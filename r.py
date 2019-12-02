@@ -266,6 +266,13 @@ def currently_running_windows():
 def currently_running_posix():
     import os
     return os.name=='posix'
+def currently_running_mac():
+    import platform
+    return platform.system()=='Darwin'
+def currently_running_linux():
+    import platform
+    return platform.system()=='Linux'
+
 currently_running_unix=currently_running_posix#Technically posix!=unix, but realistically we don't care...i mean what OS is posix and not unix that somebody's likely to run rp on?
 def terminal_supports_ansi():
     if currently_running_windows():
@@ -322,8 +329,8 @@ def without_fansi():
 
 
 def fansi(text_string,text_color=None,style=None,background_color=None,*,per_line=False):
-    #This function uses ANSI escape sequnces to make colored text in a terminal. 
-    #It can also make bolded, underlined, or highlighted text. 
+    #This function uses ANSI escape sequnces to make colored text in a terminal.
+    #It can also make bolded, underlined, or highlighted text.
     #It uses ANSI escape sequences to do this...
     #    ...and so calling it 'fansi' is a pun on 'fancy' and 'ansi'
     # 'fansi' is a pun, referring to ANSI and fancy
@@ -390,8 +397,8 @@ def fansi(text_string,text_color=None,style=None,background_color=None,*,per_lin
 # print(seq([lambda old:old+fansi(chr(randint(0,30000)),randint(0,7),randint(0,7),randint(0,7))]*100,''))
 # endregion
 def fansi_print(text_string: object,text_color: object = None,style: object = None,background_color: object = None,new_line=True) -> object:
-    #This function prints colored text in a terminal. 
-    #It can also print bolded, underlined, or highlighted text. 
+    #This function prints colored text in a terminal.
+    #It can also print bolded, underlined, or highlighted text.
     #It uses ANSI escape sequences to do this...
     #    ...and so calling it 'fansi' is a pun on 'fancy' and 'ansi'
     # Example: print(fansi('ERROR:','red','bold')+fansi(" ATE TOO MANY APPLES!!!",'blue','underlined','yellow'))
@@ -954,7 +961,7 @@ random_ints=randints
 def randints_complex(*args,**kwargs):
     #Arguments passed to this function are passed to 'randints'
     #The only difference between this function and randints is that this also generates a complex component
-    #EXAMPLE:  
+    #EXAMPLE:
     # ⮤ randints_complex(10)
     # ans = [56.+64.j 61. +9.j 58.+42.j 93.+71.j 67.+57.j 67.+67.j 24. +3.j 14.+98.j 92.+96.j 32.+29.j]
     return randints(*args,**kwargs)+randints(*args,**kwargs)*1j
@@ -1442,7 +1449,7 @@ def _module_loader():
 fig=None
 def _fig():
     #initialize the fig singleton
-    global fig 
+    global fig
     if fig is None:
         global plt
         plt=_get_plt()
@@ -1694,7 +1701,7 @@ def bar_graph(values,*,width=.9,align='center',block=False):
     #EXAMPLE: bar_graph(randints(10))
     pip_import('matplotlib')
     plt=_get_plt()
-    
+
     assert align in {'center','left','right'}
     if align=='right':
         #The right of the bars touch the index numbers, like in a right-riemann-sum
@@ -1704,9 +1711,9 @@ def bar_graph(values,*,width=.9,align='center',block=False):
     if align=='left':
         #Vice versa, see 'right' above
         align='edge'
-        
+
     x=list(range(len(values)))
-    
+
     plt.clf()
     plt.bar(x,values,width=width,align=align)
     plt.show(block=block)
@@ -2276,9 +2283,9 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
         for parent in object.__bases__:
             out[parent.__name__]=get_parent_hierarchy(parent)
         return out
-        
+
     print(col(tab + "PARENT HIERARCHY: ") + repr(get_parent_hierarchy(object)))#This is presenred in an ugly format right now and should eventually replace "parent". But this can be done later.
-    
+
     print(col(tab + "TYPE: ") + str(type(object))[1:-1]+parent_string)
     if i.getmodule(object) is not None:
         print(col(tab + "FROM MODULE: ") + str(i.getmodule(object))[1:-1])
@@ -2366,7 +2373,7 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
 # endregion
 # region Arduino: ［arduino，read_line］
 def arduino(baudrate: int = 115200,port_description_keywords:list=['arduino','USB2.0-Serial'],timeout: float = .1,manually_chosen_port: str = None,shutup: bool = False,return_serial_instead_of_read_write=False,marco_polo_timeout=0) -> (callable,callable):# 'USB2.0-Serial' is for a cheap knock-off arduino I got
-    #NOTE: This function uses a library called 'serial', got from 'pip install pyserial'. 
+    #NOTE: This function uses a library called 'serial', got from 'pip install pyserial'.
     #BUT THERE'S A SECOND LIBRARY: 'pip install serial' will give errors, as it's module is also called 'serial'. If you get this error, uninstall 'pip uninstall serial' then 'pip install pyserial'
     # Finds an arduino, connects to it, and returns the read/write methods you use to communicate with it.
     # Example: read,write=arduino()
@@ -2473,7 +2480,7 @@ def load_image_from_webcam(webcam_index: int = 0,shutup=False):
     return img
 
 def load_image_from_screenshot():
-    #Take a screeshot, and return the result as a numpy-array-style image 
+    #Take a screeshot, and return the result as a numpy-array-style image
     #EXAMPLE: display_image(load_image_from_screenshot())
     #TODO: Make this faster. the 'mss' package from pypi got much better performance, so if you need higher FPS try using that for the inner workings of this function.
     pyscreenshot=pip_import('pyscreenshot')
@@ -3604,7 +3611,7 @@ def pop_exception_traceback(exception,n=1):
     #   File "<string>", line 2, in h
     #   File "<string>", line 2, in j
     #   File "<string>", line 2, in k
-    #Then print_stack_trace(pop_exception_traceback(exception),3) would print: 
+    #Then print_stack_trace(pop_exception_traceback(exception),3) would print:
     #   File "<string>", line 2, in <module>
     #   File "<string>", line 2, in j
     #   File "<string>", line 2, in k
@@ -3639,7 +3646,7 @@ def print_stack_trace(error:BaseException,full_traceback: bool = True,header='r.
     #                                       │                                  └                                                                                                                                                            ┘│
     #                                       └                                                                                                                                                                                                ┘
 
-#endregion 
+#endregion
 
 def audio_stretch(mono_audio, new_number_of_samples):# Does not take into account the last bit of looping audio
     # ⮤ audio_stretch([1,10],10)
@@ -3939,7 +3946,7 @@ def auto_canny(image,sigma=0.33,lower=None,upper=None):
 
 def skeletonize(image):
     try:
-        return _skimage_skeletonize(image) 
+        return _skimage_skeletonize(image)
     except:
         #Warning: The current _cv_skeletonize method produces different and inferior results than that of _skimage_skeletonize
         return _cv_skeletonize(image)
@@ -4236,7 +4243,7 @@ def get_all_submodule_names(module):
 
     if not hasattr(module,'__path__'):
         return []
-    
+
     submodule_names=[]
     prefix = module.__name__ + "."
     path   = module.__path__
@@ -4266,7 +4273,7 @@ def get_all_submodule_names(module):
 #             else:
 #                 yield submodule
 
-# def get_all_submodule_names(module):  #OLD CODE 
+# def get_all_submodule_names(module):  #OLD CODE
 #     # SOURCE: https://stackoverflow.com/questions/832004/python-finding-all-packages-inside-a-package
 #     return [x.split('.')[1] for x in get_all_submodule_names(module)]
 #     dir = os.path.dirname(module.__file__)
@@ -4557,7 +4564,7 @@ def _multi_line_python_input(prompt):
                     print(p+ol[0])
                     if len(ol)>1:
                         for l in ol[1:]:
-                            print(l)        
+                            print(l)
                 if not ol:
                     return ''
         return line_join(ol)
@@ -4680,7 +4687,7 @@ def python_input(scope,header='',enable_ptpython=True,iPython=False):
         return "RETURN"
     except Exception as E:
         if not _printed_a_big_annoying_pseudo_terminal_error:
-            if not running_in_google_colab():#No reason to scare 
+            if not running_in_google_colab():#No reason to scare
                 print_stack_trace(E)
                 fansi_print("The prompt_toolkit version of pseudo_terminal crashed; reverting to the command-line version...",'cyan','bold')
             else:
@@ -4741,7 +4748,7 @@ def _reload_modules():
                 print_stack_trace(e)
         else:
             _modules[name].update()
-        
+
 
 def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseudo_terminal_style(),enable_ptpython=True,eval=eval,exec=exec):
     try:
@@ -4750,7 +4757,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
     except Exception as E:
         fansi_print("Warning: This pseudo_terminal is being started in a separate thread",'yellow')
         # print_stack_trace(E)
-    import re 
+    import re
 
     # TODO: Make better error reports than are available by default in python! Let it debug things like nested parenthesis and show where error came from instead of just throwing a tantrum.
     # @author: Ryan Burgert 2016，2017，2018
@@ -5220,7 +5227,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         GC OFF
                         GC ON
                         """
-                        strings_input=lrstrip_all_lines(strings_input) 
+                        strings_input=lrstrip_all_lines(strings_input)
                         command_list=columnify_strings(strings_input)
 
                         display_help_message_on_error=True# Seems appropriate if they're looking for help
@@ -5379,7 +5386,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         cursor='|'
                         if cursor in user_message:
                             def string_to_modifier(string):
-                                #Treat the string as a template. 
+                                #Treat the string as a template.
                                 return lambda input:string.replace(cursor,input)
                             template_string=user_message[len('MODIFIER SET'):].lstrip()
                             fansi_print("MODIFIER SET: Setting template with cursor="+repr(cursor)+" string to "+repr(template_string),'blue','bold')
@@ -5395,7 +5402,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         cursor='|'
                         if cursor in user_message:
                             def repr_string_to_modifier(string):
-                                #Treat the string as a template. 
+                                #Treat the string as a template.
                                 return lambda input:string.replace(cursor,repr(input))
                             template_string=user_message[len('SMODIFIER SET'):].lstrip()
                             fansi_print("SMODIFIER SET: (aka String-modifier set) Setting template with cursor="+repr(cursor)+" string to "+repr(template_string),'blue','bold')
@@ -5406,7 +5413,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 use_modifier=True
                         else:
                             fansi_print("Failed to set string-modifier because you didn't use the cursor anywhere. You should use "+repr(cursor)+" somewhere in your modifier string.\nEXAMPLE:\nMODIFIER SET print("+str(cursor)+")",'red','bold')
-                        
+
                     elif user_message == "MODIFIER OFF":
                         fansi_print("MODIFIER OFF ⟹ use_modifier=False","blue")
                         use_modifier=False
@@ -6460,7 +6467,7 @@ def is_number(x):
     #     if x.__class__.__name__=='Tensor' or x.__name__=='Tensor':#Try to avoid importing torch, as that takes a while...
     #         import torch#...we might not even have torch, which is why this is in a try-catch block
     #         if isinstance(x,torch.Tensor) or isinstance(x,type) and issubclass(x,torch.Tensor):
-    #             return True 
+    #             return True
     # except:pass#Maybe we don't have torch.
     return False
 
@@ -6504,15 +6511,15 @@ known_pypi_module_package_names={
     'serial':'pyserial',#WARNING: there is a 'pip install serial' which ALSO creates a 'serial' module. This module is the WRONG SERIAL MODULE.
 }
 def pip_import(module_name,package_name=None):
-    #Attempts to import a module, and if successful returns it. 
+    #Attempts to import a module, and if successful returns it.
     #If it's unsuccessful, it attempts to find it on pypi, and if
-    #    it can, it asks you if you'd like to install it, and if 
-    #    you say 'yes', rp will attempt to install it for you. 
+    #    it can, it asks you if you'd like to install it, and if
+    #    you say 'yes', rp will attempt to install it for you.
     #
     #The rp module uses tons and tons of packages from pypi.
     #You don't need to install all of them to make rp work,
     #    because not all functions need all of these packages.
-    #However, when you DO need a certain package's module, 
+    #However, when you DO need a certain package's module,
     #    and we try importing it, we get an import error.
     #Normally, this isn't a problem, because most packages on pypi
     #    have the same package name as the module name.
@@ -6523,7 +6530,7 @@ def pip_import(module_name,package_name=None):
     #Obviously, "cv2"!="opencv-python". And because of this, when you get an error "can't cv2=pip_import('cv2')",
     #    you can't just fix it with 'pip install cv2'. You have to google it. That's annoying.
     #THIS FUNCTION addresses that problem. pip
-    
+
     assert isinstance(module_name,str),'pip_import: error: module_name must be a string, but got type '+repr(type(module_name))#Probably better done with raise typerror but meh whatever
 
     if package_name is None:
@@ -6618,7 +6625,7 @@ def cv_imshow(img,label="cvImshow",*,
         on_mouse_down =None, #Either set to None or some function like lambda x,y:print(x,y)
         on_mouse_move =None, #Either set to None or some function like lambda x,y:print(x,y)
         on_mouse_up   =None, #Either set to None or some function like lambda x,y:print(x,y)
-        on_key_press  =None  #Either set to None or some function like lambda key:print(key). 
+        on_key_press  =None  #Either set to None or some function like lambda key:print(key).
         # on_key_press will either be sent a character representing the key (such as pressing 'a' makes key='a') or else a multi-character string describing it. Examples: 'left','right','backspace','delete'
         ):
     #A non-blocking image display, using OpenCV
@@ -6690,7 +6697,7 @@ def cv_find_contours(image,*,include_every_pixel=False):
     cv2=pip_import('cv2')
     #Contours are represented in the form [[x,y],[x,y],[x,y]].
     #If you want to get rid of the extra, useless dimension, don't forget to use .squeeze()
-    #NOTE: This doesn't return normal numpy arrays: The output arrays subclass numpy.ndarray and have these attributes: 
+    #NOTE: This doesn't return normal numpy arrays: The output arrays subclass numpy.ndarray and have these attributes:
     #   parent, children, descendants, is_inner, is_outer, is_solid_white, is_solid_black
     #This is really useful, because it's like hierarchy but much easier to use. The parent of a contour is the contour immediately and completely surrounding it (None if no such contour exists.) This is calculated from the hierarchy.
     # 'contour.is_inner' is always the same as 'not contour.is_outer'. It returns whether it is an inner or an outer contour
@@ -6732,19 +6739,19 @@ def cv_find_contours(image,*,include_every_pixel=False):
                 yield self
             self._descendants_cache = list(helper())
             return self._descendants_cache
-            
+
     contours=[as_points_array(raw_contour).view(Contour) for raw_contour in raw_contours]#This is how we subclass numpy arrays (by using (some ndarray).view(wrapper class))
-    
+
     for contour in contours:
         contour.parent=None
         contour.children=[]
-    
+
     try:
         hierarchy=hierarchy[0]
         for info,contour in zip(hierarchy,contours):
             parent_index=info[3]
             if parent_index != -1:#Opencv tells us that the contour has no parents by telling us it is its own parent, and therefore is its own child. I think it makes more sense to say its parent is None (which is the default value)
-                parent=contours[parent_index]#How to read the opencv contour hierarchy: https://stackoverflow.com/questions/22240746/recognize-open-and-closed-shapes-opencv 
+                parent=contours[parent_index]#How to read the opencv contour hierarchy: https://stackoverflow.com/questions/22240746/recognize-open-and-closed-shapes-opencv
                 contour.parent=parent
                 parent.children.append(contour)
     except TypeError:pass#ERROR: TypeError: 'NoneType' object is not iterable (due to hierarchy being None before hierarchy=hierarchy[0])
@@ -6821,7 +6828,7 @@ def cv_apply_affine_to_image(image,affine,output_resolution=None):
 
 def cv_manually_selected_contours(contours,image=None):
     #Let the user manually pick out a set of contours by clicking them, then hitting the enter key to confirm their selection
-    #It shows you an image with contours. Click to toggle the contours on and off. 
+    #It shows you an image with contours. Click to toggle the contours on and off.
     #Optionally, you can specify a background image to be shown during this selection. This is particularly useful if the contours originally came from that image. I personally like to divide that image by 2 to make it darker, letting the contours pop out more apparently.
     #Special keys: press "b" to toggle a black background with your image, to help see the contours better
     #Special keys: press "a" to select all contours
@@ -6865,7 +6872,7 @@ def cv_manually_selected_contours(contours,image=None):
         else:
             selected_contours[key]=mouse_contour
         display_needs_update=True
-    
+
     done=False
     def on_key_press(key):
         nonlocal done,image,alternative_image,display_needs_update,contours,selected_contours
@@ -6885,25 +6892,25 @@ def cv_manually_selected_contours(contours,image=None):
         elif key=='\n':
             #Pressing the enter key makes it return the result
             done=True
-    
+
     while True:
         if display_needs_update:
             #Don't re-render unless necessary
             display_needs_update=False
-            
+
             #Draw the contours
             display    =image.copy()
             if mouse_contour is not None:
                 display=cv_draw_contour (display,mouse_contour             ,color=(255,255,255),width=5,antialias=False)
             display    =cv_draw_contours(display,contours                  ,color=(255,0  ,0  ),width=2,antialias=False)
             display    =cv_draw_contours(display,selected_contours.values(),color=(0  ,255,255),width=2,antialias=False)
-                
+
             #Display the result
         cv_imshow(display                    ,
                   on_mouse_move=on_mouse_move,
                   on_mouse_down=on_mouse_down,
                   on_key_press =on_key_press)
-        
+
         #Check to see if we're done
         if done:
             return list(selected_contours.values())
@@ -6913,7 +6920,7 @@ def cv_manually_selected_contours(contours,image=None):
 def cv_manually_selected_contour(contours,image=None):
     #TODO Merge cv_manually_selected_contours with cv_manually_selected_contour to eliminate redundancy
     #Let the user manually pick out a contour by clicking it, then hitting the enter key to confirm your selection
-    #It shows you an image with contours. Click to toggle the contours on and off. 
+    #It shows you an image with contours. Click to toggle the contours on and off.
     #Optionally, you can specify a background image to be shown during this selection. This is particularly useful if the contours originally came from that image. I personally like to divide that image by 2 to make it darker, letting the contours pop out more apparently.
     #Special keys: press "b" to toggle a black background with your image, to help see the contours better
     #Special keys: press "\n" confirm your selection
@@ -6951,7 +6958,7 @@ def cv_manually_selected_contour(contours,image=None):
 
         selected_contour=mouse_contour#Select the contour we clicked
         display_needs_update=True
-    
+
     done=False
     def on_key_press(key):
         nonlocal done,image,alternative_image,display_needs_update,contours,selected_contour
@@ -6964,12 +6971,12 @@ def cv_manually_selected_contour(contours,image=None):
             #Pressing the enter key makes it return the result
             if selected_contour is not None:#To return the result we must have selected a contour
                 done=True
-    
+
     while True:
         if display_needs_update:
             #Don't re-render unless necessary
             display_needs_update=False
-            
+
             #Draw the contours
             display    =image.copy()
             if mouse_contour    is not None:
@@ -6977,13 +6984,13 @@ def cv_manually_selected_contour(contours,image=None):
             display    =cv_draw_contours(display,contours        ,color=(255,0  ,0  ),width=2,antialias=False)
             if selected_contour is not None:
                 display=cv_draw_contour (display,selected_contour,color=(0  ,255,255),width=2,antialias=False)
-                
+
             #Display the result
         cv_imshow(display                    ,
                   on_mouse_move=on_mouse_move,
                   on_mouse_down=on_mouse_down,
                   on_key_press =on_key_press)
-        
+
         #Check to see if we're done
         if done:
             return selected_contour
@@ -7161,7 +7168,7 @@ def cv_gauss_blur(image,sigma=1):
     if not sigma%2:
         sigma+=1#Make sigma odd
     return cv2.GaussianBlur(image,(sigma,sigma),0)
-    
+
 
 
 #endregion
@@ -7435,7 +7442,7 @@ def contours_to_image(contours,*,scale=1,crop=True,**kwargs):
     #By increasing 'scale' from 1 to some larger number, you increase the resolution of the output
     #TODO add flags for whether these contours are loops, for padding/margin etc, color/thickness of contours
     #Give this function contours and it will turn it into a black and white image
-    #Hint: kwarg fill=True 
+    #Hint: kwarg fill=True
     #You don't need to specify the size; that will be auto-calculated for you (which is why this function is so convenient)
     #EXAMPLE:
     #   tris=[randints_complex(randint(3,10))for _ in range(3)]#Three Triangles
@@ -8047,7 +8054,7 @@ def get_file_paths(*directory_path                  ,
                     include_files           = True  ,
                     include_folders         = False ,
                     just_file_names         = False ,
-                    include_file_extensions = True  
+                    include_file_extensions = True
                     ):
     #Returns global paths.
     #TODO: Make sure this function isn't redundant before committing to keeping it forever!
@@ -8136,7 +8143,7 @@ def get_file_paths(*directory_path                  ,
             #'x.png' --> 'x', 'text.txt' --> 'txt', etc. (See strip_file_extension for more details)
             output=list(map(strip_file_extension   ,output))
 
-        return output 
+        return output
 
     return recursion_helper(*directory_path)
 
@@ -8157,15 +8164,15 @@ def fractional_integral_in_frequency_domain(coefficients,n=1):
 
 
 class FlannDict:
-    #TODO: Finish bundling PyFlann's binaries into rp. 
+    #TODO: Finish bundling PyFlann's binaries into rp.
     #FLANN is an algorithm that calculates the (approximate) nearest neigbours of a point very, very quickly. Originally called nearest_neighbor_dict, but this is ambiguous in the case that we wish to use other algorithms.
     #in addition to real keys, FlannDict supports complex keys of any numpy shape. But, just try to be consistent else it will throw errors (by design).
     #This is abstraction above FLANN that lets you use nearest neighbor search with the interface of a dictionary; automatically rebuilding the index as needed (for a huge performance boost).
     #This interface can be replaced by a brute force search...but why do that?
     #FlannDict caches any queries you make, so if you query the same point twice it will just reuse those calculations. This cache is automatically reset upon rebuilding the FLANN tree.
     #Uses nearest-neighbor to match keys. Currently uses FLANN.
-    #Use splicing to get k nearest neighbours like this: d[point:k] (will return a list with k nearest neighbours.) K must be >=0. 
-    #nn stands for nearest neighbor, and knn stands for 'k nearest neighbours'  
+    #Use splicing to get k nearest neighbours like this: d[point:k] (will return a list with k nearest neighbours.) K must be >=0.
+    #nn stands for nearest neighbor, and knn stands for 'k nearest neighbours'
     #Example:
     # >>> n=FlannDict()
     # >>> n[[0,0,0,0]]='Hello!'
@@ -8182,7 +8189,7 @@ class FlannDict:
     #
     # >>> n[[0,0,7,75]]
     # ans = Fourth!
-    # 
+    #
     #ANOTHER EXAMPLE:
     #  d=FlannDict()
     #  d[1,2,3]=3
@@ -8239,7 +8246,7 @@ class FlannDict:
         if self._need_to_rebuild_index:#Will be set to true upon adding data
             self._flann.build_index(np.asarray(self._keys).astype(float))#Only do this upon getting; not setting.
             self._cache=HandyDict()#Clear the cache
-            self._need_to_rebuild_index=False 
+            self._need_to_rebuild_index=False
         results,dists=self._flann.nn_index(qpts=np.asarray([key]),num_neighbors=k,algorithm="kmeans",branching=self.branching,iterations=self.iterations,checks=self.checks)
         #We're only querying one point, so results and dists should both have length 1...
         dists=dists.squeeze()
@@ -8307,16 +8314,16 @@ def best_flann_dict_matches(queries,flann_dict,n:int=None,query_to_vector=lambda
 
     old_include_dists=flann_dict.include_dists
     flann_dict.include_dists=True
-    
+
     matches=[]
     for query in queries:
         results,dists=flann_dict[query_to_vector(query):n]
         matches+=[(result[1],random_float(),(result[0],query,result[1])) for result in zip(results,dists)]#The random_float is to prevent it from trying to sort something that might not be sortable if we have two identical distances (which is a very real possibility)
     matches=sorted(matches)#TODO: If this is a bottle neck, we can use heapq.merge to return a lazy result that merges all the results together in a generator (in-case we just want the top-N results among all of these)
     matches=[match[2]for match in matches]#Just keep the results
-        
+
     flann_dict.include_dists=old_include_dists
-    
+
     return matches
 
 def knn_clusters(vectors,k=5,spatial_dict=FlannDict):
@@ -8334,14 +8341,14 @@ def knn_clusters(vectors,k=5,spatial_dict=FlannDict):
     #             for c in s:
     #                 for C in s:
     #                     image=cv_draw_contour(image,np.asarray([c,C])*r,color=(0,255,255))
-                        
+
     #         for pp in p:
     #             image=cv_draw_circle(image,*(pp*r).astype(int),radius=3)
     #         display_image(image,False)
     #     test()
 
     spatial_dict=spatial_dict()#If you want to override the default FlannDict paramers, pass a lambda through this function's spatial_dict parameter
-    #Note: This method is logically clean-ish but is probably much less efficient than it could be. If it matters, there's probably many better ways to implement this function. 
+    #Note: This method is logically clean-ish but is probably much less efficient than it could be. If it matters, there's probably many better ways to implement this function.
     assert k>=1
     vectors=np.asarray(vectors)
     assert len(vectors.shape)==2
@@ -8441,7 +8448,7 @@ def magnitude(x,**kwargs):
 
 def normalized(x,axis=None):
     #Normalize the vector/matrix/etc to have total magnitude 1
-    x=np.asarray(x) 
+    x=np.asarray(x)
     return x/magnitude(x,axis=axis,keepdims=True)
 
 _javascript_runtime=None#We have a global JS runtime. If you wish to have multiple runtimes, you'd best just use js2py directly.
@@ -8459,7 +8466,7 @@ def javascript(code):
     return _get_javascript_runtime().eval(code)
 js=javascript
 def javascript_console():
-    #Enter the javascript console, which 
+    #Enter the javascript console, which
     return _get_javascript_runtime().console()
 
 #region Image Channel Conversions
@@ -8467,7 +8474,7 @@ def is_image(image):
     #An image must be either grayscale, rgb, or rgba and have be either a bool, np.uint8, or floating point dtype
     image=np.asarray(image)
     return (is_grayscale_image(image) or is_rgb_image (image) or is_rgba_image  (image))  and\
-           (is_float_image    (image) or is_byte_image(image) or is_binary_image(image)) 
+           (is_float_image    (image) or is_byte_image(image) or is_binary_image(image))
 
 def is_grayscale_image(image):
     #Basically,
@@ -8609,7 +8616,7 @@ def running_in_ipython():
     except:
         return False#If we get an error when trying to import IPython...then..well, we're definately NOT running in iPython!
 def running_in_google_colab():
-    #Return true iff this function is called from google colab 
+    #Return true iff this function is called from google colab
     import sys
     return 'google.colab' in sys.modules
 
@@ -8634,14 +8641,14 @@ def split_tensor_into_regions(tensor,*counts,flat=True):
     #   Then, output[0,0] is the upper left face, and output[0,1] is one-to-the-right of the top left image
     #   Also, output[1,:] is a list of all the faces on the second row ([face1,face2,face3...])
     #   But maybe we want to do PCA on all these images. We don't want to address these faces by coordinate anymore; we want to get rid of that information.
-    #   We just want one big flattened list of faces. To do this, we would instead use 
+    #   We just want one big flattened list of faces. To do this, we would instead use
     #   output=split_tensor_into_regions(‹that image›,10,10,flat=True)
     #   This would give us a list of numpy arrays containing every face in the image, such that output[35] would exist (and, because it's a 10x10 faces image, give us the 5th face on the third row (taking into account starting at the 0th index))
 
     tensor=np.asarray(tensor)
     shape=tensor.shape
     new_shape=list(shape)
-    
+
     assert len(counts)<=len(shape),'We can\'t split a tensor of shape '+str(shape)+' along '+str(len(counts))+' of its dimensions becuase it only has '+str(len(shape))+' dimensions'
     for index,count in reversed(list(enumerate(counts))):
         assert isinstance(count,int) and count>0,'All arguments to "counts" should be positive integers representing how many pieces we should slice the tensor in their respective dimension'
@@ -8672,12 +8679,12 @@ def split_tensor_into_regions(tensor,*counts,flat=True):
         o[1*n:2*n]=b
         return o
     transpose_axes=f(len(counts),len(shape)-len(counts))
-    
+
     out=tensor.reshape(new_shape).transpose(transpose_axes)
-    
-    if flat:    
+
+    if flat:
         out=out.reshape(*(np.product(out.shape[:len(counts)]),*out.shape[len(counts):]))
-    
+
     return out
 
 def bordered_image_solid_color(image,color=(1.,1.,1.,1.),thickness=1,width=None,height=None,top=None,bottom=None,left=None,right=None):
@@ -8750,7 +8757,7 @@ def get_principle_components(tensors,number_of_components=None):
     principle_components=np.asarray(list(map(normalized,principle_components)))#Each principle component is almost, but not quite perfectly normalized by opencv (one had a magnitude of 1.0000377) but we're going to normalize them again for even more precision. Side-note: it's ok to use a python-loop here because there shouldn't be many principle_components to begin with (that's very slow)
     assert len(principle_components)==len(eigenvectors)==number_of_components,'This is an internal assertion that should never fail'
     return principle_components
-    
+
 def cv_box_blur(image,diameter=3,width=None,height=None):
     cv2=pip_import('cv2')
     image=np.asarray(image)
@@ -8764,7 +8771,7 @@ def cv_box_blur(image,diameter=3,width=None,height=None):
 def rinsp_search(root,query,depth=10):
     #THIS IS A WORK IN PROGRESS
     #example: trying to find the conv function in torch? Maybe it's nested in some modules...wouldn't it be nice to automatically search the whole tree of a, a.b, a.c, a.d, b, b.a, b.a.c, etc... this does that
-    #example: 
+    #example:
     #TODO: Allow searching the docs etc more than just searching the name
     #TODO: Allow fuzzy search, better queries (fuzzy find for example with nice printed outputs)
     #TODO: Make this breadth-first instead of depth first
@@ -8772,7 +8779,7 @@ def rinsp_search(root,query,depth=10):
         assert isinstance(query,str)
         assert isinstance(name,str)
         return query.lower() in name.lower()
-    
+
     def keys(root):
         out=set()
         try:out.update(dir(root))
@@ -8780,7 +8787,7 @@ def rinsp_search(root,query,depth=10):
         try:out.update(root.__dict__)
         except:pass
         return sorted(out)
-        
+
     def get(root,key):
         try:return getattr(root,key)
         except:pass
@@ -8789,7 +8796,7 @@ def rinsp_search(root,query,depth=10):
         try:return eval('root.'+key)
         except:pass
         raise
-    
+
     searched=set()
     def helper(root=root,depth=depth,path=[]):
         if not depth or id(root) in searched:
@@ -8799,7 +8806,7 @@ def rinsp_search(root,query,depth=10):
             if match(name):yield path+[name]
             try:yield from helper(get(root,name),depth-1,path+[name])
             except:pass
-    
+
     def highlighted(string,query):
         #Case insensitive fansi-highlighting of a query in a string
         #Example: print(highlighted('Hello, world wORld hello woRld!','world'))#All the 'world','wORld', etc's are printed green and bold
@@ -8826,7 +8833,7 @@ def as_numpy_array(x):
     except:pass
     try:return x.detach().cpu().numpy()#For pytorch. We're not doing an isinstance check of type pytorch tensor becuse that involves importing pytorch, which might be slow. Try catch is faster here.
     except:pass
-    assert False,'as_numpy_array: Error: Could not convert x into a numpy array. type(x)='+repr(type(x))+' and x='+repr(x) 
+    assert False,'as_numpy_array: Error: Could not convert x into a numpy array. type(x)='+repr(type(x))+' and x='+repr(x)
 
 def input_conditional(question,condition=lambda answer:True,on_fail=lambda answer: print('Please try again. Invalid input: '+repr(answer)),prompt=' > '):
     #Keeps asking the user for a console input until they satisfy the condition with their answer.
@@ -8835,7 +8842,7 @@ def input_conditional(question,condition=lambda answer:True,on_fail=lambda answe
     assert callable(condition),'"condition" should be a boolean function of the users input'
     assert callable(on_fail),'"on_fail" should be a void function of the users input'
     assert isinstance(prompt,str),'The "prompt" should be a string'
-    
+
     print(question)
     while True:
         answer=input(prompt)
@@ -8891,7 +8898,7 @@ def download_youtube_video(url,path='./'):
 #     #CODE FROM https://www.dlology.com/blog/how-to-run-object-detection-and-segmentation-on-video-fast-for-free/
 #     """
 #     Create a video from a list of images.
- 
+
 #     @param      outvid      output video
 #     @param      images      list of images to use in the video
 #     @param      fps         frame per second
@@ -8932,7 +8939,7 @@ def get_video_file_duration(path,from_cache=True):
         return _get_video_file_duration_cache[path]
     out=_get_video_file_duration_via_moviepy(path)
     _get_video_file_duration_cache[path]=out
-    return out 
+    return out
 
 def load_video_stream(path):
     #Much faster than load_video, which loads all the frames into a numpy array. This means load_video has to iterate through all the frames before you can even use the first frame.
@@ -8942,10 +8949,10 @@ def load_video_stream(path):
     #    for frame in load_video_stream("/Users/Ryan/Desktop/media.io_Silicon Valley - Gavin - Animals Compilation copy.mp4"):display_image(frame)
     #EXAMPLE:
     #    for frame in load_video_stream(download_youtube_video('https://www.youtube.com/watch?v=cAy4zULKFDU')):display_image(frame)  #Monty python clip
-    cv2=pip_import('cv2')    
+    cv2=pip_import('cv2')
     assert file_exists(path),'load_video error: path '+repr(path)+' does not point to a file that exists'#Opencv will silently fail if this breaks
-    cv_stream=cv2.VideoCapture(path)    
-    while True:                         
+    cv_stream=cv2.VideoCapture(path)
+    while True:
         not_done,frame=cv_stream.read()
         if not not_done:
             return
@@ -9105,7 +9112,7 @@ def make_directory(path):
             cursor=cursor.parent
         while cursor != cursor.parent:
             assert cursor.is_dir(),'make_directory: failed to make directory at path '+repr(path)+' because '+repr(cursor)+' is the path of an existing file that is not a directory'
-            cursor=cursor.parent            
+            cursor=cursor.parent
         for directory in reversed(need_to_make):
             directory.mkdir()
         return str(path)
@@ -9137,7 +9144,7 @@ def get_cutscene_frame_numbers(video_path,*,from_cache=False):
     #        sleep(1/30)
     pip_import('cv2')#Needed for scenedetect
     pip_import('scenedetect')
-            
+
     if video_path in _get_cutscene_frame_numbers_cache:
         return _get_cutscene_frame_numbers_cache[video_path]
 
@@ -9188,7 +9195,7 @@ def get_cutscene_frame_numbers(video_path,*,from_cache=False):
 
 def send_text_message(message,number):
     #number is a phone number. Can be an int or a string
-    #Once this no longer works (which it eventually won't, because it's running on a free trial), replace the credentials with your own twilio trial account 
+    #Once this no longer works (which it eventually won't, because it's running on a free trial), replace the credentials with your own twilio trial account
     #OR create a fallback that doesnt use twilio
     #EXAMPLE:
     #    send_text_message('Hello, World!',15436781234)
@@ -9202,7 +9209,7 @@ def send_text_message(message,number):
     client = Client(account_sid, auth_token)
     message = client.messages \
                 .create(
-                     body=message, 
+                     body=message,
                      from_='+'+str(from_number),
                      to='+'+number
                  )
@@ -9224,7 +9231,7 @@ def crop_image_zeros(image):
     cropped=image[top:bottom,left:right]
     print(top,bottom,left,right)
     return cropped
-    
+
 def cv_contour_to_segment(contour):
     #TODO: provide a visual example
     #The way OpenCV extracts single-pixel-wide non-looping contours is to treat those contours as loops, where the second half of the points are just the first-half of the points mirrored
@@ -9318,7 +9325,7 @@ def make_string_rectangular(string,align='left',fillchar=' '):
     #   ...MAKES...
     #     ans = -----The mathematician-----
     #     Plotting his past relations
-    #     ----"ex" and "why" axis----    
+    #     ----"ex" and "why" axis----
     align_methods={'left':visible_string_ljust,
                   'right':visible_string_rjust,
                  'center':visible_string_center}
@@ -9346,9 +9353,9 @@ def horizontally_concatenated_strings(*strings,rectangularize=False,fillchar=' '
     #EXAMPLE:
     # ⮤ print(horizontally_concatenated_strings('Why\nHello\nThere!','My\nName\nIs\nBob','Pleased\nTo\nMeet\nYou!',rectangularize=True))
     # Why   My  Pleased
-    # Hello NameTo     
-    # There!Is  Meet   
-    # Bob       You!   
+    # Hello NameTo
+    # There!Is  Meet
+    # Bob       You!
     #EXAMPLE:
     # ⮤ print(horizontally_concatenated_strings('a','b\nb','c\nc\nc',rectangularize=True))
     # abc
@@ -9478,10 +9485,10 @@ def bordered_string(string,*,
     top_left_fill     = top_left_fill     if top_left_fill     is not None else top_fill
     #
     lines=line_split(string)
-    
+
     lines =[top_fill   *string_width(lines[ 0])]*top+lines
     lines+=[bottom_fill*string_width(lines[-1])]*bottom
-    
+
     for index,line in list(enumerate(lines))[top:-bottom]:
         lines[index]=left_fill*left+line+right_fill*right
 
@@ -9543,7 +9550,7 @@ def strip_ansi_escapes(string):
 
 
 def visible_string_length(string):
-    #Give the visible string length when printed into a terminal. 
+    #Give the visible string length when printed into a terminal.
     #Ignores ansi escape seqences and zero-width characters
     try:string=strip_ansi_escapes(string)
     except AssertionError:pass
@@ -9606,7 +9613,7 @@ def prime_number_generator():
 
 def edit_distance(string_from, string_to):
     #There are faster implementations. I just took this from stackoverflow. This might be improved (use libraries that implement this in c) in the future if I feel the need for better performance
-    #CODE FROM:  https://stackoverflow.com/questions/2460177/edit-distance-in-python 
+    #CODE FROM:  https://stackoverflow.com/questions/2460177/edit-distance-in-python
     s1,s2=string_from,string_to
     m=len(s1)+1
     n=len(s2)+1
@@ -9684,7 +9691,7 @@ def is_singular_noun(noun):
 def is_singular_noun_of(singular_word,plural_word):
     #Returns true if singular_word is the signular-form of plural_word
     return _get_inflect_engine().compare_nouns(singular_word,plural_word) and is_singular_noun(singular_word)
-    
+
 def is_plural_noun_of(plural_word,singular_word):
     #Returns true if plural_word is the plural-form of singular_word
     #
@@ -9834,9 +9841,9 @@ def words_to_number(string):
     #    words_to_number("-.0"                                            ) = -0.0
     #    words_to_number("-0.1"                                           ) = -0.1
     from word2number import w2n #pip install word2number
-    
+
     assert isinstance(string,str),'word2number error: please input a string. You gave me a '+repr(type(string))
-    
+
     negative=False
     string=string.strip()
     string=string.replace('minus ','-')
@@ -9845,7 +9852,7 @@ def words_to_number(string):
         #This word2number library can't natively handle 'negative 5' without crashing
         negative=True
         string=string[1:].strip()
-    
+
     string=string.replace('/'           ,' over ')
     string=string.replace(' out of '    ,' over ')#For the next few lines that handle fractions...
     string=string.replace(' of '        ,' over ')
@@ -9857,7 +9864,7 @@ def words_to_number(string):
         if int(out)==out:
             return int(out)#'five out of 1' should return an integer, not a float
         return out if not negative else -out
-    
+
     string=string.replace('.','point ')#Because words_to_number('234.324') should also work for the next few lines...
     if 'point ' in string:
         assert string.count('point ')==1,'word2number error: Cant have more than one decimal point in a number but string said \'point\' twice in '+repr(string)
@@ -9866,10 +9873,10 @@ def words_to_number(string):
         after_decimal=''.join(str(words_to_number(x)) for x in after_decimal.split()).strip()#after_decimal looks like "five one six two"...space separated digits
         out = float(str(words_to_number(before_decimal))+'.'+str(words_to_number(after_decimal)))
         return out if not negative else -out
-    
+
     string=string.replace(',',' ')#Because without this, 'one thousand, one hundred and fifty five' returns the wrong answer
     out=w2n.word_to_num(string)
-    
+
     return out if not negative else -out
 
 #endregion
@@ -10002,7 +10009,7 @@ def mouse_middle_press():
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().press(pynput.mouse.Button.middle)
-    
+
 def mouse_left_release():
     """
     #Release the mouse's left button
@@ -10024,8 +10031,8 @@ def mouse_middle_release():
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().release(pynput.mouse.Button.middle)
-    
-#endregion 
+
+#endregion
 
 # def captured_stdout_as_string(callable):
 #THIS IS COMMENTED OUT. IT WORKS TECHNICALLY, BUT ITS WAY TOO MESSY. It would be better to make it into a generator that yields each character then returns the output of callable.
@@ -10139,7 +10146,7 @@ def get_all_importable_module_names(from_cache=True):
     for name in sys.builtin_module_names:
         _all_module_names.add(name)
     return _all_module_names
-    
+
 
 def current_date():
     """
@@ -10159,7 +10166,7 @@ def open_file_with_default_application(path):
     """
     #Open a file or folder with the OS's default application
     #EXAMPLE: open_file_with_default_application('.') #Should open up a file browser with the current directory
-    #Currently works on Mac, Windows, and Linux. 
+    #Currently works on Mac, Windows, and Linux.
     #https://stackoverflow.com/questions/434597/open-document-with-default-os-application-in-python-both-in-windows-and-mac-os
     """
     import subprocess, os, platform
@@ -10311,6 +10318,16 @@ def prime_factors(number):
             _prime_factors_cache[original_number]=out
             return out
 
+def set_os_volume(percent):
+    #Set your operating system's volume
+    assert is_number(percent),'Volume percent should be a number, but got type '+repr(type(volume))
+    assert 0<=percent<=100,'Volume percent should be between 0 and 100, but got volume = '+repr(volume)
+    if currently_running_mac():
+        pip_import('osascript').osascript('set volume output volume '+str(int(percent)))
+    else:
+        assert False,'Sorry, currently only MacOS is supported for setting the volume. This might change in the future.'
+        
+
 from .tracetraptest import * #A few experimental debugging features. These things mostly need to be renamed.
 
 if __name__ == "__main__":
@@ -10333,6 +10350,3 @@ if __name__ == "__main__":
 #     assert callable(f)
 #     Đ_args=f.
 #     args=[args]
-
-
-
