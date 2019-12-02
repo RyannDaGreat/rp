@@ -2,4 +2,9 @@ r.py.history.txt
 ./r.py.history.txt
 ./libs/pyflann
 ./libs/pyflann/**/*
+./junk
+./junk/**/*
+./junk/*
+junk
+
 
