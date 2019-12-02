@@ -1,0 +1,44 @@
+Searching 9 files for "^\s*import " (regex)
+
+/usr/local/lib/python3.7/site-packages/rpdb/__init__.py:
+   45  from .completion_hints import CompletionHint
+   46  from .style import get_ui_style
+   47: 
+   48: import linecache
+   49: import os
+   50: import pdb
+   51: import six
+   52: import sys
+   53: import weakref
+   54  
+   55  
+
+/usr/local/lib/python3.7/site-packages/rpdb/completers.py:
+    6  
+    7  from rp.rp_ptpdb.commands import commands_with_help
+    8: 
+    9: import bdb
+   10: import os
+   11: import re
+   12: import sys
+   13  
+   14  
+
+/usr/local/lib/python3.7/site-packages/rpdb/grammar.py:
+    1  from __future__ import unicode_literals, absolute_import
+    2  from rp.prompt_toolkit.contrib.regular_languages.compiler import compile
+    3: 
+    4: import re
+    5  
+    6  
+
+/usr/local/lib/python3.7/site-packages/rpdb/layout.py:
+    9  from pygments.token import Token
+   10  from pygments.lexers import PythonLexer
+   11: 
+   12: import linecache
+   13: import os
+   14  
+   15  __all__ = (
+
+13 matches across 4 files

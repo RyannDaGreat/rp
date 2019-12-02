@@ -1,0 +1,19 @@
+History Entries:
+	What they store:
+		Document
+			Text
+			Cursor Position
+			‹Maybe undo history?›
+		Relations
+			ID
+			Parent ID
+			‹Some way to get siblings›
+		Results
+			‹Printout?›
+			Successfulness of command
+			Time it took to run command
+		Date
+
+	Ideally it should use some kind of database, but it has to be super robust. It will replace prompt_toolkit's history implementation. It should be accessible from over the internet as well, for future purposes (but for this rp version we don't need that functionality).
+
+
