@@ -215,14 +215,10 @@ def nanos(seconds=gtoc) -> int:
 # region  Files and such: ［get_current_directory‚ get_all_file_names］
 import glob,sys
 def get_current_directory():
+    # Get the result of 'cd' in a shell. This is the current folder where save or load things by default.
     # SUMMARY: get_current_directory() ≣ sys.path[0] ﹦ ﹙default folder_path﹚ ﹦ ﹙current directory﹚ ﹦ /Users/Ryan/PycharmProjects/RyanBStandards_Python3.5
-    try:
-        #Works only on unix based systems
-        import posix
-        return posix.getcwd()
-    except:
-        return sys.path[0]#I'm not sure how to handle this on windows. I'll leave that for a future update.
-    # return sys.path[0]
+    import os
+    return os.getcwd()
 
 def get_all_file_names(file_name_ending: str = '',file_name_must_contain: str = '',folder_path: str = get_current_directory(),show_debug_narrative: bool = False):
     # SUMMARY: This method returns a list of all file names files in 'folder_path' that meet the specifications set by 'file_name_ending' and 'file_name_must_contain'
@@ -10147,6 +10143,21 @@ def get_all_importable_module_names(from_cache=True):
         _all_module_names.add(name)
     return _all_module_names
 
+def get_module_path_from_name(module_name):
+    #Gets the file path of a module without importing it, given the module's name
+    #EXAMPLES:
+    #    ⮤ get_module_path_from_name('rp')
+    #   ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/__init__.py
+    #    ⮤ get_module_path_from_name('prompt_toolkit')
+    #   ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/prompt_toolkit/__init__.py
+    #    ⮤ get_module_path_from_name('numpy')
+    #   ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/numpy/__init__.py
+    #    ⮤ get_module_path_from_name('six')
+    #   ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/six.py
+    #FROM: https://stackoverflow.com/questions/4693608/find-path-of-module-without-importing-in-python
+    import importlib
+    return importlib.util.find_spec(module_name).origin
+
 
 def current_date():
     """
@@ -10327,7 +10338,6 @@ def set_os_volume(percent):
     else:
         assert False,'Sorry, currently only MacOS is supported for setting the volume. This might change in the future.'
         
-
 from .tracetraptest import * #A few experimental debugging features. These things mostly need to be renamed.
 
 if __name__ == "__main__":
