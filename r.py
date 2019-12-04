@@ -499,7 +499,7 @@ def fansi_syntax_highlighting(code: str,namespace=(),style_overrides={}):
 # region  Copy/Paste: ［string_to_clipboard，string_from_clipboard］
 import os
 _local_clipboard_string=''#if we can't access a system OS clipboard, try and fake it with a local clipboard istead. Of course, you need to use the string_to_clipboard and clipboard_to_string functions to make this work, but that's ok
-_local_clipboard_string_path='.rp_local_clipboard'
+_local_clipboard_string_path=__file__+'.rp_local_clipboard'
 def _get_local_clipboard_string():
     #Try to get the string from a file (so we can share our fake clipboard across processes. THis is important over SSH into headless systems that don't support clipboards, but we still want to keep our clipboard between sessions).
     #If we can't write or read from a file, just keep _local_clipboard_string as a local variable in this process as a last resort.
@@ -4712,7 +4712,7 @@ class _Module:
         self.name=name
         self.module=module
         self.path=getsourcefile(module)
-        self.date_last_updated=current_date()
+        self.date_last_updated=get_current_date()
         if not isinstance(self.path,str):
             raise TypeError()
     def update(self):
@@ -4729,7 +4729,7 @@ class _Module:
             except BaseException as e:
                 fansi_print('RELOAD: ERROR: Failed to reload module '+repr(self.name)+"\nStack trace shown below:",'blue','bold')
                 print_stack_trace(e)
-            self.date_last_updated=current_date()
+            self.date_last_updated=get_current_date()
     def __hash__(self):
         return self.name
 _modules={}
@@ -6471,14 +6471,13 @@ def is_number(x):
 def line_join(iterable,separator='\n'):
     return separator.join(map(str,iterable))
 
-
-def pip_install(package_name,*,upgrade=False):
+def pip_install(pip_args:str):
+    assert isinstance(pip_args,str),'pip_args must be a string like "numpy --upgrade" or "rp --upgrade --no-cache --user" etc'
     import os
     if currently_running_unix():
         #Attempt to get root priveleges. Sometimes we need root priveleges to install stuff. If we're on unix, attempt to become the root for this process. There's probably a better way to do this but idk how and don't really care that much even though I probably should...
         os.system('sudo echo')#This should only prompt for a password once...making the next command run in sudo.
-    os.system(sys.executable+' -m pip install '+package_name+(' --upgrade'if upgrade else ''))
-
+    os.system(sys.executable+' -m pip install '+pip_args)
     #DONT DELETE THIS COMMENT BLOCK: An alternative way to install things with pip:
     #    from pip.__main__ import _main as pip
     #    errored=pip(['install', package_name]+['--upgrade']*upgrade)
@@ -8042,7 +8041,7 @@ def date_accessed(path):
     timestamp=os.path.getatime(path)#Measured in seconds
     import datetime
     return datetime.datetime.fromtimestamp(timestamp)
-
+    
 def get_file_paths(*directory_path                  ,
                     sort_by                 = None  ,
                     file_extension_filter   = None  ,
@@ -8050,9 +8049,11 @@ def get_file_paths(*directory_path                  ,
                     include_files           = True  ,
                     include_folders         = False ,
                     just_file_names         = False ,
-                    include_file_extensions = True
+                    include_file_extensions = True  ,
+                    relative                = False
                     ):
     #Returns global paths.
+    #If relative is False, we return global paths. Otherwise, we return relative paths to the current working directory 
     #TODO: Make sure this function isn't redundant before committing to keeping it forever!
     #TODO: In particular, make sure this isn't redundant with respect to get_all_file_names, or else merge them together.
     #TODO: Add a recursive option, filters, etc.
@@ -8138,6 +8139,11 @@ def get_file_paths(*directory_path                  ,
         if not include_file_extensions:
             #'x.png' --> 'x', 'text.txt' --> 'txt', etc. (See strip_file_extension for more details)
             output=list(map(strip_file_extension   ,output))
+
+        if relative:
+            pwd=get_current_directory()
+            pwd=path_join(pwd,'')#If pwd looks 'like folder1/folder2', change it to 'folder1/folder2/'
+            output=[path[len(pwd):] if path.startswith(pwd) else path for path in output]
 
         return output
 
@@ -9046,6 +9052,17 @@ def copy_path(from_path,to_path,*,extract=False):
         copy_directory(from_path,to_path,extract=extract)
     else:
         copy_file(from_path,to_path)
+
+def copy_to_folder(from_path,to_path):
+    #Copy a file or directory to a folder, keeping the same file name
+    #For example, copy_to_folder('/docs/text.txt','some/folder/path') will create a new file whose path is 'some/folder/path/text.txt'
+    #This can be nicer than copy_path, because then we don't have to rewrite the file name twice.
+    #This function also works with folders, and copies them recursively.
+    assert is_a_folder(to_path),'to_path must be a folder, but '+repr(to_path)+' either does not exist or is not a folder'
+    dest=path_join(to_path,get_path_name(from_path))
+    copy_path(from_path,dest)
+copy_to_directory=copy_to_folder
+
 
 def copy_directory(from_path,to_path,*,extract=False):
     #Recursively copy a directory.
@@ -10159,7 +10176,7 @@ def get_module_path_from_name(module_name):
     return importlib.util.find_spec(module_name).origin
 
 
-def current_date():
+def get_current_date():
     """
     #This is annoying to type...so I added this function as a bit of sugar.
     """

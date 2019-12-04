@@ -1894,7 +1894,7 @@ def load_python_bindings(python_input):
                                                        get_parent_directory , \
                                                        get_file_name        , \
                                                        path_join            , \
-                                                       current_date
+                                                       get_current_date
                                         if before_line.count('`')==1:#give a lambda that takes one argument
                                             arg=before_line.split('`')[1].split('\\')[0]
                                             path=arg
@@ -1902,7 +1902,7 @@ def load_python_bindings(python_input):
                                                 try:
                                                     file_name=get_file_name(path)
                                                     directory=get_parent_directory(path)
-                                                    backup_path=path_join(directory,'.'+file_name+'.backup.'+str(current_date())+'.py')
+                                                    backup_path=path_join(directory,'.'+file_name+'.backup.'+str(get_current_date())+'.py')
                                                     file_contents=text_file_to_string(path)
                                                     string_to_text_file(backup_path,file_contents)
                                                 except BaseException as E:

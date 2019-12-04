@@ -71,6 +71,8 @@ KEYBOARD SHORTCUTS:
 	⌥ →    jump forward one word
 	⌥ ↓    jump down several lines
 	⌥ ↑    jump up several lines
+	⌥ !    run shell command
+	⌥ #    comment out the entire buffer and execute it
 	⌃ t    previous buffer in history regardless of where cursor is (stands for top)
 	⌃ b    next buffer in history regardless of where cursor is (stands for bottom)
 	LESS IMPORTANT AND MAYBE REMOVED IN FUTURE:
