@@ -8023,6 +8023,18 @@ def get_path_name(path,include_file_extension=True):
     return output
 get_folder_name=get_directory_name=get_file_name=get_path_name
 
+def get_relative_path(path,parent_directory=None):
+    #Take an absolute path, and turn it into a relative path starting from parent_directory
+    #parent_directory's default is get_current_directory()
+    if parent_directory is None:
+        parent_directory=get_current_directory()
+    assert isinstance(parent_directory,str),'parent_directory must be a string representing the root path to compare the given path against'
+    return os.path.relpath(path,parent_directory)
+
+def get_absolute_path(path):
+    #Given a relative path, return its absolute path
+    return os.path.abspath(path)
+
 def has_file_extension(file_path):
     return get_file_extension(file_path)==''
 
@@ -8138,12 +8150,11 @@ def get_file_paths(*directory_path                  ,
 
         if not include_file_extensions:
             #'x.png' --> 'x', 'text.txt' --> 'txt', etc. (See strip_file_extension for more details)
-            output=list(map(strip_file_extension   ,output))
+            output=list(map(strip_file_extension,output))
 
         if relative:
-            pwd=get_current_directory()
-            pwd=path_join(pwd,'')#If pwd looks 'like folder1/folder2', change it to 'folder1/folder2/'
-            output=[path[len(pwd):] if path.startswith(pwd) else path for path in output]
+            #Return relative paths instead of absolute paths
+            output=[get_relative_path(path,directory_path) for path in output]
 
         return output
 
