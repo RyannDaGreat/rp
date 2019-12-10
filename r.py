@@ -6428,7 +6428,7 @@ def regex_replace(string,regex,replacement):
     return re.sub(regex,replacement,string)
 
 def ring_terminal_bell():
-    print(end=chr(7))#This character should ring the TTY's bell, if that's possible.
+    print(end=chr(7),flush=True)#This character should ring the TTY's bell, if that's possible.
 
 def pterm():
     pseudo_terminal(locals(),globals())
