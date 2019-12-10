@@ -3623,9 +3623,9 @@ def print_verbose_stack_trace(exception):
     stackprinter=pip_import('stackprinter')
     try:
         if _disable_fansi:
-            stackprinter.show(exception)
+            stackprinter.show(exception,file=sys.stdout)
         else:
-            stackprinter.show(exception,style='darkbg2')
+            stackprinter.show(exception,style='darkbg2',file=sys.stdout)
     except ValueError:#ERROR: ValueError: Can't format KeyboardInterrupt(). Expected an exception instance, sys.exc_info() tuple,a frame or a thread object.
         print_stack_trace(exception)#Fallback when this fails
 
