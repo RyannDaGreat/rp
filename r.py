@@ -8066,6 +8066,7 @@ def get_file_paths(*directory_path                  ,
                     ):
     #Returns global paths.
     #If relative is False, we return global paths. Otherwise, we return relative paths to the current working directory 
+    #If relative is a string, we return paths relative to that string (otherwise if it's just True, we default to directory_path)
     #TODO: Make sure this function isn't redundant before committing to keeping it forever!
     #TODO: In particular, make sure this isn't redundant with respect to get_all_file_names, or else merge them together.
     #TODO: Add a recursive option, filters, etc.
@@ -8098,14 +8099,17 @@ def get_file_paths(*directory_path                  ,
     #    ⮤ get_file_paths('Tests/First','Inputs',sort_by='name',just_file_names=True,include_file_extension=False,file_extension_filter='bmp png')  #Filtering the extension type to just .bmp and .png images
     #    ans =  ['01', '04']
     #
+
     if sort_by is not None:
         sort_by=sort_by.lower()#Don't be case-sensitive. That's annoying. Reassign it here so we dont need to make it nonlocal.
-    def recursion_helper(*directory_path):
-        if directory_path==():#If the user didn't specify a path...
-            directory_path=get_current_directory()#...default to the current directory
-        else:
-            directory_path=os.path.join(*directory_path)#Turn ('Ryan','Documents','Images') into 'Ryan/Documents/Images'
 
+    if directory_path==():#If the user didn't specify a path...
+        directory_path=get_current_directory()#...default to the current directory
+    else:
+        directory_path=os.path.join(*directory_path)#Turn ('Ryan','Documents','Images') into 'Ryan/Documents/Images'
+
+    def recursion_helper(directory_path):
+        assert isinstance(directory_path,str),'This is an internal assertion that should never fail. If this assertion does fail, get_file_paths has a bug.'
         assert directory_exists(directory_path),'get_file_paths error: '+repr(directory_path)+' is not a directory'
 
         all_paths=[os.path.join(directory_path,name) for name in os.listdir(directory_path)]
@@ -8139,7 +8143,7 @@ def get_file_paths(*directory_path                  ,
 
         if file_extension_filter is not None:
             #'x.png' --> 'x', 'text.txt' --> 'txt', etc. (See strip_file_extension for more details)
-            assert type(file_extension_filter)==str,'get_file_paths: For file_extension_filter, right now only space-split whitelists are supported.'
+            assert type(file_extension_filter)==str,'get_file_paths: For file_extension_filter, right now only space-split whitelists are supported, such as "png jpg bmp gif"'
             file_extension_whitelist=file_extension_filter.split()
             output=[path for path in output if get_file_extension(path) in file_extension_whitelist]
 
@@ -8152,13 +8156,17 @@ def get_file_paths(*directory_path                  ,
             #'x.png' --> 'x', 'text.txt' --> 'txt', etc. (See strip_file_extension for more details)
             output=list(map(strip_file_extension,output))
 
-        if relative:
-            #Return relative paths instead of absolute paths
-            output=[get_relative_path(path,directory_path) for path in output]
-
         return output
 
-    return recursion_helper(*directory_path)
+    output=recursion_helper(directory_path)
+
+    if relative:
+        #Return relative paths instead of absolute paths
+        relative_to=relative if isinstance(relative,str) else directory_path
+        output=[get_relative_path(path,relative_to) for path in output]
+
+    return output
+get_all_paths=get_file_paths
 
 #endregion
 
@@ -10365,7 +10373,29 @@ def set_os_volume(percent):
         pip_import('osascript').osascript('set volume output volume '+str(int(percent)))
     else:
         assert False,'Sorry, currently only MacOS is supported for setting the volume. This might change in the future.'
-        
+
+def fuzzy_string_match(string,target,*,case_sensitive=True):
+    # >>> fuzzy_string_match('apha','alpha')
+    #ans = True
+    # >>> fuzzy_string_match('alpha','alpha')
+    #ans = True
+    # >>> fuzzy_string_match('aa','alpha')
+    #ans = True
+    # >>> fuzzy_string_match('aqa','alpha')
+    #ans = False
+    # >>> fuzzy_string_match('e','alpha')
+    #ans = False
+    # >>> fuzzy_string_match('h','alpha')
+    #ans = False
+    if not case_sensitive:
+        string=string.lower()
+        target=target.lower()
+
+    import re
+    pattern='.*'.join(re.escape(char) for char in string)
+    pattern='.*'+pattern+'.*'
+    return bool(re.fullmatch(pattern,target))
+
 from .tracetraptest import * #A few experimental debugging features. These things mostly need to be renamed.
 
 if __name__ == "__main__":
