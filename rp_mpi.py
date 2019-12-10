@@ -5,7 +5,7 @@ comm=MPI.COMM_WORLD
 rank=comm.rank
 size=comm.size
 
-__all__='start_slave parallel_mapper exit_mpi'.split()
+# __all__='start_slave parallel_mapper exit_mpi'.split()
 
 def print_verbose_stack_trace(exception):
     import stackprinter
