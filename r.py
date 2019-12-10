@@ -10396,6 +10396,16 @@ def fuzzy_string_match(string,target,*,case_sensitive=True):
     pattern='.*'+pattern+'.*'
     return bool(re.fullmatch(pattern,target))
 
+def get_source_code(object):
+    #EXAMPLE:
+    # >>> get_source_code(get_source_code)
+    # ans = def get_source_code(object):
+    #     import inspect
+    #     return inspect.getsource(object)
+    import inspect
+    return inspect.getsource(object)
+
+
 from .tracetraptest import * #A few experimental debugging features. These things mostly need to be renamed.
 
 if __name__ == "__main__":
