@@ -16,7 +16,7 @@ MASTER_TO_SLAVE_TAG=1923784#Arbitrary unique integer
 def exec_in_new_thread(code):
     run_as_new_thread(lambda:exec(code))
 
-def eval_function_from_name(function_name,*args,**kwargs):
+def eval_function_from_name(function_name,scope,*args,**kwargs):
     #Pass code that genrates a function called function_name
     #It will return the value that function returns when passed *args and **kwargs
     #EXAMPLE:
@@ -25,7 +25,6 @@ def eval_function_from_name(function_name,*args,**kwargs):
 
     assert isinstance(function_name,str),'Function name should be a string'
 
-    scope=globals()
     assert function_name in scope,'This name isn\'t in the scope: '+repr(function_name)
     function=scope[function_name]
     assert callable(function),'You tried to call an object that exists called '+repr(function_name)+', but it\'s not a function'
@@ -33,7 +32,7 @@ def eval_function_from_name(function_name,*args,**kwargs):
     output=function(*args,**kwargs)
     return output
 
-def accept_command(command):
+def accept_command(command,scope):
     #Parse the command object (passed as a dict for mpi4py's convenience)
     assert isinstance(command,dict)
     function_name  =command['function_name'  ]#The name of the function
@@ -51,7 +50,7 @@ def accept_command(command):
     #Create the reply
     reply={}#If we don't error, add a 'result' key to reply containing the function result
     try:
-        reply['result']=eval_function_from_name(function_name,*function_args,**function_kwargs)
+        reply['result']=eval_function_from_name(function_name,scope,*function_args,**function_kwargs)
     finally:
         #No error handling yet...the indication that you have an error is that the reply is empty, and the stack trace this thread prints
         comm.isend(obj=reply,dest=reply_dest,tag=reply_tag)
@@ -150,12 +149,12 @@ def parallel_mapper(function,dests=None):
 
     return parallel_map
 
-def slave_loop():
+def slave_loop(scope=globals()):
     while True:
         command=comm.irecv(tag=MASTER_TO_SLAVE_TAG)
         command=command.wait()
         try:
-            accept_command(command)
+            accept_command(command,scope=scope)
         except BaseException as e:
             print_verbose_stack_trace(e)
             print(end='',flush=True)
@@ -170,15 +169,35 @@ def exit_mpi():
 
 
 
-def printy(string):
-    print(rank,string,flush=True)
-    return rank**2
 
-# start_slave()#Every processor should call this exactly once, AFTER you've defined all of your functions...
+# if __name__=='__main__':
 
-if __name__=='__main__':
-    if rank==0:
-        output=parallel_mapper(printy)(['Hello']*size)
-        print("FINAL OUTPUT =",output,flush=True)
+#     #A demo of how to use this module
 
-# exit_mpi()
+#     def printy(string):
+#         print(rank,string,flush=True)
+#         return rank**2
+
+#     start_slave()#Every processor should call this exactly once, AFTER you've defined all of your functions...
+
+#     if rank==0:
+#         output=parallel_mapper(printy)(['Hello']*size)
+#         print("FINAL OUTPUT =",output,flush=True)
+
+#     exit_mpi()
+
+
+def test_1(x):
+        print(rank,x,flush=True)
+        return rank,x
+
+def test_2():
+        return parallel_mapper(test_1)([rank]*size)
+
+
+if rank==0:
+    output=parallel_mapper(test_2)()
+    print("FINAL OUTPUT =",output,flush=True)
+
+start_slave()
+exit_mpi()
