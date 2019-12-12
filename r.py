@@ -9659,8 +9659,7 @@ def edit_distance(string_from, string_to):
     return tbl[i,j]
 levenshtein_distance=edit_distance#Synonyms, for now...
 
-
-class Timeout:
+class Timeout:  
     #TODO: Make this work on windows (I won't think it will work on anything but UNIX because of the signal handling)
     # https://stackoverflow.com/questions/2281850/timeout-function-if-it-takes-too-long-to-finish
     # Use this function to prevent a block of code from taking too long to run, else throw a TimeoutError
@@ -9673,10 +9672,13 @@ class Timeout:
     def handle_timeout(self, signum, frame):
         raise TimeoutError(self.error_message)
     def __enter__(self):
+        import signal
         signal.signal(signal.SIGALRM, self.handle_timeout)
         signal.alarm(self.seconds)
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, type, value, traceback):                                                                                  
+        import signal                                                                                                            
         signal.alarm(0)
+                                                                                                                                 
 class TimeoutError(Exception):
     pass
 def timeout(*timeout_args,**timeout_kwargs):

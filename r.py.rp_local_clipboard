@@ -1,2 +1,1 @@
-def is_a_module(path):
-    return is_a_folder(path) and any(is_a_file(x) and get_file_extension(x)=='py' for x in get_file_paths(path))
+
