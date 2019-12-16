@@ -10331,6 +10331,13 @@ def is_a_square_matrix(matrix):
     matrix=as_numpy_array(matrix)
     return is_a_matrix(matrix) and matrix.shape[0]==matrix.shape[1]
 
+def square_matrix_size(matrix):
+    #Square matrices are of shape (N,N) where N is some integer
+    #This function returns N
+    #Lets you not have to choose between matrix.shape[0] and matrix.shape[1], which are both equivalent.
+    matrix=as_numpy_array(matrix)
+    assert is_a_square_matrix(matrix)
+    return matrix.shape[0]
 
 _prime_factors_cache={}
 def prime_factors(number):
