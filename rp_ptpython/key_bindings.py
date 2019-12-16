@@ -645,7 +645,7 @@ def handle_character(buffer,char):
                 return True
             # buffer.insert_text(plural_noun(name))#If we can't find a name that fits, and 'ans' isn't an option, just choose a plural name
             # return True 
-        keywords={'with', 'nonlocal', 'while', 'None', 'global', 'as', 'is', 'and', 'else', 'yield', 'raise', 'del', 'break', 'in', 'not', 'False', 'assert', 'try', 'def', 'return', 'if', 'finally', 'lambda', 'for', 'from', 'True', 'pass', 'continue', 'elif', 'except', 'class', 'or', 'import'}
+        keywords={'async','await','with', 'nonlocal', 'while', 'None', 'global', 'as', 'is', 'and', 'else', 'yield', 'raise', 'del', 'break', 'in', 'not', 'False', 'assert', 'try', 'def', 'return', 'if', 'finally', 'lambda', 'for', 'from', 'True', 'pass', 'continue', 'elif', 'except', 'class', 'or', 'import'}
         from rp import split_python_tokens,is_namespaceable
         if char==' ' and (before_line=='for ' or before_line.endswith(' for ')) and starts_with_any(after_line,' in]','in)','in}',' in '):
             before_tokens=split_python_tokens(before_line)[:-1]#Get rid of the 'for'
@@ -992,6 +992,13 @@ def handle_character(buffer,char):
             refresh_strings_from_buffer()
 
       #endregion
+
+      #region async and await
+        if char==' ' and before_line.lstrip in ('async','await') and not after_line.strip():
+            buffer.insert_text(' ')
+            return True
+      #endregion
+
 
       #region misc tweaks
 
@@ -1370,6 +1377,9 @@ def handle_character(buffer,char):
         if char=='\n' and before_line.lstrip() in {'while ','if '} and after_line.strip()==':':
             buffer.insert_text('True')
 
+
+
+
         # if char==' ' and after_line.startswith(')') and endswithany(before_line,*'\'"'):
         #     #print('hello'|) ---> print('hello',|)
         #     #print('hello'|) -/-> print('hello' |)
@@ -1664,7 +1674,7 @@ def load_python_bindings(python_input):
                     might_be_in_string_or_comment='"' in before_line and after_line.count('"')==before_line.count('"') or \
                                        "'" in before_line and after_line.count("'")==before_line.count("'") or \
                                        '#' in before_line
-                    keywords={'with', 'nonlocal', 'while', 'None', 'global', 'as', 'is', 'and', 'else', 'yield', 'raise', 'del', 'break', 'in', 'not', 'False', 'assert', 'try', 'def', 'return', 'if', 'finally', 'lambda', 'for', 'from', 'True', 'pass', 'continue', 'elif', 'except', 'class', 'or', 'import'}
+                    keywords={'with', 'nonlocal', 'while', 'None', 'global', 'as', 'is', 'and', 'else', 'yield', 'raise', 'del', 'break', 'in', 'not', 'False', 'assert', 'try', 'def', 'return', 'if', 'finally', 'lambda', 'for', 'from', 'True', 'pass', 'continue', 'elif', 'except', 'class', 'or', 'import', 'async', 'await'}
                     if before_line.strip() and not might_be_in_string_or_comment:
                         if not starts_with_any(before_line.lstrip() , 'from ','import '):
                             i_triggers_ifelse=False
@@ -2616,7 +2626,7 @@ def load_python_bindings(python_input):
         #     #"for | in :"  --->  "for _ in |:"
         #     buffer.insert_text('ans')
         #     return
-        keywords={'with', 'nonlocal', 'while', 'None', 'global', 'as', 'is', 'and', 'else', 'yield', 'raise', 'del', 'break', 'in', 'not', 'False', 'assert', 'try', 'def', 'return', 'if', 'finally', 'lambda', 'for', 'from', 'True', 'pass', 'continue', 'elif', 'except', 'class', 'or', 'import'}
+        keywords={'async','await','with', 'nonlocal', 'while', 'None', 'global', 'as', 'is', 'and', 'else', 'yield', 'raise', 'del', 'break', 'in', 'not', 'False', 'assert', 'try', 'def', 'return', 'if', 'finally', 'lambda', 'for', 'from', 'True', 'pass', 'continue', 'elif', 'except', 'class', 'or', 'import'}
 
         if regex_match(before,r'\s*for\s+\w+\s+in\s+') and after.strip()==':':
             #"for x in |:"  --->  "for x in ans:"
@@ -2861,9 +2871,11 @@ def load_python_bindings(python_input):
             elif is_autocompletable_prefix('nonlocal '):autocomplete_prefix('nonlocal ',left=0)
             elif is_autocompletable_prefix('global '):autocomplete_prefix('global ',left=0)
             elif is_autocompletable_prefix('raise '):autocomplete_prefix('raise ',left=0)
+            elif is_autocompletable_prefix('async '):autocomplete_prefix('async ',left=0)
+            # elif is_autocompletable_prefix('async def ():'):autocomplete_prefix('def ():',left=3)
 
             elif is_autocompletable_prefix('print()',allow_single_liner=True):autocomplete_prefix('print()',left=1);function_comma_flag=True
-            elif is_autocompletable_prefix('pass',allow_single_liner=False):autocomplete_prefix('pass',left=0)
+            elif is_autocompletable_prefix('pass',allow_single_liner=False):autocomplete_prefix('pass',left=0);function_comma_flag=True
 
             elif is_autocompletable_prefix('except :',allow_single_liner=False):autocomplete_prefix('except :',left=1)
             elif is_autocompletable_prefix('with :'):autocomplete_prefix('with :',left=1)

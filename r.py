@@ -10408,6 +10408,59 @@ def get_source_code(object):
     return inspect.getsource(object)
 
 
+def get_english_synonyms_via_nltk(word):
+    #This thing is really crappy...but also really funny xD
+    #This thing belongs in death of the mind honestly...
+    #Try get_bad_english_synonyms('spade') and it won't list shovel...
+    #Try get_bad_english_synonyms('cat') and it lists 'vomit', 'spew'...
+    #Try get_bad_english_synonyms('cheese') and it lists 'vomit', {'cheeseflower', 'Malva_sylvestris', 'cheese', 'tall_mallow', 'high_mallow'}
+    #https://www.geeksforgeeks.org/get-synonymsantonyms-nltk-wordnet-python/
+    pip_import('nltk')
+    from nltk.corpus import wordnet 
+    synsets = wordnet.synsets(word)
+    if not synsets:
+        return set()
+    synonym_sets = [{y.name() for y in x.lemmas()} for x in synsets]#Sets of synonyms for different definitions. This function ignores that. For example, given word=='dog', 'hot-dog' and 'canine' would be in different synonym_sets. But for the sake of simplicity, this function will return them all as one big set. If you want something more sophisticated, just use the nltk library or modify this function
+    synonyms = set.union(*synonym_sets)
+    return synonyms
+
+
+@memoized
+def _datamuse_words_request(query,word):
+    #Uses https://www.datamuse.com/api/
+    import requests,json
+    response=requests.get('https://api.datamuse.com/words?'+query+'='+word)
+    content=response.content.decode()
+    content=json.loads(content)
+    return [x['word'] for x in content]
+
+
+def get_english_synonyms_via_datamuse(word):
+    #EXAMPLE: get_english_synonyms_via_datamuse('food')
+    #Uses https://www.datamuse.com/api/
+    return _datamuse_words_request('rel_syn',word)
+
+def get_english_related_words_via_datamuse(word):
+    #EXAMPLE: get_english_synonyms_via_datamuse('food')
+    #Uses https://www.datamuse.com/api/
+    return _datamuse_words_request('ml',word)
+
+def get_english_antonyms_via_datamuse(word):
+    #EXAMPLE: get_english_synonyms_via_datamuse('good')
+    #Uses https://www.datamuse.com/api/
+    return _datamuse_words_request('rel_ant',word)
+
+def get_english_rhymes_via_datamuse(word):
+    #EXAMPLE: get_english_synonyms_via_datamuse('breath')#poppy: what rhymes with breath?
+    #Uses https://www.datamuse.com/api/
+    return _datamuse_words_request('rel_rhy',word)
+
+def get_english_synonyms(word):
+    try:
+        return get_english_synonyms_via_datamuse(word)
+    except:
+        return get_english_synonyms_via_nltk(word)
+
 from .tracetraptest import * #A few experimental debugging features. These things mostly need to be renamed.
 
 if __name__ == "__main__":
