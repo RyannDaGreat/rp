@@ -1,3 +1,15 @@
+#TODO: When x makes sense, y will happen when it makes sense (general ideas. )
+
+
+When it makes sense, - will be turned into _.
+	Examples:
+		-=6  -->  _=6
+		def f(-,) --> def f(_,)
+		if -    if _
+
+
+
+
 
 SUMMARY
 	This documention is for RP (aka RyanPython).

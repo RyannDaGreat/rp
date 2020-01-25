@@ -6396,7 +6396,7 @@ def product(*i):#redefined from earlier in r.py, but it does the same thing. It'
     from functools import reduce
     return reduce(lambda x,y:x*y,i,1)
 
-def fibbonacci(n):
+def fibonacci(n):
     #Calculate fibbonacci in constant time
     #www.desmos.com/calculator/6q1csqqoqo
     φ=.5+.5*5**.5#The golden ratio
@@ -7230,7 +7230,7 @@ def scatter_plot(x,y=None,*,block=False,clear=True,dot_size=1):
         )
     plt.show(block=block)
     if not block:
-        plt.pause(.1)
+        plt.pause(.01)
 
 def line_split(string):
     #I find myself often wishing this function exists for a few seconds before remembering String.splitlines exists
@@ -8520,7 +8520,9 @@ def _grayscale_image_to_rgba_image     (image):return _rgb_image_to_rgba_image(_
 
 def _rgb_image_to_grayscale_image      (image):return rgb_to_grayscale(image)
 def _rgb_image_to_rgb_image            (image):return image.copy()
-def _rgb_image_to_rgba_image           (image):return np.concatenate((image,np.ones((*image.shape[:2],255 if is_byte_image(image) else 1),image.dtype)),2)#TODO TEST ME!!!
+def _rgb_image_to_rgba_image           (image):
+    assert False,'_rgb_image_to_rgba_image: Please fix me Im broken?!'
+    return np.concatenate((image,np.ones((*image.shape[:2],255 if is_byte_image(image) else 1),image.dtype)),2)#TODO TEST ME!!!
 
 def _rgba_image_to_grayscale_image     (image):return _rgb_image_to_grayscale_image(_rgba_image_to_rgb_image(image))
 def _rgba_image_to_rgb_image           (image):return image[:,:,:3]
