@@ -6401,6 +6401,17 @@ def fibonacci(n):
     #www.desmos.com/calculator/6q1csqqoqo
     φ=.5+.5*5**.5#The golden ratio
     return round((φ**n-φ**(-n)*(-1)**n)/5**.5)
+def inverse_fibonacci(n):
+    #Runs in constant time
+    #inverse_fibonacci(fibonacci(3415))==3415
+    #inverse_fibonacci(fibonacci(1234))==1234
+    #inverse_fibonacci(fibonacci(9471))==9471
+    #inverse_fibonacci(fibonacci(  x ))==x for all non-negative integer x
+    #https://stackoverflow.com/questions/5162780/an-inverse-fibonacci-algorithm
+    φ=.5+.5*5**.5#The golden ratio
+    from math import log as ln
+    return int(ln(n*5**.5+.5)/ln(φ))
+
 from math import factorial
 def ncr(n, r):
     #choose r objects from n
