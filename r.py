@@ -1133,13 +1133,18 @@ def save_image(image,file_name=None,add_png_extension: bool = True):
     #Simply save a numpy image to a file.
     #The add_png_extension is annoying legacy stuff...sorry...it would break some of my other scripts to change that right now.
     #Provide several fallbacks to saving an image file
-    try:from scipy.misc import imsave
+    try:
+        from scipy.misc import imsave
     except:
-        pip_import('cv2')
-        from cv2 import imwrite
-        imsave=lambda filename,data: imwrite(filename,cv_bgr_rgb_swap(as_rgba_image(as_byte_image(data))))
-    try:from skimage.io import imsave
-    except:pass
+        try:
+            pip_import('cv2')
+            from cv2 import imwrite
+            imsave=lambda filename,data: imwrite(filename,cv_bgr_rgb_swap(as_rgba_image(as_byte_image(data))))
+        except:
+            try:
+                from skimage.io import imsave
+            except:
+                pass
     if file_name is None:
         file_name=str(millis()) + ".png"  # ⟵ Default image name
     if add_png_extension and not has_file_extension(file_name):#Save a png file by default
@@ -6726,7 +6731,6 @@ class Contour(np.ndarray):
             yield self
         self._descendants_cache = list(helper())
         return self._descendants_cache
-
 def cv_find_contours(image,*,include_every_pixel=False):
     cv2=pip_import('cv2')
     #Contours are represented in the form [[x,y],[x,y],[x,y]].
