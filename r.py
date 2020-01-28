@@ -1137,12 +1137,12 @@ def save_image(image,file_name=None,add_png_extension: bool = True):
         from scipy.misc import imsave
     except:
         try:
-            pip_import('cv2')
-            from cv2 import imwrite
-            imsave=lambda filename,data: imwrite(filename,cv_bgr_rgb_swap(as_rgba_image(as_byte_image(data))))
+            from skimage.io import imsave
         except:
             try:
-                from skimage.io import imsave
+                pip_import('cv2')
+                from cv2 import imwrite
+                imsave=lambda filename,data: imwrite(filename,cv_bgr_rgb_swap(as_rgba_image(as_byte_image(data))))
             except:
                 pass
     if file_name is None:
@@ -8045,7 +8045,7 @@ def get_absolute_path(path):
     return os.path.abspath(path)
 
 def has_file_extension(file_path):
-    return get_file_extension(file_path)==''
+    return get_file_extension(file_path)!=''
 
 def date_modified(path):
     #Get the date a path was modified
