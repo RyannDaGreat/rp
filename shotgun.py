@@ -49,6 +49,7 @@ packages=[
 'blist',
 'ipython',
 'pypager',
+'scikit-image',
 ]
 def shotgun():
     for package in packages:

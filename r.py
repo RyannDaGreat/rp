@@ -827,6 +827,15 @@ def resize_image(image,scale,interp='bilinear'):
         from scipy.misc import imresize
         return imresize(image,float(scale),interp)#We multiply scale by 100 because it's measured in percent
     except:pass
+    try:
+        assert is_image(image)
+        pip_import("skimage")
+        from skimage.transform import resize
+        height,width=image.shape[:2]
+        height=int(height*scale)
+        width =int(width *scale)
+        return resize(image,(height,width))
+    except:pass
     if is_number(scale):
         try:
             return cv_apply_affine_to_image(dog,scale_affine_2d(scale),output_resolution=scale)#Doesn't support 'interp'
@@ -6498,6 +6507,7 @@ known_pypi_module_package_names={
     'PIL':'Pillow',
     'skvideo.io':'sk-video',
     'lib2to3':'2to3',
+    'skimage':'scikit-image',
     'serial':'pyserial',#WARNING: there is a 'pip install serial' which ALSO creates a 'serial' module. This module is the WRONG SERIAL MODULE.
 }
 def pip_import(module_name,package_name=None):
@@ -6683,6 +6693,40 @@ def _cv_helper(*,image,copy,antialias):
     if copy     :image=image.copy();#s_byte_image(as_rgb_image(image))#Decide whether we should mutate an image or create a new one (which is less efficient but easier to write in my opinion)
     return image,kwargs
 
+class Contour(np.ndarray):
+    # __slots__ = ['parent','children','_descendants_cache','_is_inner_cache']#Prevent adding new attriutes. This makes it faster.
+    @property
+    def is_inner(self):
+        #https://stackoverflow.com/questions/45323590/do-contours-returned-by-cvfindcontours-have-a-consistent-orientation
+        if hasattr(self,'_is_inner_cache'):
+            return self._is_inner_cache
+        self._is_inner_cache=is_counter_clockwise(self)#Edge case I don't know what to do with: what should we return if  len(self)<=2?
+        return self._is_inner_cache
+
+    @property
+    def is_outer(self):
+        return not self.is_inner#Edge case I don't know what to do with: what should we return if  len(self)<=2? Same problem as in is_inner
+
+    @property
+    def is_solid_white(self):
+        return not self.children and self.is_outer
+
+    @property
+    def is_solid_black(self):
+        return not self.children and self.is_inner
+
+    @property
+    def descendants(self):
+        #Return not just the immediate children, but their children's children etc recursively
+        if hasattr(self,'_descendants_cache'):
+            return self._descendants_cache
+        def helper():
+            for child in self.children:
+                yield child.descendants()
+            yield self
+        self._descendants_cache = list(helper())
+        return self._descendants_cache
+
 def cv_find_contours(image,*,include_every_pixel=False):
     cv2=pip_import('cv2')
     #Contours are represented in the form [[x,y],[x,y],[x,y]].
@@ -6695,40 +6739,6 @@ def cv_find_contours(image,*,include_every_pixel=False):
     image=as_grayscale_image(image)
     raw_contours, hierarchy = cv2.findContours(image,cv2.RETR_CCOMP,cv2.CHAIN_APPROX_NONE if include_every_pixel else cv2.CHAIN_APPROX_SIMPLE)[-2:]
 
-    class Contour(np.ndarray):
-        __slots__ = ['parent','children','_descendants_cache','_is_inner_cache']#Prevent adding new attriutes. This makes it faster.
-
-        @property
-        def is_inner(self):
-            #https://stackoverflow.com/questions/45323590/do-contours-returned-by-cvfindcontours-have-a-consistent-orientation
-            if hasattr(self,'_is_inner_cache'):
-                return self._is_inner_cache
-            self._is_inner_cache=is_counter_clockwise(self)#Edge case I don't know what to do with: what should we return if  len(self)<=2?
-            return self._is_inner_cache
-
-        @property
-        def is_outer(self):
-            return not self.is_inner#Edge case I don't know what to do with: what should we return if  len(self)<=2? Same problem as in is_inner
-
-        @property
-        def is_solid_white(self):
-            return not self.children and self.is_outer
-
-        @property
-        def is_solid_black(self):
-            return not self.children and self.is_inner
-
-        @property
-        def descendants(self):
-            #Return not just the immediate children, but their children's children etc recursively
-            if hasattr(self,'_descendants_cache'):
-                return self._descendants_cache
-            def helper():
-                for child in self.children:
-                    yield child.descendants()
-                yield self
-            self._descendants_cache = list(helper())
-            return self._descendants_cache
 
     contours=[as_points_array(raw_contour).view(Contour) for raw_contour in raw_contours]#This is how we subclass numpy arrays (by using (some ndarray).view(wrapper class))
 
