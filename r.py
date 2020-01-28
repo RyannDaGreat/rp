@@ -6396,38 +6396,6 @@ def product(*i):#redefined from earlier in r.py, but it does the same thing. It'
     from functools import reduce
     return reduce(lambda x,y:x*y,i,1)
 
-@memoized
-def fibonacci(n):
-    assert n>=0
-    if n<71:
-        #Although this method is beautiful, it's not accurate past n=70 (due to floating point precision)
-        #www.desmos.com/calculator/6q1csqqoqo
-        #Calculate fibbonacci in constant time
-        φ=.5+.5*5**.5#The golden ratio
-        return round((φ**n-φ**(-n)*(-1)**n)/5**.5)
-    else:
-        #The less cool, but more accurate way
-        #This method takes O(n) time (but it doesn't really matter for almost all realistic cases)
-        a=0
-        b=1
-        for _ in range(n):
-            a,b=b,a+b
-        return a
-
-
-@memoized
-def inverse_fibonacci(n):
-    #Runs in constant time
-    #inverse_fibonacci(fibonacci(3415))==3415
-    #inverse_fibonacci(fibonacci(1234))==1234
-    #inverse_fibonacci(fibonacci(9471))==9471
-    #inverse_fibonacci(fibonacci(  x ))==x for all non-negative integer x
-    #https://stackoverflow.com/questions/5162780/an-inverse-fibonacci-algorithm
-    #TODO: Make accurate past n=70, similar to how def fibonacci(n) was made (split into two cases)
-    φ=.5+.5*5**.5#The golden ratio
-    from math import log as ln
-    return int(ln(n*5**.5+.5)/ln(φ))
-
 from math import factorial
 def ncr(n, r):
     #choose r objects from n
@@ -10498,6 +10466,36 @@ def get_english_synonyms(word):
         return get_english_synonyms_via_nltk(word)
 
 from .tracetraptest import * #A few experimental debugging features. These things mostly need to be renamed.
+
+@memoized
+def fibonacci(n):
+    assert n>=0
+    if n<71:
+        #Although this method is beautiful, it's not accurate past n=70 (due to floating point precision)
+        #www.desmos.com/calculator/6q1csqqoqo
+        #Calculate fibbonacci in constant time
+        φ=.5+.5*5**.5#The golden ratio
+        return round((φ**n-φ**(-n)*(-1)**n)/5**.5)
+    else:
+        #The less cool, but more accurate way
+        #This method takes O(n) time (but it doesn't really matter for almost all realistic cases)
+        a=0
+        b=1
+        for _ in range(n):
+            a,b=b,a+b
+        return a
+@memoized
+def inverse_fibonacci(n):
+    #Runs in constant time
+    #inverse_fibonacci(fibonacci(3415))==3415
+    #inverse_fibonacci(fibonacci(1234))==1234
+    #inverse_fibonacci(fibonacci(9471))==9471
+    #inverse_fibonacci(fibonacci(  x ))==x for all non-negative integer x
+    #https://stackoverflow.com/questions/5162780/an-inverse-fibonacci-algorithm
+    #TODO: Make accurate past n=70, similar to how def fibonacci(n) was made (split into two cases)
+    φ=.5+.5*5**.5#The golden ratio
+    from math import log as ln
+    return int(ln(n*5**.5+.5)/ln(φ))
 
 if __name__ == "__main__":
     print(end='\r')
