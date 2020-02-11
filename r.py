@@ -963,6 +963,22 @@ def randints(N,a_inclusive=99,b_inclusive=0):
     except:pass
     return out
 random_ints=randints
+def randint_complex(*args,**kwargs):
+    #Arguments passed to this function are passed to 'randint'
+    #The only difference between this function and randints is that this also generates a complex component
+    #EXAMPLE:
+    #  >>> randints_complex(100)
+    # ans = 56.+64.j
+    #  >>> randint_complex(1)
+    # ans = (1+1j)
+    #  >>> randint_complex(1)
+    # ans = 0j
+    #  >>> randint_complex(1)
+    # ans = (1+0j)
+    #  >>> randint_complex(1)
+    # ans = 0j
+    return randint(*args,**kwargs)+randint(*args,**kwargs)*1j
+random_int_complex=randint_complex
 def randints_complex(*args,**kwargs):
     #Arguments passed to this function are passed to 'randints'
     #The only difference between this function and randints is that this also generates a complex component
@@ -975,14 +991,31 @@ def random_float(exclusive_max: float = 1,inclusive_min=0) -> float:
     inclusive_min,exclusive_max=sorted([inclusive_min,exclusive_max])
     return (random.random())*(exclusive_max-inclusive_min)+inclusive_min
 def random_floats(N,exclusive_max=1,inclusive_min=0):
-    # Generate N random integers
-    # Example: random_floats(10)   ====   [9, 36, 82, 49, 13, 9, 62, 81, 80, 66]
+    # Generate N uniformly distributed random floats
+    # Example: random_floats(10)   ====   [0.547 0.516 0.421 0.698 0.732 0.885 0.947 0.668 0.857 0.237]
     # This function exists for convenience when using pseudo_terminal (wasn't really meant for use in long-term code, though it totally could be)
     assert N>=0 and N==int(N),'Cannot have a non-counting-number length: N='+repr(N)
     inclusive_min,exclusive_max=sorted([inclusive_min,exclusive_max])
-    try:return (np.random.randn(N))*(exclusive_max-inclusive_min)+inclusive_min#Do this IFF we have numpy for convenience's sake
+    try:return (np.random.rand(N))*(exclusive_max-inclusive_min)+inclusive_min#Do this IFF we have numpy for convenience's sake
     except:pass
     return [random_float(a_inclusive,b_inclusive) for _ in range(N)]
+def random_floats_complex(*args,**kwargs):
+    #Arguments passed to this function are passed to 'random_floats'
+    #The only difference between this function and randints is that this also generates a complex component
+    #EXAMPLE:
+    # >>> random_floats_complex(10)
+    #ans = [0.611+0.569j 0.371+0.036j 0.469+0.336j 0.615+0.069j 0.329+0.16j  0.896+0.22j  0.22 +0.668j 0.901+0.741j 0.827+0.937j 0.619+0.513j]
+    # >>> random_floats_complex(10,-1)
+    #ans = [-0.504-0.998j -0.668-0.345j -0.104-0.952j -0.532-0.019j -0.949-0.488j -0.02 -0.82j  -0.805-0.194j -0.021-0.287j -0.708-0.231j -0.152-0.159j]
+    # >>> random_floats_complex(10,-1,0)
+    #ans = [-0.433-0.792j -0.71 -0.633j -0.395-0.383j -0.782-0.336j -0.176-0.176j -0.78 -0.16j  -0.505-0.978j -0.199-0.963j -0.98 -0.456j -0.231-0.775j]
+    # >>> random_floats_complex(10,-1,1)
+    #ans = [-0.139-0.101j  0.84 -0.259j  0.347+0.632j -0.362+0.036j  0.002-0.942j -0.685+0.176j  0.852-0.988j  0.188-0.134j  0.011-0.434j -0.578-0.883j]
+    # >>> random_floats_complex(10,0,100)
+    #ans = [40.909+10.029j 51.376+61.357j 15.713+25.714j 99.301+76.956j  5.253+21.822j  8.723+75.36j  15.964+85.891j 20.968+12.191j 37.997+92.09j  87.132+89.107j]
+
+    return random_floats(*args,**kwargs)+random_floats(*args,**kwargs)*1j
+
 def random_chance(probability: float = .5) -> bool:
     return random_float() < probability
 def random_batch(full_list,batch_size: int = None,retain_order: bool = False):
@@ -2576,7 +2609,10 @@ def MIDI_output(message: list):
         if not __midiout:
             import rtmidi  # pip3 install python-rtmidi
             __midiout=rtmidi.RtMidiOut()
-            available_ports=__midiout.get_ports()
+            try:
+                available_ports=__midiout.get_ports()
+            except AttributeError:#AttributeError: 'midi.RtMidiOut' object has no attribute 'get_ports': See https://stackoverflow.com/questions/38166344/attributeerror-in-python-rtmidi-sample-code
+                available_ports=__midiout.ports
             if available_ports:
                 __midiout.open_port(0)
                 print("r.MIDI_output: Port Output Name: '" + __midiout.get_ports()[0])
@@ -10510,6 +10546,8 @@ def inverse_fibonacci(n):
     φ=.5+.5*5**.5#The golden ratio
     from math import log as ln
     return int(ln(n*5**.5+.5)/ln(φ))
+
+
 
 if __name__ == "__main__":
     print(end='\r')
