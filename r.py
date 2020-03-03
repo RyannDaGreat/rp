@@ -990,6 +990,8 @@ random_ints_complex=randints_complex
 def random_float(exclusive_max: float = 1,inclusive_min=0) -> float:
     inclusive_min,exclusive_max=sorted([inclusive_min,exclusive_max])
     return (random.random())*(exclusive_max-inclusive_min)+inclusive_min
+def random_float_complex(exclusive_max: float = 1,inclusive_min=0) -> float:
+    return random_float(exclusive_max=exclusive_max,inclusive_min=inclusive_min)+1j*random_float(exclusive_max=exclusive_max,inclusive_min=inclusive_min)
 def random_floats(N,exclusive_max=1,inclusive_min=0):
     # Generate N uniformly distributed random floats
     # Example: random_floats(10)   ====   [0.547 0.516 0.421 0.698 0.732 0.885 0.947 0.668 0.857 0.237]
@@ -10547,6 +10549,10 @@ def inverse_fibonacci(n):
     from math import log as ln
     return int(ln(n*5**.5+.5)/ln(φ))
 
+def convex_hull(points):
+    points=as_points_array(points)
+    from scipy.spatial import ConvexHull
+    return ConvexHull(points).simplices
 
 
 if __name__ == "__main__":
