@@ -7395,17 +7395,17 @@ def evenly_split_path(path,number_of_pieces=100,*,loop=False):
 def is_complex_vector(x):
     #Return True iff x is like [1+2j,3+4j,5+6j,...]
     x=np.asarray(x)
-    if not len(x):return x.copy()#Vaccuous truth
+    if not len(x):return True#Vaccuous truth
     return len(x.shape)==1 and np.iscomplexobj(x)
 def is_points_array(x):
     #Return True iff x is like [[1,2],[3,4],[5,6],...]
     x=np.asarray(x)
-    if not len(x):return x.copy()#Vaccuous truth
+    if not len(x):return True#Vaccuous truth
     return len(x.shape)==2 and x.shape[1]==2
 def is_cv_contour(x):
     #Return True iff x is like [[[1,2]],[[3,4]],[[5,6]],...] and dtype=np.int32
     x=np.asarray(x)#TODO this might cast it to a type other than np.int32 if given a list...though it wouldn't be WRONG to say it's not a cv contour in this case...idk should I change this or leave it be?
-    if not len(x):return x.copy()#Vaccuous truth
+    if not len(x):return True#Vaccuous truth
     return len(x.shape)==3 and x.shape[1]==1 and x.shape[2]==2 and x.dtype==np.int32
 
 #All the manual conversions (might be hidden later after we have automatic conversions) (the number of functions grows at (number of types)^2 )
