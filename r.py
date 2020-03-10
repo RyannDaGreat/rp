@@ -3938,6 +3938,57 @@ def gist(gist_body="Body",gist_filename="File.file",gist_description="Descriptio
 
 sgist=lambda *x:seq([gist,printed,open_url,shorten_url],*x)# Open the url of a gist and print it
 
+def load_gist(gist_url:str):
+    # Example: print(load_gist('https://api.github.com/gists/7c58479241430e86c2234ae26558999b'))
+    # Example:
+    #     >>> post_gist('Hello World!')
+    #    ans = https://api.github.com/gists/92d158541ae4f3732267194b1f1ac14d
+    #     >>> load_gist(ans)
+    #    ans = Hello World!
+    import requests,json
+    response=requests.get(gist_url)
+    response_json=json.loads(response.content)
+    file_name=list(response_json['files'])[0]
+    return response_json['files'][file_name]['content']
+    
+def post_gist(content:str,
+              file_name:str='',
+              description:str='',
+              api_token:str='d65866e83aac7fc09093220a795ca66a5f7cc18d'):
+    # Example:          
+    #     >>> post_gist('Hello World!')                                          
+    #    ans = https://api.github.com/gists/92d158541ae4f3732267194b1f1ac14d     
+    #     >>> load_gist(ans)                                                     
+    #    ans = Hello World!                                                      
+    import urllib
+    import json
+    import datetime
+    import time
+
+    access_url = "https://api.github.com/gists"
+    
+    data={
+            'description':description,
+            'public':True,
+            'files':{
+                file_name:
+                {
+                    'content':content
+                }
+            }
+        }
+        
+    json_data=bytes(json.dumps(data),'UTF-8');
+    
+    req = urllib.request.Request(access_url) #Request
+    req.add_header("Authorization", "token {}".format(api_token))
+    req.add_header("Content-Type", "application/json")
+    
+    res = urllib.request.urlopen(req, data=json_data) #Response
+    res_json = json.loads(res.readline())
+    
+    return res_json['url']
+
 def random_namespace_hash(n:int=10,chars_to_choose_from:str="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"):
     # ⮤ random_namespace_hash(10)
     # ans=DZC7B8GV74
@@ -6552,6 +6603,7 @@ known_pypi_module_package_names={
     'lib2to3':'2to3',
     'skimage':'scikit-image',
     'serial':'pyserial',#WARNING: there is a 'pip install serial' which ALSO creates a 'serial' module. This module is the WRONG SERIAL MODULE.
+    'github':'PyGithub',#https://github.com/PyGithub/PyGithub
 }
 def pip_import(module_name,package_name=None):
     #Attempts to import a module, and if successful returns it.
