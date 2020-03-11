@@ -8801,9 +8801,9 @@ def random_grayscale_binary_color():
 def is_binary_color(color):
     return all(np.asarray(x).dtype==bool for x in color)
 def is_byte_color(color):
-    return all(np.issubdtype(image.dtype,np.integer) for x in color)
+    return all(np.issubdtype(x.dtype,np.integer) for x in color)
 def is_float_color(color):
-    return all(np.issubdtype(image.dtype,np.floating) for x in color)
+    return all(np.issubdtype(x.dtype,np.floating) for x in color)
 
 def get_color_hue(color):
     assert is_float_color(color),'For now, get_color_hue only works with float_colors and returns a float between 0 and 1'
