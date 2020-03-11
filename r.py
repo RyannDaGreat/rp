@@ -1491,6 +1491,8 @@ def _module_loader():
     except:
         pass
 
+
+
 fig=None
 def _fig():
     #initialize the fig singleton
@@ -1895,6 +1897,21 @@ def block(on_click=None,on_unclick=None):
     # - 'axes_leave_event'
     # - 'close_event'
     plt.show(True)
+
+def display_update(block=False):
+    #This should be preferred over the older block() function shown above
+    import matplotlib.pyplot as plt
+    if block:
+        plt.show(block=block)
+    else:
+        plt.gcf().canvas.blit()
+    plt.pause(.001)
+update_display=display_update#Synonyms
+def display_clear():
+    import matplotlib.pyplot as plt
+    plt.gcf().clf()
+clear_display=display_clear#Synonyms
+
 def clf():
     plt.clf()
 # endregion
