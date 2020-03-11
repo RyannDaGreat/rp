@@ -1806,6 +1806,8 @@ def line_graph(*y_values,show_dots: bool = False,clf: bool = True,y_label: str =
     plt.show(block=block)  # You can also use the r.block() method at any time if you want to make the plot useable.
     plt.pause(.001)
 
+
+
 def display_polygon(path,*,
                     filled    =True,
                     fill_color=None,
@@ -8802,6 +8804,26 @@ def is_byte_color(color):
     return all(np.issubdtype(image.dtype,np.integer) for x in color)
 def is_float_color(color):
     return all(np.issubdtype(image.dtype,np.floating) for x in color)
+
+def get_color_hue(color):
+    assert is_float_color(color),'For now, get_color_hue only works with float_colors and returns a float between 0 and 1'
+    import colorsys
+    hue=colorsys.rgb_to_hsv(*color)[0]
+    return hue
+
+def get_color_saturation(color):
+    assert is_float_color(color),'For now, get_color_saturation only works with float_colors and returns a float between 0 and 1'
+    import colorsys
+    hue=colorsys.rgb_to_hsv(*color)[1]
+    return hue
+
+def get_color_brightness(color):
+    assert is_float_color(color),'For now, get_color_brightness only works with float_colors and returns a float between 0 and 1'
+    import colorsys
+    hue=colorsys.rgb_to_hsv(*color)[2]
+    return hue
+
+
 #TODO: Finish color conversions
 
 #endregion
