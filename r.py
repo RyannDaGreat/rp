@@ -1803,6 +1803,62 @@ def line_graph(*y_values,show_dots: bool = False,clf: bool = True,y_label: str =
     plt.draw()
     plt.show(block=block)  # You can also use the r.block() method at any time if you want to make the plot useable.
     plt.pause(.001)
+
+def display_polygon(path,*,
+                    filled    =True,
+                    fill_color=None,
+                    line_width=1,
+                    line_style='solid',
+                    line_color=None,
+                    clear     =False,
+                    block     =False,
+                    alpha     =1):
+    #Uses matplotlib
+    #Parameters:
+        #line_width: The width of the border around the polygon (set to 0 for no border)
+        #line_style: Please see https://matplotlib.org/3.1.0/gallery/lines_bars_and_markers/linestyles.html
+        #line_color: The color of the outline aka border of the polygon (like (1,0,0) for red, etc)
+        #
+        #filled    : boolean whether we should fill the object or just use an outline
+        #fill_color: The color of the area of the polygon (like (1,0,0) for red, etc)
+        #
+        #alpha     : The transparency value (1 is opaque, 0 is completely transparent)
+        #
+        #clear     : Whether we should clear the plot before drawing this polygon
+        #block     : True for an interactive plot that blocks the current python code; False to display immediately and continue python code; None to just plot it and skip the displaying step (which is faster and useful if you want to plot a lot of polygons at once)
+    #EXAMPLE: display_polygon(random_floats_complex(5),alpha=.5)
+    from matplotlib.patches import Polygon
+    from matplotlib import pyplot as plt
+    
+    path=as_points_array(path)
+    
+    if fill_color is None: fill_color=random_rgb_float_color()
+    
+    if clear:    
+        plt.clf()
+
+    #Setting up the polygon
+    polygon=Polygon(path, True)
+    
+    polygon.set_fill     (filled    )
+    polygon.set_alpha    (alpha     )
+    polygon.set_facecolor(fill_color)
+    polygon.set_linewidth(line_width)
+    polygon.set_linestyle(line_style)
+    polygon.set_edgecolor(line_color)
+    
+    plt.axes().add_patch(polygon)
+
+    #Autoscaling
+    bounding_points=np.row_stack((np.max(path,axis=0),np.min(path,axis=0)))#Get two points representing the bounding box of path
+    plt.plot(*bounding_points,marker='o')[0].set_visible(False)#Plot two invisible points on this bounding box, so that matplotlib will automatically rescale to accomidate whatever path you gave it
+
+    #Displaying
+    if block is not None:
+        plt.show(block=block)
+        if not block:
+            plt.pause(.01)
+
 def block(on_click=None,on_unclick=None):
     _fig()#Initialize fig
     # You may specify methods you would like to overwrite here.
@@ -6604,6 +6660,7 @@ known_pypi_module_package_names={
     'skimage':'scikit-image',
     'serial':'pyserial',#WARNING: there is a 'pip install serial' which ALSO creates a 'serial' module. This module is the WRONG SERIAL MODULE.
     'github':'PyGithub',#https://github.com/PyGithub/PyGithub
+    'mplcairo':'git+https://github.com/matplotlib/mplcairo',#Some features only available on master branch: https://stackoverflow.com/questions/26702176/is-it-possible-to-do-additive-blending-with-matplotlib
 }
 def pip_import(module_name,package_name=None):
     #Attempts to import a module, and if successful returns it.

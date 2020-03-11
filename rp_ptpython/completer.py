@@ -230,6 +230,10 @@ class PythonCompleter(Completer):
             yield from yield_from_candidates([x for x in os.listdir()])
             return 
 
+        import re
+
+        # if re.fullmatch(r'(.*\W)?',before_line)
+
 
         if  in_global_or_nonlocal_declaration     or\
             (not after and re.fullmatch(r'\@\w*',before_line)) or\
