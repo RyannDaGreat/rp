@@ -1,5 +1,10 @@
 # -*- coding: UTF-8 -*-
 from __future__ import unicode_literals
+#THINGS TO DO BEFORE OFFICIAL RELEASE:
+#   Rename "path" functions to "2d-somethings" idk what, but it conflicts with file-paths...
+#   Rename "display" functions to "plot" functions. "display" functions should be very simple and library-agnostic, while plot can be matplotlib-based.
+#   Remove useless functions, and categorize them. Probably should split into multiple files; but that's kinda messy...
+
 #TODO: Turn the comments at the beginning of each function into docstrings so they can be read by the builtin help function
 # python /Users/Ryan/PycharmProjects/Py27RyanStandard2.7/Groupie.py ftF11dwbP61OfPf9QsXBfS5usCdQdBkkMieObdvZ -g 'The Think Tank'
 # Imports that are necessary for the 'r' module:
@@ -1154,7 +1159,6 @@ def _load_image_from_file_via_opencv(file_name):
     return cv_bgr_rgb_swap(image)#OpenCV is really weird and doesn't use RGB: It uses BGR for some strange legacy reason. We have to swap the channels to make it useful.
 
 
-
 def load_image_from_url(url: str):
     assert is_valid_url(url),'load_image_from_url error: invalid url: '+repr(url)
     pip_import('PIL')
@@ -1163,6 +1167,27 @@ def load_image_from_url(url: str):
     from io import BytesIO
     response=requests.get(url)
     return np.add(Image.open(BytesIO(response.content)),0)  # Converts it to a numpy array by adding 0 to it.
+
+def load_image_from_matplotlib(*,dpi:int=None,fig=None):
+    #Return matplotlib's current display as an image
+    #You can increase the DPI to get a higher resolution. Set it to something like 360 or higher.
+    #Example:
+    #    line_graph(random_ints(10))
+    #    cv_imshow(load_image_from_matplotlib())
+    import io
+    import cv2
+    import numpy as np
+    import matplotlib.pyplot as plt
+    if fig is None: fig=plt.gcf()
+    if dpi is None: dpi=fig.dpi
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=dpi)
+    buf.seek(0)
+    img_arr = np.frombuffer(buf.getvalue(), dtype=np.uint8)
+    buf.close()
+    img = cv2.imdecode(img_arr, 1)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    return img
 
 def save_image(image,file_name=None,add_png_extension: bool = True):
     #Simply save a numpy image to a file.
@@ -1499,7 +1524,7 @@ def _fig():
     global fig
     if fig is None:
         global plt
-        plt=_get_plt()
+        plt=get_plt()
         fig=plt.gcf()#to Get Current Figure
         fig=plt.figure()#Commented this line out because this created a second figure. This has to be done in the main thread or else Mac OS Mojave will crash
     return fig
@@ -1677,7 +1702,7 @@ def display_image(image,block=False):
                 image=image.cpu().numpy()
         except:pass
     global plt
-    plt=_get_plt()
+    plt=get_plt()
     if is_image(image):
         image=as_rgb_image(as_float_image(image))
     try:
@@ -1718,7 +1743,7 @@ def display_image(image,block=False):
 def brutish_display_image(image):
     from copy import deepcopy
     global plt
-    plt=_get_plt()
+    plt=get_plt()
     image=deepcopy(image)
     for x_index,x in enumerate(image):
         for y_index,y in enumerate(x):
@@ -1734,7 +1759,7 @@ def display_grayscale_image(matrix,pixel_interpolation_method_name: str = 'bicub
     pixel_interpolation_method_name=str(pixel_interpolation_method_name).lower()  # Note that None⟶'none'
     assert pixel_interpolation_method_name in [None,'none','nearest','bilinear','bicubic','spline16','spline36','hanning','hamming','hermite','kaiser','quadric','catrom','gaussian','bessel','mitchell','sinc','lanczos']  # These are the options. See http://stackoverflow.com/questions/14722540/smoothing-between-pixels-of-imagesc-imshow-in-matlab-like-the-matplotlib-imshow/14728122#14728122
     global plt
-    plt=_get_plt()
+    plt=get_plt()
     plt.imshow(matrix,cmap=plt.get_cmap('gray'),interpolation=pixel_interpolation_method_name)  # "cmap=plt.get_cmap('gray')" makes it show a black/white image instead of a color map.
     if refresh:
         plt.draw()
@@ -1747,7 +1772,7 @@ def bar_graph(values,*,width=.9,align='center',block=False):
     #The 'align'  parameter sets whether the bars are to the center, right or left of each index
     #EXAMPLE: bar_graph(randints(10))
     pip_import('matplotlib')
-    plt=_get_plt()
+    plt=get_plt()
 
     assert align in {'center','left','right'}
     if align=='right':
@@ -1771,7 +1796,7 @@ def line_graph(*y_values,show_dots: bool = False,clf: bool = True,y_label: str =
     # axes etc. For more information on this, see http://matplotlib.org/users/pyplot_tutorial.html
     global plt
     pip_import('matplotlib')
-    plt=_get_plt()
+    plt=get_plt()
     if clf:
         plt.clf()
 
@@ -1902,13 +1927,16 @@ def block(on_click=None,on_unclick=None):
 
 def display_update(block=False):
     #This should be preferred over the older block() function shown above
+    if block is None:
+        return#A convention that if block is "None" for some display function, it means we don't actually want to display it right away (for speed purposes, mostly)
     import matplotlib.pyplot as plt
     if block:
         plt.show(block=block)
     else:
         plt.gcf().canvas.blit()
-    plt.pause(.001)
+        plt.pause(.001)
 update_display=display_update#Synonyms
+
 def display_clear():
     import matplotlib.pyplot as plt
     plt.gcf().clf()
@@ -3179,27 +3207,33 @@ def blob_coords(image,small_end_radius=10,big_start_radius=50):
     for r in reversed(range(small_end_radius,big_start_radius)):
         x,y=local_max(blurred(r + 1),x,y)
     return x,y
+
 def tofloat(ndarray):
     # Things like np.int16 or np.int64 will all be scaled down by their max values; resulting in
     # elements that in sound files would be floats ∈ [-1,1] and in images [0,255] ⟶ [0-1]
     return np.ndarray.astype(ndarray,float) / np.iinfo(ndarray.dtype).max
 
-def _get_plt():
+def get_plt():
     pip_import('matplotlib')
     global plt
     import matplotlib.pyplot as plt
     locals()['plt']=plt
     return plt
 
-
 def display_dot(x,y,color='red',size=3,shape='o',block=False):
     #Used to be called 'dot', in-case any of my old code breaks...
     #EXAMPLE: for theta in np.linspace(0,tau): display_dot(np.sin(theta),np.cos(theta));sleep(.1)
-    plt=_get_plt()
+    plt=get_plt()
     plt.plot([x],[y],marker=shape,markersize=size,color=color)
-    plt.show(block=block)
-    if not block:
-        plt.pause(0.0001)
+    display_update(block=block)
+
+def display_path(path,*,color=None,alpha=1,marker=None,linestyle=None,block=False,**kwargs):
+    #If color is None, will plot as a different color every time
+    x, y = as_points_array(path).T #Get the x, y values of the path as two lists
+    import matplotlib.pyplot as plt
+    plt.plot(x, y,color=color,alpha=alpha,marker=marker,linestyle=linestyle,**kwargs)
+    update_display(block)
+
 def translate(to_translate,to_language="auto",from_language="auto"):
     # I DID NOT WRITE THIS!! I GOT IT FROM https://github.com/mouuff/mtranslate/blob/master/mtranslate/core.py
     """Returns the translation using google translate
@@ -7396,16 +7430,14 @@ def scatter_plot(x,y=None,*,block=False,clear=True,dot_size=1):
             x=y=[]
     global plt
     pip_import('matplotlib')
-    plt=_get_plt()
+    plt=get_plt()
     if clear and plt:
         #Clear the plot (wipe it clean of any(previous drawings)
         plt.clf()
     plt.scatter(x,y,
         s=dot_size#The size of the dots. Smaller value --> smaller dots. The default is too big for my taste.
         )
-    plt.show(block=block)
-    if not block:
-        plt.pause(.01)
+    display_update(block=block)
 
 def line_split(string):
     #I find myself often wishing this function exists for a few seconds before remembering String.splitlines exists
@@ -10687,6 +10719,7 @@ def fibonacci(n):
         for _ in range(n):
             a,b=b,a+b
         return a
+
 @memoized
 def inverse_fibonacci(n):
     #Runs in constant time
@@ -10700,11 +10733,176 @@ def inverse_fibonacci(n):
     from math import log as ln
     return int(ln(n*5**.5+.5)/ln(φ))
 
-def convex_hull(points):
-    points=as_points_array(points)
-    from scipy.spatial import ConvexHull
-    return ConvexHull(points).simplices
+def graham_scan(path):
+    #This function is intentionally unoptimized to match my personal intuition of the algorithm most closely
+    #(Might change in the future if this is a bottleneck)
 
+    #Complex numbers make math nicer
+    points=as_complex_vector(path)
+
+    #Remove any duplicate points
+    points=np.unique(points)
+
+    #Edge cases where we aren't able to make a polygon: the original set of points is either a point or a line
+    if len(points)<=2:
+        return points
+
+    #Find point with lowest y coordinate. On ties, choose the leftmost point
+    bottom_left_point=min(points,key=lambda point:(point.imag,point.real))
+
+    #Make bottom_left_point the center. We'll undo this shift at the end by adding bottom_left_point to the hull
+    points=points-bottom_left_point
+
+    #Remove the center from the pointset (because it doesn't have an angle) and add it to the hull
+    points=points[np.where(points!=0)]
+    hull=[0+0j]
+
+    #Sort the points by decreasing angle (decreasing angle because I'm used to it's visualization)
+    #During ties, choose the closer point first
+    points=sorted(points,key=lambda point:(-np.angle(point),np.abs(point)))
+
+    #Add the first edge to the hull (now we have a line)
+    hull.append(points.pop(0))
+
+    #The meat of the graham scan algorithm
+    while points:
+        point=points.pop(0)
+        while True:
+            edge =hull[-2:]
+            if not is_counter_clockwise([*edge,point]):
+                hull.append(point)
+                break
+            else:
+                hull.pop()
+
+    #Un-shift the points on the hull
+    hull=as_numpy_array(hull)+bottom_left_point
+
+    return hull
+
+    #TEST CODE (run repeatedly):
+    #   points=randints_complex(20,10)
+    #   scatter_plot(points,dot_size=10)
+    #   convex_hull=graham_scan(points)
+    #   display_polygon(convex_hull,alpha=.25)
+
+def convex_hull(points):
+    #Only 2d convex hulls are supported at the moment, sorry...
+    return graham_scan(points)
+
+def _point_on_edge(point,edge):
+    #Return true if a point is on an edge, including the edge's endpoints
+    point,=as_complex_vector([point])
+    a,b=edge
+    return loop_direction_2d([point,*edge])==0 and point.real==median([point.real,a.real,b.real]) and \
+                                                   point.imag==median([point.imag,a.imag,b.imag])
+def _edges_intersect(edge_a,edge_b):
+    edge_a=as_complex_vector(edge_a)
+    edge_b=as_complex_vector(edge_b)
+    assert len(edge_a==2)
+    assert len(edge_b==2)
+
+    if _point_on_edge(edge_a[0],edge_b) or \
+       _point_on_edge(edge_a[1],edge_b) or \
+       _point_on_edge(edge_b[0],edge_a) or \
+       _point_on_edge(edge_b[1],edge_a):
+       return True
+
+    return is_clockwise([edge_a[0],*edge_b])!= \
+           is_clockwise([edge_a[1],*edge_b])and\
+           is_clockwise([edge_b[0],*edge_a])!= \
+           is_clockwise([edge_b[1],*edge_a])
+
+    #TEST CODE (run this over and over again):
+    #    while True:
+    #        edge_a=randints_complex(2,4)
+    #        edge_b=randints_complex(2,4)
+    #        if not _edges_intersect(edge_a,edge_b):#Depending on whether you're looking for false positives or false negatives, negate this or don't negate this
+    #            break
+    #    print(_edges_intersect(edge_a,edge_b))
+    #    plot_clear()
+    #    plot_polygon(edge_a)
+    #    plot_polygon(edge_b)
+    #    plot_update()
+
+def paths_intersect(path_a,path_b)->bool:
+
+    #Does NOT assume the paths are loops
+    #O(n^2) naive algorithm. Should be full-proof.
+
+    #Make sure we have valid paths
+    path_a=as_complex_vector(path_a)
+    path_b=as_complex_vector(path_b)
+
+    #If one of the paths has no points, there are no intersections
+    if not len(path_a) or not len(path_b):
+        return False
+
+    #If a path only has one point, turn that into a segment with duplicate end-points to work nicely with the rest of the code
+    if len(path_a)==1:path_a=[path_a[0]]*2
+    if len(path_b)==1:path_b=[path_b[0]]*2
+
+    #Check every edge in path_a to every edge in path_b for intersections
+    edges_a=map(list,zip(path_a[:-1],path_a[1:]))
+    edges_b=map(list,zip(path_b[:-1],path_b[1:]))
+    for edge_a in edges_a:
+        for edge_b in edges_b:
+            if _edges_intersect(edge_a,edge_b):
+                #We found an intersection
+                return True
+
+    #No intersections were found
+    return False
+
+def _edge_intersection_positions(edge_a,edge_b):
+    #Will return a list of either 0, 1 or 2 points (2 points is a special edge case where one line shares part of its segment with another line collinearly)
+    a0,a1=edge_a=as_complex_vector(edge_a)
+    b0,b1=edge_b=as_complex_vector(edge_b)
+
+    output=[]
+    if _point_on_edge(a0,edge_b):output.append(a0)
+    if _point_on_edge(a1,edge_b):output.append(a1)
+    if _point_on_edge(b0,edge_a):output.append(b0)
+    if _point_on_edge(b1,edge_a):output.append(b1)
+    if not output and _edges_intersect(edge_a,edge_b):#If we already detected an intersection, we don't need to run these calculations (which might even divide by 0)
+        # https://stackoverflow.com/questions/20677795/how-do-i-compute-the-intersection-point-of-two-lines
+        px= ( (a0.real*a1.imag-a0.imag*a1.real)*(b0.real-b1.real)-(a0.real-a1.real)*(b0.real*b1.imag-b0.imag*b1.real) ) / ( (a0.real-a1.real)*(b0.imag-b1.imag)-(a0.imag-a1.imag)*(b0.real-b1.real) ) 
+        py= ( (a0.real*a1.imag-a0.imag*a1.real)*(b0.imag-b1.imag)-(a0.imag-a1.imag)*(b0.real*b1.imag-b0.imag*b1.real) ) / ( (a0.real-a1.real)*(b0.imag-b1.imag)-(a0.imag-a1.imag)*(b0.real-b1.real) )
+        output.append(px+py*1j)
+
+    return np.unique(output)
+
+    #TEST CODE (run repeatedly):
+    #   while True:
+    #       edge_a=randints_complex(2,4)
+    #       edge_b=randints_complex(2,4)
+    #       if _edges_intersect(edge_a,edge_b):#Depending on whether you're looking for false positives or false negatives, negate this or don't negate this
+    #           break
+    #   print(_edges_intersect(edge_a,edge_b))
+    #   plot_clear()
+    #   intersection=_edge_intersection_positions(edge_a,edge_b)
+    #   plot_path(edge_a,color='blue' ,alpha=.5,linestyle='--')
+    #   plot_path(edge_b,color='green',alpha=.5,linestyle='-')
+    #   plot_path(intersection,marker='o',linestyle='dotted',color='black',alpha=.5)
+    #   plot_update()
+
+def path_intersections(path_a,path_b):
+    #TODO: Let this function take varargs paths and return all intersections
+    #Returns a list of points where the two paths intersect, including edge cases (the paths intersect tangentially at a vertex, or overlap etc - it handles all of those correctly)
+    path_a=as_points_array(path_a)
+    path_b=as_points_array(path_b)
+    output=[]
+    edges_a=list(map(list,zip(path_a[:-1],path_a[1:])))
+    edges_b=list(map(list,zip(path_b[:-1],path_b[1:])))
+    for edge_a in edges_a:
+        for edge_b in edges_b:
+            if _edges_intersect(edge_a,edge_b):
+                output.extend(_edge_intersection_positions(edge_a,edge_b))
+    output=as_complex_vector(output)
+    return np.unique(output)
+
+def path_intersects_point(path,point)->bool:
+    return paths_intersect([point],path)
 
 if __name__ == "__main__":
     print(end='\r')
