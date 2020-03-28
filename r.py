@@ -1765,7 +1765,7 @@ def display_grayscale_image(matrix,pixel_interpolation_method_name: str = 'bicub
         plt.draw()
         plt.show(block=False)  # You can also use the r.block() method at any time if you want to make the plot usable.
         plt.pause(0.0001)  # This is nessecary, keep it here or it will crash. I don't know WHY its necessary, but empirically speaking it seems to be.
-def bar_graph(values,*,width=.9,align='center',block=False):
+def bar_graph(values,*,width=.9,align='center',block=False,**kwargs):
     #Create a bar graph with the given y-values
     #The 'values' parameter is a list of bar heights. They should all be real numbers.
     #The 'width'  parameter sets the width of each bar
@@ -1787,7 +1787,7 @@ def bar_graph(values,*,width=.9,align='center',block=False):
     x=list(range(len(values)))
 
     plt.clf()
-    plt.bar(x,values,width=width,align=align)
+    plt.bar(x,values,width=width,align=align,**kwargs)
     plt.show(block=block)
     plt.pause(.001)
 def line_graph(*y_values,show_dots: bool = False,clf: bool = True,y_label: str = None,x_label: str = None,use_dashed_lines: bool = False,line_color: str = None,graph_title=None,block: bool = False,background_image=None) -> None:
@@ -7408,7 +7408,7 @@ def cv_make_clockwise(contour):
 
 
 
-def scatter_plot(x,y=None,*,block=False,clear=True,dot_size=1):
+def scatter_plot(x,y=None,*,block=False,clear=True,color=None,dot_size=1):
     #Parameters:
     #   x and y:
     #       There are three ways to give this function points:
@@ -7437,8 +7437,8 @@ def scatter_plot(x,y=None,*,block=False,clear=True,dot_size=1):
         #Clear the plot (wipe it clean of any(previous drawings)
         plt.clf()
     plt.scatter(x,y,
-        s=dot_size#The size of the dots. Smaller value --> smaller dots. The default is too big for my taste.
-        )
+        s=dot_size,#The size of the dots. Smaller value --> smaller dots. The default is too big for my taste.
+        color=color)
     display_update(block=block)
 
 def line_split(string):
