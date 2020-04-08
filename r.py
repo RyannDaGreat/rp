@@ -3220,9 +3220,11 @@ def get_plt():
     locals()['plt']=plt
     return plt
 
-def display_dot(x,y,color='red',size=3,shape='o',block=False):
+def display_dot(x,y=None,color='red',size=3,shape='o',block=False):
     #Used to be called 'dot', in-case any of my old code breaks...
     #EXAMPLE: for theta in np.linspace(0,tau): display_dot(np.sin(theta),np.cos(theta));sleep(.1)
+    if y is None:
+        x,y=as_points_array([x])[0]
     plt=get_plt()
     plt.plot([x],[y],marker=shape,markersize=size,color=color)
     display_update(block=block)
