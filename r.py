@@ -4700,6 +4700,10 @@ def dec2bin(f):
     st = st[:h] + "." + st[h:]
     return sxt
 
+def run_until_complete(x):
+    from asyncio import get_event_loop
+    return get_event_loop().run_until_complete(x)
+
 if __name__=='__main__':fansi_print("Booting rp...",'blue','bold',new_line=False)
 import rp.rp_ptpython.prompt_style as ps
 from rp.prompt_toolkit.shortcuts import create_eventloop#Unless this can be sped up (inlining just pushes the problem to the next imoprt)
@@ -5970,7 +5974,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 user_message=''
 
                         elif user_message.startswith('await ') and not '\n' in user_message:
-                            user_message='from asyncio import get_event_loop\nans=get_event_loop().run_until_complete('+user_message[len('await '):]+')'
+                            user_message='run_until_complete('+user_message[len('await '):]+')'
+                            # user_message='from asyncio import get_event_loop\nans=get_event_loop().run_until_complete('+user_message[len('await '):]+')'
                             fansi_print("Parsed command into:\n" + fansi_syntax_highlighting(user_message),'magenta')
 
                         elif user_message.startswith('ARG '):
