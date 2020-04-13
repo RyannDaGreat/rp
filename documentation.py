@@ -385,9 +385,11 @@ MICROCOMPLETIONS:
 
 		nin:  x nin y  –––>  x not in
 		isnt: x isnt y –––>  x is not y
+		 snt: x snt y  –––>  x is not y
 		n:    x n y    –––>  x in y
 		o:    x o y    –––>  x or y
 		a:    x a y    –––>  x and y
+		s:    x s y    –––>  x is y
 
 			EDGE CASES:
 				for x nin y:   –/–> for x not in y:
@@ -438,6 +440,10 @@ MICROCOMPLETIONS:
 				‹x[1;2;3]›   –––>  ‹x[1:2:3]›
 				‹x[a;b;c]›   –––>  ‹x[a:b:c]›
 				‹x[1;2,3;4]› –––>  ‹x[1:2,3:4]›
+			ARGUMENT TYPE HINTS:
+				On ‹;›: ‹def f(x|):›  --->  ‹def f(x:|):›
+			DICT LITERALS:
+				On ‹;›: ‹{x|}›  --->  ‹x:|›
 
 		UNDERSCORE:
 			//When possible, turn - into _. This is a recurring motif in other completions as well.
@@ -516,6 +522,7 @@ MICROCOMPLETIONS:
 						‹[1==2]›   –/–> ‹[!=2]¦›
 						‹(1==2)›   –/–> ‹(!=2)¦›
 						‹{1==2}›   –/–> ‹{!=2}¦›
+						‹1j›       –/–> ‹not j¦›  //1j is a valid literal
 				not:
 					//Because we sometimes treat ‹1› like ‹!›,
 					//    and we sometimes treat ‹!› like ‹not›,
@@ -599,27 +606,35 @@ MICROCOMPLETIONS:
 				//‹8› can be used as the vararg ‹*› and ‹88› can be used as the kwarg ‹**›
 				FUNCTION DECLARATIONS:
 					‹def f(8args):›          –––> ‹def f(*args):¦›          //For function definitions
+					‹def f(88kwargs):› –––> ‹def f(**kwargs):¦›
 					‹def f(8args,88kwargs):› –––> ‹def f(*args,**kwargs):¦›
-					‹def f(x,y,8,z):›        –––> ‹def f(x,y,*,z):¦›
+					‹def f(8args,8kwargs):› –––> ‹def f(*args,**kwargs):¦›  //TODO: Because we know that we can only have one *args in a function definition, the next * must be for kwargs, letting us save one keystroke   (likewise, TODO: ‹def f(*args,*kwargs):› –––> ‹def f(*args,**kwargs):›)
+				FUNCTION CALLS:
+					‹print(8args)›           –––> ‹print(*args)¦›            //For function calls
+					‹print(88kwargs)›        –––> ‹print(**kwargs)¦›
+					‹print(x,y,88kwargs)›    –––> ‹print(x,y,**kwargs)¦›
+					‹f(8args):›        –––> ‹f(*args¦)›
+					‹f(88kwargs):›        –––> ‹f(**kwargs¦)›
+					EDGE CASES:
+						print(8)   –/–>  print(*)
+						‹f(8j):›   –-–> ‹f(8j)›   // TODO
+						‹f(8j):›   –/–> ‹f(*j)›   // TODO
+						‹f(8jj):›  –-–> ‹f(*jj)›  // TODO (Since 8j is a valid literal, it should activate the *'s on the next character that breaks syntax...)
 				SETS LISTS TUPLES:
 					‹[8x]›    –––> ‹[*x]¦›                    //For data literals
 					‹{88x}›   –––> ‹[**x]¦›
+					‹{8x}›    –––> ‹[**x]¦› // TODO: Since we're in a dict literal, we know that a single * isn't an option; therefore it must be ** (saving one keystroke)  (likewise, TODO: ‹{*x}› –––> ‹[**x]¦›)
 					‹(z,88x)› –––> ‹(z,**x)¦›
 					‹z,88x›   –––> ‹(z,**x)¦›
 					EDGE CASES:
 						[x,8]  –/–>  [x,*]
 						[x,88] –/–>  [x,**]
 						{8}    –/–>  {*}
+						[8j]   –-–> [8j]   // TODO
 				LAMBDAS:
 					‹lambda 8args:None›      –––> ‹lambda *args:None¦›       //For lambda declarations  //TODO
 					‹lambda x,y,8args:None›  –––> ‹lambda x,y,*args:None¦›
 					‹lambda 88kargs:None›    –––> ‹lambda **kwargs:None¦›
-				FUNCTION CALLS:
-					‹print(8args)›           –––> ‹print(*args)¦›            //For function calls
-					‹print(88kwargs)›        –––> ‹print(**kwargs)¦›
-					‹print(x,y,88kwargs)›    –––> ‹print(x,y,**kwargs)¦›
-					EDGE CASES:
-						print(8)  –/–>  print(*)
 
 			9:
 				//If next character breaks syntax that () would fix, treat ‹9› as if it were originally ‹(›

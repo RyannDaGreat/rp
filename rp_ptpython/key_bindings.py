@@ -83,7 +83,8 @@ def toggle_bottom_line_text(buffer,bottom_line):
     new_text=toggled_last_line(text,bottom_line)
     buffer.document=Document(new_text,min(old_cursor_pos,len(new_text)-1),buffer.document.selection)
 
-n_makes_in=True#This is imperfect and got annoying
+n_makes_in_and_s_makes_is=True#This is imperfect and got annoying
+s_makes_is=True#This is imperfect and got annoying
 
 def text_to_speech(words):
     try:
@@ -757,7 +758,7 @@ def handle_character(buffer,char):
                 if after_line==':':
                     buffer.insert_text('ans')
                 return True
-        if n_makes_in and char=='t':
+        if n_makes_in_and_s_makes_is and char=='t':
             if before_line.endswith(' in o'):
                 #Because 'n' --> 'in', 'not'-->'in ot'
                 #On t: ' in o|'-->' not '
@@ -943,12 +944,12 @@ def handle_character(buffer,char):
                 bad_match=bad_match or\
                           bool(re.match(r'[0-9]+\.[0-9]*\-'       ,before_line[::-1]))
                 bad_match=bad_match or before_line.endswith('.')
-                if match and not bad_match and not re.fullmatch(r'.*[^\)\]a-zA-Z_\'\"][0-9]+',before_line):
+                if match and not bad_match and not re.fullmatch(r'.*[^\)\]a-zA-Z_\'\"][0-9]+',before_line) and\
+                             not re.fullmatch(r'.*[0-9]+\,\w*',before_line):#To fix ‹[.5,.›  -/->  ‹[[.5,].|]›
                     double_dot=bool(re.match(r'[0123456789\,\:]+\.\.',before_line[::-1]))
                     start,end=match.span()#Number of digits
                     assert start==0
                     assert end>1
-                    end-=2
                     buffer.cursor_left(end)
                     buffer.delete_before_cursor()
                     if double_dot:buffer.delete_before_cursor()#;print('\n',end)# x.1.2..3.  -->  x[1][2]['3'].;
@@ -1062,10 +1063,11 @@ def handle_character(buffer,char):
                     buffer.delete_before_cursor(2)
                     buffer.insert_text('%%')
         if char in 'qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM[({_' and re.fullmatch(r'.*[^a-zA-Z_0-9]1',before_line):
-            #Interperet ! or 1 as 'not '
-            #`x f1y z` --->  `x if not y else z`
-            buffer.delete_before_cursor()
-            buffer.insert_text('not ')
+            if char!='j':#1j is a valid literal. Don't destroy it.
+                #Interperet ! or 1 as 'not '
+                #`x f1y z` --->  `x if not y else z`
+                buffer.delete_before_cursor()
+                buffer.insert_text('not ')
         if char in 'qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM_({[\'"':
             #8 to * in function calls and lists etc
             if re.fullmatch(r'.*[\(\[\{\,] *8',before_line):
@@ -1376,9 +1378,14 @@ def handle_character(buffer,char):
             buffer.insert_text('?'*i)
         if char=='\n' and before_line.lstrip() in {'while ','if '} and after_line.strip()==':':
             buffer.insert_text('True')
-
-
-
+        if char==';' and after_line.startswith('}'):
+            #On ‹;›: ‹{x|}›  --->  ‹x:|›
+            buffer.insert_text(':')
+            return True
+        if char==';' and after_line.startswith(')') and before_line.lstrip().startswith('def '):
+            #On ‹;›: ‹def f(x|):›  --->  ‹def f(x:|):›
+            buffer.insert_text(':')
+            return True
 
         # if char==' ' and after_line.startswith(')') and endswithany(before_line,*'\'"'):
         #     #print('hello'|) ---> print('hello',|)
@@ -1775,15 +1782,16 @@ def load_python_bindings(python_input):
                                 #         buffer.insert_text('not ')
                                 #         return
                                 # TODO CORRECTION: 't' --> 'not ' should NOT be handled here, this should be handled as a space completion instead. I'll do that later...
-                                # n_makes_in=True#This is imperfect and got annoying
-                                if n_makes_in:#This completion is a real trouble-maker for edge cases...
-                                    if char=='n':
+                                # n_makes_in_and_s_makes_is=True#This is imperfect and got annoying
+                                if n_makes_in_and_s_makes_is:#This completion is a real trouble-maker for edge cases...
+                                    if char=='n' or char=='s':
                                         if before_line.strip() and not (before_line.endswith(' ') and endswithany(before_line[:-1],*(set(keywords)-{'not','True','False'}))):
                                             if re.fullmatch(r'.*[\]\}\)\'\"a-zA-Z0-9_] *',before_line):
                                                 if not re.fullmatch(r'.*[^a-zA-Z0-9_](if|and|or|not|while|with|else|elif|is|yield) ',before_line):#prevent: return x if not negative  ——> return x if not in egative| else
                                                     if not re.fullmatch(r'[0-9]+[a-zA-Z_].*',before_line[::-1]):#Prevent: nuts2nuts  —>  nuts2 in uts
-                                                        buffer.insert_text('in ')
+                                                        buffer.insert_text('in ' if char=='n' else 'is ')
                                                         return
+
                     if char=='m' and meta_pressed(clear=True):
                         # ⌥ + m ---> MORE
                         # ⌥ + m twice ---> MMORE
