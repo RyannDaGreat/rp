@@ -5968,6 +5968,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 fansi_print(user_message,'yellow')
                             else:
                                 user_message=''
+
+                        elif user_message.startswith('await ') and not '\n' in user_message:
+                            user_message='from asyncio import get_event_loop\nans=get_event_loop().run_until_complete('+user_message[len('await '):]+')'
+                            fansi_print("Parsed command into:\n" + fansi_syntax_highlighting(user_message),'magenta')
+
                         elif user_message.startswith('ARG '):
                             import sys,shlex
                             args_string=user_message[len('ARG '):]
