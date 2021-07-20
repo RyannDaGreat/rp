@@ -49,3 +49,9 @@ class ShowVarSpaceAndShowRealtimeInput(PythonInputFilter):
 class ShowParenthesisAutomator(PythonInputFilter):
     def __call__(self, cli):
         return self.python_input.show_parenthesis_automator and self.python_input.show_parenthesis_automator
+class ShowLastAssignable(PythonInputFilter):
+    def __call__(self, cli):
+        return hasattr(self.python_input,'show_last_assignable') and self.python_input.show_last_assignable 
+class ShowBatteryLife(PythonInputFilter):
+    def __call__(self, cli):
+        return hasattr(self.python_input,'show_battery_life') and self.python_input.show_battery_life 

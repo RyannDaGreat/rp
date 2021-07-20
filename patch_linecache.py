@@ -106,11 +106,70 @@ interpereter=code.InteractiveInterpreter()
 # def run(code):
 #     exec(interpereter.compile(code,fc(code),'single'))
 # ans=fc
+
+
 def run_code(code,mode,namespace,exv):
     import sys
     old_tracer=sys.gettrace()#To make sure any debuggers launched in this exeval aren't carried through to pseudo-terminal internal code, while still letting you call pseudo-terminal from a debugger
     try:
-        return exv(interpereter.compile(code,fc(code),mode),namespace,namespace)
+        #THE FOLLOWING 4 LINES HAVE BEEN BOILED DOWN INTO 1 LINE TO MAKE EXITING THE DEBUGGER FASTER
+        #comp=interpereter.compile(code,fc(code),mode)
+        #if comp is None:#This means the code is incomplete; see help(interpereter.compile). Because interpereter.compile("(","<filename",'exec') returns None and not an error.
+        #    #I want it to raise an error, though. We know it won't compile, so we might as well call exec.
+        #    exec(code) #This shouldn't actually run anything; it should throw an EOF error with the appropriate text. Also, pseudo_terminal should hide the difference from the user.
+        #else:
+        #    return exv(comp,namespace,namespace)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#################################    EXITING THE DEBUGGER #######################################
+
+
+        return exv(interpereter.compile(code,fc(code),mode) or exec(code),namespace,namespace)
     finally:#This should happen no matter what, but shouldn't squelch any errors we get when evaluating the code
         #EXIT THE DEBUGGER: (Do this so we don't debug the next pseudo-terminal prompt as well)
         sys.settrace(old_tracer)#Instead of just setting it to None, set it to what it was before. This allows us to run pseudo_terminal from a debugger without exiting the debugger.

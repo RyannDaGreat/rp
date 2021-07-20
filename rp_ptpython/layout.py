@@ -158,9 +158,9 @@ def python_sidebar_navigation(python_input):
             (T, ' '),
             (T.Key.Description, 'Navigate'),
             (T, ' '),
-            (T.Key, '[Enter]'),
+            (T.Key, '[F5]'),
             (T, ' '),
-            (T.Key.Description, 'Hide menu'),
+            (T.Key.Description, 'Save Settings'),
         ])
 
         return tokens
@@ -253,7 +253,8 @@ def signature_toolbar(python_input):
                         append((Signature,desc_string))
                     append((Signature.Operator, ', '))
                 except:
-                    print("(Just caught a bug that would have crashed the prompt-toolkit gui. Why did this happen??)")
+                    #NOTE: This used to be printed...but seeing as this bug never seemed to cause any problems and only spammed the terminal, I'm getting rid of it. I bet you'll never notice...
+                    # print("(Just caught a bug that would have crashed the prompt-toolkit gui. Why did this happen??)")
                     pass#I don't know why, but this broke pseudo terminal. I don't know what this is but I don't really care...it's not worth crashing over...
 
             if sig.params:
@@ -312,6 +313,14 @@ def status_bar(python_input):
         python_input.enable_mouse_support = not python_input.enable_mouse_support
 
     @if_mousedown
+    def toggle_microcompletions(cli, mouse_event):
+        python_input.enable_microcompletions = not python_input.enable_microcompletions
+
+    @if_mousedown
+    def toggle_wrap_lines(cli, mouse_event):
+        python_input.wrap_lines = not python_input.wrap_lines
+
+    @if_mousedown
     def toggle_paste_mode(cli, mouse_event):
         python_input.paste_mode = not python_input.paste_mode
 
@@ -359,15 +368,40 @@ def status_bar(python_input):
                 append((TB.PasteModeOn, 'Mouse:On  ', toggle_mouse_support))
             else:
                 append((TB, 'Mouse:Off ', toggle_mouse_support))
+
+            
+
+            result.extend([
+                (TB.Key, '[F7]', toggle_wrap_lines),
+            ])
+            if hasattr(python_input,'wrap_lines') and python_input.wrap_lines:
+                append((TB, 'Wrap:On  ', toggle_wrap_lines))
+            else:
+                append((TB.PasteModeOn, 'Wrap:Off ', toggle_wrap_lines))
+
+
+
+            result.extend([
+                (TB.Key, '[F8]', toggle_microcompletions),
+            ])
+            if hasattr(python_input,'enable_microcompletions') and python_input.enable_microcompletions:
+                append((TB, 'Micro:On  ', toggle_microcompletions))
+            else:
+                append((TB.PasteModeOn, 'Micro:Off ', toggle_microcompletions))
+            
+
+
+
         #region RYAN BURGERT CODE GOES HERE FOR PSEUDOTERMINAL STUFF
-        append((TB, ' '))
-        @if_mousedown
-        def testytest(cli,mouse_event):
-            # python_input.enter_history(cli)
-            pass
-        import rp.r_iterm_comm
-        append((TB.PseudoTerminalCurrentVariable,repr(rp.r_iterm_comm.last_assignable_comm),testytest))
-        append((TB, ' '))
+        if hasattr(python_input,'show_last_assignable') and python_input.show_last_assignable:
+            append((TB, ' '))
+            @if_mousedown
+            def testytest(cli,mouse_event):
+                # python_input.enter_history(cli)
+                pass
+            import rp.r_iterm_comm
+            append((TB.PseudoTerminalCurrentVariable,repr(rp.r_iterm_comm.last_assignable_comm),testytest))
+            append((TB, ' '))
         return result
 
     return TokenListToolbar(
@@ -469,8 +503,14 @@ def show_sidebar_button_info(python_input):
     get_tokens=lambda cli: [
 
 
-        (token.BatteryPluggedIn if rp.battery_plugged_in() else token.BatteryNotPluggedIn,"🔋 "*0+str(rp.battery_percentage())+'%'),# put the time here
-        (token, ' '),
+        *(
+            [
+                (token.BatteryPluggedIn if rp.battery_plugged_in() else token.BatteryNotPluggedIn,"🔋 "*0+str(rp.battery_percentage())[:6]+'%'),# put the time here
+                (token, ' ')
+            ]
+            if hasattr(python_input,'show_battery_life') and python_input.show_battery_life
+            else []
+        ),
         (token,(remove_beginning_zero(datetime.datetime.now().strftime("%I:%M%p")).lower())),# put the time here
         (token, ' '),
         (token.Key, '[F2]', toggle_sidebar),

@@ -98,6 +98,7 @@ class FileHistory(History):
 
         def add_all_lines():
             nonlocal lines
+            from time import sleep
             if os.path.exists(self.filename):
                 with open(self.filename, 'rb') as f:
                     for line in f:

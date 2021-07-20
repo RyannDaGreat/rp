@@ -42,7 +42,19 @@ else:
 HISTORY_BUFFER = 'HISTORY_BUFFER'
 HELP_BUFFER = 'HELP_BUFFER'
 
-HISTORY_COUNT = 2000
+# HISTORY_COUNT = 2000
+def get_HISTORY_COUNT():
+    try:
+        from rp.r import _globa_pyin,print_stack_trace
+        # print("OSIDFSOIJFOSI")
+        # print("OUTPUT ",_globa_pyin[0].history_number_of_lines)
+        return _globa_pyin[0].history_number_of_lines
+    except Exception as E:
+        print_stack_trace(E)
+
+def should_highlight_history():
+    from rp.r import _globa_pyin,print_stack_trace
+    return _globa_pyin[0].history_syntax_highlighting
 
 __all__ = (
     'create_history_application',
@@ -168,7 +180,7 @@ def create_layout(python_input, history_mapping):
                 Window(
                     content=BufferControl(
                         buffer_name=HISTORY_BUFFER,
-                        lexer=PygmentsLexer(PythonLexer),
+                        lexer=None if not should_highlight_history() else PygmentsLexer(PythonLexer),
                         input_processors=processors),
                     wrap_lines=False,
                     left_margins=[HistoryMargin(history_mapping)],
@@ -350,14 +362,14 @@ class HistoryMapping(object):
         # Process history.
         history_lines = []
 
-        for entry_nr, entry in list(enumerate(python_history))[-HISTORY_COUNT:]:
+        for entry_nr, entry in list(enumerate(python_history))[-get_HISTORY_COUNT():]:
             self.lines_starting_new_entries.add(len(history_lines))
 
             for line in entry.splitlines():
                 history_lines.append(line)
 
-        if len(python_history) > HISTORY_COUNT:
-            history_lines[0] = '# *** History has been truncated to %s lines ***' % HISTORY_COUNT
+        if len(python_history) > get_HISTORY_COUNT():
+            history_lines[0] = '# *** History has been truncated to %s entries ***' % get_HISTORY_COUNT()
 
         self.history_lines = history_lines
         self.concatenated_history = '\n'.join(history_lines)

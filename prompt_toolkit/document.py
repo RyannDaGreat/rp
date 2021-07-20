@@ -221,6 +221,30 @@ class Document(object):
         consists of just one line, it equals `text`. """
         return self.current_line_before_cursor + self.current_line_after_cursor
 
+
+    @property
+    def current_line_above(self):
+        #RYAN ADDED THIS PROPERTY
+        """ Return the line above the cursor. If there is none, return None """
+        rownum=self.cursor_position_row
+        lines=self.text.splitlines()
+        if rownum==0:
+            return None
+        return lines[rownum-1]
+
+    @property
+    def current_line_below(self):
+        #RYAN ADDED THIS PROPERTY
+        """ Return the line below the cursor. If there is none, return None """
+        rownum=self.cursor_position_row
+        rownum=self.text_before_cursor.count('\n')
+        lines=self.text.splitlines()
+        # if rownum==self.line_count-1:
+        if rownum==self.text.count('\n')-1:
+            #This is the last line, there are none below it.
+            return None
+        return lines[rownum+1]
+
     @property
     def leading_whitespace_in_current_line(self):
         """ The leading whitespace in the left margin of the current line.  """
@@ -628,6 +652,11 @@ class Document(object):
         :param preferred_column: When given, go to this column instead of
                                  staying at the current column.
         """
+        # if count==0:
+        #     return self.cursor_position
+        # if count<0:
+        #     return self.get_cursor_down_position(abs(count),preferred_column=preferred_column)
+
         assert count >= 1
         column = self.cursor_position_col if preferred_column is None else preferred_column
 
@@ -642,6 +671,11 @@ class Document(object):
         :param preferred_column: When given, go to this column instead of
                                  staying at the current column.
         """
+        # if count==0:
+        #     return self.cursor_position
+        # if count<0:
+        #     return self.get_cursor_up_position(abs(count),preferred_column=preferred_column)
+
         assert count >= 1
         column = self.cursor_position_col if preferred_column is None else preferred_column
 

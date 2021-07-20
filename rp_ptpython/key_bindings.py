@@ -12,8 +12,7 @@
         #On press 'a': "x |" ---> "x and |"
         #(because in no other situation would you need that space)
     #How to handle conflict: "in" vs "is":
-        #Branch prediction: figure out how to predict which one the user uses more often.
-        #Let's say they use 'in' more often; more specifically, if the variable to the left has a __contains__ function:
+        #Branch prediction: figure out how to predict which one the user uses more often.  #Let's say they use 'in' more often; more specifically, if the variable to the left has a __contains__ function:
             #On press i: "x |" ---> "x in |"
         #Let's say that the user actually wanted "is". Because of the rule that normal typing should be supported:
             #On press s: "x in |" ---> "x is |"
@@ -24,23 +23,250 @@
 
 from __future__ import unicode_literals
 import re
-from rp.prompt_toolkit.document import Document
-from rp.prompt_toolkit.enums import DEFAULT_BUFFER
-from rp.prompt_toolkit.filters import HasSelection, IsMultiline, Filter, HasFocus, Condition, ViInsertMode, EmacsInsertMode
-from rp.prompt_toolkit.key_binding.vi_state import InputMode
-from rp.prompt_toolkit.key_binding.registry import Registry
-from rp.prompt_toolkit.keys import Keys,Key
-from rp.prompt_toolkit.buffer import Buffer
+from rp.prompt_toolkit.document                    import Document
+from rp.prompt_toolkit.enums                       import DEFAULT_BUFFER
+from rp.prompt_toolkit.filters                     import HasSelection, IsMultiline, Filter, HasFocus, Condition, ViInsertMode, EmacsInsertMode
+from rp.prompt_toolkit.key_binding.vi_state        import InputMode
+from rp.prompt_toolkit.key_binding.registry        import Registry,_Binding
+from rp.prompt_toolkit.keys                        import Keys,Key
+from rp.prompt_toolkit.buffer                      import Buffer
+from rp.prompt_toolkit.key_binding.input_processor import KeyPressEvent
+
+def get_all_function_names(code:str):        
+    #Return all the names of all functions defined in the given code, in the order that they appear
+    from rp import lrstrip_all_lines,line_split
+    lines=line_split(lrstrip_all_lines(code))
+    import re
+    defs=[line for line in lines if re.fullmatch(r'\s*def\s+\w+\s*\(.*',line)]
+    func_names=[d[len('def '):d.find('(')].strip() for d in defs]
+    return func_names
+
+def run_code_without_destroying_buffer(event,put_in_history=True):
+    #Run the code in the buffer without clearing it or destroying cursor position etc
+    buffer=event.cli.current_buffer
+    import rp.r_iterm_comm as ric
+    ric.dont_erase_buffer_on_enter+=['DO IT']
+    buffer.accept_action.validate_and_handle(event.cli, buffer,put_in_history=put_in_history)
+
+def run_arbitrary_code_without_destroying_buffer(code,event,put_in_history=True):
+    buffer=event.cli.current_buffer
+    original_document=buffer.document
+    buffer.document = Document(text=code)#Temporarily change the text in the buffer
+        # cursor_position=len(''.join(lines_before + reshaped_text)))
+    run_code_without_destroying_buffer(event,put_in_history=put_in_history)
+    buffer.document=original_document#Put the old text/cursor pos/etc back. Dont mutate the buffer
+
+def handle_run_cell(event):
+    #Happens when we press control+w or alt+w
+    #Run current cell between the boundary prefixes
+    buffer=event.cli.current_buffer
+    def main():
+        text=buffer.document.text
+        cursor_pos=buffer.cursor_position
+        cell_code=get_cell_code(text,cursor_pos,cell_boundary_prefix)
+        from rp import fansi_print
+        # fansi_print("RUNNING CODE CELL:",'blue','bold')
+        # fansi_print(cell_code,'blue')
+
+        #When we do this, don't include that spam in our history...right? Maybe I'll change my mind in the future...I can't decide...like, it's annoying but it's truthful...
+        run_arbitrary_code_without_destroying_buffer(cell_code,event,put_in_history=True)#To include or not to include...which one??
+    main()
+
+def edit_event_buffer_in_vim(event):
+        buffer=event.cli.current_buffer
+        document=buffer.document
+        text=buffer.document.text   
+        from rp import text_file_to_string,temporary_file_path,string_to_text_file
+        import subprocess
+
+        path=temporary_file_path()+'.py'
+        string_to_text_file(path,text)
+
+        lineno=document.text_before_cursor.count('\n')
+        colno=document.cursor_position_col
+
+        #+=1 because vim's line/col numbers start at 1, not 0
+        colno+=1
+        lineno+=1
+
+        try:
+            try:
+                subprocess.call(["vim",path,'+call cursor(%i,%i)'%(lineno,colno),'+normal zz'])#https://stackoverflow.com/questions/3313418/starting-vim-at-a-certain-position-line-and-column-of-a-file
+            except:
+                subprocess.call(["vi",path,'+call cursor(%i,%i)'%(lineno,colno),'+normal zz'])#If it doesn't work with vim, try vi. vi is installed on basically every computer by default (except windows)
+        except FileNotFoundError as error:
+            buffer.insert_text('#ERROR: Cant find vim. Are you sure its installed? '+str(error))
+            return True
+
+        text=text_file_to_string(path)
+
+        from rp import delete_file
+        delete_file(path)
+
+        if text!='':
+            #That means the user saved the file
+            buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+
+        event.cli.renderer.clear()#Refresh the screen
+
+        try:
+            #Attempt to restore the cursor position from vim and use it in rp
+            #I'm still not 100% sure if this will always work; so for now I'm going to squelch any errors.
+            import os
+            def get_viminfo():return '\n'.join(open(os.path.expanduser('~/.viminfo'),errors='ignore').readlines())
+            def get_last_cursor_row_in_vim():    return int(os.path.expanduser([line for line in get_viminfo().splitlines() if line.startswith("'0 ")].pop().split()[ 1]))
+            def get_last_cursor_column_in_vim(): return int(os.path.expanduser([line for line in get_viminfo().splitlines() if line.startswith("'0 ")].pop().split()[ 2]))
+            def get_last_path_edited_in_vim():   return     os.path.expanduser([line for line in get_viminfo().splitlines() if line.startswith("'0 ")].pop().split()[-1])
+            from rp import get_file_name
+            if get_file_name(get_last_path_edited_in_vim())==get_file_name(path):
+                #We recently edited the file, and we should attempt to restore the cursor
+                buffer.set_cursor_column(get_last_cursor_column_in_vim())
+                buffer.set_cursor_row(get_last_cursor_row_in_vim()-1 )
+        except:
+            pass
+
+def split_python_tokens(string,return_tokens=False,ignore_errors=True):
+    #return_tokens is as opposed to returning the strings of those tokens, and thus returning a list of strings (the default behaviour)
+    #if ignore_errors, ignore any parsing errors and keep parsing tokens (return all tokens, even the ones that causes errors such as unterminated strings etc)
+    #EXAMPLES:
+    #    ⮤ split_python_tokens('aosid aoisjd aois   j d; ')
+    #    ans = ['aosid', 'aoisjd', 'aois', 'j', 'd', ';']
+    #    ⮤ split_python_tokens(' lambda x: 3,1')
+    #    ans = [' ', 'lambda', 'x', ':', '3', ',', '1', '']
+    import tokenize
+    i=iter(string.splitlines())
+    def f():return next(i).encode()
+    token_iterator=tokenize.tokenize(f)
+    tokens=[]
+    while True:
+        try:
+            tokens.append(next(token_iterator))
+        except StopIteration:
+            break
+        except:
+            if ignore_errors:
+                continue
+            else:
+                raise
+    tokens=tokens[1:]#The first and last token are never useful (just begin/end of field tokens. Even tokenizing an empty string would yield these two tokens.)
+    if tokens and tokens[-1].type==tokenize.ENDMARKER:#This token is useless imho. Especially when we're trying to return strings split from python tokens. It just adds an empty string to the end of the output. Useless...
+        del tokens[-1]
+    if return_tokens:
+        return tokens
+    else:
+        return [token.string for token in tokens]
+
+def get_ans():
+    import rp.r_iterm_comm as ric
+    if 'ans' in ric.globa:
+        return ric.globa['ans']
+    else:
+        return None
+
+
+def do_vim_copy(string):
+    import rp
+    global _copied_string
+    rp.vim_copy(string)
+    # _copied_string=string
+
+def do_local_copy(string):
+    import rp
+    global _copied_string
+    rp.local_copy(string)
+    # _copied_string=string
+
+def do_tmux_copy(string):
+    import rp
+    global _copied_string
+    rp.tmux_copy(string)
+    # _copied_string=string
+
+def do_vim_paste(buffer,repr_mode=False,commented=None):
+    import rp
+    try:
+        if repr_mode:
+            text=repr(rp.vim_paste())
+        else:
+            text=str(rp.vim_paste())
+
+        if commented is not None:
+            text=commented_string(buffer,text,spaces=commented)
+
+        buffer.insert_text(text)
+    except:
+        pass
+
+def do_tmux_paste(buffer,repr_mode=False,commented=None):
+    import rp
+    try:
+        if repr_mode:
+            text=repr(rp.tmux_paste())
+        else:
+            text=str(rp.tmux_paste())
+
+        if commented is not None:
+            text=commented_string(buffer,text,spaces=commented)
+
+        buffer.insert_text(text)
+    except:
+        pass
+
+def do_web_copy(string):
+    import rp
+    global _copied_string
+    rp.web_copy(string)
+    # _copied_string=string
+
+def do_local_paste(buffer,repr_mode=False):
+    import rp
+    try:
+        if repr_mode:
+            buffer.insert_text(repr(str(rp.local_paste())))
+        else:
+            buffer.insert_text(str(rp.local_paste()))
+    except:
+        pass
+def do_web_paste(buffer,repr_mode=False):
+    import rp
+    try:
+        if repr_mode:
+            buffer.insert_text(repr(str(rp.web_paste())))
+        else:
+            buffer.insert_text(str(rp.web_paste()))
+    except:
+        pass
+
 _copied_string=""
 def do_copy(string):
     import rp
     global _copied_string
     rp.string_to_clipboard(string)
     _copied_string=string
-def do_paste(buffer):
 
+def commented_string(buffer,string,spaces=0):
+    if isinstance(spaces,int):
+        spaces=' '*spaces
+    cursor_column=buffer.document.cursor_position_col
+    string=string.split('\n')
+    string=['#'+spaces+x for x in string]
+    flag=False
+    for index,line in enumerate(string):
+        if flag:
+            string[index]=' '*cursor_column+line
+        flag=True
+    string='\n'.join(string)
+    return string
+
+def do_paste(buffer,commented:int=None):
     import rp
-    buffer.insert_text(rp.string_from_clipboard())
+    string=rp.string_from_clipboard()
+    if commented is not None:string=commented_string(buffer,string,spaces=commented)
+    buffer.insert_text(string)
+
+def do_string_paste(buffer):
+    import rp
+    buffer.insert_text(repr(rp.string_from_clipboard()))
 import rp.r_iterm_comm as ric
 enable_space_autocompletions=ric.enable_space_autocompletions#This variable is a list that's mutated between being empty and being full, which toggles it's truth value. This feature isn't completely figured out yet...I suppose it's better to disable it for the time being...
 
@@ -183,6 +409,27 @@ def get_cell_code(text,cursor_pos,prefix=cell_boundary_prefix):
     return text[max(0,start):min(len(text),end)]
 #endregion
 
+def swap_from_import(line):
+    try:
+        #EXAMPLES:
+        #     >>> swap_from_import('   import jugio as gi')
+        #    ans =    from jugio import
+        #     >>> swap_from_import('   from bugg.malo import bees')
+        #    ans =    import bugg.malo
+        whitespace=line[:len(line)-len(line.lstrip())]
+        line=line[len(whitespace):]
+        items=line.split()
+        items=items[:2]
+        if items[0]=='from':
+            items[0]='import'
+        elif items[0]=='import':
+            items[0]='from'
+            items.append('import ')        
+        line=' '.join(items)
+        return whitespace+line
+    except Exception:
+        return line
+
 align_char='→'
 def align_lines_to_char(string,char=align_char,space=' '):
     #EXAMPLE:
@@ -308,7 +555,7 @@ def cursor_on_string(text,cpos):
     #hello="Helo"+234   <--- this works well because theresno whitespace between hello and = and "Helo"
     #0000001111110000
     import rp
-    tokens=rp.split_python_tokens(text)
+    tokens=split_python_tokens(text)
     count=0
     for token in tokens:
         if count+len(token)>cpos:
@@ -322,7 +569,7 @@ def cursor_on_string(text,cpos):
 def cursor_on_comment(text,cpos,tokens):
     #NOT accurate, dont put into the main RP library
     import rp
-    tokens=rp.split_python_tokens(text)
+    tokens=split_python_tokens(text)
     count=0
     for token in tokens:
         if count+len(token)>cpos:
@@ -336,7 +583,7 @@ def cursor_on_comment(text,cpos,tokens):
 def current_token(text,cpos):
     #NOT accurate, dont put into the main RP library
     import rp
-    tokens=rp.split_python_tokens(text)
+    tokens=split_python_tokens(text)
     count=0
     for token in tokens:
         if count+len(token)>cpos:
@@ -374,7 +621,7 @@ _previous_before_line=None
 _previous_result=False
 def get_if_in_string_or_comment(before_line,after_line,buffer):
     if not '\n' in buffer.text:
-        if re.fullmatch(r'((!|!!|CD |RUN ).*)',before_line):#Things we want to turn microcompletions off for
+        if re.fullmatch(r'((!|!!|CD |RUN |([A-Z]+ )).*)',before_line):#Things we want to turn microcompletions off for
             return True
     #This function attempts to make an nearly equivalent but faster version of true_get_if_in_string_or_comment
     global _previous_result,_previous_after_line,_previous_before_line
@@ -394,13 +641,18 @@ def meta_pressed(clear=True):#This should only be called once per keystroke
     if clear:
         _meta_pressed.clear()
     return out
+
 def line_above(buffer):
-    document=buffer.document
+    return line_above_document(buffer.document)
+
+def line_above_document(document):
     before=document.text_before_cursor
     if not '\n' in before:
         return None
     before_lines=before.split("\n")
     return before_lines[-2]
+
+
 def beginswithany(a,*b):
     for x in b:
         if a.startswith(x):
@@ -551,14 +803,218 @@ def has_selected_completion(buffer):# If we have a completion visibly selected o
     return buffer.complete_state and buffer.complete_state.complete_index is not None
 last_pressed_dash=False
 
-def handle_character(buffer,char):
+
+class CommentedParenthesizerAutomator:
+    def __init__(self,
+        upper_marker='#',
+        lower_marker='#',
+        match_indent=True
+        ):
+    # def __init__(self,
+    #     upper_marker='#╵',
+    #     lower_marker='#╷',
+    #     match_indent=True
+    #     ):
+        self.upper_marker=upper_marker
+        self.lower_marker=lower_marker
+        self.match_indent=match_indent#If true, indent the parnthesis comments along with the rest of the code. Otherwise, start the parenthesizer comments at the very beginning of the line
+
+    def parenthezized_line(self,line:str)->str:
+        assert '\n' not in line,'Input Assertion Error: line should be a single line, but its a multiline string. line='+repr(line)
+
+        from rp import parenthesizer_automator
+
+        original_line=line
+
+        if self.match_indent:
+            whitespace=line[:len(line)-len(line.lstrip())]
+            assert line[len(whitespace):]==line.lstrip()
+        else:
+            whitespace=''
+
+        middle_line  =line[len(whitespace):]
+        parenth_lines=parenthesizer_automator(middle_line).splitlines()
+
+        assert len(parenth_lines)==0 or len(parenth_lines)%2,'Internal logical assertion (this should never fail unless this function is broken) due to the nature of rp.parenthesizer_automator: rp.parenthesizer_automator should always return an odd number of lines, unless it returns 0 lines'
+        if len(parenth_lines)<=1:
+            return original_line
+
+        upper_lines=parenth_lines[:len(parenth_lines)//2   ]
+        lower_lines=parenth_lines[ len(parenth_lines)//2+1:]
+
+        upper_lines=[(self.upper_marker+(upper_line[len(self.upper_marker):] if len(upper_line)>=len(self.upper_marker) else '')) for upper_line in upper_lines]
+        lower_lines=[(self.lower_marker+(lower_line[len(self.lower_marker):] if len(lower_line)>=len(self.lower_marker) else '')) for lower_line in lower_lines]
+
+        out_lines=[*upper_lines,middle_line,*lower_lines]
+        out_lines=[whitespace+out_line for out_line in out_lines]
+
+        out='\n'.join(out_lines)
+
+        return out
+
+    def is_upper_line(self,line:str)->bool:
+        if not isinstance(line,str):return False#Can't be an upper line if it's not a line...
+        assert '\n' not in line,'Input Assertion Error: line should be a single line, but its a multiline string. line='+repr(line)
+        return line.lstrip().startswith(self.upper_marker) and set(line.strip())<=set(' #│┌┐') and set(line)&set('│└┘┌┐')
+
+    def is_lower_line(self,line:str)->bool:
+        if not isinstance(line,str):return False#Can't be a lower line if it's not a line...
+        assert '\n' not in line,'Input Assertion Error: line should be a single line, but its a multiline string. line='+repr(line)
+        return line.lstrip().startswith(self.lower_marker) and set(line.strip())<=set(' #│└┘') and set(line)&set('│└┘┌┐')
+
+    def is_parenthesized_at_line(self,string:str,line_number:int)->bool:
+        #Returns true if there are visible parenthesizer comments above and below the given linenumber in the given string
+        #Check for comments with the right markers above and below that line
+        #Used to determine whether this line is worth looking at (to see whether we must update its surroundings when using the editor)
+
+        if line_number==0:
+            return False #You can't have any upper parenthesis if we're on the first line
+
+        lines=string.splitlines()
+        try:
+            line_above=lines[line_number-1]
+            line_below=lines[line_number+1]
+            return self.is_lower_line(line_below) and self.is_upper_line(line_above)
+        except IndexError:
+            return False
+
+    def unparenthesized(self,string,line_number)->str:
+        #Remove the parenthesizer comments around a given line number on the given string
+        lines=string.splitlines()
+
+        #Delete all lower lines
+        while True:
+            try:
+                line_below_index=line_number+1
+                line_below=lines[line_below_index]
+                if self.is_lower_line(line_below):
+                    del lines[line_below_index]
+                else:
+                    break
+            except IndexError:
+                break
+
+        #Delete all upper lines
+        line_above_index=line_number-1
+        while line_above_index>=0:
+            try:
+                line_above=lines[line_above_index]
+                if self.is_upper_line(line_above):
+                    del lines[line_above_index]
+                    line_above_index-=1
+                else:
+                    break
+            except IndexError:
+                break
+
+        return '\n'.join(lines)
+
+
+    def parenthesized_at_line(self,string,line_number)->str:
+        #Insert parenthesizer comments around a given line in a string and return the result
+        lines=string.splitlines()
+        line =lines[ line_number]
+        lines=lines[line_number:line_number+1]=self.parenthezized_line(line).splitlines()
+        return '\n'.join(lines)
+        
+    def unparenthesize_buffer(self,buffer)->None:
+        #Remove the parenthesizer comments around the cursor in the given buffer
+        #Delete all lower lines
+        while self.is_lower_line(buffer.document.current_line_below):
+            from rp import random_chance
+            buffer.delete_line_below_cursor()
+
+        #Delete all upper lines
+        while self.is_upper_line(buffer.document.current_line_above):
+            buffer.delete_line_above_cursor()
+
+    def parenthesize_buffer(self,buffer)->None:
+        #Insert parenthesizer comments around the cursor in a given buffer
+        current_line =buffer.document.current_line
+        cursor_column=buffer.document.cursor_position_col
+        buffer.cursor_right(999999)
+        buffer.delete_before_cursor(len(current_line))
+        new_text=self.parenthezized_line(current_line)
+        buffer.insert_text(new_text)
+        if '\n' in new_text:
+            buffer.cursor_up(new_text.count('\n')//2)
+        buffer.set_cursor_column(cursor_column)
+
+    def buffer_is_parenthesized_at_cursor(self,buffer)->bool:
+        #Returns true if there are visible parenthesizer comments above and below the buffer's cursor
+        #Check for comments with the right markers above and below that line
+        #Used to determine whether this line is worth looking at (to see whether we must update its surroundings when using the editor)
+        return self.is_parenthesized_at_line(buffer.document.text,buffer.document.cursor_position_row)
+
+    def buffer_refresh_parenthesization(self,buffer)->None:
+        if self.buffer_is_parenthesized_at_cursor(buffer):
+            #Refresh the parenthesization
+            self.unparenthesize_buffer(buffer)
+            self.parenthesize_buffer(buffer)
+        else:
+            pass
+
+    def buffer_toggle_parenthesization(self,buffer)->None:
+        if self.buffer_is_parenthesized_at_cursor(buffer):
+            self.unparenthesize_buffer(buffer)
+        else:
+            self.parenthesize_buffer(buffer)
+
+
+        
+commented_parenthesizer_automator=CommentedParenthesizerAutomator()
+
+
+_global_event=None
+def post_handler(binding:_Binding,event:KeyPressEvent,old_document:Document):
+    #This function should be very lightweight, as it's called once after EVERY keystroke in the editor (including ones like control+e which don't even modify the text)
+    #I made sure that post_handler is called on every keystroke by modifying input_processor.py and replacing key_bindings.py's '@handle' with a lambda that also ensures this function is called
+    #Get the pressed char
+    char=event.data
+
+    assert isinstance(char,str)
+
+    #Get information about old_document
+    old_text         = old_document.text
+    old_current_line = old_document.current_line
+    old_after_line   = old_document.current_line_after_cursor
+    old_before_line  = old_document.current_line_before_cursor
+    old_before       = old_document.text_before_cursor
+    old_after        = old_document.text_after_cursor
+    old_above_line   = line_above_document(old_document)
+
+    #Get the buffer and related information
+    buffer=event.cli.current_buffer
+    text=document=current_line=after_line=before_line=before=after=above_line=None
+    def refresh_strings_from_buffer():
+        nonlocal text,document,current_line,after_line,before_line,before,after,above_line
+        document     = buffer.document
+        text         = buffer.document.text
+        current_line = buffer.document.current_line
+        after_line   = buffer.document.current_line_after_cursor
+        before_line  = buffer.document.current_line_before_cursor
+        before       = buffer.document.text_before_cursor
+        after        = buffer.document.text_after_cursor
+        above_line   = line_above(buffer)
+    refresh_strings_from_buffer()
+
+    if text!=old_text:
+        commented_parenthesizer_automator.buffer_refresh_parenthesization(buffer)#This is optimized and only makes changes if nessecary
+
+
+def handle_character(buffer,char,event=None):
     #This function should receive all VISIBLE keystrokes (such as 'a','b','c','1','2','3' but also ' ','\n','.','$' etc)
     #But it should NOT receive things like backspace, backtab, or other control keys that aren't actually part of the code
     #If this function returns true it overrides the other code that handles that specific char
-    from rp import is_namespaceable,split_python_tokens
+    from rp import is_namespaceable
     global last_pressed_dash
     import rp.r_iterm_comm as ric
     import tokenize
+
+    if False:#No microcompletions
+        buffer.insert_text(char)
+        return True
+
     text=current_line=after_line=before_line=before=after=above_line=before_tokens=after_tokens=before_line_ends_with_number=None
     def refresh_strings_from_buffer():
         nonlocal text,current_line,after_line,before_line,before,after,above_line,before_tokens,after_tokens,before_line_ends_with_number
@@ -585,6 +1041,26 @@ def handle_character(buffer,char):
         buffer.insert_text(' ')#This should always work
         meta_pressed(clear=True)
         return True
+
+    if char=='v' and meta_pressed(clear=True):
+        edit_event_buffer_in_vim(event)
+        return True
+
+    if char=='r' and meta_pressed(clear=True):
+        run_arbitrary_code_without_destroying_buffer(repr(text),event,put_in_history=True)#To include or not to include...which one??
+        buffer.document=Document('',0,buffer.document.selection)
+        return True
+
+    if char=='q' and meta_pressed(clear=True):
+        #Delete all
+        #Equivalent to \da
+        buffer.document=Document('',0,buffer.document.selection)
+        return True
+
+    if char=='w' and meta_pressed(clear=True):
+        handle_run_cell(event)
+        return True
+
     in_string_or_comment=get_if_in_string_or_comment(before_line,after_line,buffer)
     if char not in '\n\'\"' and in_string_or_comment:
         buffer.insert_text(char)#Don't do anything but write the damn character lol
@@ -595,6 +1071,23 @@ def handle_character(buffer,char):
         buffer.insert_text('-')#Trigger '--' or '-=' indirectly by replacing the '_' with a '-' where applicable (aka NOT if the user made the _ by typing _ with the shift key. This is one of the rare instances where stateful is OK)
     if char=='-':last_pressed_dash=True
     else:        last_pressed_dash=False
+
+        
+    if char in '/\n' and before_line.endswith('?/') and not after:
+        #This rule is a HACK to preserve the functionality of ?/
+        #Without this rule, pressing enter after ?/ will turn it into ??
+        if char=='\n':
+            return False
+        #if char=='/':
+        #    #Actually this rule isn't nessecary...pressing enter on // turns it into ??
+        #    buffer.delete_before_cursor()
+        #    buffer.insert_text('?')
+        #    return True
+    if char=='/' and before.endswith('???') and not after:
+        return True
+            
+
+
 
     if not in_string_or_comment:#This is just for visual purposes, so I can put the lines in a block of code and document ,after_line)it
       #region ..= and =.. in-place operators
@@ -626,7 +1119,7 @@ def handle_character(buffer,char):
         if char==' ' and (starts_with_any(after_line,']',':')) and re.fullmatch(r'((.* for)|(for)) [a-zA-Z_0-9]+ in ',before_line):
             #[thing(index) for index in |] --->  [thing(index) for index in indices|] #TO BE IMPROVED LATER. THIS IS JUST A PROOF OF CONCEPT RIGHT NOW.
             name=before_line.rstrip().split(' ')[-2]
-            from rp import plural_noun,is_singular_noun_of,is_iterable,split_python_tokens,is_plural_noun,plural_noun
+            from rp import plural_noun,is_singular_noun_of,is_iterable,is_plural_noun,plural_noun
             refresh_strings_from_buffer()
             candidates=set(list(ric.globa)) | set(split_python_tokens(before+after))
             plural_name=plural_noun(name)
@@ -647,7 +1140,7 @@ def handle_character(buffer,char):
             # buffer.insert_text(plural_noun(name))#If we can't find a name that fits, and 'ans' isn't an option, just choose a plural name
             # return True 
         keywords={'async','await','with', 'nonlocal', 'while', 'None', 'global', 'as', 'is', 'and', 'else', 'yield', 'raise', 'del', 'break', 'in', 'not', 'False', 'assert', 'try', 'def', 'return', 'if', 'finally', 'lambda', 'for', 'from', 'True', 'pass', 'continue', 'elif', 'except', 'class', 'or', 'import'}
-        from rp import split_python_tokens,is_namespaceable
+        from rp import is_namespaceable
         if char==' ' and (before_line=='for ' or before_line.endswith(' for ')) and starts_with_any(after_line,' in]','in)','in}',' in '):
             before_tokens=split_python_tokens(before_line)[:-1]#Get rid of the 'for'
             # dont_use_these_tokens=set(split_python_tokens(text))-set(before_tokens)
@@ -1124,7 +1617,7 @@ def handle_character(buffer,char):
             buffer.delete_before_cursor()
             buffer.insert_text('\n')
             return True
-        if char!='=' and re.fullmatch(r'.*\=',before_line) and not re.fullmatch(r'.*\=\=',before_line) and starts_with_any(after_line,']') and not (len(after_line.strip())==2 and after_line.strip()[1]==':'):
+        if (char!='=' and re.fullmatch(r'.*\=',before_line) and not re.fullmatch(r'.*\=\=',before_line) and starts_with_any(after_line,']') and not (len(after_line.strip())==2 and after_line.strip()[1]==':')) and not endswithany(before_line,'==','1=','!='):
             #On a letter or number 'q':  i[w=|]  -->  i[w]=q
             if before_line.endswith('>=') or before_line.endswith('<='):
                 buffer.insert_text(char)
@@ -1177,6 +1670,12 @@ def handle_character(buffer,char):
             buffer.insert_text('range(len())')
             buffer.cursor_left(len('))'))
             return True
+        if char in 'p' and meta_pressed(clear=True):
+            run_arbitrary_code_without_destroying_buffer('PREV',event,put_in_history=True)
+            return True
+        if char in 'n' and meta_pressed(clear=True):
+            run_arbitrary_code_without_destroying_buffer('NEXT',event,put_in_history=True)
+            return True
         if char in '{([])}' and meta_pressed(clear=False):
             #When holding alt, add a ) or ] or } to the end of the line, instead of autocompleting it where it is currently
             #TODO: Add example
@@ -1184,7 +1683,8 @@ def handle_character(buffer,char):
                 buffer.insert_text(char)
                 char={'(':')','[':']','{':'}'}[char]
             meta_pressed(clear=True)
-            l=len(after_line)
+            # l=after_line.find(':')#In the event that we're in "for x in func(|thing:" we want "for x in func(|thing):" and not "for x in func(|thing:)"
+            l=len(after_line)-1 if after_line.endswith(':') else len(after_line)
             buffer.cursor_right(l)
             buffer.insert_text(char)
             buffer.cursor_left(l+1)
@@ -1387,6 +1887,58 @@ def handle_character(buffer,char):
             buffer.insert_text(':')
             return True
 
+        if char=='-' and before_line.lstrip().startswith('def ') and before_line.endswith(')') and after_line==':':
+            buffer.insert_text('->')
+            return True
+        if (char=='-' or char=='>') and before_line.lstrip().startswith('def ') and before_line.endswith(')->') and after_line==':':
+            #Do nothing
+            return True
+
+        if before=='cd' and not after and char==' ':
+            #Allow 'cd thing' to be 'CD thing'
+            buffer.delete_before_cursor(2)
+            buffer.insert_text('CD ')
+            return True
+
+        if set(after)<=set('])}') and not '\n' in before:
+            if char=='\n' and before.endswith('/'):
+                # On enter:  ans[5/|]  --->  ans[5]?|
+                buffer.delete_before_cursor()
+                buffer.cursor_right(9999)
+                buffer.insert_text('?')
+                return False
+            if char=='\n' and before.endswith('//'):
+                # On enter:  ans[5//|]  --->  ans[5]??|
+                buffer.delete_before_cursor(2)
+                buffer.cursor_right(9999)
+                buffer.insert_text('??')
+                return False
+            # if char=='/' and before.endswith('//'):
+            #     # On /:  ans[5//|]  --->  ans[5]???|
+            #     buffer.delete_before_cursor(2)
+            #     buffer.cursor_right(9999)
+            #     buffer.insert_text('???')
+            #     return True
+            if char=='?':
+                # On ?:  ans[5|]  --->  ans[5]?|
+                buffer.cursor_right(9999)
+                return False
+                
+        
+        import rp.r_iterm_comm as ric
+        if char in './?=' and text=="" and ric.successful_commands:
+            last_command=ric.successful_commands[-1]
+            if not '\n' in last_command and not ';' in last_command:
+                if last_command.startswith('from ') or last_command.startswith('import '):
+                    #import numpy
+                    #<on .>
+                    #numpy.|
+                    buffer.insert_text(last_command.split()[-1]+char)
+                    if char=='=':
+                        buffer.delete_before_cursor()
+                    return True
+                
+
         # if char==' ' and after_line.startswith(')') and endswithany(before_line,*'\'"'):
         #     #print('hello'|) ---> print('hello',|)
         #     #print('hello'|) -/-> print('hello' |)
@@ -1412,6 +1964,8 @@ def original_ptpython_load_python_bindings(python_input):
 
     sidebar_visible = Condition(lambda cli: python_input.show_sidebar)
     handle = registry.add_binding
+    handle = lambda *args,**kwargs:registry.add_binding(*args,post_handler=post_handler,**kwargs)
+    # handle = lambda *args,**kwargs:registry.add_binding(*args,post_handler=post_handler,**kwargs)
     has_selection = HasSelection()
     vi_mode_enabled = Condition(lambda cli: python_input.vi_mode)
 
@@ -1516,9 +2070,12 @@ def load_python_bindings(python_input):
     registry = Registry()
 
     sidebar_visible = Condition(lambda cli: python_input.show_sidebar)
-    handle = registry.add_binding
+    # handle = registry.add_binding # <---- OLD CODE
+    handle = lambda *args,**kwargs:registry.add_binding(*args,post_handler=post_handler,**kwargs)# <---- NEW CODE: Make sure post_handler is called after every keystroke
     has_selection = HasSelection()
     vi_mode_enabled = Condition(lambda cli: python_input.vi_mode)
+    # microcompletions_enabled = Condition(lambda cli: True)
+    microcompletions_enabled = Condition(lambda cli: getattr(python_input,'enable_microcompletions',False))
 
     #region Ryan Burgert Stuff
     from rp.prompt_toolkit.key_binding.input_processor import KeyPressEvent
@@ -1546,10 +2103,10 @@ def load_python_bindings(python_input):
 #endregion
     for char in '''`~!@#$%^&*()-_=+[{]}\|;:'",<.>/?']''':
         def go(c):
-            @handle(c,filter=~vi_mode_enabled)
+            @handle(c,filter=~vi_mode_enabled&microcompletions_enabled)
             def _(event):
                 buffer=event.cli.current_buffer
-                if handle_character(buffer,c):return
+                if handle_character(buffer,c,event):return
                 buffer.insert_text(c)
         go(char)
     for char in '~!@#$%^&*()_+QWERTYUIOP{}|ASDFGHJKL:"ZXCVBNM<>?`1234567890-=qwertyuiop[]\\asdfghjkl;\'zxcvbnm,./':# Normal keyboard inputs
@@ -1557,7 +2114,7 @@ def load_python_bindings(python_input):
             @handle(c,filter=has_selection & ~vi_mode_enabled)
             def _(event):
                 buffer=event.cli.current_buffer
-                if handle_character(buffer,c):return
+                if handle_character(buffer,c,event):return
                 # buffer.on_text_changed+=lambda *x:buffer.save_to_undo_stack(clear_redo_stack=False)
                 buffer.cut_selection()# Overwrite text if we have something selected
                 buffer.insert_text(c)
@@ -1626,10 +2183,10 @@ def load_python_bindings(python_input):
             buffer.insert_text('='+char)
             return True
         return False
-    @handle(';',filter=~vi_mode_enabled)
+    @handle(';',filter=~vi_mode_enabled&microcompletions_enabled)
     def _(event):
         buffer=event.cli.current_buffer
-        if handle_character(buffer,';'):return
+        if handle_character(buffer,';',event):return
         document=buffer.document
         current_line=document.current_line
         before_line=document.current_line_before_cursor
@@ -1645,10 +2202,10 @@ def load_python_bindings(python_input):
         return
     for char in 'QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm_':#Letter inputs
             def go(char):
-                @handle(char,filter=~vi_mode_enabled)
+                @handle(char,filter=~vi_mode_enabled&microcompletions_enabled)
                 def _(event):
                     buffer=event.cli.current_buffer
-                    if handle_character(buffer,char):return
+                    if handle_character(buffer,char,event):return
                     document=buffer.document
                     current_line=document.current_line
                     before_line=document.current_line_before_cursor
@@ -1808,7 +2365,6 @@ def load_python_bindings(python_input):
                             buffer.delete_before_cursor()
                             buffer.cursor_right(4)
                             return
-
                     if True:#not '"' in after_line and not "'" in after_line:
                         #Jump cursor to headers with special commands following the '\' key
                         #(on press d)
@@ -1817,7 +2373,7 @@ def load_python_bindings(python_input):
                         #   --->
                         #|def f():
                         #   return
-                        def jump_cursor_to_beginning_of_header(command:str='\\de',header:str='def '):
+                        def jump_cursor_to_beginning_of_header(command:str='\\db',header:str='def '):
                             if before_line.endswith(command):
                                 blines=before.splitlines()[:-1]
                                 if any(x.lstrip().startswith(header)for x in blines):
@@ -1830,15 +2386,85 @@ def load_python_bindings(python_input):
                                     buffer.cursor_right(len(get_indent(cline())))
                                     return
                         # header_jump_commands={
-                        #                  '\\de':'def ',
+                        #                  '\\db':'def ',
                         #                  '\\cl':'class ',
                         #                  '\\if':'if ',#go ...etc
                         #                  '\\wh':'while ',
                         #                  '\\wi':'with ',
                         #                  '\\fo':'for ',#go f
                         #                  '\\el':'el'}#go e
-                        header_arg_commands={'\\ed':'editor','\\re':'replace','\\py':'python','\\dtl':'delete to line','\\go':'goto','\\al':'align_lines','\\ac':'align_char','\\sw':'strip_whitespace','\\mla':'multi line arguments','\\lo':'load','\\sa':'save','\\wr':'write','\\ca':'cancel'}
-                        header_commands={'\\co':'copy','\\da':'delete all','\\pa':'paste','\\ya':'yapf autoformat','\\gg':'go to top','\\GG':'go to bottom','\\vO':'vim open up','\\vo':'vim open down','\\tts':'tabs to spaces','\\de':'debug','\\pu':'pudb','\\wi':'workingindex'}
+                        header_arg_commands={
+                                             '\\re':'replace',
+                                             '\\py':'python',
+                                             '\\dtl':'delete to line',
+                                             '\\go':'goto',
+                                             '\\lo':'load',
+                                             '\\sa':'save',
+                                             '\\wr':'write',
+                                             '\\ca':'cancel',
+                                             '\\t3pa':'tmux_comment_paste',
+                                             '\\3tpa':'tmux_comment_paste',
+                                             '\\3an':'comment_ans',
+                                             '\\/c':'source_code',
+                                             '\\?c':'source_code',
+                                             }
+                        header_commands={
+                                         '\\sim':'sort_imports',
+                                         '\\bla':'black',
+                                         '\\sg':'save_gist',
+                                         '\\lg':'load_gist',
+                                         '\\co':'copy',
+                                         '\\pa':'paste',
+                                         '\\3pa':'comment_paste',
+                                         '\\vpa':'vim_paste',
+                                         '\\vspa':'vim_string_paste',
+                                         '\\vco':'vim_copy',
+                                         '\\tpa':'tmux_paste',
+                                         '\\tspa':'tmux_string_paste',
+                                         '\\tco':'tmux_copy',
+                                         '\\lpa':'local_paste',
+                                         '\\lspa':'local_string_paste',
+                                         '\\wpa':'web_paste',
+                                         '\\wspa':'web_string_paste',
+                                         '\\rpr':'repr',
+                                         '\\rpa':'repr ans',
+                                         '\\wco':'web_copy',
+                                         '\\ed':'editor',
+                                         '\\vi':'vim',
+                                         '\\al':'align_lines',
+                                         '\\ac':'align_char',
+                                         '\\sw':'strip_whitespace',
+                                         '\\sc':'strip_comments',
+                                         '\\mla':'multi line arguments',
+                                         '\\fo':'for',
+                                         '\\fi':'import_from_swap',
+                                         '\\de':'def',
+                                         '\\wh':'while',
+                                         '\\da':'delete all',
+                                         '\\lss':'LSS',
+                                         '\\lsr':'Relative LSS',
+                                         '\\an':'ans',
+                                         '\\san':'string ans',
+                                         '\\tbp':'toggle_big_parenthesis',
+                                         '\\spa':'string_paste',
+                                         '\\d0l':'delete_empty_lines',
+                                         '\\dtt':'delete_to_top',
+                                         '\\dtb':'delete_to_bottom',
+                                         '\\sl':'sort_lines',
+                                         '\\rl':'reverse_lines',
+                                         '\\ya':'yapf autoformat',
+                                         '\\gg':'go to top',
+                                         '\\GG':'go to bottom',
+                                         '\\vO':'vim open up',
+                                         '\\vo':'vim open down',
+                                         '\\fn':'function_name',
+                                         '\\tts':'tabs to spaces',
+                                         '\\23p':'python_2_to_3',
+                                         '\\db':'debug',
+                                         '\\pu':'pudb',
+                                         '\\wi':'workingindex',
+                                         '\\en':'enumerate',
+                                         }
                         # header_commands.update(header_jump_commands)
                         header_commands.update(header_arg_commands)
 
@@ -1920,7 +2546,7 @@ def load_python_bindings(python_input):
                                                 try:
                                                     file_name=get_file_name(path)
                                                     directory=get_parent_directory(path)
-                                                    backup_path=path_join(directory,'.'+file_name+'.backup.'+str(get_current_date())+'.py')
+                                                    backup_path=path_join(directory,'.'+file_name+'.backup.'+str(get_current_date()).replace(' ','_')+'.py')
                                                     file_contents=text_file_to_string(path)
                                                     string_to_text_file(backup_path,file_contents)
                                                 except BaseException as E:
@@ -1932,6 +2558,10 @@ def load_python_bindings(python_input):
                                                 string_to_text_file(path,text)
                                             except BaseException as E:
                                                 buffer.insert_text("\nERROR: "+str(E)+"\n(Undo to make me go away)\n")
+                                                
+                                        header='aoisjdaosijdoiasjdaosijd' #Prevent string ans from triggering
+                                        # else:
+                                            # buffer.insert_text('\\sa')#For '\san' for string ans
 
                                     if header=='goto':
                                         if before_line.count('`')==1:
@@ -1975,14 +2605,46 @@ def load_python_bindings(python_input):
                                     #         except Exception as e:
                                     #             buffer.insert_text('\n#ERROR: '+str(e))
                                     #             pass
+                                
+                                if header=='load' and not '`' in before_line:
+                                    from rp import text_file_to_string, string_to_text_file, input_select_file
+                                    try:
+                                        print(end='\033[999B\n\033[999D\n')#Move the cursor to the bottom left of the screenhttps://tldp.org/HOWTO/Bash-Prompt-HOWTO/x361.html
+                                        arg=input_select_file(message='Please select a python file to load into the buffer')
+                                        new_text=text_file_to_string(arg)
+                                        buffer.document=Document(new_text,buffer.document.cursor_position,buffer.document.selection)
+                                    except BaseException as E:
+                                        buffer.insert_text("\nERROR: "+str(E)+"\n(Undo to make me go away)\n")
+                                    event.cli.renderer.clear()#Refresh the screen
+                                    event.cli.renderer.clear()#Refresh the screen
+                                    event.cli.renderer.clear()#Refresh the screen
+                                    
+                                if header=='LSS':
+                                    #LSS refers to the command 'LSS' aka 'LS SEL' in rp's pseudo_terminal.
+                                    try:
+                                        import rp
+                                        rp.clear_terminal_screen()
+                                        buffer.insert_text(repr(rp.input_select_path()))
+                                    except:pass
+                                    event.cli.renderer.clear()#Refresh the screen
+                                    
+                                if header=='Relative LSS':
+                                    #LSS refers to the command 'LSS' aka 'LS SEL' in rp's pseudo_terminal.
+                                    try:
+                                        import rp
+                                        rp.clear_terminal_screen()
+                                        buffer.insert_text(repr(rp.get_relative_path(rp.input_select_path())))
+                                    except:pass
+                                    event.cli.renderer.clear()#Refresh the screen
+                                        
                                 if header=='workingindex':
                                     buffer.insert_text('#'+str(buffer.working_index))
 
                                 if header=='debug':
-                                    toggle_top_line_text(buffer,"debug()\n")
+                                    toggle_top_line_text(buffer,"from rp import debug;debug()\n")
                                     # toggle_bottom_line_text(buffer,"pip_import('sys').settrace(None)#Exit the debugger")#Use the default exit-the-debugger#Commented this out. THis functionality is not handled, in a better way, in patch_linecache.py
                                 if header=='pudb':
-                                    line="pip_import('pudb').set_trace()"
+                                    line="from rp import pip_import;pip_import('pudb').set_trace()"
                                     import rp
                                     if rp.currently_running_windows():
                                         line+='#WARNING: pudb crashes on windows; it\'s unix-only'
@@ -2001,10 +2663,190 @@ def load_python_bindings(python_input):
                                     text=buffer.document.text
                                     text='\n'.join(line.rstrip() for line in text.split('\n'))
                                     buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                if header=='import_from_swap':
+                                    before_line=buffer.document.current_line_before_cursor
+                                    after_line=buffer.document.current_line_after_cursor
+                                    current_line=buffer.document.current_line
+                                    buffer.delete_before_cursor(len(before_line))
+                                    buffer.delete(len(after_line))
+                                    buffer.insert_text(swap_from_import(current_line))
+                                if header=='enumerate':
+                                    def uses_enumerate(line):
+                                        ans=line
+                                        ans=ans.split(' in ')
+                                        ans=ans[1]
+                                        ans=ans.strip()
+                                        ans=ans.startswith('enumerate')
+                                        return ans
+
+                                    def transform_var(line):
+                                        ans=line
+                                        ans=ans.split(' in ')
+                                        l=ans
+                                        ans=ans[0]
+                                        ans=ans.strip()
+                                        ans=ans[len('for '):]
+                                        oldvar=ans
+                                        if not ans.isalnum():
+                                            ans='('+ans+')'
+                                        ans=','+ans
+                                        var=ans
+                                        return line.replace(oldvar,var,1)
+                                    def enumeratify(line):
+                                        ans=line.rstrip()
+                                        ans=ans[:ans.find(' in ')+len(' in ')]+'enumerate('+ans[ans.find(' in ')+len(' in '):-1]+'):'
+                                        return ans
+                                    before_line=buffer.document.current_line_before_cursor
+                                    after_line=buffer.document.current_line_after_cursor
+                                    current_line=buffer.document.current_line
+                                    buffer.delete_before_cursor(len(before_line))
+                                    buffer.delete(len(after_line))
+                                    buffer.insert_text(swap_from_import(current_line))
+                                    leading_whitespace=current_line[:len(current_line)-len(current_line.lstrip())]
+                                    buffer.cursor_right(9999)
+                                    buffer.delete_before_cursor(len(current_line))
+                                    new_line=transform_var(enumeratify(current_line))
+                                    buffer.insert_text(leading_whitespace+new_line)
+                                    buffer.cursor_left(9999)
+                                    buffer.cursor_right(len(leading_whitespace+'for '))
+
+                                if header=='toggle_big_parenthesis':
+                                    if not '\n' in before+after:
+                                        #If has a single line, add a new line to avoid a glitch where we get too many parenthesis
+                                        text=buffer.document.text
+                                        buffer.document=Document(buffer.document.text+'\n',min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    commented_parenthesizer_automator.buffer_toggle_parenthesization(buffer)
+                                if header=='delete_to_top':
+                                    text=buffer.document.text
+                                    lineno=document.text_before_cursor.count('\n')
+                                    colno=document.cursor_position_col
+                                    text=text.splitlines()[lineno:]
+                                    text='\n'.join(text)
+                                    buffer.document=Document(text,colno-len(r'\dt'),buffer.document.selection)
+                                    # buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                if header=='delete_to_bottom':
+                                    text=buffer.document.text
+                                    lineno=document.text_before_cursor.count('\n')
+                                    colno=document.cursor_position_col
+                                    text=text.splitlines()[:lineno+1]
+                                    text='\n'.join(text)
+                                    buffer.document=Document(text,text.rfind('\n')+colno-len(r'\dt'),buffer.document.selection)
+                                    # buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                if header=='delete_empty_lines':
+                                    text=buffer.document.text
+                                    text='\n'.join(line for line in text.split('\n') if line.strip())
+                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                if header=='sort_lines':
+                                    text=buffer.document.text
+                                    text='\n'.join(sorted(text.split('\n')))
+                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                if header=='reverse_lines':
+                                    text=buffer.document.text
+                                    text='\n'.join(reversed(text.split('\n')))
+                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                if header=='strip_comments':
+                                    from rp import strip_python_comments
+                                    text=buffer.document.text
+                                    text=strip_python_comments(text)
+                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                if header=='repr':
+                                    #A shortcut to `repr\py
+                                    text=buffer.document.text
+                                    buffer.document=Document(repr(text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                if header=='black':
+                                    from rp import pip_import
+                                    try:
+                                        pip_import('black')
+                                        import black
+                                        text=buffer.document.text
+                                        text=black.format_str(text,mode=black.Mode())
+                                        buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    except BaseException as e:
+                                        buffer.insert_text('#sort_imports: Error: '+str(e).replace('\n',' ; '))
+                                if header=='sort_imports':
+                                    from rp import pip_import
+                                    try:
+                                        pip_import('isort')
+                                        import isort
+                                        text=buffer.document.text
+                                        text=isort.code(text)
+                                        buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    except BaseException as e:
+                                        buffer.insert_text('#sort_imports: Error: '+str(e).replace('\n',' ; '))
+                                if header=='source_code':
+                                    #Sets ans=rp.get_source_code(current buffer)
+                                    indent=''
+                                    if before_line.count('`')==1:
+                                        commented_arg=before_line.split('`')[1].split('\\')[0]
+                                        buffer.delete_before_cursor(len(commented_arg+'`'))
+                                        before_line=buffer.document.current_line_before_cursor
+                                        indent=' '*(len(before_line)-len(before_line.lstrip()))
+                                        text=commented_arg
+                                    else:
+                                        text=buffer.document.text
+                                        buffer.delete_before_cursor(99999999)
+                                        buffer.delete(99999999)
+                                    try:
+                                        item=eval(text,r_iterm_comm.globa)
+                                        from rp import get_source_code
+                                        code=get_source_code(item)
+                                        code=code.splitlines()
+                                        code=code[::-1]
+                                        code[:-1]=[indent+line for line in code[:-1]] 
+                                        code=code[::-1]
+                                        code='\n'.join(code)
+                                        # buffer.document=Document(code,min(len(code),buffer.document.cursor_position),buffer.document.selection)
+                                        buffer.insert_text(code)
+                                    except BaseException as e:
+                                        buffer.insert_text('#get_source_code: Error: '+str(e).replace('\n',' ; '))
+                                if header=='save_gist':
+                                    #Sets ans=str(current buffer)
+                                    text=buffer.document.text
+                                    text=repr(text)
+                                    text='from rp import save_gist;ans=save_gist(%s)'%text
+                                    run_arbitrary_code_without_destroying_buffer(text,event,put_in_history=True)#To include or not to include...which one??
+                                if header=='load_gist':
+                                    from rp import load_gist
+                                    text=buffer.document.text
+                                    try:
+                                        try:
+                                            text=load_gist(text)
+                                        except Exception:
+                                            text='git.io/'+text
+                                            text=load_gist(text)
+                                    except Exception:
+                                        text='#Failed to load gist at specified url'
+                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                if header=='repr ans':
+                                    #Sets ans=str(current buffer)
+                                    text=buffer.document.text
+                                    text=repr(text)
+                                    run_arbitrary_code_without_destroying_buffer(text,event,put_in_history=True)#To include or not to include...which one??
                                 if header=='tabs to spaces':
                                     text=buffer.document.text
                                     text=text.replace('\t','    ')
                                     buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                if header=='function_name':
+                                    #Insert the current function's name
+                                    func_names=get_all_function_names(buffer.document.text_before_cursor)
+                                    buffer.insert_text(func_names[-1] if func_names else '')
+                                if header=='python_2_to_3':
+                                    text=buffer.document.text
+                                    from rp import python_2_to_3
+                                    text=python_2_to_3(text)
+                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                if header=='while':
+                                    text=buffer.document.text
+                                    text='while True:\n'+'\n'.join(['    '+line for line in text.split('\n')])
+                                    buffer.document=Document(text,10,buffer.document.selection)
+                                if header=='for':
+                                    text=buffer.document.text
+                                    text='for  in :\n'+'\n'.join(['    '+line for line in text.split('\n')])
+                                    buffer.document=Document(text,4,buffer.document.selection)
+                                if header=='def':
+                                    text=buffer.document.text
+                                    text='def ():\n'+'\n'.join(['    '+line for line in text.split('\n')])
+                                    buffer.document=Document(text,4,buffer.document.selection)
                                 if header=='go to top':
                                     buffer.cursor_up(1000000)
                                 if header=='go to bottom':
@@ -2032,6 +2874,18 @@ def load_python_bindings(python_input):
                                     # print("END")
                                     # print(new_def)
                                     buffer.insert_text(new_def)
+                                if header=='local_copy':
+                                    import rp
+                                    do_local_copy(buffer.document.text)
+                                if header=='vim_copy':
+                                    import rp
+                                    do_vim_copy(buffer.document.text)
+                                if header=='tmux_copy':
+                                    import rp
+                                    do_tmux_copy(buffer.document.text)
+                                if header=='web_copy':
+                                    import rp
+                                    do_web_copy(buffer.document.text)
                                 if header=='copy':
                                     import rp
                                     do_copy(buffer.document.text)
@@ -2042,13 +2896,44 @@ def load_python_bindings(python_input):
                                         editor=pip_import('editor')
                                         text=editor.edit(contents=text,use_tty=True,suffix='.py').decode()
                                         buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
-
+                                        event.cli.renderer.clear()#Refresh the screen
                                     except ImportError:
                                         buffer.insert_text("#ERROR: Cannot import 'editor'. Try pip install python-editor")
-                                if header=='paste':
-                                    do_paste(buffer)
+                                if header=='vim':
+                                    edit_event_buffer_in_vim(event)
+                                if header=='save' or header=='string ans':#header=='save' because of the conflict of \sa in the dict
+                                    buffer.insert_text(repr(str(get_ans())))
+                                if header=='ans':
+                                    buffer.insert_text(str(get_ans()))
+
+                                if header=='web_string_paste'   : do_web_paste(buffer,repr_mode=True)
+                                if header=='tmux_string_paste'  : do_tmux_paste(buffer,repr_mode=True)
+                                if header=='vim_string_paste'  : do_vim_paste(buffer,repr_mode=True)
+                                if header=='local_string_paste' : do_local_paste(buffer,repr_mode=True)
+
+                                if header=='web_paste'          : do_web_paste(buffer,repr_mode=False)
+                                if header=='tmux_paste'         : do_tmux_paste(buffer,repr_mode=False)
+                                if header=='vim_paste'         : do_vim_paste(buffer,repr_mode=False)
+                                if header=='local_paste'        : do_local_paste(buffer,repr_mode=False)
+
+                                if 'comment_paste' in header or 'comment_ans'==header:
+                                    commented_arg=''
+                                    if before_line.count('`')==1:
+                                            commented_arg=before_line.split('`')[1].split('\\')[0]
+                                            buffer.delete_before_cursor(len(commented_arg+'`'))
+                                    
+                                    if header=='tmux_comment_paste' : do_tmux_paste(buffer,repr_mode=False,commented=commented_arg)
+                                    if header=='comment_paste'      : do_paste(buffer,commented=commented_arg)
+                                    if header=='comment_ans'      : 
+
+                                        ans=str(get_ans())
+                                        ans=commented_string(buffer,ans,spaces=commented_arg)
+                                        buffer.insert_text(ans)
+
+                                if header=='paste'              : do_paste(buffer)
+                                if header=='string_paste'       : do_string_paste(buffer)
+
                                 if header=='delete all':
-                                    import rp
                                     buffer.document=Document('',0,buffer.document.selection)
                                 if header=='yapf autoformat':
                                     try:
@@ -2064,7 +2949,6 @@ def load_python_bindings(python_input):
                                         from rp import fansi_print 
                                         buffer.insert_text("\n#ERROR Using yapf autoformatter: "+str(e))
                                 return
-
 
                     if char in {'d','c'} and not before_line.strip():
                         above=line_above(buffer)#returns None if there are no above lines
@@ -2135,10 +3019,10 @@ def load_python_bindings(python_input):
             meta_pressed(clear=True)#Reset: we don't want to keep the esc key pressed (this should go after every keystroke. Period. But it doesnt yet cause ima be a lazy...)
     for char in '1234567890':#Digit inputs
         def go(c):
-            @handle(c,filter=~vi_mode_enabled)
+            @handle(c,filter=~vi_mode_enabled&microcompletions_enabled)
             def _(event):
                 buffer=event.cli.current_buffer
-                if handle_character(buffer,c):return
+                if handle_character(buffer,c,event):return
                 if self_dot_var_equals_var(buffer,c) or setting_index(buffer,c):
                     return
                 document=buffer.document
@@ -2270,10 +3154,10 @@ def load_python_bindings(python_input):
                 move_line_down(buffer)
             buffer.cursor_left(1000000)
 
-    @handle(Keys.ControlBackslash)
-    def _(event):
-        buffer=event.cli.current_buffer
-        pseudo_terminal(merge_dicts(r_iterm_comm.globa,{ans:buffer.document.text}))
+#     @handle(Keys.ControlBackslash)
+#     def _(event):
+#         buffer=event.cli.current_buffer
+#         pseudo_terminal(merge_dicts(r_iterm_comm.globa,{ans:buffer.document.text}))
 
     @handle(Keys.ShiftRight)
     def _(event):
@@ -2358,16 +3242,17 @@ def load_python_bindings(python_input):
             buffer.cursor_up(abs(delta))
         buffer.cursor_up()
     def delete_current_line(buffer):
-        document=buffer.document
-        current_line=document.current_line
-        buffer.cursor_left(10000)
-        firstline=buffer.cursor_position==0
-        buffer.delete(len(current_line))
-        buffer.delete_before_cursor()
-        if firstline:
-            buffer.delete()
-        else:
-            buffer.cursor_down()
+        buffer.delete_line_at_cursor()
+        # document=buffer.document
+        # current_line=document.current_line
+        # buffer.cursor_left(10000)
+        # firstline=buffer.cursor_position==0
+        # buffer.delete(len(current_line))
+        # buffer.delete_before_cursor()
+        # if firstline:
+        #     buffer.delete()
+        # else:
+        #     buffer.cursor_down()
 
     #region Bracket Match Writers
     function_comma_flag=False# Used to keep track of when we are writing arguments to fucntions that were initially parenthesized with the spacebar
@@ -2383,10 +3268,10 @@ def load_python_bindings(python_input):
     function_comma_flag=False# Used to keep track of when we are writing arguments to fucntions that were initially parenthesized with the spacebar
     can_take_no_args=False# Doesn't practically matter right now if function_comma_flag is false
 
-    @handle('.',filter=~vi_mode_enabled)
+    @handle('.',filter=~vi_mode_enabled&microcompletions_enabled)
     def _(event):# period '.' event handler function thingy
         buffer=event.cli.current_buffer
-        if handle_character(buffer,'.'):return
+        if handle_character(buffer,'.',event):return
         if self_dot_var_equals_var(buffer,'.'):
             #self.foo|=foo   --->   self.foo.|=self.foo.
             return
@@ -2449,14 +3334,14 @@ def load_python_bindings(python_input):
         buffer.insert_text('.')
 
 
-    @handle(Keys.Escape,filter=~vi_mode_enabled)
+    @handle(Keys.Escape,filter=~vi_mode_enabled)#microcompletions_enabled)
     def _(event):
         _meta_pressed.append(True)#This is meant to be flipped to false immediately after anything reads it, with meta_pressed(). We're using a list to easily keep track of this after this method is @'d outta this file somewhere else idk where
 
-    @handle(' ',filter=~vi_mode_enabled)
+    @handle(' ',filter=~vi_mode_enabled&microcompletions_enabled)
     def _(event):# Spacebar event handle spacebar
         buffer=event.cli.current_buffer
-        if handle_character(buffer,' '):return
+        if handle_character(buffer,' ',event):return
         single_line = line_above(buffer) is None
         if meta_pressed():#No shenanagins -- just give me a space.
             buffer.insert_text(' ')
@@ -3143,10 +4028,10 @@ def load_python_bindings(python_input):
             from rp import print_stack_trace
             print_stack_trace(e)
 
-    @handle("?",filter=~vi_mode_enabled)
+    @handle("?",filter=~vi_mode_enabled&microcompletions_enabled)
     def _(event):
         buffer=event.cli.current_buffer
-        if handle_character(buffer,'?'):return
+        if handle_character(buffer,'?',event):return
         document=buffer.document
         before=document.text_before_cursor
         # after= document.text_after_cursor
@@ -3157,10 +4042,10 @@ def load_python_bindings(python_input):
             #x=| --> x?   (meant because I often want to use ? on something that I've just imported, and this is a small, stable way to do it)
             buffer.delete_before_cursor()
         buffer.insert_text('?')
-    @handle("!",filter=~vi_mode_enabled)
+    @handle("!",filter=~vi_mode_enabled&microcompletions_enabled)
     def _(event):
         buffer=event.cli.current_buffer
-        if handle_character(buffer,'!'):return
+        if handle_character(buffer,'!',event):return
         document=buffer.document
         before=document.text_before_cursor
         if not before:
@@ -3176,10 +4061,10 @@ def load_python_bindings(python_input):
             buffer.insert_text('!=')
             return
         buffer.insert_text('!')
-    @handle(":",filter=~vi_mode_enabled)
+    @handle(":",filter=~vi_mode_enabled&microcompletions_enabled)
     def _(event):
         buffer=event.cli.current_buffer
-        if handle_character(buffer,':'):return
+        if handle_character(buffer,':',event):return
         document=buffer.document
         before=document.text_before_cursor
         after= document.text_after_cursor
@@ -3190,7 +4075,7 @@ def load_python_bindings(python_input):
             buffer.cursor_right(count=1)
         else:
             buffer.insert_text(':')
-    @handle('=',filter=~vi_mode_enabled)
+    @handle('=',filter=~vi_mode_enabled&microcompletions_enabled)
     def _(event):
         import rp.r_iterm_comm as r_iterm_comm
 
@@ -3206,7 +4091,7 @@ def load_python_bindings(python_input):
                     # return
             buffer.insert_text(text)
         buffer=event.cli.current_buffer
-        if handle_character(buffer,'='):return
+        if handle_character(buffer,'=',event):return
         document=buffer.document
         #
         before=document.text_before_cursor
@@ -3373,27 +4258,13 @@ def load_python_bindings(python_input):
         #     # after= document.text_after_cursor
         #     buffer.insert_text('RETURN')
 
-        def run_code_without_destroying_buffer(event,put_in_history=True):
-            #Run the code in the buffer without clearing it or destroying cursor position etc
-            buffer=event.cli.current_buffer
-            import rp.r_iterm_comm as ric
-            ric.dont_erase_buffer_on_enter+=['DO IT']
-            buffer.accept_action.validate_and_handle(event.cli, buffer,put_in_history=put_in_history)
 
-        def run_arbitrary_code_without_destroying_buffer(code,event,put_in_history=True):
-            buffer=event.cli.current_buffer
-            original_document=buffer.document
-            buffer.document = Document(text=code)#Temporarily change the text in the buffer
-                # cursor_position=len(''.join(lines_before + reshaped_text)))
-            run_code_without_destroying_buffer(event,put_in_history=put_in_history)
-            buffer.document=original_document#Put the old text/cursor pos/etc back. Dont mutate the buffer
- 
-
-
-        @handle(Keys.ControlH,filter=~vi_mode_enabled)
+        @handle(Keys.ControlH,filter=~vi_mode_enabled&microcompletions_enabled)
         def _(event):
             buffer=event.cli.current_buffer
-            buffer.insert_text('HISTORY')
+            #On ubuntu, shift+backspace triggers this; and inserting 'HISTORY' is very annoying when we just want to backspace
+            buffer.delete_before_cursor()
+            # buffer.insert_text('HISTORY')
         @handle(Keys.ControlE)
         def _(event):
             #Run the buffer without erasing it or disturbing cursor position
@@ -3401,29 +4272,17 @@ def load_python_bindings(python_input):
 
         @handle(Keys.ControlW)
         def _(event):
-            #Run current cell between the boundary prefixes
-            buffer=event.cli.current_buffer
-            def main():
-                text=buffer.document.text
-                cursor_pos=buffer.cursor_position
-                cell_code=get_cell_code(text,cursor_pos,cell_boundary_prefix)
-                from rp import fansi_print
-                # fansi_print("RUNNING CODE CELL:",'blue','bold')
-                # fansi_print(cell_code,'blue')
-
-                #When we do this, don't include that spam in our history...right? Maybe I'll change my mind in the future...I can't decide...like, it's annoying but it's truthful...
-                run_arbitrary_code_without_destroying_buffer(cell_code,event,put_in_history=True)#To include or not to include...which one??
-            main()
+            handle_run_cell(event)
 
 
 
 
 
-        @handle(Keys.ControlU,filter=~vi_mode_enabled)
+        @handle(Keys.ControlU,filter=~vi_mode_enabled&microcompletions_enabled)
         def _(event):
             buffer=event.cli.current_buffer
             buffer.insert_text('UNDO')
-        @handle(Keys.ControlP,filter=~vi_mode_enabled)
+        @handle(Keys.ControlP,filter=~vi_mode_enabled&microcompletions_enabled)
         def _(event):
             buffer=event.cli.current_buffer
             before_line=buffer.document.current_line_before_cursor
@@ -3492,10 +4351,10 @@ def load_python_bindings(python_input):
 
 
 
-    @handle('<',filter=~vi_mode_enabled)
+    @handle('<',filter=~vi_mode_enabled&microcompletions_enabled)
     def _(event):
         buffer=event.cli.current_buffer
-        if handle_character(buffer,'<'):return
+        if handle_character(buffer,'<',event):return
         document=buffer.document
         before_line=document.current_line_before_cursor
         after_line=document.current_line_after_cursor
@@ -3506,10 +4365,10 @@ def load_python_bindings(python_input):
             except:print("JAM")
             return
         buffer.insert_text('<')
-    @handle('>',filter=~vi_mode_enabled)
+    @handle('>',filter=~vi_mode_enabled&microcompletions_enabled)
     def _(event):
         buffer=event.cli.current_buffer
-        if handle_character(buffer,'>'):return
+        if handle_character(buffer,'>',event):return
         document=buffer.document
         before_line=document.current_line_before_cursor
         after_line=document.current_line_after_cursor
@@ -3705,15 +4564,18 @@ def load_python_bindings(python_input):
     import rp.r_iterm_comm as r_iterm_comm
     @handle(Keys.ControlV)# On mac this is alt+z
     def _(event):
-        buffer=event.cli.current_buffer
-        from rp import string_from_clipboard
-        clip=r_iterm_comm.clipboard_text
-        try:
-            clip=string_from_clipboard()
-            buffer.cut_selection()
-            buffer.insert_text(clip)
-        except:
-            pass# Paste failed
+        if meta_pressed(clear=True):
+            edit_event_buffer_in_vim(event)
+        else:
+            buffer=event.cli.current_buffer
+            from rp import string_from_clipboard
+            clip=r_iterm_comm.clipboard_text
+            try:
+                clip=string_from_clipboard()
+                buffer.cut_selection()
+                buffer.insert_text(clip)
+            except:
+                pass# Paste failed
 
 
     @handle(Keys.ControlC)# ,filter=has_selection)# On mac this is alt+z
@@ -3741,10 +4603,10 @@ def load_python_bindings(python_input):
 
     def inc_dec(inc_or_dec:str):# ++ ⟶ +=1
         #increment or decrement
-        @handle(inc_or_dec,filter=~vi_mode_enabled)
+        @handle(inc_or_dec,filter=~vi_mode_enabled&microcompletions_enabled)
         def _(event):
             buffer=event.cli.current_buffer
-            if handle_character(buffer,inc_or_dec):return
+            if handle_character(buffer,inc_or_dec,event):return
             document=buffer.document
             before=document.text_before_cursor
             before_line=document.current_line_before_cursor
@@ -3857,10 +4719,10 @@ def load_python_bindings(python_input):
 
     bracket_pairs={"()","[]","{}"}
     def thing(begin,end):
-        @handle(begin,filter=~vi_mode_enabled)
+        @handle(begin,filter=~vi_mode_enabled&microcompletions_enabled)
         def _(event):# Parenthesis completion
             buffer=event.cli.current_buffer
-            if handle_character(buffer,begin):return
+            if handle_character(buffer,begin,event):return
             if(begin=='('):
                 document=buffer.document
                 before_line=document.current_line_before_cursor
@@ -3883,10 +4745,10 @@ def load_python_bindings(python_input):
                 if after.strip()==':' or not after or after[0].isspace() or before and before[-1]+after[0]in bracket_pairs or document.find_matching_bracket_position()!=0:
                     buffer.insert_text(end)
                     buffer.cursor_left(count=1)
-        @handle(end,filter=~vi_mode_enabled)
+        @handle(end,filter=~vi_mode_enabled&microcompletions_enabled)
         def _(event):# Parenthesis completion
             buffer=event.cli.current_buffer
-            if handle_character(buffer,end):return
+            if handle_character(buffer,end,event):return
             if not surround(buffer,begin,end):
                 document=buffer.document
                 before=document.text_before_cursor
@@ -3912,10 +4774,10 @@ def load_python_bindings(python_input):
         # script.call_signatures()
         return bool(selection_tuples)# Returns whether we have a selection
     def thing2(char):
-        @handle(char,filter=~vi_mode_enabled)
+        @handle(char,filter=~vi_mode_enabled&microcompletions_enabled)
         def _(event,filter=has_selection):# Parenthesis completion
             buffer=event.cli.current_buffer
-            if handle_character(buffer,char):return
+            if handle_character(buffer,char,event):return
             if not surround(buffer,char,char):
                 document=buffer.document
                 before=document.text_before_cursor
@@ -3947,11 +4809,11 @@ def load_python_bindings(python_input):
 
     for char in '"\'':
         thing2(char)
-    @handle(',',filter=~vi_mode_enabled)  
+    @handle(',',filter=~vi_mode_enabled&microcompletions_enabled)  
     def _(event):
         #Comma event
         buffer=event.cli.current_buffer
-        if handle_character(buffer,','):return
+        if handle_character(buffer,',',event):return
         document=buffer.document
         before=document.text_before_cursor
         after= document.text_after_cursor
@@ -4012,6 +4874,10 @@ def load_python_bindings(python_input):
     #         buffer.insert_text(char)
     # for char in '!#%&*,./:;<>^|~':# + and - allready taken
     #     thing3(char)
+
+    @handle(Keys.Delete)
+    def _(event):
+        event.cli.current_buffer.delete()
 
     @handle(Keys.ControlSpace)# For commenting
     def _(event):  # Parenthesis completion
@@ -4100,6 +4966,21 @@ def load_python_bindings(python_input):
         Enable/Disable mouse mode.
         """
         python_input.enable_mouse_support = not python_input.enable_mouse_support
+
+    @handle(Keys.F8)
+    def _(event):
+        """
+        Enable/Disable microcopletions.
+        """
+        python_input.enable_microcompletions = not python_input.enable_microcompletions
+
+    @handle(Keys.F7)
+    def _(event):
+        """
+        Enable/Disable line wraps.
+        """
+        python_input.wrap_lines = not python_input.wrap_lines
+        
     def number_of_leading_spaces(string):
         i=0
         for x in string:
@@ -4114,7 +4995,7 @@ def load_python_bindings(python_input):
         When tab should insert whitespace, do that instead of completion.
         """
         buffer=event.cli.current_buffer
-        if handle_character(buffer,'\t'):return
+        if handle_character(buffer,'\t',event):return
         buffer.insert_text('    ')
         after_line = buffer.document.current_line_after_cursor
         before_line = buffer.document.current_line_after_cursor
@@ -4217,7 +5098,7 @@ def load_python_bindings(python_input):
         """
         b = event.current_buffer
         buffer=b
-        if handle_character(buffer,'\n'):return
+        if handle_character(buffer,'\n',event):return
         empty_lines_required = python_input.accept_input_on_enter or 10000
         text=current_line=after_line=before_line=before=after=above_line=None
         def refresh_strings_from_buffer():
@@ -4412,6 +5293,24 @@ def load_python_bindings(python_input):
         Override Control-D exit, to ask for confirmation.
         """
         python_input.show_exit_confirmation = True
+
+
+
+
+    @handle(Keys.F5, filter=Condition(lambda cli: python_input.show_sidebar))#Only activate when the sidebar is visible
+    def _(event):
+        from rp.prompt_toolkit.shortcuts import confirm
+        from rp import input_yes_no,clear_terminal_screen
+
+        import rp.rp_ptpython.python_input as rrpi
+
+        clear_terminal_screen()
+        if input_yes_no("Ryan Python\nPlease Confirm: Are you sure you want to this menu's settings (the F2 menu)?\nIf you choose yes, they'll be saved for the next time you boot rp.\nNote: You can also do this with the 'PT SAVE' command."):
+            run_arbitrary_code_without_destroying_buffer("PT SAVE",event)
+            print("Saved the F2 menu's current settings; you'll see them again when you reboot rp!")
+        else:
+            clear_terminal_screen()
+            event.cli.renderer.clear()
 
     return registry
 

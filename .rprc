@@ -1,0 +1,17 @@
+## /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/.rprc
+## This is the rprc file. Like .bashrc, or .vimrc, this file is run each time you boot rp from the command line.
+## Even though the extension of this file is .rprc, and not .py, treat it as a python file.
+## Feel free to commment/uncomment any of the lines here, or to add your own. This file is preserved when you update rp.
+
+## Add the current directory to the path, letting us import any files in the directory we booted rp in
+## For example, if we run 'rp' in a directory with 'thing.py', let us run 'import thing.py' by enabling the belowline
+import os,sys;sys.path.append(os.getcwd());del os,sys;
+
+## Import the rp library's whole namespace. It's not nessecary, but it exposes a lot of useful functions without
+#from rp import *
+
+## Set the terminal's cursor to the shape of a line, instead of a block. I personally prefer this, but I've commented out because I don't know if you'd like it.
+#set_cursor_to_bar()
+
+
+from rp import *

@@ -37,6 +37,7 @@ __all__ = (
     'Registry',
     'ConditionalRegistry',
     'MergedRegistry',
+    '_Binding',
 )
 
 
@@ -44,7 +45,9 @@ class _Binding(object):
     """
     (Immutable binding class.)
     """
-    def __init__(self, keys, handler, filter=None, eager=None, save_before=None):
+    def __init__(self, keys, handler, filter=None, eager=None, save_before=None, post_handler=None):
+        #RYAN: post_handler is a void(_Binding,event) that's called after the given handler function
+        #In other words, it's called after every ketstroke
         assert isinstance(keys, tuple)
         assert callable(handler)
         assert isinstance(filter, CLIFilter)
@@ -53,12 +56,20 @@ class _Binding(object):
 
         self.keys = keys
         self.handler = handler
+        self.post_handler=post_handler
         self.filter = filter
         self.eager = eager
         self.save_before = save_before
 
     def call(self, event):
-        return self.handler(event)
+        #ORIGINAL BODY: just one line: return self.post_handler(self,event). If this function normally works (meant for the pseudopython buffer editor keys), but there's some weird edge case I didn't think about (I.E. somewhre else in the rp UI), just add a try/except/squelch block in here that defaults to the original behaviour (I'm not doing that now, in case I need to keep debugging though)
+        buffer=event.cli.current_buffer
+        old_document=buffer.document
+        out= self.handler(event)
+        if self.post_handler is not None:
+            self.post_handler(self,event,old_document)
+        return out
+
 
     def __repr__(self):
         return '%s(keys=%r, handler=%r)' % (
@@ -117,6 +128,7 @@ class Registry(BaseRegistry):
         eager = to_cli_filter(kwargs.pop('eager', False))
         save_before = kwargs.pop('save_before', lambda e: True)
         to_cli_filter(kwargs.pop('invalidate_ui', True))  # Deprecated! (ignored.)
+        post_handler = kwargs.pop('post_handler', None)
 
         assert not kwargs
         assert keys
@@ -134,7 +146,7 @@ class Registry(BaseRegistry):
             def decorator(func):
                 self.key_bindings.append(
                     _Binding(keys, func, filter=filter, eager=eager,
-                             save_before=save_before))
+                             save_before=save_before, post_handler=post_handler))
                 self._clear_cache()
 
                 return func

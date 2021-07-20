@@ -41,11 +41,11 @@ def has_unclosed_brackets(text):
 
 
 def get_jedi_script_from_document(document, locals, globals):
-    import jedi  # We keep this import in-line, to improve start-up time.
+    import rp.libs.jedi  # We keep this import in-line, to improve start-up time.
                  # Importing Jedi is 'slow'.
 
     try:
-        return jedi.Interpreter(
+        return rp.libs.jedi.Interpreter(
             document.text,
             column=document.cursor_position_col,
             line=document.cursor_position_row + 1,

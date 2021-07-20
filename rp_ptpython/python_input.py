@@ -57,13 +57,26 @@ def set_debug_height(height):
     ric.debug_height=height
     return height
 
+def set_history_line_limit(number_of_lines):
+    from rp.r import _globa_pyin
+    _globa_pyin[0].history_number_of_lines=number_of_lines
+    return number_of_lines
+def get_history_line_limit():
+    from rp.r import _globa_pyin
+    return _globa_pyin[0].history_number_of_lines
+
 class OptionCategory(object):
     def __init__(self,title,options):
         assert isinstance(title,six.text_type)
         assert isinstance(options,list)
 
         self.title=title
-        self.options=options
+        self._options=options
+
+    @property
+    def options(self):
+        return [option for option in self._options if option.is_visible()]
+    
 
 class Option(object):
     """
@@ -76,7 +89,7 @@ class Option(object):
             possible values to callbacks that activate these value.
     :param get_current_value: Callable that returns the current, active value.
     """
-    def __init__(self,title,description,get_current_value,get_values):
+    def __init__(self,title,description,get_current_value,get_values,is_visible=lambda:True):
         assert isinstance(title,six.text_type)
         assert isinstance(description,six.text_type)
         assert callable(get_current_value)
@@ -86,6 +99,7 @@ class Option(object):
         self.description=description
         self.get_current_value=get_current_value
         self.get_values=get_values
+        self.is_visible=is_visible
 
     @property
     def values(self):
@@ -273,6 +287,7 @@ class PythonInput(object):
                     return o
                 else:
                     i+=1
+        return category.options[-1]
 
     def get_compiler_flags(self):
         """
@@ -369,12 +384,12 @@ class PythonInput(object):
             setattr(self,attribute,False)
             return True
 
-        def simple_option(title,description,field_name,values=None):
+        def simple_option(title,description,field_name,values=None,is_visible=lambda:True):
             " Create Simple on/of option. "
             values=values or ['off','on']
 
             def get_current_value():
-                return values[bool(getattr(self,field_name))]
+                return values[bool(getattr(self,field_name,'(Broken)'))]
 
             def get_values():
                 return {
@@ -384,7 +399,8 @@ class PythonInput(object):
 
             return Option(title=title,description=description,
                           get_values=get_values,
-                          get_current_value=get_current_value)
+                          get_current_value=get_current_value,
+                          is_visible=is_visible)
         def doge(self):
             setattr(self,'sand_creature',"Option Camel")
             from doge.core import main
@@ -396,7 +412,12 @@ class PythonInput(object):
                               description='Vi or emacs key bindings.',
                               field_name='vi_mode',
                               values=['emacs','vi']),
+                simple_option(title='Microcompletions',
+                              description='When in RP-Emacs mode, should we enable microcompletions?',
+                              field_name='enable_microcompletions',
+                              values=[False,True]),
                 simple_option(title='Paste mode',
+                        # is_visible=lambda:getattr(self,'show_all_options',True),
                               description="When enabled, don't indent automatically.",
                               field_name='paste_mode'),
                 Option(title='Complete while typing',
@@ -408,6 +429,7 @@ class PythonInput(object):
                            'off':lambda:disable('complete_while_typing'),
                        }),
                 Option(title='History search',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
                        description='When pressing the up-arrow, filter the history on input starting '
                                    'with the current text. (Not compatible with "Complete while typing".)',
                        get_current_value=lambda:['off','on'][self.enable_history_search],
@@ -420,17 +442,21 @@ class PythonInput(object):
                                           'selecting text and scrolling through windows.',
                               field_name='enable_mouse_support'),
                 simple_option(title='Confirm on exit',
+                    is_visible=lambda:getattr(self,'show_all_options',True),
                               description='Require confirmation when exiting.',
                               field_name='confirm_exit'),
                 simple_option(title='Input validation',
+                    is_visible=lambda:getattr(self,'show_all_options',True),
                               description='In case of syntax errors, move the cursor to the error '
                                           'instead of showing a traceback of a SyntaxError.',
                               field_name='enable_input_validation'),
                 simple_option(title='Auto suggestion',
+                    is_visible=lambda:getattr(self,'show_all_options',True),
                               description='Auto suggest inputs by looking at the history. '
                                           'Pressing right arrow or Ctrl-E will complete the entry.',
                               field_name='enable_auto_suggest'),
                 Option(title='Accept input on enter',
+                    is_visible=lambda:getattr(self,'show_all_options',True),
                        description='Amount of ENTER presses required to execute input when the cursor '
                                    'is at the end of the input. (Note that META+ENTER will always execute.)',
                        get_current_value=lambda:str(self.accept_input_on_enter or 'meta-enter'),
@@ -451,50 +477,259 @@ class PythonInput(object):
                            CompletionVisualisation.MULTI_COLUMN:lambda:enable('completion_visualisation',CompletionVisualisation.MULTI_COLUMN),
                            CompletionVisualisation.TOOLBAR:lambda:enable('completion_visualisation',CompletionVisualisation.TOOLBAR),
                        }),
-                Option(title='Prompt',
-                       description="Visualisation of the prompt. ('>>>' or 'In [1]:')",
-                       get_current_value=lambda:self.prompt_style,
-                       get_values=lambda:dict((s,partial(enable,'prompt_style',s)) for s in self.all_prompt_styles)),
+                #I DISABLED THIS BECAUSE IT'S DEPRECATED NOW - NOW YOU USE 'SET STYLE'
+                # Option(title='Prompt',
+                #         is_visible=lambda:getattr(self,'show_all_options',True),
+                #        description="Visualisation of the prompt. ('>>>' or 'In [1]:')",
+                #        get_current_value=lambda:self.prompt_style,
+                #        get_values=lambda:dict((s,partial(enable,'prompt_style',s)) for s in self.all_prompt_styles)),
                 simple_option(title='Blank line after output',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
+
                               description='Insert a blank line after the output.',
                               field_name='insert_blank_line_after_output'),
                 simple_option(title='Show signature',
                               description='Display function signatures.',
                               field_name='show_signature'),
                 simple_option(title='Show docstring',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
                               description='Display function docstrings.',
                               field_name='show_docstring'),
                 simple_option(title='Show line numbers',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
                               description='Show line numbers when the input consists of multiple lines.',
                               field_name='show_line_numbers'),
                 simple_option(title='Show Meta+Enter message',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
                               description='Show the [Meta+Enter] message when this key combination is required to execute commands. ' +
                                           '(This is the case when a simple [Enter] key press will insert a newline.',
                               field_name='show_meta_enter_message'),
                 simple_option(title='Wrap lines',
                               description='Wrap lines instead of scrolling horizontally.',
                               field_name='wrap_lines'),
+                                simple_option(title='History Highlighting',
+                              description='When using F3 (aka History Broswer) to select entries from history,  '
+                                          'should we use syntax highlighting? Its pretty, but slow.',
+                              field_name='history_syntax_highlighting'),
+                Option(title='History Browser Limit',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
+
+                       description='How many lines should we display when using F3 history? Less is faster\nMaking this smaller decreases the latency of pressing F3',
+                       get_current_value=lambda:str(get_history_line_limit()).rjust(12),
+                       get_values=lambda:{'asdpoa':lambda:None,
+                            '           1':lambda:set_history_line_limit(1          ),
+                            '           5':lambda:set_history_line_limit(5          ),
+                            '          10':lambda:set_history_line_limit(10          ),
+                            '          20':lambda:set_history_line_limit(20          ),
+                            '          30':lambda:set_history_line_limit(30          ),
+                            '          40':lambda:set_history_line_limit(40          ),
+                            '          50':lambda:set_history_line_limit(50          ),
+                            '         100':lambda:set_history_line_limit(100         ),
+                            '         150':lambda:set_history_line_limit(150         ),
+                            '         200':lambda:set_history_line_limit(200         ),
+                            '         250':lambda:set_history_line_limit(250         ),
+                            '         300':lambda:set_history_line_limit(300         ),
+                            '         400':lambda:set_history_line_limit(400         ),
+                            '         500':lambda:set_history_line_limit(500         ),
+                            '         600':lambda:set_history_line_limit(600         ),
+                            '         700':lambda:set_history_line_limit(700         ),
+                            '         800':lambda:set_history_line_limit(800         ),
+                            '         900':lambda:set_history_line_limit(900         ),
+                            '        1000':lambda:set_history_line_limit(1000        ),
+                            '        1500':lambda:set_history_line_limit(1500        ),
+                            '        2000':lambda:set_history_line_limit(2000        ),
+                            '        2500':lambda:set_history_line_limit(2500        ),
+                            '        3000':lambda:set_history_line_limit(3000        ),
+                            '        3500':lambda:set_history_line_limit(3500        ),
+                            '        4000':lambda:set_history_line_limit(4000        ),
+                            '        4500':lambda:set_history_line_limit(4500        ),
+                            '        5000':lambda:set_history_line_limit(5000        ),
+                            '        6000':lambda:set_history_line_limit(6000        ),
+                            '        7000':lambda:set_history_line_limit(7000        ),
+                            '        8000':lambda:set_history_line_limit(8000        ),
+                            '        9000':lambda:set_history_line_limit(9000        ),
+                            '       10000':lambda:set_history_line_limit(10000       ),
+                            '       15000':lambda:set_history_line_limit(15000       ),
+                            '       20000':lambda:set_history_line_limit(20000       ),
+                            '       25000':lambda:set_history_line_limit(25000       ),
+                            '       30000':lambda:set_history_line_limit(30000       ),
+                            '       40000':lambda:set_history_line_limit(40000       ),
+                            '       50000':lambda:set_history_line_limit(50000       ),
+                            '      100000':lambda:set_history_line_limit(100000      ),
+                            '     1000000':lambda:set_history_line_limit(1000000     ),
+                            '    10000000':lambda:set_history_line_limit(10000000    ),
+                            '999999999999':lambda:set_history_line_limit(999999999999),
+                       }),
+
+                Option(title='Prompt Height Percent',
+                        # is_visible=lambda:getattr(self,'show_all_options',True),
+
+                       description='How many rows of the terminal should the prompt be allowed to take?\n(When using control+e or control+w, this can be useful)\nThis is a hack. Doesnt yet work on Windows (see rp/prompt_toolkit/terminal/vt100_output.py)',
+                       get_current_value=lambda:str(100-r_iterm_comm.options['top_space']).rjust(11)+'%',
+                       get_values=lambda:{'asdpoa':lambda:None,
+                            '          0%':lambda:r_iterm_comm.options.__setitem__('top_space',100-0   ),
+                            '          1%':lambda:r_iterm_comm.options.__setitem__('top_space',100-1   ),
+                            '          2%':lambda:r_iterm_comm.options.__setitem__('top_space',100-2   ),
+                            '          3%':lambda:r_iterm_comm.options.__setitem__('top_space',100-3   ),
+                            '          4%':lambda:r_iterm_comm.options.__setitem__('top_space',100-4   ),
+                            '          5%':lambda:r_iterm_comm.options.__setitem__('top_space',100-5   ),
+                            '         10%':lambda:r_iterm_comm.options.__setitem__('top_space',100-10  ),
+                            '         15%':lambda:r_iterm_comm.options.__setitem__('top_space',100-15  ),
+                            '         20%':lambda:r_iterm_comm.options.__setitem__('top_space',100-20  ),
+                            '         25%':lambda:r_iterm_comm.options.__setitem__('top_space',100-25  ),
+                            '         30%':lambda:r_iterm_comm.options.__setitem__('top_space',100-30  ),
+                            '         35%':lambda:r_iterm_comm.options.__setitem__('top_space',100-35  ),
+                            '         40%':lambda:r_iterm_comm.options.__setitem__('top_space',100-40  ),
+                            '         45%':lambda:r_iterm_comm.options.__setitem__('top_space',100-45  ),
+                            '         50%':lambda:r_iterm_comm.options.__setitem__('top_space',100-50  ),
+                            '         55%':lambda:r_iterm_comm.options.__setitem__('top_space',100-55  ),
+                            '         60%':lambda:r_iterm_comm.options.__setitem__('top_space',100-60  ),
+                            '         65%':lambda:r_iterm_comm.options.__setitem__('top_space',100-65  ),
+                            '         70%':lambda:r_iterm_comm.options.__setitem__('top_space',100-70  ),
+                            '         75%':lambda:r_iterm_comm.options.__setitem__('top_space',100-75  ),
+                            '         80%':lambda:r_iterm_comm.options.__setitem__('top_space',100-80  ),
+                            '         85%':lambda:r_iterm_comm.options.__setitem__('top_space',100-85  ),
+                            '         90%':lambda:r_iterm_comm.options.__setitem__('top_space',100-90  ),
+                            '         95%':lambda:r_iterm_comm.options.__setitem__('top_space',100-95  ),
+                            '        100%':lambda:r_iterm_comm.options.__setitem__('top_space',100-100 ),
+                       }),
+
+                # Option(title='Empty Top Space',
+                #         # is_visible=lambda:getattr(self,'show_all_options',True),
+
+                #        description='How many lines of free rows should be above the top of the prompt?\n(When using control+e or control+w, this can be useful)',
+                #        get_current_value=lambda:str(r_iterm_comm.options['top_space']).rjust(12),
+                #        get_values=lambda:{'asdpoa':lambda:None,
+                #             '           0':lambda:r_iterm_comm.options.__setitem__('top_space',0   ),
+                #             '           1':lambda:r_iterm_comm.options.__setitem__('top_space',1   ),
+                #             '           2':lambda:r_iterm_comm.options.__setitem__('top_space',2   ),
+                #             '           3':lambda:r_iterm_comm.options.__setitem__('top_space',3   ),
+                #             '           4':lambda:r_iterm_comm.options.__setitem__('top_space',4   ),
+                #             '           5':lambda:r_iterm_comm.options.__setitem__('top_space',5   ),
+                #             '          10':lambda:r_iterm_comm.options.__setitem__('top_space',10  ),
+                #             '          15':lambda:r_iterm_comm.options.__setitem__('top_space',15  ),
+                #             '          20':lambda:r_iterm_comm.options.__setitem__('top_space',20  ),
+                #             '          25':lambda:r_iterm_comm.options.__setitem__('top_space',25  ),
+                #             '          30':lambda:r_iterm_comm.options.__setitem__('top_space',30  ),
+                #             '          35':lambda:r_iterm_comm.options.__setitem__('top_space',35  ),
+                #             '          40':lambda:r_iterm_comm.options.__setitem__('top_space',40  ),
+                #             '          45':lambda:r_iterm_comm.options.__setitem__('top_space',45  ),
+                #             '          50':lambda:r_iterm_comm.options.__setitem__('top_space',50  ),
+                #             '          55':lambda:r_iterm_comm.options.__setitem__('top_space',55  ),
+                #             '          60':lambda:r_iterm_comm.options.__setitem__('top_space',60  ),
+                #             '          65':lambda:r_iterm_comm.options.__setitem__('top_space',65  ),
+                #             '          70':lambda:r_iterm_comm.options.__setitem__('top_space',70  ),
+                #             '          75':lambda:r_iterm_comm.options.__setitem__('top_space',75  ),
+                #             '          80':lambda:r_iterm_comm.options.__setitem__('top_space',80  ),
+                #             '          85':lambda:r_iterm_comm.options.__setitem__('top_space',85  ),
+                #             '          90':lambda:r_iterm_comm.options.__setitem__('top_space',90  ),
+                #             '          95':lambda:r_iterm_comm.options.__setitem__('top_space',95  ),
+                #             '         100':lambda:r_iterm_comm.options.__setitem__('top_space',100 ),
+                #             '         125':lambda:r_iterm_comm.options.__setitem__('top_space',125 ),
+                #             '         150':lambda:r_iterm_comm.options.__setitem__('top_space',150 ),
+                #             '         175':lambda:r_iterm_comm.options.__setitem__('top_space',175 ),
+                #             '         200':lambda:r_iterm_comm.options.__setitem__('top_space',200 ),
+                #             '         300':lambda:r_iterm_comm.options.__setitem__('top_space',300 ),
+                #             '         400':lambda:r_iterm_comm.options.__setitem__('top_space',400 ),
+                #             '         500':lambda:r_iterm_comm.options.__setitem__('top_space',500 ),
+                #             '         600':lambda:r_iterm_comm.options.__setitem__('top_space',600 ),
+                #             '         700':lambda:r_iterm_comm.options.__setitem__('top_space',700 ),
+                #             '         800':lambda:r_iterm_comm.options.__setitem__('top_space',800 ),
+                #             '         900':lambda:r_iterm_comm.options.__setitem__('top_space',900 ),
+                #             '        1000':lambda:r_iterm_comm.options.__setitem__('top_space',1000),
+                #        }),
+
+                Option(title='Minimum Prompt Height',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
+
+                       description='With respect to the "Prompt Height" option, whats the minimum height of the prompt (in #rows)?',
+                       get_current_value=lambda:str(r_iterm_comm.options['min_bot_space']).rjust(12),
+                       get_values=lambda:{'asdpoa':lambda:None,
+                            '           0':lambda:r_iterm_comm.options.__setitem__('min_bot_space',0   ),
+                            '           1':lambda:r_iterm_comm.options.__setitem__('min_bot_space',1   ),
+                            '           2':lambda:r_iterm_comm.options.__setitem__('min_bot_space',2   ),
+                            '           3':lambda:r_iterm_comm.options.__setitem__('min_bot_space',3   ),
+                            '           4':lambda:r_iterm_comm.options.__setitem__('min_bot_space',4   ),
+                            '           5':lambda:r_iterm_comm.options.__setitem__('min_bot_space',5   ),
+                            '          10':lambda:r_iterm_comm.options.__setitem__('min_bot_space',10  ),
+                            '          15':lambda:r_iterm_comm.options.__setitem__('min_bot_space',15  ),
+                            '          20':lambda:r_iterm_comm.options.__setitem__('min_bot_space',20  ),
+                            '          25':lambda:r_iterm_comm.options.__setitem__('min_bot_space',25  ),
+                            '          30':lambda:r_iterm_comm.options.__setitem__('min_bot_space',30  ),
+                            '          35':lambda:r_iterm_comm.options.__setitem__('min_bot_space',35  ),
+                            '          40':lambda:r_iterm_comm.options.__setitem__('min_bot_space',40  ),
+                            '          45':lambda:r_iterm_comm.options.__setitem__('min_bot_space',45  ),
+                            '          50':lambda:r_iterm_comm.options.__setitem__('min_bot_space',50  ),
+                            '          55':lambda:r_iterm_comm.options.__setitem__('min_bot_space',55  ),
+                            '          60':lambda:r_iterm_comm.options.__setitem__('min_bot_space',60  ),
+                            '          65':lambda:r_iterm_comm.options.__setitem__('min_bot_space',65  ),
+                            '          70':lambda:r_iterm_comm.options.__setitem__('min_bot_space',70  ),
+                            '          75':lambda:r_iterm_comm.options.__setitem__('min_bot_space',75  ),
+                            '          80':lambda:r_iterm_comm.options.__setitem__('min_bot_space',80  ),
+                            '          85':lambda:r_iterm_comm.options.__setitem__('min_bot_space',85  ),
+                            '          90':lambda:r_iterm_comm.options.__setitem__('min_bot_space',90  ),
+                            '          95':lambda:r_iterm_comm.options.__setitem__('min_bot_space',95  ),
+                            '         100':lambda:r_iterm_comm.options.__setitem__('min_bot_space',100 ),
+                            '         125':lambda:r_iterm_comm.options.__setitem__('min_bot_space',125 ),
+                            '         150':lambda:r_iterm_comm.options.__setitem__('min_bot_space',150 ),
+                            '         175':lambda:r_iterm_comm.options.__setitem__('min_bot_space',175 ),
+                            '         200':lambda:r_iterm_comm.options.__setitem__('min_bot_space',200 ),
+                            '         300':lambda:r_iterm_comm.options.__setitem__('min_bot_space',300 ),
+                            '         400':lambda:r_iterm_comm.options.__setitem__('min_bot_space',400 ),
+                            '         500':lambda:r_iterm_comm.options.__setitem__('min_bot_space',500 ),
+                            '         600':lambda:r_iterm_comm.options.__setitem__('min_bot_space',600 ),
+                            '         700':lambda:r_iterm_comm.options.__setitem__('min_bot_space',700 ),
+                            '         800':lambda:r_iterm_comm.options.__setitem__('min_bot_space',800 ),
+                            '         900':lambda:r_iterm_comm.options.__setitem__('min_bot_space',900 ),
+                            '        1000':lambda:r_iterm_comm.options.__setitem__('min_bot_space',1000),
+                       }),
+
+                Option(title='Show Battery Life',
+
+                        is_visible=lambda:getattr(self,'show_all_options',True),
+                       description='Should we show your laptop\'s battery life?\nIt\'s shown on the bottom right of the terminal.\nWhen it\'s green, that means your laptop is plugged in. When red, it means youre on battery power.',
+                       get_current_value=lambda:getattr(self,'show_battery_life','(Broken)'),
+                       get_values=lambda:{
+                           True:lambda:setattr(self,'show_battery_life',True),# print("Selected Llama"),
+                           False:lambda:setattr(self,'show_battery_life',False),# print("Selected Donkey"),
+                       }),
                 simple_option(title='Show status bar',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
                               description='Show the status bar at the bottom of the terminal.',
                               field_name='show_status_bar'),
                 simple_option(title='Show sidebar help',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
                               description='When the sidebar is visible, also show this help text.',
                               field_name='show_sidebar_help'),
                 simple_option(title='Highlight parenthesis',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
                               description='Highlight matching parenthesis, when the cursor is on or right after one.',
                               field_name='highlight_matching_parenthesis'),
 
             ]),
-            OptionCategory('rp Pseudo-Terminal',[
+            OptionCategory('Ryan Python',[
                 Option(title='Sand Creature',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
+
                        description='This is an option selection test that should print stuff',
-                       get_current_value=lambda:self.sand_creature,
+                       get_current_value=lambda:getattr(self,'sand_creature','(Broken)'),
                        get_values=lambda:{
                            "Option Llama":lambda:setattr(self,'sand_creature',"Option Llama"),# print("Selected Llama"),
                            "Option Donkey":lambda:setattr(self,'sand_creature',"Option Donkey"),# print("Selected Donkey"),
                            "Option Camel":lambda:doge(self),# print("Selected Camel"),
                        }),
+                Option(title='Show Last Assignable',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
+
+                       description='Should we show the variable in purple box on the bottom of the screen?',
+                       get_current_value=lambda:getattr(self,'show_last_assignable','(Broken)'),
+                       get_values=lambda:{
+                           True:lambda:setattr(self,'show_last_assignable',True),# print("Selected Llama"),
+                           False:lambda:setattr(self,'show_last_assignable',False),# print("Selected Donkey"),
+                       }),
                 Option(title='Space-Functions',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
+
                        description='Turning this on lets pressing the space bar autocomplete a \nfunction for you as well as adding parenthesis around it.\n(Its like pressing tab followed by the spacebar).',
                        get_current_value=lambda:"on" if ric.enable_space_autocompletions else "off",
                        get_values=lambda:{
@@ -509,15 +744,23 @@ class PythonInput(object):
                            "good" :lambda:ric.completion_style.__setitem__(0,'good'),# print("Selected Donkey"),
                        }),
                 simple_option(title='Parenthesizer',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
+
                               description='bla',
                               field_name='show_parenthesis_automator'),
                 simple_option(title='Realtime Eval',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
+
                               description='bla',
                               field_name='show_realtime_input'),
                 simple_option(title='Show VARS',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
+
                               description='bla',
                               field_name='show_vars'),
                 Option(title='Debugger UI Height',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
+
                        description='The height of the GUI when running debug()',
                        get_current_value=lambda:str(ric.debug_height),
                        get_values=lambda:{
@@ -543,22 +786,34 @@ class PythonInput(object):
                             '100':lambda:set_debug_height(100),
                        }),
             ]),
-            OptionCategory('Colors',[
+            OptionCategory('Color Themes',[
                 Option(title='Code',
                        description='Color scheme to use for the Python code.',
                        get_current_value=lambda:self._current_code_style_name,
                        get_values=lambda:dict(
                            (name,partial(self.use_code_colorscheme,name)) for name in self.code_styles)
                        ),
-                Option(title='User interface',
+                Option(title='User Interface',
                        description='Color scheme to use for the user interface.',
                        get_current_value=lambda:self._current_ui_style_name,
                        get_values=lambda:dict(
                            (name,partial(self.use_ui_colorscheme,name)) for name in self.ui_styles)
                        ),
                 simple_option(title='True color (24 bit)',
-                              description='Use 24 bit colors instead of 265 colors',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
+
+                              description='Use 24 bit colors instead of 265 colors\nThis is only supported on some terminal apps\nSome known to support it: Ubuntu\'s default terminal, MacOS iTerm',
                               field_name='true_color'),
+            ]),
+            OptionCategory('This Menu',[
+                                Option(title='Show All Options',
+                       description='If turned on, will show more options in this menu.\nIf turned off, will try to keep this menu simple.',
+                       get_current_value=lambda:getattr(self,'show_all_options',False),
+                       get_values=lambda:{
+                           True:lambda:setattr(self,'show_all_options',True),# print("Selected Llama"),
+                           False:lambda:setattr(self,'show_all_options',False),# print("Selected Donkey"),
+                       }),
+
             ]),
         ]
 

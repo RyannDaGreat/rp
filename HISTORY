@@ -1,0 +1,69 @@
+
+
+
+############################################################
+########### BEGINNING OF PSEUDO TERMINAL SESSION ###########
+###########    Mon Jul 19, 2021 at 2:27:14PM     ###########
+############################################################
+ans=__import__('rp').get_git_remote_url()
+
+
+############################################################
+########### BEGINNING OF PSEUDO TERMINAL SESSION ###########
+###########    Mon Jul 19, 2021 at 2:35:16PM     ###########
+############################################################
+ans = '/Users/Ryan/.vimrc'
+from rp import *
+ans='/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/.rprc'
+ans=r
+import sys,os;os.chdir('/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp');sys.path.append(os.getcwd())# CD /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+
+
+############################################################
+########### BEGINNING OF PSEUDO TERMINAL SESSION ###########
+###########    Mon Jul 19, 2021 at 2:37:29PM     ###########
+############################################################
+__import__('rp').os.system("sh");
+
+
+############################################################
+########### BEGINNING OF PSEUDO TERMINAL SESSION ###########
+###########    Mon Jul 19, 2021 at 2:45:55PM     ###########
+############################################################
+ans="def vim(file_or_object=None,line_number=None):\n    import subprocess\n    args=['vim']\n\n    assert currently_in_a_tty(),'Cannot start Vim because we are not running in a terminal' #In Jupyter Notebook, launching Vim might force you to restart the kernel...very annoying\n\n    if isinstance(file_or_object,str):\n        path=file_or_object\n        path=get_absolute_path(path)\n        args.append(path)\n    elif file_or_object is None:\n        path=None\n        pass\n    else:\n        path=get_source_file(file_or_object)\n        args.append(path)\n\n        if line_number is None and not is_a_module(file_or_object):\n            try:\n                line_number=_get_object_lineno(file_or_object)\n            except Exception:\n                pass\n\n    if line_number is not None:\n        #https://stackoverflow.com/questions/3313418/starting-vim-at-a-certain-position-line-and-column-of-a-file\n        column_number=0\n        args+=['+call cursor(%i,%i)'%(line_number,column_number),'+normal zz']\n\n    if is_a_folder(path):\n        folder=path\n    else:\n        folder=get_parent_directory(path)\n        \n    original_directory=get_current_directory()\n\n    try:\n        set_current_directory(folder) # This step is just for convenience; it's completely optional (might be removed if I don't like it). When editing a file, set vim's pwd to it's folder\n        subprocess.call(args) \n    finally:\n        set_current_directory(original_directory)\n"
+ans=__import__('rp').shell_command('which vim')
+__import__('rp').os.system("zsh");
+
+
+############################################################
+########### BEGINNING OF PSEUDO TERMINAL SESSION ###########
+###########    Mon Jul 19, 2021 at 2:50:37PM     ###########
+############################################################
+__import__('rp').os.system("zsh");
+ans=rp
+
+
+############################################################
+########### BEGINNING OF PSEUDO TERMINAL SESSION ###########
+###########    Mon Jul 19, 2021 at 5:09:05PM     ###########
+############################################################
+string_to_text_file(get_module_path(r),ans)
+
+
+############################################################
+########### BEGINNING OF PSEUDO TERMINAL SESSION ###########
+###########    Mon Jul 19, 2021 at 5:09:19PM     ###########
+############################################################
+__import__('rp.pypi_inspection').pypi_inspection.display_all_pypi_info()
+ans=r
+import sys,os;os.chdir('/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp');sys.path.append(os.getcwd())# CD /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+import web_evaluator
+import runpy
+import runpy
+
+
+############################################################
+########### BEGINNING OF PSEUDO TERMINAL SESSION ###########
+###########    Tue Jul 20, 2021 at 3:03:54PM     ###########
+############################################################
+print_fansi_reference_table()

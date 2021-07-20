@@ -128,6 +128,9 @@ class PythonCompleter(Completer):
             char_before_cursor.isalnum() or char_before_cursor in '_.')
 
     def _get_completions(self, document, complete_event,force=False):# When force is true it acts like the original ptpython autocomplete
+      import warnings
+      with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
         force=True
         global old_origin,candidates
         origin=document.get_word_before_cursor()
@@ -271,10 +274,14 @@ class PythonCompleter(Completer):
             if complete_event.completion_requested or self._complete_python_while_typing(document):
                 doc=Document(document.text,document.cursor_position-(origin[::-1].find('.') if '.' in origin else len(origin)),document.selection)
                 script = get_jedi_script_from_document(doc, self.get_locals(), self.get_globals())
+                # print(script)
                 pos=document.cursor_position-len(origin)+1
                 if script:
                     try:completions = script.completions()
-                    except:pass#The original ptpython has a whole string of specific error types, and it looks like visual clutter. I got rid of it to see my code more easily. I dont think im missing much.
+                    except Exception as e:
+                        import rp
+                        # rp.print_verbose_stack_trace(e)
+                        pass#The original ptpython has a whole string of specific error types, and it looks like visual clutter. I got rid of it to see my code more easily. I dont think im missing much.
                     else:
                         # fff=1
                         for c in completions:
@@ -307,6 +314,9 @@ class PythonCompleter(Completer):
 
         old_origin=origin
     def get_completions(self, document, complete_event,force=False):
+      import warnings
+      with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
 
         global completion_cache_pre_origin_doc
         from rp import tic,toc,ptoctic,ptoc 
@@ -359,10 +369,13 @@ class PythonCompleter(Completer):
             # ric.current_candidates==ric.current_candidates[::-1]
 
         for x in ric.current_candidates:
-            if not x.startswith('_'):#Make sure things starting with '_' come last...
+            if not x.startswith('_') and not x.startswith('.'):#Make sure things starting with '_' come last...
                 yield Completion(text=x,start_position=-len(post_period_origin),display=x)
         for x in ric.current_candidates:
             if     x.startswith('_'):
+                yield Completion(text=x,start_position=-len(post_period_origin),display=x)
+        for x in ric.current_candidates:
+            if     x.startswith('.'): #Private files, such as .backup_.py should be displayed last
                 yield Completion(text=x,start_position=-len(post_period_origin),display=x)
         # print("TIME2:",end='')
         # ptoc()

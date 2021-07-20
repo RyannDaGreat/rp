@@ -37,6 +37,7 @@ def get_all_ui_styles():
         'jenny'      :jenny,
         'random'     :random,
         'darkred'    :darkred,
+        'nebula'     :stars_2,
     }
 
 from pygments.token import Token, Keyword, Name, Comment, String, Operator, Number
@@ -877,6 +878,102 @@ inverted_3.update({
         Token.Menu.Completions.ProgressButton:        'bg:#460000           ',
 })
 
+
+
+
+stars_2 = {}
+stars_2.update(default_ui_style)
+stars_2.update({
+    # Status toolbar.
+
+    # Token.Toolbar.Status:                         'bg:#dddddd #555555',
+    # Token.Toolbar.Status.BatteryPluggedIn:        'bg:#dddddd #dd55dd',
+    # Token.Toolbar.Status.BatteryNotPluggedIn:     'bg:#dddddd #55dddd',
+    # Token.Toolbar.Status.Title:                   'underline',
+    # Token.Toolbar.Status.InputMode:               'bg:#dddddd #000055',
+    # Token.Toolbar.Status.Key:                     'bg:#ffffff #777777',
+    # Token.Toolbar.Status.PasteModeOn:             'bg:#55bbbb #000000',
+    # Token.Toolbar.Status.PseudoTerminalCurrentVariable:
+    #     'bg:#99dd99 #555555',# RYAN BURGERT STUFF
+    # Token.Toolbar.Status.PythonVersion:           'bg:#dddddd #000000 bold',
+
+    # When Control-C has been pressed. Grayed.
+    Token.Aborted:                                '#777777',
+
+    # The options sidebar.
+    Token.Sidebar:                                'bg:#444444 #ffffff',
+    Token.Sidebar.Title:                          'bg:#007799 #000000 bold',
+    Token.Sidebar.Label:                          'bg:#444444 #dddddd',
+    Token.Sidebar.Status:                         'bg:#222222 #eeffff',
+    Token.Sidebar.Selected.Label:                 'bg:#dddddd #111111',
+    Token.Sidebar.Selected.Status:                'bg:#bbbbbb #000000 bold',
+
+    Token.Sidebar.Separator:                       'bg:#444444 #000000 underline',
+    Token.Sidebar.Key:                            'bg:#442244 #ffffff bold',
+    Token.Sidebar.Key.Description:                'bg:#444444 #ffffff',
+    Token.Sidebar.HelpText:                       'bg:#001111 #eeffff',
+
+    #lili Sng for the history layout.
+    Token.History.Line:                          '',
+    Token.History.Line.Selected:                 'bg:#ff77ff  #ffffff',
+    Token.History.Line.Current:                  'bg:#000000 #ffffff',
+    Token.History.Line.Selected.Current:         'bg:#770077 #ffffff',
+    Token.History.ExistingInput:                  '#777777',
+
+    #plp  HWindow.
+    Token.Window.Border:                          '#ffff44',
+    Token.Window.Title:                           'bg:#444444 #ffffff',
+    Token.Window.TIItleV2:                         'bg:#447799 #ffffff bold',
+
+    #ata- Menter message.
+    Token.AcceptMessage:                          'bg:#770000 #bbbbbb',
+
+    #tit  Econfirmation.
+    Token.ExitConfirmation:                       'bg:#bbbb77 #000000',
+})
+
+stars_2.update({
+        #ene  Lnumbers.
+        Token.LineNumber:                             '#aa6666 bg:#222222',
+
+        #hlhl Highting of search matches in document.
+        Token.SearchMatch:                            '#ffffff bg:#aa4444',
+        Token.SearchMatch.Current:                    '#ffffff bg:#44aa44',
+
+        #hlhl Highting of select text in document.
+        Token.SelectedText:                           '#ffffff bg:#aa6666',
+
+        # C  ##pl Ceter toolbar.
+        #enen T.Toolbar.Completions:                    'bg:#bbbb44 #000000',
+        #enen T.Toolbar.Completions.Arrow:              'bg:#bbbb44 #000000 bold',
+        #enen T.Toolbar.Completions.Completion:         'bg:#bbbb44 #000000',
+        #enen T.Toolbar.Completions.Completion.Current: 'bg:#888800 #ffffff',
+
+        # C  ##pl Ceter menu.
+        #enen T.Menu.Completions.Completion:            'bg:#bbbb44 #000000',
+        #enen T.Menu.Completions.Completion.Current:    'bg:#888800 #ffffff',
+        #enen T.Menu.Completions.Meta:                  'bg:#999944 #000000',
+        #enen T.Menu.Completions.Meta.Current:          'bg:#aaaa00 #000000',
+        #enen T.Menu.Completions.ProgressBar:           'bg:#aaaaaa',
+        #enen T.Menu.Completions.ProgressButton:        'bg:#000000',
+
+
+
+                Token.Toolbar.Completions:            'bg:#460000 #4c95bf',
+        Token.Toolbar.Completions.Arrow:              'bg:#460000 #4c95bf bold',
+        Token.Toolbar.Completions.Completion:         'bg:#460000 #4c95bf',
+        Token.Toolbar.Completions.Completion.Current: 'bg:#fffff0 #00516a',
+
+
+
+        #plpl Ceter menu.
+        Token.Menu.Completions.Completion:            'bg:#462020 #4c95ff',
+        Token.Menu.Completions.Completion.Current:    'bg:#4c95ff #462020',
+        Token.Menu.Completions.Meta:                  'bg:#460000 #4c68ff',
+        Token.Menu.Completions.Meta.Current:          'bg:#460000 #007eff',
+        Token.Menu.Completions.ProgressBar:           'bg:#d47eff           ',
+        Token.Menu.Completions.ProgressButton:        'bg:#000046           ',
+})
 
 
 
@@ -2428,9 +2525,9 @@ jenny.update({
     Token.SelectedText:                                   '#ffffff           noinherit',
     Token.Toolbar.Completions.Arrow:                      '#bf95bf underline noinherit',
     Token.Toolbar.Completions.Completion:                 '#bf95bf           noinherit',
-    Token.Toolbar.Completions.Completion.Current:         '#808080 underline noinherit',
+    Token.Toolbar.Completions.Completion.Current:         '#FFFFFF underline noinherit',
     Token.Menu.Completions.Completion:                    '#ff95ff           noinherit',
-    Token.Menu.Completions.Completion.Current:            '#808080 underline noinherit',
+    Token.Menu.Completions.Completion.Current:            '#FFFFFF underline noinherit',
     Token.Menu.Completions.Meta:                          '#ff68ff           noinherit',
     Token.Menu.Completions.Meta.Current:                  '#ff7eff           noinherit',
     Token.Menu.Completions.ProgressBar:                   '                  noinherit',

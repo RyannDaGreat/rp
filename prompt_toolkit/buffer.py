@@ -657,6 +657,39 @@ class Buffer(object):
 
         return deleted
 
+    def set_cursor_column(self,column_number:int):
+        self.cursor_left(999999999)
+        self.cursor_right(column_number)
+
+
+
+    def set_cursor_row(self,row_number:int):
+        self.cursor_up(999999999)
+        self.cursor_down(row_number)
+
+
+    def delete_line_at_cursor(self, count=1):
+
+        def delete_current_line(buffer):
+            document=buffer.document
+            current_line=document.current_line
+            buffer.cursor_left(10000)
+            firstline=buffer.cursor_position==0
+            buffer.delete(len(current_line))
+            buffer.delete_before_cursor()
+            if firstline:
+                buffer.delete()
+            else:
+                buffer.cursor_down()
+
+        cursor_column=self.document.cursor_position_col
+
+        for _ in range(count):
+            delete_current_line(self)
+
+        self.set_cursor_column(cursor_column)
+
+
     def delete(self, count=1):
         """
         Delete specified number of characters and Return the deleted text.
@@ -668,6 +701,37 @@ class Buffer(object):
             return deleted
         else:
             return ''
+
+
+    def delete_line_above_cursor(self, count=1):
+        cursor_column=self.document.cursor_position_col
+
+        for _ in range(count):
+            if '\n' not in self.document.text_before_cursor:
+                #There are no lines above this line. Stop here.
+                break
+            self.cursor_up()
+            self.delete_line_at_cursor()
+
+        self.set_cursor_column(cursor_column)
+
+    def delete_line_below_cursor(self, count=1):
+        cursor_column=self.document.cursor_position_col
+
+        for _ in range(count):
+            if '\n' not in self.document.text_after_cursor:
+                #If our cursor is on the last line, stop here.
+                break
+
+            deleting_last_line=self.document.text_after_cursor.count('\n')==1
+            self.cursor_down()
+            self.delete_line_at_cursor()
+
+            if not deleting_last_line:
+                #If we're not deleting the last line, we have to move the cursor back up manually
+                self.cursor_up()
+
+        self.set_cursor_column(cursor_column)
 
     def join_next_line(self, separator=' '):
         """

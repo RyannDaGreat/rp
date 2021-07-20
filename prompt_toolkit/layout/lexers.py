@@ -146,6 +146,96 @@ class RegexSync(SyntaxSync):
         return cls(p)
 
 
+def longest_common_prefix(a,b):
+    #Written by Ryan Burgert, 2020. Written for efficiency's sake.
+    #Works for strings, lists and tuples (and possibly other datatypes, but not numpy arrays)
+    #This implementation is two orders of magnitude faster than anything I could find on the web/stack overflow/etc, especially for strings
+    #It has complexity O(len(output of this function)), and a very good time constant (because it doesn't directly iterate through every element in a python loop)
+    #On my computer, this function was able to compare two strings of length 1,000,000 in 0.00454 second. Here's the test I used: string='a'*10**7;tic();longest_common_prefix(string,string);ptoc() [[[tic() starts a timer, ptoc() prints out the elapsed time]]]
+    #
+    #EXAMPLES:
+    #   longest_common_prefix('abcderty','abcdefoaisjd')                --> abcde
+    #   longest_common_prefix('abcderty','abcsdefoa')                   --> abc
+    #   longest_common_prefix('abcderty','asbcsdefoa')                  --> a
+    #   longest_common_prefix('abcderty','aasbcsdefoa')                 --> a
+    #   longest_common_prefix('aaaabdcderty','aasbcsdefoa')             --> aa
+    #   longest_common_prefix(list('aaaabdcderty'),list('aasbcsdefoa')) --> ['a', 'a']
+    
+    len_a=len(a)
+    len_b=len(b)
+    out_max=min(len_a,len_b)
+    s=0#Start index
+    i=1#Length of proposed additional match
+    while s+i<out_max and a[s:s+i]==b[s:s+i]:
+        s+=i
+        i*=2
+    while i:
+        if a[s:s+i]==b[s:s+i]:
+            s+=i
+        i//=2
+    assert a[:s]==b[:s]
+    return a[:s]
+
+
+
+from pygments.lexers import Python3Lexer
+class FastPygmentsTokenizer:
+    def __init__(self,pygments_lexer=Python3Lexer()):
+        self.old_text=''
+        self.token_cache=[]
+        self.pygments_lexer=pygments_lexer
+    def _set_new_text(self,text):
+        # from rp import longest_common_prefix
+        #Used to invalidate the token_cache
+        prefix=longest_common_prefix(text,self.old_text)
+        length=len(prefix)
+        # self.token_cache=[token for token in self.token_cache if token[0]<length]
+        from bisect import bisect_left
+        try:
+            del self.token_cache[max(0,bisect_left(self.token_cache,(length,))-1):]
+        except:
+            self.token_cache=[]
+        try:
+            while self.token_cache[-1][1]!='\n':
+            # for _ in range(10):
+                self.token_cache.pop()
+            #Snip off the tail just to be sure its correct, in particular because '"HELLO"' is treated as 3 tokens ('"','HELLO','"') we need to make sure the beginning quote is kept when re-highlighting
+        except:
+            pass
+        self.old_text=text
+    def get_tokens_unprocessed(self,text):
+        # yield (0, Token.Keyword, text)
+        #Yields something like [(0, Token.Keyword, 'def'), (3, Token.Text, ' '), (4, Token.Name.Function, 'f'), (5, Token.Punctuation, '('), (6, Token.Punctuation, ')'), (7, Token.Punctuation, ':'), (8, Token.Keyword, 'pass')]
+        self._set_new_text(text)
+        # from rp import text_to_speech
+        # text_to_speech(len(self.token_cache))
+        yield from self.token_cache
+        # for token in self.token_cache:
+            # yield token
+        if not self.token_cache:
+            start_pos=0
+        else:
+            start_pos=self.token_cache[-1][0]+len(self.token_cache[-1][2])
+        if start_pos>=len(text):
+            return#We're aleady at the end of the string; we're done. no more tokens.
+        else:
+            for token in self.pygments_lexer.get_tokens_unprocessed(text[start_pos:]):
+                token=(token[0]+start_pos,token[1],token[2])
+                # start,species,data=token
+                # start+=start_pos
+                # token=start,species,data
+                self.token_cache.append(token)
+                yield token
+# t=FastPygmentsTokenizer()
+# print(list(t.get_tokens_unprocessed('((HELLO))')))
+# print(list(t.get_tokens_unprocessed('((HELLO)))')))
+# print(list(t.get_tokens_unprocessed('((HO)))')))
+
+        
+        
+        
+        
+
 class PygmentsLexer(Lexer):
     """
     Lexer that calls a pygments lexer.
@@ -188,11 +278,16 @@ class PygmentsLexer(Lexer):
         self.pygments_lexer_cls = pygments_lexer_cls
         self.sync_from_start = to_cli_filter(sync_from_start)
 
+        self.old_text=""
+
         # Instantiate the Pygments lexer.
         self.pygments_lexer = pygments_lexer_cls(
             stripnl=False,
             stripall=False,
             ensurenl=False)
+
+        self.fast_pygments_lexer=self.pygments_lexer
+        self.fast_pygments_lexer=FastPygmentsTokenizer(self.pygments_lexer)
 
         # Create syntax sync instance.
         self.syntax_sync = syntax_sync or RegexSync.from_pygments_lexer_cls(pygments_lexer_cls)
@@ -244,12 +339,13 @@ class PygmentsLexer(Lexer):
             """
             def get_tokens():
                 text = '\n'.join(document.lines[start_lineno:])[column:]
+                text = '\n'.join(document.lines[0:])[0:]
 
                 # We call `get_tokens_unprocessed`, because `get_tokens` will
                 # still replace \r\n and \r by \n.  (We don't want that,
                 # Pygments should return exactly the same amount of text, as we
                 # have given as input.)
-                for _, t, v in self.pygments_lexer.get_tokens_unprocessed(text):
+                for _, t, v in self.fast_pygments_lexer.get_tokens_unprocessed(text):
                     yield t, v
 
             return enumerate(split_lines(get_tokens()), start_lineno)
@@ -316,5 +412,5 @@ class PygmentsLexer(Lexer):
 
                         return cache[num]
             return []
-
+        self.old_text=document.text#For speed's sake: Ryan Burgert
         return get_line

@@ -236,6 +236,14 @@ class _CompiledGrammar(object):
 
         :param string: The input string.
         """
+
+        #RYAN BURGERT: Update, I disabled this - because for some ungodly reason self._re.match(string) seemed to be running forever???
+        #It seems to be a 'catastrophic backtracking' issue, but I don't even know where this regex is from muchless how to fix it...
+        #Also, I don't even think I need it anyway...nothing seems to happen when I break this function by returning None...
+        #Here's the example code: Paste this code into the buffer and it will freeze: https://git.io/JqkTB
+        return None
+
+        #
         m = self._re.match(string)
 
         if m:
@@ -253,8 +261,10 @@ class _CompiledGrammar(object):
         # First try to match using `_re_prefix`. If nothing is found, use the patterns that
         # also accept trailing characters.
         for patterns in [self._re_prefix, self._re_prefix_with_trailing_input]:
-            matches = [(r, r.match(string)) for r in patterns]
-            matches = [(r, m) for r, m in matches if m]
+            #RYAN: I disabled the two next lines. I don't know what it's used for, but I beleive it improved the performance.
+            # matches = [(r, r.match(string)) for r in patterns]
+            # matches = [(r, m) for r, m in matches if m]
+            matches=[]
 
             if matches != []:
                 return Match(string, matches, self._group_names_to_nodes, self.unescape_funcs)
