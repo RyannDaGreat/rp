@@ -3504,3 +3504,23 @@ ans = '/Users/Ryan/.tmux.conf'
 ###########    Mon Aug 16, 2021 at 6:45:46PM     ###########
 ############################################################
 string_to_text_file(get_module_path(r),ans)
+
+
+############################################################
+########### BEGINNING OF PSEUDO TERMINAL SESSION ###########
+###########    Mon Aug 16, 2021 at 7:00:55PM     ###########
+############################################################
+string_to_text_file(get_module_path(r),ans)
+import sys,os;os.chdir('/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages');sys.path.append(os.getcwd())# CD ..
+import sys,os;os.chdir('/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5');sys.path.append(os.getcwd())# CD ..
+import sys,os;os.chdir('/Library/Frameworks/Python.framework/Versions/3.5/lib');sys.path.append(os.getcwd())# CD ..
+import sys,os;os.chdir('/Library/Frameworks/Python.framework/Versions/3.5');sys.path.append(os.getcwd())# CD ..
+import sys,os;os.chdir('/Library/Frameworks/Python.framework/Versions');sys.path.append(os.getcwd())# CD ..
+import sys,os;os.chdir('/Library/Frameworks/Python.framework');sys.path.append(os.getcwd())# CD ..
+import sys,os;os.chdir('/Library/Frameworks');sys.path.append(os.getcwd())# CD ..
+import sys,os;os.chdir('/Library');sys.path.append(os.getcwd())# CD ..
+import sys,os;os.chdir('/');sys.path.append(os.getcwd())# CD ..
+import sys,os;os.chdir('/Users');sys.path.append(os.getcwd())# CD Users
+import sys,os;os.chdir('/Users/Ryan');sys.path.append(os.getcwd())# CD Ryan
+ans = '/Users/Ryan/.tmux.conf'
+ans='/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/r.py'

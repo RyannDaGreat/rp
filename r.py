@@ -9275,15 +9275,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
                         elif user_message == 'RYAN XONSHRC':
                             if input_yes_no('Would you like to use Ryan Burgert\'s settings in your ~/.xonshrc? (This is the settings file for the SHELL command, which uses the Xonsh shell)'):
-                                xonshrc_path=get_absolute_path('~/.xonshrc')
-                                xonfig=text_file_to_string(xonshrc_path) if file_exists(xonshrc_path) else ''
-                                
-                                ryan_xonfig='''
-$PROMPT = "{BOLD_CYAN} >> {BOLD_CYAN}{cwd_base}{branch_color}{curr_branch: {}}{NO_COLOR} "
-$CASE_SENSITIVE_COMPLETIONS = False
-'''
-                                string_to_text_file(xonshrc_path,xonfig+ryan_xonfig)
-                                print("Your ~/.xonshrc file has been modified. Use the SHELL command to try it out!")
+                                _set_ryan_xonshrc()
                                 user_message='ans = '+repr(xonshrc_path)
 
                         elif user_message=='APWD':
@@ -9324,9 +9316,6 @@ $CASE_SENSITIVE_COMPLETIONS = False
 
                             user_message='ans = '+repr(pudb_config_file_path)
 
-
-                                
-
                         elif user_message=='RYAN TMUXRC':
                             _set_ryan_tmux_conf()
                             user_message='ans = '+repr(get_absolute_path('~/.tmux.conf'))
@@ -9334,12 +9323,7 @@ $CASE_SENSITIVE_COMPLETIONS = False
 
                         elif user_message=='RYAN VIMRC':
                             if input_yes_no('Would you like to add Ryan Burgert\'s vim settings to your ~/.vimrc?'):
-                                vimrc=text_file_to_string(get_module_path_from_name('rp.ryan_vimrc'))
-                                string_to_text_file(get_absolute_path('~/.vimrc'),vimrc)
-                                shell_command('git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim')
-                                import os
-                                os.system('vim +PluginInstall +qall')
-                                print("Finished setting your ~/.vimrc vim settings. Give it a try! Enter 'ans?v' without quotes to see your new ~/.vimrc file")
+                                _set_ryan_vimrc()
                                 user_message='ans = '+repr(get_absolute_path('~/.vimrc'))
                             
                         elif user_message == 'XONSHRC':
@@ -9356,12 +9340,11 @@ $CASE_SENSITIVE_COMPLETIONS = False
                             fansi_print("VIMRC --> editing your ~/.vimrc file","blue",'bold')
                             vim(get_absolute_path('~/.vimrc'))
                             user_message='ans = '+repr(get_absolute_path('~/.vimrc'))
+
                         elif user_message == 'RYAN RPRC':
                             #This isn't in the help documentation, because it's something I made for myself. You can use it too though!
                             if input_yes_no('Would you like to add Ryan Burgert\'s default settings to your rprc?'):
-                                _get_rprc()
-                                string_to_text_file(rprc_file_path,text_file_to_string(rprc_file_path)+'\n'+'from rp import *')
-                                print("Your rprc file has been modified.")
+                                _get_ryan_rprc_path()
                             user_message='from rp import *\nans='+repr(rprc_file_path)
 
                         elif user_message == 'GMORE':
@@ -10712,7 +10695,7 @@ def ring_terminal_bell():
 def _pterm():
     #This is what gets run when we run rp from the command line
     try:
-        pseudo_terminal(locals(),globals(),rprc=_get_rprc())
+        pseudo_terminal(locals(),globals(),rprc=_get_ryan_rprc_path())
     finally:
         if _pterm_hist_file is not None:
             _pterm_hist_file.close()
@@ -16404,10 +16387,78 @@ import os,sys;sys.path.append(os.getcwd());del os,sys;
 #set_cursor_to_bar()
 
 """%rprc_file_path
-def _get_rprc():
+
+def _get_ryan_rprc_path():
     if not file_exists(rprc_file_path):
         string_to_text_file(rprc_file_path,_default_rprc)
     return text_file_to_string(rprc_file_path)
+
+def _set_ryan_rprc():
+    rprc_file_path=_get_ryan_rprc_path()
+    string_to_text_file(rprc_file_path,text_file_to_string(rprc_file_path)+'\n'+'from rp import *')
+    print("Your rprc file has been modified.")
+    
+
+def _set_ryan_vimrc():
+    vimrc=text_file_to_string(get_module_path_from_name('rp.ryan_vimrc'))
+    string_to_text_file(get_absolute_path('~/.vimrc'),vimrc)
+    shell_command('git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim')
+    import os
+    os.system('vim +PluginInstall +qall')
+    print("Finished setting your ~/.vimrc vim settings. Give it a try! Enter 'ans?v' without quotes to see your new ~/.vimrc file")
+
+def _set_ryan_xonshrc():
+    xonshrc_path=get_absolute_path('~/.xonshrc')
+    xonfig=text_file_to_string(xonshrc_path) if file_exists(xonshrc_path) else ''
+    
+    ryan_xonfig='''
+$PROMPT = "{BOLD_CYAN} >> {BOLD_CYAN}{cwd_base}{branch_color}{curr_branch: {}}{NO_COLOR} "
+$CASE_SENSITIVE_COMPLETIONS = False
+'''
+    string_to_text_file(xonshrc_path,xonfig+ryan_xonfig)
+    print("Your ~/.xonshrc file has been modified. Use the SHELL command to try it out!")
+
+def _set_ryan_tmux_conf():
+    conf='''
+#Ryan Burgert's Tmux config
+#Main changes:
+#   - You can use the mouse to move panes around
+#   - The history limit is way higher than the default
+#   - Vim-like bindings have been added:
+#       - hjkl for pane navigation
+#       - When in copy move (after ctrl+b then [), use 'v' to start a selection then 'y' to yank it
+#           - When this selection is yanked, it's sent to your system clipboard, which means you can paste it again somewhere else (i.e. sublime text, for example). NOTE: On Linux, please install 'sudo apt install xclip' to make this work!)
+
+set -g mouse on 
+set -g history-limit 99999
+# set-option -g prefix M-b
+
+
+#Allow vim-like navigation: https://stackoverflow.com/questions/30719042/tmux-using-hjkl-to-navigate-panes
+set -g status-keys vi
+setw -g mode-keys vi
+# smart pane switching with awareness of vim splits
+bind h select-pane -L
+bind j select-pane -D
+bind k select-pane -U
+bind l select-pane -R
+bind-key -T copy-mode-vi 'v' send -X begin-selection     # Begin selection in copy mode.
+bind-key -T copy-mode-vi 'C-v' send -X rectangle-toggle  # Begin selection in copy mode.
+
+# Let tmux copy to the system clipboard.
+# First, please run   git clone https://github.com/tmux-plugins/tmux-yank ~/clone/path
+run-shell ~/clone/path/yank.tmux
+set -g @yank_with_mouse on
+set -g @yank_selection_mouse 'clipboard' # or 'primary' or 'secondary'
+
+#Let tmux use 256 colors, instead of being limited to plain boring ascii colors
+set -g default-terminal "screen-256color"
+    '''
+    conf_path=get_absolute_path("~/.tmux.conf")
+    if not file_exists(conf_path) or input_yes_no("You already have a tmux config file ~/.tmux.conf, would you like to overwrite it?"):
+        string_to_text_file(conf_path,conf)
+        shell_command('git clone https://github.com/tmux-plugins/tmux-yank ~/clone/path')
+        print("Succesfully configured your tmux! Please restart tmux to see the changes.")
 
 
 def can_convert_object_to_bytes(x:object)->bool:
@@ -17017,47 +17068,6 @@ def file_to_object(path:str):
 def object_to_file(object,path:str):
     return bytes_to_file(object_to_bytes(object),path)
 
-def _set_ryan_tmux_conf():
-    conf='''
-#Ryan Burgert's Tmux config
-#Main changes:
-#   - You can use the mouse to move panes around
-#   - The history limit is way higher than the default
-#   - Vim-like bindings have been added:
-#       - hjkl for pane navigation
-#       - When in copy move (after ctrl+b then [), use 'v' to start a selection then 'y' to yank it
-#           - When this selection is yanked, it's sent to your system clipboard, which means you can paste it again somewhere else (i.e. sublime text, for example). NOTE: On Linux, please install 'sudo apt install xclip' to make this work!)
-
-set -g mouse on 
-set -g history-limit 99999
-# set-option -g prefix M-b
-
-
-#Allow vim-like navigation: https://stackoverflow.com/questions/30719042/tmux-using-hjkl-to-navigate-panes
-set -g status-keys vi
-setw -g mode-keys vi
-# smart pane switching with awareness of vim splits
-bind h select-pane -L
-bind j select-pane -D
-bind k select-pane -U
-bind l select-pane -R
-bind-key -T copy-mode-vi 'v' send -X begin-selection     # Begin selection in copy mode.
-bind-key -T copy-mode-vi 'C-v' send -X rectangle-toggle  # Begin selection in copy mode.
-
-# Let tmux copy to the system clipboard.
-# First, please run   git clone https://github.com/tmux-plugins/tmux-yank ~/clone/path
-run-shell ~/clone/path/yank.tmux
-set -g @yank_with_mouse on
-set -g @yank_selection_mouse 'clipboard' # or 'primary' or 'secondary'
-
-#Let tmux use 256 colors, instead of being limited to plain boring ascii colors
-set -g default-terminal "screen-256color"
-    '''
-    conf_path=get_absolute_path("~/.tmux.conf")
-    if not file_exists(conf_path) or input_yes_no("You already have a tmux config file ~/.tmux.conf, would you like to overwrite it?"):
-        string_to_text_file(conf_path,conf)
-        shell_command('git clone https://github.com/tmux-plugins/tmux-yank ~/clone/path')
-        print("Succesfully configured your tmux! Please restart tmux to see the changes.")
 
 
 def _launch_ranger():
