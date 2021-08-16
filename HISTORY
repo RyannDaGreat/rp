@@ -3524,3 +3524,10 @@ import sys,os;os.chdir('/Users');sys.path.append(os.getcwd())# CD Users
 import sys,os;os.chdir('/Users/Ryan');sys.path.append(os.getcwd())# CD Ryan
 ans = '/Users/Ryan/.tmux.conf'
 ans='/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/r.py'
+
+
+############################################################
+########### BEGINNING OF PSEUDO TERMINAL SESSION ###########
+###########    Mon Aug 16, 2021 at 7:22:30PM     ###########
+############################################################
+ans=r._set_ryan_rprc
