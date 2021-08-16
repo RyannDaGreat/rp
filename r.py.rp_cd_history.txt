@@ -1,3 +1,14 @@
 /usr/bin
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+/Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1/states/000000
+/Users/Ryan/datasets
+/Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1/images/4
+/Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1/states
+/Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1/images/1
+/Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1/images/3
+/Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1/images/2
+/Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1/images
+/Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1
+/Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets
+/Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot
 /Users/Ryan

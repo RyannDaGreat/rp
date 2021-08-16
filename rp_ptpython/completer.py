@@ -226,7 +226,7 @@ class PythonCompleter(Completer):
         if re.fullmatch(r'.*\`\w*',before_line)\
             or (before_line.startswith('RUN ') and not ('\n' in before) and not after):#not after and not '\n' in before and re.fullmatch(before_line):
             import os
-            yield from yield_from_candidates([x for x in os.listdir() if x.endswith('.py')])
+            yield from yield_from_candidates([x for x in os.listdir() if any(x.endswith(e) for e in '.py .rpy'.split())])
             return 
         if (before_line.startswith('!') or before_line.startswith('ARG ')) and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
@@ -460,7 +460,7 @@ def ryan_completion_matches(origin:str,candidates:list):
     import re
     compiled=re.compile('.*'+'.*'.join(re.escape(x) for x in origin.lower())+'.*')#Using regex to weed out bad candidates sped this function up by an order of magnitude when we had 4000 candidates
     c=candidates=[c for c in candidates if compiled.fullmatch(c.lower())]#Speed things up and weed out bad candidates
-    out=sorted([x[1] for x in sorted(x for x in zip([match(o,x)for x in c],c) if x[0] is not None) if x[1] is not 'mro'],key=lambda x:x==x.startswith('_')+(x.startswith('__') and x.endswith('__')))
+    out=sorted([x[1] for x in sorted(x for x in zip([match(o,x)for x in c],c) if x[0] != None) if x[1] != 'mro'],key=lambda x:x==x.startswith('_')+(x.startswith('__') and x.endswith('__')))
     # rp.ptoc()
     _ryan_completion_matches_cache[h]=out
     return out

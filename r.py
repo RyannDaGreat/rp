@@ -5179,6 +5179,20 @@ def harmonic_analysis_via_least_squares(wave,harmonics:int):
     phases=np.arctan2(*out)
     return np.asarray([amplitudes,phases])  # https://www.desmos.com/calculator/fnlwi71n9x
 
+def cluster_by_key(iterable,key)->list:
+    #Iterable is a list of values
+    #Key is a function that takes a value from iterable and returns a hashable
+    assert callable(key)
+    assert is_iterable(iterable)
+    from collections import OrderedDict
+    outputs=OrderedDict()
+    for value in iterable:
+        k=key(value)
+        if k not in outputs:
+            outputs[k]=[]
+        outputs[k].append(value)
+    return list(outputs.values())
+    
 def cluster_filter(vec,filter=identity):  # This has a terrible name...I'm not sure what to rename it so if you think of something, go for it!
     # EXAMPLE: cluster_filter([2,3,5,9,4,6,1,2,3,4],lambda x:x%2==1) --> [[3, 5, 9], [1], [3]]  <---- It separated all chunks of odd numbers
     # region Unoptimized, much slower version (that I kept because it might help explain what this function does):
@@ -7688,6 +7702,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         <File System>
         RM
         LS
+        LST
         FD
         CD
         CDP
@@ -7960,6 +7975,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         IASM $import_all_submodules(ans,verbose=True);
         SUH $sublime('.')
         SUA $sublime(ans)
+        COH $vscode('.')
+        COA $vscode(ans)
         SG $save_gist(ans)
         LG $load_gist(input($fansi('URL:','blue','bold')))
         LGA $load_gist(ans)
@@ -7975,7 +7992,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         RF    $random_element($get_all_files())
         RD    $random_element($get_all_directories())
-        eE    $random_element(ans)
+        RE    $random_element(ans)
 
         DCI $display_image_in_terminal_color(ans)
         
@@ -8925,19 +8942,22 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         fansi_print("CCAT: Copying to your clipboard the contents of "+repr(file_name),"blue")
                         string_to_clipboard(_load_text_from_file_or_url(file_name))
 
-                    elif user_message=='LS':
+                    elif user_message=='LS' or user_message=='LST':
                         import os
 
                         printed_lines=[]
                         def print_line(line):
                             printed_lines.append(line)
-                            try:
-                            # ERROR: UnicodeEncodeError: 'utf-8' codec can't encode character '\udcd9' in position 10: surrogates not allowed
-                                print(line)
-                            except (UnicodeDecodeError,UnicodeEncodeError):
-                                print(''.join(x for x in line if ord(x)<5000))
 
-                        for item in sorted(sorted(os.listdir()),key=is_a_directory):
+                        paths=sorted(sorted(os.listdir()),key=is_a_directory)
+
+                        if user_message=='LST':
+                            fansi_print("LST -> Printing all paths from LS sorted by Time (date_modified)",'blue','bold')
+                            paths=[path for path in paths if path_exists(path)]
+                            paths=sorted(paths,key=date_modified)
+                            paths=sorted(paths,key=is_a_directory)
+
+                        for item in paths:
                             if is_a_directory(item):
                                 print_line(fansi(item,'cyan','bold'))
                             elif is_a_file(item):
@@ -8945,7 +8965,22 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             else:
                                 print_line(fansi(item,'red'))
 
-                        _maybe_display_string_in_pager(line_join(printed_lines))
+                        text=line_join(printed_lines)
+
+                        if user_message=='LST':
+                            dates=[_format_datetime(date_modified(path)) for path in paths]
+                            dates=[fansi(date,'blue',None) for date in dates]
+                            dates=line_join(dates)
+                            text=horizontally_concatenated_strings(text,'    ',dates,rectangularize=True)
+
+                        try:
+                            # ERROR: UnicodeEncodeError: 'utf-8' codec can't encode character '\udcd9' in position 10: surrogates not allowed
+                            print(text)
+                        except (UnicodeDecodeError,UnicodeEncodeError):
+                            for line in line_split(text):
+                                print(''.join(x for x in line if ord(x)<5000))
+
+                        _maybe_display_string_in_pager(text)
 
                     elif user_message=='WANS':
                         fansi_print("WANS -> Write ans to a file (can be text, bytes, or an image)","blue",'bold')
@@ -12714,8 +12749,8 @@ def get_all_paths(*directory_path                   ,
 
         if just_file_names:
             #Extract the file names from each file path (these could have been sorted, which is why we aren't re-using the file names we got when we originally calculated file_paths)
-            #Example: if not include_file_extensions, then 'Documents/Textures/texture.png'  --->  'texture.png' (see get_path_file_name for more details)
-            output=list(map(get_path_file_name,output))
+            #Example: if not include_file_extensions, then 'Documents/Textures/texture.png'  --->  'texture.png' (see get_file_name for more details)
+            output=list(map(get_file_name,output))
 
         if not include_file_extensions:
             #'x.png' --> 'x', 'text.txt' --> 'txt', etc. (See strip_file_extension for more details)
@@ -16184,7 +16219,7 @@ def input_select_path(root=None,
 
     if is_a_folder(selected):
         try:
-            return input_select_path(selected,sort_by=sort_by,reverse=reverse,message=message,include_files=include_files,include_folders=include_folders)
+            return input_select_path(selected,sort_by=sort_by,reverse=reverse,message=message,include_files=include_files,include_folders=include_folders,file_extension_filter=file_extension_filter)
         except PermissionError as error:
             print(fansi('ERROR: ','red','bold')+fansi(error,'red'))
             return input_select_path(root    ,sort_by=sort_by,reverse=reverse)
@@ -18339,6 +18374,9 @@ def _display_filetype_size_histogram(root='.'):
     assert is_a_folder(root)
 
     paths=get_all_paths(root,recursive=True,ignore_permission_errors=True,include_files=True,include_folders=False)
+
+    paths=[path for path in paths if not is_symbolic_link(path)] #Don't include symlinks in the overall count for file sizes
+
     filetypes=set(get_file_extension(file) for file in paths)
     mem_hist={filetype:sum(get_file_size(file,human_readable=False) for file in paths if get_file_extension(file)==filetype) for filetype in filetypes}
         
@@ -18430,6 +18468,46 @@ def _autoformat_python_code_via_black(code:str):
     import black
     return black.format_str(code,mode=black.Mode())
 
+def _is_numpy_array(x):
+    try:
+        import numpy
+        return isinstance(x,numpy.ndarray)
+    except Exception:
+        return False
+
+def _is_torch_tensor(x):
+    try:
+        import torch
+        return isinstance(x,torch.Tensor)
+    except Exception:
+        return False
+
+def as_numpy_images(images):
+    if _is_numpy_array(images):
+        return images.copy()
+    elif _is_torch_tensor(images):
+        import torch
+        assert isinstance(images,torch.Tensor)
+        assert len(images.shape)==4,'Should be 4d tensor: (batch size, num channels, height, width)'
+        images=as_numpy_array(images)
+        images=images.transpose(0,2,3,1)
+        return images   
+    else:
+        raise TypeError('Unsupported image datatype: %s'%type(images))
+    
+def as_torch_images(images):
+    if _is_numpy_array(images) or all(is_image(x) for x in images):
+        assert len(images.shape)!=3,'Grayscale images are not yet supported'
+        images=images.transpose(0,3,1,2)
+        import torch
+        images=torch.Tensor(images)
+        return images
+    elif _is_torch_tensor(images):
+        #Not creating a copy. GPU tensors are expensive.
+        return images
+    else:
+        raise TypeError('Unsupported image datatype: %s'%type(images))
+
 if __name__ == "__main__":
     print(end='\r')
     _pterm()
@@ -18477,3 +18555,11 @@ del re
 #     assert callable(f)
 #     default_args=f.
 #     args=[args]
+
+
+
+
+
+
+
+
