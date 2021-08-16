@@ -3531,3 +3531,12 @@ ans='/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packag
 ###########    Mon Aug 16, 2021 at 7:22:30PM     ###########
 ############################################################
 ans=r._set_ryan_rprc
+
+
+############################################################
+########### BEGINNING OF PSEUDO TERMINAL SESSION ###########
+###########    Mon Aug 16, 2021 at 7:52:58PM     ###########
+############################################################
+ans=r
+import sys,os;os.chdir('/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp');sys.path.append(os.getcwd())# CD /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+ans=__import__("rp"),open_file_with_default_application('.')

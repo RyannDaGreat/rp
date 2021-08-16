@@ -16433,7 +16433,6 @@ set -g mouse on
 set -g history-limit 99999
 # set-option -g prefix M-b
 
-
 #Allow vim-like navigation: https://stackoverflow.com/questions/30719042/tmux-using-hjkl-to-navigate-panes
 set -g status-keys vi
 setw -g mode-keys vi
@@ -16445,14 +16444,43 @@ bind l select-pane -R
 bind-key -T copy-mode-vi 'v' send -X begin-selection     # Begin selection in copy mode.
 bind-key -T copy-mode-vi 'C-v' send -X rectangle-toggle  # Begin selection in copy mode.
 
-# Let tmux copy to the system clipboard.
-# First, please run   git clone https://github.com/tmux-plugins/tmux-yank ~/clone/path
-run-shell ~/clone/path/yank.tmux
-set -g @yank_with_mouse on
-set -g @yank_selection_mouse 'clipboard' # or 'primary' or 'secondary'
-
 #Let tmux use 256 colors, instead of being limited to plain boring ascii colors
-set -g default-terminal "screen-256color"
+    
+# set -g default-terminal "tmux-256color"
+# set -g default-terminal "screen-256color"
+set -g default-terminal "xterm"
+
+#Let control+arrow keys work through tmux 
+#https://stackoverflow.com/questions/38133250/cannot-get-control-arrow-keys-working-in-vim-through-tmux
+set-window-option -g xterm-keys on
+
+#Change the color of the status bar. This is how I distinguish RyanGlass from other computers when using nested tmux's over ssh
+#Pro tip: Use control+b twice to access the ssh'd tmux, and control+b once to access the host's tmux!
+#Pro tip: To see all 256 colors, use rp.print_fansi_reference_table()
+    #Set the color of the status bar
+        set -g status-style bg=colour70
+    #The border colors between panes
+        set -g pane-active-border-style bg=default,fg=colour70
+    #Set the color of text selection
+        set -g mode-style bg=colour119,fg=black #Set 
+
+#Make control+k clear scrollback history, so after using control+l to clear the screen, you can't scroll up anymore (this can be a good thing sometimes)
+#COMMENTED OUT FOR NOW BECASUSE IT DOESN'T SEEM TO WORK YET. TODO: MAKE IT WORK
+#bind -n C-k clear-history
+
+#Shortcut for joining panes: https://maciej.lasyk.info/2014/Nov/19/tmux-join-pane/
+#Note: You need to enter two numbers, not one. For example, 1.3 or 3.4 not just 0. You can see what's what with ^b+w or ^b+q on a given tab
+bind-key j command-prompt -p "Join pane from:"  "join-pane -s '%%'"
+bind-key s command-prompt -p "Send pane to:"  "join-pane -t '%%'"
+
+#TODO: Test this
+bind-key b "break-pane"
+
+#Let HJKL (with shift key) resize panes
+    bind J resize-pane -D 10
+    bind K resize-pane -U 10
+    bind H resize-pane -L 10
+    bind L resize-pane -R 10
     '''
     conf_path=get_absolute_path("~/.tmux.conf")
     if not file_exists(conf_path) or input_yes_no("You already have a tmux config file ~/.tmux.conf, would you like to overwrite it?"):
