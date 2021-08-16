@@ -10,7 +10,6 @@
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5
 /Library/Frameworks/Python.framework/Versions/3.5/lib
@@ -22,4 +21,5 @@
 /usr
 /
 /Users
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
 /Users/Ryan
