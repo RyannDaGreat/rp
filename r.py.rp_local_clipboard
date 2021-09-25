@@ -1,3 +1,22 @@
-while True:
-    i=load_image_from_webcam()
-    display_image_in_terminal_color(i)
+j add.end_definition
+add:
+	push_registers $ra $a0 $a1 $s0
+		add $v0 $a0 $a1
+		add $v0 $v0 $s0
+	add.return:
+	pop_registers $s0 $a1 $a0 $ra
+	jr $ra
+add.end_definition:
+j mult.end_definition
+mult:
+	push_registers $ra $a0 $a1
+		mul $v0 $a0 $a1
+	mult.return:
+	pop_registers $a1 $a0 $ra
+	jr $ra
+mult.end_definition:
+########################  CODE  ATLAS  ########################
+#       'm' stands for macro, 'f' stands for function.
+#
+#2  f: add:
+#11 f: mult:

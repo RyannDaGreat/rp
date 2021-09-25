@@ -2461,6 +2461,7 @@ def display_image_slideshow(images='.',display=None,use_cache=True):
         print('        n: Go to the next image')
         print('        p: Go to the prev image')
         print('        r: Go to a random image')
+        print('        #: Go to a selected image')
         print('        +: Zoom In')
         print('        -: Zoom Out')
         print('        l: Pan Right')
@@ -2533,6 +2534,9 @@ def display_image_slideshow(images='.',display=None,use_cache=True):
             index-=1
         elif key=='r':
             index=random_index(images)
+        elif key=='#':
+            print("Which image would you like to view?")
+            index=input_integer(0,len(images)-1)
 
         #Panning and zooming
         elif key=='+':
@@ -7703,7 +7707,6 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RM
         LS
         LST
-        FD
         CD
         CDP
         CDA
@@ -7738,6 +7741,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         TREE ALL   
         TREE DIR
         TREE ALL DIR
+        FD
+        FDA
         FD SEL (FDS)
         LS SEL (LSS)
         LS REL (LSR)
@@ -7947,6 +7952,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         WA WANS
 
+        AFD FDA
+
         LSA ALS
         LSAD ALSD
         LSAF ALSF
@@ -7997,6 +8004,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         DCI $display_image_in_terminal_color(ans)
         
         FCA $web_copy_path(ans)
+        FCH print("FCH->FileCopyHere");$web_copy_path('.')
         RMA $r._rma(ans)
 
         RST __import__('os').system('reset')
@@ -9530,7 +9538,13 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 user_message=repr(result)
 
 
-                        elif (user_message.startswith('FDS ') or user_message.startswith('FD ')) and not '\n' in user_message and ' ' in user_message.strip() or user_message=='FDS':
+                        elif (user_message.startswith('FDS ') or user_message.startswith('FD ') or user_message.startswith('FDA')) and not '\n' in user_message and ' ' in user_message.strip() or user_message=='FDS' or user_message=='FDA' or user_message=='FD':
+                            if user_message=='FDA' or user_message=='FD':
+                                user_message+=' '+input(fansi('Please enter a search query: ','blue','bold'))
+                            return_list=False
+                            if user_message.startswith('FDA '):
+                                return_list=True
+                                user_message='FD '+user_message[len('FDA '):]
                             if user_message=='FDS':
                                 user_message='FDS '+input(fansi("Please enter a search query: ",'blue','bold'))
                             if user_message.startswith('FDS '):
@@ -9554,6 +9568,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 user_message='ans = '+repr(selected_result)
                             else:
                                 user_message=''
+
+                            if return_list:
+                                user_message=repr(list(map(strip_ansi_escapes,results)))
+
+                                    
                         elif user_message in {'RUNA','SRUNA','SSRUNA'}:
                             cmd=user_message
                             user_message=str(get_ans())
@@ -9856,7 +9875,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
                             if path_exists(file_path):
                                 user_message='open_file_with_default_application('+repr(file_path)+')'
-                                user_message='__import__("rp"),'+user_message
+                                user_message='__import__("rp").'+user_message
                             elif is_valid_url(file_path):
                                 user_message='__import__("rp").open_url_in_web_browser('+repr(file_path)+')'
                                 
@@ -13804,6 +13823,46 @@ def input_yes_no(question):
     #Example: input_yes_no('Are you feeling well today?')
     return 'yes'.startswith(input_conditional(question+'\nPlease enter yes or no.', lambda x: x.lower() in {'y','ye','yes','n','no'}).lower())
 
+
+def input_integer(minimum=None,maximum=None):
+
+    if minimum is not None: assert isinstance(minimum,int)
+    if maximum is not None: assert isinstance(maximum,int)
+
+    def is_valid_integer_string(string):
+        try:
+            int(string)
+            return True
+        except Exception:
+            return False
+
+    def on_fail(string):
+        if not is_valid_integer_string(string):
+            print("That input isn't an integer. "+cond_question)
+        elif maximum is not None and int(string)>maximum:
+            print("That integer is too large. "+cond_question)
+        elif minimum is not None and int(string)<maximum:
+            print("That integer is too small. "+cond_question)
+
+    if   minimum is     None and maximum is     None: 
+        cond_question='Please input an integer'                                                
+        return int(input_conditional(question=cond_question,condition=lambda integer:is_valid_integer_string(integer)                                   ,on_fail=on_fail))
+
+    elif minimum is not None and maximum is     None: 
+        cond_question='Please input an integer that\'s at least %i'%(minimum)                  
+        return int(input_conditional(question=cond_question,condition=lambda integer:is_valid_integer_string(integer) and minimum<=int(integer)         ,on_fail=on_fail))
+
+    elif minimum is     None and maximum is not None: 
+        cond_question='Please input an integer that\'s at most %i'%(maximum)                   
+        return int(input_conditional(question=cond_question,condition=lambda integer:is_valid_integer_string(integer) and          int(integer)<=maximum,on_fail=on_fail))
+
+    elif minimum is not None and maximum is not None: 
+        cond_question='Please input an integer between %i and %i (inclusive)'%(minimum,maximum)
+        return int(input_conditional(question=cond_question,condition=lambda integer:is_valid_integer_string(integer) and minimum<=int(integer)<=maximum,on_fail=on_fail))
+
+    else: assert False, 'This should be an unreachable line'
+
+
 def input_select(question='Please select an option:',options=[],stringify=repr,reverse=False):
     #Allow the user to choose from a list of numbered options
     #stringify is how we turn options into strings (options dont have to be strings)
@@ -16433,6 +16492,7 @@ set -g mouse on
 set -g history-limit 99999
 # set-option -g prefix M-b
 
+
 #Allow vim-like navigation: https://stackoverflow.com/questions/30719042/tmux-using-hjkl-to-navigate-panes
 set -g status-keys vi
 setw -g mode-keys vi
@@ -16444,43 +16504,14 @@ bind l select-pane -R
 bind-key -T copy-mode-vi 'v' send -X begin-selection     # Begin selection in copy mode.
 bind-key -T copy-mode-vi 'C-v' send -X rectangle-toggle  # Begin selection in copy mode.
 
+# Let tmux copy to the system clipboard.
+# First, please run   git clone https://github.com/tmux-plugins/tmux-yank ~/clone/path
+run-shell ~/clone/path/yank.tmux
+set -g @yank_with_mouse on
+set -g @yank_selection_mouse 'clipboard' # or 'primary' or 'secondary'
+
 #Let tmux use 256 colors, instead of being limited to plain boring ascii colors
-    
-# set -g default-terminal "tmux-256color"
-# set -g default-terminal "screen-256color"
-set -g default-terminal "xterm"
-
-#Let control+arrow keys work through tmux 
-#https://stackoverflow.com/questions/38133250/cannot-get-control-arrow-keys-working-in-vim-through-tmux
-set-window-option -g xterm-keys on
-
-#Change the color of the status bar. This is how I distinguish RyanGlass from other computers when using nested tmux's over ssh
-#Pro tip: Use control+b twice to access the ssh'd tmux, and control+b once to access the host's tmux!
-#Pro tip: To see all 256 colors, use rp.print_fansi_reference_table()
-    #Set the color of the status bar
-        set -g status-style bg=colour70
-    #The border colors between panes
-        set -g pane-active-border-style bg=default,fg=colour70
-    #Set the color of text selection
-        set -g mode-style bg=colour119,fg=black #Set 
-
-#Make control+k clear scrollback history, so after using control+l to clear the screen, you can't scroll up anymore (this can be a good thing sometimes)
-#COMMENTED OUT FOR NOW BECASUSE IT DOESN'T SEEM TO WORK YET. TODO: MAKE IT WORK
-#bind -n C-k clear-history
-
-#Shortcut for joining panes: https://maciej.lasyk.info/2014/Nov/19/tmux-join-pane/
-#Note: You need to enter two numbers, not one. For example, 1.3 or 3.4 not just 0. You can see what's what with ^b+w or ^b+q on a given tab
-bind-key j command-prompt -p "Join pane from:"  "join-pane -s '%%'"
-bind-key s command-prompt -p "Send pane to:"  "join-pane -t '%%'"
-
-#TODO: Test this
-bind-key b "break-pane"
-
-#Let HJKL (with shift key) resize panes
-    bind J resize-pane -D 10
-    bind K resize-pane -U 10
-    bind H resize-pane -L 10
-    bind L resize-pane -R 10
+set -g default-terminal "screen-256color"
     '''
     conf_path=get_absolute_path("~/.tmux.conf")
     if not file_exists(conf_path) or input_yes_no("You already have a tmux config file ~/.tmux.conf, would you like to overwrite it?"):
@@ -16885,7 +16916,7 @@ def _maybe_display_string_in_pager(string,with_line_numbers=True):
     
 
 
-def _fd(query,select=False):
+def _fd(query,select=False,silent=False):
     #Act like the 'fd' command 
     def highlighted(string,query):
         #Case insensitive fansi-highlighting of a query in a string
@@ -16902,11 +16933,15 @@ def _fd(query,select=False):
     glob_query='*'+escape(query)+'*'
     printed_lines=[]
     def print_line(line):
-        print(line)
+        if not silent:
+            print(line)
         printed_lines.append(line)
     query=query.lower()
     try:
-        for result in glob.iglob('**',recursive=True):
+        import itertools
+        globbed=itertools.chain(glob.iglob('.**',recursive=True), glob.iglob('**',recursive=True), glob.iglob('**/.*',recursive=True))
+
+        for result in globbed:
         # for result in chain( iglob(glob_query), iglob('*/**/'+glob_query,recursive=True)):
             if query in get_path_name(result):  
                 print_line(highlighted(result,query))

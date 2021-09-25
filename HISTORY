@@ -3880,3 +3880,48 @@ print(ans)
 ############################################################
 ans=''
 ans="\\documentclass{article}\n\\usepackage[utf8]{inputenc}\n\n\\title{CSE548 HW2 Part A}\n\\author{Ryan Burgert }\n\\date{September 2021}\n\n\\usepackage[margin=0.5in]{geometry}\n\n\\begin{document}\n\n\\maketitle\n\n\\section{Introduction}\n\nA preface: I write my homework in Sublime in plain text before I translate to LaTeX. During this homework, \nI ran out of time to translate it to LaTeX in a beautiful manner, so I'm going to upload my answers in plaintext. (I don't want to take a late day)\nform into this LaTeX document. All the answers are there and are completely legible, but I apologize for the lack of pretty \nformatting.\n\n\\pagebreak\n\\begin{verbatim}\n\nCSE548 HW2 Part A\nRyan Burgert 110176886\n\nCollaborated with Daniel Delayo, Julie Lee, Rama Shanbhag\n\n1.\n    a.\n        P(a given person speaks) = 1/N\n        P(a given person does not speak) = 1-1/N\n        P(nobody speaks) = (1-1/N)^N\n    b.\n        (Number of people)*(P(a given person speaks)*P(all other people don't speak)=\n        N*(1/N*(1-1/N)^(N-1))=(1-1/N)^(N-1)\n    c.\n        Step 1:\n            (Number of half the people)*(P(a given person speaks)*...\n            ...*P(the other people who attempted don't speak)=\n            (N/2)*(1/N*(1-1/N)^(N/2-1))=1/2*(1-1/N)^(N/2-1)\n        Step 2:\n            Calculate limit as N -> infinity of 1/2*(1-1/N)^(N/2-1)\n            Note: (Limit as N -> infinity of (1-1/N)^N) = 1/e\n            Let Q(N)=(1-1/N)^N)\n            Limit as N -> infinity of 1/2*sqrt(Q(N))/(1-1/N) = 1/2*sqrt(1/e)/(1-0) = sqrt(1/e)/2\n        Answer: sqrt(1/e)/2\n\n\n    Some python code I wrote for numerical verification:\n        from rp import *\n        def trial_nobody_speaks(N=10000):\n            random=np.random.rand(N)\n            prob_speak=1/N\n            speaks=random<prob_speak\n            not_speaks=~speaks\n            nobody_speaks=np.all(not_speaks)\n            return nobody_speaks\n        def empirical_probability(trial_func,num_trials=100000,*trial_args,**trial_kwargs):\n            successes=0\n            display_progress=eta(num_trials)\n            for _ in range(num_trials):\n                display_progress(_)\n                if trial_func(*trial_args,**trial_kwargs):\n                    successes+=1\n            return float(successes/num_trials)\n        print((1-1/3)**3,empirical_probability(trial_nobody_speaks,num_trials=100000,N=3))\n\n\\end{verbatim}\n\\pagebreak\n\\begin{verbatim}\n\n2.\n    a.\n        1/nCr(2n,n)\n    b.\n        Let our probability p=1/nCr(2n,n)\n        Suppose 1/Q is the upper bound of p: 1/nCr(2n,n) <= 1/Q\n        1/nCr(2n,n) <= 1/Q  <-->  nCr(2n,n) >= Q\n        A death bed formula: nCr(a,b) >= (a/b)^b\n        Plug in a=2n and b=n to get:\n            nCr(2n,n) >= (2n/n)^n = 2^n\n        Let Q=2^n. Therefore, nCr(2n,n) >= Q = 2^n <--> 1/nCr(2n,n) <= 1/Q = 1/2^n\n        Therefore, 1/2^n is an upper bound for p\n        With n=1000, p is no more than 1/2^1000\n    c.\n        I worked with Rama Shanbhag on this question.\n        nCr(n,k) assumes n>=k\n        Part 1:\n            Redefine nCr(n,k)\n\n            nCr(n,k) = n!/(k!(n-k)!) = \n                     (n)(n-1)(n-2)...(n-k)(n-k-1)(n-k-2)...(1)\n                ---------------------------------------------------  =\n                ((k)(k-1)(k-2)...(1)) * ((n-k)(n-k-1)(n-k-2)...(1))\n    \n                    (n)(n-1)(n-2)...(n-k+1)  \n                    ----------------------- = \n                      (k)(k-1)(k-2)...(1)     \n    \n                 = n/k * (n-1)/(k-1) * (n-2)/(k-2) ... (n-k+1)/(k-k+1)\n                 (There are k terms)\n\n        Part 2:\n            (n/k)^k = (n/k) * (n/k) * (n/k) * ... * (n/k)\n            (There are k terms)\n\n        Part 3:\n            Note that for integers n>k>1, (n/k) < (n-1)/(k-1)\n            For example, 3/2 < 2/1\n\n        Part 4:\n            Therefore, by induction,\n                n/k * (n-1)/(k-1) * (n-2)/(k-2) ... (n-k+1)/(k-k+1)\n                Is greater than \n                (n/k) * (n/k) * (n/k) * ... * (n/k)\n                Term by term,\n            And therfore,\n                (n/k)^k <= nCr(n,k)\n\n\\end{verbatim}\n\\pagebreak\n\\begin{verbatim}\n\n3.\n    1.\n        This is false. Counter example: Let f(n)=2^n and g(n)=3^n.\n        2^n = o(3^n) but log(2^n) != o(log(3^n)) because log(2^n)\n        and log(3^n) are both linear functions\n    2.\n        I believe this is True, but I don't know how to prove this\n    3.\n        I believe this is True, but I don't know how to prove this\n    4.\n        This is false. Counter example: Let f(n)=n and g(n)=2n.\n        2^n != O(2^(2n)) = O(4^n)\n\n\\end{verbatim}\n\\pagebreak\n\\begin{verbatim}\n4.\n    Worked with Julie Lee on this question\n    \n    Let v stand for 'square-root' (because v looks like the square root symbol √)\n\n    Original Ordering:\n        n\n        lg n\n        v(n)\n        3^n\n        v(lg n)\n        lg v(n)\n        3^v(n)\n        v(3^n)\n        3^(lg n)\n        lg(3^n)\n        3^(lg v(n))\n        3^v(lg n)\n        v(3^(lg n))\n        lg v(3^n)\n        v(lg(3^n))\n        5^n\n        5^v(n)\n        v(5^n)\n        5^(lg n)\n        lg(5^n)\n        5^(lg v(n))\n        5^v(lg n)\n        v(5^(lg n))\n        lg v(5^n)\n        v(lg(5^n))\n        \n    Sorted Ordering From Least to Greatest:\n        v(lg n)     = O(v(log n))\n        lg n        = O(log n)\n        lg v(n)     = O(log n)\n        3^v(lg n)   = O(3^v(lg n))\n        5^v(lg n)   = O(5^v(lg n))\n        3^v(n)      = O(3^v(n))\n        5^v(n)      = O(5^v(n))\n        v(n)        = O(v(n))\n        v(lg(5^n))  = O(v(n))\n        v(lg(3^n))  = O(v(n))\n        v(3^(lg n)) = O(n^.7925)\n        3^(lg v(n)) = O(n^.7925)\n        lg(3^n)     = O(n)\n        n           = O(n)\n        lg(5^n)     = O(n)\n        lg v(5^n)   = O(n)\n        lg v(3^n)   = O(n)\n        v(5^(lg n)) = O(n^1.1609)\n        5^(lg v(n)) = O(n^1.1609)\n        3^(lg n)    = O(n^1.584)\n        5^(lg n)    = O(n^2.321)\n        v(3^n)      = O(1.732^n)\n        v(5^n)      = O(2.236^n)\n        3^n         = O(3^n)\n        5^n         = O(5^n)\n\\end{verbatim}\n\\pagebreak\n\\begin{verbatim}\n5.\n    a.\n        Worked with Julie Lee on this question\n\n        We maintain an invariant: when we remove N distinct elements from list L,\n            if there are N-1 heavy hitters in L, they will be maintained\n        From this invariant, we modify the original algorithm and obtain\n        the following code (full, tested implementation written in python):\n        \n            def heavy_hitters(a:list,l:float):\n                #Given a list 'a' and a lambda value 'l', return all heavy hitters as a set\n                \n                #First pass through the array\n                from math import ceil\n                N=ceil(1/l)\n                c={} # Candidate -> counter mappings\n                for e in a:\n                    if e in c:\n                        c[e]+=1\n                    elif len(c)<N:\n                        c[e]=1\n                    else:\n                        for x in c:\n                            if c[x]==1:\n                                del c[x]\n                            else:\n                                c[x]-=1\n                \n                #Second pass through the array\n                f={x:0 for x in c} #Frequencies\n                for e in a:\n                    if e in f:\n                        f[e]+=1\n                \n                #Final answer\n                return {x for x in f if f[x]/len(a)>l}\n    b.\n        I don't know\n\n\n\n\n\n\n\n    \n\\end{verbatim}\n\\end{document}\n"
+
+
+############################################################
+########### BEGINNING OF PSEUDO TERMINAL SESSION ###########
+###########    Mon Sep 20, 2021 at 7:29:10AM     ###########
+############################################################
+#Failed to load gist at specified url
+
+
+############################################################
+########### BEGINNING OF PSEUDO TERMINAL SESSION ###########
+###########    Fri Sep 24, 2021 at 7:30:58PM     ###########
+############################################################
+ans=r
+ans=identity
+
+
+############################################################
+########### BEGINNING OF PSEUDO TERMINAL SESSION ###########
+###########    Fri Sep 24, 2021 at 7:32:12PM     ###########
+############################################################
+ans=identity
+
+
+############################################################
+########### BEGINNING OF PSEUDO TERMINAL SESSION ###########
+###########    Fri Sep 24, 2021 at 8:25:15PM     ###########
+############################################################
+import sys,os;os.chdir('/Users/Ryan/Desktop');sys.path.append(os.getcwd())# CD Desktop
+import sys,os;os.chdir('/Users/Ryan/Desktop/DiffRendering');sys.path.append(os.getcwd())# CD DiffRendering
+ans=[[[0,0,0],[1,0,0]],[[0,1,0],[1,1,0]]]
+ans=as_numpy_array(ans)
+ans=+0.0
+ans=ans+0.0
+ans=as_byte_image(ans)
+ans=[]
+import warnings as np
+import numpy as np
+
+
+############################################################
+########### BEGINNING OF PSEUDO TERMINAL SESSION ###########
+###########    Sat Sep 25, 2021 at 1:55:43AM     ###########
+############################################################
+string_to_text_file(get_module_path(r),ans)
