@@ -704,6 +704,85 @@ def gaussian_kernel(size=21, sigma=3,dim=2):
         _gaussian_circle_kernel_cache[args]=kernel / kernel.sum()
     return _gaussian_circle_kernel_cache[args]
 
+def crop_images_to_max_size(*images,origin='top left'):
+    #Makes sure all images have the same height and width
+    #Does this by adding additional black space around images if needed
+    #EXAMPLE:
+    #    ans='https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg&auto=webp https://s3.amazonaws.com/cdn-origin-etr.akc.org/wp-content/uploads/2017/11/13002248/GettyImages-187066830.jpg https://hips.hearstapps.com/hmg-prod.s3.amazonaws.com/images/best-small-dog-breeds-cavalier-king-charles-spaniel-1598992577.jpg?crop=0.468xw:1.00xh;0.259xw,0&resize=480:*'.split()
+    #    ans=load_images(ans)
+    #    display_image_slideshow(ans)
+    #    print("DI")
+    #    display_image_slideshow(crop_images_to_max_size(ans))
+    #    display_image_slideshow(crop_images_to_max_size(ans,origin='center'))
+    
+    images=detuple(images)
+    dimensions=[get_image_dimensions(image) for image in images]
+    
+    if len(set(dimensions))==1:
+        #Save a bit of time. If all the image dimensions are the same, we don't need to bother cropping them.
+        return images.copy()
+    #
+    heights,widths=zip(*dimensions)
+    max_height=max(heights)
+    max_width =max(widths)
+    
+    images=[crop_image(image,max_height,max_width,origin=origin) for image in images]
+    return images
+
+def trim_video(video,length:int):
+    #This function takes a video and a length, and returns a video with that length
+    #If the desired length is longer than the video, additional blank frames will be added to the end
+    #TODO: This function has NOT been tested yet! There are no examples!
+    #TODO: Add examples
+    #TODO: Test this function for all use cases, including:
+    #    -Decreasing video length
+    #    -Increasing video length for lists of images
+    #    -Increasing video length for numpy-array videos
+    assert length>=0,'Cannot trim a video to a negative length'
+    
+    if len(video)>=length:
+        return video[:length]
+
+    number_of_extra_frames=len(length-len(video))
+
+    assert len(video),'Cannot extend a video with no frames - we need an example frame to determine the width and height'
+    last_frame=video[-1]
+    assert is_image(last_frame)
+    extra_frames=[np.zeros_like(last_frame) for _ in range(number_of_extra_frames)]
+
+    if isinstance(video,list):
+        if not length:
+            return []
+        return video+extra_frames
+        
+    elif isinstance(video,np.ndarray):
+        return np.concatenate(video,np.asarray(extra_frames))
+    
+    else:
+        raise TypeError('Unsupported video type: %s'%type(video))
+
+def _make_videos_same_length(*videos):
+    #Adds blank frames to the end of videos to make sure they're all the same number of frames
+    videos=detuple(videos)
+    max_length=max(len(video) for video in videos)
+    videos=[trim_video(video,max_length) for video in videos]
+    return videos
+
+def _concatenated_videos(image_method,videos):
+    videos=detuple(videos)
+    videos=[crop_images_to_max_size(video) for video in videos]
+    videos=_make_videos_same_length(videos)
+    output=[image_method(*frames) for frames in zip(*videos)]
+    return output
+     
+def horizontally_concatenated_videos(*videos):
+    #TODO: Optimize this to not use horizontally_concatenated_images (which is slow)
+    return _concatenated_videos(horizontally_concatenated_images,videos)
+    
+def vertically_concatenated_videos(*videos):
+    #TODO: Optimize this to not use vertically_concatenated_images (which is slow)
+    return _concatenated_videos(vertically_concatenated_images,videos)
+
 def max_filter(image,diameter,single_channel: bool = False,mode: str = 'reflect',shutup: bool = False):
     # NOTE: order refers to the derivative of the gauss curve; for edge detection etc.
     if diameter == 0:
@@ -2410,6 +2489,59 @@ def display_image(image,block=False):
                 image=image.astype(float)
             cv_imshow(image,wait=10 if not block else 1000000)#Hit esc in the image to exit it
 
+def _display_image_slideshow_animated(images):
+    #This works best on Jupyter notebooks right now
+    #It technically works without a jupyter notebook...but at that rate you might as well use display_video...
+    #    ...this is because jupyter notebooks display nice controls for the video, while default matplotlib doesn't
+    
+    if not running_in_jupyter_notebook():
+        display_video(images) #This is objectively better at the moment
+    
+    pip_import('matplotlib')
+
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import matplotlib.animation as animation
+    
+    assert len(images)>0, 'Must have at least one image to display, but len(images)==%i'%len(images)
+    height,width=get_image_dimensions(images[0])
+    
+    try:
+        
+        #Adjust the size of matplotlib's display of the image to match it's resolution
+        old_dpi,old_figsize=matplotlib.rcParams['figure.dpi'],matplotlib.rcParams['figure.figsize']
+        arbitrary_number=100
+        matplotlib.rcParams['figure.dpi'] = arbitrary_number
+        figsize=[height/arbitrary_number,width/arbitrary_number]
+        matplotlib.rcParams['figure.figsize']=figsize
+
+        #Make sure all the images are standardized
+        images=[as_rgb_image(as_byte_image(image)) for image in images]
+
+        #Remove matplotlib's white border around the image
+        fig = plt.figure(figsize=figsize[::-1])
+        plt.axis("off")
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        
+        #Display the animation
+        ims = [[plt.imshow(image, animated=True)] for image in images]
+        ani = animation.ArtistAnimation(fig, ims, interval=1000, repeat_delay=1000, blit=True)
+        if running_in_jupyter_notebook():
+            #Note: In jupyter notebook, this animation will be embedded.
+            #This can make the .ipynb files quite large if you're not careful to keep the videos small
+            from IPython.display import HTML
+            matplotlib.rcParams['animation.embed_limit'] = 2**128
+            html=HTML(ani.to_jshtml())
+            from IPython.display import display_html
+            display_html(html)
+        else:
+            plt.show()
+            
+    finally:
+        matplotlib.rcParams['figure.dpi'],matplotlib.rcParams['figure.figsize']=old_dpi,old_figsize
+
 def display_image_slideshow(images='.',display=None,use_cache=True):
     #Enters an interactive image slideshow
     #Useful for exploring large folders/lists of images
@@ -2436,7 +2568,12 @@ def display_image_slideshow(images='.',display=None,use_cache=True):
     #    display_image_slideshow(images,display_image_in_terminal)
 
     if display is None:
-        if running_in_ssh() and currently_in_a_tty():
+        if running_in_jupyter_notebook():
+            #If we're in a jupyter notebook, by default display a gui.
+            #However, if we want that default functionality, we can set display=display_image to override this
+            _display_image_slideshow_animated(images)
+            return
+        elif running_in_ssh() and currently_in_a_tty():
             display=display_image_in_terminal
         else:
             display=display_image
@@ -7963,7 +8100,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         DKH DISKH
          KH DISKH
-        GOO $open_google_search_in_web_browser(str(ans))
+        GOO  $open_google_search_in_web_browser(str(ans))
+        GOOP $open_google_search_in_web_browser(string_from_clipboard())
         ALSF $get_all_paths(get_current_directory(),include_files=True,include_folders=False,relative=True)
         SMI $os.system("nvidia-smi");
         NVT $os.system("nvtop");#sudo_apt_install_nvtop
@@ -7996,6 +8134,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         GCLP $git_clone($string_from_clipboard())
         GCLA $git_clone(ans)
         GURL $get_git_remote_url()
+
+        LNAH $os.symlink(ans,$get_file_name(ans));ans=$get_file_name(ans)#Created_Symlink
+        LN   $os.symlink(ans,$get_file_name(ans));ans=$get_file_name(ans)#Created_Symlink
 
         RF    $random_element($get_all_files())
         RD    $random_element($get_all_directories())
@@ -8966,7 +9107,12 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             paths=sorted(paths,key=is_a_directory)
 
                         for item in paths:
-                            if is_a_directory(item):
+                            if is_symbolic_link(item):
+                                if is_a_directory(item):
+                                    print_line(fansi(item,'green','bold'))
+                                else:
+                                    print_line(fansi(item,'green'))
+                            elif is_a_directory(item):
                                 print_line(fansi(item,'cyan','bold'))
                             elif is_a_file(item):
                                 print_line(fansi(item,'gray'))
@@ -8979,7 +9125,12 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             dates=[_format_datetime(date_modified(path)) for path in paths]
                             dates=[fansi(date,'blue',None) for date in dates]
                             dates=line_join(dates)
-                            text=horizontally_concatenated_strings(text,'    ',dates,rectangularize=True)
+
+                            sizes=[get_file_size(path,human_readable=True) if is_a_file(path) else '' for path in paths]
+                            sizes=[fansi(size.rjust(8),'green',None) for size in sizes]
+                            sizes=line_join(sizes)
+
+                            text=horizontally_concatenated_strings(text,'    ',dates,'  ',sizes,rectangularize=True)
 
                         try:
                             # ERROR: UnicodeEncodeError: 'utf-8' codec can't encode character '\udcd9' in position 10: surrogates not allowed
@@ -10983,7 +11134,39 @@ known_pypi_module_package_names={
     'yapftests': 'yapf',
     'zalgo_text': 'zalgo-text'
 }
+
+
+#class _rp_persistent_dict:
+#    def __init__(self,name):
+#        #TODO: Make this a persistent file that's opened by rp upon booting and saved when things change
+#        pass
+#    def __getitem__(self,key):
+#        return self.data[key]
+#    def __setitem__(self,key,value):
+#        self.data[key]=value
+#    def __delitem__(self,key):
+#        self[data]=key
+
+class _rp_persistent_set:
+    def __init__(self,name=''):
+        #TODO: Make this a persistent file that's opened by rp upon booting and saved when things change
+        self.data=set()
+
+    def add(self,key):
+        self.data|={key}
+
+    def __contains__(self,key):
+        return key in self.data
+
+    def delete(self,key):
+        self.data-={key}
+
+
+
+_pip_import_blacklist=_rp_persistent_set()
+
 def pip_import(module_name,package_name=None):
+    """
     #Attempts to import a module, and if successful returns it.
     #If it's unsuccessful, it attempts to find it on pypi, and if
     #    it can, it asks you if you'd like to install it, and if
@@ -11005,6 +11188,7 @@ def pip_import(module_name,package_name=None):
     #Obviously, "cv2"!="opencv-python". And because of this, when you get an error "can't cv2=pip_import('cv2')",
     #    you can't just fix it with 'pip install cv2'. You have to google it. That's annoying.
     #THIS FUNCTION addresses that problem. pip
+    """
 
     assert isinstance(module_name,str),'pip_import: error: module_name must be a string, but got type '+repr(type(module_name))#Probably better done with raise typerror but meh whatever
 
@@ -11013,11 +11197,16 @@ def pip_import(module_name,package_name=None):
     if package_name in known_pypi_module_package_names:
         package_name=known_pypi_module_package_names[package_name]
 
+    def offer_to_blacklist():
+        if input_yes_no('Would you like to blacklist %s? (In the future, pip_import will no longer try to install it)'%module_name):
+            _pip_import_blacklist.add(module_name)
+            print('TODO: This message tells you how to remove items from the blacklist')
+
     import importlib
     try:
         return importlib.import_module(module_name)
     except ImportError:
-        if module_exists(module_name):
+        if module_exists(module_name) or module_name in _pip_import_blacklist:
             raise #We're getting an import error for some reason other than not having installed the module
         if connected_to_internet():
             if running_in_google_colab() or input_yes_no("Failed to import module "+repr(module_name)+'. You might be able to get this module by installing package '+repr(package_name)+' with pip. Would you like to try that?'):
@@ -11030,6 +11219,7 @@ def pip_import(module_name,package_name=None):
                 return out
             else:
                 print("...very well then. Throwing an import error...")
+                offer_to_blacklist()
                 raise
         else:
             #We would fail to install the package becuase we have no internet
@@ -16658,7 +16848,7 @@ def get_all_facebook_messages(my_email:str=None,my_password:str=None,my_name:str
     print(output)
     return message_tuples
 
-def visualize_pytorch_model(model,*,input_shape=None, example_input=None):
+def visualize_pytorch_model(model,*,input_shape=None, example_input=None, supress_warnings=True):
     #TODO: integrate code better with _visualize_pytorch_model_via_torchviz: get rid of redundant code
     #Show a graph depicting some pytorch-based neural network
     # - model: should be some neural network model created in pytorch
@@ -16671,34 +16861,39 @@ def visualize_pytorch_model(model,*,input_shape=None, example_input=None):
     #    import torchvision.models
     #    model = torchvision.models.vgg16()
     #    visualize_pytorch_model(model,[3,224,224])
+
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore') #Sometimes hiddenlayer will complain that a model is in training mode because of some ONNX exporting mismatch issue. It's probably not worth warning the user about.
+            
+        pip_import('hiddenlayer')  #This library is used to draw the neural network. See github.com/waleedka/hiddenlayer
+        pip_import('torch'      )  #We obviously need pytorch installed to use this function
+        pip_import('graphviz')
+        import hiddenlayer, torch
+        assert isinstance(model,torch.nn.Module)    
+
+        assert example_input is None or input_shape is None,'Please only specify one, not both: either input_shape or example_input should be None'
         
-    pip_import('hiddenlayer')  #This library is used to draw the neural network. See github.com/waleedka/hiddenlayer
-    pip_import('torch'      )  #We obviously need pytorch installed to use this function
-    pip_import('graphviz')
-    import hiddenlayer, torch
-    assert isinstance(model,torch.nn.Module)    
+        if input_shape is not None:
+            input_shape=[1, *input_shape] #The first dimension refers to the number of samples. For simplicity's sake, we're going to use just one sample.
+            model_input=torch.zeros(input_shape)
+            model=model.cpu()
+        else:
+            model_input=example_input
 
-    assert example_input is None or input_shape is None,'Please only specify one, not both: either input_shape or example_input should be None'
-    
-    if input_shape is not None:
-        input_shape=[1, *input_shape] #The first dimension refers to the number of samples. For simplicity's sake, we're going to use just one sample.
-        model_input=torch.zeros(input_shape)
-        model=model.cpu()
-    else:
-        model_input=example_input
-
-    graph = hiddenlayer.build_graph(model=model, args=model_input)
-    
-    if running_in_ipython(): 
-        #If we're in a jupyter notbook, display the graph inside it 
-        from IPython.display import display
-        display(graph)
-    else:
-        file_type = 'pdf'
-        output_path = temporary_file_path(file_type)
-        graph.save(path=output_path, format=file_type)
-        # display_image(load_image(output_path),block=block) #We would use this line if we wanted to rasterize it. However, a PDF is probably the best option
-        open_file_with_default_application(output_path)# If we're making a pdf, open it in some pdf viewer
+        graph = hiddenlayer.build_graph(model=model, args=model_input)
+        
+        if running_in_ipython(): 
+            #If we're in a jupyter notbook, display the graph inside it 
+            from IPython.display import display
+            display(graph)
+        else:
+            file_type = 'pdf'
+            output_path = temporary_file_path(file_type)
+            graph.save(path=output_path, format=file_type)
+            # display_image(load_image(output_path),block=block) #We would use this line if we wanted to rasterize it. However, a PDF is probably the best option
+            open_file_with_default_application(output_path)# If we're making a pdf, open it in some pdf viewer
 
 #def _visualize_pytorch_model_via_torchviz(model,*,input_shape=None, example_input=None):
 #    pip_import('torch'      )
@@ -18533,6 +18728,30 @@ def git_clone(url,path=None):
     git.Repo.clone_from(url,path)
     return path
 
+def get_git_info(folder='.'):
+    pip_import('git')
+    import git
+    repo=git.Repo(folder)
+    info={}
+    info['active_branch']    = repo.active_branch                                  
+    info['alternates']       = repo.alternates                                  
+    info['bare']             = repo.bare                                  
+    info['branches']         = repo.branches                                  
+    info['common_dir']       = repo.common_dir                                  
+    info['daemon_export']    = repo.daemon_export                                  
+    info['description']      = repo.description                                  
+    info['head']             = repo.head                                  
+    info['heads']            = repo.heads                                  
+    info['index']            = repo.index                                  
+    info['references']       = repo.references                                  
+    info['refs']             = repo.refs                                  
+    info['remotes']          = repo.remotes                                  
+    info['submodules']       = repo.submodules                                  
+    info['tags']             = repo.tags                                  
+    info['untracked_files']  = repo.untracked_files                                  
+    info['working_tree_dir'] = repo.working_tree_dir                                  
+    return info
+
 try:from icecream import ic#This is a nice library...I reccomend it for debugging. It's really simple to use, too. EXAMPLE: a=1;b=2;ic(a,b)
 except Exception:pass
 
@@ -18580,6 +18799,31 @@ def as_torch_images(images):
         return images
     else:
         raise TypeError('Unsupported image datatype: %s'%type(images))
+
+class ImageDataset:
+    #This class is meant to be used with Pytorch dataloaders
+    #TODO: Possibly migrate this to a new torch submodule of rp to avoid cluttering this namespace
+
+    def __init__(self,
+                 directory:str,
+                 use_cache:bool=False,
+                 transform=None):
+                     
+        assert directory_exists(directory)
+        self.image_paths=get_all_files(directory,sort_by='number')
+        self.transform=transform
+        self.use_cache=use_cache
+    
+    def __len__(self):
+        return len(self.image_paths)
+    
+    def __getitem__(self,i):
+        image_path=self.image_paths[i]
+        image=load_image(image_path,use_cache=self.use_cache)
+        if self.transform:
+            image=self.transform(image)
+        return image
+        
 
 if __name__ == "__main__":
     print(end='\r')
@@ -18630,6 +18874,7 @@ del re
 #     args=[args]
 
 
+# Version Oct24 2021
 
 
 

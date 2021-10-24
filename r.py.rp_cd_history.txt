@@ -19,7 +19,6 @@
 /usr
 /
 /Users
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
 /Users/Ryan/Desktop/CleanCode/Sandbox/scrap
 /Users/Ryan/Desktop/CleanCode/Sandbox
 /Users/Ryan/Desktop/CleanCode
@@ -33,6 +32,7 @@
 /Users/Ryan/Desktop/CleanCode/SBU/Classes/CSE548_Algorithms
 /private/etc
 /Users/Ryan/PycharmProjects/RyanBStandards_Python3.5
-/Users/Ryan
 /Users/Ryan/Desktop
 /Users/Ryan/Desktop/DiffRendering
+/Users/Ryan
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
