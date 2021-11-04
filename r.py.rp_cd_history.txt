@@ -17,10 +17,8 @@
 /Library/Frameworks
 /Library
 /usr
-/
 /Users
 /Users/Ryan/Desktop/CleanCode/Sandbox/scrap
-/Users/Ryan/Desktop/CleanCode/Sandbox
 /Users/Ryan/Desktop/CleanCode
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot
 /Users/Ryan/Desktop/CleanCode/SBU/Research
@@ -32,7 +30,29 @@
 /Users/Ryan/Desktop/CleanCode/SBU/Classes/CSE548_Algorithms
 /private/etc
 /Users/Ryan/PycharmProjects/RyanBStandards_Python3.5
-/Users/Ryan/Desktop
 /Users/Ryan/Desktop/DiffRendering
-/Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+/Users/Ryan/Desktop/CleanCode/Sandbox/lab-simulation-builder/src
+/Users/Ryan/Desktop/CleanCode/Sandbox
+/Users/Ryan/Desktop/CleanCode/Sandbox/Lab-In-A-Cube_2/src
+/Users/Ryan/Desktop/CleanCode/Sandbox/lab-simulation-builder/public
+/Users/Ryan/Desktop/CleanCode/Sandbox/lab-simulation-builder
+/Users/Ryan/Desktop/CleanCode/Sandbox/lab-simulation-builder/node_modules
+/Users/Ryan/Desktop/CleanCode/Sandbox/Lab-In-A-Cube_2/public
+/Users/Ryan/Desktop/CleanCode/Sandbox/lab-simulation-builder/node_modules/react-scripts
+/Users/Ryan/Desktop/CleanCode/Sandbox/Lab-In-A-Cube_2/node_modules
+/Users/Ryan/Desktop/CleanCode/Sandbox/Lab-In-A-Cube_2
+/Users/Ryan/Desktop/CleanCode/Sandbox/Lab-In-A-Cube-New
+/Users/Ryan/Desktop/CleanCode/SBU/LabInACube/Lab-In-A-Cube-Full
+/Users/Ryan/Desktop/Lab-In-A-Cube_LUMPO
+/Users/Ryan/Desktop/CleanCode/SBU/LabInACube/Lab-In-A-Cube
+/Users/Ryan/Desktop/Lab-In-A-Cube_LUnew
+/
+/Users/Ryan/Desktop
+/Users/Ryan/Documents/FL Studio
+/Users/Ryan/Documents/Image-Line/FL Studio/Presets
+/Users/Ryan/Documents/Image-Line/FL Studio/Projects
+/Users/Ryan/Documents/Image-Line/FL Studio
+/Users/Ryan/Documents/Image-Line
+/Users/Ryan/Documents
+/Users/Ryan

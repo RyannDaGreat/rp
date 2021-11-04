@@ -2542,6 +2542,32 @@ def _display_image_slideshow_animated(images):
     finally:
         matplotlib.rcParams['figure.dpi'],matplotlib.rcParams['figure.figsize']=old_dpi,old_figsize
 
+def display_qr_code_in_terminal(text):
+    #EXAMPLE:
+    #    #Done in Alacritty or the default Mac Terminal
+    #    display_qr_code_in_terminal('https://google.com')
+    #EXAMPLE:
+    #    #This one is really annoying: it will cover the entire camera of the iPhone that sees it for a brief moment
+    #    display_qr_code_in_terminal('a'*2300)
+    pip_import('qrcode')
+    import qrcode
+    
+    code=qrcode.QRCode()
+    code.add_data(text)
+    
+    if currently_in_a_tty():
+        code.print_tty()
+    else:
+        code.print_ascii()
+
+def display_website_in_terminal(url):
+    assert is_valid_url(url),'Invalid url: %s'%url
+    html=curl(url)
+    pip_import('html2text')
+    import html2text
+    output=html2text.html2text(html)
+    rp.r._rich_print(output)
+
 def display_image_slideshow(images='.',display=None,use_cache=True):
     #Enters an interactive image slideshow
     #Useful for exploring large folders/lists of images
@@ -2574,6 +2600,7 @@ def display_image_slideshow(images='.',display=None,use_cache=True):
             _display_image_slideshow_animated(images)
             return
         elif running_in_ssh() and currently_in_a_tty():
+            print('Currently running in SSH, so we will print the images into the terminal')
             display=display_image_in_terminal
         else:
             display=display_image
@@ -4176,15 +4203,29 @@ def string_to_text_file(file_path: str,string: str,) -> None:
         file.write(string,)
 
     file.close()
-def text_file_to_string(file_path: str) -> str:
-    # file=open(file_path,"r")
-    # try:
-    #     return file.read()
-    # except Exception as e:
-    #     print_stack_trace()
-    # finally:
-    #     file.close()
-    file_path=get_absolute_path(file_path)#Make sure it recognizes ~/.vimrc AKA with the ~ attached
+
+
+_text_file_to_string_cache={}
+def text_file_to_string(file_path: str,use_cache=False) -> str:
+    #Only reason not to use use_cache is if you're worried about memory consumption
+    #   It will refresh the cache entry if it's out of date even if use_cache is True.
+    #   TODO: Make this happen on load_image, etc...all other functions that read from a file and have use_cache as an option
+
+    file_path=get_absolute_path(file_path)#Make sure it recognizes ~/.vimrc AKA with the ~ attached. Also, don't cache the same file twice under a relative and absolute path
+
+    assert file_exists(file_path),'File %s does not exist'%file_path
+
+    if use_cache:
+        file_path=get_absolute_path(file_path)
+        current_date=date_modified(file_path)
+        if file_path in _text_file_to_string_cache:
+            cached_date,cached_text=_text_file_to_string_cache[file_path]
+            if current_date<=cached_date:
+                return cached_text
+        current_text=text_file_to_string(file_path,use_cache=False)
+        _text_file_to_string_cache[file_path]=current_date,current_text
+        return current_text
+            
     return open(file_path).read()
 
 def append_line_to_file(line:str,file_path:str):
@@ -7042,10 +7083,29 @@ def _all_files_listed_in_exception_traceback(exception:BaseException)->list:
             pass
     return out
 
+def make_symlink(original_path,symlink_path):
+
+    if path_exists(symlink_path) and not path_exists(original_path):
+        #If the caller of this function gets the arguments backwards, fix it automatically
+        symlink_path,original_path=original_path,symlink_path
+        
+    if is_a_folder(symlink_path):
+        symlink_path=path_join(symlink_path,get_file_name(original_path))
+
+    assert path_exists(original_path), "Can't create symlink to %s because that path does not exist!"%original_path
+    assert not path_exists(symlink_path), "Can't create symlink at %s because a file already exists there!"%symlink_path
+    
+    import os
+    os.symlink(original_path,symlink_path)
+    
+    return symlink_path
+
 def is_symbolic_link(path:str):
     #Returns whether or not a given path is a symbolic link
     from pathlib import Path
     return Path(path).is_symlink()
+
+is_symlink=is_symbolic_link
 
 def _guess_mimetype(file_path)->str:
     import mimetypes
@@ -7316,6 +7376,21 @@ def _warnings_are_off():
     import warnings
     return _warning_ignore_filter in warnings.filters
 
+
+
+def _mv(from_path=None,to_dir=None):
+    if from_path is None: 
+        fansi_print("Please select a file or folder to be moved",'yellow','bold')
+        from_path=input_select_path()
+
+    if to_dir    is None: 
+        print('\n')
+        fansi_print("Please select a destination folder to move %s into"%from_path,'yellow','bold')
+        to_dir=input_select_folder()
+
+    print(fansi('Moving','blue','bold'),fansi(from_path,'green'),fansi('to directory','blue'),fansi(to_dir,'green'))
+    return move_file(from_path,to_dir)
+
 def _rma(ans):
     if not isinstance(ans,str):
         raise TypeError('RMA: ans should be a str pointing to a file path, but ans is a '+str(type(ans)))
@@ -7327,6 +7402,7 @@ def _rma(ans):
         print('Deleted path: '+ans)
     else:
         print('Deletion cancelled.'+ans)
+
 
 #def pudb_shell(_globals,_locals_):
 #    #https://documen.tician.de/pudb/shells.html
@@ -7651,6 +7727,15 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                 highlighted_code=fansi_syntax_highlighting(value)
                 print(highlighted_code)
                 _maybe_display_string_in_pager(highlighted_code)
+            elif file_exists(value) and is_image_file(value):
+                display_image_in_terminal_color(load_image(value))
+            elif isinstance(value,str) and is_valid_url(value):
+                if get_file_extension(value).lower() in 'jpg png jpeg tiff bmp gif'.split():
+                    display_image_in_terminal_color(load_image(value))
+                else:
+                    display_website_in_terminal(value)
+            elif is_image(value):
+                display_image_in_terminal_color(image)
             else:
                 pretty_print(value,*args,**kwargs)
             return
@@ -7800,6 +7885,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         ?p
         ?c
         ?i
+        ?r
 
         <Others>
         RETURN  (RET)
@@ -7838,10 +7924,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         ALS
         ALSD
         ALSF
-        ?r
 
         <File System>
         RM
+        RN
+        MV
         LS
         LST
         CD
@@ -7880,6 +7967,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         TREE ALL DIR
         FD
         FDA
+        FDT
         FD SEL (FDS)
         LS SEL (LSS)
         LS REL (LSR)
@@ -8017,7 +8105,6 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         DA CDA
 
         RU RUN
-        RN RUN
         SSRA SSRUNA
         SSA  SSRUNA
         SSR  SSRUNA
@@ -8128,8 +8215,12 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         OG $load_gist($input_select(options=$line_split($text_file_to_string($path_join($get_parent_folder($get_module_path($rp)),'old_gists.txt')))))
         CAH  $copy_path(ans,'.')
         CPAH $copy_path(ans,'.')
+        CPPH $copy_path(string_from_clipboard(),'.')
+        CPH  $copy_path(string_from_clipboard(),'.')
         MAH  $move_path(ans,'.')
         MVAH $move_path(ans,'.')
+        MVPH $move_path(string_from_clipboard(),'.')
+        MPH  $move_path(string_from_clipboard(),'.')
 
         GCLP $git_clone($string_from_clipboard())
         GCLA $git_clone(ans)
@@ -8147,11 +8238,15 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         FCA $web_copy_path(ans)
         FCH print("FCH->FileCopyHere");$web_copy_path('.')
         RMA $r._rma(ans)
+        RNA $rename_file(ans,input(fansi('NewPathName:','blue')))
 
         RST __import__('os').system('reset')
         RS  __import__('os').system('reset')
 
         DAPI __import__('rp.pypi_inspection').pypi_inspection.display_all_pypi_info()
+
+        DISC $display_image_slideshow('.',display=display_image_in_terminal_color)
+
 
         '''.replace('$',rp_import)
         # SA string_to_text_file(input("Filename:"),str(ans))#SaveAnsToFile
@@ -8282,7 +8377,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             if get_ans() is None:
                                 fansi_print("rp.pseudo_terminal(): Exiting session. No value returned.",'blue','bold')
                             else:
-                                fansi_print("rp.pseudo_terminal(): Exiting session. Returning ans = " + str(get_ans()),'blue','bold')
+                                # fansi_print("rp.pseudo_terminal(): Exiting session. Returning ans = " + str(get_ans()),'blue','bold')
+                                fansi_print("rp.pseudo_terminal(): Exiting session. Returning ans",'blue','bold')
                             return get_ans()
                         except Exception as e:
                             print_verbose_stack_trace(e)
@@ -8940,7 +9036,6 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         view_table(value)
                     elif user_message=='?p':
                         fansi_print("?p --> Pretty Print --> Running pretty_print(ans,with_lines=False):","blue",'bold')
-                        #pip_import('rich').print(get_ans())
                         pterm_pretty_print(get_ans(),with_lines=False)
                     elif user_message.endswith('?p') and not '\n' in user_message:
                         user_message=user_message[:-2]
@@ -9240,14 +9335,16 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
                         elif user_message=='?r':
                             fansi_print("?r --> rich.inspect(ans)","blue",'bold')
-                            pip_import('rich').inspect(get_ans(),all=True,help=True,methods=True,private=True,dunder=True)
+
+                            rp.r._rich_inspect(get_ans())
+
                             user_message=""
 
                         elif user_message.endswith('?r') and not '\n' in user_message:
                             user_message=user_message[:-2]
                             fansi_print("?r --> rich.inspect(%s)"%user_message,"blue",'bold')
                             value=eval(user_message,scope())
-                            pip_import('rich').inspect(value,all=True,help=True,methods=True,private=True,dunder=True)
+                            rp.r._rich_inspect(value)
                             user_message=""
 
 
@@ -9405,7 +9502,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             file_name=user_message[user_message.find(' '):].strip()
                             try:
                                 fansi_print("ACAT: Copying to your ans the contents of "+repr(file_name),"blue",'bold')
-                                user_message='ans='+repr(_load_text_from_file_or_url(file_name))
+                                if is_valid_url(file_name) and get_file_extension(file_name) in 'jpg png gif tiff tga jpeg bmp'.split():
+                                    user_message='ans=__import__("rp").load_image(%s)'%repr(file_name)
+                                else: 
+                                    user_message='ans='+repr(_load_text_from_file_or_url(file_name))
                             except UnicodeDecodeError:
                                 if is_video_file(file_name):
                                     user_message='ans=__import__("rp").load_video(%s)'%repr(file_name)
@@ -9662,6 +9762,14 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             except KeyboardInterrupt:
                                 fansi_print("\t(LS SEL cancelled)",'blue')
                                 user_message=''
+                        
+                        elif user_message=='FDT':
+                            fansi_print("FDT aka FinD Text --> Grep with FZF",'blue','bold')
+                            fansi_print("    (Reminder) PWD: "+get_current_directory(),"blue",'bold')
+                            result=rp.r._fzf_multi_grep()
+                            result=repr(result)
+                            user_message=result
+
                         elif user_message=='LS FZF' or user_message=='LSZ' or user_message=='LSQ' or user_message=='LS QUE':
                             #TODO: LSQ could be made obsolete if there was some way to sort the results of LSZ
                             #However, I don't know how to do this
@@ -9793,6 +9901,18 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             # shell_command(command)
                             user_message='ans='+repr(path)+" # TAB"
 
+                        elif user_message.startswith('RN ') or user_message=='RN':
+                            fansi_print("RN --> Renames a file or folder",'blue','bold')
+                            path=input_select_path(message='Please select the file or folder to be renamed')
+
+                            print('Renaming %s'%fansi(get_file_name(path),'green','bold'))
+                            print('Please input the new name of the %s'%('file' if is_a_file(path) else 'folder'))
+                            new_name=input(' > ')
+                                
+                            user_message='__import__("rp").rename_path('+repr(path)+','+repr(new_name)+')# '+path
+
+                            fansi_print("Renaming %s %s to %s: "%(('folder' if is_a_folder(path) else 'file'),path,new_name),'blue','bold')
+
                         elif user_message.startswith('RM ') or user_message=='RM':
                             fansi_print("RM --> Deletes a file or folder (actually, tries to move it to the trash bin if possible)",'blue','bold')
                             path=input_select_path()
@@ -9808,7 +9928,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             if user_message:
                                 fansi_print("Deleting %s: "%('folder' if is_a_folder(path) else 'file')+repr(get_absolute_path(path)),'blue','bold')
                                 
-                            
+                        elif user_message.startswith('MV'):
+                            fansi_print("MV --> Moves a file or folder to a folder",'blue','bold')
+                            user_message= repr(_mv())
+                                
 
                         elif user_message.startswith("TAKE ") or user_message =='TAKE' or user_message=='MKDIR' or user_message.startswith('MKDIR '):
                             make=user_message.startswith('MKDIR')
@@ -10532,18 +10655,46 @@ def num_args(f):# https://stackoverflow.com/questions/847936/how-can-i-find-the-
         args = spec[spec.find('(')+1:spec.find(')')]
         return args.count(',')+1 if args else 0
 
-def pretty_print(d:dict,with_lines=True):
+
+def _rich_inspect(x):
+    pip_import('rich')
+    from rich.console import Console
+    import rich
+
+    #CAPTURE doesn't work for rich inspect...string==''
+    # console = Console()
+    # with console.capture() as capture:
+    #     rich.inspect(x,all=True,help=True,methods=True,private=True,dunder=True)
+    # string=capture.get()
+    # print('LENNNGTHH',len(string))
+    # _maybe_display_string_in_pager(string,with_line_numbers=False)
+    # print(string)
+
+    rich.inspect(x,all=True,help=True,methods=True,private=True,dunder=True)
+
+def _rich_print(x):
+    pip_import('rich')
+    from rich.console import Console
+    console = Console()
+    with console.capture() as capture:
+        console.print(x)
+    string=capture.get()
+    _maybe_display_string_in_pager(string,with_line_numbers=True)
+    print(string)
+
+def pretty_print(x,with_lines=False):
     #Used to print out highly-nested dicts and lists etc, which are hard to read when it's all in one line.
     #Particularly useful for JSON objets from web requests.
     if not with_lines and sys.version_info>(3,6):
         try:
-            pip_import('rich').print(d)
+            _rich_print(x)
             return
-        except Exception:
+        except Exception as e:
+            print_stack_trace(e)
             pass    
 
     from pprint import pformat
-    string=pformat(d)
+    string=pformat(x)
     def pretty_lines(s):
         s=string_transpose(string_transpose(s))  # Ensure all have same length
         l=s.split('\n')
@@ -12956,6 +13107,8 @@ def get_all_paths(*directory_path                   ,
         #Return relative paths instead of absolute paths
         relative_to=relative if isinstance(relative,str) else directory_path
         output=[get_relative_path(path,relative_to) for path in output]
+    else:
+        output=[get_absolute_path(path) for path in output]
 
     return output
 
@@ -14191,6 +14344,7 @@ def input_select_multiple(question='Please select any number of options:',option
         return output
     
     while True:
+        #TODO: Add support for iterfzf's built-in multiple selections
         option=input_select(question,options=[None]+selected+unselected,stringify=_stringify,reverse=reverse)
         if option is None:
             return [options[index] for index in selected]
@@ -17219,6 +17373,26 @@ def apply_colormap_to_image(image,colormap_name='viridis'):
     image_colorized = cv_rgb_bgr_swap(image_colorized)
     return image_colorized
 
+def zalgo_text(text:str,amount:int=1):
+    #EXAMPLE: zalgo_text('Hello World',0) == 'Hello World'
+    #EXAMPLE: zalgo_text('Hello World',1) == 'H̵ͮe͚͘ĺ̫l̬ͧoͥ̈ W͗͜o̴͇r̖̃l̡͚d̛͓'
+    #EXAMPLE: zalgo_text('Hello World',2) == 'H̓ͨ̐e͆͟͢l̘͆͝l̦̘ͪo̰ͮ͢ W̴̓ͅǫ̨͛r̞̫͘l̴̼̎d̯͑̕'
+    assert isinstance(text,str)
+    assert isinstance(amount,int)
+    assert amount>=0
+    if amount==0:
+        return text
+    amount+=1
+    
+    pip_import('zalgo_text','zalgo-text')
+    import zalgo_text.zalgo as zalgo
+    z=zalgo.zalgo()
+    z.maxAccentsPerLetter=amount
+    z.numAccentsDown= (1, amount)
+    z.numAccentsMiddle= (1, amount-1)
+    z.numAccentsUp= (1, amount)
+    return z.zalgofy(text)
+
 def big_ascii_text(text:str,*,font='standard'):
     #Returns big ascii art text!
     #EXAMPLE:
@@ -18508,6 +18682,73 @@ def dns_lookup(url:str)->str:
     import socket
     return socket.gethostbyname(url)
 
+class _MinFileSizeHeap:
+    #Push file paths to this
+    #When you pop from it, the smallest files get popped first
+    #TODO: Use threading and integrate this with _fzf_multi_grep so that it doesn't get hung on large files as often
+    #This class has been tested and it does work
+    def __init__(self):
+        self.heap=[]
+    def push(self,file):
+        import heapq
+        assert path_exists(file)
+        size=get_file_size(file,human_readable=False)
+        heapq.heappush(self.heap,(size,file))
+    def pop(self):
+        import heapq
+        return heapq.heappop(self.heap)[1]
+
+def _fzf_multi_grep():
+    
+    heap=_MinFileSizeHeap()
+
+    zero_width_space='\u200b'
+    import iterfzf
+    
+    def files_walk(root='.'):
+        import os
+        for folder,subfolders,files in os.walk(root):
+            files=[path_join(folder,file) for file in files]
+            yield from files
+            
+    def load_text(file):
+        try:
+            return text_file_to_string(file,use_cache=False)
+        except Exception:
+            return ''
+        
+    def load_annotated_lines(file):
+        text=load_text(file)
+        lines=line_split(text)
+        num_digits=len(str(len(lines)))
+        title=lambda line_number:zero_width_space.join(file+':%s: '%(str(line_number).zfill(num_digits)))
+        lines=[title(line_number+1)+line for line_number,line in enumerate(lines)]
+        lines=lines[::-1] #For FZF, which pputs the first things on the bottom
+        return lines
+        
+    def text_files_walk():
+        root='.'
+        return map(get_relative_path,filter(is_utf8_file,files_walk(root)))
+    
+    def text_lines_walk():
+        import multiprocessing.pool,itertools
+        pool=multiprocessing.pool.ThreadPool()
+        out=pool.imap_unordered(load_annotated_lines,text_files_walk())
+        out=itertools.chain.from_iterable(out)
+        return out
+    
+    fansi_print('Press tab or shift tab to select deselect multiple lines','blue')
+    output=iterfzf.iterfzf(text_lines_walk(),case_sensitive=False,exact=True,multi=True)
+    output=sorted({line[:line.find(':')].replace(zero_width_space,'') for line in output})
+    
+    if len(output)==1:
+        return output[0]
+    
+    return output
+    
+
+
+
 def unwarped_perspective_image(image, from_points, to_points=None, height:int=None, width:int=None):
     #Takes an image, and two corresponding lists of four points, and returns an unwarped image
     #If you don't specify the to_points, it will simply unwarp the source quadrangle to the resolution of the input image
@@ -18875,9 +19116,5 @@ del re
 
 
 # Version Oct24 2021
-
-
-
-
 
 

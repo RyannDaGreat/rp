@@ -22,6 +22,7 @@ def get_all_ui_styles():
         'adventure'  :color_3,
         'jade'       :pupper,
         'clara'      :clara,
+        'claranew'   :new_clara_style,
         'emma'       :emma,
         'dejavu'     :dejavu,
         'anna'       :newstyle,
@@ -97,6 +98,7 @@ def get_all_code_styles():
     result['win32'] = win32_code_style
     result['ryan']=ryan_style
     result['clara']=clara_style
+    result['newclara']=new_clara_style
     result['viper']=viper_style
     result['stratus']=stratus_style
     result['snape']=snape_style
@@ -270,6 +272,24 @@ clara_style={Token: '',
             Token.Punctuation: '#51a6fb',
             Token.Text: '',
             Token.Text.Whitespace: '#00d1ff'}
+
+new_clara_style=clara_style.copy()
+new_clara_style_diff={
+            Token.Keyword: '#D026B0 bold',
+            Token.Name.Builtin: '#008cf0',
+            Token.Name.Function: '#21d988',
+            Token.Name.Class: '#17ff9a bold',
+            Token.Literal.Number: '#55CDFC',
+            Token.Literal.Number: '#2196d9',
+            Token.Name.Decorator: '#8730ff',
+            Token.Keyword.Constant: 'italic #008cD0',
+            Token.Keyword.Declaration: 'italic',
+            Token.Keyword.Pseudo: '',
+            Token.Keyword.Reserved: '',
+            Token.Keyword.Type: 'italic',
+}
+new_clara_style.update(new_clara_style_diff)
+
 
 random_syntax_style={Token: random_style(),
             Token.Comment: random_style(),
