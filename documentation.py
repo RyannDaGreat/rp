@@ -3,8 +3,8 @@
 
 When it makes sense, - will be turned into _.
 	Examples:
-		-=6  -->  _=6
 		def f(-,) --> def f(_,)
+                -=6  -->  _=6
 		if -    if _
 
 
@@ -197,7 +197,9 @@ KEYBOARD SHORTCUTS:
 	⌥ #    comment out the entire buffer and execute it
 	⌥ n    executes 'NEXT', changing the value of 'ans' (useful in combination with \rpa and \an)
 	⌥ p    executes 'PREV', changing the value of 'ans' (useful in combination with \rpa and \an)
-	⌥ r    similar to \rpa, except it clears the buffer
+	⌥ r    similar to \rpa, except it clears the buffer. Sets ans to the current buffer as a string
+        ⌃ a    insert str(ans)   Equivalent to \an
+	⌥ ⌃ a  insert repr(str(ans))  Equivalent to \sa
 	⌥ q    equivalent to \da: clears the current buffer
 	⌥ (    insert ( at current position and ) at the end of the line without moving the cursor to the end of the line
 	⌥ [    insert [ at current position and ] at the end of the line without moving the cursor to the end of the line

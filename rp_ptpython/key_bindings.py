@@ -4562,6 +4562,7 @@ def load_python_bindings(python_input):
         # buffer.redo()
 
     import rp.r_iterm_comm as r_iterm_comm
+
     @handle(Keys.ControlV)# On mac this is alt+z
     def _(event):
         if meta_pressed(clear=True):
@@ -4577,6 +4578,22 @@ def load_python_bindings(python_input):
             except:
                 pass# Paste failed
 
+    @handle(Keys.ControlA)# On mac this is alt+z
+    def _(event):
+        reprify=False
+        if meta_pressed(clear=True):
+            reprify=True
+        if True:
+            buffer=event.cli.current_buffer
+            try:
+                if reprify:
+                    clip=repr(str(get_ans()))
+                else:
+                    clip=str(get_ans())
+                buffer.cut_selection()
+                buffer.insert_text(clip)
+            except:
+                pass# Paste failed
 
     @handle(Keys.ControlC)# ,filter=has_selection)# On mac this is alt+z
     def _(event):

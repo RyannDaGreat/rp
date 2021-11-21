@@ -19,7 +19,6 @@
 /usr
 /Users
 /Users/Ryan/Desktop/CleanCode/Sandbox/scrap
-/Users/Ryan/Desktop/CleanCode
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot
 /Users/Ryan/Desktop/CleanCode/SBU/Research
 /Users/Ryan/Desktop/CleanCode/SBU/Research/ReverseDynamics
@@ -31,7 +30,6 @@
 /private/etc
 /Users/Ryan/PycharmProjects/RyanBStandards_Python3.5
 /Users/Ryan/Desktop/DiffRendering
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
 /Users/Ryan/Desktop/CleanCode/Sandbox/lab-simulation-builder/src
 /Users/Ryan/Desktop/CleanCode/Sandbox
 /Users/Ryan/Desktop/CleanCode/Sandbox/Lab-In-A-Cube_2/src
@@ -48,11 +46,17 @@
 /Users/Ryan/Desktop/CleanCode/SBU/LabInACube/Lab-In-A-Cube
 /Users/Ryan/Desktop/Lab-In-A-Cube_LUnew
 /
-/Users/Ryan/Desktop
 /Users/Ryan/Documents/FL Studio
 /Users/Ryan/Documents/Image-Line/FL Studio/Presets
 /Users/Ryan/Documents/Image-Line/FL Studio/Projects
 /Users/Ryan/Documents/Image-Line/FL Studio
 /Users/Ryan/Documents/Image-Line
 /Users/Ryan/Documents
+/Users/Ryan/Desktop
+/Users/Ryan/Desktop/CleanCode
+/Users/Ryan/Desktop/CleanCode/Resume/Attempt1
+/Users/Ryan/Desktop/CleanCode/Resume
+/Users/Ryan/Desktop/CleanCode/Resume/Latex
+/Users/Ryan/Desktop/CleanCode/Resume/Latex/Attempt1
 /Users/Ryan
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
