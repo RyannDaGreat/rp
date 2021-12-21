@@ -180,6 +180,20 @@ def summation(x,start=None):
     #     out+=y
     # return out
 
+def unique(iterable):
+    #Removes duplicates but preserves order
+    #Works with things that aren't conventionally hashable, like numpy arrays
+    #    (this is because it uses handy_hash)
+    #EXAMPLE:
+    #     >>> list(unique([4,3,5,4,3,2]))
+    #    ans = [4, 3, 5, 2]
+    seen=set()
+    for item in iterable:
+        tag=handy_hash(item)
+        if tag not in seen:
+            seen.add(tag)
+            yield item
+    
 # endregion
 # endregion
 # region  Time:［gtoc，tic‚ toc‚ ptoc‚ ptoctic‚ millis，micros，nanos］
@@ -1527,7 +1541,10 @@ def load_image_from_matplotlib(*,dpi:int=None,fig=None):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     return img
 
+
 def load_openexr_image(file_path:str):
+    #NOTE: This function is unnesecary for loading EXR files with full quality...assuming they're RGB. load_image works fine; I haven't tested it with more than 4 channels yet though
+
     #Takes .exr image file with a depth map, and returns an RGBAZ image (where Z is depth, as opposed to an RGBA image.)
     #Because of the way .exr files work, the output of this function is not an image as defined by rp.is_image, because it has 5 channels (all floating point)
     #This function exists because load_image ignores the depth-map channel, which is important informatoin but is ignored by OpenCV's importer as well as Snowy's and all other libraries I've tried so far
@@ -1629,14 +1646,26 @@ def save_image(image,file_name=None,add_png_extension: bool = True):
     if file_name==None:
         file_name=temporary_file_path('png')
 
-    image=as_byte_image(image)#Suppress any warnings about losing data when coming from a float_image...that's a given, considering that png's only have one byte per color channel...
+    if get_file_extension(file_name)=='exr':
+        #Note that exr filetypes must have a float32 dtype
+        image=as_float_image(image).astype(np.float32)
+    else:
+        #Suppress any warnings about losing data when coming from a float_image...that's a given, considering that png's only have one byte per color channel...
+        image=as_byte_image(image)
 
     if not folder_exists(get_parent_folder(file_name)):
         #If the specified path's folders don't exist, make them. Don't whine and throw errors.
         make_directory(get_parent_folder(file_name))
-
+    
     try:
-        from scipy.misc import imsave
+        try:
+            pip_import('imageio') #This is the best library for this task: it handles the most image types, and it does it just as fast as opencv
+            if get_file_extension(file_name)=='exr':
+                from imageio import imwrite as imsave #Imageio is the best at saving .exr files
+            else:
+                from imageio import imsave as imsave
+        except Exception:
+            from scipy.misc import imsave
     except Exception:
         try:
             from skimage.io import imsave
@@ -1647,11 +1676,12 @@ def save_image(image,file_name=None,add_png_extension: bool = True):
                 imsave=lambda filename,data: imwrite(filename,cv_bgr_rgb_swap(as_rgba_image(as_byte_image(data))))
             except Exception:
                 pass
-    if file_name is None:
-        file_name=str(millis()) + ".png"  # ⟵ Default image name
+
     if add_png_extension and not has_file_extension(file_name):#Save a png file by default
         file_name+=".png"
+
     imsave(file_name,image)
+
     return file_name
 
 def save_images(images,paths:list=None,skip_overwrites=False,show_progress=False):
@@ -4699,7 +4729,27 @@ def display_path(path,*,color=None,alpha=1,marker=None,linestyle=None,block=Fals
     plt.plot(x, y,color=color,alpha=alpha,marker=marker,linestyle=linestyle,**kwargs)
     update_display(block)
 
-def translate(to_translate,to_language="auto",from_language="auto"):
+def _translate_offline(text,to_language='ru'):
+    #This method was made private because right now it only supports russian and nearby countries lol...this function is currently too niche to be exposed as a general translation function...
+    # ka Georgian
+    # sr Serbian
+    # mn Mongolian
+    # el Greek
+    # bg Bulgarian
+    # mk Macedonian
+    # ru Russian
+    # hy Armenian
+    # l1 Latin1Supplement
+    # uk Ukrainia
+    #TODO: Refine this
+    #This runs much faster than google...but I can't vouch for its quality
+    #Correction: this runs INSANELY fast - translating every line in RP to russian in just .6 seconds!
+    pip_import('transliterate')
+    from transliterate import translit, get_available_language_codes
+
+    return translit(text,to_language)
+
+def translate(to_translate,to_language="en",from_language="auto"):
     # I DID NOT WRITE THIS!! I GOT IT FROM https://github.com/mouuff/mtranslate/blob/master/mtranslate/core.py
     """Returns the translation using google translate
     you must shortcut the language you define
@@ -4763,66 +4813,80 @@ def translate(to_translate,to_language="auto",from_language="auto"):
             'vi'    :'Vietnamese',
             'cy'    :'Welsh'
         }
-    LANGUAGES['auto']='(automatic)'
-    valid_languages=set(LANGUAGES)
-    is_valid=lambda x:x in valid_languages
-    assert is_valid(to_language) and is_valid(from_language),'Invalid language! Cannot translate. Valid languages: \n'+strip_ansi_escapes(indentify(display_dict(LANGUAGES,print_it=False,arrow=' --> ')))
 
-    import sys
-    import re
-    if sys.version_info[0] < 3:
-        # noinspection PyUnresolvedReferences
-        import urllib2
-        import urllib
-        # noinspection PyUnresolvedReferences
-        import HTMLParser
-    else:
-        import html.parser
-        import urllib.request
-        import urllib.parse
-    agent={'User-Agent':
-               "Mozilla/4.0 (\
-                 compatible;\
-                 MSIE 6.0;\
-                 Windows NT 5.1;\
-                 SV1;\
-                 .NET CLR 1.1.4322;\
-                 .NET CLR 2.0.50727;\
-                 .NET CLR 3.0.04506.30\
-                 )"}
-    def unescape(text):
-        if sys.version_info[0] < 3:
-            parser=HTMLParser.HTMLParser()
-        else:
-            parser=html.parser.HTMLParser()
-        try:
-            # noinspection PyDeprecation
-            return parser.unescape(text)
-        except:
-            return html.unescape(text)
-    base_link="http://translate.google.com/m?hl=%s&sl=%s&q=%s"
-    if sys.version_info[0] < 3:
-        # noinspection PyUnresolvedReferences
-        to_translate=urllib.quote_plus(to_translate)
-        link=base_link % (to_language,from_language,to_translate)
-        request=urllib2.Request(link,headers=agent)
-        raw_data=urllib2.urlopen(request).read()
-    else:
-        to_translate=urllib.parse.quote(to_translate)
-        link=base_link % (to_language,from_language,to_translate)
-        request=urllib.request.Request(link,headers=agent)
-        raw_data=urllib.request.urlopen(request).read()
-    data=raw_data.decode("utf-8")
-    expr=r'class="t0">(.*?)<'
-    re_result=re.findall(expr,data)
-    if len(re_result) == 0:
-        result=""
-    else:
-        result=unescape(re_result[0])
-    return result
+
+    from_language=from_language.lower()
+    to_language=to_language.lower()
+    assert from_language in set(LANGUAGES)|{'auto'}
+    assert to_language in set(LANGUAGES)|{'auto'}
+
+    def translate(text,dest='en',src='auto'):
+        pip_import('googletrans','googletrans==4.0.0-rc1')#https://stackoverflow.com/questions/52455774/googletrans-stopped-working-with-error-nonetype-object-has-no-attribute-group
+        import googletrans
+        return googletrans.Translator().translate(text,dest,src).text
+
+    return translate(to_translate,to_language,from_language)
+
+    #OLD VERSION (NO LONGER WORKS)
+        # LANGUAGES['auto']='(automatic)'
+        # valid_languages=set(LANGUAGES)
+        # is_valid=lambda x:x in valid_languages
+        # assert is_valid(to_language) and is_valid(from_language),'Invalid language! Cannot translate. Valid languages: \n'+strip_ansi_escapes(indentify(display_dict(LANGUAGES,print_it=False,arrow=' --> ')))
+        # import sys
+        # import re
+        # if sys.version_info[0] < 3:
+        #     # noinspection PyUnresolvedReferences
+        #     import urllib2
+        #     import urllib
+        #     # noinspection PyUnresolvedReferences
+        #     import HTMLParser
+        # else:
+        #     import html.parser
+        #     import urllib.request
+        #     import urllib.parse
+        # agent={'User-Agent':
+        #            "Mozilla/4.0 (\
+        #              compatible;\
+        #              MSIE 6.0;\
+        #              Windows NT 5.1;\
+        #              SV1;\
+        #              .NET CLR 1.1.4322;\
+        #              .NET CLR 2.0.50727;\
+        #              .NET CLR 3.0.04506.30\
+        #              )"}
+        # def unescape(text):
+        #     if sys.version_info[0] < 3:
+        #         parser=HTMLParser.HTMLParser()
+        #     else:
+        #         parser=html.parser.HTMLParser()
+        #     try:
+        #         # noinspection PyDeprecation
+        #         return parser.unescape(text)
+        #     except:
+        #         return html.unescape(text)
+        # base_link="http://translate.google.com/m?hl=%s&sl=%s&q=%s"
+        # if sys.version_info[0] < 3:
+        #     # noinspection PyUnresolvedReferences
+        #     to_translate=urllib.quote_plus(to_translate)
+        #     link=base_link % (to_language,from_language,to_translate)
+        #     request=urllib2.Request(link,headers=agent)
+        #     raw_data=urllib2.urlopen(request).read()
+        # else:
+        #     to_translate=urllib.parse.quote(to_translate)
+        #     link=base_link % (to_language,from_language,to_translate)
+        #     request=urllib.request.Request(link,headers=agent)
+        #     raw_data=urllib.request.urlopen(request).read()
+        # data=raw_data.decode("utf-8")
+        # expr=r'class="t0">(.*?)<'
+        # re_result=re.findall(expr,data)
+        # if len(re_result) == 0:
+        #     result=""
+        # else:
+        #     result=unescape(re_result[0])
+        # return result
 def sync_sorted(*lists_in_descending_sorting_priority,key=identity):
-    # Sorts main_list and reorders all *lists_in_descending_sorting_priority the same way, in sync with main_list
-    return tuple(zip(*sorted(zip(*lists_in_descending_sorting_priority),key=lambda x:tuple(map(key,x)))))
+        # Sorts main_list and reorders all *lists_in_descending_sorting_priority the same way, in sync with main_list
+        return tuple(zip(*sorted(zip(*lists_in_descending_sorting_priority),key=lambda x:tuple(map(key,x)))))
 sync_sort=sync_sorted#For backwards compatiability
     
 def sync_shuffled(*lists):
@@ -7117,6 +7181,8 @@ def _guess_mimetype(file_path)->str:
     return mimetype.split('/')[0]
 
 def is_image_file(file_path):
+    if get_file_extension(file_path) in 'exr'.split():
+        return True
     return _guess_mimetype(file_path)=='image'
 
 def is_video_file(file_path):
@@ -7726,7 +7792,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
             if isinstance(value,str) and is_valid_python_syntax(value):
                 highlighted_code=fansi_syntax_highlighting(value)
                 print(highlighted_code)
-                _maybe_display_string_in_pager(highlighted_code)
+                _maybe_display_string_in_pager(highlighted_code,False)
             elif file_exists(value) and is_image_file(value):
                 display_image_in_terminal_color(load_image(value))
             elif isinstance(value,str) and is_valid_url(value):
@@ -7735,7 +7801,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                 else:
                     display_website_in_terminal(value)
             elif is_image(value):
-                display_image_in_terminal_color(image)
+                display_image_in_terminal_color(value)
             else:
                 pretty_print(value,*args,**kwargs)
             return
@@ -8041,9 +8107,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         SC SHORTCUTS
 
         CO  COPY
-        WC  WCOPY
         WCO WCOPY
         LC  LCOPY
+        WC  WCOPY
         LCO LCOPY
         TC  TCOPY
         TCO TCOPY
@@ -8247,6 +8313,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         DISC $display_image_slideshow('.',display=display_image_in_terminal_color)
 
+        FZM $pip_import('iterfzf').iterfzf(ans,multi=True)
+
+        CLS !clear
+        VV !vim
 
         '''.replace('$',rp_import)
         # SA string_to_text_file(input("Filename:"),str(ans))#SaveAnsToFile
@@ -8812,7 +8882,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
                         bullet='    - '
 
-                        print('Python version: '+version)
+                        print('Python version: '+version+' at '+fansi(sys.executable,'magenta'))
                         print('Current time: '+_format_datetime(get_current_date()))
                         print('Computer details:')
                         print(bullet+'Operating system: '+fansi('('+platform_type+') ','red','bold')+fansi(platform.platform(),'red'))
@@ -9502,7 +9572,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             file_name=user_message[user_message.find(' '):].strip()
                             try:
                                 fansi_print("ACAT: Copying to your ans the contents of "+repr(file_name),"blue",'bold')
-                                if is_valid_url(file_name) and get_file_extension(file_name) in 'jpg png gif tiff tga jpeg bmp'.split():
+                                if is_valid_url(file_name) and get_file_extension(file_name) in 'jpg png gif tiff tga jpeg bmp exr'.split():
                                     user_message='ans=__import__("rp").load_image(%s)'%repr(file_name)
                                 else: 
                                     user_message='ans='+repr(_load_text_from_file_or_url(file_name))
@@ -12998,7 +13068,8 @@ def get_all_paths(*directory_path                   ,
                    just_file_names          = False ,
                    include_file_extensions  = True  ,
                    relative                 = False ,
-                   ignore_permission_errors = False
+                   ignore_permission_errors = False ,
+                   hidden_paths_last        = True  , #WARNING: This signature might change in the future to something that allows you to disclude hidden paths or put them first or separate controls for folders and files
                    ):
     #Returns global paths.
     #If relative is False, we return global paths. Otherwise, we return relative paths to the current working directory 
@@ -13014,25 +13085,25 @@ def get_all_paths(*directory_path                   ,
     #sort_by can be None, or it can be a string
     #EXAMPLES:
     #
-    #    ⮤ get_all_paths('Tests/First','Inputs',sort_by='name')
+    #    >>> get_all_paths('Tests/First','Inputs',sort_by='name')
     #    ans = ['Tests/First/Inputs/01.png',
     #           'Tests/First/Inputs/02.jpg',
     #           'Tests/First/Inputs/03.gif',
     #           'Tests/First/Inputs/04.bmp']
     #
-    #    ⮤ get_all_paths('Tests/First','Inputs')                 #Without sort_by specified, the output could potentially be shuffled
+    #    >>> get_all_paths('Tests/First','Inputs')                 #Without sort_by specified, the output could potentially be shuffled
     #    ans = ['Tests/First/Inputs/02.jpg',
     #           'Tests/First/Inputs/04.bmp',
     #           'Tests/First/Inputs/03.gif',
     #           'Tests/First/Inputs/01.png']
     #
-    #    ⮤ get_all_paths('Tests/First','Inputs',sort_by='name',just_file_names=True)
+    #    >>> get_all_paths('Tests/First','Inputs',sort_by='name',just_file_names=True)
     #    ans =  ['01.png', '02.jpg', '03.gif', '04.bmp']
     #
-    #    ⮤ get_all_paths('Tests/First','Inputs',sort_by='name',just_file_names=True,include_file_extension=False)
+    #    >>> get_all_paths('Tests/First','Inputs',sort_by='name',just_file_names=True,include_file_extension=False)
     #    ans =  ['01', '02', '03', '04']
     #
-    #    ⮤ get_all_paths('Tests/First','Inputs',sort_by='name',just_file_names=True,include_file_extension=False,file_extension_filter='bmp png')  #Filtering the extension type to just .bmp and .png images
+    #    >>> get_all_paths('Tests/First','Inputs',sort_by='name',just_file_names=True,include_file_extension=False,file_extension_filter='bmp png')  #Filtering the extension type to just .bmp and .png images
     #    ans =  ['01', '04']
     #
 
@@ -13083,6 +13154,12 @@ def get_all_paths(*directory_path                   ,
             }
             assert sort_by in sort_by_options,'get_file_paths: sort_by specifies how to sort the files. Please set sort_by to one of the following strings: '+', '.join(map(repr,sorted(sort_by_options)))+'. (You chose repr(sort_by)=='+repr(sort_by)+' with repr(type(sort_by))=='+repr(type(sort_by))
             output.sort(key=sort_by_options[sort_by])
+
+            if hidden_paths_last:
+                hidden_paths    =[path for path in output if     get_file_name(path).startswith('.')]
+                non_hidden_paths=[path for path in output if not get_file_name(path).startswith('.')]
+                output[:]=non_hidden_paths+hidden_paths
+                
 
         if file_extension_filter is not None:
             #'x.png' --> 'x', 'text.txt' --> 'txt', etc. (See strip_file_extension for more details)
@@ -13394,7 +13471,7 @@ def vertically_concatenated_images(*image_list):
     image_list=detuple(image_list)
     return np.rot90(horizontally_concatenated_images([np.rot90(image,-1) for image in reversed(image_list)]))
 
-def grid_concattenated_images(image_grid):  
+def grid_concatenated_images(image_grid):  
     #Given a list of lists of images, like [[image1, image2],[image3,image4]], join them all together into one big image
     #Often, when given a list of images you want to put into a grid, 
     #   split_into_sublists(images, number_of_images_per_row) will be a good companion function!
@@ -13408,21 +13485,21 @@ def grid_concattenated_images(image_grid):
     #    imagechunks=[bordered_image_solid_color(image,thickness=5,color=(0,1,0,1)) for image in imagechunks]
     #    imagechunks=shuffled(imagechunks)
     #    ans=split_into_sublists(imagechunks,4)
-    #    display_image(grid_concattenated_images(ans))
+    #    display_image(grid_concatenated_images(ans))
     #EXAMPLE:
     #    dog=load_image('https://nationaltoday.com/wp-content/uploads/2020/02/doggy-date-night.jpg')
     #    dog=resize_image(dog,.25)
     #    regions=split_tensor_into_regions(dog,3,5,flat=False)
     #    regions=grid2d_map(regions, lambda image: bordered_image_solid_color(image,color=(1,0,0,1),thickness=5))
     #    for angle in list(range(360)):
-    #        display_image(grid_concattenated_images(grid2d_map(regions, lambda image: rotate_image(image,angle))))
+    #        display_image(grid_concatenated_images(grid2d_map(regions, lambda image: rotate_image(image,angle))))
     #EXAMPLE:
     #    ans='https://pbs.twimg.com/profile_images/945393898649665536/Ea5FkV5q.jpg'
     #    ans=load_image(ans)
     #    ans=split_tensor_into_regions(ans,10,10)
     #    ans=[bordered_image_solid_color(x,color=random_rgba_float_color(),thickness=5) for x in ans]
     #    ans=split_into_sublists(ans,10)
-    #    ans=grid_concattenated_images(ans)
+    #    ans=grid_concatenated_images(ans)
     #    display_image(ans)
     #EXAMPLE:
     #    ans='https://pbs.twimg.com/profile_images/945393898649665536/Ea5FkV5q.jpg'
@@ -13431,7 +13508,7 @@ def grid_concattenated_images(image_grid):
     #    ans=[horizontally_concatenated_images(tile,resize_image(cv_text_to_image(str(i)),.25)) for i,tile in enumerate(tiles)]
     #    ans=[bordered_image_solid_color(an,color=(0,.5,1,1)) for an in ans]
     #    ans=split_into_sublists(ans,10)
-    #    ans=grid_concattenated_images(ans)
+    #    ans=grid_concatenated_images(ans)
     #    display_image(ans)
 
     image_grid=list(image_grid)
@@ -13455,14 +13532,14 @@ def grid_concattenated_images(image_grid):
 def tiled_images(images,length=None,border_color=(.5,.5,.5,1),border_thickness=1):
     #EXAMPLE:
     #   display_image_in_terminal_color(tiled_images([load_image('https://i.pinimg.com/236x/36/69/39/36693999b6e24b1d06d0ee21c9ae320d--caged-nicolas-cage.jpg')]*25))
-    #Sugar for what I often do with grid_concattenated_images
+    #Sugar for what I often do with grid_concatenated_images
     images=list(images)
     if length is None:
         length=max(1,int(len(images)**.5))
     format_image=lambda image: bordered_image_solid_color(image,color=border_color,thickness=border_thickness,top=0,left=0)
     images=[format_image(image) for image in images]
     images=split_into_sublists(images,length)
-    output=grid_concattenated_images(images)
+    output=grid_concatenated_images(images)
     output=bordered_image_solid_color(output,color=border_color,thickness=border_thickness,bottom=0,right=0)
     return output
 
@@ -14238,7 +14315,7 @@ def input_select(question='Please select an option:',options=[],stringify=repr,r
             if i!=float(user_input):#No fractions
                 return False
             return 0<=i<number_of_options
-        except ValueError:#ERROR: ValueError: invalid literal for int() with base 10: 'aosijd
+        except ValueError:#ERROR: ValueError: invalid literal for int() with base 10: '
             return False
 
     def display_more_options():
@@ -14556,7 +14633,10 @@ def move_path(from_path,to_path):
         new_path=path_join(to_path,get_file_name(from_path))
     else:
         new_path=to_path
-    os.rename(from_path,new_path)
+    
+    import shutil
+    shutil.move(from_path,new_path)
+    # os.rename(from_path,new_path) # This doesn't work across harddrives: OSError: [Errno 18] Invalid cross-device link: '/home/ryan/Downloads/previous_exams_548.zip' -> './previous_exams_548.zip'
     return new_path
 
 move_file=move_directory=move_folder=move_path#Synonyms that might make more sense to read in their context than rename_path
@@ -16556,6 +16636,8 @@ def input_select_path(root=None,
 
     folders=get_all_paths(root,sort_by=sort_by,include_files=False,include_folders=True )
     files  =get_all_paths(root,sort_by=sort_by,include_files= True,include_folders=False)
+
+
     parent =get_parent_directory(root)
     paths  =[parent]+folders
     
@@ -18888,12 +18970,13 @@ def _display_filetype_size_histogram(root='.'):
 
     filetypes=set(get_file_extension(file) for file in paths)
     mem_hist={filetype:sum(get_file_size(file,human_readable=False) for file in paths if get_file_extension(file)==filetype) for filetype in filetypes}
+    num_hist={filetype:len([file for file in paths if get_file_extension(file)==filetype]) for filetype in filetypes}
         
     entries=[]
     for filetype in sorted(set(mem_hist),key=mem_hist.get):
         mem_percent=mem_hist[filetype]/sum(mem_hist.values())
         mem_percent*=100
-        entries.append((filetype,'    ',human_readable_file_size(mem_hist[filetype]),'   %10.5f%%'%mem_percent))
+        entries.append((filetype,'    ',human_readable_file_size(mem_hist[filetype]),'   %10.5f%%'%mem_percent,'    %i'%num_hist[filetype],))
 
     ans=horizontally_concatenated_strings(list(map(line_join,zip(*entries))),rectangularize=True)
         
@@ -19046,12 +19129,15 @@ class ImageDataset:
     #TODO: Possibly migrate this to a new torch submodule of rp to avoid cluttering this namespace
 
     def __init__(self,
-                 directory:str,
+                 files:str,
                  use_cache:bool=False,
                  transform=None):
                      
-        assert directory_exists(directory)
-        self.image_paths=get_all_files(directory,sort_by='number')
+        assert directory_exists(files) or isinstance(files,list)
+        if isinstance(files,str):
+            self.image_paths=get_all_files(files,sort_by='number')
+        else:
+            self.image_paths=files
         self.transform=transform
         self.use_cache=use_cache
     
@@ -19065,6 +19151,20 @@ class ImageDataset:
             image=self.transform(image)
         return image
         
+def file_line_iterator(file_name):
+    #Opens a file and iterates through its lines
+    #Needs a better name
+    file=open(file_name)
+    while True:
+        line=file.readline()
+        if not line:
+            return
+        #I DONT KNOW WHY THIS ASSERTION DOESN'T ALWAYS WORK BUT SOMETIMES IT FAILS...
+        if line.endswith('\n'):
+            yield line[:-1]
+        else:
+            yield line
+    
 
 if __name__ == "__main__":
     print(end='\r')

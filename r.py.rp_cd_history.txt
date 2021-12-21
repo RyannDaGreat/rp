@@ -18,7 +18,6 @@
 /Library
 /usr
 /Users
-/Users/Ryan/Desktop/CleanCode/Sandbox/scrap
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot
 /Users/Ryan/Desktop/CleanCode/SBU/Research
 /Users/Ryan/Desktop/CleanCode/SBU/Research/ReverseDynamics
@@ -52,11 +51,17 @@
 /Users/Ryan/Documents/Image-Line/FL Studio
 /Users/Ryan/Documents/Image-Line
 /Users/Ryan/Documents
-/Users/Ryan/Desktop
-/Users/Ryan/Desktop/CleanCode
 /Users/Ryan/Desktop/CleanCode/Resume/Attempt1
-/Users/Ryan/Desktop/CleanCode/Resume
 /Users/Ryan/Desktop/CleanCode/Resume/Latex
 /Users/Ryan/Desktop/CleanCode/Resume/Latex/Attempt1
-/Users/Ryan
+/Users/Ryan/Desktop/Lowres
+/Users/Ryan/Desktop/CleanCode/Resume
+/Users/Ryan/Desktop
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/pygments/lexers
+/Users/Ryan/Desktop/CleanCode/Sandbox/scrap
+/Users/Ryan/Desktop/CleanCode
+/Users/Ryan/Desktop/CSE548_Last_HW
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+/Users/Ryan/Desktop/Screenshots
+/Users/Ryan
