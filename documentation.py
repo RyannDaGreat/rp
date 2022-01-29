@@ -28,6 +28,24 @@ When it makes sense, - will be turned into _.
 	#	
 
 
+#FZF Notes:
+	When in regular (non-fuzzy) mode, you *almost* can do everything you can do in fuzzy mode by inserting spaces between every character
+	The following searches for everything that contains 'jedi' but not 'rp.libs.jedi'
+		jedi !rp.libs.jedi
+	The following searches for every line containing 'from jedi'
+		from\ jedi
+	The following searches for every line containing both 'from' and 'import'
+		from import
+	The following is equivalent to the above because order doesnt matter:
+		import from
+	The following is equivalent to the above because it appears to only care about sets:
+		import from import from import from from from import import import
+	The following searches for a line starting with the letter H and ending with #
+		^H $#
+	The following searches for a line starting with the letter H and NOT ending with #
+		^H !$#
+
+
 
 ##################CSE526 PLANS
 
@@ -267,6 +285,7 @@ MICROCOMPLETIONS:
 			\ya   yapf autoformatter      (autoformats your current code buffer using google's yapf library)
 			\bla  black autoformatter     (autoformats your current code buffer using the 'black' library: pypi.org/project/black )
 			\sim  sort imports            (sorts and organizes all imports in the current buffer, using the 'isort' library)
+			\rms  remove star             (turns all 'from x import *' into explicit 'from x import y,z,...' etc)
 			\fn   function name           (writes the name of the current function)
 			\gg   go to top               (like gg in vim. bring cursor to the top of the buffer)
 			\GG   go to bottom            (like G in vim. bring cursor to the bottom of the buffer)

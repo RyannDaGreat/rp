@@ -2410,6 +2410,7 @@ def load_python_bindings(python_input):
                                              }
                         header_commands={
                                          '\\sim':'sort_imports',
+                                         '\\rms':'remove_star',
                                          '\\bla':'black',
                                          '\\sg':'save_gist',
                                          '\\lg':'load_gist',
@@ -2773,6 +2774,14 @@ def load_python_bindings(python_input):
                                         buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
                                     except BaseException as e:
                                         buffer.insert_text('#sort_imports: Error: '+str(e).replace('\n',' ; '))
+                                if header=='remove_star':
+                                    try:
+                                        from rp.r import _removestar
+                                        text=buffer.document.text
+                                        text=_removestar(text)
+                                        buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    except BaseException as e:
+                                        buffer.insert_text('#remove_star: Error: '+str(e).replace('\n',' ; '))
                                 if header=='source_code':
                                     #Sets ans=rp.get_source_code(current buffer)
                                     indent=''

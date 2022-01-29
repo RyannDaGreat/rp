@@ -22,7 +22,6 @@
 /Users/Ryan/Desktop/CleanCode/SBU/Research
 /Users/Ryan/Desktop/CleanCode/SBU/Research/ReverseDynamics
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1/images/2
-/Users/Ryan/Downloads
 /Users/Ryan/Desktop/CleanCode/SBU/Classes/Undergrad/CSE350
 /Users/Ryan/Desktop/AMS548_HW1_Ryan_Burgert_110176886
 /Users/Ryan/Desktop/CleanCode/SBU/Classes/CSE548_Algorithms
@@ -30,7 +29,6 @@
 /Users/Ryan/PycharmProjects/RyanBStandards_Python3.5
 /Users/Ryan/Desktop/DiffRendering
 /Users/Ryan/Desktop/CleanCode/Sandbox/lab-simulation-builder/src
-/Users/Ryan/Desktop/CleanCode/Sandbox
 /Users/Ryan/Desktop/CleanCode/Sandbox/Lab-In-A-Cube_2/src
 /Users/Ryan/Desktop/CleanCode/Sandbox/lab-simulation-builder/public
 /Users/Ryan/Desktop/CleanCode/Sandbox/lab-simulation-builder
@@ -56,12 +54,15 @@
 /Users/Ryan/Desktop/CleanCode/Resume/Latex/Attempt1
 /Users/Ryan/Desktop/Lowres
 /Users/Ryan/Desktop/CleanCode/Resume
-/Users/Ryan/Desktop
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/pygments/lexers
-/Users/Ryan/Desktop/CleanCode/Sandbox/scrap
 /Users/Ryan/Desktop/CleanCode
 /Users/Ryan/Desktop/CSE548_Last_HW
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
 /Users/Ryan/Desktop/Screenshots
+/Users/Ryan/Desktop/CleanCode/Sandbox
+/Users/Ryan/Desktop/CleanCode/Sandbox/scrap
+/Users/Ryan/Desktop
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+/Users/Ryan/Desktop/CleanCode/Glass/media/ryan/Noman/Ubuntu/CleanCode/Scrapbook/archived_experiments/rudalle/Images
+/Users/Ryan/Downloads
 /Users/Ryan

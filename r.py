@@ -1075,6 +1075,7 @@ def random_index(array_length_or_array_itself):
     # Returns a random integer ∈ ℤ ⋂ [0‚array_length)
     if isinstance(array_length_or_array_itself,int):
         assert array_length_or_array_itself != 0
+        from random import randrange #randrange(0,x) ==== randint(0,x-1)
         return randint(0,array_length_or_array_itself - 1)
     else:
         return random_index(len(array_length_or_array_itself))
@@ -1652,6 +1653,9 @@ def save_image(image,file_name=None,add_png_extension: bool = True):
     else:
         #Suppress any warnings about losing data when coming from a float_image...that's a given, considering that png's only have one byte per color channel...
         image=as_byte_image(image)
+    
+    if file_name.startswith('~'):
+        file_name=get_absolute_path(file_name)
 
     if not folder_exists(get_parent_folder(file_name)):
         #If the specified path's folders don't exist, make them. Don't whine and throw errors.
@@ -2271,7 +2275,7 @@ def play_sound_file(path):
     try:
         if currently_running_linux():
             samples,samplerate=load_sound_file(path,samplerate=True)
-            ic(samples,samplerate)
+            # ic(samples,samplerate)
             play_sound_from_samples(samples,samplerate)
 
         elif currently_running_mac():
@@ -2566,6 +2570,7 @@ def _display_image_slideshow_animated(images):
             html=HTML(ani.to_jshtml())
             from IPython.display import display_html
             display_html(html)
+            plt.close() #We have to call plt.close, or else it will display an additional image under the animation
         else:
             plt.show()
             
@@ -6216,25 +6221,34 @@ default_python_input_eventloop = None  # Singleton for python_input
 #     # print("THE DEMON SCREAMS")
 def split_into_sublists(l,sublist_len:int,strict=False,keep_remainder=True):
     # If strict: sublist_len MUST evenly divide len(l)
+    # It will return a list of tuples, unless l is a string, in which case it will return a list of strings
     # keep_remainder is not applicable if strict
     # if not keep_remainder and sublist_len DOES NOT evenly divide len(l), we can be sure that all tuples in the output are of len sublist_len, even though the total number of elements in the output is less than in l.
     # EXAMPLES:
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,3 ,0)   ⟶ [(1,2,3),(4,5,6),(7,8,9)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,0)   ⟶ [(1,2,3,4),(5,6,7,8),(9,)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,5 ,0)   ⟶ [(1,2,3,4,5),(6,7,8,9)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,6 ,0)   ⟶ [(1,2,3,4,5,6),(7,8,9)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0)   ⟶ [(1,2,3,4,5,6,7,8,9)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0,1) ⟶ [(1,2,3,4,5,6,7,8,9)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0,0) ⟶ []
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,5 ,0,0) ⟶ [(1,2,3,4,5)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,0,0) ⟶ [(1,2,3,4),(5,6,7,8)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,3 ,0,0) ⟶ [(1,2,3),(4,5,6),(7,8,9)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,1,0) ⟶ ERROR: ¬ 4 | 9
+    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,3 ,0)   -> [(1,2,3),(4,5,6),(7,8,9)]
+    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,0)   -> [(1,2,3,4),(5,6,7,8),(9,)]
+    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,5 ,0)   -> [(1,2,3,4,5),(6,7,8,9)]
+    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,6 ,0)   -> [(1,2,3,4,5,6),(7,8,9)]
+    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0)   -> [(1,2,3,4,5,6,7,8,9)]
+    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0,1) -> [(1,2,3,4,5,6,7,8,9)]
+    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0,0) -> []
+    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,5 ,0,0) -> [(1,2,3,4,5)]
+    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,0,0) -> [(1,2,3,4),(5,6,7,8)]
+    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,3 ,0,0) -> [(1,2,3),(4,5,6),(7,8,9)]
+    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,1,0) -> ERROR: ¬ 4 | 9
+
     assert is_number(sublist_len),'sublist_len should be an integer, but got type '+repr(type(sublist_len))
     if strict:
         assert not len(l)%sublist_len,'len(l)=='+str(len(l))+' and sublist_len=='+str(sublist_len)+': strict mode is turned on but the sublist size doesnt divide the list input evenly. len(l)%sublist_len=='+str(len(l)%sublist_len)+'!=0'
     n=sublist_len
-    return list(zip(*(iter(l),) * n))+([tuple(l[len(l)-len(l)%n:])] if len(l)%n and keep_remainder else [])
+
+    #This line is rather dense, but it makes sense.
+    output=list(zip(*(iter(l),) * n))+([tuple(l[len(l)-len(l)%n:])] if len(l)%n and keep_remainder else [])
+    
+    if isinstance(l,str):
+        output=[''.join(substring) for substring in output]
+
+    return output
 
 def rotate_image(image, angle_in_degrees):
     #Returns a rotated image by angle_in_degrees, clockwise
@@ -6829,11 +6843,17 @@ top_space=0,
     )
 _pyin_settings_file_path=__file__+'.rp_pyin_settings'
 _globa_pyin=[None]
+
+
+_rprc_pterm_settings_overrides={}#Modify this as you wish in an rprc.
+
+
 def _load_pyin_settings_file():
     # print("BOOTLEGER",pyin)
     _globa_pyin[0]=pyin
     try:
         settings=eval(text_file_to_string(_pyin_settings_file_path))
+        settings.update(_rprc_pterm_settings_overrides)
         for setting in _default_pyin_settings:
             assert setting in settings
     except Exception:
@@ -6855,6 +6875,20 @@ def _save_pyin_settings_file():
 
 def _delete_pyin_settings_file():
     delete_file(_pyin_settings_file_path)
+
+def _set_pterm_theme(ui_theme_name=None,code_theme_name=None):
+    #EXAMPLE:
+    #    _set_pterm_theme('saturn','gruvbox-dark')
+    import rp.r as r    
+    import rp.rp_ptpython.style as s
+    
+    if ui_theme_name   is None:ui_theme_name=_current_ui_style_name
+    if code_theme_name is None:ui_theme_name=_current_code_style_name
+    
+    #r.pyin._current_code_style_name='vim'
+    #r.pyin._current_code_style_name='gruvbox-dark'
+    r.pyin._current_code_style_name=code_theme_name
+    r.pyin.use_ui_colorscheme(ui_theme_name)
 
 
 _pt_pseudo_terminal_init_settings=False
@@ -7236,7 +7270,7 @@ def display_file_tree(root=None,*,all=False,only_directories=False,traverse_syml
                 extension=all_unhidden_file_extensions[0]
                 if extension.strip():
                     stats.append('%i .%s file'%(len(all_unhidden_file_extensions),extension)+('s' if len(files)!=1 else ''))
-                    if extension in image_file_extensions:
+                    if extension.lower() in image_file_extensions:
                         dims=None
                         try:
                             display_dims=True
@@ -7267,7 +7301,7 @@ def display_file_tree(root=None,*,all=False,only_directories=False,traverse_syml
         elif is_a_file(path):
             stats.append(get_file_size(path,human_readable=True))
             extension=get_file_extension(path)
-            if extension in image_file_extensions:
+            if extension.lower() in image_file_extensions:
                 try:
                     stats.append('x'.join(map(str,get_image_file_dimensions(path))))
                 except Exception:pass#Maybe it wasn't actually an image file...
@@ -7468,6 +7502,16 @@ def _rma(ans):
         print('Deleted path: '+ans)
     else:
         print('Deletion cancelled.'+ans)
+
+def _cpah(paths,method=None):
+    if method is None:
+        method=copy_path
+    if isinstance(paths,str) and '\n' in paths:
+        paths=line_split(paths)
+    if isinstance(paths,str):
+        paths=[paths]
+    for path in paths:
+        copy_path(path,'.')
 
 
 #def pudb_shell(_globals,_locals_):
@@ -8217,8 +8261,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         RG RNG
         VS VARS
-
         OP OPEN
+
         OPH OPENH
         OH OPENH
         OPA OPENA
@@ -8253,44 +8297,72 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         DKH DISKH
          KH DISKH
+
         GOO  $open_google_search_in_web_browser(str(ans))
         GOOP $open_google_search_in_web_browser(string_from_clipboard())
-        ALSF $get_all_paths(get_current_directory(),include_files=True,include_folders=False,relative=True)
+
         SMI $os.system("nvidia-smi");
         NVT $os.system("nvtop");#sudo_apt_install_nvtop
         ZSH $os.system("zsh");
+
         BA   $os.system("bash");
         S   $os.system("sh");
         Z   $os.system("zsh");
+
         NB  $extract_code_from_ipynb()
         NBA  $extract_code_from_ipynb(ans)
         NBC  $r._clear_jupyter_notebook_outputs()
         NBCA $r._clear_jupyter_notebook_outputs(ans)
         NCA  $r._clear_jupyter_notebook_outputs(ans)
+
         INS $input_select("Select:",ans)
         ISA $input_select("Select:",ans)
+        ISM $pip_import('iterfzf').iterfzf(ans,multi=True,exact=True)
+        IMA $pip_import('iterfzf').iterfzf(ans,multi=True,exact=True)
+        IMS $pip_import('iterfzf').iterfzf(ans,multi=True,exact=True)
+
         VCL $delete_file($get_absolute_path('~/.viminfo'))#VimClear_use_when_VCOPY_doesnt_work_properly
+
+        ALSF $get_all_paths(get_current_directory(),include_files=True,include_folders=False,relative=True)
+        LSAG  $get_all_paths  (relative=False,sort_by='name')
+        LSAFG $get_all_files  (relative=False,sort_by='name')
+        LSADG $get_all_folders(relative=False,sort_by='name')
+        LSM   $pip_import('iterfzf').iterfzf(get_all_paths('.',relative=False,sort_by='name'),multi=True,exact=True)
+
         IASM $import_all_submodules(ans,verbose=True);
+
         SUH $sublime('.')
         SUA $sublime(ans)
         COH $vscode('.')
         COA $vscode(ans)
+
         SG $save_gist(ans)
         LG $load_gist(input($fansi('URL:','blue','bold')))
         LGA $load_gist(ans)
         OG $load_gist($input_select(options=$line_split($text_file_to_string($path_join($get_parent_folder($get_module_path($rp)),'old_gists.txt')))))
-        CAH  $copy_path(ans,'.')
-        CPAH $copy_path(ans,'.')
-        CPPH $copy_path(string_from_clipboard(),'.')
-        CPH  $copy_path(string_from_clipboard(),'.')
-        MAH  $move_path(ans,'.')
-        MVAH $move_path(ans,'.')
-        MVPH $move_path(string_from_clipboard(),'.')
-        MPH  $move_path(string_from_clipboard(),'.')
+
+        # CAH  $copy_path(ans,'.')
+        # CPAH $copy_path(ans,'.')
+        CAH  $r._cpah(ans)
+        CPAH $r._cpah(ans)
+        # CPPH $copy_path($string_from_clipboard(),'.')
+        # CPH  $copy_path($string_from_clipboard(),'.')
+        CPPH $r._cpah($string_from_clipboard())
+        CPH  $r._cpah($string_from_clipboard())
+
+        # MAH  $move_path(ans,'.')
+        # MVAH $move_path(ans,'.')
+        # MVPH $move_path($string_from_clipboard(),'.')
+        # MPH  $move_path($string_from_clipboard(),'.')
+        MAH  $r._cpah(ans,$move_path)
+        MVAH $r._cpah(ans,$move_path)
+        MVPH $r._cpah($string_from_clipboard(),$move_path)
+        MPH  $r._cpah($string_from_clipboard(),$move_path)
 
         GCLP $git_clone($string_from_clipboard())
         GCLA $git_clone(ans)
         GURL $get_git_remote_url()
+        WGA $os.system('wget\\x20'+ans)
 
         LNAH $os.symlink(ans,$get_file_name(ans));ans=$get_file_name(ans)#Created_Symlink
         LN   $os.symlink(ans,$get_file_name(ans));ans=$get_file_name(ans)#Created_Symlink
@@ -8301,6 +8373,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         DCI $display_image_in_terminal_color(ans)
         
+        GP $get_parent_directory(ans)
+
         FCA $web_copy_path(ans)
         FCH print("FCH->FileCopyHere");$web_copy_path('.')
         RMA $r._rma(ans)
@@ -8323,9 +8397,16 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         # BB set_current_directory(r._get_cd_history()[-2]);fansi_print('BB-->CDH1-->'+get_current_directory(),'blue','bold')#Use_BB_instead_of_CDH_<enter>_1_<enter>_to_save_time_when_starting_rp
         #Note: \x20 is the space character
         command_shortcuts=line_split(command_shortcuts_string)
+        
         command_shortcuts=list(map(str.strip,command_shortcuts))
+        command_shortcuts=[x for x in command_shortcuts if not x.startswith('#')]
         command_shortcuts=[x for x in command_shortcuts if x]
         command_shortcuts_pairs=list(map(str.split,command_shortcuts))
+        def join_command(pair):
+            #Let us have spaces on the right side
+            return [pair[0],' '.join(pair[1:])]
+    
+        command_shortcuts_pairs=list(map(join_command,command_shortcuts_pairs))
         command_shortcuts={x:y for x,y in command_shortcuts_pairs}
         for key in list(command_shortcuts):
             command_shortcuts[key.lower()]=command_shortcuts[key]#Make it case-insensitive
@@ -9570,6 +9651,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 user_message='CCAT '+input_select_file()
 
                             file_name=user_message[user_message.find(' '):].strip()
+                            if file_name.startswith('~'):file_name=get_absolute_path(file_name)
                             try:
                                 fansi_print("ACAT: Copying to your ans the contents of "+repr(file_name),"blue",'bold')
                                 if is_valid_url(file_name) and get_file_extension(file_name) in 'jpg png gif tiff tga jpeg bmp exr'.split():
@@ -9847,14 +9929,14 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             #Hopefully there's some way to sort the FZF results...
                             #Also, it would be nice if we didn't show irrelevant search results. For example, when searchig for a folder 'Thing', having 'Thing/Stuff' show up doesn't make sense when 'Thing' was already a result
                             if user_message in ['LSQ','LS QUE']:    
-                                fansi_print("LS QUE aka LSQ --> LS Query --> Please select a file or folder (this is basically LS FZF, but requires an exact match)",'blue','underlined')
+                                fansi_print("LS QUE aka LSQ --> LS Query --> Please select a file(s) or folder(s) (this is basically LS FZF, but requires an exact match)",'blue','underlined')
                                 exact=True
                             else:
-                                fansi_print("LS FZF aka LSZ --> LS Fuzzy-Select --> Please select a file or folder",'blue','underlined')
+                                fansi_print("LS FZF aka LSZ --> LS Fuzzy-Select --> Please select a file(s) or folder(s)",'blue','underlined')
                                 exact=False
 
                             try:
-                                result=_iterfzf((line.replace('\n',' ').replace('\r',' ') for line in breadth_first_path_iterator('.')),exact=exact)
+                                result=_iterfzf((line.replace('\n',' ').replace('\r',' ') for line in breadth_first_path_iterator('.')),exact=exact,multi=True)
                             except:
                                 result=None
 
@@ -9864,6 +9946,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 # user_message=''
                             else:
                                 # result=get_absolute_path(result)
+                                if len(result)==1:
+                                    result=result[0]
                                 user_message=repr(result)
 
 
@@ -10067,6 +10151,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 user_message='CD ..'
                             if user_message=='CDA':
                                 new_dir=str(get_ans())
+                                new_dir=get_absolute_path(new_dir)
+                                if is_a_file(new_dir):
+                                    new_dir=get_parent_directory(new_dir)
                                 if is_a_module(get_ans()):
                                     new_dir=get_module_path(get_ans())
                                 elif not isinstance(get_ans(),str):
@@ -11388,6 +11475,8 @@ _pip_import_blacklist=_rp_persistent_set()
 
 def pip_import(module_name,package_name=None):
     """
+    TODO: Make this function only request sudo if we need it. Otherwise it's a nuisance.
+    TODO: Add an "always" option to "yes" and "no" for installing modules.
     #Attempts to import a module, and if successful returns it.
     #If it's unsuccessful, it attempts to find it on pypi, and if
     #    it can, it asks you if you'd like to install it, and if
@@ -11478,7 +11567,75 @@ def remove_all_whitespace(string):
 
 #region OpenCV Helpers
 
+def labeled_image(image,
+                  text:str,
+                  size=15,
+                  position='top',
+                  align='center',
+                  text_color=(255,255,255)
+                 ):
+    #Adds a label to an image and returns an image
+    #'size' is either measured in pixels, or is in proportion to the image size
+    #EXAMPLES:
+    #     image=load_image('http://hi-bk.com/wp-content/uploads/2020/08/hibkdog.png',use_cache=True)
+    #     display_image(labeled_image(image,'hello',10))
+    #     display_image(labeled_image(image,'hello',25))
+    #     display_image(labeled_image(image,'hello',.1))
+    #     display_image(labeled_image(image,'hello',.1,align='left'))
+    #     display_image(labeled_image(image,'hello',.1,align='right'))
+    #     display_image(labeled_image(image,'hello',.1,align='center'))
+    #     display_image(labeled_image(image,'hello',.1,position='top'))
+    #     display_image(labeled_image(image,'hello',.1,position='bottom'))
+    #     display_image(labeled_image(image,'hello',.5))
+    #     display_image(labeled_image(image,'hello',.9))
+    #     display_image(labeled_image(image,'hello habba booboo gabba',.9))
+    #     display_image(labeled_image(image,'hello habba booboo gabba',.1))
+    #TODO: Add multiple colors, such as black on white
 
+    assert is_image(image)
+    assert position in ['top','bottom'] #TODO: Add left, right
+    assert align in ['left','right','center']
+    assert isinstance(size,float) or isinstance(size,int)
+    assert size>0
+
+    text=str(text)
+    
+    if position in ['top','bottom']:
+        if isinstance(size,float):
+            height=int(get_image_height(image)*size)
+        else:
+            assert isinstance(size,int)
+            height=size
+            
+        height=max(height,1)         #Label height in pixels
+        width=get_image_width(image) #Label width in pixels
+        
+        label=cv_text_to_image(text,color=text_color)
+        label=cv_resize_image(label,height/get_image_height(label))  
+        if get_image_width(label)>width:
+            label=cv_resize_image(label,width/get_image_width(label))
+            
+        label=as_rgb_image(label)
+        
+        label=crop_image(label,height=height,origin='center')
+        label=crop_image(label,width=width,origin={'left'  :'top left'    ,
+                                                   'right' :'bottom right',
+                                                   'center':'center'      ,}[align])
+        
+        if position=='top':
+            return vertically_concatenated_images(label,image)
+        
+        if position=='bottom':
+            return vertically_concatenated_images(image,label)
+        
+    assert False,'This line should be unreachable'
+
+def labeled_images(images,labels,*args,**kwargs):
+    #The plural of labeled_image
+    images=list(images)
+    labels=list(labels)
+    assert len(images)==len(labels)
+    return [labeled_image(image,label,*args,**kwargs) for image,label in zip(images,labels)]
 
 def cv_text_to_image(text,*,scale=2,font=3,thickness=2,color=(255,255,255),tight_fit=False,background_color=(0,0,0)):
     lines=text.splitlines()
@@ -13038,6 +13195,7 @@ def get_relative_path(path,parent_directory=None):
 def get_absolute_path(path):
     #Given a relative path, return its absolute path
     path=os.path.expanduser(path)#In case the path has a '~' in it
+    path=os.path.realpath(path)#Get rid of any symlinks in the path
     return os.path.abspath(path)
 
 def has_file_extension(file_path):
@@ -13059,17 +13217,20 @@ def date_accessed(path):
     import datetime
     return datetime.datetime.fromtimestamp(timestamp)
     
-def get_all_paths(*directory_path                   ,
-                   sort_by                  = None  ,
-                   file_extension_filter    = None  ,
-                   recursive                = False ,
-                   include_files            = True  ,
-                   include_folders          = True  ,
-                   just_file_names          = False ,
-                   include_file_extensions  = True  ,
-                   relative                 = False ,
-                   ignore_permission_errors = False ,
-                   hidden_paths_last        = True  , #WARNING: This signature might change in the future to something that allows you to disclude hidden paths or put them first or separate controls for folders and files
+def get_all_paths(*directory_path                    ,
+                   sort_by                  = None   ,
+                   file_extension_filter    = None   ,
+                   recursive                = False  ,
+                   include_files            = True   ,
+                   include_folders          = True   ,
+                   just_file_names          = False  ,
+                   include_file_extensions  = True   ,
+                   relative                 = False  ,
+                   ignore_permission_errors = False  ,
+                   include_hidden           = True   ,
+                   include_symlinks         = True   ,
+                   folder_placement         = 'first',
+                   hidden_placement         = 'last' ,
                    ):
     #Returns global paths.
     #If relative is False, we return global paths. Otherwise, we return relative paths to the current working directory 
@@ -13082,7 +13243,10 @@ def get_all_paths(*directory_path                   ,
     #directory_path can be composed of multiple paths (specified in varargs); this function will join them for you.
     #If include_global_path is true, we return the whole global file path of all files in the directory (as opposed to just returning their names)
     #If file_extension_filter is not None and file_types is a space-separated string, only accept those file extensions
+    #If not include_symlinks, it will notinclude any symlinks in the output. If it is recursive, it will skip any symlink directories.
     #sort_by can be None, or it can be a string
+    #hidden_placement can be None, or it can be a string
+    #folder_placement can be None, or it can be a string
     #EXAMPLES:
     #
     #    >>> get_all_paths('Tests/First','Inputs',sort_by='name')
@@ -13135,6 +13299,10 @@ def get_all_paths(*directory_path                   ,
         if include_files  :output+=file_paths
         if include_folders:output+=subdirectory_paths
 
+        if not include_symlinks:
+            output             = [x for x in output             if not is_symbolic_link(x)]
+            subdirectory_paths = [x for x in subdirectory_paths if not is_symbolic_link(x)]
+
         if recursive:
             for subdirectory_path in subdirectory_paths:
                 output+=recursion_helper(subdirectory_path)
@@ -13154,13 +13322,7 @@ def get_all_paths(*directory_path                   ,
             }
             assert sort_by in sort_by_options,'get_file_paths: sort_by specifies how to sort the files. Please set sort_by to one of the following strings: '+', '.join(map(repr,sorted(sort_by_options)))+'. (You chose repr(sort_by)=='+repr(sort_by)+' with repr(type(sort_by))=='+repr(type(sort_by))
             output.sort(key=sort_by_options[sort_by])
-
-            if hidden_paths_last:
-                hidden_paths    =[path for path in output if     get_file_name(path).startswith('.')]
-                non_hidden_paths=[path for path in output if not get_file_name(path).startswith('.')]
-                output[:]=non_hidden_paths+hidden_paths
                 
-
         if file_extension_filter is not None:
             #'x.png' --> 'x', 'text.txt' --> 'txt', etc. (See strip_file_extension for more details)
             assert type(file_extension_filter)==str,'get_file_paths: For file_extension_filter, right now only space-split whitelists are supported, such as "png jpg bmp gif"'
@@ -13179,6 +13341,29 @@ def get_all_paths(*directory_path                   ,
         return output
 
     output=recursion_helper(directory_path)
+
+    assert not folder_placement or folder_placement in ['first','last']
+    assert not hidden_placement or hidden_placement in ['first','last']
+    hidden_placement = hidden_placement.lower().strip()
+    folder_placement = folder_placement.lower().strip()
+
+    def is_hidden(path):
+        return get_file_name(path).startswith('.')
+
+    if not include_hidden:
+        output=[path for path in output if not is_hidden(path)]
+
+    if hidden_placement:
+        hidden_paths    =[path for path in output if     is_hidden(path)]
+        non_hidden_paths=[path for path in output if not is_hidden(path)]
+        if hidden_placement=='last' : output[:]=non_hidden_paths+hidden_paths
+        if hidden_placement=='first': output[:]=hidden_paths+non_hidden_paths
+
+    if folder_placement:
+        folder_paths    =[path for path in output if     is_a_folder(path)]
+        non_folder_paths=[path for path in output if not is_a_folder(path)]
+        if folder_placement=='last' : output[:]=non_folder_paths+folder_paths
+        if folder_placement=='first': output[:]=folder_paths+non_folder_paths
 
     if relative:
         #Return relative paths instead of absolute paths
@@ -13534,8 +13719,9 @@ def tiled_images(images,length=None,border_color=(.5,.5,.5,1),border_thickness=1
     #   display_image_in_terminal_color(tiled_images([load_image('https://i.pinimg.com/236x/36/69/39/36693999b6e24b1d06d0ee21c9ae320d--caged-nicolas-cage.jpg')]*25))
     #Sugar for what I often do with grid_concatenated_images
     images=list(images)
+    from math import ceil
     if length is None:
-        length=max(1,int(len(images)**.5))
+        length=max(1,int(ceil(len(images)**.5)))
     format_image=lambda image: bordered_image_solid_color(image,color=border_color,thickness=border_thickness,top=0,left=0)
     images=[format_image(image) for image in images]
     images=split_into_sublists(images,length)
@@ -14283,7 +14469,9 @@ def input_integer(minimum=None,maximum=None):
     else: assert False, 'This should be an unreachable line'
 
 
+
 def input_select(question='Please select an option:',options=[],stringify=repr,reverse=False):
+    #TODO: In order to make this truly customizable, such as adding multi-select options for fuzzy searching or fuzzy searching through paths etc, we need to make this a class that can be inherited from
     #Allow the user to choose from a list of numbered options
     #stringify is how we turn options into strings (options dont have to be strings)
     #Example: Try running 'input_select_option(options=['Hello','Goodbye','Bonjour'])'
@@ -16885,6 +17073,10 @@ def _set_ryan_rprc():
     
 
 def _set_ryan_vimrc():
+    try:pip_import('isort')
+    except Exception:print("Skipped pip install isort...")
+    try:pip_import('macchiato','black-macchiato')
+    except Exception:print("Skipped pip install black-macchiato...")
     vimrc=text_file_to_string(get_module_path_from_name('rp.ryan_vimrc'))
     string_to_text_file(get_absolute_path('~/.vimrc'),vimrc)
     shell_command('git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim')
@@ -17824,7 +18016,7 @@ def cv_resize_image(image,size,interp='bilinear'):
     height=int(height)
     width =int(width)
     
-    out = cv2.resize(image,(width,height),interp_method)
+    out = cv2.resize(image,(width,height),interpolation=interp_method)
     
     return out
 
@@ -17843,6 +18035,7 @@ def breadth_first_path_iterator(root='.'):
     #        print(path)
     import os
     dirs = [root]
+    seen = set()
     # while we has dirs to scan
     while len(dirs) :
         nextDirs = []
@@ -17853,6 +18046,12 @@ def breadth_first_path_iterator(root='.'):
                     # if there is a dir, then save for next ittr
                     # if it  is a file then yield it (we'll return later)
                     ff = os.path.join( parent, f )
+                    af = get_absolute_path(ff)
+                    if af in seen:
+                        #Don't let symlink loops make this function go on infinitely
+                        continue
+                    seen.add(af)
+
                     if os.path.isdir( ff ) :
                         yield ff
                         nextDirs.append( ff )
@@ -18689,6 +18888,11 @@ def get_mac_address_vendor(address:str)->str:
     return MacLookup().lookup(address)
 
 try:
+    #Don't pester people to death to download icrecream...
+    from icecream import ic#This is a nice library...I reccomend it for debugging. It's really simple to use, too. EXAMPLE: a=1;b=2;ic(a,b)
+except Exception:pass
+
+try:
     # import numpy as np
     def autoimportable_module(module_name):
         class LazyloadedModule(type(rp)):
@@ -18964,19 +19168,44 @@ def detect_apriltags(image,family:str='tag36h11'):
 def _display_filetype_size_histogram(root='.'):
     assert is_a_folder(root)
 
-    paths=get_all_paths(root,recursive=True,ignore_permission_errors=True,include_files=True,include_folders=False)
-
-    paths=[path for path in paths if not is_symbolic_link(path)] #Don't include symlinks in the overall count for file sizes
+    paths = get_all_paths(
+        root                            ,
+        recursive                = True ,
+        ignore_permission_errors = True ,
+        include_files            = True ,
+        include_folders          = False,
+        include_symlinks         = False,
+    )
 
     filetypes=set(get_file_extension(file) for file in paths)
-    mem_hist={filetype:sum(get_file_size(file,human_readable=False) for file in paths if get_file_extension(file)==filetype) for filetype in filetypes}
-    num_hist={filetype:len([file for file in paths if get_file_extension(file)==filetype]) for filetype in filetypes}
+
+    mem_hist = {
+        filetype: sum(
+            get_file_size(file, human_readable=False)
+            for file in paths
+            if get_file_extension(file) == filetype
+        )
+        for filetype in filetypes
+    }
+
+    num_hist = {
+        filetype: len([file for file in paths if get_file_extension(file) == filetype])
+        for filetype in filetypes
+    }
         
     entries=[]
     for filetype in sorted(set(mem_hist),key=mem_hist.get):
         mem_percent=mem_hist[filetype]/sum(mem_hist.values())
         mem_percent*=100
-        entries.append((filetype,'    ',human_readable_file_size(mem_hist[filetype]),'   %10.5f%%'%mem_percent,'    %i'%num_hist[filetype],))
+        entries.append(
+            (
+                filetype,
+                "    ",
+                human_readable_file_size(mem_hist[filetype]),
+                "   %10.5f%%" % mem_percent,
+                "    %i" % num_hist[filetype],
+            )
+        )
 
     ans=horizontally_concatenated_strings(list(map(line_join,zip(*entries))),rectangularize=True)
         
@@ -19057,27 +19286,25 @@ def get_git_info(folder='.'):
     import git
     repo=git.Repo(folder)
     info={}
-    info['active_branch']    = repo.active_branch                                  
-    info['alternates']       = repo.alternates                                  
-    info['bare']             = repo.bare                                  
-    info['branches']         = repo.branches                                  
-    info['common_dir']       = repo.common_dir                                  
-    info['daemon_export']    = repo.daemon_export                                  
-    info['description']      = repo.description                                  
-    info['head']             = repo.head                                  
-    info['heads']            = repo.heads                                  
-    info['index']            = repo.index                                  
-    info['references']       = repo.references                                  
-    info['refs']             = repo.refs                                  
-    info['remotes']          = repo.remotes                                  
-    info['submodules']       = repo.submodules                                  
-    info['tags']             = repo.tags                                  
-    info['untracked_files']  = repo.untracked_files                                  
-    info['working_tree_dir'] = repo.working_tree_dir                                  
+    info['active_branch'   ] = repo.active_branch
+    info['alternates'      ] = repo.alternates
+    info['bare'            ] = repo.bare
+    info['branches'        ] = repo.branches
+    info['common_dir'      ] = repo.common_dir
+    info['daemon_export'   ] = repo.daemon_export
+    info['description'     ] = repo.description
+    info['head'            ] = repo.head
+    info['heads'           ] = repo.heads
+    info['index'           ] = repo.index
+    info['references'      ] = repo.references
+    info['refs'            ] = repo.refs
+    info['remotes'         ] = repo.remotes
+    info['submodules'      ] = repo.submodules
+    info['tags'            ] = repo.tags
+    info['untracked_files' ] = repo.untracked_files
+    info['working_tree_dir'] = repo.working_tree_dir
     return info
 
-try:from icecream import ic#This is a nice library...I reccomend it for debugging. It's really simple to use, too. EXAMPLE: a=1;b=2;ic(a,b)
-except Exception:pass
 
 def _autoformat_python_code_via_black(code:str):
     pip_import('black')
@@ -19110,6 +19337,14 @@ def as_numpy_images(images):
         return images   
     else:
         raise TypeError('Unsupported image datatype: %s'%type(images))
+
+def as_numpy_image(image):
+    if isinstance(image,np.ndarray):
+        return image.copy()
+    elif _is_torch_tensor(image):
+        return as_numpy_images(image[None])[0]
+    else:
+        assert False,'Unsupported image type: '+str(type(image))
     
 def as_torch_images(images):
     if _is_numpy_array(images) or all(is_image(x) for x in images):
@@ -19123,6 +19358,14 @@ def as_torch_images(images):
         return images
     else:
         raise TypeError('Unsupported image datatype: %s'%type(images))
+
+def as_torch_image(image):
+    if _is_torch_tensor(image):
+        return image.clone()
+    elif isinstance(image,np.ndarray):
+        return as_torch_images(image[None])[0]
+    else:
+        assert False,'Unsupported image type: '+str(type(image))
 
 class ImageDataset:
     #This class is meant to be used with Pytorch dataloaders
@@ -19150,6 +19393,22 @@ class ImageDataset:
         if self.transform:
             image=self.transform(image)
         return image
+
+def _removestar(code:str):
+    #Takes something like:
+    #    from numpy import *
+    #    from rp import *
+    #    asarray([1,2,3])
+    #    display_image(x)
+    #And turns it into this:
+    #    from numpy import asarray
+    #    from rp import display_image
+    #    asarray([1,2,3])
+    #    display_image(x)
+    #It removes the stars
+    pip_import('removestar')
+    from removestar.removestar import fix_code
+    return fix_code(code,file='filename is irrelevant')
         
 def file_line_iterator(file_name):
     #Opens a file and iterates through its lines
@@ -19165,6 +19424,31 @@ def file_line_iterator(file_name):
         else:
             yield line
     
+@memoized
+def get_all_ttf_fonts():
+    #Returns a list of paths to all .ttf fonts on this computer
+    if currently_running_mac():
+        #https://apple.stackexchange.com/questions/35852/list-of-activated-fonts-with-shell-command-in-os-x
+        out=[]
+        out+=['/System/Library/Fonts/'+x for x in shell_command('ls -R /System/Library/Fonts | grep ttf').splitlines()]
+        out+=['/Library/Fonts/'       +x for x in shell_command('ls -R /Library/Fonts | grep ttf'       ).splitlines()]
+        out+=['~/Library/Fonts/'      +x for x in shell_command('ls -R ~/Library/Fonts | grep ttf'      ).splitlines()]
+        out=[get_absolute_path(x) for x in out]
+        out=[x for x in out if file_exists(x)]
+        return tuple(out)
+    elif currently_running_linux():
+        #https://askubuntu.com/questions/552979/how-can-i-determine-which-fonts-are-installed-from-the-command-line-and-what-is
+        ans=shell_command('fc-list')
+        ans=line_split(ans)
+        ans=[x[:x.find(':')] for x in ans]
+        ans=[x for x in ans if file_exists(x)]
+        return tuple(ans)
+    elif currently_running_windows():
+        #https://stackoverflow.com/questions/64070050/how-to-get-a-list-of-installed-windows-fonts-using-python
+        import os
+        return tuple(os.listdir(r'C:\Windows\fonts'))
+    else:
+        assert False,'Unsupported operating system: not mac, windows or linux'
 
 if __name__ == "__main__":
     print(end='\r')
