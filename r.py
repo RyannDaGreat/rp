@@ -7492,16 +7492,25 @@ def _mv(from_path=None,to_dir=None):
     return move_file(from_path,to_dir)
 
 def _rma(ans):
-    if not isinstance(ans,str):
-        raise TypeError('RMA: ans should be a str pointing to a file path, but ans is a '+str(type(ans)))
-    if not path_exists(ans):
-        raise FileNotFoundError(ans)
-    ans=get_absolute_path(ans)
-    if input_yes_no("Are you sure you want to delete %s?"%ans):
-        delete_path(ans)
-        print('Deleted path: '+ans)
+    if not isinstance(ans,str) and not isinstance(ans,list):
+        raise TypeError('RMA: ans should be a str pointing to a file path or a list of file paths, but ans is a '+str(type(ans)))
+    if isinstance(ans,list):
+        bad_paths=[x for x in ans if not path_exists(x)]
+
+        if bad_paths:
+            print("The following paths don't exist:\n"+['    '+x for x in bad_paths])
+        if input_yes_no("Are you sure you want to delete the below paths?\n"+line_join(['    '+x for x in ans])):
+            for x in ans:
+                delete_path(x)
     else:
-        print('Deletion cancelled.'+ans)
+        if not path_exists(ans):
+            raise FileNotFoundError(ans)
+        ans=get_absolute_path(ans)
+        if input_yes_no("Are you sure you want to delete %s?"%ans):
+            delete_path(ans)
+            print('Deleted path: '+ans)
+        else:
+            print('Deletion cancelled.'+ans)
 
 def _cpah(paths,method=None):
     if method is None:
@@ -13230,8 +13239,7 @@ def get_all_paths(*directory_path                    ,
                    include_hidden           = True   ,
                    include_symlinks         = True   ,
                    folder_placement         = 'first',
-                   hidden_placement         = 'last' ,
-                   ):
+                   hidden_placement         = 'last' ):
     #Returns global paths.
     #If relative is False, we return global paths. Otherwise, we return relative paths to the current working directory 
     #If relative is a string, we return paths relative to that string (otherwise if it's just True, we default to directory_path)
@@ -19393,6 +19401,17 @@ class ImageDataset:
         if self.transform:
             image=self.transform(image)
         return image
+
+def load_yaml_file(path):
+    #EXAMPLE:
+    #    >>> load_yaml_file('alphablock_without_ssim_256.yaml')
+    #    ans = {'max_iter': 300000, 'batch_size': 5, 'image_save_iter': 250, ...(etc)... }
+    pip_import('yaml')
+    import yaml
+    assert file_exists(path)
+    text=text_file_to_string(path)
+    data=yaml.safe_load(text)
+    return data
 
 def _removestar(code:str):
     #Takes something like:
