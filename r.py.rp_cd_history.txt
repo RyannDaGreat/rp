@@ -61,8 +61,8 @@
 /Users/Ryan/Desktop/Screenshots
 /Users/Ryan/Desktop/CleanCode/Sandbox
 /Users/Ryan/Desktop/CleanCode/Sandbox/scrap
-/Users/Ryan/Desktop
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
 /Users/Ryan/Desktop/CleanCode/Glass/media/ryan/Noman/Ubuntu/CleanCode/Scrapbook/archived_experiments/rudalle/Images
 /Users/Ryan/Downloads
+/Users/Ryan/Desktop
 /Users/Ryan

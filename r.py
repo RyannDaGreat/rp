@@ -1391,7 +1391,7 @@ def load_images(*locations,use_cache=False,show_progress=False,strict=True):
     if len(locations)==1:
         locations=locations[0]
     if isinstance(locations,str) and is_a_folder(locations):
-        locations=get_all_paths(locations,include_files=True,include_folders=False)
+        locations=get_all_paths(locations,include_files=True,include_folders=False,sort_by='number')
         locations=[location for location in locations if is_image_file(location)]
         return load_images(locations,use_cache=use_cache,show_progress=show_progress,strict=strict)
     if isinstance(locations,str):
@@ -4594,8 +4594,10 @@ def k_means_analysis(data_vectors,k_or_initial_centroids,iterations,tries):
     return centroids,total_distortion,parent_centroid_indexes,parent_centroid_distances
 def is_iterable(x):
     try:
-        for _ in x: pass
-        return True
+        if hasattr(x,'__iter__') or hasattr(x,'__getitem__'):
+            return True
+        # for _ in x: pass
+        # return True
     except:
         return False
 def space_split(x: str) -> list:
@@ -5696,6 +5698,9 @@ def shorten_github_url(url,title=None):
     if not title: del data['code']
     r = requests.post('https://git.io/', data=data)
     out= r.headers.get('Location')
+    if out is None:
+        print("rp.shorten_github_url failed! Please update it; github must have changed somehow. Returning the response for debugging purposes.")
+        return r    
     # print(out)
     return out
 #def post_gist(content:str,
@@ -5789,6 +5794,10 @@ def save_gist(content:str,*,
     response=urllib.request.urlopen(req, data=json_data.encode())
     response=json.loads(response.read())
     gist_url=response['html_url']
+
+    if gist_url is None:
+        print("Save Gist: Failed! Returning response...")
+        return response
 
     if shorten_url:
         gist_url=shorten_github_url(gist_url)
@@ -7215,6 +7224,7 @@ def _guess_mimetype(file_path)->str:
     return mimetype.split('/')[0]
 
 def is_image_file(file_path):
+    if not isinstance(file_path,str): return False
     if get_file_extension(file_path) in 'exr'.split():
         return True
     return _guess_mimetype(file_path)=='image'
@@ -7522,6 +7532,12 @@ def _cpah(paths,method=None):
     for path in paths:
         copy_path(path,'.')
 
+def _display_columns(entries,title=None):
+    pip_import('rich')
+    from rich import print
+    from rich.columns import Columns
+    columns = Columns(entries, equal=False, expand=False, title=title)
+    print(columns)
 
 #def pudb_shell(_globals,_locals_):
 #    #https://documen.tician.de/pudb/shells.html
@@ -8400,6 +8416,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         CLS !clear
         VV !vim
+
+        DR $r._display_columns(dir(),'dir():')
 
         '''.replace('$',rp_import)
         # SA string_to_text_file(input("Filename:"),str(ans))#SaveAnsToFile
@@ -14753,16 +14771,82 @@ def save_video_avi(frames,path:str=None,framerate:int=30):
         
     return path
 
-def save_video(images,path,framerate=30):
+def save_video_mp4(frames, path, framerate=60, video_bitrate='medium', vcodec='libx264'):
+    #EXAMPLE BITRATES (used for the Sunkist soda example):
+    # 100000    : ( 345KB) is decent, and very compressed. It starts out a bit mushy though
+    # 1000000   : ( 3.3MB) I believe this is close to ffmpeg's default rate. It looks okay, but it does look a tiny bit mushy
+    # 10000000  : (32.7MB)
+    # 100000000 : (93.0MB)
+    # 1000000000: (93.0MB) It seems to be the maximum size
+    
+    if video_bitrate in 'small medium large max':
+        video_bitrate = {'small':100000,'medium':1000000,'large':10000000,'max':10000000000}[video_bitrate]
+
+
+    assert isinstance(video_bitrate,int)
+
+    # Originally from: https://github.com/kkroening/ffmpeg-python/issues/246
+    assert path.endswith('.mp4')
+    rp.pip_import('ffmpeg','ffmpeg-python')
+    frames=[rp.as_rgb_image(rp.as_byte_image(x)) for x in frames]
+    frames=rp.as_numpy_array(frames)
+    import ffmpeg
+    import numpy as np
+
+    #Make sure the height and width are even. If it isn't, ffmpeg will throw a fit:
+    #     ...   [libx264 @ 0x55e695b389c0] width not divisible by 2 (611x550)    ...
+    if frames.shape[1]%2:
+        frames=frames[:,:-1]
+    if frames.shape[2]%2:
+        frames=frames[:,:,:-1]
+
+
+    if not isinstance(frames, np.ndarray):
+        frames = np.asarray(frames)
+    n,height,width,channels = frames.shape
+    process = (
+        ffmpeg
+            .input('pipe:', format='rawvideo', pix_fmt='rgb24', s='{}x{}'.format(width, height))
+            .output(path, pix_fmt='yuv420p', vcodec=vcodec, r=framerate, video_bitrate=video_bitrate)
+            .overwrite_output()
+            .run_async(pipe_stdin=True)
+    )
+    for frame in frames:
+        process.stdin.write(
+            frame
+                .astype(np.uint8)
+                .tobytes()
+        )
+    process.stdin.close()
+    process.wait()
+
+    return path
+
+
+def save_video(images,path,framerate=60):
     #TODO: add options for sound and framerate. Possibly quality options but probably not (that should be delegated to a function meant for a specific format)
     #Save a series of images into a video.
     #Note that the file extension used in path decides the kind of video that will be exported.
     #For example, save_video(images,'video.mp4') saves an mp4 file whilst save_video(images,'video.avi') saves an avi file
+    assert get_file_extension(path) in 'mp4 avi'.split(), 'This function currently supports .mp4 and .avi files'
+
+    if path.endswith('.mp4'):
+        return save_video_mp4(images,path,framerate=framerate)
+    if path.endswith('.avi'):
+        return save_video_avi(images,path,framerate=framerate)
+
+
+    assert False, 'Below this line mightn not work. Until further notice, please specify .avi or .mp4 in the path argument'
+
+
+
     if not has_file_extension(path):
         try:
+            return save_video_mp4(path,images)
             return save_video_avi(images,path,framerate=framerate)
         except Exception:
             pass #No big deal, we'll try sk-video. Although, that's more annoying because it means we need FFMPEG instead of just needing OpenCV
+
 
     #Make sure all frames have ranges between 0 and 255, and that they're RGB. Otherwise we might get weird results when we save the video
     images=[as_byte_image(as_rgb_image(frame)) for frame in images]
