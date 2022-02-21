@@ -1399,7 +1399,7 @@ def load_images(*locations,use_cache=False,show_progress=False,strict=True):
 
     if show_progress:
         number_of_images_loaded=0
-        show_time_remaining=eta(len(locations))
+        show_time_remaining=eta(len(locations), title='Loading Images')
         start_time=gtoc()
 
     cancelled=False
@@ -7532,6 +7532,252 @@ def _cpah(paths,method=None):
     for path in paths:
         copy_path(path,'.')
 
+def _get_env_info():
+    #Adapted from the pytorch github page
+    #This script gets information about your computer
+    #It's used in pseudo_terminal's LEVEL command
+    #The original code: https://gist.github.com/93795ffd6380c79ffc1a709500ed9118
+    #Returns a named tuple like:
+    #    SystemEnv(cuda_runtime_version='10.1.243', nvidia_gpu_models='GPU 0: NVIDIA GeForce RTX 3090', nvidia_driver_version='470.103.01', os='Ubuntu 20.04.2 LTS (x86_64)')
+    #  Or, on my macbook:
+    #    ans = SystemEnv(cuda_runtime_version=None, nvidia_gpu_models=None, nvidia_driver_version=None, os='macOS 10.15.7 (x86_64)')
+
+    import locale
+    import re
+    import subprocess
+    import sys
+    import os
+    from collections import namedtuple
+    
+    
+    try:
+        import torch
+        TORCH_AVAILABLE = True
+    except (ImportError, NameError, AttributeError, OSError):
+        TORCH_AVAILABLE = False
+    
+    # System Environment Information
+    SystemEnv = namedtuple('SystemEnv', [
+        'cuda_runtime_version',
+        'nvidia_gpu_models',
+        'nvidia_driver_version',
+        'os',
+    ])
+    
+    
+    def run(command):
+        """Returns (return-code, stdout, stderr)"""
+        p = subprocess.Popen(command, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, shell=True)
+        raw_output, raw_err = p.communicate()
+        rc = p.returncode
+        if get_platform() == 'win32':
+            enc = 'oem'
+        else:
+            enc = locale.getpreferredencoding()
+        output = raw_output.decode(enc)
+        err = raw_err.decode(enc)
+        return rc, output.strip(), err.strip()
+    
+    
+    def run_and_read_all(run_lambda, command):
+        """Runs command using run_lambda; reads and returns entire output if rc is 0"""
+        rc, out, _ = run_lambda(command)
+        if rc != 0:
+            return None
+        return out
+    
+    
+    def run_and_parse_first_match(run_lambda, command, regex):
+        """Runs command using run_lambda, returns the first regex match if it exists"""
+        rc, out, _ = run_lambda(command)
+        if rc != 0:
+            return None
+        match = re.search(regex, out)
+        if match is None:
+            return None
+        return match.group(1)
+    
+    def get_nvidia_driver_version(run_lambda):
+        if get_platform() == 'darwin':
+            cmd = 'kextstat | grep -i cuda'
+            return run_and_parse_first_match(run_lambda, cmd,
+                                             r'com[.]nvidia[.]CUDA [(](.*?)[)]')
+        smi = get_nvidia_smi()
+        return run_and_parse_first_match(run_lambda, smi, r'Driver Version: (.*?) ')
+    
+    
+    def get_gpu_info(run_lambda):
+        if get_platform() == 'darwin' or (TORCH_AVAILABLE and hasattr(torch.version, 'hip') and torch.version.hip is not None):
+            if TORCH_AVAILABLE and torch.cuda.is_available():
+                return torch.cuda.get_device_name(None)
+            return None
+        smi = get_nvidia_smi()
+        uuid_regex = re.compile(r' \(UUID: .+?\)')
+        rc, out, _ = run_lambda(smi + ' -L')
+        if rc != 0:
+            return None
+        # Anonymize GPUs by removing their UUID
+        return re.sub(uuid_regex, '', out)
+    
+    
+    def get_running_cuda_version(run_lambda):
+        return run_and_parse_first_match(run_lambda, 'nvcc --version', r'release .+ V(.*)')
+    
+    
+    def get_cudnn_version(run_lambda):
+        """This will return a list of libcudnn.so; it's hard to tell which one is being used"""
+        if get_platform() == 'win32':
+            system_root = os.environ.get('SYSTEMROOT', 'C:\\Windows')
+            cuda_path = os.environ.get('CUDA_PATH', "%CUDA_PATH%")
+            where_cmd = os.path.join(system_root, 'System32', 'where')
+            cudnn_cmd = '{} /R "{}\\bin" cudnn*.dll'.format(where_cmd, cuda_path)
+        elif get_platform() == 'darwin':
+            # CUDA libraries and drivers can be found in /usr/local/cuda/. See
+            # https://docs.nvidia.com/cuda/cuda-installation-guide-mac-os-x/index.html#install
+            # https://docs.nvidia.com/deeplearning/sdk/cudnn-install/index.html#installmac
+            # Use CUDNN_LIBRARY when cudnn library is installed elsewhere.
+            cudnn_cmd = 'ls /usr/local/cuda/lib/libcudnn*'
+        else:
+            cudnn_cmd = 'ldconfig -p | grep libcudnn | rev | cut -d" " -f1 | rev'
+        rc, out, _ = run_lambda(cudnn_cmd)
+        # find will return 1 if there are permission errors or if not found
+        if len(out) == 0 or (rc != 1 and rc != 0):
+            l = os.environ.get('CUDNN_LIBRARY')
+            if l is not None and os.path.isfile(l):
+                return os.path.realpath(l)
+            return None
+        files_set = set()
+        for fn in out.split('\n'):
+            fn = os.path.realpath(fn)  # eliminate symbolic links
+            if os.path.isfile(fn):
+                files_set.add(fn)
+        if not files_set:
+            return None
+        # Alphabetize the result because the order is non-deterministic otherwise
+        files = list(sorted(files_set))
+        if len(files) == 1:
+            return files[0]
+        result = '\n'.join(files)
+        return 'Probably one of the following:\n{}'.format(result)
+    
+    
+    def get_nvidia_smi():
+        # Note: nvidia-smi is currently available only on Windows and Linux
+        smi = 'nvidia-smi'
+        if get_platform() == 'win32':
+            system_root = os.environ.get('SYSTEMROOT', 'C:\\Windows')
+            program_files_root = os.environ.get('PROGRAMFILES', 'C:\\Program Files')
+            legacy_path = os.path.join(program_files_root, 'NVIDIA Corporation', 'NVSMI', smi)
+            new_path = os.path.join(system_root, 'System32', smi)
+            smis = [new_path, legacy_path]
+            for candidate_smi in smis:
+                if os.path.exists(candidate_smi):
+                    smi = '"{}"'.format(candidate_smi)
+                    break
+        return smi
+    
+    
+    def get_platform():
+        if sys.platform.startswith('linux'):
+            return 'linux'
+        elif sys.platform.startswith('win32'):
+            return 'win32'
+        elif sys.platform.startswith('cygwin'):
+            return 'cygwin'
+        elif sys.platform.startswith('darwin'):
+            return 'darwin'
+        else:
+            return sys.platform
+    
+    
+    def get_mac_version(run_lambda):
+        return run_and_parse_first_match(run_lambda, 'sw_vers -productVersion', r'(.*)')
+    
+    
+    def get_windows_version(run_lambda):
+        system_root = os.environ.get('SYSTEMROOT', 'C:\\Windows')
+        wmic_cmd = os.path.join(system_root, 'System32', 'Wbem', 'wmic')
+        findstr_cmd = os.path.join(system_root, 'System32', 'findstr')
+        return run_and_read_all(run_lambda, '{} os get Caption | {} /v Caption'.format(wmic_cmd, findstr_cmd))
+    
+    
+    def get_lsb_version(run_lambda):
+        return run_and_parse_first_match(run_lambda, 'lsb_release -a', r'Description:\t(.*)')
+    
+    
+    def check_release_file(run_lambda):
+        return run_and_parse_first_match(run_lambda, 'cat /etc/*-release',
+                                         r'PRETTY_NAME="(.*)"')
+    
+    
+    def get_os(run_lambda):
+        from platform import machine
+        platform = get_platform()
+    
+        if platform == 'win32' or platform == 'cygwin':
+            return get_windows_version(run_lambda)
+    
+        if platform == 'darwin':
+            version = get_mac_version(run_lambda)
+            if version is None:
+                return None
+            return 'macOS {} ({})'.format(version, machine())
+    
+        if platform == 'linux':
+            # Ubuntu/Debian based
+            desc = get_lsb_version(run_lambda)
+            if desc is not None:
+                return '{} ({})'.format(desc, machine())
+    
+            # Try reading /etc/*-release
+            desc = check_release_file(run_lambda)
+            if desc is not None:
+                return '{} ({})'.format(desc, machine())
+    
+            return '{} ({})'.format(platform, machine())
+    
+        # Unknown platform
+        return platform
+    
+    
+    def get_env_info():
+        run_lambda = run
+    
+        return SystemEnv(
+                cuda_runtime_version=get_running_cuda_version(run_lambda),
+                nvidia_gpu_models=get_gpu_info(run_lambda),
+                nvidia_driver_version=get_nvidia_driver_version(run_lambda),
+                os=get_os(run_lambda),
+        )
+    
+    env_info_fmt = """
+    CUDA runtime version: {cuda_runtime_version}
+    GPU models and configuration: {nvidia_gpu_models}
+    Nvidia driver version: {nvidia_driver_version}
+    OS: {os}
+    """
+    
+    return get_env_info()
+
+
+def _get_processor_name():
+    import os, platform, subprocess, re
+    #https://stackoverflow.com/questions/4842448/getting-processor-information-in-python
+    if platform.system() == "Windows":
+        return platform.processor()
+    elif platform.system() == "Darwin":
+        os.environ['PATH'] = os.environ['PATH'] + os.pathsep + '/usr/sbin'
+        command ="sysctl -n machdep.cpu.brand_string"
+        return subprocess.check_output(command).strip()
+    elif platform.system() == "Linux":
+        command = "cat /proc/cpuinfo"
+        all_info = subprocess.check_output(command, shell=True).strip().decode()
+        for line in all_info.split("\n"):
+            if "model name" in line:
+                return re.sub( ".*model name.*:", "", line,1)
+    return ""
+
 def _display_columns(entries,title=None):
     pip_import('rich')
     from rich import print
@@ -8990,12 +9236,29 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
                         bullet='    - '
 
+                        env_info = _get_env_info() #Like SystemEnv(cuda_runtime_version='10.1.243', nvidia_gpu_models='GPU 0: NVIDIA GeForce RTX 3090', nvidia_driver_version='470.103.01', os='Ubuntu 20.04.2 LTS (x86_64)')
+
+                        os_name = env_info.os or platform_type
+
                         print('Python version: '+version+' at '+fansi(sys.executable,'magenta'))
                         print('Current time: '+_format_datetime(get_current_date()))
                         print('Computer details:')
-                        print(bullet+'Operating system: '+fansi('('+platform_type+') ','red','bold')+fansi(platform.platform(),'red'))
+                        print(bullet+'Operating system: '+fansi('('+os_name+') ','red','bold')+fansi(platform.platform(),'red'))
                         print(bullet+'Computer name: '+name)
                         print(bullet+'User Name: '+cyan(getpass.getuser()))
+                        print(bullet+'CPU: '+cyan(_get_processor_name()))
+                        print('GPU Details:')
+                        if env_info.nvidia_gpu_models:
+                            print(bullet+'NVIDIA GPU Models: '+cyan(env_info.nvidia_gpu_models))
+
+                        cuda_info = ''
+                        if env_info.cuda_runtime_version:
+                            cuda_info+='Cuda version: '+cyan(env_info.cuda_runtime_version)+'    '
+                        if env_info.cuda_runtime_version:
+                            cuda_info+='Driver version: '+cyan(env_info.nvidia_driver_version)
+                        if cuda_info:
+                            print(bullet+cuda_info)
+
                         print("Network:")
                         print(bullet+"MAC Address:",cyan(get_my_mac_address()))
                         if connected_to_internet():
@@ -11352,6 +11615,7 @@ known_pypi_module_package_names={
     'eglRenderer': 'pybullet',
     'examples': 'test-tube',
     'faiss': 'faiss-gpu',
+    'ffmpeg': 'ffmpeg-python',
     'getmac': 'get-mac',
     'git': 'GitPython',
     'github': 'PyGithub',
@@ -11388,6 +11652,7 @@ known_pypi_module_package_names={
     'markdown_it': 'markdown-it-py',
     'matplotlib_inline': 'matplotlib-inline',
     'mpl_toolkits': 'matplotlib',
+    'more_itertols':'more-itertools',
     'mplcairo': 'git+https://github.com/matplotlib/mplcairo',#Some features only available on master branch: https://stackoverflow.com/questions/26702176/is-it-possible-to-do-additive-blending-with-matplotlib
     'mypy_extensions': 'mypy-extensions',
     'neural_style': 'neural-style',
@@ -14771,7 +15036,87 @@ def save_video_avi(frames,path:str=None,framerate:int=30):
         
     return path
 
-def save_video_mp4(frames, path, framerate=60, video_bitrate='medium', vcodec='libx264'):
+class VideoWriterMP4:
+    def __init__(self, path, framerate=60, video_bitrate='medium'):
+        # Originally from: https://github.com/kkroening/ffmpeg-python/issues/246
+
+        rp.pip_import('ffmpeg', 'ffmpeg-python')
+
+        if video_bitrate in 'small medium large max':
+            video_bitrate = {'small':100000,'medium':1000000,'large':10000000,'max':10000000000}[video_bitrate]
+
+        assert path.endswith('.mp4')
+        assert isinstance(video_bitrate,int)
+
+        vcodec='libx264' #This used to be an argument, but I don't know if I'll ever change it
+
+        self.path          = path
+        self.vcodec        = vcodec
+        self.framerate     = framerate
+        self.video_bitrate = video_bitrate
+
+        self.started  = False
+        self.finished = False
+    
+        
+    def write_frame(self, frame):
+        import ffmpeg
+
+        assert is_image(frame)
+        assert not self.finished
+
+        if not self.started:
+            self.started = True
+
+            height, width = get_image_dimensions(frame)
+
+            #Make sure the height and width are even. If it isn't, ffmpeg will throw a fit:
+            #     ...   [libx264 @ 0x55e695b389c0] width not divisible by 2 (611x550)    ...
+            if height%2:
+                height-=1
+            if width%2:
+                width-=1
+
+            self.process = (
+                ffmpeg
+                    .input('pipe:',
+                           format='rawvideo',
+                           pix_fmt='rgb24',
+                           s='{}x{}'.format(width, height),
+                           r=self.framerate,
+                           )
+                    .output(self.path, pix_fmt='yuv420p',
+                            vcodec=self.vcodec,
+                            video_bitrate=self.video_bitrate,    
+                            #Interstingly, this is not where the framerate should go, based on my experiments...
+                            )
+                    .overwrite_output()
+                    .run_async(pipe_stdin=True)
+            )
+
+            self.height = height
+            self.width  = width
+
+
+        #Prepare the frame for the writer...
+        frame=rp.crop_image   (frame, self.height, self.width)
+        frame=rp.as_rgb_image (frame)
+        frame=rp.as_byte_image(frame)
+
+        self.process.stdin.write(frame.tobytes())
+
+
+    def finish(self):
+        assert self.started
+        self.process.stdin.close()
+        self.process.wait()
+        self.finished=True
+        
+def save_video_mp4(frames, path, framerate=60, *, video_bitrate='medium'):
+    # frames: a list of images as defined by rp.is_image(). Saves an .mp4 file at the path
+    # Note that frames can also be a generator, as opposed to a numpy array.
+    # This can let you save larger videos that would otherwise make your computer run out of memory.
+    #
     #EXAMPLE BITRATES (used for the Sunkist soda example):
     # 100000    : ( 345KB) is decent, and very compressed. It starts out a bit mushy though
     # 1000000   : ( 3.3MB) I believe this is close to ffmpeg's default rate. It looks okay, but it does look a tiny bit mushy
@@ -14779,48 +15124,90 @@ def save_video_mp4(frames, path, framerate=60, video_bitrate='medium', vcodec='l
     # 100000000 : (93.0MB)
     # 1000000000: (93.0MB) It seems to be the maximum size
     
-    if video_bitrate in 'small medium large max':
-        video_bitrate = {'small':100000,'medium':1000000,'large':10000000,'max':10000000000}[video_bitrate]
+    writer = VideoWriterMP4(path, framerate, video_bitrate=video_bitrate)
 
-
-    assert isinstance(video_bitrate,int)
-
-    # Originally from: https://github.com/kkroening/ffmpeg-python/issues/246
-    assert path.endswith('.mp4')
-    rp.pip_import('ffmpeg','ffmpeg-python')
-    frames=[rp.as_rgb_image(rp.as_byte_image(x)) for x in frames]
-    frames=rp.as_numpy_array(frames)
-    import ffmpeg
-    import numpy as np
-
-    #Make sure the height and width are even. If it isn't, ffmpeg will throw a fit:
-    #     ...   [libx264 @ 0x55e695b389c0] width not divisible by 2 (611x550)    ...
-    if frames.shape[1]%2:
-        frames=frames[:,:-1]
-    if frames.shape[2]%2:
-        frames=frames[:,:,:-1]
-
-
-    if not isinstance(frames, np.ndarray):
-        frames = np.asarray(frames)
-    n,height,width,channels = frames.shape
-    process = (
-        ffmpeg
-            .input('pipe:', format='rawvideo', pix_fmt='rgb24', s='{}x{}'.format(width, height))
-            .output(path, pix_fmt='yuv420p', vcodec=vcodec, r=framerate, video_bitrate=video_bitrate)
-            .overwrite_output()
-            .run_async(pipe_stdin=True)
-    )
     for frame in frames:
-        process.stdin.write(
-            frame
-                .astype(np.uint8)
-                .tobytes()
-        )
-    process.stdin.close()
-    process.wait()
+        writer.write_frame(frame)
 
+    writer.finish()
+        
     return path
+
+
+
+#def save_video_mp4(frames, path, framerate=60, *, video_bitrate='medium', vcodec='libx264'):
+#    # frames: a list of images as defined by rp.is_image(). Saves an .mp4 file at the path
+#    # Note that frames can also be a generator, as opposed to a numpy array.
+#    # This can let you save larger videos that would otherwise make your computer run out of memory.
+#    #
+#    #EXAMPLE BITRATES (used for the Sunkist soda example):
+#    # 100000    : ( 345KB) is decent, and very compressed. It starts out a bit mushy though
+#    # 1000000   : ( 3.3MB) I believe this is close to ffmpeg's default rate. It looks okay, but it does look a tiny bit mushy
+#    # 10000000  : (32.7MB)
+#    # 100000000 : (93.0MB)
+#    # 1000000000: (93.0MB) It seems to be the maximum size
+    
+#    if video_bitrate in 'small medium large max':
+#        video_bitrate = {'small':100000,'medium':1000000,'large':10000000,'max':10000000000}[video_bitrate]
+
+#    assert isinstance(video_bitrate,int)
+
+#    # Originally from: https://github.com/kkroening/ffmpeg-python/issues/246
+#    assert path.endswith('.mp4')
+#    rp.pip_import('ffmpeg','ffmpeg-python')
+#    rp.pip_import('more_itertools','more-itertools')
+#    import ffmpeg
+#    import numpy as np
+#    from more_itertools import peekable
+    
+#    frames=peekable(frames)
+#    first_frame=frames.peek()
+#    assert is_image(first_frame)
+#    height,width=get_image_dimensions(first_frame)
+
+#    #Make sure the height and width are even. If it isn't, ffmpeg will throw a fit:
+#    #     ...   [libx264 @ 0x55e695b389c0] width not divisible by 2 (611x550)    ...
+#    if width%2:
+#        width-=1
+#    if height%2:
+#        height-=1
+    
+#    def prepare_frame(frame):
+#        assert is_image(frame)
+#        frame=rp.as_rgb_image(frame)
+#        frame=rp.as_byte_image(frame)
+#        frame=rp.crop_image(frame,height,width)
+#        return frame
+
+#    process = (
+#        ffmpeg
+#            .input('pipe:',
+#                   format='rawvideo',
+#                   pix_fmt='rgb24',
+#                   s='{}x{}'.format(width, height),
+#                   r=framerate,
+#                   )
+#            .output(path, pix_fmt='yuv420p',
+#                    vcodec=vcodec,
+#                    video_bitrate=video_bitrate,    
+#                    #Interstingly, this is not where the framerate should go, based on my experiments...
+#                    )
+#            .overwrite_output()
+#            .run_async(pipe_stdin=True)
+#    )
+    
+#    for i,frame in enumerate(frames):
+#        frame=prepare_frame(frame)
+#        process.stdin.write(
+#            frame
+#                .astype(np.uint8)
+#                .tobytes()
+#        )
+        
+#    process.stdin.close()
+#    process.wait()
+    
+#    return path
 
 
 def save_video(images,path,framerate=60):
@@ -14902,7 +15289,6 @@ rename_file=rename_path#Synonyms that might make more sense to read in their con
 rename_folder=rename_path
 rename_directory=rename_path
 
-from rp import *
 def move_path(from_path,to_path):
     #Like the 'mv' command
     #Move a folder or file into a given directory if to_path is a directory,
@@ -15305,7 +15691,7 @@ def whiten_points_covariance(points):
     #    scatter_plot(whitened)
     pip_import('sklearn')
     from sklearn.decomposition import PCA
-    contour=as_numpy_array(points)
+    # contour=as_numpy_array(points)
     if is_complex_vector(points) or is_cv_contour(points):
         points=as_points_array(points)#Support for making contours invariant to stretching in a given direction by normalizing their covariance (idea from Zebra 2019 internship).
     assert len(points.shape)==2,'Input should be a matrix, aka a list of points. But your input has shape '+str(points.shape)
@@ -16480,8 +16866,8 @@ def prime_factors(number):
 
 def set_os_volume(percent):
     #Set your operating system's volume
-    assert is_number(percent),'Volume percent should be a number, but got type '+repr(type(volume))
-    assert 0<=percent<=100,'Volume percent should be between 0 and 100, but got volume = '+repr(volume)
+    assert is_number(percent),'Volume percent should be a number, but got type '+repr(type(percent))
+    assert 0<=percent<=100,'Volume percent should be between 0 and 100, but got volume = '+repr(percent)
     if currently_running_mac():
         pip_import('osascript').osascript('set volume output volume '+str(int(percent)))
     else:
@@ -16884,9 +17270,9 @@ def input_keypress():#catch_keyboard_interrupt=False): <---- TODO: Implement cat
             ret.append(c)
             c = sys.stdin.read(1)
     except KeyboardInterrupt:
-        if catch_keyboard_interrupt:
-            ret.append('\x03')
-        else:
+        # if catch_keyboard_interrupt:
+        #     ret.append('\x03')
+        # else:
             raise
     finally:
         # restore old state
@@ -17645,7 +18031,7 @@ def _fd(query,select=False,silent=False):
         return s
     from glob import iglob, escape
     from itertools import chain
-    glob_query='*'+escape(query)+'*'
+    # glob_query='*'+escape(query)+'*'
     printed_lines=[]
     def print_line(line):
         if not silent:

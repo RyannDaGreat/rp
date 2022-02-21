@@ -1,1 +1,75 @@
+def save_video_mp4(frames, path, framerate=60, *, video_bitrate='medium', vcodec='libx264', show_progress=False):
+    #EXAMPLE BITRATES (used for the Sunkist soda example):
+    # 100000    : ( 345KB) is decent, and very compressed. It starts out a bit mushy though
+    # 1000000   : ( 3.3MB) I believe this is close to ffmpeg's default rate. It looks okay, but it does look a tiny bit mushy
+    # 10000000  : (32.7MB)
+    # 100000000 : (93.0MB)
+    # 1000000000: (93.0MB) It seems to be the maximum size
+    
+    if video_bitrate in 'small medium large max':
+        video_bitrate = {'small':100000,'medium':1000000,'large':10000000,'max':10000000000}[video_bitrate]
 
+    assert isinstance(video_bitrate,int)
+
+    # Originally from: https://github.com/kkroening/ffmpeg-python/issues/246
+    assert path.endswith('.mp4')
+    rp.pip_import('ffmpeg','ffmpeg-python')
+    rp.pip_import('more_itertools','more-itertools')
+    import ffmpeg
+    import numpy as np
+    from more_itertools import peekable
+    
+    frames=peekable(frames)
+    first_frame=frames.peek()
+    assert is_image(first_frame)
+    height,width=get_image_dimensions(first_frame)
+
+    #Make sure the height and width are even. If it isn't, ffmpeg will throw a fit:
+    #     ...   [libx264 @ 0x55e695b389c0] width not divisible by 2 (611x550)    ...
+    if width%2:
+        width-=1
+    if height%2:
+        height-=1
+    
+    def prepare_frame(frame):
+        assert is_image(frame)
+        frame=rp.as_rgb_image(frame)
+        frame=rp.as_byte_image(frame)
+        frame=rp.crop_image(frame,height,width)
+        return frame
+
+    process = (
+        ffmpeg
+            .input('pipe:', format='rawvideo', pix_fmt='rgb24', s='{}x{}'.format(width, height))
+            .output(path, pix_fmt='yuv420p',
+                    vcodec=vcodec,
+                    r=framerate,
+                    vsync=0,#Don't add duplicate frames. Ever. https://superuser.com/questions/1374584/why-does-ffmpeg-extracts-a-lot-more-frames-than-the-actual
+                    video_bitrate=video_bitrate,    
+                    )
+            .overwrite_output()
+            .run_async(pipe_stdin=True)
+    )
+    
+    if show_progress:
+        print()
+        
+    for i,frame in enumerate(frames):
+        
+        if show_progress:
+            print(end='\rSaved frame %i...'%i)
+            
+        frame=prepare_frame(frame)
+        process.stdin.write(
+            frame
+                .astype(np.uint8)
+                .tobytes()
+        )
+        
+    if show_progress:
+        print('...done!')
+        
+    process.stdin.close()
+    process.wait()
+\
+    return path
