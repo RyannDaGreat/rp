@@ -7769,6 +7769,7 @@ def _get_processor_name():
     elif platform.system() == "Darwin":
         os.environ['PATH'] = os.environ['PATH'] + os.pathsep + '/usr/sbin'
         command ="sysctl -n machdep.cpu.brand_string"
+        return shell_command(command)
         return subprocess.check_output(command).strip()
     elif platform.system() == "Linux":
         command = "cat /proc/cpuinfo"
@@ -9247,7 +9248,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         print(bullet+'Computer name: '+name)
                         print(bullet+'User Name: '+cyan(getpass.getuser()))
                         print(bullet+'CPU: '+cyan(_get_processor_name()))
-                        print('GPU Details:')
+
+                        if env_info.nvidia_gpu_models or env_info.cuda_runtime_version or env_info.cuda_runtime_version:
+                            print('GPU Details:')
                         if env_info.nvidia_gpu_models:
                             print(bullet+'NVIDIA GPU Models: '+cyan(env_info.nvidia_gpu_models))
 
