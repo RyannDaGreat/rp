@@ -3770,6 +3770,8 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
         except TypeError as e:
             print(col(tab + 'FILE: ') + str(e))
 
+    if is_symlink(object):
+        print(col(tab + 'SYMLINK --> '+read_symlink(object)))
 
     if isinstance(object,str) and path_exists(object):
         stats=[]
@@ -3795,6 +3797,8 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
             print_stack_trace(e)
             pass
         print(col(tab + '     '.join(stats)))
+
+        
 
 
     def errortext(x):
@@ -5688,6 +5692,9 @@ def shorten_github_url(url,title=None):
     #Uses git.io to shorten a url
     #This method specifically only works for Github URL's; it doesn't work for anything else
     #If title is specified, it will try to get you a particular name for your url (such as git.io/labinacube)
+
+    return shorten_url(url) # git.io was discontinued :(
+
     if not is_valid_url(url):
         #Try to make it valid
         url='https://'+url
@@ -7190,6 +7197,17 @@ def _all_files_listed_in_exception_traceback(exception:BaseException)->list:
             pass
     return out
 
+def read_symlink(path:str):
+    #Returns the path a symlink points to
+    assert isinstance(path,str)
+    assert path_exists(path), 'Path does not exist: '+path
+    assert is_symlink(path), 'Not a symlink: '+path
+    if path.endswith('/'):
+        # turn 'folder/' into 'folder'
+        path=path[:-1]
+    import os
+    return os.readlink(path)
+
 def make_symlink(original_path,symlink_path):
 
     if path_exists(symlink_path) and not path_exists(original_path):
@@ -7210,9 +7228,21 @@ def make_symlink(original_path,symlink_path):
 def is_symbolic_link(path:str):
     #Returns whether or not a given path is a symbolic link
     from pathlib import Path
+    if not isinstance(path,str):
+        return False
     return Path(path).is_symlink()
 
 is_symlink=is_symbolic_link
+
+def symlink_move(from_path,to_path):
+    #Move a file or folder, but leave a symlink behind so that programs that try to access the original file aren't affected
+    from_path=get_absolute_path(from_path)
+    to_path=get_absolute_path(to_path)
+
+    assert path_exists(from_path)
+    to_path=move_path(from_path,to_path)
+    make_symlink(from_path,to_path)
+    return to_path
 
 def _guess_mimetype(file_path)->str:
     import mimetypes
@@ -7550,12 +7580,6 @@ def _get_env_info():
     from collections import namedtuple
     
     
-    try:
-        import torch
-        TORCH_AVAILABLE = True
-    except (ImportError, NameError, AttributeError, OSError):
-        TORCH_AVAILABLE = False
-    
     # System Environment Information
     SystemEnv = namedtuple('SystemEnv', [
         'cuda_runtime_version',
@@ -7608,7 +7632,7 @@ def _get_env_info():
     
     
     def get_gpu_info(run_lambda):
-        if get_platform() == 'darwin' or (TORCH_AVAILABLE and hasattr(torch.version, 'hip') and torch.version.hip is not None):
+        if get_platform() == 'darwin':
             if TORCH_AVAILABLE and torch.cuda.is_available():
                 return torch.cuda.get_device_name(None)
             return None
@@ -8662,6 +8686,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         FZM $pip_import('iterfzf').iterfzf(ans,multi=True)
 
         CLS !clear
+        CLEAR !clear
         VV !vim
 
         DR $r._display_columns(dir(),'dir():')
@@ -19381,7 +19406,7 @@ try:
                 return getattr(pip_import(module_name),key)
         return LazyloadedModule(module_name)
     np=autoimportable_module('numpy')
-    icecream=autoimportable_module('icecream')
+    # icecream=autoimportable_module('icecream')
 except:
     print("Warning: Cannot import numpy. Please excuse any 'np is None' errors, or try rp.pip_install('numpy')")
 
