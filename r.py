@@ -3772,6 +3772,8 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
 
     if is_symlink(object):
         print(col(tab + 'SYMLINK --> '+read_symlink(object)))
+        if symlink_is_broken(object):
+            print(tab+tab+col("(symlink is broken)"))
 
     if isinstance(object,str) and path_exists(object):
         stats=[]
@@ -7200,13 +7202,21 @@ def _all_files_listed_in_exception_traceback(exception:BaseException)->list:
 def read_symlink(path:str):
     #Returns the path a symlink points to
     assert isinstance(path,str)
-    assert path_exists(path), 'Path does not exist: '+path
     assert is_symlink(path), 'Not a symlink: '+path
     if path.endswith('/'):
         # turn 'folder/' into 'folder'
         path=path[:-1]
     import os
     return os.readlink(path)
+
+def symlink_is_broken(path:str):
+    assert is_symlink(path)
+    if not path_exists(path):
+        return True
+    return False
+
+# def symlink_works(path:str):
+#     return not symlink_is_broken(path)
 
 def make_symlink(original_path,symlink_path):
 
