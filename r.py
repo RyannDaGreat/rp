@@ -10867,7 +10867,18 @@ def get_process_title():
 
 
 def parenthesizer_automator(string:str):
-    def parenthesizer_automator(x:str):
+
+    if string!=strip_ansi_escapes(string):
+        #String is a colorized terminal string. Handle it properly.
+        #EXAMPLE:
+        #   print(parenthesizer_automator(  '[[[' + fansi("Hello","red") + "]]]" ))
+        plain_string=strip_ansi_escapes(string)
+        output_lines=parenthesizer_automator(plain_string).splitlines()
+        output_lines[len(output_lines)//2]=string
+        return line_join(output_lines)
+
+
+    def _parenthesizer_automator(x:str):
         # Parenthesis automator for python
         #For best results, x should be one line.
         l=lambda q:''.join('(' if x in '([{' else ')' if x in ')]}' else ' ' for x in q)
@@ -10897,7 +10908,7 @@ def parenthesizer_automator(string:str):
              return [x]#Prevent possible infinite recursion errors
             return [x] + p(y,False)
         return delete_empty_lines(strip_trailing_whitespace(p(x)))
-    return '\n'.join(parenthesizer_automator(line) for line in string.splitlines())
+    return '\n'.join(_parenthesizer_automator(line) for line in string.splitlines())
     #I tried and failed to do this without recursion. I wonder what the time complexity of this function is? My failure is below
     # assert not '\n' in line,'Input must be a single line, not multiple lines'
     
@@ -11770,6 +11781,7 @@ known_pypi_module_package_names={
     'wheel-platform-tag-is-broken-on-empty-wheels-see-issue-141': 'sklearn',
     'xontrib': 'xonsh',
     'yapftests': 'yapf',
+    'yaml':'PyYAML',
     'zalgo_text': 'zalgo-text'
 }
 
@@ -14205,22 +14217,35 @@ def _binary_floyd_steinburg_dithering(image):
 #region Image Channel Conversions
 def is_image(image):
     #An image must be either grayscale, rgb, or rgba and have be either a bool, np.uint8, or floating point dtype
-    image=as_numpy_array(image)
+    try:
+        image=as_numpy_array(image)
+    except Exception:
+        return False
     return (is_grayscale_image(image) or is_rgb_image (image) or is_rgba_image  (image))  and\
            (is_float_image    (image) or is_byte_image(image) or is_binary_image(image))
 
 def is_grayscale_image(image):
-    #Basically,
-    image=as_numpy_array(image)
+    try:
+        image=as_numpy_array(image)
+    except Exception:
+        return False
     return len(image.shape)==2
+
 def is_rgb_image(image):
-    image=as_numpy_array(image)
+    try:
+        image=as_numpy_array(image)
+    except Exception:
+        return False
     shape=image.shape
     if len(shape)!=3:return False
     number_of_channels=shape[2]
     return number_of_channels==3
+
 def is_rgba_image(image):
-    image=as_numpy_array(image)
+    try:
+        image=as_numpy_array(image)
+    except Exception:
+        return False
     shape=image.shape
     if len(shape)!=3:return False
     number_of_channels=shape[2]
@@ -19962,20 +19987,259 @@ def get_all_ttf_fonts():
         out+=['~/Library/Fonts/'      +x for x in shell_command('ls -R ~/Library/Fonts | grep ttf'      ).splitlines()]
         out=[get_absolute_path(x) for x in out]
         out=[x for x in out if file_exists(x)]
-        return tuple(out)
+        return list(out)
     elif currently_running_linux():
         #https://askubuntu.com/questions/552979/how-can-i-determine-which-fonts-are-installed-from-the-command-line-and-what-is
         ans=shell_command('fc-list')
         ans=line_split(ans)
         ans=[x[:x.find(':')] for x in ans]
         ans=[x for x in ans if file_exists(x)]
-        return tuple(ans)
+        return list(ans)
     elif currently_running_windows():
         #https://stackoverflow.com/questions/64070050/how-to-get-a-list-of-installed-windows-fonts-using-python
         import os
-        return tuple(os.listdir(r'C:\Windows\fonts'))
+        return list(os.listdir(r'C:\Windows\fonts'))
     else:
         assert False,'Unsupported operating system: not mac, windows or linux'
+
+class DictReader:
+    def __init__(self,data:dict):
+        #This class makes reading nested dicts easier
+        #Instead of data['a']['b']['c'] you say data.a.b.c
+        #Right now this only reads values from dicts
+        #More functionality might be added later if I need it...
+        #...but for now let's keep it super simple...
+        #In the future this might:
+        #    - Extend the dict class (allow for __getitem__, __setitem__, and other operators)
+        
+        assert isinstance(data,dict)    
+    
+        self._data=data
+        
+    def __getattr__(self,key:str):
+        
+        assert key in self._data, key
+
+        value = self._data[key]
+        
+        return DictReader(value) if isinstance(value,dict) else value
+
+    def __dir__(self):
+        #Great for autocompletion in interactive sessions!
+        return list(self._data)
+
+    def __contains__(self, key):
+        return key in self._data
+
+    def __repr__(self):
+        return 'DictReader('+repr(self._data)+')'
+
+def parse_dyaml(code:str)->dict:
+    #This is like DJSON, except for YAML
+    #TODO: Migrate this function into its own module.
+    #Look at the test_parse_dyaml_junctions() function to see how this language works, it's pretty simple
+    #The only differences between this and YAML:
+    #   - When a key has multiple colons in it, like a:b:c:, it's equivalent to multiple lines of keys
+    #   - When a key has commas in it, its value is duplicated
+    
+    assert isinstance(code,str)
+
+            
+    class Junction:
+        def __init__(self,key,value):
+            self.key  =key
+            self.value=value
+            
+        def __repr__(self):
+            #           u250c                           u2510
+            #           u2502   u250c        u2510              u2502      u250c          u2510
+            return fansi(str(self.key) + ":", "cyan") + str(self.value)
+            #           u2502   u2514        u2518              u2502      u2514          u2518
+            #           u2514                           u2518
+        
+        def __iter__(self):
+            yield self.key
+            yield self.value
+          
+        @property
+        def is_leaf(self):  
+            return not isinstance(self.value, JunctionList)
+            
+    class JunctionList(list):
+        #In this module, every JunctionList created is a list of Junction instances
+        pass
+
+    def handle_key_colons(junction)->Junction:
+        #If we have a key like "a:b:c",
+        #Make [a:b:c: z] into [a:[b:[c:z]]]
+        #EXAMPLE:
+        #     >>> handle_key_colons(Junction('a:b:c','z'))
+        #    ans = a:[b:[c:z]]
+        key,value=junction
+        assert isinstance(key,str)
+        path=key.split(':')
+        output=value
+        for sub_key in path[::-1]:
+            output=Junction(sub_key,output)
+            output=[output]
+            output=JunctionList(output)
+        return output[0]
+
+    def split_colon_keys(junctions)->JunctionList:
+        output=JunctionList()
+        for junction in junctions:
+            if not junction.is_leaf:
+                junction.value=split_colon_keys(junction.value)
+            junction=handle_key_colons(junction)
+            output.append(junction)
+        return output
+            
+
+    def parse_dyaml_junctions(src)->JunctionList:
+        # https://stackoverflow.com/questions/44904290/getting-duplicate-keys-in-yaml-using-python
+        # We deliberately define a fresh class inside the function,
+        # because add_constructor is a class method and we don't want to
+        # mutate pyyaml classes.
+
+        pip_import('yaml','PyYAML')
+        
+        import yaml
+        
+        class PreserveDuplicatesLoader(yaml.loader.Loader):
+            pass
+
+        def map_constructor(loader, node):
+            """Walk the mapping, recording any duplicate keys."""
+            
+            deep=False
+            mapping=JunctionList()
+            for key_node, value_node in node.value:
+                key = loader.construct_object(key_node, deep=deep)
+                value = loader.construct_object(value_node, deep=deep)
+
+                #mapping.setdefault(key,[]).append(value)
+                mapping.append(Junction(key,value))
+
+            return mapping
+
+        PreserveDuplicatesLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, map_constructor)
+        
+        return yaml.load(src, PreserveDuplicatesLoader)
+
+    def expand_comma_keys(junctions) -> JunctionList:
+        #Note that there may be duplicate lists in multiple places
+        #This saves memory
+        
+        assert isinstance(junctions, JunctionList)
+        
+        from copy import deepcopy
+
+        output = JunctionList()
+
+        for key,value in junctions:
+            if isinstance(value, JunctionList):
+                value=expand_comma_keys(value)
+            for sub_key in key.split(','):
+                value=deepcopy(value)
+                junction = Junction(sub_key, value)
+                output.append(junction)
+                
+        return output
+
+    def apply_deltas_from_junctions(junctions:JunctionList,recipient:dict):
+        #Apply all the junctions as deltas
+        
+        for key,value in junctions:
+            if isinstance(value,JunctionList):
+                apply_deltas_from_junctions(value,recipient.setdefault(key,{}))
+            else:
+                recipient[key]=value
+        return recipient
+
+    def junctions_to_dict(junctions:JunctionList)->dict:
+        output={}
+        return apply_deltas_from_junctions(junctions,{})
+
+    def parse_dyaml(src)->dict:
+        junctions=parse_dyaml_junctions(src)
+        junctions=split_colon_keys(junctions)
+        junctions=expand_comma_keys(junctions)
+        return junctions_to_dict(junctions)
+
+    def test_parse_dyaml_junctions():
+
+        code="""
+        a:
+            b:
+                c: boochy
+            b,q:
+                c,d: creepy
+            b:
+                c: cri
+        a:b:
+                e: {"Hil":87}
+        w,x:y,z: pup
+        """
+
+        print(code)
+        print(parenthesizer_automator(str(                                   parse_dyaml_junctions(code)  )))
+        print(parenthesizer_automator(str(                  split_colon_keys(parse_dyaml_junctions(code)) )))
+        print(parenthesizer_automator(str(expand_comma_keys(split_colon_keys(parse_dyaml_junctions(code))))))
+        print(parenthesizer_automator(str(parse_dyaml(code))))
+
+        # RESULT:
+        #        a:
+        #            b:
+        #                c: boochy
+        #            b,q:
+        #                c,d: creepy
+        #            b:
+        #                c: cri
+        #        a:b:
+        #                e: {"Hil":87}
+        #        w,x:y,z: pup
+        #    
+        #    ┌                                                                            ┐
+        #    │  ┌                                         ┐      ┌          ┐             │
+        #    │  │  ┌        ┐      ┌          ┐    ┌     ┐│      │  ┌      ┐│             │
+        #    [a:[b:[c:boochy], b,q:[c,d:creepy], b:[c:cri]], a:b:[e:[Hil:87]], w,x:y,z:pup]
+        #    │  │  └        ┘      └          ┘    └     ┘│      │  └      ┘│             │
+        #    │  └                                         ┘      └          ┘             │
+        #    └                                                                            ┘
+        #    ┌                                                                                ┐
+        #    │                                                 ┌              ┐               │
+        #    │  ┌                                         ┐    │  ┌          ┐│               │
+        #    │  │  ┌        ┐      ┌          ┐    ┌     ┐│    │  │  ┌      ┐││      ┌       ┐│
+        #    [a:[b:[c:boochy], b,q:[c,d:creepy], b:[c:cri]], a:[b:[e:[Hil:87]]], w,x:[y,z:pup]]
+        #    │  │  └        ┘      └          ┘    └     ┘│    │  │  └      ┘││      └       ┘│
+        #    │  └                                         ┘    │  └          ┘│               │
+        #    │                                                 └              ┘               │
+        #    └                                                                                ┘
+        #    ┌                                                                                                                                   ┐
+        #    │                                                                               ┌              ┐                                    │
+        #    │  ┌                                                                       ┐    │  ┌          ┐│                                    │
+        #    │  │  ┌        ┐    ┌                  ┐    ┌                  ┐    ┌     ┐│    │  │  ┌      ┐││    ┌            ┐    ┌            ┐│
+        #    [a:[b:[c:boochy], b:[c:creepy, d:creepy], q:[c:creepy, d:creepy], b:[c:cri]], a:[b:[e:[Hil:87]]], w:[y:pup, z:pup], x:[y:pup, z:pup]]
+        #    │  │  └        ┘    └                  ┘    └                  ┘    └     ┘│    │  │  └      ┘││    └            ┘    └            ┘│
+        #    │  └                                                                       ┘    │  └          ┘│                                    │
+        #    │                                                                               └              ┘                                    │
+        #    └                                                                                                                                   ┘
+        #    ┌                                                                                                                                                            ┐
+        #    │     ┌                                                                                       ┐                                                              │
+        #    │     │     ┌                                           ┐                                     │                                                              │
+        #    │     │     │                                ┌         ┐│       ┌                            ┐│       ┌                      ┐       ┌                      ┐│
+        #    {'a': {'b': {'c': 'cri', 'd': 'creepy', 'e': {'Hil': 87}}, 'q': {'c': 'creepy', 'd': 'creepy'}}, 'w': {'y': 'pup', 'z': 'pup'}, 'x': {'y': 'pup', 'z': 'pup'}}
+        #    │     │     │                                └         ┘│       └                            ┘│       └                      ┘       └                      ┘│
+        #    │     │     └                                           ┘                                     │                                                              │
+        #    │     └                                                                                       ┘                                                              │
+        #    └                                                                                                                                                            ┘
+
+    return parse_dyaml(code)
+
+def load_dyaml_file(path:str)->dict:
+    assert file_exists(path)
+    code=text_file_to_string(path)
+    return parse_dyaml(code)
 
 if __name__ == "__main__":
     print(end='\r')
