@@ -1042,6 +1042,16 @@ def handle_character(buffer,char,event=None):
         meta_pressed(clear=True)
         return True
 
+
+    if char=='X' and meta_pressed(clear=True):
+        #Delete first char of every line
+        text=buffer.document.text
+        lines=text.splitlines()
+        lines=[line[1:] for line in lines]
+        text='\n'.join(lines)
+        buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
+        return True
+
     if char=='v' and meta_pressed(clear=True):
         edit_event_buffer_in_vim(event)
         return True

@@ -204,6 +204,7 @@ KEYBOARD SHORTCUTS:
 	⌥ ↵    run current cell and clear buffer no-matter where you cursor is
 	⇧ ⇥    unindent current line or cycle through completions
 	⌃ ␣    toggle comment on current line and move cursor to next line
+	⌥ X    delete the first character of every line
 	⌥ v    edit current text in vim (equivalent to the \vi microcompletion)
 	⌥ ␣    forcibly insert a space character, skipping any microcompletions
 	⌥ ⌫    backspace a whole word
@@ -216,7 +217,7 @@ KEYBOARD SHORTCUTS:
 	⌥ n    executes 'NEXT', changing the value of 'ans' (useful in combination with \rpa and \an)
 	⌥ p    executes 'PREV', changing the value of 'ans' (useful in combination with \rpa and \an)
 	⌥ r    similar to \rpa, except it clears the buffer. Sets ans to the current buffer as a string
-        ⌃ a    insert str(ans)   Equivalent to \an
+	⌃ a    insert str(ans)   Equivalent to \an
 	⌥ ⌃ a  insert repr(str(ans))  Equivalent to \sa
 	⌥ q    equivalent to \da: clears the current buffer
 	⌥ (    insert ( at current position and ) at the end of the line without moving the cursor to the end of the line
