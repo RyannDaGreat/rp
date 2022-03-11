@@ -65,4 +65,6 @@
 /Users/Ryan/Desktop
 /Users/Ryan/Downloads
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+/Users/Ryan/Downloads/halved_photos
+/Users/Ryan/Desktop/CleanCode/Glass/mnt/Noman/Ubuntu/CleanCode/Scrapbook/archived_experiments/Alphacube
 /Users/Ryan

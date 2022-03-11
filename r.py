@@ -13571,6 +13571,7 @@ def get_all_paths(*directory_path                    ,
                    ignore_permission_errors = False  ,
                    include_hidden           = True   ,
                    include_symlinks         = True   ,
+                   explore_symlinks         = True   ,
                    folder_placement         = 'first',
                    hidden_placement         = 'last' ):
     #Returns global paths.
@@ -13620,9 +13621,13 @@ def get_all_paths(*directory_path                    ,
     else:
         directory_path=os.path.join(*directory_path)#Turn ('Ryan','Documents','Images') into 'Ryan/Documents/Images'
 
+    visited_directories = set()
+
     def recursion_helper(directory_path):
         assert isinstance(directory_path,str),'This is an internal assertion that should never fail. If this assertion does fail, get_all_paths has a bug.'
         assert directory_exists(directory_path),'get_file_paths error: '+repr(directory_path)+' is not a directory'
+
+        visited_directories.add(get_absolute_path(directory_path))
 
         try:
             all_paths=[os.path.join(directory_path,name) for name in os.listdir(directory_path)]
@@ -13634,7 +13639,7 @@ def get_all_paths(*directory_path                    ,
 
         subdirectory_paths=list(filter(directory_exists,all_paths))
         file_paths        =list(filter(file_exists     ,all_paths))
-        #OLD VERSION: file_paths=[os.path.join(directory_path,file_name) for file_name in next(os.walk(directory_path))[2]]#next(os.walk(...)) returns something like (‹directory_path›, [], ['0.png','1.png',...])
+        #OLD VERSION: file_paths=[os.path.join(directory_path,file_name) for file_name in next(os.walk(directory_path))[2]]#next(os.walk(...)) returns something like (u2039directory_pathu203a, [], ['0.png','1.png',...])
 
         output=[]
         if include_files  :output+=file_paths
@@ -13646,6 +13651,12 @@ def get_all_paths(*directory_path                    ,
 
         if recursive:
             for subdirectory_path in subdirectory_paths:
+                if get_absolute_path(subdirectory_path) in visited_directories:
+                    #Don't let symlink loops make this function recurse forever
+                    continue
+                if is_symlink(subdirectory_path) and not explore_symlinks:
+                    #If not explore_symlinks, don't recurse into them
+                    continue
                 output+=recursion_helper(subdirectory_path)
 
         if sort_by is not None:
@@ -14380,6 +14391,17 @@ def is_byte_color(color):
 def is_float_color(color):
     return all(np.issubdtype(x.dtype,np.floating) for x in as_numpy_array(color))
 
+def hex_color_to_tuple(hex_color:str):
+    #EXAMPLE:
+    #     >>> hex_color_to_tuple('#007FFF')
+    #    ans = (0, 127, 255)
+    assert len(hex_color)==len('#ABCDEF')
+    hex_color=hex_color[1:]
+    r=int(hex_color[0:2],16)
+    g=int(hex_color[2:4],16)
+    b=int(hex_color[4:6],16)
+    return r,g,b
+
 def get_color_hue(color):
     assert is_float_color(color),'For now, get_color_hue only works with float_colors and returns a float between 0 and 1'
     import colorsys
@@ -15113,7 +15135,7 @@ class VideoWriterMP4:
 
         vcodec='libx264' #This used to be an argument, but I don't know if I'll ever change it
 
-        self.path          = path
+        self.path          = get_absolute_path(path)
         self.vcodec        = vcodec
         self.framerate     = framerate
         self.video_bitrate = video_bitrate
@@ -15127,6 +15149,10 @@ class VideoWriterMP4:
 
         assert is_image(frame)
         assert not self.finished
+
+        assert not is_a_folder(self.path)
+        if not path_exists(get_parent_directory(self.path)):
+            make_directory(get_parent_directory(self.path))
 
         if not self.started:
             self.started = True
