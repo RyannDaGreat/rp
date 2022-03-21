@@ -6,5 +6,7 @@ r.py.history.txt
 ./junk/**/*
 ./junk/*
 junk
+./*.pyc
+./**/*.pyc
 
 
