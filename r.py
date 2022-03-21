@@ -6858,13 +6858,14 @@ history_syntax_highlighting=False,
 history_number_of_lines=2500,
 min_bot_space=15,
 top_space=0,
+
+session_title='',
     )
 _pyin_settings_file_path=__file__+'.rp_pyin_settings'
 _globa_pyin=[None]
 
 
 _rprc_pterm_settings_overrides={}#Modify this as you wish in an rprc.
-
 
 def _load_pyin_settings_file():
     # print("BOOTLEGER",pyin)
@@ -6893,6 +6894,16 @@ def _save_pyin_settings_file():
 
 def _delete_pyin_settings_file():
     delete_file(_pyin_settings_file_path)
+
+def _set_session_title(title=None):
+    pyin=_globa_pyin[0]
+    if title is None:
+        if hasattr(pyin,'session_title'):
+            current_title=pyin.session_title
+            print("Current session title:",repr(current_title))
+        print("Please enter a new session title:")
+        title=input(" > ")
+    pyin.session_title=title
 
 def _set_pterm_theme(ui_theme_name=None,code_theme_name=None):
     #EXAMPLE:
@@ -8249,6 +8260,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         <RP Settings>
         PT SAVE
         PT RESET
+        SET TITLE
         SET STYLE
 
         <Shell Commands>
@@ -8528,8 +8540,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         SRA   SRUNA
         SA    SRUNA
         SR    SRUNA
-        RA RUNA
-        EA RUNA
+        RA     RUNA
+        EA     RUNA
 
         V VIM
         VI VIM
@@ -8539,7 +8551,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         VHE VIMH
         VIH VIMH
 
-        GO GC
+        # GO GC
 
         MON MONITOR
 
@@ -8618,8 +8630,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         NB  $extract_code_from_ipynb()
         NBA  $extract_code_from_ipynb(ans)
         NBC  $r._clear_jupyter_notebook_outputs()
-        NBCA $r._clear_jupyter_notebook_outputs(ans)
-        NCA  $r._clear_jupyter_notebook_outputs(ans)
+        NBCA $r._nbca(ans)
+        NBCH $r._nbca($get_all_files(file_extension_filter='ipynb'))
+        NCA  $r._nbca(ans)
 
         INS $input_select("Select:",ans)
         ISA $input_select("Select:",ans)
@@ -8694,6 +8707,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         DISC $display_image_slideshow('.',display=display_image_in_terminal_color)
 
         FZM $pip_import('iterfzf').iterfzf(ans,multi=True)
+
+        PTS ptsave
+        ST settitle
 
         CLS !clear
         CLEAR !clear
@@ -8931,6 +8947,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         The ?. command has some variations. r?.image will print a list of results. But, just r?. alone will enter FZF. r?.3 will enter FZF with a max search depth of 3.
         ALL COMMANDS:\n"""*0+indentify(command_list,' '*4*0), "blue")
         # Other commands: 'MOD ON', 'MOD OFF', 'SMOD SET', 'MOD SET', 'VARS', 'MORE', 'MMORE', 'RETURN NOW', 'EDIT', 'AHISTORY', GHISTORY', 'COPY', 'PASTE', 'CHISTORY', 'DITTO', 'LEVEL', 'PREV', 'NEXT', 'UNDO', 'PT ON', 'PT OFF', 'RANT', '!', '!!', '?/', '?.', '?', '??', '???', '????', '?????','SHELL', 'IPYTHON', 'UNDO ALL', 'PREV ALL', 'UNDO ON', 'UNDO OFF', 'PREV ON', 'PREV OFF', 'PREV CLEAR', 'UNDO CLEAR', 'GC ON', 'GC OFF', 'SUSPEND', 'TICTOC ON', 'TICTOC OFF', 'TICTOC', 'FANSI ON', 'FANSI OFF', 'RUN', 'CD', 'PROF ON', 'PROF OFF', 'PROF', 'IPYTHON ON', 'IPYTHON OFF', 'PROF DEEP', 'SET STYLE', 'PT SAVE', 'PT RESET', 'RELOAD ON', 'RELOAD OFF', 'PWD', 'CPWD', 'LS', 'FORK'
+
+                    elif user_message =='SET TITLE':
+                        _set_session_title()
 
                     elif user_message =='PT SAVE':
                         try:
@@ -9251,6 +9270,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         name=fansi(name,'green','bold')
                         if running_in_ssh():
                             name=fansi('(SSH) ','green',)+name
+                            #     def _get_ssh_client_ip_address():
+                            #         return shell_command('echo $SSH_CLIENT').split()[0]
+                            #     ip=_get_ssh_client_ip_address()
+                            #     name=fansi('(SSH from %s) '%ip,'green',)+name
                         if running_in_google_colab():
                             fansi_print("Google Colab",'yellow','bold')
                         elif running_in_jupyter_notebook():
@@ -19787,6 +19810,15 @@ def _display_filetype_size_histogram(root='.'):
     _maybe_display_string_in_pager(printed_lines)
     print(printed_lines)
 
+def _nbca(paths):
+    if isinstance(paths,str):
+        paths=line_split(paths)
+    for x in paths:
+        if file_exists(x) and x.endswith('.ipynb'):
+            _clear_jupyter_notebook_outputs(x)
+        else:
+            print(fansi("r.nbca: Skipping; not a ipynb file:",'yellow'),x)
+
 def _clear_jupyter_notebook_outputs(path:str=None):
     #This clears all outputs of a jupyter notebook file
     #This is useful when the file gets so large it crashes the web browser (storing too many images in it etc)
@@ -19805,6 +19837,118 @@ def _clear_jupyter_notebook_outputs(path:str=None):
         print('New file size:',get_file_size(path))
 
     return path
+
+# @memoized #Only run once
+def _initialize_bokeh():
+    pip_import('bokeh')
+    pip_import('IPython')
+    
+    from bokeh.io import output_notebook
+    from IPython.utils import io
+    
+    # Suppress output - output_notebook() creates an output cell
+    # https://stackoverflow.com/questions/23692950/how-do-you-suppress-output-in-jupyter-running-ipython
+    
+    # with io.capture_output() as captured: 
+    #     output_notebook(hide_banner=True)
+    output_notebook(hide_banner=True)
+        
+def line_graph_via_bokeh(values, *,
+                         xlabel:str = None,
+                         ylabel:str = None,
+                         title :str = None,
+                         logx:float = None,
+                         logy:float = None,
+                         #Bokeh-specific kwargs:
+                         height:float = 400, #Height of the display. 375 is the minimum height to see all tools at once with title and ylabel.
+                         width :float = None #Width of the display. Set to None for maximal width.
+                        ):
+    #Uses the Bokeh library to display an interactive line graph in an IPython notebook
+    #Only works in IPython notebooks right now
+    #
+    #TODO:
+    #    - Currently only displays one graph at a time. Might add the ability to do multiple graphs in the future.
+    #    - Currently doesn't let you use custom x-coordinates. Might add that functionality in the future.
+    #    - Currently doesn't support legend labels, custom colors, custom line widths, etc. This should be added.
+    #    - Currently only uses a dark theme. Should add custom themes in the future.
+    #    - Allow custom log-axis bases (not just base 10)
+    #
+    #NOTES:
+    #    - This function should be as similar to rp.line_graph() as possible, while still getting as much ...
+    #        ... bokeh-specific functionality as possible
+    #
+    #EXAMPLES:
+    #    #Run these in an iPython notebook, such as Jupyter Lab or Google Colab       
+    #    line_graph_via_bokeh(random_ints(4),height=400,width=400);
+    #    line_graph_via_bokeh(random_ints(40),logy=True,logx=False);
+    #    line_graph_via_bokeh(random_ints(40),logy=True,logx=True,title='New Jersey',xlabel='Cows',ylabel='Time');
+    
+    assert running_in_jupyter_notebook(), 'line_graph_via_bokeh is meant to be used in a notebook (like Colab or Jupyter Lab etc)'
+
+    #Import stuff
+    _initialize_bokeh() #Bokeh has to be initialized before use
+    import bokeh
+    from bokeh.plotting import figure, show
+    from bokeh.io       import curdoc, output_notebook
+    from bokeh.themes   import built_in_themes
+
+
+    #Create (x,y) points
+    x = list(range(len(values)))
+    y = values
+
+
+    #Create figure
+    fig_kwargs = {}
+    if title  is not None: assert isinstance(title ,str) ; fig_kwargs['title'       ] = title
+    if xlabel is not None: assert isinstance(xlabel,str) ; fig_kwargs['x_axis_label'] = xlabel
+    if ylabel is not None: assert isinstance(ylabel,str) ; fig_kwargs['y_axis_label'] = ylabel
+    if logx              :                                 fig_kwargs['x_axis_type' ] = 'log'
+    if logy              :                                 fig_kwargs['y_axis_type' ] = 'log'
+    if height is not None:                                 fig_kwargs['height'      ] = height  
+    if width  is not None:                                 fig_kwargs['width'       ] = width  
+
+    fig_kwargs['tools'] = 'pan,wheel_zoom,box_zoom,reset,hover,crosshair' #http://docs.bokeh.org/en/0.11.1/docs/user_guide/tools.html
+    
+    fig = figure(**fig_kwargs)
+
+    crosshair = fig.tools[-1]
+    crosshair.line_color = '#999999' #This compliments our dark theme. The default crosshair color is black.
+
+    #Some extra tools I don't know the names of for the above string that lists tools...
+    fig.tools.append(bokeh.models.ZoomInTool ())
+    fig.tools.append(bokeh.models.ZoomOutTool())
+    fig.tools.append(bokeh.models.SaveTool   ())
+
+    #Get rid of the bokeh logo on the toolbar; it takes up too much room
+    fig.toolbar.logo=None
+    
+    if title is not None:
+        #Put the title on the middle-top, not the top-left
+        fig.title.align = 'center'
+
+    if width is None:
+        #Scale the figure to the notebook width.
+        # fig.sizing_mode = 'scale_width'   #Scale both display width and height by same factor to take maximal web-browser width
+        fig.sizing_mode = 'stretch_width' #Scale just display width to take maximal web-browser width
+        
+    #Put the 0,1,2,...etc number lines on x=0 and y=0, like desmos
+    # fig.yaxis.fixed_location=0
+    # fig.xaxis.fixed_location=0
+
+    #Draw the line graph onto the figure
+    fig.line(x, y, line_width=2, color='#007FFF') # TODO: Add legend_label="line label")
+
+
+    #Display figure with dark theme
+    theme = 'dark_minimal' #TODO: Make this an argument
+    assert theme in built_in_themes, repr(theme) + ' not in ' + repr(built_in_themes)
+    old_theme = curdoc().theme
+    try:
+        curdoc().theme = theme
+        show(fig) #Display the graph
+    finally:
+        curdoc().theme = old_theme
 
 def get_git_remote_url(repo='.'):
     assert folder_exists(repo)
@@ -20275,26 +20419,26 @@ del re
 
 #TODO: Fix this. It can help extract function defs among other useful thins
 #    def semantic_lines(python_code:str)->list:
-#	#Gets every semantic python line.
-#	#Meaning, literals that take up more than one line will be treated as one line (aka multiline strings, multiline defs, multiline lists etc)
-#	tokens=split_python_tokens(python_code)#This fraks up because split_python_tokens is broken -- it sees '"hello"' as 3 tokens: ['"','hello','"']
-#	output=[]
-#	stack =[]
-#	current_line=''
-#	closes={'}':'{',')':'(',']':'['}
-#	opens ={'{','(','['}
-#	for token in tokens:
-#	    current_line+=token
-#	    if token in opens:
-#		stack.append(token)
-#	    elif token in closes and stack and stack[-1] == closes[token]:
-#		stack.pop()
-#	    elif token=='\n' and not stack:
-#		output.append(current_line)
-#		current_line=''
-#	if current_line:
-#	    output.append(current_line)
-#	return output
+#   #Gets every semantic python line.
+#   #Meaning, literals that take up more than one line will be treated as one line (aka multiline strings, multiline defs, multiline lists etc)
+#   tokens=split_python_tokens(python_code)#This fraks up because split_python_tokens is broken -- it sees '"hello"' as 3 tokens: ['"','hello','"']
+#   output=[]
+#   stack =[]
+#   current_line=''
+#   closes={'}':'{',')':'(',']':'['}
+#   opens ={'{','(','['}
+#   for token in tokens:
+#       current_line+=token
+#       if token in opens:
+#       stack.append(token)
+#       elif token in closes and stack and stack[-1] == closes[token]:
+#       stack.pop()
+#       elif token=='\n' and not stack:
+#       output.append(current_line)
+#       current_line=''
+#   if current_line:
+#       output.append(current_line)
+#   return output
 
 
 

@@ -62,9 +62,18 @@
 /Users/Ryan/Desktop/CleanCode/Sandbox
 /Users/Ryan/Desktop/CleanCode/Sandbox/scrap
 /Users/Ryan/Desktop/CleanCode/Glass/media/ryan/Noman/Ubuntu/CleanCode/Scrapbook/archived_experiments/rudalle/Images
-/Users/Ryan/Desktop
 /Users/Ryan/Downloads
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
 /Users/Ryan/Downloads/halved_photos
 /Users/Ryan/Desktop/CleanCode/Glass/mnt/Noman/Ubuntu/CleanCode/Scrapbook/archived_experiments/Alphacube
+/Users/Ryan/Desktop/CleanCode/Github/robosuite
+/Users/Ryan/Desktop/CleanCode/Github/DeepAO
+/Users/Ryan/Desktop/CleanCode/Github/return-youtube-dislike/Extensions/combined/dist/chrome
+/Users/Ryan/Desktop/CleanCode/Github/return-youtube-dislike/Extensions/combined/dist
+/Users/Ryan/Desktop/CleanCode/Github/return-youtube-dislike/Extensions/combined
+/Users/Ryan/Desktop/CleanCode/Github/return-youtube-dislike/Extensions
+/Users/Ryan/Desktop
+/Users/Ryan/Library/Application Support/Ryan Burgert
+/Users/Ryan/Desktop/CleanCode/Github/return-youtube-dislike
+/Users/Ryan/Desktop/CleanCode/Glass/home/ryan/.local/lib/python3.8/site-packages/rp
 /Users/Ryan

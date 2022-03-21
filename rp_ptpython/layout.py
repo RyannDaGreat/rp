@@ -390,6 +390,13 @@ def status_bar(python_input):
                 append((TB.PasteModeOn, 'Micro:Off ', toggle_microcompletions))
             
 
+            if hasattr(python_input,'session_title') and python_input.session_title:
+                # append((Token.Window.Title, python_input.session_title, toggle_microcompletions))
+                append((TB.PseudoTerminalCurrentVariable, python_input.session_title, toggle_microcompletions))
+            else:
+                pass
+            
+
 
 
         #region RYAN BURGERT CODE GOES HERE FOR PSEUDOTERMINAL STUFF
@@ -500,9 +507,19 @@ def show_sidebar_button_info(python_input):
     import datetime
     remove_beginning_zero=lambda x:x[1:] if x[0] == '0' else x
     import rp
+
+    # if not hasattr(python_input,'session_title'):
+    #     title=''
+    # else:
+    #     title=python_input.session_title
+    # TB = Token.Toolbar.Status
+
     get_tokens=lambda cli: [
 
-
+        # (Token.Window.Title, title),
+        # (token.Key, title),
+        # (TB.PseudoTerminalCurrentVariable, title),
+        (token, ' '),
         *(
             [
                 (token.BatteryPluggedIn if rp.battery_plugged_in() else token.BatteryNotPluggedIn,"🔋 "*0+str(rp.battery_percentage())[:6]+'%'),# put the time here
