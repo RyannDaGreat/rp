@@ -6875,11 +6875,13 @@ _rprc_pterm_settings_overrides={}#Modify this as you wish in an rprc.
 def _load_pyin_settings_file():
     # print("BOOTLEGER",pyin)
     _globa_pyin[0]=pyin
+
     try:
         settings=eval(text_file_to_string(_pyin_settings_file_path))
+        assert isinstance(settings,dict)
         settings.update(_rprc_pterm_settings_overrides)
-        for setting in _default_pyin_settings:
-            assert setting in settings
+        # for setting in _default_pyin_settings:
+            # assert setting in settings
     except Exception:
         settings=_default_pyin_settings.copy()
 
@@ -6887,7 +6889,8 @@ def _load_pyin_settings_file():
         pyin.use_ui_colorscheme(d['_current_ui_style_name'])
         pyin.use_code_colorscheme(d['_current_code_style_name'])
         for attr in _default_pyin_settings:
-            setattr(pyin,attr,d[attr])
+            if attr in d:
+                setattr(pyin,attr,d[attr])
 
     _load_pyin_settings_from_dict(settings)
 
