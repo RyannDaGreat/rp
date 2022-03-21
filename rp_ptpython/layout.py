@@ -334,6 +334,13 @@ def status_bar(python_input):
         result = []
         append = result.append
 
+        if hasattr(python_input,'session_title') and python_input.session_title:
+            # append((Token.Window.Title, python_input.session_title, toggle_microcompletions))
+            append((TB.PseudoTerminalCurrentVariable, python_input.session_title, toggle_microcompletions))
+        else:
+            pass
+        
+
         append((TB, ' '))
         result.extend(get_inputmode_tokens(cli, python_input))
 
@@ -349,6 +356,8 @@ def status_bar(python_input):
             # Emacs cut/copy keys.
             append((TB, '[Ctrl-W] Cut [Meta-W] Copy [Ctrl-Y] Paste [Ctrl-G] Cancel'))
         else:
+
+
             result.extend([
                 (TB.Key, '[F3]', enter_history),
                 (TB, 'History ', enter_history),
@@ -390,11 +399,11 @@ def status_bar(python_input):
                 append((TB.PasteModeOn, 'Micro:Off ', toggle_microcompletions))
             
 
-            if hasattr(python_input,'session_title') and python_input.session_title:
-                # append((Token.Window.Title, python_input.session_title, toggle_microcompletions))
-                append((TB.PseudoTerminalCurrentVariable, python_input.session_title, toggle_microcompletions))
-            else:
-                pass
+            # if hasattr(python_input,'session_title') and python_input.session_title:
+            #     # append((Token.Window.Title, python_input.session_title, toggle_microcompletions))
+            #     append((TB.PseudoTerminalCurrentVariable, python_input.session_title, toggle_microcompletions))
+            # else:
+            #     pass
             
 
 
