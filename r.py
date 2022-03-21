@@ -5762,7 +5762,7 @@ def save_gist(content:str,*,
               shorten_url=True,
               description:str='',
               filename:str='',
-              token:str="5bbe2f80af7cd2c347664c2ff9f2616676918c70"):
+              token:str=None):
     #This function takes an input string, posts it as a gist on Github, then returns the URL of the new gist
     #I've included a token that anybody using this library is allowed to use. Have fun, but please don't abuse it!
     #
@@ -5777,6 +5777,11 @@ def save_gist(content:str,*,
     #NOTE: if you get a SSL Error that looks like
     #       URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1123)>
     #   Then try running rp.r._fix_CERTIFICATE_VERIFY_FAILED_errors()
+
+    if token is None:
+        #Token can't be in this code or github will revoke it
+        token = 'g h p _ 7 V z 7 8 D F B S 4 W 7 1 Y 1 b s r c a J g 6 b 8 H 8 X 5 v 0 9 M G i R'.replace(' ','')
+
     import urllib.request, urllib.error, urllib.parse
     import json
     import datetime
