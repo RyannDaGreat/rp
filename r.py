@@ -8274,6 +8274,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         <Shell Commands>
         !
         !!
+        SRUNA
+        SSRUNA
 
         <Simple Timer>
         TICTOC
@@ -8385,8 +8387,6 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         ACATA
         RUN
         RUNA
-        SRUNA
-        SSRUNA
         PWD
         CPWD
         APWD

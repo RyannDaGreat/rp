@@ -1,34 +1,19 @@
-#TODO: When x makes sense, y will happen when it makes sense (general ideas. )
+This is a help document for using RP's pseudo_terminal.
 
+SUMMARY
+	This documention is for RP (aka RyanPython).
+	It's not totally organized yet, but you can search through it to find what you want.
+	It's not yet complete, but includes a lot of important information.
+	It's an extension of the HELP command.
+	If you have any questions, you can email sqrtryan@gmail.com (for Ryan Burgert, the author of this package)
+	Note: The only reason this is a .py file and not a .txt file is to make it conveniently be included in my pypi package. It's not an actual python file. This might change in the future.
 
-When it makes sense, - will be turned into _.
-	Examples:
-		def f(-,) --> def f(_,)
-                -=6  -->  _=6
-		if -    if _
-
-
-#PLANS:
-	#Pretty much all future plans are here purely to make it clean, and to increase adoptability...
-	#Maybe put this in my apple Notes app later...so as not to clutter the help document lol.
-	#Ultimate terminal IDE plans:
-	#	Probably won't get around to multi-cursors, realistically. Vim can handle that anyway.
-	#	Alt+up that correctly expands and decreases selection region
-	#	In editor: Right click items OR some keyboard shortcut for context menus, that include:
-	#		Viewing documentation for a function/class etc
-	#		Copying it
-	#		Renaming it
-	#		Extracting selection to a variable
-	#		Finding usages (don't know how we would show results yet tho)
-	#	Better syntax highlighting: 
-	#		Highlight callables differently. We can use JEDI for this.
-	#	GUI menus for everything. 
-	#	Multiple tabs for the buffer; where we can open files and save files without having to type them out every time.
-	#	Sync breakpoints with PUDB in the gutter of the editor. Remember that the buffer is refreshed every time, so this might be difficult...
-	#	
+	Important Backslash Commands:
+		\da \co \pa \vi \tbp \23p \ya \sw \tts \lo \sa \pu 
 
 
 #FZF Notes:
+	Many functions in RP use FZF, a program that lets you search through things really fast in a terminal. Here's some useful info about it: 
 	When in regular (non-fuzzy) mode, you *almost* can do everything you can do in fuzzy mode by inserting spaces between every character
 	The following searches for everything that contains 'jedi' but not 'rp.libs.jedi'
 		jedi !rp.libs.jedi
@@ -44,106 +29,6 @@ When it makes sense, - will be turned into _.
 		^H $#
 	The following searches for a line starting with the letter H and NOT ending with #
 		^H !$#
-
-
-
-##################CSE526 PLANS
-
-	* Keep valid syntax as much as possible. New way to write def:
-	* Need to somehow have more memory than just the visible text in order for this to work well...
-	* Temporary text created in this way should be highlighted differently (temporary text, that might "solidify" if we move the cursor away)
-
-	*Utilizes concrete syntax trees and differentiable syntax errors
-
-	EXAMPLE (of how things could be done differently)
-
-	On ‹ ›: ‹d¦›   --->   ‹def _¦():
-	                           pass›
-
-	Then, On ‹f›:  ‹def _¦():   --->   ‹def f¦():
-	                    pass›               pass›
-
-	Or,   On ‹_›:  ‹def _¦():   --->   ‹def _¦():   // This is because, although you can't see it in this document, that _ changed colors. It used to be a temp token, but now it's solidified. All state is still visible in the terminal (by color); this might be accomplished by also having state in the text there (with special unicode syntax + a postprocessor so that you don't see it + special syntax highlighting. Maybe an invisible no-space character before another character changes its color?)
-	                    pass›               pass›
-
-	Then, On ‹↵›:  ‹def f¦():   --->   ‹def f():
-	                    pass›               ¦
-	                                        pass›
-
-	Then, On ‹p›:  ‹def f():   --->   ‹def f():
-	                    ¦                  p¦›
-	                    pass›               
-
-	Or,   On ‹↵›:  ‹def f():   --->   ‹def f():
-	                    ¦                  pass
-	                    pass›          ¦›
-
-	ANOTHER EXAMPLE:
-
-	On ‹ ›: ‹if¦›   --->   ‹if ¦:
-
-	#Play around with this to see how we can separate the syntax-error region from the rest of the code
-	#For example, while entering some python code keep pressing ^e over and over to see how the syntax errors evolve over time
-	#	For example, enter [x for x in y|] then press ^e then type ' if' to get [x for x in y if|] then press ^e again to see how ' if' is reddened
-	#This will let us use a concrete syntax tree to analyze python even when there are syntax errors.
-	#	For example, this will let alt+up progressively select text more easily.
-	#TODO: Pull request changes to PromptToolkit: Mouse events, faster regions, color filters - to have highlightable menus when moused over
-	def threeway_split(old_text,new_text):
-		#EXAMPLES:
-		#     >>> threeway_split('Hello World','Hello Fair World')
-		#    ans = ('Hello ', 'Fair ', 'World')
-		#     >>> threeway_split('Hello World','HelloWorld')
-		#    ans = ('Hello', '', 'World')
-		#     >>> threeway_split('Hello World','HelWorld')
-		#    ans = ('Hel', '', 'World')
-		#     >>> threeway_split('Hello World','Hel oi World')
-		prefix=longest_common_prefix(old_text,new_text)
-		old_text=old_text[len(prefix):]
-		new_text=new_text[len(prefix):]
-		suffix=longest_common_suffix(old_text,new_text)
-		old_text=old_text[:-len(suffix)]
-		new_text=new_text[:-len(suffix)]
-		middle=new_text
-		return prefix,middle,suffix
-	class DifferentialPython:
-		def __init__(self):
-			self.valid_text=""
-		def update(self,new_text):
-			if is_valid_python_syntax(new_text):
-				self.valid_text=new_text
-				print(fansi(new_text,'green'))
-			else:
-				prefix,middle,suffix=threeway_split(self.valid_text,new_text)
-				if is_valid_python_syntax(prefix+suffix):
-					self.valid_text=prefix+suffix
-					print(fansi(prefix,'green')+fansi(middle,'red','underlined')+fansi(suffix,'green'))
-				else:
-	d=DifferentialPython()
-	SMODIFIER SET d.update(|)
-
-
-
-##############################
-
-
-
-
-
-
-
-
-
-
-SUMMARY
-	This documention is for RP (aka RyanPython).
-	It's not yet complete, but includes a lot of important information.
-	It's an extension of the HELP command.
-	If you have any questions, you can email sqrtryan@gmail.com (for Ryan Burgert, the author of this package)
-	Note: The only reason this is a .py file and not a .txt file is to make it conveniently be included in my pypi package. It's not an actual python file. This might change in the future.
-
-	Important Backslash Commands:
-		\da \co \pa \vi \tbp \23p \ya \sw \tts \lo \sa \pu 
-	
 
 SOME FEATURES OF RP:
 	NORMAL FEATURE LIST:
@@ -798,7 +683,8 @@ MICROCOMPLETIONS:
 					‹def f(8args):›          –––> ‹def f(*args):¦›          //For function definitions
 					‹def f(88kwargs):› –––> ‹def f(**kwargs):¦›
 					‹def f(8args,88kwargs):› –––> ‹def f(*args,**kwargs):¦›
-					‹def f(8args,8kwargs):› –––> ‹def f(*args,**kwargs):¦›  //TODO: Because we know that we can only have one *args in a function definition, the next * must be for kwargs, letting us save one keystroke   (likewise, TODO: ‹def f(*args,*kwargs):› –––> ‹def f(*args,**kwargs):›)
+					‹def f(8args,8kwargs):› –––> ‹def f(*args,**kwargs):¦›  //TODO: Because we know that we can only have one *args in a function definition, the next * must be for kwargs, letting us save one keystroke   
+					                                                        // (likewise, TODO: ‹def f(*args,*kwargs):› –––> ‹def f(*args,**kwargs):›)
 				FUNCTION CALLS:
 					‹print(8args)›           –––> ‹print(*args)¦›            //For function calls
 					‹print(88kwargs)›        –––> ‹print(**kwargs)¦›
@@ -839,57 +725,68 @@ MICROCOMPLETIONS:
 PSEUDO TERMINAL COMMANDS:
 	SUMMARY:
 		ALL COMMANDS:
-			<Input Modifier>        <Namespace History>    <Startup Files>          <Unimportant>       
-			MODIFIER ON             UNDO                   RPRC                     NUM COM             
-			MODIFIER OFF            UNDO ON                VIMRC                    IHISTORY (IHIST)    
-			MODIFIER SET            UNDO OFF               TMUXRC                   PROF DEEP           
-			SMODIFIER SET           UNDO CLEAR             XONSHRC                  CDH CLEAN           
-			                        UNDO ALL               RYAN RPRC                                    
-			<Stack Traces>                                 RYAN VIMRC               <File System>       
-			MORE                    <Prompt Toolkit>       RYAN TMUXRC              RM                  
-			MMORE                   PT ON                  RYAN XONSHRC             LS                  
-			DMORE                   PT OFF                                          FD                  
-			AMORE                   PT                     <Inspection>             CD                  
-			GMORE                                          ?                        CDP                 
-			HMORE                   PT SAVE                ??                       CDA                 
-			VIMORE                  PT RESET               ???                      CDB                 
-			PIPMORE                 <RP Settings>          ?.                       CDU                 
-			IMPMORE                 SET STYLE              ?v                       CDH                 
-			PREVMORE                                       ?s                       CDZ                 
-			NEXTMORE                <Shell Commands>       ?t                       CDQ                 
-			                        !                      ?h (?/)                  CAT                 
-			<Command History>       !!                     ?e                       NCAT                
-			HISTORY    (HIST)                              ?p                       CCAT                
-			GHISTORY   (GHIST)      <Simple Timer>         ?c                       ACAT                
-			AHISTORY   (AHIST)      TICTOC                                          CATA                
-			CHISTORY   (CHIST)      TICTOC ON              <Others>                 NCATA               
-			DHISTORY   (DHIST)      TICTOC OFF             RETURN  (RET)            CCATA               
-			VHISTORY   (VHIST)                             SUSPEND (SUS)            ACATA               
-			ALLHISTORY (ALLHIST)    <Profiler>             GPU                      RUN                 
-			                        PROF                   TOP                      RUNA                
-			<Clipboards>            PROF ON                TAB                      PWD                 
-			COPY                    PROF OFF               TABA                     CPWD                
-			PASTE                                          MONITOR                  APWD                
-			EPASTE                  <Toggle Colors>        UPDATE                   TAKE                
-			WCOPY                   FANSI ON               ANS PRINT ON   (APON)    OPEN                
-			WPASTE                  FANSI OFF              ANS PRINT OFF  (APOF)    OPENH               
-			TCOPY                                          ANS PRINT FAST (APFA)    OPENA               
-			TPASTE                  <Module Reloading>     SHELL (SH)               DISK                
-			LCOPY                   RELOAD ON              LEVEL                    TREE                
-			LPASTE                  RELOAD OFF             DITTO                    TREE ALL            
-			VCOPY                                          EDIT                     TREE DIR            
-			VPASTE                  <Documentation>        VARS                     TREE ALL DIR        
-			FCOPY                   HELP                   RANT                     FD SEL (FDS)        
-			FPASTE                  HHELP                  FORK                     LS SEL (LSS)        
-			MLPASTE                 SHORTCUTS              WANS                     LS REL (LSR)        
-			                                               ARG                      LS FZF (LSZ)        
-			<'ans' History>                                VIM                      LS QUE (LSQ)        
-			NEXT                                           VIMH                     RANGER (RNG)        
-			PREV                                           VIMA                                         
-			PREV ON                                        AVIMA                                        
-			PREV OFF                                       GC OFF                                       
-			PREV CLEAR                                     GC ON                                        
-			PREV ALL                                       GC       
+			<Input Modifier>        <Namespace History>    <Inspection>             <File System>
+			MOD ON                  UNDO                   ?                        RM
+			MOD OFF                 UNDO ON                ??                       RN
+			MOD SET                 UNDO OFF               ???                      MV
+			SMOD SET                UNDO CLEAR             ?.                       LS
+			                        UNDO ALL               ?v                       LST
+			<Stack Traces>                                 ?s                       CD
+			MORE                    <Prompt Toolkit>       ?t                       CDP
+			MMORE                   PT ON                  ?h (?/)                  CDA
+			DMORE                   PT OFF                 ?e                       CDB
+			AMORE                   PT                     ?p                       CDU
+			GMORE                                          ?c                       CDH
+			HMORE                   <RP Settings>          ?i                       CDZ
+			VIMORE                  PT SAVE                ?r                       CDQ
+			PIPMORE                 PT RESET                                        CAT
+			IMPMORE                 SET TITLE              <Others>                 NCAT
+			PREVMORE                SET STYLE              RETURN  (RET)            CCAT
+			NEXTMORE                                       SUSPEND (SUS)            ACAT
+			                        <Shell Commands>       WARN                     CATA
+			<Command History>       !                      GPU                      NCATA
+			HISTORY    (HIST)       !!                     TOP                      CCATA
+			GHISTORY   (GHIST)      SRUNA                  TAB                      ACATA
+			AHISTORY   (AHIST)      SSRUNA                 TABA                     RUN
+			CHISTORY   (CHIST)                             MONITOR                  RUNA
+			DHISTORY   (DHIST)      <Simple Timer>         UPDATE                   PWD
+			VHISTORY   (VHIST)      TICTOC                 ANS PRINT ON   (APON)    CPWD
+			ALLHISTORY (ALLHIST)    TICTOC ON              ANS PRINT OFF  (APOF)    APWD
+			                        TICTOC OFF             ANS PRINT FAST (APFA)    TAKE
+			<Clipboards>                                   SHELL (SH)               MKDIR
+			COPY                    <Profiler>             LEVEL                    OPEN
+			PASTE                   PROF                   DITTO                    OPENH
+			EPASTE                  PROF ON                EDIT                     OPENA
+			WCOPY                   PROF OFF               VARS                     DISK
+			WPASTE                                         RANT                     DISKH
+			TCOPY                   <Toggle Colors>        FORK                     TREE
+			TPASTE                  FANSI ON               WANS                     TREE ALL
+			LCOPY                   FANSI OFF              ARG                      TREE DIR
+			LPASTE                                         VIM                      TREE ALL DIR
+			VCOPY                   <Module Reloading>     VIMH                     FD
+			VPASTE                  RELOAD ON              VIMA                     FDA
+			FCOPY                   RELOAD OFF             AVIMA                    FDT
+			FPASTE                                         GC OFF                   FD SEL (FDS)
+			MLPASTE                 <Documentation>        GC ON                    LS SEL (LSS)
+			                        HELP                   GC                       LS REL (LSR)
+			<'ans' History>         HHELP                                           LS FZF (LSZ)
+			NEXT                    SHORTCUTS              <Unimportant>            LS QUE (LSQ)
+			PREV                                           NUM COM                  RANGER (RNG)
+			PREV ON                 <Startup Files>        PROF DEEP
+			PREV OFF                RPRC                   CDH CLEAN
+			PREV CLEAR              VIMRC                  ALS
+			PREV ALL                TMUXRC                 ALSD
+			                        XONSHRC                ALSF
+			                        RYAN RPRC
+			                        RYAN VIMRC
+			                        RYAN TMUXRC
+			                        RYAN XONSHRC
+
+	// NOTE: When a command here is listed like:
+	//    SOME COMMAND (SMCMD)
+	// It means SMCMD is an alias for SOME COMMAND, and is therefore a shorthand equivalent.
+	//Also note that in SHORTCUTS, many of these command might have additional shorthands. They're listed here as well.
+
 
 	<Input Modifier>
 		// In pseudo-terminal, modifiers are preprocessors for your code.
@@ -901,40 +798,88 @@ PSEUDO TERMINAL COMMANDS:
 
 	<Stack Traces>
 		MORE  : Shows you a bigger stack trace. Always works.
+			Shortcut: m
 		MMORE : Shows you a more detailed stack trace with the values of every variable at every stack frame,
 			along with big chunks of code, but requires an external library. It's extremely useful for debugging.
+			Shortcut: mm
 		DMORE : Lauches a post-mortem debugger on the last error. If you have pudb, it will launch that debugger
 			instead of the defaut pdb library. It's useful when you want to get information that MMORE can't tell you.
+			Shortcut: dm
 		GMORE : Googles for your error in your default web browser
+			Shortcut: gm
 		AMORE : Stands for 'ans more'. Will set 'ans' to the latest error's exception, so you can perform custom tests on it.
+			Shortcut: am
+		HMORE : Almost exactly like MORE, except with syntax Highlighting
+			Shortcut: hm
 		VIMORE: Stands for 'vim more'. Used to edit the files you see in your stack trace with vim.
+			Shortcut: vm
+		PIPMORE: If you get an import error becuase a package isn't installed, simply use 'PIPMORE' to auto-install it
+			Shortcut: pm
+		IMPMORE: If you get an error like "NameError: name 'numpy' is not defined", this will automatically import numpy
+			Shortcut: im
+		PREVMORE: Goes to the previous error. It's kind of like the PREV command, but for errors.
+			Shortcut: um
+		NEXTMORE: The opposite of PREVMORE. It's kind of like the NEXT command, but for errors.
+			Shortcut: nm
 
 	<Command History>
 		HISTORY : Prints a list of all commands that you've entered that didn't cause errors. All green commands were single-liners,
 			and all yellow commands were multi-liners. Yellow commands alternate between bold and not-bold so you can visually distinguish
 			one multiline command from the next.
-		AHISTORY: Stands for 'All History'. Prints all history entries from the current session, including ones that made errors while running. 
-			Useful for getting numbers to plug into EDIT.
+			Shortcut: hi
 		GHISTORY: Prints a list of all single-line commands that didn't have errors. GHISTORY stands for 'green history', because in HISTORY all
 			single-liners are printed in green.
+			Shortcut: gh
 		CHISTORY: Stands for 'Copy History'. Copies the output of HISTORY to your clipboard.
+			Shortcut: ch
 		DHISTORY: Stands for 'def History'. Extracts all function definitions from HISTORY and shows one of each to you 
 			(it's easier than sifting through HISTORY manually to pull your functions out)
+			Shortcut: dh
+		VHISTORY: Every time you close RP, your HISTORY is saved to a file. VHISTORY opens up that file in VIM. You can use it to select code and paste it back into RP.
+			Shortcut: vh
+		ALLHISTORY: Shows all commands you entered, including the ones that caused errors. In a terminal, you can also press F3 to get a similar result.
 
 	<Clipboard>
 		COPY  : Copies str(ans) to your clipboard. If you're using linux, please 'sudo apt install xclip'
-		PASTE : Runs code from your clipboard.
-		SPASTE: Sets ans to the string from your clipboard.
+			Shortcut: co
+		PASTE: Sets ans to the string from your clipboard.
+			Shortcut: pa
+		EPASTE : Runs code from your clipboard. Stands for 'eval paste'
+			Pro tip: Equivalent to PASTE followed by RUNA (aka 'pa ra' using shortcuts)
+			Shortcuts: ep, epa
 		WCOPY : Attempts to serialize ans into a bytestring, then sends it to be copied online. It's counterpart is WPASTE.
+			Shortcuts: wc, wco
 		WPASTE: Pastes from a world-wide clipboard that's hosted on the internet. Any instance of rp that uses WCOPY can copy to this clipboard, letting
-			you copy and paste between computers easily. It supports many datatypes including numpy arrays, tensorflow tensors, lists, integers, floats and even lambdas and python functions (including builtins) - as well as many other datatypes. Anything that the 'dill'
-			library supports is supported by WCOPY and WPASTE. The motivation behind this: Before, when writing code on things like the raspberry pi, it was annoying to bring code back and fourth from my computer to the raspi. I had to use something 
+			you copy and paste between computers easily. It supports many datatypes including numpy arrays, tensorflow tensors, lists, integers, floats and even lambdas and python
+			functions (including builtins) - as well as many other datatypes. Anything that the 'dill'
+			library supports is supported by WCOPY and WPASTE. The motivation behind this: Before, when writing code on things like the raspberry pi, it was annoying to bring code back 
+			and fourth from my computer to the raspi. I had to use something 
 			like email, etc, which meant leaving the terminal and using a GUI. But with this, you never even have to leave RP! Whatsmore, you can transfer more than just strings now :) 
+			Shortcuts: wp, wpa
+		TCOPY: Copies str(ans) to your tmux clipboard. If there is no tmux running, this won't do anything.
+			Shortcuts: tc, tco
+		TPASTE: Pastes the tmux clipboard as ans. That way, you can copy something in tmux and paste it directly into rp as a string.
+			Pro tip: Follow TPASTE by COPY to copy your tmux clipboard to your system's clipboard, to paste tmux output into sublime or something.
+			Shortcuts: tp, tpa
+		VCOPY: Copies str(ans) into vim's clipboard. The next time you open vim, you can press 'p' to paste that string into vim.
+			Shortcuts: vc, vco
+		VPASTE: Paste's vim's clipboard contents into ans. Note that you have to yank something in vim, then exit vim, then this will work.
+			Pro tip: If this causes an error, run the command 'VCL' then try again. This stands for 'vim clear'. This will clear certain corrupted vim files, letting it work again.
+			Shortcuts: vp, vpa
+		FCOPY: Will let you select a file (or folder) and copy it over the web. It can be pasted at any computer using FPASTE
+			Shortcuts: fc, fco
+		FPASTE: Assumes somebody recently used FCOPY somewhere in the world. It will paste the file (or folder) in your current directory.
+			Note: Behind the scenes, it uses WCOPY and WPASTE to do this. Large files, over a gigabyte, probably won't work well.
+			Shortcuts: fp, fpa
+		MLPASTE: When all else fails and we're in a nuclear apocalypse, this will still let you paste text into RP. Run this, then paste some content. When you're done, sent a KeyboardInterrupt by pressing Ctrl+C (or in Jupyter, by pressing 'stop')
+			Shortcut: mlp
 
 	<'ans' History>
 		// See https://asciinema.org/a/TFf9OvoRj1vmRqMPYDhHEyDsV
 		PREV      : reverts ans to its previous value
+			Shortcut: pp
 		NEXT      : The opposite of PREV. Undo is to PREV as redo is to NEXT.
+			Shortcut: n
 		PREV ON   : Enables tracking ans's history. This is the default.
 		PREV OFF  : Disables tracking ans's history. This can save memory.
 		PREV CLEAR: Deletes all ans history, which might save some memory. I rarely use it in practice.
@@ -948,13 +893,17 @@ PSEUDO TERMINAL COMMANDS:
 
 	<Prompt Toolkit>
 		//TODO: Add video
+		PT: Toggles between PT ON and PT OFF
 		PT OFF: Disables prompt toolkit. This means using a simpler UI, with less features but also saving battery life.
 		PT ON : Enables prompt toolkit, letting you have things like autocompletions and multi-line editing etc.
 
 	<Saving Settings>
 		//TODO: Add video
-		PT SAVE  : Prompt-Toolkit Save saves all the settings in the menu you get when pressing F2.
+		PT SAVE  : Prompt-Toolkit Save saves all the settings in the menu you get when pressing F2, as well as any title made by SET TITLE.
+			Shortcut: pts
 		PT RESET : Resets all the options in the F2 menu to their defaults.
+		SET TITLE: Lets you assign a title to this RP installation, displaying a tag on the bottom left.
+			Shortcut: st
 		SET STYLE: Lets you select a different prompt label (which is by default ' >>> ')
 
 	<Shell Commands>
@@ -963,21 +912,81 @@ PSEUDO TERMINAL COMMANDS:
 			python files in your current directory
 		!!: Similar to the above single exclamation mark, having !! instead of ! will capture the standard output of your command to a string in 'ans', 
 			instead of printing it to stdout. For example, '!!echo Hello World!' is the same as doing 'ans="Hello World!"'
+			Pro tip: If you need to use sudo, or interact with the command somehow, its best use a single exclamation mark. Otherwise, if you want to keep the output, use !!.
+		SRUNA : Equivalent to running "!*"  where * is replaced by str(ans). Stands for 'Shell-Run Ans'
+			Shortcut: sa
+		SSRUNA: Equivalent to running "!!*" where * is replaced by str(ans)
+			Shortcut: ssa
 
-	<Inspection>
-		//TODO: Add video
-		?/: Just entering '?/'' by itself is equivalent to writing 'help(ans)'. A command like 'some_expression?/' is turned into 'help(some_expression)'
-		? : Just entering '?' by itself is equivalent to writing 'ans?'. 'some_value?' will give you more information about that value. 
-				In ENTRIES, green items are callables (like functions and classes). Blue items are modules, and others are just plain colored.
-		??: Same as ?, but will also show the source code of the inspected object.
-		???: Same as ?, but will also show details about every value in ENTRIES.
+	<Simple Timer>
+		//TICTOC has nothing to do with TIKTOK - this came first - i promise lmao
+		//rp.tic() and rp.toc() are timing functions that work the same way they do in MATLAB
+		TICTOC: Toggles between TICTOC ON and TICTOC OFF
+			Shortcut: tt
+		TICTOC ON: When this is turned on, the time it takes to run each command will be displayed.
+			Pro tip: If the command runs super fast, try doing '\fo 100' to edit the command to run 100 times, or alternatively do 'DITTO 100' to run the previosuly-run command 100 times
+		TICTOC OFF: Turns that mode back off again.
 
 	<Profiler>
 		//TODO: Add video
+		PROF: Toggles PROF ON with PROF OFF. Quick and dirty. What I almost always end up using lol.
 		PROF ON: Will turn on the profiler for your next commands, telling you which function takes how long to run in a tree diagram next time you run a python command.
 		PROF DEEP: Like PROF ON, but shows more details.
 		PROF OFF: Turns the profiler off.
-		PROF: Toggles PROF ON with PROF OFF. Quick and dirty.
+
+	<Toggle Colors>
+		
+
+	<Module Reloading>
+	<Documentation>
+	<Startup Files>
+
+	<Inspection>
+		// All of these commands can be used like this:
+		//     >>> some_object?
+		// where some_object is the 'target'
+		// Or like this:
+		//     >>> ?
+		// ...which is simply turned into:
+		//     >>> ans?
+		// where 'ans' is now the 'target'
+
+		//Note that there is a microcompletion that will let you press '/' instead of '?' for most of these.
+
+		//TODO: Add a video to this help section
+
+		? : Just entering '?' by itself is equivalent to writing 'ans?'. 'some_value?' will give you more information about that value. 
+			In ENTRIES, green items are callables (like functions and classes). Blue items are modules, and others are just plain colored.
+			Some special cases:
+				- If given a file or folder name, it will display information about it such as file size, number of files, etc
+					- If given the path of a text file, will show the number of lines
+					- If given an image file, will show it's resolution 
+					- If given a video file, will show its duration
+					- If given a symlink, will show its destination
+				- If given a numpy array or torch tensor etc, will show its shape and dtype
+				- If given a module, will show its source code path
+				- If given a function, will show its arguments
+				- If given something with length, will show it's len()
+		??: Same as ?, but will also show the source code of the inspected object.
+		???: Same as ?, but will also show details about every value in ENTRIES.
+		?p: Will attempt to display the target in the terminal. Normally it will pretty-print it. Dicts, nested lists etc will be displayed nicely. Great for web api repsonses that looks like {{asd::f{}:::{asdf}a::sdf}}}asdf{}{a::sdf}{{asdf{}::{}{}{}}} etc
+			Some special cases:
+				- If target is an image (as defined by rp.is_image), it will be displayed in the terminal in full color (if your terminal supports true-color, which most do)
+				- If the target is a string containing python code, it will print it with syntax highlighting
+		?h: Just entering '?/'' by itself is equivalent to writing 'help(ans)'. A command like 'some_expression?/' is turned into 'help(some_expression)'
+		?/: Equivalent to ?h. Can be typed by pressing '/' twice.
+		?.: Lets you search for attributes recursively, interactively. It uses fzf.
+			You can also do "?.fourier" to search *non-interactively* for the query "fourier". Good for when you aren't running this in a terminal, or you want to record the output. Press control+c to cancel it prematurely.
+			You can also do "?.1" or "?.2" to search interactively with a maximum recursion depth of 1 or 2 respectively (or 3, or 4 etc - whatever floats your boat)
+		?v: Will attempt to edit the source code of the target in vim. Will position the cursor nicely for you in that file too.
+		?s: Will print str(target).
+		?t: Will let you interactively view a large numerical matrix or pandas table in a terminal. Equivalent to the TAB command.
+		?e: Will display information about each attribute of the target. If there are functions with no arguments, it evaluates them (such as __len__ etc). It uses the 'peepdis' library to do this (its on pypi).
+		?c: Gets source code. Will set ans to the source code of the target. Equivalent to "ans=rp.get_source_code(target)"
+		?i: Will show pip information about a given module. Assumes the target is a module obtained from pip.
+		?r: Will show nicely formatted colorful information about the target using the 'rich' library.
+
+
 
 	?c  gets source code
 	?p  prints either with pretty_print, or prints a python code string with syntax highlighting
@@ -1050,3 +1059,13 @@ Todo:
 		- I want it to terminate once it reaches the top of the stack we put it on....because...
 		- ...Conceptual issue: If you run into an error when debugging, or just continue off the edge, pseudo_terminal now runs in the debugger and for some reason you can't quit it.
 		- I want a DMORE (post-mortem debugger). Honestly when the debugger crashes it's fuckin' useless (it never actually crashes beause pseudo-terminal catches the error. Which is a conceptual flaw I don't know how to work around.)
+
+
+#TODO: When x makes sense, y will happen when it makes sense (general ideas. )
+
+
+When it makes sense, - will be turned into _.
+	Examples:
+		def f(-,) --> def f(_,)
+                -=6  -->  _=6
+		if -    if _
