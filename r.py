@@ -20471,3 +20471,27 @@ del re
 # Version Oct24 2021
 
 
+def deepgenx(code:str)->str:
+    #Similar to GitHub copilot, except it uses GPT-J and is free
+    #See https://deepgenx.com/
+    #Given some python code, it will continue it and return the original code + the continued code
+    import requests
+    import json
+    ans = code
+    ans = requests.post(
+        "https://api.deepgenx.com:5700/generate",
+        json=dict(
+            input=code,
+            token_max_length=1024,
+            temperature=1,
+            top_p=.7,
+            # Get your token here: https://deepgenx.com/signin
+            token="8168b4cc9bbc41f0b3b8a403a9ad6b7cf195f01ded98706282980ceff021041e.3a3eed41e43b3a212f8898ba26c6e341a639c2e86bb3110e35f64d312b982086",
+        ),
+    )
+    ans = ans.text
+    ans = json.loads(ans)
+    assert ans['success'], 'deepgenx request failed: '+repr(ans)
+    ans = ans["message"]
+    ans = line_join(ans)
+    return code+ans

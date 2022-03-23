@@ -2422,6 +2422,8 @@ def load_python_bindings(python_input):
                                          '\\sim':'sort_imports',
                                          '\\rms':'remove_star',
                                          '\\bla':'black',
+                                         '\\gpt':'gpt',
+                                         '\\dgx':'deepgenx',
                                          '\\sg':'save_gist',
                                          '\\lg':'load_gist',
                                          '\\co':'copy',
@@ -2792,6 +2794,24 @@ def load_python_bindings(python_input):
                                         buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
                                     except BaseException as e:
                                         buffer.insert_text('#remove_star: Error: '+str(e).replace('\n',' ; '))
+                                if header=='gpt':
+                                    try:
+                                        import rp
+                                        before_text=buffer.document.text_before_cursor
+                                        after_text =buffer.document.text_after_cursor
+                                        before_text=rp.gpt3(before_text)
+                                        buffer.document=Document(text,len(before_text),buffer.document.selection)
+                                    except BaseException as e:
+                                        buffer.insert_text('#gpt: Error: '+str(e).replace('\n',' ; '))
+                                if header=='dgx':
+                                    try:
+                                        import rp
+                                        before_text=buffer.document.text_before_cursor
+                                        after_text =buffer.document.text_after_cursor
+                                        before_text=rp.deepgenx(before_text)
+                                        buffer.document=Document(text,len(before_text),buffer.document.selection)
+                                    except BaseException as e:
+                                        buffer.insert_text('#dgx (aka deepgenx): Error: '+str(e).replace('\n',' ; '))
                                 if header=='source_code':
                                     #Sets ans=rp.get_source_code(current buffer)
                                     indent=''
