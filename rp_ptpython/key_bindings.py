@@ -2800,15 +2800,17 @@ def load_python_bindings(python_input):
                                         before_text=buffer.document.text_before_cursor
                                         after_text =buffer.document.text_after_cursor
                                         before_text=rp.gpt3(before_text)
+                                        text=before_text+after_text
                                         buffer.document=Document(text,len(before_text),buffer.document.selection)
                                     except BaseException as e:
                                         buffer.insert_text('#gpt: Error: '+str(e).replace('\n',' ; '))
-                                if header=='dgx':
+                                if header=='deepgenx':
                                     try:
                                         import rp
                                         before_text=buffer.document.text_before_cursor
                                         after_text =buffer.document.text_after_cursor
                                         before_text=rp.deepgenx(before_text)
+                                        text=before_text+after_text
                                         buffer.document=Document(text,len(before_text),buffer.document.selection)
                                     except BaseException as e:
                                         buffer.insert_text('#dgx (aka deepgenx): Error: '+str(e).replace('\n',' ; '))
