@@ -8,5 +8,13 @@ r.py.history.txt
 junk
 ./*.pyc
 ./**/*.pyc
+./*.un~
+./**/*.un~
 
 
+
+HISTORY
+libs
+
+..gitignore.un~
+.HISTORY.un~
