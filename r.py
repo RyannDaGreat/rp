@@ -8925,7 +8925,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         command_list=columnify_strings(strings_input)
 
                         display_help_message_on_error=True# Seems appropriate if they're looking for help
-                        fansi_print("HELP --> Here are the instructions:",'blue','underlined')
+                        fansi_print("HELP --> Here are the instructions (type HHELP for more info):",'blue','underlined')
                         fansi_print("""    For those of you unfamiliar, this will basically attempt to exec(input()) repeatedly.",'blue')
         For more documentation, type 'HHELP'
         NOTE: If you're using linux, please use 'sudo apt-get install xclip' to let rp access your system's clipboard
