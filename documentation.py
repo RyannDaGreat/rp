@@ -954,6 +954,29 @@ PSEUDO TERMINAL COMMANDS:
 			Shortcut: h
 		HHELP: Shows you this document
 			Shortcut: hh
+		SHORTCUTS: Shows you useful aliases
+			#TODO: Write about these ones in particular:
+			CLS, CLEAR     
+			RNA            
+			RMA            
+			CPAH CAH       
+			MVAH MAH       
+			FCA FCH        
+			GCLP           
+			GCLA           
+			GURL           
+			LN LNAH        
+			SG LG OG       
+			SUH COH SUA COA
+			IASM           
+			LSM            
+			RF RD RE       
+			GP             
+			NBC NBCA NBCH  
+			NB             
+			Z BA S         
+			GOO            
+			RS RST         
 
 	<Startup Files>
 		RPRC: Edits your .rprc file. This file runs every time rp is launched via 'python3 -m rp'
