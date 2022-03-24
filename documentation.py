@@ -826,17 +826,20 @@ PSEUDO TERMINAL COMMANDS:
 		HISTORY : Prints a list of all commands that you've entered that didn't cause errors. All green commands were single-liners,
 			and all yellow commands were multi-liners. Yellow commands alternate between bold and not-bold so you can visually distinguish
 			one multiline command from the next.
-			Shortcut: hi
+			Shortcuts: hi, hist
 		GHISTORY: Prints a list of all single-line commands that didn't have errors. GHISTORY stands for 'green history', because in HISTORY all
 			single-liners are printed in green.
-			Shortcut: gh
+			Shortcuts: gh, ghi, ghist
+		AHISTORY:
+			Sets ans to str(HISTORY)
+			Shortcuts: ah, ahi, ahist
 		CHISTORY: Stands for 'Copy History'. Copies the output of HISTORY to your clipboard.
-			Shortcut: ch
+			Shortcuts: ch, chi, chist
 		DHISTORY: Stands for 'def History'. Extracts all function definitions from HISTORY and shows one of each to you 
 			(it's easier than sifting through HISTORY manually to pull your functions out)
-			Shortcut: dh
+			Shortcuts: dh, dhi, dhist
 		VHISTORY: Every time you close RP, your HISTORY is saved to a file. VHISTORY opens up that file in VIM. You can use it to select code and paste it back into RP.
-			Shortcut: vh
+			Shortcuts: vh, vhi, vhist
 		ALLHISTORY: Shows all commands you entered, including the ones that caused errors. In a terminal, you can also press F3 to get a similar result.
 
 	<Clipboard>
@@ -930,16 +933,30 @@ PSEUDO TERMINAL COMMANDS:
 	<Profiler>
 		//TODO: Add video
 		PROF: Toggles PROF ON with PROF OFF. Quick and dirty. What I almost always end up using lol.
+			Shortcut: po
 		PROF ON: Will turn on the profiler for your next commands, telling you which function takes how long to run in a tree diagram next time you run a python command.
-		PROF DEEP: Like PROF ON, but shows more details.
 		PROF OFF: Turns the profiler off.
 
 	<Toggle Colors>
-		
+		FANSI ON: Enables terminal-based text coloring features of rp
+			Shortcut: fon
+		FANSI OFF: Disables terminal-based text coloring features of rp
+			Pro tip: This can be less laggy, especially on Windows terminals
+			Shortcuts: fof, foff
+		// This enables/disables rp.fansi() and rp.fansi_print()
 
 	<Module Reloading>
+		RELOAD ON: Will automatically reload modules that have changed since the previous prompt
+		RELOAD OFF: Disables that
+
 	<Documentation>
+		HELP: Lists commands
+			Shortcut: h
+		HHELP: Shows you this document
+			Shortcut: hh
+
 	<Startup Files>
+		RPRC: Edits your .rprc file. This file runs every time rp is launched via 'python3 -m rp'
 
 	<Inspection>
 		// All of these commands can be used like this:
@@ -986,6 +1003,168 @@ PSEUDO TERMINAL COMMANDS:
 		?i: Will show pip information about a given module. Assumes the target is a module obtained from pip.
 		?r: Will show nicely formatted colorful information about the target using the 'rich' library.
 
+	<Others>
+		RETURN: Exit the rp session, and return ans as the return value.
+			Shortcut: ret, control+d
+		SUSPEND: Suspends this python process. Usually ctrl+z does this, but in rp, ctrl+z means undo.
+			Shortcut: sus
+		WARN: Toggles all python warnings
+		GPU: Shows GPU usage info
+		TOP: Shows bpytop
+		MONITOR: An alternative to TOP
+			Shortcut: mon
+		TAB: Asks you to select a csv file to be interactively viewed
+		TABA: Lets you interactively view ans, where ans is either:
+			- a file path to a csv or tsv file
+			- a 2d numpy array
+			- a pandas table
+			- (other things might work too, try them out)
+		UPDATE: Updates rp
+			Shortcut: up
+		ANS PRINT ON: enables printing str(ans) when it changes
+			Shortcut: apon
+		ANS PRINT OFF: disables that
+			Pro tip: Use this when chaning ans spams the terminal (maybe ans is a long string or something)
+			Shortcut: apof
+		ANS PRINT FAST: enables printing str(ans) when it changes, but won't always get the color right (yellow vs green for changes vs unchanged).
+			Pro tip: Use this if you still want to read the value of ans, but it's slow because it's a big tensor or something
+			Shortcut: apfa
+		SHELL: Launches xonsh. The directory you navigate to in xonsh will also change rp's current working directory after exiting xonsh.
+			Shortcut: sh
+		LEVEL: Displays information about your computer, runtime, python version, etc. The 'LEVEL' is how deeply your rp session is nested (when you call pseudo_terminal() inside a pseudo_terminal(), the LEVEL increases)
+			Shortcut: l
+		DITTO: Repeat the previous command
+			Pro tip: 'DITTO 10' will repeat the previous command 10 times. Or any other number...
+		EDIT: Use vim to enter a command, that will then be run.
+		VARS: Return a set of all variable names created in this session
+			Shortcut: vs
+		RANT: Run-as-new-thread the stuff that comes after RANT.
+			For example, 'RANT sleep(5);print("HELLO")' will print "HELLO" after 5 seconds.
+		FORK: Will enter a forked process of this session. Good for experimenting with things you're not sure you'll break or not.
+		WANS: Write-ans. Will write ans as a file. It will prompt you for the file name you want to use.
+			Special cases:
+				- If ans is a string, it will write a text file
+				- If ans is an image, it will write an image
+				- If ans is bytes, it will write a binary file
+			Shortcut: wa
+		ARG: Displays the current arguments given to this python process.
+			Pro tip: 'ARG -a -b --thing stuff' is equivalent to sys.args[1:]='-a -b --thing stuff'.split()
+		VIM: Selects a file with vim then opens it
+			Pro tip: 'VIM ~/.vimrc' edits ~/.vimrc with vim
+			Shortcut: vv
+		VIMH: Equivalent to "!vim ."
+			Shortcut: vih
+		VIMA: Equivalent to ?v. Edits ans with vim, where ans is:
+			- A file-path string
+			- A module or function
+			Shortcut: va
+		AVIMA: Opens up vim with str(ans). Lets you modify it, then returns the result as ans.
+			Shortcut: av, ava
+		GC: Toggles between GC ON and GC OFF
+		GC ON: Will run gc.collect() after every command
+		GC OFF: Disables GC ON
+	
+	<Unimportant>  
+		NUM COM: Lists all of these commands
+		PROF DEEP: Like PROF ON, but shows more details.
+		CDH CLEAN: Removes all red entries from CDH.
+			Shortcut: cdc
+		ALS: Returns the contents of LS as ans. 
+			Shortcut: lsa
+		ALSD: Returns the contents of LS as ans, but only dirs.
+			Shortcut: lsad
+		ALSFReturns the contents of LS as ans, but only files.
+			Shortcut: lsaf
+
+
+	<File System>
+		RM: Removes a file that you select.
+		RN: Renames a file you select
+		MV: Moves a file you select into a destination you select
+		LS: Prints all files and directories
+		LST: Prints all files and directories with timestamps and filesizes, sorted by time modified
+		CD: Cd's into a directory you select, and adds it to sys.path so you can easily import python modules from it
+			Pro tip: 'CD some/folder/path' will cd into that folder path
+			Pro tip: Typing 'cd thing' will be microcompleted into 'CD thing'
+		CDP: Cd's into the directory from your clipboard (cd paste)
+		CDA: Cd's into ans, where ans is:
+			- A directory string
+			- A file string (it will cd into it's parent directory)
+			- A module (will cd into the module's source code directory)
+			- A function (will cd into the function's module's source code directory)
+		CDB: Cd's back to the previous directory you visited
+			Pro tip: You can use this as soon as you boot rp to go back to the directory of the previous session, to pick up where you left off
+			Shortcut: b
+		CDU: Cd's up. Equivalent to 'CD ..'
+			Shortcut: u
+		CDH: Cd history - keeps track of every directory rp's visited, and lets you select one of them to cd into.
+			Pro tip: There are 3 colors for folders: yellow means it exists. Bold yellow means it's in sys.path, and red means it no longer exists
+			Pro tip: Use CDH CLEAN to remove all red entries - good for when you've deleted folders
+		CDZ: Cd's into a user-selected folder found via fuzzy-searching for it (cd fuzzy)
+		CDQ: Cd's into a user-selected folder found via query-searching for it (cd query)
+		CAT: Prints the contents of a file you select. If it's a python file, the contents will be syntax-highlighted.
+			Pro tip: 'CAT filename.txt' will print the contents of filename.txt
+		NCAT: (number-cat) Like CAT, but has line numbers
+		CCAT: (copy-cat) Like CAT, but copies the contents of the file to your clipboard instead of printing them
+		ACAT: (ans-cat) Like CAT, but copies the contents of the file to ans of printing them
+			Shortcut: ac
+		CATA: (cat ans) Like CAT, but instead of selecting a file, it cat's the file specified by ans (assumes ans is a file-name string)
+			Shortcut: ca
+		NCATA: Like CATA, except has line-numbers
+		CCATA: Like CATA and CCAT combined
+		ACATA: Like CATA and ACAT combined
+			Shortcut: aa, aca
+		RUN: Runs a selected python file, as if it were copy-pasted into the console
+			Pro-tip: 'RUN file.py' will run file.py
+			Shortcut: ru
+		RUNA: (run ans) Will run the contents of ans if ans is valid python code, or run the contents of a file if ans is a string pointing to a python file
+			Shortcut: ra
+		PWD: Shows the current working directory
+			Shortcut: pw
+		CPWD: Copies the current working directory to your clipboard
+		APWD: Copies the current working directory to ans
+			Shortcut: ap
+		TAKE: Like the 'take' command in zsh; it will make a directory then cd into it.
+			Shortcut: tk
+		MKDIR: Makes a directory specified by the user
+			Shortcut: mk
+		OPEN: Opens a selected file or directory with the default application
+			Shortcut: op
+		OPENH: Open-here. Equivalent to 'OPEN .'
+			Shortcut: oh
+		OPENA: Open-ans. Opens the file or directory specified by ans with the defualt application.
+			Shortcut: oa
+		DISK: Displays a breakdown of the current directory's disk usage.
+			Shortcut: dk
+		DISKH: Displays a histogram of filetypes and how much storage they take recursively from the current directory.
+			Shortcut: kh
+		TREE: Displays a tree of files, and displays some information about each file and directory.
+			Shortcut: tr
+		TREE ALL: Like TREE, except it doesn't skip hidden files
+			Shortcut: tra
+		TREE DIR: Like TREE, except it only shows directories
+			Shortcut: trd
+		TREE ALL DIR: Like TREE ALL and TREE DIR combined
+			Shortcut: trad
+		FD: Recursively searches for a string to be contained in a file or folder name
+		FDA: Like FD, but returns the result as a list in ans
+		FDT: Interactively fuzzy-search for lines of text recursively in the current directory. Like recursive grep, but interactive...
+		LS SEL (LSS): Select a file or folder path, and set ans to its absolute path.
+		LS REL (LSR): Like LSS, except it does relative paths
+		LS FZF (LSZ): Like LSS, except uses a fuzzy search recursively across directories
+		LS QUE (LSQ): Like LSS, except uses a query search recursively across directories
+		RANGER (RNG): Launches 'ranger', a python-based file manager. When you navigate in range, it will change rp's current working directory.
+
+
+
+
+
+
+
+
+
+
+
 
 
 	?c  gets source code
@@ -999,7 +1178,7 @@ PSEUDO TERMINAL COMMANDS:
 	AVIMA will highlight a string using python syntax highlighting, if the string is valid python syntax
 	OPENA will open a folder, file OR url in your web browser!
 	LEVEL will print out the current pseudo_terminal level, as well as the current python version and computer name. Useful when running RP on multiple computers and you need to kno who's who.
-
+CAT via LSS ACATA ?p
 
 
 
