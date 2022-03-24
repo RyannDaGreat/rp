@@ -871,6 +871,8 @@ PSEUDO TERMINAL COMMANDS:
 			Shortcuts: vp, vpa
 		FCOPY: Will let you select a file (or folder) and copy it over the web. It can be pasted at any computer using FPASTE
 			Shortcuts: fc, fco
+			$FCA: File-copies ans, assuming ans is a string that is the path to a file or folder
+			$FCH: File-copies current directory recursively
 		FPASTE: Assumes somebody recently used FCOPY somewhere in the world. It will paste the file (or folder) in your current directory.
 			Note: Behind the scenes, it uses WCOPY and WPASTE to do this. Large files, over a gigabyte, probably won't work well.
 			Shortcuts: fp, fpa
@@ -956,27 +958,29 @@ PSEUDO TERMINAL COMMANDS:
 			Shortcut: hh
 		SHORTCUTS: Shows you useful aliases
 			#TODO: Write about these ones in particular:
-			CLS, CLEAR     
-			RNA            
-			RMA            
-			CPAH CAH       
-			MVAH MAH       
-			FCA FCH        
-			GCLP           
-			GCLA           
-			GURL           
-			LN LNAH        
-			SG LG OG       
-			SUH COH SUA COA
-			IASM           
-			LSM            
-			RF RD RE       
-			GP             
-			NBC NBCA NBCH  
-			NB             
-			Z BA S         
-			GOO            
-			RS RST         
+			CLS aka CLEAR: Clears all terminal output. Equivalent to !clear
+			RS aka RESET: resets the current tty. Equivalent to !reset
+			RNA            +
+			RMA            +
+			CPAH aka CAH: (copy ans here) Copies the file specified by ans to the current directory (or if ans is a list of paths, copies all of them here)
+			MVAH MAH       +
+			FCA FCH        +
+			GCLP: git-clones url from clipboard (git-clone paste)
+			GCLA: git-clones ans
+			GURL: github url (gets url of current repo)
+			LN aka LNAH: Creates a symlink from the path specified by ans to here
+			SG LG OG: save-gist, load-gist, old-gists (saves or loads a gist from ans, and old-gists shows old saved gists)
+			SUH COH: sublime-here, code-here (opens sublime at . or vscode at .)
+			SUA COA: sublime-ans, code-ans (opens sublime to edit the module or path specified by ans, or does that with vscode)
+			IASM: import all sub-modules of ans (assuming ans is a module)
+			DAPI: display all pypi packages' info
+			LSM            +
+			RF RD RE: Random-file, random-directory, random-element
+			GP: equivalent to get_parent_directory(ans)
+			NBC NBCA NBCH: notebook-clear (clears the outputs of a selected notebook), notebook-clear-ans (clears the notebook outputs of the notebook file speficied by ans), notebook-clear here (clears all ipynb outputs in current dir)
+			NB: Takes a .ipynb file and returns python code that can be used in rp with the ^w key to execute individual cells
+			Z BA S: zsh, bash, sh
+			GOO: Googles str(ans)
 
 	<Startup Files>
 		RPRC: Edits your .rprc file. This file runs every time rp is launched via 'python3 -m rp'
@@ -1102,8 +1106,11 @@ PSEUDO TERMINAL COMMANDS:
 
 	<File System>
 		RM: Removes a file that you select.
-		RN: Renames a file you select
+		$RMA : Removes ans. If ans is a file or folder, it will remove it. If ans is a list of files or folders, it will remove all of them.
+		RN: Renames a file you select to a name you input
+		$RNA: Renames the path specified by ans to a name you input
 		MV: Moves a file you select into a destination you select
+		$MVAH: Moves ans here. Moves the path specified by ans to the current directory.
 		LS: Prints all files and directories
 		LST: Prints all files and directories with timestamps and filesizes, sorted by time modified
 		CD: Cd's into a directory you select, and adds it to sys.path so you can easily import python modules from it
@@ -1176,6 +1183,7 @@ PSEUDO TERMINAL COMMANDS:
 		LS REL (LSR): Like LSS, except it does relative paths
 		LS FZF (LSZ): Like LSS, except uses a fuzzy search recursively across directories
 		LS QUE (LSQ): Like LSS, except uses a query search recursively across directories
+		$LSM: Like LSS, but lets you select multiple files by pressing the tab key interactively in query search mode
 		RANGER (RNG): Launches 'ranger', a python-based file manager. When you navigate in range, it will change rp's current working directory.
 
 
