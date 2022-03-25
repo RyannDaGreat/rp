@@ -1,10 +1,14 @@
 import sys
 
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Text, Tuple, Union
-from collections import Mapping
 from markupsafe._compat import text_type
 import string
 from markupsafe._native import escape as escape, escape_silent as escape_silent, soft_unicode as soft_unicode
+
+try:
+    from collections.abc import Mapping #Python 3.9 and below
+except ImportError:
+    from collections import Mapping #Python 3.10+
 
 class Markup(text_type):
     def __new__(cls, base: Text = ..., encoding: Optional[Text] = ..., errors: Text = ...) -> Markup: ...
