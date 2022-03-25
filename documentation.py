@@ -11,25 +11,6 @@ SUMMARY
 	Important Backslash Commands:
 		\da \co \pa \vi \tbp \23p \ya \sw \tts \lo \sa \pu 
 
-
-#FZF Notes:
-	Many functions in RP use FZF, a program that lets you search through things really fast in a terminal. Here's some useful info about it: 
-	When in 'query' (as opposed to 'fuzzy') mode, you can *almost* do everything you can do in fuzzy mode by inserting spaces between every character
-	The following searches for everything that contains 'jedi' but not 'rp.libs.jedi'
-		jedi !rp.libs.jedi
-	The following searches for every line containing 'from jedi'
-		from\ jedi
-	The following searches for every line containing both 'from' and 'import'
-		from import
-	The following is equivalent to the above because order doesnt matter:
-		import from
-	The following is equivalent to the above because it appears to only care about sets:
-		import from import from import from from from import import import
-	The following searches for a line starting with the letter H and ending with #
-		^H $#
-	The following searches for a line starting with the letter H and NOT ending with #
-		^H !$#
-
 SOME FEATURES OF RP:
 	NORMAL FEATURE LIST:
 		A profiler
@@ -98,7 +79,7 @@ KEYBOARD SHORTCUTS:
 	⌥ ↓    jump down 10 lines
 	⌥ ↑    jump up 10 lines
 	⌥ !    run shell command
-	⌥ #    comment out the entire buffer and execute it
+	⌥ #    comment out the entire buffer and run that comment (it will do nothing lol)
 	⌥ n    executes 'NEXT', changing the value of 'ans' (useful in combination with \rpa and \an)
 	⌥ p    executes 'PREV', changing the value of 'ans' (useful in combination with \rpa and \an)
 	⌥ r    similar to \rpa, except it clears the buffer. Sets ans to the current buffer as a string
@@ -1132,6 +1113,7 @@ PSEUDO TERMINAL COMMANDS:
 		CDH: Cd history - keeps track of every directory rp's visited, and lets you select one of them to cd into.
 			Pro tip: There are 3 colors for folders: yellow means it exists. Bold yellow means it's in sys.path, and red means it no longer exists
 			Pro tip: Use CDH CLEAN to remove all red entries - good for when you've deleted folders
+			Shortcut: hd
 		CDZ: Cd's into a user-selected folder found via fuzzy-searching for it (cd fuzzy)
 		CDQ: Cd's into a user-selected folder found via query-searching for it (cd query)
 		CAT: Prints the contents of a file you select. If it's a python file, the contents will be syntax-highlighted.
@@ -1236,6 +1218,23 @@ USING IN BLENDER (Or any other closed environment that has pip):
 
 
 
+#FZF Notes:
+	Many functions in RP use FZF, a program that lets you search through things really fast in a terminal. Here's some useful info about it: 
+	When in 'query' (as opposed to 'fuzzy') mode, you can *almost* do everything you can do in fuzzy mode by inserting spaces between every character
+	The following searches for everything that contains 'jedi' but not 'rp.libs.jedi'
+		jedi !rp.libs.jedi
+	The following searches for every line containing 'from jedi'
+		from\ jedi
+	The following searches for every line containing both 'from' and 'import'
+		from import
+	The following is equivalent to the above because order doesnt matter:
+		import from
+	The following is equivalent to the above because it appears to only care about sets:
+		import from import from import from from from import import import
+	The following searches for a line starting with the letter H and ending with #
+		^H $#
+	The following searches for a line starting with the letter H and NOT ending with #
+		^H !$#
 
 
 
@@ -1286,3 +1285,326 @@ When it makes sense, - will be turned into _.
 		def f(-,) --> def f(_,)
                 -=6  -->  _=6
 		if -    if _
+
+
+
+Here are some commands in the frequency that I've used them over the years:
+LS 3147
+PP 1091
+B 1083
+RET 925
+U 922
+? 719
+HD 619
+CDH 612
+PASTE 560
+AV 517
+Z 503
+MM 327
+WC 321
+PREV 316
+ANS 301
+MMORE 291
+H 271
+TR 258
+CDA 240
+RETURN 236
+LP 236
+VIMRC 230
+LSS 230
+PA 223
+AA 214
+PWD 212
+CO 212
+L 201
+HISTORY 194
+M 191
+KH 181
+PW 171
+V 170
+DK 166
+LSA 162
+HI 160
+TP 160
+TRD 153
+VIH 153
+FDQ 147
+RM 145
+APFA 141
+WA 136
+RF 136
+VA 132
+TOP 128
+VP 127
+OH 121
+WP 113
+FDT 112
+VH 109
+LC 108
+S 107
+LST 107
+SC 103
+N 102
+DH 102
+VM 102
+COPY 96
+HE 93
+WCOPY 92
+RA 88
+PM 86
+CPWD 85
+OA 85
+HELP 83
+IASM 81
+VV 78
+CDU 78
+LSR 78
+MORE 77
+RNG 72
+LSQ 72
+AC 69
+NVT 69
+DM 68
+FP 66
+AVIMA 65
+CD 63
+NEXT 61
+GM 61
+RMA 61
+TK 59
+TT 57
+TAB 56
+MK 56
+IM 55
+PO 54
+LPASTE 54
+LSZ 54
+UP 54
+RN 54
+AP 53
+ACATA 52
+HM 51
+UM 51
+CDQ 51
+TREE 50
+MLP 49
+LN 48
+RS 48
+TABA 48
+PT 48
+NB 48
+VC 48
+CH 47
+AM 45
+DISK 44
+VIM 43
+GPU 43
+APOF 43
+ACAT 43
+AH 42
+HH 42
+SH 40
+?. 39
+CHI 39
+CHIST 38
+OG 38
+P 37
+UPDATE 36
+VIMA 36
+FD 36
+DMORE 35
+VS 35
+RU 35
+MVAH 35
+TICTOC 34
+?? 34
+SG 34
+RPRC 33
+RV 33
+CA 33
+CAT 32
+FC 32
+LSM 32
+WPASTE 31
+CLS 30
+DHIST 30
+HIST 30
+RUNA 30
+FDA 30
+OP 28
+TMUXRC 28
+TC 28
+TPASTE 27
+GOO 27
+RUN 26
+CDZ 26
+CDC 26
+CPAH 26
+SA 25
+LSAD 25
+HHELP 24
+VIMORE 24
+RE 24
+??? 23
+VARS 23
+CDB 23
+MV 23
+GCLA 23
+GURL 22
+RNA 22
+CATA 22
+APON 22
+NN 22
+NBC 22
+LNAH 22
+LSAF 21
+CHISTORY 20
+PROF 20
+FDZ 20
+NM 18
+GC 17
+DCI 17
+LCOPY 16
+?/ 15
+OPEN 15
+GHISTORY 14
+CDP 14
+HMORE 14
+ACA 14
+VCL 14
+DAPI 14
+ST 13
+TCOPY 13
+CCATA 13
+MON 13
+HC 12
+MONITOR 12
+SMI 12
+ALS 12
+LSF 12
+FDS 12
+FCA 11
+LG 11
+CLEAR 11
+VHI 11
+DITTO 10
+GH 10
+ARG 10
+AMORE 10
+GMORE 10
+APWD 10
+DHI 10
+DA 10
+VI 10
+AW 10
+ISA 10
+RD 10
+EDIT 9
+SHELL 9
+FORK 9
+WANS 9
+PREVMORE 9
+LGA 8
+TAKE 8
+INS 8
+WD 8
+MAH 8
+SRA 8
+COH 8
+UNDO 7
+LEVEL 7
+AHIST 7
+SHORTCUTS 7
+GHI 7
+AHI 7
+VCO 7
+TA 7
+GP 7
+RT 7
+CAA 7
+DKH 7
+WR 7
+GCLP 7
+SUSPEND 6
+AHISTORY 6
+NCATA 6
+PF 6
+DD 6
+VIMH 6
+SUS 6
+ZSH 6
+NBA 6
+IMS 6
+LSAG 6
+DR 6
+NBCH 6
+PRINT 5
+FANSI 5
+WCO 5
+PD 5
+TRAD 5
+ISM 5
+BA 5
+AFD 5
+WGA 5
+RANT 4
+NCAT 4
+CCAT 4
+GHIST 4
+LV 4
+CAH 4
+MPH 4
+LPA 3
+XONSHRC 3
+TCO 3
+LVL 3
+WARN 3
+RESET 2
+DIR 2
+SS 2
+FCH 2
+SUH 2
+DO 2
+ALL 2
+SET 2
+DISC 2
+OPH 2
+FOF 2
+FON 2
+OPA 2
+ON 2
+ALLHIST 2
+RPA 2
+EP 2
+NEXTMORE 2
+IMA 2
+ALSF 2
+ALSD 2
+DT 2
+CPH 2
+NCA 2
+MA 2
+WN 2
+RST 2
+GOOP 2
+DHISTORY 1
+PIPMORE 1
+PTS 1
+WPA 1
+FZF 1
+OPENH 1
+VHE 1
+MKDIR 1
+EPA 1
+IMPMORE 1
+CCL 1
+SSA 1
+REL 1
+EA 1
+RG 1
+MVPH 1
+FZM 1
+CPPH 1
+TRA 1
+NBCA 1
+SSRA 1

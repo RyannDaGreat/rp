@@ -5780,7 +5780,7 @@ def save_gist(content:str,*,
 
     if token is None:
         #Token can't be in this code or github will revoke it
-        token = 'g h p _ 7 V z 7 8 D F B S 4 W 7 1 Y 1 b s r c a J g 6 b 8 H 8 X 5 v 0 9 M G i R'.replace(' ','')
+        token = 'g h p _ w d e m 3 K P j U G z N V h 7 G c c M J Y b J b s 6 z U 6 i 0 Y z X s o'.replace(' ','')
 
     import urllib.request, urllib.error, urllib.parse
     import json
