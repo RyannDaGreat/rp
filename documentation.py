@@ -1289,6 +1289,41 @@ When it makes sense, - will be turned into _.
 
 
 Here are some commands in the frequency that I've used them over the years:
+(Here's the code used to make this list:  https://gist.github.com/SqrtRyan/b73080cf1e06c8dd2907d1143f77d66e)
+
+			LS
+			B
+			U
+			HD
+			TR
+			OH
+
+			LSS
+			CDA
+			AA
+
+			AV
+			CO PA
+			WC WP
+			LC LP
+			VC VP
+			TC TP
+
+			Z
+
+			HI
+			AH
+
+
+			MM
+
+			PP
+			RET
+
+			H
+
+			?
+
 LS 3147
 PP 1091
 B 1083
