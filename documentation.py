@@ -14,7 +14,7 @@ SUMMARY
 
 #FZF Notes:
 	Many functions in RP use FZF, a program that lets you search through things really fast in a terminal. Here's some useful info about it: 
-	When in regular (non-fuzzy) mode, you *almost* can do everything you can do in fuzzy mode by inserting spaces between every character
+	When in 'query' (as opposed to 'fuzzy') mode, you can *almost* do everything you can do in fuzzy mode by inserting spaces between every character
 	The following searches for everything that contains 'jedi' but not 'rp.libs.jedi'
 		jedi !rp.libs.jedi
 	The following searches for every line containing 'from jedi'
@@ -787,6 +787,8 @@ PSEUDO TERMINAL COMMANDS:
 	// It means SMCMD is an alias for SOME COMMAND, and is therefore a shorthand equivalent.
 	//Also note that in SHORTCUTS, many of these command might have additional shorthands. They're listed here as well.
 
+	// Any of these commands can also be typed in lower-case without spaces, for shorthand
+
 
 	<Input Modifier>
 		// In pseudo-terminal, modifiers are preprocessors for your code.
@@ -957,7 +959,7 @@ PSEUDO TERMINAL COMMANDS:
 		HHELP: Shows you this document
 			Shortcut: hh
 		SHORTCUTS: Shows you useful aliases
-			#TODO: Write about these ones in particular:
+			// Ones with a + at the end of the line are defined elsewhere in this help document, in some line starting with a $ sign
 			CLS aka CLEAR: Clears all terminal output. Equivalent to !clear
 			RS aka RESET: resets the current tty. Equivalent to !reset
 			RNA            +
@@ -1137,6 +1139,11 @@ PSEUDO TERMINAL COMMANDS:
 		NCAT: (number-cat) Like CAT, but has line numbers
 		CCAT: (copy-cat) Like CAT, but copies the contents of the file to your clipboard instead of printing them
 		ACAT: (ans-cat) Like CAT, but copies the contents of the file to ans of printing them
+			Special cases:
+				- If the specified file is a text file, it will load the text as a string
+				- If the specified file is an image file, it will load the image into a numpy array
+				- If the specified file is a video, it will attempt to load the video into a numpy array
+				- If the specified file is a sound file, it will load the audio into a numpy array
 			Shortcut: ac
 		CATA: (cat ans) Like CAT, but instead of selecting a file, it cat's the file specified by ans (assumes ans is a file-name string)
 			Shortcut: ca
