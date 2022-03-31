@@ -20470,6 +20470,10 @@ del re
 
 # Version Oct24 2021
 
+def minify_python_code(code:str):
+    pip_import('python_minifier','python-minifier')
+    import python_minifier
+    return python_minifier.minify(code)
 
 def deepgenx(code:str)->str:
     #Similar to GitHub copilot, except it uses GPT-J and is free

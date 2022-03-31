@@ -177,6 +177,7 @@ MICROCOMPLETIONS:
 			\dtt  delete to top           (deletes all lines above the cursor. Useful for getting lines after something like CHIST then \pa)
 			\dgx  deepgenx                (auto-completes your code using deepgenx. See https://deepgenx.com/. It's like GitHub Copilot, except open source and made with GPT-J. Needs internet.)
 			\gpt  gpt3                    (auto-completes your code with gpt3. Needs internet. Mostly just for fun...but might have good uses.)
+			\min  minify                  (Minifies your code - making it as small as possible. Uses https://github.com/dflook/python-minifier)
 
 	FOR LOOPS:
 		COMPREHENSION:

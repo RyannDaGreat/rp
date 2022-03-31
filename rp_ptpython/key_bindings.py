@@ -2424,6 +2424,7 @@ def load_python_bindings(python_input):
                                          '\\bla':'black',
                                          '\\gpt':'gpt',
                                          '\\dgx':'deepgenx',
+                                         '\\min':'minify',
                                          '\\sg':'save_gist',
                                          '\\lg':'load_gist',
                                          '\\co':'copy',
@@ -2814,6 +2815,14 @@ def load_python_bindings(python_input):
                                         buffer.document=Document(text,len(before_text),buffer.document.selection)
                                     except BaseException as e:
                                         buffer.insert_text('#dgx (aka deepgenx): Error: '+str(e).replace('\n',' ; '))
+                                if header=='minify':
+                                    try:
+                                        import rp
+                                        text=buffer.document.text
+                                        text=rp.minify_python_code(text)
+                                        buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    except BaseException as e:
+                                        buffer.insert_text('#min (aka python-minifier): Error: '+str(e).replace('\n',' ; '))
                                 if header=='source_code':
                                     #Sets ans=rp.get_source_code(current buffer)
                                     indent=''
