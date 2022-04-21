@@ -7560,6 +7560,21 @@ def _mv(from_path=None,to_dir=None):
     print(fansi('Moving','blue','bold'),fansi(from_path,'green'),fansi('to directory','blue'),fansi(to_dir,'green'))
     return move_file(from_path,to_dir)
 
+def _absolute_path_ans(ans):
+    #Absolute Path Ans
+    if isinstance(ans,str):
+        return get_absolute_path(ans)
+    else:
+        return [get_absolute_path(x) for x in ans]
+
+def _relative_path_ans(ans):
+    #Relative Path Ans
+    if isinstance(ans,str):
+        return get_relative_path(ans)
+    else:
+        return [get_relative_path(x) for x in ans]
+
+
 def _rma(ans):
     if not isinstance(ans,str) and not isinstance(ans,list):
         raise TypeError('RMA: ans should be a str pointing to a file path or a list of file paths, but ans is a '+str(type(ans)))
@@ -8501,7 +8516,6 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         FPA FPASTE
         FC FCOPY
         MLP MLPASTE
-        RPA PASTE
 
         AA ACATA
         ACA ACATA
@@ -8706,6 +8720,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         FCH print("FCH->FileCopyHere");$web_copy_path('.')
         RMA $r._rma(ans)
         RNA $rename_file(ans,input(fansi('NewPathName:','blue')))
+        APA $r._absolute_path_ans(ans)
+        RPA $r._relative_path_ans(ans)
 
         RST __import__('os').system('reset')
         RS  __import__('os').system('reset')
@@ -13547,6 +13563,23 @@ def with_file_extension(path:str,extension:str,*,replace=False):
                 path=strip_file_extension(path)
             return path+'.'+extension
 
+def with_file_name(path:str,name:str):
+    #Returns the path with a new file name, keeping the old file extension
+    #
+    #EXAMPLE:
+    #     >>> with_file_name('some/parent/folder/file.txt','untitled')
+    #    ans = some/parent/folder/untitled.txt
+    #
+    parent_folder=get_parent_folder(path)
+    file_name=get_file_name(path)
+    assert path==path_join(parent_folder,file_name)
+    
+    extension=get_file_extension(file_name)
+    file_name=strip_file_extension(file_name)
+    file_name=name
+    file_name=with_file_extension(file_name,extension)
+    return path_join(parent_folder,file_name)
+
 def get_path_name(path,include_file_extension=True):
     #'/tmp/d/a.dat' --> 'a.dat'
     # For more, see: https://stackoverflow.com/questions/8384737/extract-file-name-from-path-no-matter-what-the-os-path-format
@@ -15153,6 +15186,8 @@ def save_video_avi(frames,path:str=None,framerate:int=30):
     return path
 
 class VideoWriterMP4:
+    #Todo: If this ever gets fucky, try https://github.com/imageio/imageio-ffmpeg - it looks pretty good!
+
     def __init__(self, path, framerate=60, video_bitrate='medium'):
         # Originally from: https://github.com/kkroening/ffmpeg-python/issues/246
 
@@ -18680,6 +18715,36 @@ def gpt3(text:str):
     data=response.json()
     return data['output']
 
+def deepgenx(code:str)->str:
+    #Similar to GitHub copilot, except it uses GPT-J and is free
+    #See https://deepgenx.com/
+    #Given some python code, it will continue it and return the original code + the continued code
+    import requests
+    import json
+    ans = code
+    ans = requests.post(
+        "https://api.deepgenx.com:5700/generate",
+        json=dict(
+            input=code,
+            token_max_length=1024,
+            temperature=1,
+            top_p=.7,
+            # Get your token here: https://deepgenx.com/signin
+            token="8168b4cc9bbc41f0b3b8a403a9ad6b7cf195f01ded98706282980ceff021041e.3a3eed41e43b3a212f8898ba26c6e341a639c2e86bb3110e35f64d312b982086",
+        ),
+    )
+    ans = ans.text
+    ans = json.loads(ans)
+    assert ans['success'], 'deepgenx request failed: '+repr(ans)
+    ans = ans["message"]
+    ans = line_join(ans)
+    return code+ans
+
+def minify_python_code(code:str):
+    pip_import('python_minifier','python-minifier')
+    import python_minifier
+    return python_minifier.minify(code)
+
 def image_to_text(image)->str:
     #Takes an image, finds text on it, and returns the text as a string
     #(Optical character recognition)
@@ -20181,6 +20246,9 @@ def get_all_ttf_fonts():
         assert False,'Unsupported operating system: not mac, windows or linux'
 
 class DictReader:
+    #Note: This class is similar in functionality to the python libraries "easydict" and "addict". You can find them on pypi.
+    #This class, however, is read-only right now.
+
     def __init__(self,data:dict):
         #This class makes reading nested dicts easier
         #Instead of data['a']['b']['c'] you say data.a.b.c
@@ -20470,32 +20538,4 @@ del re
 
 # Version Oct24 2021
 
-def minify_python_code(code:str):
-    pip_import('python_minifier','python-minifier')
-    import python_minifier
-    return python_minifier.minify(code)
 
-def deepgenx(code:str)->str:
-    #Similar to GitHub copilot, except it uses GPT-J and is free
-    #See https://deepgenx.com/
-    #Given some python code, it will continue it and return the original code + the continued code
-    import requests
-    import json
-    ans = code
-    ans = requests.post(
-        "https://api.deepgenx.com:5700/generate",
-        json=dict(
-            input=code,
-            token_max_length=1024,
-            temperature=1,
-            top_p=.7,
-            # Get your token here: https://deepgenx.com/signin
-            token="8168b4cc9bbc41f0b3b8a403a9ad6b7cf195f01ded98706282980ceff021041e.3a3eed41e43b3a212f8898ba26c6e341a639c2e86bb3110e35f64d312b982086",
-        ),
-    )
-    ans = ans.text
-    ans = json.loads(ans)
-    assert ans['success'], 'deepgenx request failed: '+repr(ans)
-    ans = ans["message"]
-    ans = line_join(ans)
-    return code+ans

@@ -1,4 +1,6 @@
-def minify_python_code(code:str):
-    pip_import('python_minifier','python-minifier')
-    import python_minifier
-    return python_minifier.minify(code)
+def _apa(ans):
+    #Absolute Path Ans
+    if isinstance(ans,str):
+        return get_absolute_path(ans)
+    else:
+        return [get_absolute_path(x) for x in ans]

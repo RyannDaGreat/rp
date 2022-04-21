@@ -42,7 +42,6 @@
 /Users/Ryan/Desktop/Lab-In-A-Cube_LUMPO
 /Users/Ryan/Desktop/CleanCode/SBU/LabInACube/Lab-In-A-Cube
 /Users/Ryan/Desktop/Lab-In-A-Cube_LUnew
-/
 /Users/Ryan/Documents/FL Studio
 /Users/Ryan/Documents/Image-Line/FL Studio/Presets
 /Users/Ryan/Documents/Image-Line/FL Studio/Projects
@@ -59,7 +58,6 @@
 /Users/Ryan/Desktop/CSE548_Last_HW
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Users/Ryan/Desktop/Screenshots
-/Users/Ryan/Desktop/CleanCode/Sandbox
 /Users/Ryan/Desktop/CleanCode/Sandbox/scrap
 /Users/Ryan/Desktop/CleanCode/Glass/media/ryan/Noman/Ubuntu/CleanCode/Scrapbook/archived_experiments/rudalle/Images
 /Users/Ryan/Downloads
@@ -77,5 +75,15 @@
 /Users/Ryan/Desktop/CleanCode/Github/DeepAo
 /Users/Ryan/Desktop/CleanCode/Github/return-youtube-dislike
 /Volumes
-/Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+/Users/Ryan/Desktop/CleanCode/Sandbox/Lightwave/Lightwave_Wavebox_Transceiver/lib/circuitpython_nrf24l01
+/Users/Ryan/Desktop/CleanCode/Sandbox/Lightwave/Lightwave_Wavebox_Transceiver/lib/adafruit_bus_device
+/Users/Ryan/Desktop/CleanCode/Sandbox/Lightwave/Lightwave_Wavebox_Transceiver/lib
+/Users/Ryan/Desktop/CleanCode/Sandbox/Lightwave/Lightwave_Wavebox_Transceiver
+/
+/Volumes/CIRCUITPY
+/Users/Ryan/Desktop/CleanCode/Sandbox
+/Users/Ryan
+/Users/Ryan/Desktop/CleanCode/LightWave/Hardware Source/Legacy Backups
+/Users/Ryan/Desktop/CleanCode/LightWave/Hardware Source
+/Users/Ryan/Desktop/CleanCode/LightWave
