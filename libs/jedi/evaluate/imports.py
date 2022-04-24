@@ -356,7 +356,7 @@ class Importer(object):
                 names += context.sub_modules_dict().values()
 
             if not only_modules:
-                from jedi.evaluate.gradual.conversion import convert_contexts
+                from rp.libs.jedi.evaluate.gradual.conversion import convert_contexts
 
                 both_contexts = contexts | convert_contexts(contexts)
                 for c in both_contexts:
