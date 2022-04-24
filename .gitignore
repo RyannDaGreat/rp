@@ -11,7 +11,8 @@ junk
 ./*.un~
 ./**/*.un~
 
-
+*.pyc
+**/*.pyc
 
 HISTORY
 // libs
