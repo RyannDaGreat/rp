@@ -3,9 +3,9 @@ import textwrap
 from inspect import cleandoc
 from weakref import WeakKeyDictionary
 
-from parso.python import tree
-from parso.cache import parser_cache
-from parso import split_lines
+from rp.libs.parso.python import tree
+from rp.libs.parso.cache import parser_cache
+from rp.libs.parso import split_lines
 
 from rp.libs.jedi._compatibility import literal_eval, force_unicode
 

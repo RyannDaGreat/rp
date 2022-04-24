@@ -19,7 +19,7 @@ import re
 import warnings
 from textwrap import dedent
 
-from parso import parse, ParserSyntaxError
+from rp.libs.parso import parse, ParserSyntaxError
 
 from rp.libs.jedi._compatibility import u
 from rp.libs.jedi import debug

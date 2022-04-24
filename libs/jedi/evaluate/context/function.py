@@ -1,4 +1,4 @@
-from parso.python import tree
+from rp.libs.parso.python import tree
 
 from rp.libs.jedi._compatibility import use_metaclass
 from rp.libs.jedi import debug

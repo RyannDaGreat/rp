@@ -1,6 +1,6 @@
 import re
 
-from parso.python import tree
+from rp.libs.parso.python import tree
 
 from rp.libs.jedi._compatibility import zip_longest
 from rp.libs.jedi import debug

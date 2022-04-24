@@ -62,9 +62,9 @@ I need to mention now that lazy evaluation is really good because it
 only *evaluates* what needs to be *evaluated*. All the statements and modules
 that are not used are just being ignored.
 """
-from parso.python import tree
-import parso
-from parso import python_bytes_to_unicode
+from rp.libs.parso.python import tree
+import rp.libs.parso as parso
+from rp.libs.parso import python_bytes_to_unicode
 from rp.libs.jedi.file_io import FileIO
 
 from rp.libs.jedi import debug

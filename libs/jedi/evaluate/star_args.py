@@ -17,7 +17,7 @@ from rp.libs.jedi.evaluate.names import ParamNameWrapper
 
 
 def _iter_nodes_for_param(param_name):
-    from parso.python.tree import search_ancestor
+    from rp.libs.parso.python.tree import search_ancestor
     from rp.libs.jedi.evaluate.arguments import TreeArguments
 
     execution_context = param_name.parent_context

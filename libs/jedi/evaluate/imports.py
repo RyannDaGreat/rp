@@ -13,9 +13,9 @@ statements like ``from datetim`` (cursor at the end would return ``datetime``).
 """
 import os
 
-from parso.python import tree
-from parso.tree import search_ancestor
-from parso import python_bytes_to_unicode
+from rp.libs.parso.python import tree
+from rp.libs.parso.tree import search_ancestor
+from rp.libs.parso import python_bytes_to_unicode
 
 from rp.libs.jedi._compatibility import (FileNotFoundError, ImplicitNSInfo,
                                  force_unicode, unicode)

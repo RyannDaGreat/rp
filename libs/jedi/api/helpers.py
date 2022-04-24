@@ -5,8 +5,8 @@ import re
 from collections import namedtuple
 from textwrap import dedent
 
-from parso.python.parser import Parser
-from parso.python import tree
+from rp.libs.parso.python.parser import Parser
+from rp.libs.parso.python import tree
 
 from rp.libs.jedi._compatibility import u, Parameter
 from rp.libs.jedi.evaluate.base_context import NO_CONTEXTS

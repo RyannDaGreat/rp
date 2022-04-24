@@ -13,7 +13,7 @@ from rp.libs.jedi.cache import memoize_method, time_cache
 from rp.libs.jedi.evaluate.compiled.subprocess import CompiledSubprocess, \
     EvaluatorSameProcess, EvaluatorSubprocess
 
-import parso
+import rp.libs.parso as parso
 
 _VersionInfo = namedtuple('VersionInfo', 'major minor micro')
 

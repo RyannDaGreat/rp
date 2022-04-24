@@ -7,7 +7,7 @@ as annotations in future python versions.
 
 import re
 
-from parso import ParserSyntaxError, parse
+from rp.libs.parso import ParserSyntaxError, parse
 
 from rp.libs.jedi._compatibility import force_unicode
 from rp.libs.jedi.evaluate.cache import evaluator_method_cache

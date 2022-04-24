@@ -9,7 +9,7 @@ Note that this module exists only to implement very specific functionality in
 the standard library. The usual way to understand the standard library is the
 compiled module that returns the types for C-builtins.
 """
-import parso
+import rp.libs.parso as parso
 import os
 
 from rp.libs.jedi._compatibility import force_unicode, Parameter

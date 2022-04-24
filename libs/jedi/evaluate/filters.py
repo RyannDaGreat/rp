@@ -5,7 +5,7 @@ are needed for name resolution.
 from abc import abstractmethod
 import weakref
 
-from parso.tree import search_ancestor
+from rp.libs.parso.tree import search_ancestor
 
 from rp.libs.jedi._compatibility import use_metaclass
 from rp.libs.jedi.evaluate import flow_analysis

@@ -5,7 +5,7 @@ import os
 from itertools import chain
 from contextlib import contextmanager
 
-from parso.python import tree
+from rp.libs.parso.python import tree
 
 from rp.libs.jedi._compatibility import unicode
 from rp.libs.jedi.parser_utils import get_parent_scope

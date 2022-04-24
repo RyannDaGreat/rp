@@ -1,6 +1,6 @@
 from abc import abstractmethod
 
-from parso.tree import search_ancestor
+from rp.libs.parso.tree import search_ancestor
 
 from rp.libs.jedi._compatibility import Parameter
 from rp.libs.jedi.evaluate.base_context import ContextSet, NO_CONTEXTS

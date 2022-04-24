@@ -1,6 +1,6 @@
 import os
 
-from parso import file_io
+from rp.libs.parso import file_io
 
 
 class AbstractFolderIO(object):

@@ -15,8 +15,8 @@ Unfortunately every other thing is being ignored (e.g. a == '' would be easy to
 check for -> a is a string). There's big potential in these checks.
 """
 
-from parso.python import tree
-from parso.tree import search_ancestor
+from rp.libs.parso.python import tree
+from rp.libs.parso.tree import search_ancestor
 from rp.libs.jedi import debug
 from rp.libs.jedi import settings
 from rp.libs.jedi.evaluate import compiled

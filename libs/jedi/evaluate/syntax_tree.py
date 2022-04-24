@@ -3,7 +3,7 @@ Functions evaluating the syntax tree.
 """
 import copy
 
-from parso.python import tree
+from rp.libs.parso.python import tree
 
 from rp.libs.jedi._compatibility import force_unicode, unicode
 from rp.libs.jedi import debug

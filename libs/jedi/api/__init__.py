@@ -13,8 +13,8 @@ import os
 import sys
 import warnings
 
-import parso
-from parso.python import tree
+import rp.libs.parso as parso
+from rp.libs.parso.python import tree
 
 from rp.libs.jedi._compatibility import force_unicode, cast_path, is_py3
 from rp.libs.jedi.parser_utils import get_executable_nodes

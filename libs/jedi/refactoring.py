@@ -17,7 +17,7 @@ following functions (sometimes bug-prone):
 """
 import difflib
 
-from parso import python_bytes_to_unicode, split_lines
+from rp.libs.parso import python_bytes_to_unicode, split_lines
 from rp.libs.jedi.evaluate import helpers
 
 

@@ -1,8 +1,8 @@
 import re
 
-from parso.python.token import PythonTokenTypes
-from parso.python import tree
-from parso.tree import search_ancestor, Leaf
+from rp.libs.parso.python.token import PythonTokenTypes
+from rp.libs.parso.python import tree
+from rp.libs.parso.tree import search_ancestor, Leaf
 
 from rp.libs.jedi._compatibility import Parameter
 from rp.libs.jedi import debug

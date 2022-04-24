@@ -1,7 +1,7 @@
 """
 Module for statical analysis.
 """
-from parso.python import tree
+from rp.libs.parso.python import tree
 
 from rp.libs.jedi._compatibility import force_unicode
 from rp.libs.jedi import debug
