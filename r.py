@@ -7604,7 +7604,7 @@ def _cpah(paths,method=None):
     if isinstance(paths,str):
         paths=[paths]
     for path in paths:
-        copy_path(path,'.')
+        method(path,'.')
 
 def _get_env_info():
     #Adapted from the pytorch github page
@@ -7808,15 +7808,25 @@ def _get_env_info():
         # Unknown platform
         return platform
     
-    
+    def squelch(function,run_lambda):
+        try:
+            function(run_lambda)
+        except Exception:
+            return None
+
     def get_env_info():
         run_lambda = run
     
+        cuda_runtime_version =squelch(get_running_cuda_version ,run_lambda)
+        nvidia_gpu_models    =squelch(get_gpu_info             ,run_lambda)
+        nvidia_driver_version=squelch(get_nvidia_driver_version,run_lambda)
+        os                   =squelch(get_os                   ,run_lambda)
+
         return SystemEnv(
-                cuda_runtime_version=get_running_cuda_version(run_lambda),
-                nvidia_gpu_models=get_gpu_info(run_lambda),
-                nvidia_driver_version=get_nvidia_driver_version(run_lambda),
-                os=get_os(run_lambda),
+                cuda_runtime_version =cuda_runtime_version ,
+                nvidia_gpu_models    =nvidia_gpu_models    ,
+                nvidia_driver_version=nvidia_driver_version,
+                os                   =os                   ,
         )
     
     env_info_fmt = """
@@ -14455,9 +14465,9 @@ def is_byte_color(color):
 def is_float_color(color):
     return all(np.issubdtype(x.dtype,np.floating) for x in as_numpy_array(color))
 
-def hex_color_to_tuple(hex_color:str):
+def hex_color_to_byte_color(hex_color:str):
     #EXAMPLE:
-    #     >>> hex_color_to_tuple('#007FFF')
+    #     >>> hex_color_to_byte_color('#007FFF')
     #    ans = (0, 127, 255)
     assert len(hex_color)==len('#ABCDEF')
     hex_color=hex_color[1:]
@@ -14465,6 +14475,18 @@ def hex_color_to_tuple(hex_color:str):
     g=int(hex_color[2:4],16)
     b=int(hex_color[4:6],16)
     return r,g,b
+hex_color_to_tuple = hex_color_to_byte_color #This was its old name. This is here to preserve compatiability.
+
+def byte_color_to_hex_color(byte_color:tuple):
+    #EXAMPLE:
+    #    >>> byte_color_to_hex_color((0,255,127))
+    #    ans = #00FF7F
+    assert is_byte_color(byte_color)
+
+    byte_color = [int(min(255,max(0,x))) for x in byte_color]
+    
+    return '#'+''.join('{:02X}'.format(a) for a in byte_color)
+
 
 def get_color_hue(color):
     assert is_float_color(color),'For now, get_color_hue only works with float_colors and returns a float between 0 and 1'
@@ -18653,6 +18675,26 @@ def cv_resize_image(image,size,interp='bilinear'):
     
     return out
 
+def resize_image_to_fit(image, height, width, *, interp='bilinear', allow_growth=False):
+    #Scale on both axes evenly to fit in this bounding box
+    #If not allow_growth, it won't modify the image if height and width are larger than the input image
+    #TODO: Make height or width optional, make cv_resize_image interchangeable with resize_image
+    
+    assert rp.is_image(image)
+    image_height, image_width = rp.get_image_dimensions(image)
+    scale = 1
+    
+    if allow_growth:
+        scale = 999 #It will be decreased...
+    
+    if height < image_height * scale:
+        scale = height / image_height
+        
+    if width < image_width * scale:
+        scale = width / image_width
+        
+    return rp.cv_resize_image(image, scale, interp=interp)
+
 def _iterfzf(*args,**kwargs):
     pip_import('iterfzf')
     from iterfzf import iterfzf
@@ -19966,11 +20008,6 @@ def line_graph_via_bokeh(values, *,
     from bokeh.themes   import built_in_themes
 
 
-    #Create (x,y) points
-    x = list(range(len(values)))
-    y = values
-
-
     #Create figure
     fig_kwargs = {}
     if title  is not None: assert isinstance(title ,str) ; fig_kwargs['title'       ] = title
@@ -20004,13 +20041,33 @@ def line_graph_via_bokeh(values, *,
         #Scale the figure to the notebook width.
         # fig.sizing_mode = 'scale_width'   #Scale both display width and height by same factor to take maximal web-browser width
         fig.sizing_mode = 'stretch_width' #Scale just display width to take maximal web-browser width
-        
+
+
     #Put the 0,1,2,...etc number lines on x=0 and y=0, like desmos
     # fig.yaxis.fixed_location=0
     # fig.xaxis.fixed_location=0
 
-    #Draw the line graph onto the figure
-    fig.line(x, y, line_width=2, color='#007FFF') # TODO: Add legend_label="line label")
+    if not isinstance(values, dict):
+        #Create (x,y) points
+        y = values
+        x = list(range(len(y)))
+
+        #Draw the line graph onto the figure
+        fig.line(x, y, line_width=2, color='#007FFF')
+    else:
+        #Add each line in the dict to the figure
+        for legend_label,y in values.items():
+            legend_label = str(legend_label)
+
+            x = list(range(len(y)))
+
+            color_min = 127
+            color_max = 255
+            # color = tuple(random_int(color_min,color_max) for _ in range(3)) #Random color
+            color = tuple(random.Random(hash(legend_label)+seed_shift).randint(color_min,color_max) for seed_shift in range(3)) #Pseudo-random color that depends on legend_label so it will do same colors upon running code twice
+            color = byte_color_to_hex_color(color)
+
+            fig.line(x, y, line_width=2, color=color, legend_label=legend_label)
 
 
     #Display figure with dark theme

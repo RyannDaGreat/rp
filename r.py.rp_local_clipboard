@@ -1,6 +1,59 @@
-def _apa(ans):
-    #Absolute Path Ans
-    if isinstance(ans,str):
-        return get_absolute_path(ans)
-    else:
-        return [get_absolute_path(x) for x in ans]
+#Stony Brook Robotics Lab
+    #Hostname for all rlab* Host entries come from:
+    #   ZeroTier Clarinet: b15644912e4e339c
+
+    Host rlab_ftp
+        #password is "transformer"
+        Hostname 172.27.25.172
+        # Port 130
+        # NOTE: Both users 'ryan' and 'ftp' work with the same password
+        # User ryan
+        User ftp 
+
+    Host rlab1
+        #password is "a"
+        Hostname 172.27.227.212
+        Port 130
+        User ryan
+
+    Host rlab2
+        #password is "a"
+        Hostname 172.27.154.127
+        Port 130
+        User ryan
+
+    Host rlab3
+        #password is "a"
+        Hostname 172.27.229.15
+        Port 130
+        User ryan
+
+    Host rlab4
+        #password is "a"
+        Hostname 172.27.113.218
+        Port 130
+        User ryan
+
+    Host rlab1_root
+        #password is "robotics123"
+        Hostname 172.27.227.212
+        Port 130
+        User rlab
+
+    Host rlab2_root
+        #password is "robotics123"
+        Hostname 172.27.154.127
+        Port 130
+        User rlab
+
+    Host rlab3_root
+        #password is "robotics123"
+        Hostname 172.27.229.15
+        Port 130
+        User rlab
+
+    Host rlab4_root
+        #password is "robotics123"
+        Hostname 172.27.113.218
+        Port 130
+        User rlab
