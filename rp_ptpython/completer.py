@@ -320,7 +320,7 @@ class PythonCompleter(Completer):
 
         global completion_cache_pre_origin_doc
         from rp import tic,toc,ptoctic,ptoc 
-        tic()
+        # tic()
         origin=document.get_word_before_cursor()
         import rp.r_iterm_comm as ric
         pre_origin_doc=document.text[:document.cursor_position-(origin[::-1].find('.') if '.' in origin else len(origin))]
@@ -335,6 +335,35 @@ class PythonCompleter(Completer):
         before_line=document.current_line_before_cursor
         if not before_line.strip() and not force:
            return
+
+        #This paragraph: Dictionary key completion. This should probably be in _get_completions for efficieny with large dicts, but for now this works.
+        #This completes keys in a dictionary iff the dict is a global variable, and it's the first thing you've typed in the buffer
+        #(it's pretty limited - and only does stuff if all the keys are python literals)
+        #For example, if d=={'Hello':'World','Goodbye':'Sam'} then we get completions like this:
+        #     >>> d[|]
+        #         'Hello'
+        #         'Goodbye'
+        def dict_completion_yield_from_candidates(candidates:list):
+            for c in candidates:
+                yield Completion(text=c,start_position=-len(origin),display=c[1:]);
+        after_line=document.current_line_after_cursor
+        def is_any_instance(x,*types):
+            for t in types:
+                if isinstance(x,t):
+                    return True
+            return False
+        from collections import OrderedDict
+        if before_line.endswith('[') and after_line==']':
+            if before_line[:-1] in ric.globa:
+                if is_any_instance(ric.globa[before_line[:-1]],dict, OrderedDict):
+                   if all(is_any_instance(x,str,int,float,bool) for x in ric.globa[before_line[:-1]]):
+                    # assert False
+                    dict_completion_candidates=[]
+                    for x in ric.globa[before_line[:-1]]:
+                        dict_completion_candidates.append('['+repr(x))
+                    ric.current_candidates[:]=dict_completion_candidates
+                    yield from dict_completion_yield_from_candidates(candidates)
+                    return
 
         flag=False
         while True:
