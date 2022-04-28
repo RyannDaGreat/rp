@@ -1493,6 +1493,9 @@ def _load_image_from_file_via_PIL(file_name):
     return out
 
 def _load_image_from_file_via_imageio(file_name):
+    #NOTE if this method fails try the following function:
+    # imageio.plugins.freeimage.download() #https://github.com/imageio/imageio/issues/334 #This helps when it fails. I don't know why it sometimes fails and sometimes doesn't...
+    #NOTE that even though this made it not crash, it's still sometimes reading exr files wrong...depending on the computer....
     pip_import('imageio')
     from imageio import imread
     return imread(file_name)
@@ -13608,10 +13611,12 @@ def get_relative_path(path,parent_directory=None):
     assert isinstance(parent_directory,str),'parent_directory must be a string representing the root path to compare the given path against'
     return os.path.relpath(path,parent_directory)
 
-def get_absolute_path(path):
+def get_absolute_path(path,*,physical=True):
     #Given a relative path, return its absolute path
+    #If physical, expand all symlinks in the path
     path=os.path.expanduser(path)#In case the path has a '~' in it
-    path=os.path.realpath(path)#Get rid of any symlinks in the path
+    if physical:
+        path=os.path.realpath(path)#Get rid of any symlinks in the path
     return os.path.abspath(path)
 
 def has_file_extension(file_path):
@@ -13642,6 +13647,7 @@ def get_all_paths(*directory_path                    ,
                    just_file_names          = False  ,
                    include_file_extensions  = True   ,
                    relative                 = False  ,
+                   physical                 = True   ,
                    ignore_permission_errors = False  ,
                    include_hidden           = True   ,
                    include_symlinks         = True   ,
@@ -13651,6 +13657,22 @@ def get_all_paths(*directory_path                    ,
     #Returns global paths.
     #If relative is False, we return global paths. Otherwise, we return relative paths to the current working directory 
     #If relative is a string, we return paths relative to that string (otherwise if it's just True, we default to directory_path)
+    #Here's a summary of how relative and physical play together:
+    #    Suppose:
+    #        CURRENT LOCATION:
+    #            /A/B
+    #        DESTINATION PATH:
+    #            C
+    #        FOLDER STRUCTURE:
+    #            /A
+    #            /A/B
+    #            /A/B/C --> /A/D
+    #            /A/D
+    #        RESULT:     physical and     relative: ../D
+    #        RESULT: not physical and     relative: C
+    #        RESULT:     physical and not relative: /A/D
+    #        RESULT: not physical and not relative: /A/B/C        
+    #If physical is not True, symlinks won't be expanded.
     #TODO: Make sure this function isn't redundant before committing to keeping it forever!
     #TODO: In particular, make sure this isn't redundant with respect to get_all_file_names, or else merge them together.
     #TODO: Add a recursive option, filters, etc.
@@ -13791,12 +13813,16 @@ def get_all_paths(*directory_path                    ,
         if folder_placement=='last' : output[:]=non_folder_paths+folder_paths
         if folder_placement=='first': output[:]=folder_paths+non_folder_paths
 
+    if physical :
+        #If physical, expand all symlinks in the path
+        output=[os.path.realpath(path) for path in output]
+
     if relative:
         #Return relative paths instead of absolute paths
         relative_to=relative if isinstance(relative,str) else directory_path
         output=[get_relative_path(path,relative_to) for path in output]
     else:
-        output=[get_absolute_path(path) for path in output]
+        output=[get_absolute_path(path,physical=False) for path in output]
 
     return output
 
