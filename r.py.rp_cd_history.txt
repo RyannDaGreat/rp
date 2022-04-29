@@ -89,3 +89,6 @@
 /Users/Ryan/.ssh
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
 /Users/Ryan
+/Users/Ryan/PycharmProjects/QuickPython
+/Users/Ryan/PycharmProjects/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/libs/jedi/third_party/typeshed/third_party/2and3/Crypto/Util
+/Users/Ryan/PycharmProjects/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/libs/jedi/third_party/typeshed/third_party/2and3/Crypto/Hash
