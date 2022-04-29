@@ -7923,7 +7923,7 @@ def _get_env_info():
     
     def squelch(function,run_lambda):
         try:
-            function(run_lambda)
+            return function(run_lambda)
         except Exception:
             return None
 
