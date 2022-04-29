@@ -1659,7 +1659,7 @@ def load_openexr_image(file_path,*,channels=None):
 
     # Read OpenEXR file
     if not is_valid_openexr_file(file_path):
-        assert False, f'rp.load_openexr_image: Image {file_path} is not a valid OpenEXR file'
+        assert False, 'rp.load_openexr_image: Image %s is not a valid OpenEXR file'%file_path
     input_file = OpenEXR.InputFile(file_path)
     pixel_type = Imath.PixelType(Imath.PixelType.FLOAT)
     height, width = _get_openexr_image_dimensions(input_file)
