@@ -87,5 +87,5 @@
 /Users/Ryan/Desktop/CleanCode/LightWave
 /Users/Ryan/.ssh/sodi
 /Users/Ryan/.ssh
-/Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+/Users/Ryan

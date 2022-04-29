@@ -1475,14 +1475,21 @@ def load_images(*locations,use_cache=False,show_progress=False,strict=True):
 def load_image_from_file(file_name):
     #Can try opencv as a fallback if this ever breaks
     assert file_exists(file_name),'No such image file exists: '+repr(file_name)
+
+    if get_file_extension(file_name)=='exr':
+        #Imageio doesn't load exr files well consistently across my computers. Sometimes it gives incorrect results because of some glitch in the freeimage library. I don't know why this is...
+        #That being said, the load_openexr_image is more versatile anyway...and loads exr files properly
+        try             :return load_openexr_image(file_name)
+        except Exception:pass
+
     try               :return _load_image_from_file_via_imageio(file_name)#Imageio will not forget the alpha channel when loading png files
-    except            :pass #Don't cry over spilled milk...if imageio didn't work we'll try the other libraries.
+    except Exception  :pass #Don't cry over spilled milk...if imageio didn't work we'll try the other libraries.
     try               :return _load_image_from_file_via_scipy  (file_name)#Expecting that scipy.misc.imread doesn't exist on the interpereter for whatever reason
     except ImportError:pass
     try               :return _load_image_from_file_via_opencv (file_name)#OpenCV is our last choice here, because when loading png files it forgets the alpha channel...
-    except            :pass
+    except Exception  :pass
     try               :return _load_image_from_file_via_PIL    (file_name)
-    except            :raise
+    except Exception  :raise
     # assert False,'rp.load_image_from_file: Failed to load image file: '+repr(file_name)
 
 def _load_image_from_file_via_PIL(file_name):
@@ -1546,34 +1553,134 @@ def load_image_from_matplotlib(*,dpi:int=None,fig=None):
     return img
 
 
-def load_openexr_image(file_path:str):
-    #NOTE: This function is unnesecary for loading EXR files with full quality...assuming they're RGB. load_image works fine; I haven't tested it with more than 4 channels yet though
+#def load_openexr_image(file_path:str):
+#    #NOTE: This function is unnesecary for loading EXR files with full quality...assuming they're RGB. load_image works fine; I haven't tested it with more than 4 channels yet though
+#
+#    #Takes .exr image file with a depth map, and returns an RGBAZ image (where Z is depth, as opposed to an RGBA image.)
+#    #Because of the way .exr files work, the output of this function is not an image as defined by rp.is_image, because it has 5 channels (all floating point)
+#    #This function exists because load_image ignores the depth-map channel, which is important informatoin but is ignored by OpenCV's importer as well as Snowy's and all other libraries I've tried so far
+#    #This function requires a python package called 'openexr'. It can be annoying to install.
+#    pip_import('OpenEXR') # This package can be a bit of a pain-in-the-ass to get working; it requires apt-installs on Ubuntu and brew-installs on Mac. On ubuntu, try 'sudo apt install openexr ; sudo apt install libopenexr-dev' and if that fails try 'sudo apt remove libopenexr22' and try installing openexr and libopenexr-dev again
+#    
+#    assert file_exists(file_path),'File not found: '+file_path
+#
+#    import OpenEXR, Imath, numpy
+#    
+#    #Below code adapted from: https://www.blender.org/forum/viewtopic.php?t=24549
+#
+#    exrimage = OpenEXR.InputFile(file_path)
+#
+#    dw = exrimage.header()['dataWindow']
+#    (width, height) = (dw.max.x - dw.min.x + 1, dw.max.y - dw.min.y + 1)
+#    
+#    def fromstr(s):
+#      mat = numpy.fromstring(s, dtype=numpy.float16)
+#      mat = mat.reshape (height,width)
+#      return mat
+#    
+#    pt = Imath.PixelType(Imath.PixelType.HALF)
+#    (r, g, b, a, z) = [fromstr(s) for s in exrimage.channels('RGBAZ', pt)]
+#    return np.dstack((r,g,b,a,z)).astype(float)
 
-    #Takes .exr image file with a depth map, and returns an RGBAZ image (where Z is depth, as opposed to an RGBA image.)
-    #Because of the way .exr files work, the output of this function is not an image as defined by rp.is_image, because it has 5 channels (all floating point)
-    #This function exists because load_image ignores the depth-map channel, which is important informatoin but is ignored by OpenCV's importer as well as Snowy's and all other libraries I've tried so far
-    #This function requires a python package called 'openexr'. It can be annoying to install.
-    pip_import('OpenEXR') # This package can be a bit of a pain-in-the-ass to get working; it requires apt-installs on Ubuntu and brew-installs on Mac. On ubuntu, try 'sudo apt install openexr ; sudo apt install libopenexr-dev' and if that fails try 'sudo apt remove libopenexr22' and try installing openexr and libopenexr-dev again
+def _get_openexr_image_dimensions(file_path)->set:
+    #Returns the height and width of an .exr image file
     
-    assert file_exists(file_path),'File not found: '+file_path
+    pip_import('OpenEXR')
+    import OpenEXR
+    if isinstance(file_path,OpenEXR.InputFile):
+        #This is to save a bit of time when calling this function from other rp functions:
+        #Preferably don't re-read a file more than once
+        input_file = file_path
+    else:
+        input_file = OpenEXR.InputFile(file_path)
+        
+    dw = input_file.header()['dataWindow']    
+    width, height= (dw.max.x - dw.min.x + 1, dw.max.y - dw.min.y + 1)    
+    
+    return height, width
+    
+def is_valid_openexr_file(file_path):    
+    #Returns True iff the 
+    pip_import('OpenEXR')
+    import OpenEXR
+    return OpenEXR.isOpenExrFile(file_path)
 
-    import OpenEXR, Imath, numpy
+def get_openexr_channels(file_path)->set:
+    #Gets a set of strings indicating what channels are in a given .exr file
+    #Note that .exr files are floating point images that can contain arbitrary numbers of named channels
+    #EXAMPLE:
+    #     >>> get_openexr_channels('Image0032.exr')
+    #    ans = {'A', 'G', 'R', 'B'}
     
-    #Below code adapted from: https://www.blender.org/forum/viewtopic.php?t=24549
+    pip_import('OpenEXR')
+    import OpenEXR
+    
+    if isinstance(file_path,OpenEXR.InputFile):
+        #This is to save a bit of time when calling this function from other rp functions:
+        #Preferably don't re-read a file more than once
+        input_file = file_path
+    else:
+        input_file = OpenEXR.InputFile(file_path)
+        
+    return set(input_file.header()['channels'])
 
-    exrimage = OpenEXR.InputFile(file_path)
+def load_openexr_image(file_path,*,channels=None):
+    #Will load a floating point openexr image as a numpy array
+    #The 'channels' argument is used to specify the channel names that are loaded
+    #By default this works only with RGB or RGBA floating point .exr images, but note that .exr files are interesting: they can have arbitrarily many *named* channels, and blender can exploit this.
+    #    For example, if you look at the readme on https://github.com/cheind/py-minexr (a library that loads .exr files), they have a demo showing blender outputting both normals, depth, and color in a single exr file
+    #    To access these channels, or if you have alpha etc, simply list those channels' names in the 'channels' argument
+    #    If you're not sure what channels an openexr image has (maybe it's RGB maybe it's RGBA? Maybe it has depth? Etc) then call get_openexr_channels(file_path)
+    #
+    #EXAMPLES:
+    #     >>> load_openexr_image('Image0032.exr',channels=None).shape #It happens to be the case that Image0032.exr is RGBA. This was detected automatically because channels=None
+    #    ans = (716, 862, 4)
+    #     >>> load_openexr_image('Image0032.exr',channels=('R','G','B','A')).shape  #You can specify the channels in any order you want manually
+    #    ans = (716, 862, 4)
+    #     >>> load_openexr_image('Image0032.exr',channels=('R','G','B')).shape      #If you want, you can even exclude certain channels
+    #    ans = (716, 862, 3)
+    #     >>> load_openexr_image('Image0032.exr',channels=('R','G','B','B','B','B')).shape  #...or even use some channels more than once, just to prove my point...
+    #    ans = (716, 862, 6)
+    #     >>> load_openexr_image('Image0032.exr',channels=('R','G','B','asdf')).shape   #It will throw errors if the channels you give aren't in the exr file
+    #    ERROR: AssertionError: load_openexr_image: OpenEXR file is missing the following channels: {'asdf'}
+    #     >>> get_openexr_channels('Image0032.exr')  #If you're not sure what channels are contained in an OpenEXR image, use this function
+    #    ans = {'A', 'G', 'R', 'B'}
+    #
+    #This code was originally from https://www.programcreek.com/python/example/124985/OpenEXR.InputFile
+    #Imageio used to do this well...but for some reason, as of April 27 2022, it suddenly stopped working correctly and gave wrong values along the blue channel
+    #This function has been checked to make sure the resulting floating point numbers are correct
 
-    dw = exrimage.header()['dataWindow']
-    (width, height) = (dw.max.x - dw.min.x + 1, dw.max.y - dw.min.y + 1)
+    pip_import('OpenEXR')
+    pip_import('Imath')
+    pip_import('numpy')
+    import OpenEXR
+    import Imath
+    import numpy as np
+
+    # Read OpenEXR file
+    if not is_valid_openexr_file(file_path):
+        assert False, f'rp.load_openexr_image: Image {file_path} is not a valid OpenEXR file'
+    input_file = OpenEXR.InputFile(file_path)
+    pixel_type = Imath.PixelType(Imath.PixelType.FLOAT)
+    height, width = _get_openexr_image_dimensions(input_file)
     
-    def fromstr(s):
-      mat = numpy.fromstring(s, dtype=numpy.float16)
-      mat = mat.reshape (height,width)
-      return mat
-    
-    pt = Imath.PixelType(Imath.PixelType.HALF)
-    (r, g, b, a, z) = [fromstr(s) for s in exrimage.channels('RGBAZ', pt)]
-    return np.dstack((r,g,b,a,z)).astype(float)
+    #Handle the 'channels' argument if it's None
+    input_channels = get_openexr_channels(input_file)
+    if channels is None:
+        #If channels is None, assume the image is either RGB or RGBA
+        if   input_channels=={'R','G','B'    }: channels=('R','G','B'    )
+        elif input_channels=={'R','G','B','A'}: channels=('R','G','B','A')
+        else:
+            assert False, 'rp.load_openexr_image: This image (aka %s) is neither RGB nor RGBA. Please specify the channels manually, such as channels==%s'%(file_path,str(get_openexr_channels(input_file)))
+    assert set(channels)<=input_channels, 'rp.load_openexr_image: OpenEXR file is missing the following channels: '+repr(set(channels) - input_channels)
+
+    # Read into tensor
+    image = np.zeros((height, width, len(channels)))
+    for i, channel in enumerate(channels):
+        rgb32f = np.fromstring(input_file.channel(channel, pixel_type), dtype=np.float32)
+        image[:, :, i] = rgb32f.reshape(height, width)
+
+    return image
 
 _opencv_supported_image_formats='bmp dib exr hdr jp2 jpe jpeg jpg pbm pfm pgm pic png pnm ppm pxm ras sr tif tiff webp'.split()
 
@@ -5686,6 +5793,7 @@ def load_gist(gist_url:str):
 
     gist_url+='/raw'
 
+    pip_import('requests')
     import requests,json
     response=requests.get(gist_url)
     return response.content.decode()
@@ -5705,6 +5813,7 @@ def shorten_github_url(url,title=None):
         url='https://'+url
     assert is_valid_url(url)
     # print(url)
+    pip_import('requests')
     import requests
     data = {'url': url, 'code':title}
     if not title: del data['code']
@@ -7329,7 +7438,7 @@ def display_file_tree(root=None,*,all=False,only_directories=False,traverse_syml
 
         stats=[]
         color='blue'
-        image_file_extensions='png jpg jpeg bmp gif tiff tga'.split()
+        image_file_extensions='png jpg jpeg bmp gif tiff tga exr png'.split()
         if is_a_folder(path):
             try:
                 files=get_all_paths(path,include_files=True,include_folders=False,recursive=False)
@@ -7527,6 +7636,7 @@ def _vimore(exception):
 
 def _load_text_from_file_or_url(location):
     if is_valid_url(location):
+        pip_import('requests')
         import requests
         url=location
         response=requests.request('GET',url)
@@ -16993,6 +17103,7 @@ def inverse_norm_cdf(p,mean=0,std=1):
 def download_url(url,path=None):
     #Download a file from a url and return the path it downloaded to. It no path is specified, it will choose one for you and return it (as a string)
     #EXAMPLE: open_file_with_default_application(download_url('https://i.imgur.com/qSmVyCo.jpg'))#Show a picture of a cat
+    pip_import('requests')
     import requests
     assert isinstance(url,str),'url should be a string, but got type '+repr(type(url))
     if path is None:
@@ -17128,6 +17239,7 @@ def get_english_synonyms_via_nltk(word):
 @memoized
 def _datamuse_words_request(query,word):
     #Uses https://www.datamuse.com/api/
+    pip_import('requests')
     import requests,json
     response=requests.get('https://api.datamuse.com/words?'+query+'='+word)
     content=response.content.decode()
@@ -17847,6 +17959,7 @@ def web_copy(data:object)->None:
     #Send an object to RyanPython's server's clipboard
     assert connected_to_internet(),"Can't connect to the internet"
     # assert can_convert_object_to_bytes(data),'rp.web_copy error: Cannot turn the given object into a bytestring! Maybe this type isnt supported? See can_convert_object_to_bytes for more help. The type of object you gave: '+repr(type(data))
+    pip_import('requests')
     import requests
     response=requests.post(_web_clipboard_url,data=object_to_bytes(data))
     assert response.status_code==200,'Got bad status code that wasnt 200: '+str(response.status_code)
@@ -17854,6 +17967,7 @@ def web_copy(data:object)->None:
 def web_paste():
     #Get an object from RyanPython's server's clipboard
     assert connected_to_internet(),"Can't connect to the internet"
+    pip_import('requests')
     import requests         
     response=requests.get(_web_clipboard_url) 
     assert response.status_code==200,'Got bad status code that wasnt 200: '+str(response.status_code)
@@ -18267,6 +18381,8 @@ def get_image_file_dimensions(image_file_path:str):
     #This method supports the following file types:
     #    png jpg gif tiff svg jpeg jpeg2000
     assert file_exists(image_file_path)
+    if get_file_extension(image_file_path)=='exr':
+        return _get_openexr_image_dimensions(image_file_path)
     pip_import('imagesize')
     import imagesize
     return imagesize.get(image_file_path)#Returns (width, height)
@@ -18479,6 +18595,7 @@ def _launch_ranger():
 def curl(url:str)->str:
     #Meant to imitate the 'curl' command in linux
     #Sends a get request to the given URL and returns the result string
+    pip_import('requests')
     import requests
     response=requests.request('GET',url)
     return response.text
@@ -18769,6 +18886,7 @@ def breadth_first_path_iterator(root='.'):
 def gpt3(text:str):
     #Use GPT3 to write some text
     #https://deepai.org/machine-learning-model/text-generator
+    pip_import('requests')
     import requests
     assert isinstance(text,str),'Text must be a string'
     assert len(text)>0,'Text cannot be empty'
@@ -18787,6 +18905,7 @@ def deepgenx(code:str)->str:
     #Similar to GitHub copilot, except it uses GPT-J and is free
     #See https://deepgenx.com/
     #Given some python code, it will continue it and return the original code + the continued code
+    pip_import('requests')
     import requests
     import json
     ans = code
