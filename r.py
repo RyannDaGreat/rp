@@ -560,9 +560,10 @@ def string_to_clipboard(string):
     try:
         try:
             from rp.Pyperclip import paste,copy
-            assert not (get_computer_name()=='glass' and running_in_ssh()) #This is a patch for Ryan Burgert's desktop computer, which doesn't like using the clipboard over ssh for some reason. 
+            assert not running_in_ssh() #This is a patch for Ryan Burgert's desktop computer, which doesn't like using the clipboard over ssh for some reason. 
             copy(string)
         except Exception:
+            assert currently_running_mac()
             os.system("echo '%_s' | pbcopy" % string)
     except Exception:
         return
@@ -575,7 +576,7 @@ def string_from_clipboard():
     #If that doesn't work, it falls back to writing to a global variable called _local_clipboard_string
     try:
         from rp.Pyperclip import paste,copy
-        assert not (get_computer_name()=='glass' and running_in_ssh()) #This is a patch for Ryan Burgert's desktop computer, which doesn't like using the clipboard over ssh for some reason. 
+        assert not running_in_ssh() #This is a patch for Ryan Burgert's desktop computer, which doesn't like using the clipboard over ssh for some reason. 
         return paste()
     except Exception:
         return _get_local_clipboard_string()
