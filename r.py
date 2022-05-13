@@ -14601,11 +14601,11 @@ def random_grayscale_binary_color():
     return (random_chance(1/2))
 
 def is_binary_color(color):
-    return all(np.asarray(x).dtype==bool for x in as_numpy_array(color))
+    return all(is_number(x) for x in color) and all(np.asarray(x).dtype==bool for x in as_numpy_array(color))
 def is_byte_color(color):
-    return all(np.issubdtype(x.dtype,np.integer) for x in as_numpy_array(color))
+    return all(is_number(x) for x in color) and all(np.issubdtype(x.dtype,np.integer) for x in as_numpy_array(color))
 def is_float_color(color):
-    return all(np.issubdtype(x.dtype,np.floating) for x in as_numpy_array(color))
+    return all(is_number(x) for x in color) and all(np.issubdtype(x.dtype,np.floating) for x in as_numpy_array(color))
 
 def hex_color_to_byte_color(hex_color:str):
     #EXAMPLE:
