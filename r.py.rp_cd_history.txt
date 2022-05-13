@@ -68,7 +68,6 @@
 /Users/Ryan/Desktop/CleanCode/Github/return-youtube-dislike/Extensions/combined/dist
 /Users/Ryan/Desktop/CleanCode/Github/return-youtube-dislike/Extensions/combined
 /Users/Ryan/Desktop/CleanCode/Github/return-youtube-dislike/Extensions
-/Users/Ryan/Desktop
 /Users/Ryan/Library/Application Support/Ryan Burgert
 /Users/Ryan/Desktop/CleanCode/Glass/home/ryan/.local/lib/python3.8/site-packages/rp
 /Users/Ryan/Desktop/CleanCode/Github/DeepAo
@@ -89,7 +88,11 @@
 /Users/Ryan/PycharmProjects/QuickPython
 /Users/Ryan/PycharmProjects/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/libs/jedi/third_party/typeshed/third_party/2and3/Crypto/Util
 /Users/Ryan/PycharmProjects/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/libs/jedi/third_party/typeshed/third_party/2and3/Crypto/Hash
+/Users/Ryan/.config/lazygit
+/Users/Ryan/Desktop/CleanCode/Glass/mnt/Noman/Ubuntu/CleanCode/Datasets/diff_rendering/alphabet_five/photos/halved_photos
+/Users/Ryan/Downloads
+/Users/Ryan/Desktop/real
 /Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
-/Users/Ryan/.config/lazygit
-/Users/Ryan/Downloads
+/Users/Ryan/Desktop
+/Users/Ryan/Desktop/images

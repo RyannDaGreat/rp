@@ -719,6 +719,165 @@ def gaussian_kernel(size=21, sigma=3,dim=2):
         _gaussian_circle_kernel_cache[args]=kernel / kernel.sum()
     return _gaussian_circle_kernel_cache[args]
 
+def get_max_image_dimensions(*images):
+    #Given a set of images, return the maximum height and width seen across all of them
+    if len(images)==1: images=images[0]
+    heights=[get_image_height(x) for x in images]
+    widths =[get_image_width (x) for x in images]
+    return max(heights),max(widths)
+
+def get_min_image_dimensions(*images):
+    #Given a set of images, return the minimum height and width seen across all of them
+    if len(images)==1: images=images[0]
+    heights=[get_image_height(x) for x in images]
+    widths =[get_image_width (x) for x in images]
+    return min(heights),min(widths)
+
+def uniform_float_color_image(height:int,width:int,color:tuple):
+    #Returns an image with the given height and width, where all pixels are the given color
+    #If the given color is a number, it returns a grayscale image
+    #Otherwise, the given color must be either an RGB or RGBA float color (a tuple with 3 or 4 floats between 0 and 1)
+    #
+    #EXAMPLE:
+    #    for _ in range(16):
+    #        height=randint(10,30)
+    #        width=randint(10,30)
+    #        color=random_rgb_float_color() #Color is like (.1235, .5742, .8652)
+    #        tile=uniform_float_color_image(height,width,color)
+    #        random_color_tiles.append(tile)
+    #    image=tiled_images(random_color_tiles,border_thickness=0)
+    #    display_image(image) #The result will look like https://i.imgur.com/COlmGRT.png 
+    #
+    assert height>0 and width>0
+    assert is_number(color) or is_color(color) and len(color) in {3,4}, 'Color should be a number, an RGB float color, or an RGBA float color'
+    
+    if is_number(color):
+        output = np.ones((height,width),dtype=float)*color
+        assert is_grayscale_image(output)
+        return output
+    else:
+        output = np.ones((height,width,len(color)),dtype=float)*as_numpy_array([[[*color]]])
+        assert len(color)==3 and is_rgb_image(output) or len(color)==4 and is_rgba_image(output)
+        return output
+
+def blend_images(bot,top,alpha=1):
+    #bot and top can be either images, floats, or colors. 
+    #If it is an image, we blend using that image.
+    #If it is a color, it should be an RGB or RGBA float color (a tuple with three or four values between 0 and 1)
+    #If it is a float, it's treated as an RGB color with R=G=B=that value
+    #
+    #Alpha can either be an image or a number
+    #If alpha is an image, it will be first converted to grayscale
+    #Where alpha is closer to 1, top will be more opaque. When alpha is closer to 0, top will be more transparent and bot will show more.
+    #
+    #This function is meant to blend images like in photoshop
+    #Blending images is different from a simple blend function, as the alpha channels are not blended as well
+    #
+    #EXAMPLE:
+    #   dice     ='https://bellard.org/bpg/3.png'
+    #   penguin  ='https://www.gstatic.com/webp/gallery3/2_webp_a.png'
+    #   mountains='https://cdn.britannica.com/67/19367-050-885866B4/Valley-Taurus-Mountains-Turkey.jpg'
+    #   checkerboard='https://static8.depositphotos.com/1176848/894/i/450/depositphotos_8945283-stock-photo-checkerboard-chess-background.jpg'
+    #   dice     =load_image(dice     ) #Has alpha channel
+    #   penguin  =load_image(penguin  ) #Has alpha channel
+    #   mountains=load_image(mountains) #Has no alpha channel
+    #   checkerboard=load_image(checkerboard) #Has no alpha channel
+    #   composite=blend_images(mountains,penguin,.5) #Penguin is slightly transparent
+    #   composite=blend_images(composite,dice,alpha=checkerboard) #Mix the dice on with a checkerboard mask
+    #   display_image(composite) #Result should look like https://i.imgur.com/lF8Sxuc.jpeg
+    #
+    #EXAMPLE:
+    #   dice = 'https://bellard.org/bpg/3.png'
+    #   dice = load_image(dice)  #Has alpha channel
+    #   display_image(blend_images((0,1,0),dice))               #Should look like https://i.imgur.com/iu6Z8bk.png
+    #   display_image(blend_images((0,1,0),(1,0,1),alpha=dice)) #Should look like https://i.imgur.com/gxaauuD.png
+    #   display_image(blend_images(1,1/2,alpha=dice))           #Should look like https://i.imgur.com/f0sKWY5.png
+    #
+    #EXAMPLE:    
+    #    >>> blend_images(0,.5,.5)
+    #   ans = [[[0.25 0.25 0.25 1.  ]]]
+    #    >>> blend_images(0,(0,1,0),.5)
+    #   ans = [[[0.  0.5 0.  1. ]]]
+    #    >>> blend_images(1,(0,1,0),.5)
+    #   ans = [[[0.5 1.  0.5 1. ]]]
+    #    >>> blend_images(1,(0,1,0,.5),.5)
+    #   ans = [[[0.75 1.   0.75 1.  ]]]
+    #
+    #EXAMPLE:
+    #   dog=load_image('https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg.jpg')
+    #   nebula=load_image('https://spaceplace.nasa.gov/nebula/en/nebula1.en.jpg')
+    #   nebula,dog=crop_images_to_min_size(nebula,dog)
+    #   text=cv_text_to_image("OUTER\nSPACE\nDOGGO!!",scale=4,thickness=20)
+    #   composite=blend_images(dog,nebula,alpha=text)
+    #   display_image(composite) #Should look like https://i.imgur.com/wEc1t8e.png
+    #   composite=blend_images(dog,nebula,alpha=cv_gauss_blur(text,sigma=15))#Should look like https://i.imgur.com/YtPtR1p.png
+    #
+    #Most of the code here is to handle the different types of inputs (top and bot can be floats, images or colors etc)
+    
+    #Input validation
+    assert is_image(top) or is_color(top) and len(top) in {3,4} or is_number(top)
+    assert is_image(bot) or is_color(bot) and len(bot) in {3,4} or is_number(bot)
+    assert is_image(alpha) or is_number(alpha)
+    
+    #Determine the height and width of the output
+    input_images = [x for x in (bot,top,alpha) if is_image(x)]
+    if input_images:
+        #If we have at least one image as an input, the output size is the max of all of them
+        height,width = get_max_image_dimensions(input_images)
+    else:
+        #Otherwise, the output image will have a height and width of 1x1
+        height,width = 1, 1
+        
+    #If top or bot are numbers, turn them into grayscale RGB float colors
+    if is_number(top):top=float(top);top=(top,top,top);assert is_float_color(top)
+    if is_number(bot):bot=float(bot);bot=(bot,bot,bot);assert is_float_color(bot)
+
+    #If top or bot are colors, turn them into solid-colored images
+    if is_color (top  ):top  =uniform_float_color_image(height, width, top  )  
+    if is_color (bot  ):bot  =uniform_float_color_image(height, width, bot  )
+    if is_number(alpha):alpha=uniform_float_color_image(height, width, alpha)
+    
+    #Whatever top, bot and alpha started as, by this point they should all be images
+    assert is_image(top  ) 
+    assert is_image(bot  ) 
+    assert is_image(alpha) 
+    
+    #Make sure all images are now the same size
+    bot,top,alpha=crop_images_to_max_size(bot,top,alpha)
+
+    top  =as_rgba_image     (as_float_image(top  ))
+    bot  =as_rgba_image     (as_float_image(bot  ))
+    alpha=as_grayscale_image(as_float_image(alpha))
+    
+    top_alpha=top[:,:,3] #The alpha channel of the top image
+    bot_alpha=bot[:,:,3] #The alpha channel of the bot image
+    alpha*=top_alpha #Take the top image's alpha channel into consideration
+    
+    output_alpha=1-((1-alpha)*(1-bot_alpha)) #The alpha channel of the output image. The output image is always more opaque than the input
+    
+    alpha=alpha[:,:,None]
+    
+    output=bot*(1-alpha)+top*alpha
+    output[:,:,3]=output_alpha
+    
+    return output
+
+def _crop_images_to_max_or_min_size(*images,origin='top left',criterion=max):
+    
+    images=detuple(images)
+    dimensions=[get_image_dimensions(image) for image in images]
+    
+    if len(set(dimensions))==1:
+        #Save a bit of time. If all the image dimensions are the same, we don't need to bother cropping them.
+        return list(images)
+    #
+    heights,widths=zip(*dimensions)
+    max_height=criterion(heights)
+    max_width =criterion(widths)
+    
+    images=[crop_image(image,max_height,max_width,origin=origin) for image in images]
+    return images
+
 def crop_images_to_max_size(*images,origin='top left'):
     #Makes sure all images have the same height and width
     #Does this by adding additional black space around images if needed
@@ -729,20 +888,19 @@ def crop_images_to_max_size(*images,origin='top left'):
     #    print("DI")
     #    display_image_slideshow(crop_images_to_max_size(ans))
     #    display_image_slideshow(crop_images_to_max_size(ans,origin='center'))
-    
-    images=detuple(images)
-    dimensions=[get_image_dimensions(image) for image in images]
-    
-    if len(set(dimensions))==1:
-        #Save a bit of time. If all the image dimensions are the same, we don't need to bother cropping them.
-        return images.copy()
-    #
-    heights,widths=zip(*dimensions)
-    max_height=max(heights)
-    max_width =max(widths)
-    
-    images=[crop_image(image,max_height,max_width,origin=origin) for image in images]
-    return images
+    return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=max)
+
+def crop_images_to_min_size(*images,origin='top left'):
+    #Makes sure all images have the same height and width
+    #Does this by cropping out the edges of the images if needed
+    #EXAMPLE:
+    #    ans='https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg&auto=webp https://s3.amazonaws.com/cdn-origin-etr.akc.org/wp-content/uploads/2017/11/13002248/GettyImages-187066830.jpg https://hips.hearstapps.com/hmg-prod.s3.amazonaws.com/images/best-small-dog-breeds-cavalier-king-charles-spaniel-1598992577.jpg?crop=0.468xw:1.00xh;0.259xw,0&resize=480:*'.split()
+    #    ans=load_images(ans)
+    #    display_image_slideshow(ans)
+    #    print("DI")
+    #    display_image_slideshow(crop_images_to_min_size(ans))
+    #    display_image_slideshow(crop_images_to_min_size(ans,origin='center'))
+    return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=min)
 
 def trim_video(video,length:int):
     #This function takes a video and a length, and returns a video with that length
@@ -14600,12 +14758,14 @@ def random_rgba_binary_color():
 def random_grayscale_binary_color():
     return (random_chance(1/2))
 
+def is_color(color):
+    return is_iterable(color) and all(is_number(x) for x in color)
 def is_binary_color(color):
-    return all(is_number(x) for x in color) and all(np.asarray(x).dtype==bool for x in as_numpy_array(color))
+    return is_iterable(color) and all(is_number(x) for x in color) and all(np.asarray(x).dtype==bool for x in as_numpy_array(color))
 def is_byte_color(color):
-    return all(is_number(x) for x in color) and all(np.issubdtype(x.dtype,np.integer) for x in as_numpy_array(color))
+    return is_iterable(color) and all(is_number(x) for x in color) and all(np.issubdtype(x.dtype,np.integer) for x in as_numpy_array(color))
 def is_float_color(color):
-    return all(is_number(x) for x in color) and all(np.issubdtype(x.dtype,np.floating) for x in as_numpy_array(color))
+    return is_iterable(color) and all(is_number(x) for x in color) and all(np.issubdtype(x.dtype,np.floating) for x in as_numpy_array(color))
 
 def hex_color_to_byte_color(hex_color:str):
     #EXAMPLE:
