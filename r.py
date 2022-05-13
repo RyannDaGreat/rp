@@ -8792,7 +8792,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         LSAG  $get_all_paths  (relative=False,sort_by='name')
         LSAFG $get_all_files  (relative=False,sort_by='name')
         LSADG $get_all_folders(relative=False,sort_by='name')
-        LSM   $pip_import('iterfzf').iterfzf(get_all_paths('.',relative=False,sort_by='name'),multi=True,exact=True)
+        LSM   $pip_import('iterfzf').iterfzf($get_all_paths('.',relative=False,sort_by='name'),multi=True,exact=True)
 
         IASM $import_all_submodules(ans,verbose=True);
 
@@ -8857,7 +8857,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         FZM $pip_import('iterfzf').iterfzf(ans,multi=True)
 
         PTS ptsave
-        ST settitle
+        ST   settitle
+        STIT settitle
 
         CLS !clear
         CLEAR !clear
@@ -13758,7 +13759,7 @@ def get_all_paths(*directory_path                    ,
                    just_file_names          = False  ,
                    include_file_extensions  = True   ,
                    relative                 = False  ,
-                   physical                 = True   ,
+                   physical                 = None   ,
                    ignore_permission_errors = False  ,
                    include_hidden           = True   ,
                    include_symlinks         = True   ,
@@ -13768,6 +13769,7 @@ def get_all_paths(*directory_path                    ,
     #Returns global paths.
     #If relative is False, we return global paths. Otherwise, we return relative paths to the current working directory 
     #If relative is a string, we return paths relative to that string (otherwise if it's just True, we default to directory_path)
+    #If physical is None, physical defaults to not relative
     #Here's a summary of how relative and physical play together:
     #    Suppose:
     #        CURRENT LOCATION:
@@ -13819,6 +13821,9 @@ def get_all_paths(*directory_path                    ,
     #    >>> get_all_paths('Tests/First','Inputs',sort_by='name',just_file_names=True,include_file_extension=False,file_extension_filter='bmp png')  #Filtering the extension type to just .bmp and .png images
     #    ans =  ['01', '04']
     #
+
+    if physical is None:
+        physical=not relative
 
     if sort_by is not None:
         sort_by=sort_by.lower()#Don't be case-sensitive. That's annoying. Reassign it here so we dont need to make it nonlocal.

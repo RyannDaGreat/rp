@@ -60,7 +60,6 @@
 /Users/Ryan/Desktop/Screenshots
 /Users/Ryan/Desktop/CleanCode/Sandbox/scrap
 /Users/Ryan/Desktop/CleanCode/Glass/media/ryan/Noman/Ubuntu/CleanCode/Scrapbook/archived_experiments/rudalle/Images
-/Users/Ryan/Downloads
 /Users/Ryan/Downloads/halved_photos
 /Users/Ryan/Desktop/CleanCode/Glass/mnt/Noman/Ubuntu/CleanCode/Scrapbook/archived_experiments/Alphacube
 /Users/Ryan/Desktop/CleanCode/Github/robosuite
@@ -92,3 +91,5 @@
 /Users/Ryan/PycharmProjects/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/libs/jedi/third_party/typeshed/third_party/2and3/Crypto/Hash
 /Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+/Users/Ryan/.config/lazygit
+/Users/Ryan/Downloads
