@@ -862,6 +862,19 @@ def blend_images(bot,top,alpha=1):
     
     return output
 
+def overlay_images(*images):
+    #Blends all the given images on top of one another; the last one being on top
+    #It takes into consideration any alpha channels, if the images are RGBA
+    if len(images)==1:
+        images=images[0]
+    if is_image(images):
+        return images.copy()
+    if is_image(images[0]):
+        output=images[0]+0
+    for image in images[1:]:
+        output=blend_images(output,image)
+    return output
+    
 def _crop_images_to_max_or_min_size(*images,origin='top left',criterion=max):
     
     images=detuple(images)
@@ -10834,6 +10847,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 else:
                                     fansi_print("CDZ (aka CD FZF) --> Letting you fuzzy-search for a directory",'blue')
                                 try:
+                                    if not get_subfolders('.'):
+                                        fansi_print('Cannot use CDQ or CDZ because there are no folders in this directory to CD into','blue','bold')
+                                        assert False
                                     result=_iterfzf((line.replace('\n',' ').replace('\r',' ') for line in breadth_first_path_iterator('.') if is_a_folder(line)),exact=user_message=='CDQ')
                                 except:
                                     result=None
