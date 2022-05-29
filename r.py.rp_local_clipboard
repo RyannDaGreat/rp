@@ -1,12 +1,2 @@
-def overlay_images(*images):
-    #Blends all the given images on top of one another; the last one being on top
-    #It takes into consideration any alpha channels, if the images are RGBA
-    if len(images)==1:
-        images=images[0]
-    if is_image(images):
-        return images.copy()
-    output=images[0]+0
-    for image in images[1:]:
-        output=blend_images(output,image)
-    return output
-    
+
+#ans.evaluate('2+3')

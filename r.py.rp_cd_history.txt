@@ -79,7 +79,6 @@
 /Users/Ryan/Desktop/CleanCode/Sandbox/Lightwave/Lightwave_Wavebox_Transceiver
 /
 /Volumes/CIRCUITPY
-/Users/Ryan/Desktop/CleanCode/Sandbox
 /Users/Ryan/Desktop/CleanCode/LightWave/Hardware Source/Legacy Backups
 /Users/Ryan/Desktop/CleanCode/LightWave/Hardware Source
 /Users/Ryan/Desktop/CleanCode/LightWave
@@ -90,11 +89,14 @@
 /Users/Ryan/PycharmProjects/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/libs/jedi/third_party/typeshed/third_party/2and3/Crypto/Hash
 /Users/Ryan/.config/lazygit
 /Users/Ryan/Desktop/CleanCode/Glass/mnt/Noman/Ubuntu/CleanCode/Datasets/diff_rendering/alphabet_five/photos/halved_photos
-/Users/Ryan/Downloads
 /Users/Ryan/Desktop/real
 /Users/Ryan/Desktop
 /Users/Ryan/Desktop/images
 /Users/Ryan/63.1
 /Users/Ryan/63.1/doc
-/Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+/Users/Ryan/Desktop/triton_paper
+/Users/Ryan/Downloads
+/Users/Ryan/Downloads/threetex
+/Users/Ryan/Desktop/CleanCode/Sandbox
+/Users/Ryan
