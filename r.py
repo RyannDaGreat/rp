@@ -1253,6 +1253,8 @@ def random_index(array_length_or_array_itself):
         return random_index(len(array_length_or_array_itself))
 
 def random_element(x):
+    if isinstance(x,dict):
+        return random_element(list(x.values()))
     if isinstance(x,set):
         x=list(x)
     assert is_iterable(x)
@@ -9030,6 +9032,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         PTS ptsave
         ST   settitle
         STIT settitle
+
+        UU $unshorten_url(ans)
 
         CLS !clear
         CLEAR !clear
@@ -18567,7 +18571,7 @@ def get_image_file_dimensions(image_file_path:str):
         return _get_openexr_image_dimensions(image_file_path)
     pip_import('imagesize')
     import imagesize
-    return imagesize.get(image_file_path)#Returns (width, height)
+    return imagesize.get(image_file_path)[::-1]#Returns (height, width)
 
 def rgb_to_hsv(image):
     #Takes an RGB image and returns an HSV image
