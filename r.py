@@ -1243,6 +1243,9 @@ def image_to_all_normalized_xy_rgb_training_pairs(image):
 
 import random
 def random_index(array_length_or_array_itself):
+    if isinstance(array_length_or_array_itself, dict):
+        return random_element(list(array_length_or_array_itself))
+
     # Basically a random integer generator suited for generating array indices.
     # Returns a random integer ∈ ℤ ⋂ [0‚array_length)
     if isinstance(array_length_or_array_itself,int):
