@@ -14139,6 +14139,28 @@ def get_subfolders(folder,*,relative=False,sort_by=None):
     return get_all_paths(folder,include_files=False,include_folders=True,recursive=False,relative=relative,sort_by=sort_by)
 get_subdirectories=get_subfolders
 
+def _os_listdir_files(folder):
+    #like get_all_files, but returns only file names and is a little faster
+    #https://stackoverflow.com/questions/3207219/how-do-i-list-all-files-of-a-directory
+    from os import listdir
+    from os.path import isfile, join
+    onlyfiles = [f for f in listdir(folder) if isfile(join(folder, f))]
+    return onlyfiles
+
+def random_file(folder=None):
+    #Returns the path of a random file in that folder
+    #If the folder is None, returns the name of a random file in the current directory
+    
+    
+    if folder is None:
+        folder='.'
+        return get_file_name(random_file('.')) #Return something like '__main__.py'
+    else:
+        assert folder_exists(folder), 'rp.random_file: Folder does not exist: '+repr(folder)
+        files=_os_listdir_files(folder)
+        assert not len(files)==0, 'rp.random_file: There are no files in '+repr(folder)
+        output=random_element(_os_listdir_files(folder))
+        return path_join(folder,output) #Return something like './__main__.py'
 #endregion
 
 def fractional_integral_in_frequency_domain(coefficients,n=1):
