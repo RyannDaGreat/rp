@@ -1174,7 +1174,7 @@ PSEUDO TERMINAL COMMANDS:
 		LS FZF (LSZ): Like LSS, except uses a fuzzy search recursively across directories
 		LS QUE (LSQ): Like LSS, except uses a query search recursively across directories
 		$LSM: Like LSS, but lets you select multiple files by pressing the tab key interactively in query search mode
-		RANGER (RNG): Launches 'ranger', a python-based file manager. When you navigate in range, it will change rp's current working directory.
+		RANGER (RNG): Launches 'ranger', a python-based file manager. When you navigate in range, it will change rp's current working directory - you can use this to navigate quickly around a computer inside rp.
 
 
 

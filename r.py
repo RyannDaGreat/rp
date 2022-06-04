@@ -18790,6 +18790,8 @@ def _launch_ranger():
     #Whatsmore, is that we can launch it in this process - which is what we'll do.
     #Currently this method is private, as I can't think of a reason to use it outside of pseudo_terminal and I don't want to clutter rp's namespace more
 
+    old_dir=get_current_directory()
+
     pip_import('ranger')
     import ranger
     old_os_environ_pwd=os.environ.get('PWD')#This is how ranger determines the current directory. We want to make sure it syncs up with RP's PWD, but also want to resore os.environ.get('PWD') afterwards in-case some other function needs it to work the way it originally did
@@ -18798,9 +18800,16 @@ def _launch_ranger():
         sys.argv=sys.argv[:1]
         os.environ['PWD']=get_current_directory()
         out=ranger.main()
+        import logging
+        #Commented this out because this only seems to happen on the robotics lab computers, and not on glass. Until I figure out why, I'll avoid changing things such as the logger
+        # logging.disable() #For some reason, ranger will activate the logger and spam text in rp from some other thread. This is bad, so we disable it.
     finally:
         os.environ['PWD']=old_os_environ_pwd
         sys.argv=old_args
+
+    if get_current_directory()!=old_dir:
+        fansi_print("RNG: CD'd into "+get_current_directory(),'blue','bold')
+
     return out
 
 def curl(url:str)->str:

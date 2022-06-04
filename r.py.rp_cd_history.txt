@@ -1,6 +1,4 @@
 /usr/bin
-/Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1/states/000000
-/Users/Ryan/datasets
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1/images/4
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1/states
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1/images/1
@@ -23,26 +21,11 @@
 /Users/Ryan/Desktop/CleanCode/SBU/Research/ReverseDynamics
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1/images/2
 /Users/Ryan/Desktop/CleanCode/SBU/Classes/Undergrad/CSE350
-/Users/Ryan/Desktop/AMS548_HW1_Ryan_Burgert_110176886
 /Users/Ryan/Desktop/CleanCode/SBU/Classes/CSE548_Algorithms
 /private/etc
 /Users/Ryan/PycharmProjects/RyanBStandards_Python3.5
-/Users/Ryan/Desktop/DiffRendering
-/Users/Ryan/Desktop/CleanCode/Sandbox/lab-simulation-builder/src
-/Users/Ryan/Desktop/CleanCode/Sandbox/Lab-In-A-Cube_2/src
-/Users/Ryan/Desktop/CleanCode/Sandbox/lab-simulation-builder/public
-/Users/Ryan/Desktop/CleanCode/Sandbox/lab-simulation-builder
-/Users/Ryan/Desktop/CleanCode/Sandbox/lab-simulation-builder/node_modules
-/Users/Ryan/Desktop/CleanCode/Sandbox/Lab-In-A-Cube_2/public
-/Users/Ryan/Desktop/CleanCode/Sandbox/lab-simulation-builder/node_modules/react-scripts
-/Users/Ryan/Desktop/CleanCode/Sandbox/Lab-In-A-Cube_2/node_modules
-/Users/Ryan/Desktop/CleanCode/Sandbox/Lab-In-A-Cube_2
-/Users/Ryan/Desktop/CleanCode/Sandbox/Lab-In-A-Cube-New
 /Users/Ryan/Desktop/CleanCode/SBU/LabInACube/Lab-In-A-Cube-Full
-/Users/Ryan/Desktop/Lab-In-A-Cube_LUMPO
 /Users/Ryan/Desktop/CleanCode/SBU/LabInACube/Lab-In-A-Cube
-/Users/Ryan/Desktop/Lab-In-A-Cube_LUnew
-/Users/Ryan/Documents/FL Studio
 /Users/Ryan/Documents/Image-Line/FL Studio/Presets
 /Users/Ryan/Documents/Image-Line/FL Studio/Projects
 /Users/Ryan/Documents/Image-Line/FL Studio
@@ -51,25 +34,18 @@
 /Users/Ryan/Desktop/CleanCode/Resume/Attempt1
 /Users/Ryan/Desktop/CleanCode/Resume/Latex
 /Users/Ryan/Desktop/CleanCode/Resume/Latex/Attempt1
-/Users/Ryan/Desktop/Lowres
 /Users/Ryan/Desktop/CleanCode/Resume
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/pygments/lexers
 /Users/Ryan/Desktop/CleanCode
-/Users/Ryan/Desktop/CSE548_Last_HW
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Users/Ryan/Desktop/Screenshots
-/Users/Ryan/Desktop/CleanCode/Sandbox/scrap
-/Users/Ryan/Desktop/CleanCode/Glass/media/ryan/Noman/Ubuntu/CleanCode/Scrapbook/archived_experiments/rudalle/Images
 /Users/Ryan/Downloads/halved_photos
-/Users/Ryan/Desktop/CleanCode/Glass/mnt/Noman/Ubuntu/CleanCode/Scrapbook/archived_experiments/Alphacube
 /Users/Ryan/Desktop/CleanCode/Github/robosuite
 /Users/Ryan/Desktop/CleanCode/Github/DeepAO
 /Users/Ryan/Desktop/CleanCode/Github/return-youtube-dislike/Extensions/combined/dist/chrome
 /Users/Ryan/Desktop/CleanCode/Github/return-youtube-dislike/Extensions/combined/dist
 /Users/Ryan/Desktop/CleanCode/Github/return-youtube-dislike/Extensions/combined
 /Users/Ryan/Desktop/CleanCode/Github/return-youtube-dislike/Extensions
-/Users/Ryan/Library/Application Support/Ryan Burgert
-/Users/Ryan/Desktop/CleanCode/Glass/home/ryan/.local/lib/python3.8/site-packages/rp
 /Users/Ryan/Desktop/CleanCode/Github/DeepAo
 /Users/Ryan/Desktop/CleanCode/Github/return-youtube-dislike
 /Volumes
@@ -78,25 +54,24 @@
 /Users/Ryan/Desktop/CleanCode/Sandbox/Lightwave/Lightwave_Wavebox_Transceiver/lib
 /Users/Ryan/Desktop/CleanCode/Sandbox/Lightwave/Lightwave_Wavebox_Transceiver
 /
-/Volumes/CIRCUITPY
 /Users/Ryan/Desktop/CleanCode/LightWave/Hardware Source/Legacy Backups
 /Users/Ryan/Desktop/CleanCode/LightWave/Hardware Source
 /Users/Ryan/Desktop/CleanCode/LightWave
-/Users/Ryan/.ssh/sodi
 /Users/Ryan/.ssh
 /Users/Ryan/PycharmProjects/QuickPython
-/Users/Ryan/PycharmProjects/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/libs/jedi/third_party/typeshed/third_party/2and3/Crypto/Util
-/Users/Ryan/PycharmProjects/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/QuickPython/rp/libs/jedi/third_party/typeshed/third_party/2and3/Crypto/Hash
 /Users/Ryan/.config/lazygit
-/Users/Ryan/Desktop/CleanCode/Glass/mnt/Noman/Ubuntu/CleanCode/Datasets/diff_rendering/alphabet_five/photos/halved_photos
 /Users/Ryan/Desktop/real
-/Users/Ryan/Desktop
 /Users/Ryan/Desktop/images
 /Users/Ryan/63.1
 /Users/Ryan/63.1/doc
-/Users/Ryan/Desktop/triton_paper
 /Users/Ryan/Downloads
 /Users/Ryan/Downloads/threetex
 /Users/Ryan/Desktop/CleanCode/Sandbox
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+/Users/Ryan/Desktop/triton_paper/images
+/Users/Ryan/Desktop/triton_paper/NEURIPS/images
+/Users/Ryan/Desktop
+/Users/Ryan/Desktop/triton_paper
+/Users/Ryan/Desktop/triton_paper/NEURIPS
+/Users/Ryan/Desktop/triton_paper/CORL
 /Users/Ryan
