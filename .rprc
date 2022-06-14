@@ -15,3 +15,7 @@ import os,sys;sys.path.append(os.getcwd());del os,sys;
 
 
 from rp import *
+
+def list_launchd():
+    import launchd
+    return (line_join(sorted([x.label for x in launchd.jobs()])))

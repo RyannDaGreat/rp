@@ -252,6 +252,24 @@ def set_current_directory(path):
     import os
     os.chdir(path)
 
+class SetCurrentDirectoryTemporarily:
+    #Temporarily CD into a directory
+    #Example:
+    #    print(get_current_directory())
+    #    with SetCurrentDirectoryTemporarily('/home'):
+    #        print(get_current_directory())
+    #    print(get_current_directory())
+    def __init__(self,directory:str=None):
+        self.directory=directory
+        
+    def __enter__(self, directory:str=None):
+        self.original_dir=get_current_directory()
+        if self.directory is not None:
+            set_current_directory(self.directory)
+            
+    def __exit__(self,*args):
+        set_current_directory(self.original_dir)
+        
 #THIS IS DEPRECATED IN FAVOR OF get_all_paths
 # def get_all_file_names(file_name_ending: str = '',file_name_must_contain: str = '',folder_path: str = get_current_directory(),show_debug_narrative: bool = False):
 #     # SUMMARY: This method returns a list of all file names files in 'folder_path' that meet the specifications set by 'file_name_ending' and 'file_name_must_contain'
@@ -9019,7 +9037,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         FCA $web_copy_path(ans)
         FCH print("FCH->FileCopyHere");$web_copy_path('.')
         RMA $r._rma(ans)
-        RNA $rename_file(ans,input(fansi('NewPathName:','blue')))
+        RNA $rename_file(ans,input_default(fansi('NewPathName:','blue'),get_file_name(ans)))
         APA $r._absolute_path_ans(ans)
         RPA $r._relative_path_ans(ans)
 
@@ -10739,7 +10757,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
                             print('Renaming %s'%fansi(get_file_name(path),'green','bold'))
                             print('Please input the new name of the %s'%('file' if is_a_file(path) else 'folder'))
-                            new_name=input(' > ')
+                            new_name=input_default(fansi(' > ','blue','bold'),get_file_name(path))
                                 
                             user_message='__import__("rp").rename_path('+repr(path)+','+repr(new_name)+')# '+path
 
@@ -15277,7 +15295,17 @@ def input_integer(minimum=None,maximum=None):
 
     else: assert False, 'This should be an unreachable line'
 
-
+def input_default(prompt='', default=''):
+    #Like input(), but it has a default value that you can edit
+    #From https://stackoverflow.com/questions/2533120/show-default-value-for-editing-on-python-input-possible
+    #Note: A library called PyInquirer and inquirerpy do similar things with prompt toolkit, and they're fancy shmancy!
+    #TODO: Add windows support
+    import readline
+    readline.set_startup_hook(lambda: readline.insert_text(default))
+    try:
+        return input(prompt)
+    finally:
+        readline.set_startup_hook()
 
 def input_select(question='Please select an option:',options=[],stringify=repr,reverse=False):
     #TODO: In order to make this truly customizable, such as adding multi-select options for fuzzy searching or fuzzy searching through paths etc, we need to make this a class that can be inherited from
@@ -18471,8 +18499,8 @@ def _extract_archive_via_pyunpack(archive_path, folder_path):
     pip_import('pyunpack')
 
     filetype=get_file_extension(archive_path)
-    supported_filetypes='7z ace alz a arc arj bz2 cab Z cpio deb dms gz lrz lha lzh lz lzma lzo rpm rar rz tar xz zip jar zoo'.lower().split()
-    assert filetype.lower() in supported_filetypes, 'Sorry, but I dont know how to unpack/extract/unzip etc the given filetype .'+filetype+'\n\tSupported filetypes: '+' '.join(supported_filetypes)
+    supported_filetypes='zip jar rar tar gz 7z deb ace alz a arc arj bz2 cab Z cpio dms lrz lha lzh lz lzma lzo rpm rz xz zoo'.lower().split()
+    assert filetype.lower() in supported_filetypes, 'Sorry, but I dont know how to unpack/extract/unzip etc the given filetype .'+filetype+'\n\tSupported filetypes: '+' '.join(sorted(set(supported_filetypes)))
     
     from pyunpack import Archive
     Archive(archive_path).extractall(folder_path)
@@ -19028,8 +19056,8 @@ def cv_resize_image(image,size,interp='bilinear'):
         width =np.ceil(get_image_width (image)*size)
     else:
         height,width=size
-        width =get_image_width(image) if width  is None else width
-        height=get_image_width(image) if height is None else height
+        height=get_image_height(image) if height is None else height
+        width =get_image_width (image) if width  is None else width
     
     height=int(height)
     width =int(width)

@@ -57,21 +57,23 @@
 /Users/Ryan/Desktop/CleanCode/LightWave/Hardware Source/Legacy Backups
 /Users/Ryan/Desktop/CleanCode/LightWave/Hardware Source
 /Users/Ryan/Desktop/CleanCode/LightWave
-/Users/Ryan/.ssh
 /Users/Ryan/PycharmProjects/QuickPython
-/Users/Ryan/.config/lazygit
 /Users/Ryan/Desktop/real
 /Users/Ryan/Desktop/images
 /Users/Ryan/63.1
 /Users/Ryan/63.1/doc
-/Users/Ryan/Downloads
 /Users/Ryan/Downloads/threetex
-/Users/Ryan/Desktop/CleanCode/Sandbox
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
 /Users/Ryan/Desktop/triton_paper/images
 /Users/Ryan/Desktop/triton_paper/NEURIPS/images
-/Users/Ryan/Desktop
 /Users/Ryan/Desktop/triton_paper
 /Users/Ryan/Desktop/triton_paper/NEURIPS
 /Users/Ryan/Desktop/triton_paper/CORL
+/Library/LaunchAgents
+/Users/Ryan/Downloads/New xArm Models
+/Users/Ryan/Desktop/CleanCode/Sandbox
+/Users/Ryan/.ssh
+/Users/Ryan/.config/lazygit
+/Users/Ryan/Downloads
+/Users/Ryan/Desktop
 /Users/Ryan
