@@ -37,7 +37,6 @@
 /Users/Ryan/Desktop/CleanCode/Resume
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/pygments/lexers
 /Users/Ryan/Desktop/CleanCode
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Users/Ryan/Desktop/Screenshots
 /Users/Ryan/Downloads/halved_photos
 /Users/Ryan/Desktop/CleanCode/Github/robosuite
@@ -63,7 +62,6 @@
 /Users/Ryan/63.1
 /Users/Ryan/63.1/doc
 /Users/Ryan/Downloads/threetex
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
 /Users/Ryan/Desktop/triton_paper/images
 /Users/Ryan/Desktop/triton_paper/NEURIPS/images
 /Users/Ryan/Desktop/triton_paper
@@ -77,3 +75,7 @@
 /Users/Ryan/Downloads
 /Users/Ryan/Desktop
 /Users/Ryan
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/parso
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
