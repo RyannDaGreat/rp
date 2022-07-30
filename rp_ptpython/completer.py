@@ -276,7 +276,7 @@ class PythonCompleter(Completer):
                 script = get_jedi_script_from_document(doc, self.get_locals(), self.get_globals())
                 # print(script)
                 pos=document.cursor_position-len(origin)+1
-                if script:
+                if script and not isinstance(script,Exception):
                     try:completions = script.completions()
                     except Exception as e:
                         import rp
@@ -296,7 +296,30 @@ class PythonCompleter(Completer):
                         return
                         candidates={c.name_with_symbols for c in completions}
                 else:
-                    print("ATTENTION: THIS HAS NEVER HAPPENED BEFORE, in completer.py")
+                    def update_parso_grammars():
+                        #Get all the latest grammar files but don't update parso as a whole
+                        #This will make rp's autocomplete features happy
+                        import rp
+                        old_dir=rp.get_current_directory()
+                        rp.set_current_directory(rp.get_parent_directory(rp.get_module_path_from_name('rp.libs.parso.python')))
+                        ans=['https://raw.githubusercontent.com/davidhalter/parso/master/parso/python/grammar%s.txt'%v for v in '38 39 310 311 312 313 314 315 316 317 318 319 320'.split()]
+                        for x in ans:
+                            import os
+                            os.system('wget -N '+x)
+                        print('\n\nSaved some new files to %s'%rp.get_current_directory())
+                        rp.set_current_directory(old_dir)
+                        print('\n\n\n'+'Done! You may continue using rp without this error (hopefully).')
+                        
+                    print("ATTENTION: Please update the parso definitions! This message came from %s, and script="%__file__+repr(script))
+                    if rp.input_yes_no("rp's autocomplete functionality is broken because it doesn't recognize this version of Python's grammar. Is it ok if we try and fix this by downloading some up-to-date files from https://github.com/davidhalter/parso?"):
+                        update_parso_grammars()
+                    else:
+                        print("OK...I'm assuming you said NO because you tried this and it didn't fix the problem, so here's a big stack trace to help you debug it. If this is annoying you could comment it out in %s, but note that autocomplete won't work fully if you do that. Here's the stack trace:"%__file__)
+                        if True: #Set this to False to disable the stack trace during errors
+                            import rp
+                            if isinstance(script,Exception):
+                                rp.print_verbose_stack_trace(script)
+                            print('doc='+str(doc),'\n\nscript='+repr(script),len(self.get_locals()))
                 candidates=set(candidates)
                 # if not force:
                 #     candidates|=set(self.get_globals())|set(self.get_locals())# The namespace we search for completions in
@@ -336,34 +359,55 @@ class PythonCompleter(Completer):
         if not before_line.strip() and not force:
            return
 
-        #This paragraph: Dictionary key completion. This should probably be in _get_completions for efficieny with large dicts, but for now this works.
-        #This completes keys in a dictionary iff the dict is a global variable, and it's the first thing you've typed in the buffer
-        #(it's pretty limited - and only does stuff if all the keys are python literals)
-        #For example, if d=={'Hello':'World','Goodbye':'Sam'} then we get completions like this:
-        #     >>> d[|]
-        #         'Hello'
-        #         'Goodbye'
-        def dict_completion_yield_from_candidates(candidates:list):
-            for c in candidates:
-                yield Completion(text=c,start_position=-len(origin),display=c[1:]);
-        after_line=document.current_line_after_cursor
-        def is_any_instance(x,*types):
-            for t in types:
-                if isinstance(x,t):
-                    return True
-            return False
-        from collections import OrderedDict
-        if before_line.endswith('[') and after_line==']':
-            if before_line[:-1] in ric.globa:
-                if is_any_instance(ric.globa[before_line[:-1]],dict, OrderedDict):
-                   if all(is_any_instance(x,str,int,float,bool) for x in ric.globa[before_line[:-1]]):
-                    # assert False
-                    dict_completion_candidates=[]
-                    for x in ric.globa[before_line[:-1]]:
-                        dict_completion_candidates.append('['+repr(x))
-                    ric.current_candidates[:]=dict_completion_candidates
-                    yield from dict_completion_yield_from_candidates(candidates)
-                    return
+        ##This paragraph: CD path completion. This should probably be in _get_completions for efficieny with large dicts, but for now this works.
+        #before=document.text_before_cursor
+        #after=document.text_after_cursor
+        #def cd_path_completion_yield_from_candidates(candidates:list):
+        #    for c in candidates:
+        #        yield Completion(text=c,start_position=-len(origin),display=c[1:]);
+        #from rp import get_path_parent
+        #def path_complete(path):
+        #    path=path.strip()
+        #    if path.endswith('/'):
+        #        return os.listdir(path)
+        #    else:
+        #        return os.listdir(get_path_parent(path))
+        #if before_line.startswith('CD ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
+        #    import os
+        #    from rp import is_a_directory
+        #    paths=before_line[len('CD '):]
+        #    paths=path_complete(paths)
+        #    yield from cd_path_completion_yield_from_candidates([x for x in paths if is_a_directory(x)])
+        #    return 
+
+        ##This paragraph: Dictionary key completion. This should probably be in _get_completions for efficieny with large dicts, but for now this works.
+        ##This completes keys in a dictionary iff the dict is a global variable, and it's the first thing you've typed in the buffer
+        ##(it's pretty limited - and only does stuff if all the keys are python literals)
+        ##For example, if d=={'Hello':'World','Goodbye':'Sam'} then we get completions like this:
+        ##     >>> d[|]
+        ##         'Hello'
+        ##         'Goodbye'
+        #def dict_completion_yield_from_candidates(candidates:list):
+        #    for c in candidates:
+        #        yield Completion(text=c,start_position=-len(origin),display=c[1:]);
+        #after_line=document.current_line_after_cursor
+        #def is_any_instance(x,*types):
+        #    for t in types:
+        #        if isinstance(x,t):
+        #            return True
+        #    return False
+        #from collections import OrderedDict
+        #if before_line.endswith('[') and after_line==']':
+        #    if before_line[:-1] in ric.globa:
+        #        if is_any_instance(ric.globa[before_line[:-1]],dict, OrderedDict):
+        #           if all(is_any_instance(x,str,int,float,bool) for x in ric.globa[before_line[:-1]]):
+        #            # assert False
+        #            dict_completion_candidates=[]
+        #            for x in ric.globa[before_line[:-1]]:
+        #                dict_completion_candidates.append('['+repr(x))
+        #            ric.current_candidates[:]=dict_completion_candidates
+        #            yield from dict_completion_yield_from_candidates(candidates)
+        #            return
 
         flag=False
         while True:
