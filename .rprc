@@ -13,6 +13,12 @@ import os,sys;sys.path.append(os.getcwd());del os,sys;
 ## Set the terminal's cursor to the shape of a line, instead of a block. I personally prefer this, but I've commented out because I don't know if you'd like it.
 #set_cursor_to_bar()
 
+#Added protected folders to CDH and CDC.
+#When you add a directory to this list, if any file inside it doesn't exist but the prefix also doesn't exist, it will be shown as blue when running CDH and it won't be deleted during CDH CLEAN.
+#This is useful for drives that are temporarily mounted, like over SSHFS, so your history isn't wiped when you run CDC and the drive isn't mounted.
+rp.cdc_protected_prefixes+=[
+   # '/Users/ryan/sshfs/' 
+]
 
 from rp import *
 
