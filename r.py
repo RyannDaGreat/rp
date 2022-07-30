@@ -6463,11 +6463,16 @@ def _update_cd_history():
     # fansi_print(text_file_to_string(_cd_history_path),'magenta')
     # fansi_print(_get_cd_history(),'magenta')
     # print()
+
+cdc_protected_prefixes=[]
+def _cdh_folder_is_protected(x):
+    return not folder_exists(x) and any(x.startswith(prefix) for prefix in cdc_protected_prefixes)
+
 def _clean_cd_history():
     #Removes all nonexistant paths from CDH
     #It removes all the red entries
     entries=_get_cd_history()
-    entries=[entry for entry in entries if path_exists(entry)]
+    entries=[entry for entry in entries if path_exists(entry) or _cdh_folder_is_protected(entry)]
     string_to_text_file(_cd_history_path,line_join(entries))
 
 def set_prompt_style(style:str=None):
@@ -8491,19 +8496,27 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         def pterm_pretty_print(value,*args,**kwargs):
             #If it's a string with valid python code, highlight it
             #Otherwise, pretty_print it
+            def _display_pterm_image(value):
+                if isinstance(value,str):
+                    value=load_image(value)
+                if running_in_jupyter_notebook():
+                    display_image_in_notebook(value)
+                else:
+                    display_image_in_terminal_color(value)
+
             if isinstance(value,str) and is_valid_python_syntax(value):
                 highlighted_code=fansi_syntax_highlighting(value)
                 print(highlighted_code)
                 _maybe_display_string_in_pager(highlighted_code,False)
             elif file_exists(value) and is_image_file(value):
-                display_image_in_terminal_color(load_image(value))
+                _display_pterm_image(value)
             elif isinstance(value,str) and is_valid_url(value):
                 if get_file_extension(value).lower() in 'jpg png jpeg tiff bmp gif'.split():
-                    display_image_in_terminal_color(load_image(value))
+                    _display_pterm_image(value)
                 else:
                     display_website_in_terminal(value)
             elif is_image(value):
-                display_image_in_terminal_color(value)
+                _display_pterm_image(value)
             else:
                 pretty_print(value,*args,**kwargs)
             return
@@ -8661,6 +8674,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         <Others>
         RETURN  (RET)
         SUSPEND (SUS)
+        CLEAR
         WARN
         GPU
         TOP
@@ -9056,11 +9070,12 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         UU $unshorten_url(ans)
 
-        CLS !clear
-        CLEAR !clear
+
+        CLS CLEAR
         VV !vim
 
         DR $r._display_columns(dir(),'dir():')
+        DUSHA human_readable_file_size(sum(get_file_size(x,False)for x in enlist(ans)))
 
         '''.replace('$',rp_import)
         # SA string_to_text_file(input("Filename:"),str(ans))#SaveAnsToFile
@@ -9071,7 +9086,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         command_shortcuts=list(map(str.strip,command_shortcuts))
         command_shortcuts=[x for x in command_shortcuts if not x.startswith('#')]
         command_shortcuts=[x for x in command_shortcuts if x]
-        command_shortcuts_pairs=list(map(str.split,command_shortcuts))
+        # command_shortcuts_pairs=list(map(str.split,command_shortcuts))
+        command_shortcuts_pairs=[str.split(x,maxsplit=1)for x in command_shortcuts]
         def join_command(pair):
             #Let us have spaces on the right side
             return [pair[0],' '.join(pair[1:])]
@@ -9295,6 +9311,13 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
                     elif user_message =='SET TITLE':
                         _set_session_title()
+
+                    elif user_message =='CLEAR':
+                        import os
+                        os.system('clear')
+                        if running_in_jupyter_notebook():
+                            from IPython.display import clear_output
+                            clear_output()
 
                     elif user_message =='PT SAVE':
                         try:
@@ -10827,7 +10850,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 user_message=''
                             else:
                                 import sys
-                                new_dir=input_select("Please choose a directory",_get_cd_history()[::-1], stringify=lambda x:fansi(x,'yellow' if folder_exists(x) else 'red','bold' if x in sys.path else None), reverse=True)
+                                new_dir=input_select("Please choose a directory",_get_cd_history()[::-1], stringify=lambda x:fansi(x,'blue' if _cdh_folder_is_protected(x) else 'yellow' if folder_exists(x) else 'red','bold' if x in sys.path else None), reverse=True)
                                 user_message='import sys,os;os.chdir('+repr(new_dir)+');sys.path.append(os.getcwd())# '+user_message
 
                                 #The next two lines are duplicated code from the below 'CD' section!
@@ -11030,10 +11053,18 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         #     user_message=user_message.replace('/','?')
                         #     fansi_print("Transformed command into " + repr(user_message),'magenta')
                         if not '\n' in user_message and user_message.startswith('..'):
-                            user_message='ans[' + repr(user_message)+']'
+                            user_message='ans[' + repr(user_message[len('..'):])+']'
                             fansi_print("Transformed command into " + repr(user_message),'magenta')
                         elif not '\n' in user_message and user_message.startswith('.') and len(user_message)>1 and user_message[1].isalpha():
-                            user_message='ans.'+user_message
+                            user_message='ans'+user_message
+                            fansi_print("Transformed command into " + repr(user_message),'magenta')
+                        elif not '\n' in user_message and user_message.startswith('[') and not user_message.strip().endswith(']') and hasattr(get_ans(),'__getitem__'):
+                            # Input '[0' would be a syntax error. turn it into 'ans[0]'. Only do this if ans is indexable though.
+                            user_message='ans'+user_message+']'
+                            fansi_print("Transformed command into " + repr(user_message),'magenta')
+                        elif not '\n' in user_message and user_message.startswith('(') and not user_message.strip().endswith(')') and callable(get_ans()):
+                            # Input '(0' would be a syntax error. turn it into 'ans(0)'. Only do this if ans is callable though.
+                            user_message='ans'+user_message+')'
                             fansi_print("Transformed command into " + repr(user_message),'magenta')
                         elif current_var is not None and user_message in ['+','-','*','/','%','//','**','&','|','^','>>','<<']+['and','or','not','==','!=','>=','<=']+['>','<','~']:
                             user_message='ans ' + user_message +' ' + current_var
@@ -13950,7 +13981,7 @@ def date_accessed(path):
     return datetime.datetime.fromtimestamp(timestamp)
     
 def get_all_paths(*directory_path                    ,
-                   sort_by                  = None   ,
+                   sort_by                  = 'name' ,
                    file_extension_filter    = None   ,
                    recursive                = False  ,
                    include_files            = True   ,
@@ -13994,7 +14025,7 @@ def get_all_paths(*directory_path                    ,
     #If include_global_path is true, we return the whole global file path of all files in the directory (as opposed to just returning their names)
     #If file_extension_filter is not None and file_types is a space-separated string, only accept those file extensions
     #If not include_symlinks, it will notinclude any symlinks in the output. If it is recursive, it will skip any symlink directories.
-    #sort_by can be None, or it can be a string
+    #sort_by can be None, or it can be a string. If it's None, the files won't be sorted.
     #hidden_placement can be None, or it can be a string
     #folder_placement can be None, or it can be a string
     #EXAMPLES:
