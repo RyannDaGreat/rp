@@ -18110,6 +18110,7 @@ ____file=path_join(get_parent_directory(__file__),'.'+get_file_name(__file__))#/
 rprc_file_path=strip_file_extension(____file)+'.rprc.py'
 rprc_file_path=path_join(get_parent_directory(__file__),'.rprc')
 _default_rprc="""## %s
+## /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/.rprc
 ## This is the rprc file. Like .bashrc, or .vimrc, this file is run each time you boot rp from the command line.
 ## Even though the extension of this file is .rprc, and not .py, treat it as a python file.
 ## Feel free to commment/uncomment any of the lines here, or to add your own. This file is preserved when you update rp.
@@ -18123,6 +18124,13 @@ import os,sys;sys.path.append(os.getcwd());del os,sys;
 
 ## Set the terminal's cursor to the shape of a line, instead of a block. I personally prefer this, but I've commented out because I don't know if you'd like it.
 #set_cursor_to_bar()
+
+#Added protected folders to CDH and CDC.
+#When you add a directory to this list, if any file inside it doesn't exist but the prefix also doesn't exist, it will be shown as blue when running CDH and it won't be deleted during CDH CLEAN.
+#This is useful for drives that are temporarily mounted, like over SSHFS, so your history isn't wiped when you run CDC and the drive isn't mounted.
+rp.cdc_protected_prefixes+=[
+   # '/Users/ryan/sshfs/' 
+]
 
 """%rprc_file_path
 
