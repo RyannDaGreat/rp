@@ -4813,6 +4813,7 @@ def get_my_mac_address()->str:
         return getmac.get_mac_address()
 def get_my_public_ip_address():
     assert connected_to_internet(),'Cannot get our public IP address because we are not connected to the internet'
+    pip_import('requests')
     from requests import get
     try:
         return get('https://icanhazip.com').text.strip()

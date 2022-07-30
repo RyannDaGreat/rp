@@ -2,9 +2,11 @@ import socket
 import json
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
-import requests
 
 import rp
+
+rp.pip_import('requests')
+import requests
 
 DEFAULT_SERVER_PORT = 43234 #This is an arbitrary port I chose because its easy to remember and didn't conflict with any known services I could find on https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
 
