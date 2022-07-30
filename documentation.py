@@ -999,8 +999,9 @@ PSEUDO TERMINAL COMMANDS:
 		???: Same as ?, but will also show details about every value in ENTRIES.
 		?p: Will attempt to display the target in the terminal. Normally it will pretty-print it. Dicts, nested lists etc will be displayed nicely. Great for web api repsonses that looks like {{asd::f{}:::{asdf}a::sdf}}}asdf{}{a::sdf}{{asdf{}::{}{}{}}} etc
 			Some special cases:
-				- If target is an image (as defined by rp.is_image), it will be displayed in the terminal in full color (if your terminal supports true-color, which most do)
+				- If target is an image (as defined by rp.is_image), it will be displayed in the terminal in full color (if your terminal supports true-color, which most do). When in Jupyter notebook, it will display an image in HTML instead of via text as it would in a terminal.
 				- If the target is a string containing python code, it will print it with syntax highlighting
+				- If the target is a valid url, it will try to display that webpage crudely in the terminal (you can view google search results etc with it)
 		?h: Just entering '?/'' by itself is equivalent to writing 'help(ans)'. A command like 'some_expression?/' is turned into 'help(some_expression)'
 		?/: Equivalent to ?h. Can be typed by pressing '/' twice.
 		?.: Lets you search for attributes recursively, interactively. It uses fzf.
@@ -1019,6 +1020,8 @@ PSEUDO TERMINAL COMMANDS:
 			Shortcut: ret, control+d
 		SUSPEND: Suspends this python process. Usually ctrl+z does this, but in rp, ctrl+z means undo.
 			Shortcut: sus
+		CLEAR: Will clear the terminal screen. When in Jupyter lab or notebook and running rp.pterm(), it will clear the cell.
+			Shortcut: cls
 		WARN: Toggles all python warnings
 		GPU: Shows GPU usage info
 		TOP: Shows bpytop
