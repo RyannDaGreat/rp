@@ -7574,7 +7574,11 @@ def is_symbolic_link(path:str):
     from pathlib import Path
     if not isinstance(path,str):
         return False
-    return Path(path).is_symlink()
+    try:
+        return Path(path).is_symlink()
+    except OSError:
+        #OSError: [Errno 63] File name too long:
+        return False
 
 is_symlink=is_symbolic_link
 
@@ -18110,15 +18114,15 @@ def delete_empty_lines(string,strip_whitespace=False):
 ____file=path_join(get_parent_directory(__file__),'.'+get_file_name(__file__))#/usr/local/lib/python3.7/site-packages/rp/.r.py
 rprc_file_path=strip_file_extension(____file)+'.rprc.py'
 rprc_file_path=path_join(get_parent_directory(__file__),'.rprc')
-_default_rprc="""## %s
 ## /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/.rprc
+_default_rprc="""## %s
 ## This is the rprc file. Like .bashrc, or .vimrc, this file is run each time you boot rp from the command line.
 ## Even though the extension of this file is .rprc, and not .py, treat it as a python file.
 ## Feel free to commment/uncomment any of the lines here, or to add your own. This file is preserved when you update rp.
 
 ## Add the current directory to the path, letting us import any files in the directory we booted rp in
 ## For example, if we run 'rp' in a directory with 'thing.py', let us run 'import thing.py' by enabling the belowline
-import os,sys;sys.path.append(os.getcwd());del os,sys;
+__import__("sys").path.append(__import__("os").getcwd())
 
 ## Import the rp library's whole namespace. It's not nessecary, but it exposes a lot of useful functions without
 #from rp import *
@@ -18129,7 +18133,7 @@ import os,sys;sys.path.append(os.getcwd());del os,sys;
 #Added protected folders to CDH and CDC.
 #When you add a directory to this list, if any file inside it doesn't exist but the prefix also doesn't exist, it will be shown as blue when running CDH and it won't be deleted during CDH CLEAN.
 #This is useful for drives that are temporarily mounted, like over SSHFS, so your history isn't wiped when you run CDC and the drive isn't mounted.
-rp.cdc_protected_prefixes+=[
+__import__("rp").cdc_protected_prefixes+=[
    # '/Users/ryan/sshfs/' 
 ]
 
