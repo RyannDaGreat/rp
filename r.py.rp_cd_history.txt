@@ -33,7 +33,6 @@
 /Users/Ryan/Documents
 /Users/Ryan/Desktop/CleanCode/Resume/Attempt1
 /Users/Ryan/Desktop/CleanCode/Resume/Latex
-/Users/Ryan/Desktop/CleanCode/Resume/Latex/Attempt1
 /Users/Ryan/Desktop/CleanCode/Resume
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/pygments/lexers
 /Users/Ryan/Desktop/CleanCode
@@ -74,8 +73,9 @@
 /Users/Ryan/.config/lazygit
 /Users/Ryan/Downloads
 /Users/Ryan/Desktop
-/Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/parso
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+/Users/Ryan/Desktop/CleanCode/Resume/Latex/Attempt1
+/Users/Ryan
