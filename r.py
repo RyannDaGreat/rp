@@ -12510,7 +12510,7 @@ def _cv_helper(*,image,copy,antialias):
     #This function exists to remove redundancy from other OpenCV helper functions in rp
     kwargs={}
     if antialias:kwargs['lineType']=cv2.LINE_AA#Whether to antialias the things we draw
-    if copy     :image=image.copy();#s_byte_image(as_rgb_image(image))#Decide whether we should mutate an image or create a new one (which is less efficient but easier to write in my opinion)
+    if copy     :image=image.copy();#as_byte_image(as_rgb_image(image))#Decide whether we should mutate an image or create a new one (which is less efficient but easier to write in my opinion)
     return image,kwargs
 try:
     class Contour(np.ndarray):
@@ -12617,6 +12617,42 @@ def cv_draw_contours(image,contours,color=(255,255,255),width=1,*,fill=False,ant
 
 def cv_draw_contour(image,contour,*args,**kwargs):
     return cv_draw_contours(image,[contour],*args,**kwargs)
+
+def cv_draw_rectangle(image,
+                      *,
+                      start_point:tuple,
+                      end_point:tuple,
+                      color=(255, 255, 255),
+                      thickness=1,
+                      copy=True,
+                      antialias=True):
+    #Right now rectangles are defined by two (x,y) points (start_point, end_point). They're required keyword arguments for now,
+    # becuase I might add more ways to specify rectangles in the future such as top_left, and height/width.
+    #
+    #EXAMPLE:
+    #    image=load_image('https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png')
+    #    for _ in range(100):
+    #        def random_coords():
+    #            return ( random_int(get_image_height(image)),random_int(get_image_width(image)))
+    #        image=cv_draw_rectangle(image,start_point=random_coords(),end_point=random_coords(),color=random_rgb_byte_color())
+    #        display_image(image)
+
+    #Input assertions:
+    assert isinstance(start_point,tuple) and len(start_point)==2
+    assert isinstance(end_point  ,tuple) and len(end_point  )==2
+    start_point=tuple(int(x) for x in start_point)
+    end_point  =tuple(int(x) for x in end_point  )
+    
+    pip_import('cv2')
+    import cv2
+
+    image = as_byte_image(image)
+    image = as_rgb_image(image)
+
+    image, kwargs = _cv_helper(image=image, copy=copy, antialias=True)
+
+    image = cv2.rectangle(image, start_point, end_point, color, thickness)
+    return image
 
 def cv_contour_length(contour,closed=False):
     cv2=pip_import('cv2')
