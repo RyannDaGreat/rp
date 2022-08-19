@@ -1952,19 +1952,21 @@ def save_image(image,file_name=None,add_png_extension: bool = True):
     if file_name==None:
         file_name=temporary_file_path('png')
 
-    if get_file_extension(file_name)=='exr':
-        #Note that exr filetypes must have a float32 dtype
-        image=as_float_image(image).astype(np.float32)
-    else:
-        #Suppress any warnings about losing data when coming from a float_image...that's a given, considering that png's only have one byte per color channel...
-        image=as_byte_image(image)
-    
     if file_name.startswith('~'):
         file_name=get_absolute_path(file_name)
 
     if not folder_exists(get_parent_folder(file_name)):
         #If the specified path's folders don't exist, make them. Don't whine and throw errors.
         make_directory(get_parent_folder(file_name))
+    
+    if get_file_extension(file_name)=='exr':
+        #Note that exr filetypes must have a float32 dtype
+        # image=as_float_image(image).astype(np.float32)
+        save_openexr_image(image, file_name)
+        return file_name
+    else:
+        #Suppress any warnings about losing data when coming from a float_image...that's a given, considering that png's only have one byte per color channel...
+        image=as_byte_image(image)
     
     try:
         try:
@@ -2102,6 +2104,45 @@ def save_image_jpg(image,path,*,quality=100,add_extension=True):
     if not get_file_extension(path).lower() in {'jpeg','jpg'}:
         path+='.jpg'
     return Image.fromarray(image).save(path, "JPEG", quality=quality, optimize=False, progressive=True)
+
+def save_openexr_image(image, file_path):
+    #Counterpart to load_openexr_image
+    #TODO: Add support for custom channels
+    #This code is based on https://stackoverflow.com/questions/65605761/write-pil-image-to-exr-using-openexr-in-python
+
+    pip_import('OpenEXR')
+    pip_import('Imath')
+    pip_import('numpy')
+    import OpenEXR
+    import Imath
+    import numpy as np
+    
+    #Input assertions
+    assert is_image(image)
+    assert isinstance(file_path,str)
+        
+    #Prepare the image: It should be either an RGB or RGBA floating point image
+    if is_grayscale_image(image):
+        image=as_rgb_image(image)
+    image=as_float_image(image)
+    assert len(image.shape)==3 #(height, width, num_channels)
+    height, width, num_channels = image.shape
+    
+    # Read OpenEXR file
+    pixel_type = Imath.PixelType(Imath.PixelType.FLOAT)
+        
+    if   num_channels==3: channels=('R','G','B'    )
+    elif num_channels==4: channels=('R','G','B','A')
+    else:assert False #Impossible: num_channels comes from an image as defined by rp.is_image, and is not grayscale
+    
+    header=OpenEXR.Header(width,height)
+    header['channels']={c:Imath.Channel(pixel_type) for c in channels}
+
+    #print(header) #Shows interesting info. Useful for debugging the OpenEXR library - it doesnt have much documentation
+    
+    output_file = OpenEXR.OutputFile(file_path,header)
+    output_file.writePixels({channels[i] : image[:,:,i].astype(np.float32).tobytes() for i in range(num_channels)})
+    output_file.close()
 
 # endregion
 # region Text-To-Speech: ［text_to_speech，text_to_speech_via_apple，text_to_speech_via_google，text_to_speech_voices_comparison，text_to_speech_voices_for_apple，text_to_speech_voices_for_google，text_to_speech_voices_all，text_to_speech_voices_favorites］
