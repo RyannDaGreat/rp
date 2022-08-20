@@ -8199,6 +8199,10 @@ def _get_env_info():
     
     return get_env_info()
 
+def _view_with_pyfx(data):
+    from pyfx.app import PyfxApp
+    from pyfx.model import DataSourceType
+    PyfxApp().run(DataSourceType.VARIABLE, data)
 
 def _get_processor_name():
     import os, platform, subprocess, re
@@ -8718,6 +8722,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         ?c
         ?i
         ?r
+        ?j
 
         <Others>
         RETURN  (RET)
@@ -9235,7 +9240,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         split=user_message.split('/')
                         left=''.join(split[:-1])
                         right=split[-1]
-                        if right in 'p e s v t h c r i'.split():
+                        if right in 'p e s v t h c r i j'.split():
                             #/p --> ?p   /e --> ?e   /t --> ?t   /s ---> ?s    /v --> ?v     /h --> ?h     /c --> ?c     /r --> ?r    /i --> ?i
                             if not right in scope():
                                 user_message=left+'?'+right
@@ -9961,6 +9966,14 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         value=eval(user_message,scope())
                         pterm_pretty_print(value,with_lines=False)
                         #pip_import('rich').print(value)
+                    elif user_message=='?j':
+                        fansi_print("?j --> JSON Viewer --> Interactively displaying ans with collapsible menus with r._view_with_pyfx(ans)","blue",'bold')
+                        _view_with_pyfx(get_ans())
+                    elif user_message.endswith('?j') and not '\n' in user_message:
+                        user_message=user_message[:-2]
+                        fansi_print("?j --> JSON Viewer --> Interactively displaying ans with collapsible menus with r._view_with_pyfx","blue",'bold')
+                        value=eval(user_message,scope())
+                        _view_with_pyfx(value)
                     elif user_message=='?i':
                         fansi_print("?i --> PyPI Package Inspection:","blue",'bold')
                         import rp.pypi_inspection as pi
@@ -10432,6 +10445,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     user_message='ans=__import__("rp").load_image(%s)'%repr(file_name)
                                 elif is_sound_file(file_name):
                                     user_message='ans=__import__("rp").load_sound_file(%s)'%repr(file_name)
+                                elif (file_name.endswith('.pt') or file_name.endswith('.pth')) and module_exists('torch'):
+                                    user_message="""ans=__import__("torch").load(%s,map_location='cpu')"""%repr(file_name)
+                                elif file_name.endswith('.npy') and module_exists('numpy'):
+                                    user_message="""ans=__import__("numpy").load(%s)"""%repr(file_name)
                                 else:
                                     user_message='ans=__import__("rp").file_to_bytes(%s)'%repr(file_name)
                                     # assert False,'Failed to read file '+repr(file_name)
@@ -12178,6 +12195,7 @@ known_pypi_module_package_names={
     'pybullet_robots': 'pybullet',
     'pybullet_utils': 'pybullet',
     'pydot': 'pydotz',
+    'pyfx' : 'python-fx',
     'pyinstrument_cext': 'pyinstrument-cext',
     'pylab': 'matplotlib',
     'pyls': 'python-language-server',
@@ -18957,6 +18975,8 @@ def _launch_ranger():
     finally:
         os.environ['PWD']=old_os_environ_pwd
         sys.argv=old_args
+        import logging
+        logging.disable() #For some reason ranger starts logging and spams rp with tons of irrelevant messages...ignore it.
 
     if get_current_directory()!=old_dir:
         fansi_print("RNG: CD'd into "+get_current_directory(),'blue','bold')
