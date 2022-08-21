@@ -1014,6 +1014,7 @@ PSEUDO TERMINAL COMMANDS:
 		?c: Gets source code. Will set ans to the source code of the target. Equivalent to "ans=rp.get_source_code(target)"
 		?i: Will show pip information about a given module. Assumes the target is a module obtained from pip.
 		?r: Will show nicely formatted colorful information about the target using the 'rich' library.
+		?j: Will interactively display JSON-like structures, with collapsible dicts inside of lists inside of dicts etc. Works with other datatypes too, such as the OrderedDicts used in pytorch .pth files.
 
 	<Others>
 		RETURN: Exit the rp session, and return ans as the return value.
@@ -1130,12 +1131,15 @@ PSEUDO TERMINAL COMMANDS:
 				- If the specified file is an image file, it will load the image into a numpy array
 				- If the specified file is a video, it will attempt to load the video into a numpy array
 				- If the specified file is a sound file, it will load the audio into a numpy array
+				- If the specified file is a .pt or .pth file, it will load the pytorch file into CPU using torch.load
+				- If the specified file is a .npy, it will load the numpy array using np.load
+				- If none of the above cases are met, it will simply load the file as raw bytes
 			Shortcut: ac
 		CATA: (cat ans) Like CAT, but instead of selecting a file, it cat's the file specified by ans (assumes ans is a file-name string)
 			Shortcut: ca
 		NCATA: Like CATA, except has line-numbers
-		CCATA: Like CATA and CCAT combined
-		ACATA: Like CATA and ACAT combined
+		CCATA: Like CATA and CCAT combined (copies the contents of a file specified by ans into your clipboard)
+		ACATA: Like CATA and ACAT combined (loads the contents of a file specified by ans into ans)
 			Shortcut: aa, aca
 		RUN: Runs a selected python file, as if it were copy-pasted into the console
 			Pro-tip: 'RUN file.py' will run file.py
