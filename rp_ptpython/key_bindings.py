@@ -261,6 +261,9 @@ def commented_string(buffer,string,spaces=0):
 def do_paste(buffer,commented:int=None):
     import rp
     string=rp.string_from_clipboard()
+    if string.startswith('\n') and not string.startswith('\n\n') and not buffer.text:
+        #When using control+c to copy a line and then pasting it into an empty buffer, don't add a blank first line
+        string=string[1:]
     if commented is not None:string=commented_string(buffer,string,spaces=commented)
     buffer.insert_text(string)
 
@@ -4622,9 +4625,10 @@ def load_python_bindings(python_input):
             from rp import string_from_clipboard
             clip=r_iterm_comm.clipboard_text
             try:
-                clip=string_from_clipboard()
                 buffer.cut_selection()
-                buffer.insert_text(clip)
+                do_paste(buffer)
+                # clip=string_from_clipboard()
+                # buffer.insert_text(clip)
             except:
                 pass# Paste failed
 
