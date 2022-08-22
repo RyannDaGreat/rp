@@ -4362,11 +4362,38 @@ def read_line(getCharFunction,return_on_blank=False) -> bytes:
         o+=n
 # endregion
 # region Webcam: ［load_image_from_webcam, load_image_from_webcam_in_jupyter_notebook］
+
+#Under construction...
+#class CVCamera:
+#    #This class is a wrapper for OpenCV's camera class
+#    #
+#    def __init__(self, index=0):
+#        pip_import('cv2')
+#        import cv2
+#
+#        self.index=index
+#        self.cap=cv2.VideoCapture(index)
+#
+#    def read(self):
+#        success, img = self.cap.read()
+#        if not success:
+#            assert img==None,'This assertion is not important - its just that every time it fails, img seems to be None'
+#            raise IOError('r.CVCamera: Failed to take a picture using camera %s'%str(self))
+#
+#        return img
+#
+#    def __repr__(self):
+#        return 'CVCamera(index=%i)'%self.index
+#
+#    def __call__(self):
+        
+        
+
 _cameras=[]
-def _initialize_cameras():
+def _cv_initialize_cameras():
     if _cameras:
         return  # Allready initialized
-    fansi_print("r._initialize_cameras: Initializing camera feeds; this will take a few seconds...",'green',new_line=False)
+    fansi_print("r._cv_initialize_cameras: Initializing camera feeds; this will take a few seconds...",'green',new_line=False)
     # noinspection PyUnresolvedReferences
     pip_import('cv2')
     from cv2 import VideoCapture
@@ -4376,23 +4403,75 @@ def _initialize_cameras():
         if not cam.read()[0]:
             break
         _cameras.append(cam)
-        fansi_print("\rr._initialize_cameras: Added camera #" + str(i),'green',new_line=False)
+        fansi_print("\rr._cv_initialize_cameras: Added camera #" + str(i),'green',new_line=False)
         i+=1
-    fansi_print("\rr._initialize_cameras: Initialization complete!",'green')
-def load_image_from_webcam(webcam_index: int = 0,shutup=False):
-    if running_in_google_colab():return _load_image_from_webcam_in_jupyter_notebook()
+    fansi_print("\rr._cv_initialize_cameras: Initialization complete!",'green')
+
+def _cv_print_cam_props(index=0):
+    #Prints available opencv camera properties for a given camera index
+    #EXAMPLE:
+    #     >>> print_cam_info(1)
+    #    CAP_PROP_BACKEND        1200.0
+    #    CAP_PROP_FORMAT 16.0
+    #    CAP_PROP_FPS    5.0
+    #    CAP_PROP_FRAME_HEIGHT   1080.0
+    #    CAP_PROP_FRAME_WIDTH    1920.0
+    import cv2
+    cap = cv2.VideoCapture(index)
+    props=[x for x in dir(cv2) if  x.startswith('CAP_PROP_')]
+    def list_cap_props(cap):
+        for prop in props:
+            val=cap.get(getattr(cv2,prop))
+            if val:
+                print(prop+'\t'+str(val))
+    list_cap_props(cap)
+    cap.release()
+
+def load_image_from_webcam(webcam_index: int = 0,
+                           *,
+                           width:int=None,
+                           height:int=None,
+                           shutup=False
+                           ):
     # Change webcam_index if you have multiple cameras
     # EX: while True: display_image(med_filter(load_image_from_webcam(1),σ=0));sleep(0);clf()#⟵ Constant webcam display
-    _initialize_cameras()
+
+    if running_in_google_colab():return _load_image_from_webcam_in_jupyter_notebook()
+
+    pip_import('cv2')
+    import cv2
+
+    _cv_initialize_cameras()
+
     # _,img=_cameras[webcam_index].read()
     # if webcam_index>=_cameras.__len__():
     #     if not shutup:
     #         print("r.load_image_from_webcam: Warning: Index is out of range: webcam_index="+str(webcam_index)+" BUT len(_cameras)=="+str(len(_cameras))+", setting webcam_index to 0")
     #     webcam_index=0
-    img=np.add(_cameras[webcam_index].read()[1],0)  # Turns it into numpy array
+    
+    cap=_cameras[webcam_index]
+
+    #If your camera supports multiple resolutions, input the dimensions in the height and width parameters
+    #For example, Xiang's raspberry pi webcam was taking pictures at 720p even though the camera could take 1080p pictures.
+    #   When I set width=1920 and height=1080, it fixed the problem, letting it take 1080p pictures
+    #
+    #Note: this can be finicky! You have to set both the height and width correctly for this to work.
+    #Note that when you set width and height using this method, they will stay like that until changed again.
+    #For example, on my 2021 Macboox Max, using the default webcam, here are some results:
+    #
+    #These properties can be discovered using the r._cv_print_cam_props function
+    #To discover which resolutions are supported by your webcam, see this tutorial: 
+    #    https://www.learnpythonwithrune.org/find-all-possible-webcam-resolutions-with-opencv-in-python/
+    #
+    if width  is not None: cap.set(cv2.CAP_PROP_FRAME_WIDTH , width )
+    if height is not None: cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+
+    success,img=cap.read()
+    assert success        , 'Failed to take a photo with webcam #%i'%webcam_index 
+    assert img is not None, 'Failed to take a photo with webcam #%i'%webcam_index
+
     img=np.add(img,0)  # Turns it into numpy array
-    x=img + 0  # Making it unique/doesnt mutate img
-    img[:,:,0],img[:,:,2]=x[:,:,2],x[:,:,0]
+    img=cv_bgr_rgb_swap(img)
 
     return img
 
