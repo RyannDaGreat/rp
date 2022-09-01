@@ -466,7 +466,30 @@ def print_fansi_reference_table() -> None:
         print("ALSO PRINTING ALL 256 COLORS")
         #From https://superuser.com/questions/285381/how-does-the-tmux-color-palette-work/285400
         os.system('bash -c \'for i in {0..255}; do  printf "\\x1b[38;5;${i}mcolor%-5i\\x1b[0m" $i ; if ! (( ($i + 1 ) % 8 )); then echo ; fi ; done\'')
-def fansi_syntax_highlighting(code: str,namespace=(),style_overrides={}):
+
+def fansi_syntax_highlighting(code: str,
+                              namespace=(),
+                              style_overrides:dict={},
+                              line_wrap_width:int=None,
+                              show_line_numbers:bool=False,
+                              lazy:bool=False,
+                              ):
+    #TODO: Because of the way it was programmed, it now included an extraneous new empty line on the top of the output. Feel free to remove that later brutishly lol (just lob it off the final output)
+    #If lazy==True, this function returns a generator of strings that should be printed sequentially without new lines
+    #If line_wrap_width is an int, it will wrap the whole output to that width - this is suprisingly tricky to do because of the ansi escape codes
+    #show_line_numbers, if true, will also display a line number gutter on the side
+    #
+    #EXAMPLE USING LAZY:
+    #    #Lazy can make syntax highlighting of things like rp start instantly
+    #    code=get_source_code(r)
+    #    for chunk in fansi_syntax_highlighting(code,lazy=True,show_line_numbers=True,line_wrap_width=get_terminal_width()):
+    #        print(end=chunk)
+    #    print()
+    #The result is that it has a shorter delay to start ; but it also might take longer in total
+    #
+    #EXAMPLE:
+    #    print(fansi_syntax_highlighting(get_source_code(load_image),line_wrap_width=30,show_line_numbers=False))
+    #
     # PLEASE NOTE THAT I DID NOT WRITE SOME OF THIS CODE!!! IT CAME FROM https://github.com/akheron/cpython/blob/master/Tools/scripts/highlight.py
     # Assumes code was written in python.
     # Method mainly intended for rinsp.
@@ -542,13 +565,117 @@ def fansi_syntax_highlighting(code: str,namespace=(),style_overrides={}):
         def ansi_highlight(classified_text,colors=default_ansi):
             'Add syntax highlighting to source code using ANSI escape sequences'
             # http://en.wikipedia.org/wiki/ANSI_escape_code
-            result=[]
-            for kind,text in classified_text:
+
+            nonlocal line_wrap_width, show_line_numbers
+
+            if line_wrap_width is None:
+                line_wrap_width = 9999999
+            
+            num_code_lines = code.count('\n')+1
+            num_digits = len(str(num_code_lines)) #Max number of digits in the line numbers
+
+            max_width = line_wrap_width
+            if show_line_numbers:
+                #Should always return strings of the same width if done correctly
+                #TODO: Make this customizable through the args
+                def line_number_prefix_generator( line_number):
+                    return (('%%%ii│ ')%num_digits)%line_number 
+
+                line_prefix_length = len(line_number_prefix_generator(num_code_lines))
+
+                if line_wrap_width >= line_prefix_length:
+                    max_width = line_wrap_width-line_prefix_length
+                else:
+                    #We have to not show line numbers, or else we'd be showing literally nothing but them!
+                    show_line_numbers=False
+                    
+
+            def wrapped_line_tokens(tokens,max_width):
+                #Wrap the string, respecting token boundaries when possible
+                #Tokens is a list of [(kind,text), (kind,text), ... ] tuples
+                #Output is a generator of [(kind,text,line_number) ... ] tuples
+                #EXAMPLE TEST:
+                #   
+                #    >>> list(wrapped_line_tokens([(11,'Hello\nWorld!\n123\nab\nc'),(22,'d'),(33,'e'),(44,'f')],2))
+                #    [
+                #        (11  , 'He', 0),
+                #        (None, '\n', 1),
+                #        (11  , 'll', 1),
+                #        (None, '\n', 2),
+                #        (11  , 'o' , 2),
+                #        (None, '\n', 3),
+                #        (11  , 'Wo', 3),
+                #        (None, '\n', 4),
+                #        (11  , 'rl', 4),
+                #        (None, '\n', 5),
+                #        (11  , 'd!', 5),
+                #        (None, '\n', 6),
+                #        (11  , '12', 6),
+                #        (None, '\n', 7),
+                #        (11  , '3' , 7),
+                #        (None, '\n', 8),
+                #        (11  , 'ab', 8),
+                #        (None, '\n', 9),
+                #        (11  , 'c' , 9),
+                #        (22  , 'd' , 9),
+                #        (33  , ''  , 9),
+                #        (None, '\n', 10),
+                #        (33  , 'e' , 10),
+                #        (44  , 'f' , 10)
+                #    ]
+                #
+                line_length=0
+                line_number=0
+                line_skip=0
+                for kind,text in tokens:
+                    subtokens=split_including_delimiters(text,'\n')
+                    subtokens=subtokens[::-1]
+                    while subtokens:
+                        assert max_width>=line_length
+                        subtoken=subtokens.pop()
+                        if subtoken=='\n':
+                            if not line_skip:
+                                line_number+=1
+                            line_skip=max(0,line_skip-1)
+                            line_length=0
+                            #Probably can eliminate typehere....
+                            yield None,subtoken,line_number
+                        elif line_length+len(subtoken)>max_width:
+                            index=max_width-line_length
+                            token_right=subtoken[index:]
+                            subtoken   =subtoken[:index]
+                            line_length=0
+                            subtokens.append(token_right)
+                            subtokens.append('\n')
+                            yield kind,subtoken,line_number
+                            line_skip+=1
+                        else:
+                            line_length+=len(subtoken)
+                            yield kind,subtoken,line_number
+
+            digit_remover=str.maketrans('0123456789', '          ')
+            
+            prev_line_number=None
+            from itertools import chain
+            for kind,text,line_number in chain([[None,'\n',0]],wrapped_line_tokens(classified_text,max_width=max_width)):
                 opener,closer=colors.get(kind,('',''))
-                result+=[opener,text,closer]
-            return ''.join(result)
-        return ansi_highlight(analyze_python(code))
+                if show_line_numbers and text.endswith('\n'):
+                    prefix=line_number_prefix_generator(line_number+1)
+                    prefix=fansi(prefix,'cyan','bold')#,'black')
+                    if line_number==prev_line_number:
+                        #https://stackoverflow.com/questions/19084443/replacing-digits-with-str-replace
+                        prefix=prefix.translate(digit_remover)
+                    text=text+prefix
+                yield from [opener,text,closer]
+                prev_line_number=line_number
+        output=(ansi_highlight(analyze_python(code)))
+        if lazy:
+            return output
+        else:
+            return ''.join(output)
+    
     except Exception:
+        raise
         return code  # Failed to highlight code, presumably because of an import error.
 
 # endregion
@@ -1586,8 +1713,7 @@ def load_images(*locations,use_cache=False,show_progress=False,strict=True):
     if len(locations)==1:
         locations=locations[0]
     if isinstance(locations,str) and is_a_folder(locations):
-        locations=get_all_paths(locations,include_files=True,include_folders=False,sort_by='number')
-        locations=[location for location in locations if is_image_file(location)]
+        locations=get_all_image_files(locations,sort_by='number')
         return load_images(locations,use_cache=use_cache,show_progress=show_progress,strict=strict)
     if isinstance(locations,str):
         locations=[locations]
@@ -1600,7 +1726,6 @@ def load_images(*locations,use_cache=False,show_progress=False,strict=True):
     cancelled=False
 
     def _load_image(path):
-        # print("PA",type(path),path)
         # assert isinstance(path,str)
         
         nonlocal cancelled
@@ -1611,9 +1736,7 @@ def load_images(*locations,use_cache=False,show_progress=False,strict=True):
                 return None
 
         try:
-            # print("JABBER",len(locations),flush=True)
             image=load_image(path,use_cache=use_cache)
-            # print("JABBER",len(locations),flush=True)
         except Exception as e:
             if strict==True:
                 cancelled=e
@@ -5682,6 +5805,80 @@ def properties_to_xml(src_path,target_path):  # Found this during my 219 hw4 ass
     target.write('</properties>')
     target.close()
 
+def split_including_delimiters(input: str, delimiter: str):
+    """
+    Splits an input string, while including the delimiters in the output
+    
+    Unlike str.split, we can use an empty string as a delimiter
+    Unlike str.split, the output will not have any extra empty strings
+    Conequently, len(''.split(delimiter))== 0 for all delimiters,
+       whereas len(input.split(delimiter))>0 for all inputs and delimiters
+    
+    INPUTS:
+        input: Can be any string
+        delimiter: Can be any string
+
+    EXAMPLES:
+         >>> split_and_keep_delimiter('Hello World  ! ',' ')
+        ans = ['Hello ', 'World ', ' ', '! ', ' ']
+         >>> split_and_keep_delimiter("Hello**World**!***", "**")
+        ans = ['Hello', '**', 'World', '**', '!', '**', '*']
+    EXAMPLES:
+        assert split_and_keep_delimiter('-xx-xx-','xx') == ['-', 'xx', '-', 'xx', '-'] # length 5
+        assert split_and_keep_delimiter('xx-xx-' ,'xx') == ['xx', '-', 'xx', '-']      # length 4
+        assert split_and_keep_delimiter('-xx-xx' ,'xx') == ['-', 'xx', '-', 'xx']      # length 4
+        assert split_and_keep_delimiter('xx-xx'  ,'xx') == ['xx', '-', 'xx']           # length 3
+        assert split_and_keep_delimiter('xxxx'   ,'xx') == ['xx', 'xx']                # length 2
+        assert split_and_keep_delimiter('xxx'    ,'xx') == ['xx', 'x']                 # length 2
+        assert split_and_keep_delimiter('x'      ,'xx') == ['x']                       # length 1
+        assert split_and_keep_delimiter(''       ,'xx') == []                          # length 0
+        assert split_and_keep_delimiter('aaa'    ,'xx') == ['aaa']                     # length 1
+        assert split_and_keep_delimiter('aa'     ,'xx') == ['aa']                      # length 1
+        assert split_and_keep_delimiter('a'      ,'xx') == ['a']                       # length 1
+        assert split_and_keep_delimiter(''       ,''  ) == []                          # length 0
+        assert split_and_keep_delimiter('a'      ,''  ) == ['a']                       # length 1
+        assert split_and_keep_delimiter('aa'     ,''  ) == ['a', '', 'a']              # length 3
+        assert split_and_keep_delimiter('aaa'    ,''  ) == ['a', '', 'a', '', 'a']     # length 5
+    """
+
+    # I made this question an answer at https://stackoverflow.com/questions/2136556/in-python-how-do-i-split-a-string-and-keep-the-separators/73562313#73562313
+
+    # Input assertions
+    assert isinstance(input,str), "input must be a string"
+    assert isinstance(delimiter,str), "delimiter must be a string"
+
+    if delimiter:
+        # These tokens do not include the delimiter, but are computed quickly
+        tokens = input.split(delimiter)
+    else:
+        # Edge case: if the delimiter is the empty string, split between the characters
+        tokens = list(input)
+        
+    # The following assertions are always true for any string input and delimiter
+    # For speed's sake, we disable this assertion
+    # assert delimiter.join(tokens) == input
+
+    output = tokens[:1]
+
+    for token in tokens[1:]:
+        output.append(delimiter)
+        if token:
+            output.append(token)
+    
+    # Don't let the first element be an empty string
+    if output[:1]==['']:
+        del output[0]
+        
+    # The only case where we should have an empty string in the output is if it is our delimiter
+    # For speed's sake, we disable this assertion
+    # assert delimiter=='' or '' not in output
+        
+    # The resulting strings should be combinable back into the original string
+    # For speed's sake, we disable this assertion
+    # assert ''.join(output) == input
+
+    return output
+
 def split_letters_from_digits(s: str) -> list:
     # Splits letters from numbers into a list from a string.
     # EXAMPLE: "ads325asd234" -> ['ads', '325', 'asd', '234']
@@ -8308,6 +8505,77 @@ def _display_columns(entries,title=None):
     columns = Columns(entries, equal=False, expand=False, title=title)
     print(columns)
 
+def _input_select_multiple_history_multiline(history_filename=history_filename):
+    history=text_file_to_string(history_filename)
+    paragraphs=history.split('\n\n')
+    paragraphs=paragraphs[::-1]
+    def process_paragraph(paragraph):
+        lines=paragraph.splitlines()
+        lines[1:]=[x[1:] for x in lines[1:]]
+        return line_join(lines)
+    paragraphs=[process_paragraph(x) for x in paragraphs]
+
+    # if fansi_is_enabled():
+    #     paragraphs=map(fansi_syntax_highlighting,paragraphs)
+
+    import json
+    # lines=map(repr,paragraphs)
+    lines=map(json.dumps,paragraphs)
+    lines=(x[1:-1] for x in lines)
+
+    preview_width=get_terminal_width()//2-2-2
+
+    #Older versions:
+    # lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | fold -w %i'%preview_width)
+    # lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | nl -v 0 | fold -w %i'%preview_width) #Have line numbers Start from 0
+
+    #Ideally we would have a program take a pure python string and syntax highlight it with numbers and wrapping. However, rp loads too slowly for this to be decently fast - much less instant like fzf is
+    #NOTE this syntax highlighting is hampered by a problem: the ansi escape codes are counted towards the line wrapping (done by the fold command). Idk how to ignore them in fold,
+    #You can disable highlighting with fansi_off()
+    # lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | nl -b a -v 0 -s\\|\ \  | fold -w %i'%preview_width) #
+    if fansi_is_enabled():
+        lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | %s %s %i '%(
+            json.dumps(sys.executable),
+            json.dumps(get_module_path("rp.experimental.stdin_python_highlighter")),
+            preview_width),
+        ) #
+    else:
+        lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | nl -b a -v 0 -s\\|\ \  | fold -w %i'%preview_width) #
+        # lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | nl -v 0 | fold -w %i'%preview_width) #Have line numbers Start from 0
+
+    # highlighter_code=text_file_to_string(get_module_path("rp.experimental.stdin_python_highlighter"))
+    # highlighter_code=highlighter_code.replace("HARDCODED_WIDTH=None","HARDCODED_WIDTH=%i")%preview_width
+
+    # lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | %s -i {} '%(
+    #     # json.dumps(get_module_path("rp.experimental.stdin_python_highlighter")),
+    #     json.dumps(__file__),
+    #     json.dumps(sys.executable),
+    #     preview_width),
+    # ) #
+    
+    import ast
+    # selected_paragraphs=[ast.literal_eval(x) for x in lines]
+    selected_paragraphs=[json.loads('"'+x+'"') for x in lines]
+    # out=line_join(lines)
+    out='\n\n'.join(selected_paragraphs)
+
+    if fansi_is_enabled():
+        out=strip_ansi_escapes(out)
+
+    return out
+
+def _input_select_multiple_history(history_filename=history_filename):
+    history=text_file_to_string(history_filename)
+    lines=history.splitlines()
+
+    preview_width=get_terminal_width()//2-2
+    lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | fold -w %i'%preview_width)
+
+    lines=[x[1:] for x in lines]
+    out=line_join(lines)
+
+    return out
+
 #def pudb_shell(_globals,_locals_):
 #    #https://documen.tician.de/pudb/shells.html
 #    pseudo_terminal(_globals,_locals)
@@ -9107,6 +9375,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         SMI $os.system("nvidia-smi");
         NVT $os.system("nvtop");#sudo_apt_install_nvtop
+        NVI $pip_import('nvitop');pip_import('nvitop.__main__').main()
         ZSH $os.system("zsh");
 
         BA   $os.system("bash");
@@ -9208,6 +9477,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         DR $r._display_columns(dir(),'dir():')
         DUSHA human_readable_file_size(sum(get_file_size(x,False)for x in enlist(ans)))
+
+        QPHP $r._input_select_multiple_history_multiline() #Query Prompt-Toolkit History Paragraphs (F3)
+        QPH  $r._input_select_multiple_history() #Query Prompt-Toolkit History Lines (F3)
+        QVH  $r._input_select_multiple_history($pterm_history_filename) #Query VHISTORY
 
         '''.replace('$',rp_import)
         # SA string_to_text_file(input("Filename:"),str(ans))#SaveAnsToFile
@@ -14356,6 +14629,12 @@ def get_all_paths(*directory_path                    ,
 def get_all_files(*args,**kwargs):
     return get_all_paths(*args,**{'include_folders':False,'include_files':True,**kwargs})
 
+def get_all_image_files(*args,**kwargs):
+    #Like get_all_files, but only returns image files. This function is just sugar.
+    #TODO: Once get_all_paths supports lazyness, so should this.
+    file_paths=get_all_paths(*args,**{'include_folders':False,'include_files':True,**kwargs})
+    return list(filter(is_image_file,file_paths))
+
 def get_all_folders(*args,**kwargs):
     return get_all_paths(*args,**{'include_folders':True,'include_files':False,**kwargs})
 get_all_directories=get_all_folders
@@ -15890,10 +16169,11 @@ def save_video_mp4(frames, path, framerate=60, *, video_bitrate='medium'):
     
     writer = VideoWriterMP4(path, framerate, video_bitrate=video_bitrate)
 
-    for frame in frames:
-        writer.write_frame(frame)
-
-    writer.finish()
+    try:
+        for frame in frames:
+            writer.write_frame(frame)
+    finally:
+        writer.finish()
         
     return path
 
@@ -20308,7 +20588,15 @@ def _fzf_multi_grep():
     
     heap=_MinFileSizeHeap()
 
-    zero_width_space='\u200b'
+    zero_width_space='\u200b' #Prevents file names from being included in the search
+
+    if fansi_is_enabled():
+        #This is an arbitrary choice...but sometimes its nice to be able to search file names too.
+        #Even can search line numbers...roughly...
+        #If this is annoying, you can always use FANSI OFF...
+        #...there might be a better way to do this nicely but eh its nice to have more options
+        zero_width_space=''
+
     import iterfzf
     
     def files_walk(root='.'):
@@ -20344,9 +20632,22 @@ def _fzf_multi_grep():
         return out
     
     fansi_print('Press tab or shift tab to select deselect multiple lines','blue')
-    output=iterfzf.iterfzf(text_lines_walk(),case_sensitive=False,exact=True,multi=True)
-    output=sorted({line[:line.find(':')].replace(zero_width_space,'') for line in output})
     
+    import json
+    if fansi_is_enabled():
+        #CODE DUPLICATED FROM QPHP
+        preview_width=get_terminal_width()//2-2-2
+
+        output=iterfzf.iterfzf(text_lines_walk(),multi=True,exact=True,preview='echo {} | %s %s %i FDT '%(
+            json.dumps(sys.executable),
+            json.dumps(get_module_path("rp.experimental.stdin_python_highlighter")),
+            preview_width),
+        ) #
+    else:
+        output=iterfzf.iterfzf(text_lines_walk(),case_sensitive=False,exact=True,multi=True)
+
+
+    output=sorted({line[:line.find(':')].replace(zero_width_space,'') for line in output})
     if len(output)==1:
         return output[0]
     
