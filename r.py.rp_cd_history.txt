@@ -55,7 +55,6 @@
 /Users/Ryan/Desktop/CleanCode/LightWave/Hardware Source/Legacy Backups
 /Users/Ryan/Desktop/CleanCode/LightWave/Hardware Source
 /Users/Ryan/Desktop/CleanCode/LightWave
-/Users/Ryan/PycharmProjects/QuickPython
 /Users/Ryan/Desktop/real
 /Users/Ryan/Desktop/images
 /Users/Ryan/63.1
@@ -77,5 +76,7 @@
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/parso
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Users/Ryan/Desktop/CleanCode/Resume/Latex/Attempt1
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
+/Users/Ryan/PycharmProjects/QuickPython
 /Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
