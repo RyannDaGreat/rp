@@ -20584,6 +20584,7 @@ class _MinFileSizeHeap:
         return heapq.heappop(self.heap)[1]
 
 def _fdt_for_command_line():
+    pip_import('iterfzf')
     try:
         output=_fzf_multi_grep(print_instructions=False)
         if output is None:
