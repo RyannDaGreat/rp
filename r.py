@@ -4554,8 +4554,7 @@ def load_image_from_webcam(webcam_index: int = 0,
                            *,
                            width:int=None,
                            height:int=None,
-                           shutup=False
-                           ):
+                           shutup=False):
     # Change webcam_index if you have multiple cameras
     # EX: while True: display_image(med_filter(load_image_from_webcam(1),σ=0));sleep(0);clf()#⟵ Constant webcam display
 
@@ -20584,7 +20583,19 @@ class _MinFileSizeHeap:
         import heapq
         return heapq.heappop(self.heap)[1]
 
-def _fzf_multi_grep():
+def _fdt_for_command_line():
+    try:
+        output=_fzf_multi_grep(print_instructions=False)
+        if output is None:
+            output=[]
+        if isinstance(output,str):
+            output=[output]
+        print(line_join(output))
+    except:
+        pass
+
+
+def _fzf_multi_grep(print_instructions=True):
     
     heap=_MinFileSizeHeap()
 
@@ -20626,12 +20637,18 @@ def _fzf_multi_grep():
     
     def text_lines_walk():
         import multiprocessing.pool,itertools
-        pool=multiprocessing.pool.ThreadPool()
+
+        def mute():
+            # https://stackoverflow.com/questions/30829924/suppress-output-in-multiprocessing-process
+            sys.stderr = open(os.devnull, 'w')
+
+        pool=multiprocessing.pool.ThreadPool(initializer=mute)
         out=pool.imap_unordered(load_annotated_lines,text_files_walk())
         out=itertools.chain.from_iterable(out)
         return out
     
-    fansi_print('Press tab or shift tab to select deselect multiple lines','blue')
+    if print_instructions:
+        fansi_print('Press tab or shift tab to select deselect multiple lines','blue')
     
     import json
     if fansi_is_enabled():
