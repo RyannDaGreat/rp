@@ -616,6 +616,7 @@ def start(text=None):
 
     try:
         thingstoprint=None
+        mode=None
         if len(sys.argv)>2:
             mode = sys.argv[2]
 
@@ -630,7 +631,7 @@ def start(text=None):
                 total_num_lines=number_of_lines_in_file(file)
                 print(fansi('Line %4i / %i (%s):  '%(line_number,total_num_lines,human_readable_file_size(file_size)),'green','bold','black')+fansi(get_absolute_path(file),'green','underlined','black')+fansi(' '*1000,None,None,'black'))
 
-                max_megabytes=4
+                max_megabytes=1
                 max_mini_preview_megabytes=256 #a wild guess how big is too big...feel free to calibrate these max bmegabyte numbers Based on your preferences
                 max_highlightable_size=bytes_per_megabyte*max_megabytes
                 max_minipreviewable_size=bytes_per_megabyte*max_mini_preview_megabytes
@@ -721,9 +722,15 @@ def start(text=None):
             thingstoprint=fansi_syntax_highlighting(text,show_line_numbers=True,line_wrap_width=width,lazy=True)
         
         if thingstoprint is not None:
-            next(thingstoprint)#Get rid of the first newline - its junk. Maybe a newer version of rp.fansi_syntax_highlighting addresses this, but in this file it outputs an empty junk line at the begginnging.
+            thingstoprint=iter(thingstoprint)
+            print(end=next(thingstoprint).replace('\n',''))#Get rid of the first newline - its junk. Maybe a newer version of rp.fansi_syntax_highlighting addresses this, but in this file it outputs an empty junk line at the begginnging.
+
             print(end=next(thingstoprint).replace('\n','',1))#Get rid of the first newline - its junk. Maybe a newer version of rp.fansi_syntax_highlighting addresses this, but in this file it outputs an empty junk line at the begginnging.
+            flag=9#This is a janky hack to prevent it from printing junk on the first line when the first line is selected...idk why it works...
             for x in thingstoprint:
+                if mode=='FDT' and flag and line_number==1:
+                    flag-=1
+                    x=x.replace('\n','')
                 print(end=x)
             print()
 
