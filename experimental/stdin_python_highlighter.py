@@ -1,6 +1,9 @@
 from fileinput import filelineno
 import sys
 
+#We reimplement things from r.py here because then we don't have to import rp, decreasing the delay of the output from running this file.
+#This script is called from iterfzf inside of r.py, and might be called tens of times a second
+
 
 def line_number_prefix_generator( line_number,num_digits):
     return (('%%%ii| ')%num_digits)%line_number 
@@ -570,6 +573,8 @@ def total_disc_bytes(path):
     else:
         assert False,'r.get_disc_space ERROR: '+path+' is neither a folder nor a file!'
 
+def line_join(x):
+    return '\n'.join(x)
 
 def human_readable_file_size(file_size:int):
     #Given a file size in bytes, return a string that represents how large it is in megabytes, gigabytes etc - whatever's easiest to interperet
@@ -602,7 +607,150 @@ def human_readable_file_size(file_size:int):
                 return "%3.1f%s" % (file_size, count)
         file_size /= 1024.0
 
+import difflib
+from typing import Optional
 
+class LineDiffHunk:
+    def __init__(self,old_line_number:int,new_line_number:int,type:str):
+        assert type in ' -+' and len(type)==1
+        self.type=type
+        self.lines=[]
+        self.old_line_number=old_line_number
+        self.new_line_number=new_line_number
+    
+    @property
+    def color(self):    
+        return {'+':'green','-':'red',' ':None}[self.type]
+    
+    def numbered_line(self,line:str,old_line_number:int,new_line_number:int):
+        prefix_start=fansi(self.type+' ',self.color,'bold')        
+        old_prefix='%4i'%old_line_number
+        divider='│'
+        new_prefix='%4i'%new_line_number
+        prefix_end='│'+prefix_start
+        
+        if self.type=='+':old_prefix=' '*len(old_prefix)
+        if self.type=='-':new_prefix=' '*len(old_prefix)
+        
+        if self.type!=' ':
+            old_prefix=fansi(old_prefix,self.color,'bold')
+            new_prefix=fansi(new_prefix,self.color,'bold')
+            def fansi_with_underlined_trailing_whitespace(line):
+                whitespace_amount=len(line)-len(line.rstrip())
+                if whitespace_amount==0:
+                    return fansi(line,self.color)
+                    
+                whitespace=line[-whitespace_amount:]
+                return fansi(line[:-whitespace_amount],self.color)+fansi(whitespace,None,None,'yellow')
+            line=fansi_with_underlined_trailing_whitespace(line)#,'underlined')
+        
+        return old_prefix+divider+new_prefix+prefix_end+line
+
+    def __iter__(self):            
+        old_line_number=self.old_line_number
+        new_line_number=self.new_line_number
+        for line in self.lines:
+            old_line_number+=1
+            new_line_number+=1
+            yield self.numbered_line(line,old_line_number,new_line_number)
+    
+    def __str__(self):
+        return line_join(self)
+            
+    def summary_string(self,max_context=5):#,is_first_hunk=False,is_last_hunk=False):
+        cut_line='\n • • • • ( %i lines ) • • • • \n'
+        cut_line=fansi(cut_line,'blue')
+        
+        lines=list(self)
+        if len(lines)>2*max_context+1 :#and self.type==' ':
+            num_lines_cut=len(lines)-2*max_context
+            
+            if num_lines_cut>=10:
+                #Don't report we just cut one damn line lol...
+                output=[]
+                output+=lines[:max_context]
+                output+=[cut_line%num_lines_cut]
+                output+=lines[-max_context:]
+                
+                lines=output
+            
+        return line_join(lines)
+            
+
+def diff(old: str, new: str):#->list[LineDiffHunk]:
+
+    old = old.splitlines()
+    new = new.splitlines()
+
+    line_types = {' ': None, '-': 'red', '+': 'green', '?': 'magenta'}
+
+    old_line_number=0
+    new_line_number=0
+    
+
+    current_hunk=LineDiffHunk(
+        old_line_number,
+        new_line_number,
+        type=' ',
+    )
+    
+    hunks=[]
+
+    for line in difflib.Differ().compare(old, new):
+        
+        type=line[0]
+        line=line[2:]
+
+        assert type in ' -+?'
+
+        if type=='?':
+            # Skip this. See difflib.Differ.__doc__ to see what ? does.
+            # It shows where in the line things changed, with an extra line.
+            continue
+        
+        if not current_hunk.lines or type==current_hunk.type:
+            current_hunk.type=type
+            current_hunk.lines.append(line)
+        else:
+            assert type!=current_hunk.type
+            hunks.append(current_hunk)
+            current_hunk=LineDiffHunk(old_line_number,new_line_number,type)
+            current_hunk.lines.append(line)
+
+        if type==' ':
+            new_line_number+=1
+            old_line_number+=1
+        elif type=='+':
+            new_line_number+=1
+        elif type=='-':
+            old_line_number+=1
+        else:
+            assert False,'Unreachable code'
+            
+        
+    hunks.append(current_hunk)
+    
+    return hunks
+            
+    
+def diff_display_string(a:str,b:str)->str:
+    #    #EXAMPLE:
+    #        a="# 2022-09-08 00:16:07.547366\nimport difflib\nfrom typing import Optional\n\nclass LineDiffHunk:\n    def __init__(self,old_line_number:int,new_line_number:int,type:str):\n        assert type in ' -+' and len(type)==1\n        self.type=type\n        self.lines=[]\n        self.old_line_number=old_line_number\n        self.new_line_number=new_line_number\n    \n    @property\n    def color(self):    \n        return {'+':'green','-':'red',' ':None}[self.type]\n    \n    def numbered_line(self,line:str,old_line_number:int,new_line_number:int):\n        prefix_start=fansi(self.type+' ',self.color)        \n        old_prefix='%4i'%old_line_number\n        divider=', '\n        new_prefix='%4i'%new_line_number\n        prefix_end='│ '\n        \n        if self.type=='+':old_prefix=' '*len(old_prefix)\n        if self.type=='-':new_prefix=' '*len(old_prefix)\n        \n        new_prefix=fansi(new_prefix,self.color,'bold')\n        old_prefix=fansi(old_prefix,self.color,'bold')\n        \n        return old_prefix+divider+new_prefix+prefix_end+line\n\n    def __iter__(self):            \n        old_line_number=self.old_line_number\n        new_line_number=self.new_line_number\n        for line in self.lines:\n            old_line_number+=1\n            new_line_number+=1\n            yield self.numbered_line(line,old_line_number,new_line_number)\n    \n    def __str__(self):\n        return line_join(self)\n            \n    def summary_string(self,max_context=5,is_first_hunk=False,is_last_hunk=False):\n        cut_line=' • • • • ( %i lines ) • • • • '\n        \n        lines=list(self)\n        if self.type==' ' and len(lines)>2*max_context+1:\n            num_lines_cut=len(lines)-2*max_context\n            self.lines=self.lines[:max_context]+[cut_line%num_lines_cut]+self.lines[-max_context:]\n            \n        return line_join(lines)\n            \n\ndef diff(old: str, new: str)->list[LineDiffHunk]:\n\n    old = old.splitlines()\n    new = new.splitlines()\n\n    line_types = {' ': None, '-': 'red', '+': 'green', '?': 'magenta'}\n\n    old_line_number=0\n    new_line_number=0\n    \n\n    current_hunk=LineDiffHunk(\n        old_line_number,\n        new_line_number,\n        type=' ',\n    )\n    \n    hunks=[]\n\n    for line in difflib.Differ().compare(old, new):\n        \n        type=line[0]\n        line=line[1:]\n\n        assert type in ' -+?'\n        \n        if type==' ':\n            new_line_number+=1\n            old_line_number+=1\n        elif type=='+':\n            new_line_number+=1\n        elif type=='-':\n            old_line_number+=1\n        elif type=='?':\n            # Skip this. See difflib.Differ.__doc__ to see what ? does.\n            # It shows where in the line things changed, with an extra line.\n            continue\n        else:\n            assert False,'Unreachable code'\n            \n        if not current_hunk.lines or type==current_hunk.type:\n            current_hunk.type=type\n            current_hunk.lines.append(line)\n            current_hunk.new_line_number=new_line_number\n            current_hunk.old_line_number=old_line_number            \n        else:\n            assert type!=current_hunk.type\n            hunks.append(current_hunk)\n            current_hunk=LineDiffHunk(old_line_number,new_line_number,type)\n            current_hunk.lines.append(line)\n        \n    hunks.append(current_hunk)\n    \n    return hunks\n            \n    \ndef print_diff(a,b):\n    for hunk in diff(a,b):\n        print(hunk.summary_string())\n"
+    #        b="import difflib\nfrom typing import Optional\n\nclass LineDiffHunk:\n    def __init__(self,old_line_number:int,new_line_number:int,type:str):\n        assert type in ' -+' and len(type)==1\n        self.type=type\n        self.lines=[]\n        self.old_line_number=old_line_number\n        self.new_line_number=new_line_number\n    \n    @property\n    def color(self):    \n        return {'+':'green','-':'red',' ':None}[self.type]\n    \n    def numbered_line(self,line:str,old_line_number:int,new_line_number:int):\n        prefix_start=fansi(self.type+' ',self.color,'bold')        \n        old_prefix='%4i'%old_line_number\n        divider='│'\n        new_prefix='%4i'%new_line_number\n        prefix_end='│'+prefix_start\n        \n        if self.type=='+':old_prefix=' '*len(old_prefix)\n        if self.type=='-':new_prefix=' '*len(old_prefix)\n        \n        if self.type!=' ':\n            old_prefix=fansi(old_prefix,self.color,'bold')\n            new_prefix=fansi(new_prefix,self.color,'bold')\n            line=fansi(line,self.color,'underlined')\n        \n        return old_prefix+divider+new_prefix+prefix_end+line\n\n    def __iter__(self):            \n        old_line_number=self.old_line_number\n        new_line_number=self.new_line_number\n        for line in self.lines:\n            old_line_number+=1\n            new_line_number+=1\n            yield self.numbered_line(line,old_line_number,new_line_number)\n    \n    def __str__(self):\n        return line_join(self)\n            \n    def summary_string(self,max_context=5,is_first_hunk=False,is_last_hunk=False):\n        cut_line='\\n • • • • ( %i lines ) • • • • \\n\\n'\n        cut_line=fansi(cut_line,'blue')\n        \n        lines=list(self)\n        if self.type==' ' and len(lines)>2*max_context+1:\n            num_lines_cut=len(lines)-2*max_context\n            \n            output=[]\n            output+=lines[:max_context]\n            output+=[cut_line%num_lines_cut]\n            output+=lines[-max_context:]\n            \n            lines=output\n            \n        return line_join(lines)\n            \n\ndef diff(old: str, new: str)->list[LineDiffHunk]:\n\n    old = old.splitlines()\n    new = new.splitlines()\n\n    line_types = {' ': None, '-': 'red', '+': 'green', '?': 'magenta'}\n\n    old_line_number=0\n    new_line_number=0\n    \n\n    current_hunk=LineDiffHunk(\n        old_line_number,\n        new_line_number,\n        type=' ',\n    )\n    \n    hunks=[]\n\n    for line in difflib.Differ().compare(old, new):\n        \n        type=line[0]\n        line=line[2:]\n\n        assert type in ' -+?'\n\n        if type=='?':\n            # Skip this. See difflib.Differ.__doc__ to see what ? does.\n            # It shows where in the line things changed, with an extra line.\n            continue\n        \n        if not current_hunk.lines or type==current_hunk.type:\n            current_hunk.type=type\n            current_hunk.lines.append(line)\n        else:\n            assert type!=current_hunk.type\n            hunks.append(current_hunk)\n            current_hunk=LineDiffHunk(old_line_number,new_line_number,type)\n            current_hunk.lines.append(line)\n\n        if type==' ':\n            new_line_number+=1\n            old_line_number+=1\n        elif type=='+':\n            new_line_number+=1\n        elif type=='-':\n            old_line_number+=1\n        else:\n            assert False,'Unreachable code'\n            \n        \n    hunks.append(current_hunk)\n    \n    return hunks\n            \n    \ndef print_diff(a,b):\n    for hunk in diff(a,b):\n        print(hunk.summary_string())\n"
+    #        print_diff(a,b)
+    subs=0
+    sames=0
+    adds=0
+    out=''
+    for hunk in diff(a,b):
+        if hunk.type==' ':
+            sames+=len(hunk.lines)
+        if hunk.type=='+':
+            adds+=len(hunk.lines)
+        if hunk.type=='-':
+            subs+=len(hunk.lines)
+        out+=(hunk.summary_string())+'\n'
+    return subs,sames,adds,out
 
 def start(text=None):
 
@@ -714,6 +862,43 @@ def start(text=None):
                 # from random import random
                 # if random()>.99:
                     # while True:pass
+
+            if mode=='diff_mode':
+                import json
+                # text=json.loads(text)
+                old_code = sys.argv[3]
+                old_code=json.loads(old_code)
+                # old_code = old_code.replace('\\"','"')
+                subs,sames,adds,diff_string=diff_display_string(old_code,text)
+                print(fansi(' DIFF FROM SELECTED TO ORIGINAL: '+' '*10000,'cyan','bold','black'))
+
+                print(end=fansi('   LINES: ','cyan','bold','black'))
+                sames=fansi('%i untouched, '%sames,'gray','bold','black')
+                subs=fansi('  -%i'%subs,'red' ,'bold','black')+fansi(' removed, ','red'  ,'bold','black')
+                adds=fansi('  +%i'%adds,'green','bold','black')+fansi(' added','green','bold','black')
+                print(sames+subs+adds+fansi(' '*10000,'cyan','bold','black'))
+                if text==old_code:
+                    print(fansi('          (They\'re identical!) '+' '*10000,'cyan','bold','black'))
+                print(end=diff_string)
+                
+
+                # print(old_code)
+
+                # text.replace('\\"','"')
+                # print("DONE!!!")
+                print()
+                print(fansi(' SELECTED CODE:  %i line%s'%(text.count('\n')+1,'s' if text.count('\n')+1>1 else '')+' '*10000,'cyan','bold','black'))
+
+                import itertools
+                thingstoprint=itertools.chain(
+                    fansi_syntax_highlighting(text,show_line_numbers=True,line_wrap_width=width,lazy=True),
+                    [' \n'],
+                    [' \n'],
+                    [fansi(' ORIGINAL CODE:  %i line%s'%(old_code.count('\n')+1,'s' if old_code.count('\n')+1>1 else '')+' '*10000,'cyan','bold','black')],
+                    fansi_syntax_highlighting(old_code,show_line_numbers=True,line_wrap_width=width,lazy=True),
+                )
+
+
         else:
         # width=HARDCODED_WIDTH or 80
         # text=fansi_syntax_highlighting(text)

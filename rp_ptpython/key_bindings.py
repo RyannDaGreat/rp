@@ -182,6 +182,76 @@ def do_tmux_copy(string):
     rp.tmux_copy(string)
     # _copied_string=string
 
+def do_diff(event,new_text):
+    import rp
+    try:
+        buffer=event.cli.current_buffer
+        original_text=buffer.document.text
+        text=rp.vim_string_diff(original_text,new_text)
+        buffer.document=Document(text,
+                                 buffer.document.cursor_position,
+                                 buffer.document.selection
+                                 )
+        event.cli.renderer.clear()#Refresh the screen
+    except:
+        raise
+
+def do_prompt_toolkit_history_diff(event):
+    try:
+        buffer=event.cli.current_buffer
+        original_text=buffer.document.text
+        import rp
+        selected_code=rp.r._input_select_multiple_history_multiline(old_code=original_text)
+        if selected_code is None:
+            #The user cancelled the selection
+            return
+        do_diff(event,selected_code)
+
+        # text=rp.vim_string_diff(original_text,new_text)
+        # buffer.document=Document(text,
+                                #  buffer.document.cursor_position,
+                                #  buffer.document.selection
+                                #  )
+        # event.cli.renderer.clear()#Refresh the screen
+    except Exception:
+        raise
+
+def do_query_prompt_toolkit_history(event):
+    import rp
+    selected_code=rp.r._input_select_multiple_history_multiline()
+    if selected_code is None:
+        #The user cancelled the selection
+        return
+    buffer=event.cli.current_buffer
+    buffer.cursor_right(99999)
+    buffer.insert_text(selected_code+'\n')
+    
+
+
+def do_paste_diff(event):
+    import rp
+    do_diff(event,rp.string_from_clipboard())
+
+def do_vim_paste_diff(event):
+    import rp
+    do_diff(event,rp.vim_paste())
+
+def do_ans_diff(event):
+    import rp
+    do_diff(event,str(get_ans()))
+
+def do_local_paste_diff(event):
+    import rp
+    do_diff(event,str(rp.local_paste()))
+
+def do_web_paste_diff(event):
+    import rp
+    do_diff(event,str(rp.web_paste()))
+
+def do_tmux_paste_diff(event):
+    import rp
+    do_diff(event,str(rp.tmux_paste()))
+
 def do_vim_paste(buffer,repr_mode=False,commented=None):
     import rp
     try:
@@ -2481,6 +2551,14 @@ def load_python_bindings(python_input):
                                          '\\pu':'pudb',
                                          '\\wi':'workingindex',
                                          '\\en':'enumerate',
+                                         '\\dipa':'diff_paste',
+                                         '\\ditp':'diff_tmux_paste',
+                                         '\\divp':'diff_vim_paste',
+                                         '\\diwp':'diff_web_paste',
+                                         '\\dian':'diff_ans',
+                                         '\\dilp':'diff_local_paste',
+                                         '\\diph':'diff_pt_history',
+                                         '\\qph':'query_pt_history',
                                          }
                         # header_commands.update(header_jump_commands)
                         header_commands.update(header_arg_commands)
@@ -2968,6 +3046,16 @@ def load_python_bindings(python_input):
                                 if header=='tmux_paste'         : do_tmux_paste(buffer,repr_mode=False)
                                 if header=='vim_paste'         : do_vim_paste(buffer,repr_mode=False)
                                 if header=='local_paste'        : do_local_paste(buffer,repr_mode=False)
+
+                                if header=='diff_paste'          : do_paste_diff(event)
+                                if header=='diff_tmux_paste'     : do_tmux_paste_diff(event)
+                                if header=='diff_vim_paste'      : do_vim_paste_diff(event)
+                                if header=='diff_local_paste'    : do_local_paste_diff(event)
+                                if header=='diff_web_paste'      : do_web_paste_diff(event)
+                                if header=='diff_ans'            : do_ans_diff(event)
+
+                                if header=='diff_pt_history'     : do_prompt_toolkit_history_diff(event)
+                                if header=='query_pt_history'    : do_query_prompt_toolkit_history(event)
 
                                 if 'comment_paste' in header or 'comment_ans'==header:
                                     commented_arg=''

@@ -4554,7 +4554,8 @@ def load_image_from_webcam(webcam_index: int = 0,
                            *,
                            width:int=None,
                            height:int=None,
-                           shutup=False):
+                           shutup=False
+                           ):
     # Change webcam_index if you have multiple cameras
     # EX: while True: display_image(med_filter(load_image_from_webcam(1),σ=0));sleep(0);clf()#⟵ Constant webcam display
 
@@ -8504,7 +8505,7 @@ def _display_columns(entries,title=None):
     columns = Columns(entries, equal=False, expand=False, title=title)
     print(columns)
 
-def _input_select_multiple_history_multiline(history_filename=history_filename):
+def _input_select_multiple_history_multiline(history_filename=history_filename,old_code=None):
     history=text_file_to_string(history_filename)
     paragraphs=history.split('\n\n')
     paragraphs=paragraphs[::-1]
@@ -8528,19 +8529,41 @@ def _input_select_multiple_history_multiline(history_filename=history_filename):
     # lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | fold -w %i'%preview_width)
     # lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | nl -v 0 | fold -w %i'%preview_width) #Have line numbers Start from 0
 
+
     #Ideally we would have a program take a pure python string and syntax highlight it with numbers and wrapping. However, rp loads too slowly for this to be decently fast - much less instant like fzf is
     #NOTE this syntax highlighting is hampered by a problem: the ansi escape codes are counted towards the line wrapping (done by the fold command). Idk how to ignore them in fold,
     #You can disable highlighting with fansi_off()
     # lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | nl -b a -v 0 -s\\|\ \  | fold -w %i'%preview_width) #
-    if fansi_is_enabled():
-        lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | %s %s %i '%(
-            json.dumps(sys.executable),
-            json.dumps(get_module_path("rp.experimental.stdin_python_highlighter")),
-            preview_width),
-        ) #
-    else:
-        lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | nl -b a -v 0 -s\\|\ \  | fold -w %i'%preview_width) #
+    if old_code is None:
+        if fansi_is_enabled():
+            lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | %s %s %i '%(
+                json.dumps(sys.executable),
+                json.dumps(get_module_path("rp.experimental.stdin_python_highlighter")),
+                preview_width),
+            ) #
+        else:
+            lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | nl -b a -v 0 -s\\|\ \  | fold -w %i'%preview_width) #
         # lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | nl -v 0 | fold -w %i'%preview_width) #Have line numbers Start from 0
+    else:
+        assert old_code is not None
+        #We're gonna do diffs and merge them
+        #No support for fansi_disabled right now
+        lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | %s %s %i %s %s'%(
+                json.dumps(sys.executable),
+                json.dumps(get_module_path("rp.experimental.stdin_python_highlighter")),
+                preview_width,
+                "diff_mode",
+                json.dumps(json.dumps(old_code)),
+                ),
+        ) #
+        if lines is None:
+            #The user cancelled
+            return None
+        # return line_join(lines)
+
+    if lines is None:
+        #The user cancelled
+        return None
 
     # highlighter_code=text_file_to_string(get_module_path("rp.experimental.stdin_python_highlighter"))
     # highlighter_code=highlighter_code.replace("HARDCODED_WIDTH=None","HARDCODED_WIDTH=%i")%preview_width
@@ -8558,8 +8581,8 @@ def _input_select_multiple_history_multiline(history_filename=history_filename):
     # out=line_join(lines)
     out='\n\n'.join(selected_paragraphs)
 
-    if fansi_is_enabled():
-        out=strip_ansi_escapes(out)
+    # if fansi_is_enabled():
+    #     out=strip_ansi_escapes(out)
 
     return out
 
@@ -12754,10 +12777,26 @@ def labeled_image(image,
     #TODO: Add multiple colors, such as black on white
 
     assert is_image(image)
-    assert position in ['top','bottom'] #TODO: Add left, right
+    assert position in ['top','bottom','left','right']
     assert align in ['left','right','center']
     assert isinstance(size,float) or isinstance(size,int)
     assert size>0
+
+    if position ['left', 'right']:
+        angle = 90 if position=='left' else -90
+         
+        image=rotate_image(image,angle)
+        image = labeled_image(
+            image=image,
+            text=text,
+            size=size,
+            position="top",
+            align=align,
+            text_color=text_color,
+        )
+        image=rotate_image(image,-angle)
+
+        return image
 
     text=str(text)
     
@@ -20127,26 +20166,19 @@ def view_string_diff(before:str,after:str):
 
 def vim_string_diff(before:str,after:str):
     #Requires the program 'vimdiff'
+    #Returns the modified 'before' as a string
+    #
+    #How to use vimdiff:
+    #    https://stackoverflow.com/questions/27832630/merge-changes-using-vimdiff
+    #    Summary:
+    #        do    and    dp   are diff other and diff put respectively
+    #        ]c    and    [c   are goto next diff and prev diff respectively
+    #        ^w^w              switches windows
+    #        :wqa              save when you're done
+    #
     #Interactively diffs between two strings
-    #Returns the result of the 'after' string after changes have been made
-    #    (In other words, it returns the file you see on the right of the split in the vimdiff)
-    #CONTROLS:
-    #    def vim_string_diff(before:str,after:str):
-    #    pip_import('ydiff')
-    #    import os,ydiff
-    #    
-    #    original_dir=get_current_directory()
-    #    temp_dir=temporary_file_path()
-    #    make_directory(temp_dir)
-    #    
-    #    try:
-    #        set_current_directory(temp_dir)
-    #        string_to_text_file('before.py',before)
-    #        string_to_text_file('after.py' ,after )
-    #        os.system('vimdiff before.py after.py')
-    #    finally:
-    #        set_current_directory(original_dir)
-    #        delete_directory(temp_dir)
+    #Returns the result of the 'before' string after changes have been made
+    #    (In other words, it returns the file you see on the left of the split in the vimdiff)
     #https://vi.stackexchange.com/questions/625/how-do-i-use-vim-as-a-diff-tool
     
     import os
@@ -20159,10 +20191,29 @@ def vim_string_diff(before:str,after:str):
         string_to_text_file('before.py',before)
         string_to_text_file('after.py' ,after )
         os.system('vimdiff before.py after.py')
-        return text_file_to_string('after.py')
+        return text_file_to_string('before.py')
     finally:
         set_current_directory(original_dir)
         delete_directory(temp_dir)
+
+#This comment used to be in vim_string_diff, idk why...
+#CONTROLS:
+#    def vim_string_diff(before:str,after:str):
+#    pip_import('ydiff')
+#    import os,ydiff
+#    
+#    original_dir=get_current_directory()
+#    temp_dir=temporary_file_path()
+#    make_directory(temp_dir)
+#    
+#    try:
+#        set_current_directory(temp_dir)
+#        string_to_text_file('before.py',before)
+#        string_to_text_file('after.py' ,after )
+#        os.system('vimdiff before.py after.py')
+#    finally:
+#        set_current_directory(original_dir)
+#        delete_directory(temp_dir)
 
 def vim_paste():
     #Gets the string in the 0th register of vim and returns it
@@ -20584,7 +20635,6 @@ class _MinFileSizeHeap:
         return heapq.heappop(self.heap)[1]
 
 def _fdt_for_command_line():
-    pip_import('iterfzf')
     try:
         output=_fzf_multi_grep(print_instructions=False)
         if output is None:
