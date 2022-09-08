@@ -20190,7 +20190,19 @@ def vim_string_diff(before:str,after:str):
         set_current_directory(temp_dir)
         string_to_text_file('before.py',before)
         string_to_text_file('after.py' ,after )
-        os.system('vimdiff before.py after.py')
+        
+        vim_extras=[
+            'colorscheme slate',   #https://stackoverflow.com/questions/2019281/load-different-colorscheme-when-using-vimdiff
+            'nnoremap q :wqa<cr>', #Let us save and exit just by pressing q
+            #":echo \\\"Press 'q' to exit when done. Use 'do' and 'dp' to get and put hunks.\\\"", #Print instructions
+        ]
+        
+        #https://stackoverflow.com/questions/12834370/how-to-run-a-vim-command-from-the-shell-command-line
+        vim_extras=['+"'+x+'"' for x in vim_extras]
+        vim_extras=' '.join(vim_extras)
+
+        os.system('vimdiff %s before.py after.py'%vim_extras)
+        #We use the slate colorscheme because it looks less ugly than the default theme in vimdiff...though not that much better
         return text_file_to_string('before.py')
     finally:
         set_current_directory(original_dir)
