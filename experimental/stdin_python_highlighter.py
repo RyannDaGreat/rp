@@ -752,6 +752,80 @@ def diff_display_string(a:str,b:str)->str:
         out+=(hunk.summary_string())+'\n'
     return subs,sames,adds,out
 
+def split_python_tokens(code: str):
+    #Should return a list of all the individual python tokens, INCLUDING whitespace and newlines etc
+    #When summed together, the token-strings returned by this function should equal the original inputted string
+    from pygments.lexers import Python3Lexer
+    from pygments.lexer import Lexer
+
+    def get_all_pygments_tokens(string:str,pygments_lexer:Lexer=Python3Lexer()):
+        return pygments_lexer.get_tokens_unprocessed(string)
+
+    def get_all_token_strings(string:str):
+        #Returns all the string-value of all tokens parsed from the string, including whitespace and comments
+        token_string_generator = (token[2] for token in get_all_pygments_tokens(string))
+        return token_string_generator
+
+    return list(get_all_token_strings(code))
+
+def is_valid_python_syntax(code,mode='exec'):
+    assert isinstance(code,str),'Code should be a string'
+    import ast, traceback
+    valid = True
+    try:
+        ast.parse(code,mode=mode)
+    # except SyntaxError: #ValueError: source code string cannot contain null bytes
+    except Exception:
+        valid = False
+    return valid
+
+def print_python_line_summary(code,linum):
+    if not is_valid_python_syntax(code):
+        return
+    linum-=1
+    lines=code.splitlines()
+    lines=[line+' '*100 for line in lines] #Make sure we still get the path for empty lines with no indent
+    def get_indent_level(q):return len(q)-len(q.lstrip())
+    current_level=get_indent_level(lines[linum])
+    lines=lines[:linum]
+    linum=min(linum,len(lines)-1)
+
+    def startswithany(x,things):
+        things=things.split()
+        x=x.lstrip()
+        for y in things:
+            if x.startswith(y+' '):
+                return True
+        return False
+    lines=[x for x in lines if startswithany(x,'def class if while for with try except finally async elif else ')]
+    levels=[get_indent_level(x) for x in lines]
+    lines=lines[::-1]
+    levels=levels[::-1]
+    out=[]
+    for line,level in zip(lines,levels):
+        if current_level>level:
+            out.append(line)
+            current_level=level
+            
+    out=out[::-1]#Like ['class Rays:', '    def is_cuda(self) -> bool:']
+    out=[split_python_tokens(x.strip()) for x in out]
+    out=[x[0]+' '+x[2] for x in out]
+    def colorize(x):
+        if x.startswith('class '):
+            return fansi(x,'yellow','bold','black')
+        if x.startswith('def '):
+            return fansi(x,'green','bold','black')
+        return None
+        assert False, 'should start with class or def'+ ' '+ x
+    out=[colorize(x) for x in out]    
+    out=[x for x in out if x is not None]
+    out=fansi(' --> ',None,'bold','black').join(out)
+    #Out is coloried like "class Rays --> def is_cuda"
+    # if not out:
+    #     return
+    print(fansi('     ',None,None,'black')+out+fansi(' '*1000,None,None,'black'))
+    return out
+
 def start(text=None):
 
     # HARDCODED_WIDTH=None
@@ -778,6 +852,7 @@ def start(text=None):
                 file_size=total_disc_bytes(file)
                 total_num_lines=number_of_lines_in_file(file)
                 print(fansi('Line %4i / %i (%s):  '%(line_number,total_num_lines,human_readable_file_size(file_size)),'green','bold','black')+fansi(get_absolute_path(file),'green','underlined','black')+fansi(' '*1000,None,None,'black'))
+
 
                 max_megabytes=1
                 max_mini_preview_megabytes=256 #a wild guess how big is too big...feel free to calibrate these max bmegabyte numbers Based on your preferences
@@ -856,6 +931,10 @@ def start(text=None):
                     file_text=open(file,'r').read()
                     file_lines=file_text.splitlines()
                     
+                    try:
+                        print_python_line_summary('\n'.join(file_lines),line_number)
+                    except Exception:
+                        pass
                     make_preview_window()
 
                     thingstoprint=fansi_syntax_highlighting(file_text,show_line_numbers=True,line_wrap_width=width,lazy=True,highlighted_line_numbers=[line_number])
