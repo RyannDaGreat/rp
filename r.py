@@ -4358,7 +4358,7 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
                 # signature=signature[len(object.__name__):]
                 signature=indentify_all_but_first_line(signature,' '*len('   SIGNATURE: '))
             except Exception:
-                signature=object.__name__+i.signature(object)
+                signature=object.__name__+str(i.signature(object))
             _=col(tab+'SIGNATURE: ')+fansi_syntax_highlighting(str(signature))
         except:
             pass
