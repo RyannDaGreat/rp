@@ -19698,17 +19698,26 @@ def cv_resize_image(image,size,interp='bilinear'):
     
     return out
 
-def resize_image_to_fit(image, height, width, *, interp='bilinear', allow_growth=False):
+def resize_image_to_fit(image, height:int=None, width:int=None, *, interp='bilinear', allow_growth=True):
     #Scale on both axes evenly to fit in this bounding box
     #If not allow_growth, it won't modify the image if height and width are larger than the input image
-    #TODO: Make height or width optional, make cv_resize_image interchangeable with resize_image
+    #TODO: Make height or width optional (done), make cv_resize_image interchangeable with resize_image (todo)
     
     assert rp.is_image(image)
     image_height, image_width = rp.get_image_dimensions(image)
     scale = 1
+
+    # height and width are optional
+    if height is None and width is None:
+        return image+0 #Return an unmodified copy
+    assert height is not None or width is not None
+    if height is None:
+        height = 999999
+    if width is None:
+        width = 999999
     
     if allow_growth:
-        scale = 999 #It will be decreased...
+        scale = 999999 #It will be decreased...
     
     if height < image_height * scale:
         scale = height / image_height
