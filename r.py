@@ -4860,10 +4860,13 @@ def load_json(path):
     import json
     return json.loads(text)
 
-def save_json(data,path):
+def save_json(data,path,*,pretty=False):
     import json
-    text=json.dumps(data)
-    return text_file_to_string(path,text)
+    if pretty:
+        text = json.dumps(data, indent="\t", separators=(",", ": "))
+    else:
+        text=json.dumps(data)
+    return string_to_text_file(path,text)
 
 # endregion
 # region MATLAB Integration: ［matlab_session，matlab，matlab_pseudo_terminal］
