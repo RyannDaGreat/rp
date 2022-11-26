@@ -11202,7 +11202,18 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 user_message='import os;os.system('+repr(user_message)+')#SRUNA'
 
                             fansi_print("RUNA --> Running the contents of 'ans' as a command",'blue','bold')
-                            if not is_valid_python_syntax(user_message) and (file_exists(user_message) or is_valid_url(user_message)):
+                            if (
+                                (
+                                    file_exists(user_message)
+                                    or is_valid_url(user_message)
+                                )
+                                and not "\n" in user_message
+                                and user_message == user_message.lstrip()
+                                and (
+                                    user_message.endswith(".py")
+                                    or user_message.endswith(".rpy")
+                                )
+                            ):
                                 fansi_print("Loading code from "+user_message+"...",'blue','bold')
                                 user_message=_load_text_from_file_or_url(user_message)
 
