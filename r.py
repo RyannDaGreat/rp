@@ -14388,6 +14388,8 @@ def memoized(function):
             cache[key]=function(*args,**kwargs)
         return cache[key]
     memoized_function.__name__+=function.__name__
+    memoized_function.original_function=function #So we can inspect it in rp
+    memoized_function.cache=cache #So we can inspect it, or even clear it
     return memoized_function
 
 def memoized_property(method):
