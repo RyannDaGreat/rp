@@ -16193,7 +16193,7 @@ def save_video_avi(frames,path:str=None,framerate:int=30):
 class VideoWriterMP4:
     #Todo: If this ever gets fucky, try https://github.com/imageio/imageio-ffmpeg - it looks pretty good!
 
-    def __init__(self, path, framerate=60, video_bitrate='medium'):
+    def __init__(self, path, framerate=60, video_bitrate='medium', height=None, width=None):
         # Originally from: https://github.com/kkroening/ffmpeg-python/issues/246
 
         rp.pip_import('ffmpeg', 'ffmpeg-python')
@@ -16214,6 +16214,8 @@ class VideoWriterMP4:
         self.started  = False
         self.finished = False
     
+        self.height=height
+        self.width=width
         
     def write_frame(self, frame):
         import ffmpeg
@@ -16228,7 +16230,8 @@ class VideoWriterMP4:
         if not self.started:
             self.started = True
 
-            height, width = get_image_dimensions(frame)
+            height = get_image_height(frame) if self.height is None else self.height
+            width  = get_image_width (frame) if self.width  is None else self.width 
 
             #Make sure the height and width are even. If it isn't, ffmpeg will throw a fit:
             #     ...   [libx264 @ 0x55e695b389c0] width not divisible by 2 (611x550)    ...
@@ -16272,7 +16275,7 @@ class VideoWriterMP4:
         self.process.wait()
         self.finished=True
         
-def save_video_mp4(frames, path, framerate=60, *, video_bitrate='medium'):
+def save_video_mp4(frames, path, framerate=60, *, video_bitrate='high', height=None, width=None):
     # frames: a list of images as defined by rp.is_image(). Saves an .mp4 file at the path
     # Note that frames can also be a generator, as opposed to a numpy array.
     # This can let you save larger videos that would otherwise make your computer run out of memory.
@@ -16284,7 +16287,17 @@ def save_video_mp4(frames, path, framerate=60, *, video_bitrate='medium'):
     # 100000000 : (93.0MB)
     # 1000000000: (93.0MB) It seems to be the maximum size
     
-    writer = VideoWriterMP4(path, framerate, video_bitrate=video_bitrate)
+    height = None if height is None else height
+    width  = None if width  is None else width 
+    
+    if hasattr(frames,'__len__'):
+        # If we're not fed a generator without a predefined number of frames,
+        # Calculate the max height and width in the video and use that to be the height and width
+        max_height, max_width = get_max_image_dimensions(frames)
+        if height is None: height=max_height
+        if width  is None: width =max_width 
+    
+    writer = VideoWriterMP4(path, framerate, video_bitrate=video_bitrate, height=height, width=width)
 
     try:
         for frame in frames:
