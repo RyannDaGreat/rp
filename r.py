@@ -12814,7 +12814,8 @@ def labeled_image(image,
                   size=15,
                   position='top',
                   align='center',
-                  text_color=(255,255,255)
+                  text_color=(255,255,255),
+                  flip_text=False,
                  ):
     #Adds a label to an image and returns an image
     #'size' is either measured in pixels, or is in proportion to the image size
@@ -12840,7 +12841,7 @@ def labeled_image(image,
     assert isinstance(size,float) or isinstance(size,int)
     assert size>0
 
-    if position ['left', 'right']:
+    if position in ['left', 'right']:
         angle = 90 if position=='left' else -90
          
         image=rotate_image(image,angle)
@@ -12851,6 +12852,7 @@ def labeled_image(image,
             position="top",
             align=align,
             text_color=text_color,
+            flip_text=flip_text
         )
         image=rotate_image(image,-angle)
 
@@ -12879,6 +12881,9 @@ def labeled_image(image,
         label=crop_image(label,width=width,origin={'left'  :'top left'    ,
                                                    'right' :'bottom right',
                                                    'center':'center'      ,}[align])
+                                                   
+        if flip_text:
+            label=rp.rotate_image(label,180)
         
         if position=='top':
             return vertically_concatenated_images(label,image)
