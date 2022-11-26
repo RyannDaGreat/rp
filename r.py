@@ -2929,6 +2929,12 @@ def display_image(image,block=False):
     #By default this function will not halt your code, but if you set block=True, it will.
     #This function works in Jupyter Notebooks such as google colab, and will automatically scale the DPI of the output such that the full-resolution image is shown (don't take this for granted)
     #You can pass this function binary, rgb, rgba, grayscale matrices -- most types of images (see rp.is_image() for more information)
+    
+    if currently_in_a_tty() and running_in_ssh() and not running_in_ipython():
+        #Let display_image work in terminals too, when in ssh and we have no GUI or ipynb options
+        display_image_in_terminal_color(image)
+        return
+
     if isinstance(image,str):
         fansi_print("display_image usually meant for use with numpy arrays, but you passed it a string, so we'll try to load the image load_image("+repr(image)+") and display that.")
         image=load_image(image)
