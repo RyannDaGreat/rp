@@ -9542,6 +9542,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         QPH  $r._input_select_multiple_history() #Query Prompt-Toolkit History Lines (F3)
         QVH  $r._input_select_multiple_history($pterm_history_filename) #Query VHISTORY
 
+        ZG !lazygit
+
         '''.replace('$',rp_import)
         # SA string_to_text_file(input("Filename:"),str(ans))#SaveAnsToFile
         # BB set_current_directory(r._get_cd_history()[-2]);fansi_print('BB-->CDH1-->'+get_current_directory(),'blue','bold')#Use_BB_instead_of_CDH_<enter>_1_<enter>_to_save_time_when_starting_rp
