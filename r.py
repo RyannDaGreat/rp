@@ -6611,6 +6611,11 @@ def display_image_in_terminal_color(image):
     if file_exists(image) or is_valid_url(image):
         image=load_image(image)
     assert is_image(image)
+    if get_image_height(image)%2:
+        #We can only display pixel heights of 2,4,6,8 etc.
+        #To prevent it from cutting off the bottom pixel, add some black if it's odd...
+        #For example, display_image_in_terminal_color(uniform_float_color_image(5,10,(255,0,255,255)))
+        image=bordered_image_solid_color(image,thickness=0,bottom=1,color=(0,0,0,0))
     image=as_rgb_image(image)
     image=as_byte_image(image)
     temp_file=temporary_file_path('png')
@@ -6625,7 +6630,6 @@ def display_image_in_terminal_color(image):
     finally:
         if file_exists(temp_file):
             delete_file(temp_file)
-
 
         
 def auto_canny(image,sigma=0.33,lower=None,upper=None):
