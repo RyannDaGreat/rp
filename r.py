@@ -8516,6 +8516,13 @@ def _get_env_info():
 def _view_with_pyfx(data):
     from pyfx.app import PyfxApp
     from pyfx.model import DataSourceType
+
+    if isinstance(data,str) and not '\n' in data and is_utf8_file(data):
+        if data.endswith('.json'):
+            data=load_json(data)
+        elif data.endswith('.yml') or data.endswith('.yaml'):
+            data=load_yaml_file(data)
+
     PyfxApp().run(DataSourceType.VARIABLE, data)
 
 def _get_processor_name():
