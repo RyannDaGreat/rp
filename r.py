@@ -6937,7 +6937,7 @@ def split_into_sublists(l,sublist_len:int,strict=False,keep_remainder=True):
 
     return output
 
-def rotate_image(image, angle_in_degrees):
+def rotate_image(image, angle_in_degrees, interp='bilinear'):
     #Returns a rotated image by angle_in_degrees, clockwise
     #The output image size is usually not the same as the input size, unless the angle is 180 (or in the case of a square image, 90, 180, or 270)
     #Usually, the output image size is larger than the input image size
@@ -6964,13 +6964,17 @@ def rotate_image(image, angle_in_degrees):
                 assert angle_in_degrees%360==90
                 return horizontally_flipped_image(image.transpose(1,0,2))
         
-
     #ALTERNATIVE Implementation that doesn't use OpenCV and instead uses PILLOW (not used in this function):
     #    https://pythonexamples.org/python-pillow-rotate-image-90-180-270-degrees/#:~:text=You%20can%20rotate%20an%20image,to%20the%20size%20of%20output.
     # GOT CODE FROM URL: https://www.pyimagesearch.com/2017/01/02/rotate-images-correctly-with-opencv-and-python/
     #TODO: Make a cv_rotate_image version of this function that handles making the black pixels instead reflected images (there's an option for that in cv2.warp_affine). This is better for data augmentation purposes.
     angle=angle_in_degrees
     cv2=pip_import('cv2')
+
+    interp_methods={'bilinear':cv2.INTER_LINEAR,'cubic':cv2.INTER_CUBIC,'nearest':cv2.INTER_NEAREST}
+    assert interp in interp_methods, 'cv_resize_image: Interp must be one of the following: %s'%str(list(interp_methods))
+    interp_method=interp_methods[interp]
+
     # grab the dimensions of the image and then determine the
     # center
     (h, w) = image.shape[:2]
@@ -6992,7 +6996,7 @@ def rotate_image(image, angle_in_degrees):
     M[1, 2] += (nH / 2) - cY
 
     # perform the actual rotation and return the image
-    return cv2.warpAffine(image, M, (nW, nH))
+    return cv2.warpAffine(image, M, (nW, nH), flags=interp_method)
 
 def open_url_in_web_browser(url:str):
     from webbrowser import open
