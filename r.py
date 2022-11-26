@@ -3580,7 +3580,8 @@ def iblend(z,𝓍,𝓎):  # iblend≣inverse blend. Solves for α， given 𝓏�
     return z
 def interp(x,x0,x1,y0,y1):  # 2 point interpolation
     return (x - x0) / (x1 - x0) * (y1 - y0) + y0  # https://www.desmos.com/calculator/bqpv7tfvpy
-def linterp(values:list,index:float,*,cyclic=False):# Where l is a list or vector etc
+
+def linterp(values:list,index:float,*,cyclic=False,blend_func=blend):# Where l is a list or vector etc
     #Linearly inerpolation between different values with fractional indices
     #This is written in pure python, so any values that implement addition, subtraction and multiplication will work
     #   (This includes floats, vectors, and even images)
@@ -3598,12 +3599,12 @@ def linterp(values:list,index:float,*,cyclic=False):# Where l is a list or vecto
     #    chicago=load_image('https://pbs.twimg.com/media/EeqFCjvWkAI-rv_.jpg')
     #    doggy=load_image('https://s3-prod.dogtopia.com/wp-content/uploads/sites/142/2016/05/small-dog-at-doggy-daycare-birmingham-570x380.jpg')
     #    images=[resize_image(image,(256,256)) for image in [mountain,chicago,doggy]]
-#Wit#h cyclic=True, it will loop through the images
+    #With cyclic=True, it will loop through the images
     #    for index in np.linspace(0,10,num=100):
     #        frame=linterp(images,index,cyclic=True)
     #        display_image(frame)
     #        sleep(1/30)
-#Wit#h cyclic=False, it will play the animation only once
+    #With cyclic=False, it will play the animation only once
     #    for index in np.linspace(0,2,num=100):
     #        frame=linterp(images,index,cyclic=False)
     #        display_image(frame)
@@ -3616,17 +3617,20 @@ def linterp(values:list,index:float,*,cyclic=False):# Where l is a list or vecto
     try:
         if cyclic:
             x%=len(l)
+            l=list(l)
             l=l+[l[0]]# Don't use append OR += (which acts the same way apparently); this will mutate l!
         assert x>=0
+
         x0=int(np.floor(x))
         x1=int(np.ceil(x))
         if x0==x1:
             return l[int(x)]
-        return blend(l[x0],l[x1],iblend(x,x0,x1))
-    except IndexError as ⵁ:
+        return blend_func(l[x0],l[x1],iblend(x,x0,x1))
+    except IndexError:
         if cyclic:
             fansi_print("ERROR: r.linterp: encountered an index error; did you mean to enable the 'cyclic' parameter?",'red')
         raise ⵁ
+
 # def sign(x):
 #     return 1 if x>0 else (0 if x==0 else -1)
 # endregion
