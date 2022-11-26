@@ -3304,6 +3304,23 @@ def bar_graph(values,*,width=.9,align='center',block=False,xlabel=None,ylabel=No
     if label_bars:
         for i in range(len(values)):
             plt.text(x=i,y=values[i]+1,s=str(values[i]),size=10,ha='center')
+
+def histogram_in_terminal(values,sideways=False):
+    #Right now this function is very simple (it doesnt let you specify the number of bins, for example)
+    #In the future I might add more functionality like that, or use unicode_loading_bar to make better sideways plots
+    #This is really meant to be used interactively...please don't use this in serious code...
+    #The 'sideways' argument might be renamed to 'dirction='horizontal'' etc...
+    pip_import('plotille')
+    import plotille
+
+    values=as_numpy_array(values).flatten()
+    if sideways==True:
+        out=plotille.hist(l,width=get_terminal_width()-33,bins=get_terminal_height()-0)
+    else:
+        out=plotille.histogram(values,width=get_terminal_width()-20,height=get_terminal_height()-15)
+
+    print(out)
+
 def line_graph_in_terminal(y):
     pip_import('plotille')
     import plotille
@@ -21089,6 +21106,16 @@ def get_git_remote_url(repo='.'):
     ans=ans[0]
     return ans
 
+def get_current_git_hash(folder='.'):
+    assert folder_exists(folder)
+    assert is_a_git_repo(folder), 'Not in a git repo'
+    pip_import('git')
+    import git
+    with SetCurrentDirectoryTemporarily(folder): 
+        repo = git.Repo(search_parent_directories=True)
+        sha = repo.head.object.hexsha
+        return sha
+
 def is_a_git_repo(folder='.'):
     if not is_a_folder(folder):
         return False
@@ -21543,6 +21570,21 @@ def load_dyaml_file(path:str)->dict:
 if __name__ == "__main__":
     print(end='\r')
     _pterm()
+
+def list_transpose(list_of_lists:list):
+    #EXAMPLE:
+    # >>> list_transpose([[1,2,3],[4,5,6]])
+    # ans = [[1, 4], [2, 5], [3, 6]]
+    #
+    #TODO: Fix this behaviour (extend it to list-of-lists with variable lengths)
+    # ans = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    # >>> split_into_sublists(ans,3)
+    # ans = [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10]]
+    # >>> list_transpose(ans)
+    # ans = [[1, 4, 7, 10]] #What I want: [[1,4,7,10],[2,5,8],[3,6,9]]
+
+    assert len(set(map(len,list_of_lists)))==1, 'Right now list_transpose only handles rectangular list_of_lists. This functionality may be added in the future.'
+    return list(map(list,zip(*list_of_lists)))
 
 del re
 
