@@ -15612,18 +15612,32 @@ def bordered_image_solid_color(image,color=(1.,1.,1.,1.),thickness=1,width=None,
     bottom=height    if bottom is None else bottom
     left  =width     if left   is None else left
     right =width     if right  is None else right
-    assert thickness>=0,'Cannot have a negative border thickenss (measured in pixels)'
-    assert height>=0 and width>=0,'Cannot have a negative border height or width (measured in pixels)'
-    assert top>=0 and bottom>=0 and left>=0 and right>=0,'Cannot have a negative border thickness top, bottom, left or right (measured in pixels)'
-
+    
     #We convert the image into rgba-floating point format (with colors between 0 and 1)
     image=np.asarray(image)
     image=as_rgba_image(image)
     image=as_float_image(image)
 
     colorize = lambda x: x*0+[[list(color)]]
-    image=np.concatenate((colorize(image[:top   ]),image,colorize(image[:bottom ])),axis=0)#Add top and bottom borders
-    image=np.concatenate((colorize(image[:,:left]),image,colorize(image[:,:right])),axis=1)#Add left and right borders
+
+    #A negative thickness means it points inward: it means the image size doesn't change.
+    if top   <0: image[       :-top ]=colorize(image[       :-top ]) ; top   =0
+    if bottom<0: image[bottom :     ]=colorize(image[ bottom:     ]) ; bottom=0
+    if left  <0: image[:,     :-left]=colorize(image[:,     :-left]) ; left  =0
+    if right <0: image[:,right:     ]=colorize(image[:,right:     ]) ; right =0
+
+    #assert thickness>=0,'Cannot have a negative border thickenss (measured in pixels)'
+    #assert height>=0 and width>=0,'Cannot have a negative border height or width (measured in pixels)'
+    #assert top>=0 and bottom>=0 and left>=0 and right>=0,'Cannot have a negative border thickness top, bottom, left or right (measured in pixels)'
+
+    top_pad   =top    and uniform_float_color_image(top   , get_image_width(image), color)
+    bottom_pad=bottom and uniform_float_color_image(bottom, get_image_width(image), color)
+    image=np.concatenate((( top_pad,)*bool(top )+ (image,) +(bottom_pad,)*bool(bottom)),axis=0)#Add top and bottom borders
+    
+    left_pad  =left   and uniform_float_color_image(get_image_height(image),  left, color)
+    right_pad =right  and uniform_float_color_image(get_image_height(image), right, color)
+    image=np.concatenate(((left_pad,)*bool(left)+ (image,) +(right_pad ,)*bool(right )),axis=1)#Add left and right borders
+    
     return image
 
 def get_principle_components(tensors,number_of_components=None):
