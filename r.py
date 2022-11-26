@@ -21122,7 +21122,7 @@ def is_a_git_repo(folder='.'):
     pip_import('git')
     import git
     try:
-        _ = git.Repo(folder).git_dir
+        _ = git.Repo(folder,search_parent_directories=True).git_dir
         return True
     except git.exc.InvalidGitRepositoryError:
         return False
