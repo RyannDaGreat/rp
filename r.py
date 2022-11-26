@@ -16198,7 +16198,7 @@ class VideoWriterMP4:
 
         rp.pip_import('ffmpeg', 'ffmpeg-python')
 
-        if video_bitrate in 'small medium large max':
+        if isinstance(video_bitrate,str) and video_bitrate in 'small medium large max':
             video_bitrate = {'small':100000,'medium':1000000,'large':10000000,'max':10000000000}[video_bitrate]
 
         assert path.endswith('.mp4')
