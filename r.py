@@ -3629,7 +3629,7 @@ def linterp(values:list,index:float,*,cyclic=False,blend_func=blend):# Where l i
     except IndexError:
         if cyclic:
             fansi_print("ERROR: r.linterp: encountered an index error; did you mean to enable the 'cyclic' parameter?",'red')
-        raise ⵁ
+        raise
 
 # def sign(x):
 #     return 1 if x>0 else (0 if x==0 else -1)
@@ -9574,6 +9574,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         FARTA  $r._fart(ans); #Find and replace text in paths specified by ans. Tip: best to use this with FDT
         AFARTA $r._fart(ans)  #Find and replace text in paths specified by ans. Tip: best to use this with FDT
 
+        HTTP os.system(sys.executable+' -m http.server')
+        HTP  os.system(sys.executable+' -m http.server')
+
         '''.replace('$',rp_import)
         # SA string_to_text_file(input("Filename:"),str(ans))#SaveAnsToFile
         # BB set_current_directory(r._get_cd_history()[-2]);fansi_print('BB-->CDH1-->'+get_current_directory(),'blue','bold')#Use_BB_instead_of_CDH_<enter>_1_<enter>_to_save_time_when_starting_rp
@@ -13200,6 +13203,9 @@ def cv_contour_area(contour,closed=False):
     return cv2.contourArea(contour)
 
 def cv_draw_circle(image,x,y,radius=5,color=(255,255,255),*,antialias=True,copy=True):
+    if is_binary_image(image):image=rp.as_rgb_image(image)
+    x=int(x)
+    y=int(y)
     cv2=pip_import('cv2')
     image,kwargs=_cv_helper(image=image,copy=copy,antialias=antialias)
     cv2.circle(image,(x,y),radius,color,-1,**kwargs)
