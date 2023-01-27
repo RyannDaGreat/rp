@@ -4162,6 +4162,16 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
             neednewline=True
             if hasattr(object,'dtype'):
                 print(col(tab + "DTYPE: ")+repr(object.dtype),flush=False,end='')
+            if hasattr(object,'min') and callable(object.min):
+                try: print(col(tab + "min:")+" %.6f"%(object.min()),flush=False,end='')
+                except Exception: pass
+            if hasattr(object,'max') and callable(object.max):
+                try: print(col(tab + "max:")+" %.6f"%(object.max()),flush=False,end='')
+                except Exception: pass
+            if hasattr(object,'mean') and callable(object.mean):
+                try: print(col(tab + "mean:")+" %.6f"%(object.mean()),flush=False,end='')
+                except Exception: pass
+
         if neednewline:
             print(flush=False)
         if isinstance(object,ModuleType):
@@ -5179,8 +5189,16 @@ def k_means_analysis(data_vectors,k_or_initial_centroids,iterations,tries):
     return centroids,total_distortion,parent_centroid_indexes,parent_centroid_distances
 def is_iterable(x):
     try:
-        if hasattr(x,'__iter__') or hasattr(x,'__getitem__'):
-            return True
+        #MOST PROPER WAY:
+        from collections.abc import Iterable
+        return isinstance(x,Iterable)
+
+
+        #PREVIOUS WAY:
+        # if hasattr(x,'__iter__') or hasattr(x,'__getitem__'):
+        #     return True
+        
+        #OLDEST WAY:
         # for _ in x: pass
         # return True
     except:
@@ -9550,6 +9568,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         QVH  $r._input_select_multiple_history($pterm_history_filename) #Query VHISTORY
 
         ZG !lazygit
+
+        FART   $r._fart();    #Find and replace text in current directory (recursively). Tip: best to use this with FDT
+        AFART  $r._fart()     #Find and replace text in current directory (recursively). Tip: best to use this with FDT
+        FARTA  $r._fart(ans); #Find and replace text in paths specified by ans. Tip: best to use this with FDT
+        AFARTA $r._fart(ans)  #Find and replace text in paths specified by ans. Tip: best to use this with FDT
 
         '''.replace('$',rp_import)
         # SA string_to_text_file(input("Filename:"),str(ans))#SaveAnsToFile
@@ -20667,6 +20690,155 @@ try:
 except:
     print("Warning: Cannot import numpy. Please excuse any 'np is None' errors, or try rp.pip_install('numpy')")
 
+def find_and_replace_text_files(query, replacement, paths=".", interactive=False):
+    """
+
+    Search and Replace text in files
+    This function searches for all text files within the given paths and replaces all instances of the query string with the replacement string.
+    It has two modes of operation: non-interactive and interactive. In non-interactive mode, the function will automatically replace all instances of the query string with the replacement string in all text files within the given paths. In interactive mode, the function will prompt the user before making changes to each file, allowing them to preview the changes, skip the file, or make changes to all remaining files.
+
+    Parameters:
+    query (str): The string to search for
+    replacement (str): The string to replace the query with
+    paths (str or list of str): The file or folder path(s) to search for text files. If a folder is provided, all text files within that folder and its subfolders will be processed recursively.
+    interactive (bool): Whether to prompt the user before making changes
+
+    Returns:
+    receipts (dict): A dictionary containing the original text of all the files that were modified"""
+
+    # Input assertions
+    if not isinstance(query, str):
+        raise TypeError("The 'query' parameter must be of type str, but got type {}".format(type(query)))
+    if not isinstance(replacement, str):
+        raise TypeError("The 'replacement' parameter must be of type str, but got type {}".format(type(replacement)))
+    if not (isinstance(paths, str) or (is_iterable(paths) and all(isinstance(x, str) for x in paths))):
+        raise TypeError("The 'paths' parameter must be of type str or a list of str, but got type {}".format(type(paths)))
+
+    #Prepare an iterator for the files we'll take a look at
+    if isinstance(paths, str):
+        paths=[paths]
+    files=[]
+    for path in unique(paths):
+        if path in files:
+            return
+        if is_a_folder(path):
+            files += get_all_files(path, recursive=True, relative=False)
+    text_files = list(unique(x for x in files if is_utf8_file(x)))
+    
+    def old_and_new_text(file):
+        old_text = text_file_to_string(file)
+        new_text = old_text.replace(query, replacement)
+        return old_text, new_text
+    
+    def file_will_change(file):
+        old_text, new_text = old_and_new_text(file)
+        return old_text != new_text
+
+    #Keep track of what we changed in case the user wants to undo them later
+    #These are returned at the end of the function
+    #It maps file paths to the old text (aka before this function changed them)
+    receipts = {} 
+    
+    try:
+        #Run this function silently
+        if not interactive:
+            for file in files:
+                try:
+                    old_text, new_text = old_and_new_text(file)
+                    if old_text != new_text:
+                        #We change it without notifying the user, because this is not interactive
+                        string_to_text_file(file, new_text)
+                        receipts[file] = old_text
+                except Exception:
+                    raise
+            
+        #Do it interactively    
+        else:
+            assert interactive
+
+            files = [file for file in files if file_will_change(file)]
+            yes_to_all = False
+            index = 0
+            options = ["y", "n", "p", "a", "c"]
+            instructions = "Instructions: Type y (yes), n (no), p (preview), a (yes to all), or c (cancel)"
+            indent='  '
+
+            def get_progress_text():
+                return "%i/%i" % (index + 1, len(files))
+
+            def input_option():
+                try:
+                    return input_conditional(
+                        question=get_progress_text() + " Modify %s?" % repr(files[index]),
+                        condition=lambda x: x in options,
+                        on_fail=lambda x: print(instructions),
+                    )
+                except (KeyboardInterrupt,EOFError):
+                    # Pressing ctrl+c or ctrl+d cancels this function
+                    print('Received KeyboardInterrupt or EOFError - assuming this means you want to cancel')
+                    return 'c'
+            
+            print("Running rp.find_and_replace_text_files interactively with")
+            print(indent + "query = %s" % repr(query))
+            print(indent + "replacement = %s" % repr(replacement))
+            print(instructions)
+            print("Files to go through:")
+            if files:
+                print(
+                    line_join(
+                        indent + "%i) %s" % (i + 1, repr(file)) for i, file in enumerate(files)
+                    )
+                )
+            else:
+                print(indent + "(couldn't find the query in any of the searched files)")
+                return receipts
+
+            while True:
+                
+                if index >= len(files):
+                    break
+                
+                file = files[index]
+                old_text, new_text = old_and_new_text(file)
+                
+                if not yes_to_all:
+                    option = input_option()
+                    
+                    if option == "a" and input_yes_no("Are you sure you want to modify this and the rest of the files automatically?"):
+                            yes_to_all=True
+                        
+                if yes_to_all or option == "y":
+                    string_to_text_file(file, new_text)
+                    print(get_progress_text() + " Modified %s" % repr(file))
+                    receipts[file] = old_text
+                    index += 1
+                    
+                elif option == "p":
+                    view_string_diff(old_text, new_text)
+                    
+                elif option == "n":
+                    print(get_progress_text() + " Skipping %s" % repr(file))
+                    index += 1
+                    
+                elif option == "c":
+                    if input_yes_no(" Cancelling...should we revert the %s files we changed?" % progress_text):
+                        for file, text in receipts.items():
+                            string_to_text_file(file, text)
+                            print("Reverted " + repr(file))
+                    return
+                
+    finally:
+        return receipts
+
+def _fart(files='.'):
+    #For pterm
+    #fart is stanky
+    fansi_print('FART: Find and Replace Text','blue','bold')
+    query      =input(fansi('Before Text: ','blue','bold'))
+    replacement=input(fansi('After  Text: ','blue','bold'))
+    return find_and_replace_text_files(query,replacement,files,interactive=True)
+
+
 def import_all_submodules(module,*,recursive=True,strict=False,verbose=False):
     #Useful when you're searching for some keyword in a library, but not every submodule has been imported
     #Background: Modules sometimes don't import everything all at once. When you import PIL, for example, PIL.Image doesn't exist until you use 'import PIL.image'
@@ -20828,9 +21000,10 @@ def _fzf_multi_grep(print_instructions=True):
         output=iterfzf.iterfzf(text_lines_walk(),case_sensitive=False,exact=True,multi=True)
 
 
-    output=sorted({line[:line.find(':')].replace(zero_width_space,'') for line in output})
-    if len(output)==1:
-        return output[0]
+    if output is not None:
+        output=sorted({line[:line.find(':')].replace(zero_width_space,'') for line in output})
+        if len(output)==1:
+            return output[0]
     
     return output
     
