@@ -19701,7 +19701,7 @@ def cv_resize_image(image,size,interp='bilinear'):
     import cv2  
 
     #Choose an interpolation method
-    interp_methods={'bilinear':cv2.INTER_LINEAR,'cubic':cv2.INTER_CUBIC,'nearest':cv2.INTER_NEAREST}
+    interp_methods={'bilinear':cv2.INTER_LINEAR,'bicubic':cv2.INTER_CUBIC,'nearest':cv2.INTER_NEAREST}
     assert interp in interp_methods, 'cv_resize_image: Interp must be one of the following: %s'%str(list(interp_methods))
     interp_method=interp_methods[interp]
 
@@ -19726,6 +19726,32 @@ def cv_resize_image(image,size,interp='bilinear'):
     out = cv2.resize(image,(width,height),interpolation=interp_method)
     
     return out
+
+def torch_resize_image(image,size,interp='bilinear'):
+    #Valid sizes:
+    #    - A single number: Will scale the entire image by that size
+    #    - A tuple with integers in it: Will scale the image to those dimensions (height, width)
+    #    - A tuple with None in it: A dimension with None will default to the image's dimension
+
+    pip_import('torch')
+    import torch
+
+    interp_methods={'bilinear':'bilinear','bicubic':'bicubic','nearest':'nearest'}
+    assert interp in interp_methods, 'torch_resize_image: Interp must be one of the following: %s'%str(list(interp_methods))
+    interp_method=interp_methods[interp]
+
+    if is_number(size):
+        assert size>=0, 'Cannot resize an image by a negative factor'
+        height=torch.round(image.shape[0]*size)
+        width =torch.round(image.shape[1]*size)
+    else:
+        height,width=size
+        height=image.shape[0] if height is None else height
+        width =image.shape[1] if width  is None else width
+
+    out = torch.nn.functional.interpolate(image.unsqueeze(0), size=(height,width), mode=interp_method)
+
+    return out.squeeze(0)
 
 def resize_image_to_fit(image, height:int=None, width:int=None, *, interp='bilinear', allow_growth=True):
     #Scale on both axes evenly to fit in this bounding box
