@@ -6123,6 +6123,85 @@ def cluster_by_key(iterable,key)->list:
         outputs[k].append(value)
     return list(outputs.values())
     
+def chunk_by_key(iterable, key=lambda x: x, compare=lambda x, y: x == y):
+    """
+    Divides an iterable into chunks based on the equality of elements, as defined by the compare function.
+    The key function is applied to each element to determine what should be compared.
+
+    Args:
+    - iterable (iterable): The input iterable to divide into chunks
+    - key (function): A function to extract comparison key from each element in the iterable
+    - compare (function): A function to compare equality of two consecutive keys, should return bool
+
+    Returns:
+    - A list of lists where each sublist is a chunk of equal elements from the iterable.
+
+    Example:
+    ```
+    >>> list(chunk_by_key('aAAbccdEEefeee'))
+    ['a', 'AA', 'b', 'cc', 'd', 'EE', 'e', 'f', 'eee']    
+
+    >>> list(chunk_by_key(iter('aAAbccdEEefeee')))
+    [['a'] , ['A','A'] , ['b'] , ['c','c'] , ['d'] , ['E','E'] , ['e'] , ['f'] , ['e','e','e']]
+
+    >>> list(chunk_by_key(iter('aAAbccdEEefeee'),key=str.lower))
+    [['a','A','A'] , ['b'] , ['c','c'] , ['d'] , ['E','E','e'] , ['f'] , ['e','e','e']]
+
+    >>> list(chunk_by_key([0,5,2,3,7,5,3,4,7,4,2,3,2,1,2,2,5,6],key=lambda x:x%2))
+    [[0] , [5] , [2] , [3,7,5,3] , [4] , [7] , [4,2] , [3] , [2] , [1] , [2,2] , [5] , [6]]
+
+    >>> list(chunk_by_key([4,5,6,7,7,8,9,0,3,4,5,6,5,6,7],compare=lambda x,y: x<y))
+    [[4,5,6,7] , [7] , [7,8,9] , [0,3,4,5,6] , [5,6,7]]
+    ```
+    """
+    
+    #Input Assertions
+    assert is_iterable(iterable)
+    assert callable(key)
+    assert callable(compare)
+
+    if hasattr(iterable,'__getitem__'):
+        #Attempt to chunk via slicing
+        #Chunking this way is preferable if possible
+        #It yields slices of the original input, instead of a new list
+        #That way it's both faster and returns the same type
+        #For example, if iterable is a str and we chunk via slices,
+        #it will yield substrings instead of lists of chars
+        #This method is slightly more complex than the fallback
+        #If you don't want to use slicing with your input, 
+        #wrap it in iter() as seen in the examples
+
+        try:
+            chunk_start = 0
+            chunk_end = 0
+            for element in iterable:
+                if chunk_start < chunk_end and not compare(
+                    key(iterable[chunk_start]), key(element)
+                ):
+                    yield iterable[chunk_start:chunk_end]
+                    chunk_start = chunk_end
+                chunk_end += 1
+        
+            if chunk_start < chunk_end:
+                yield iterable[chunk_start:chunk_end]
+
+        except Exception:
+            return chunk_by_key(iter(iterable), key=key, compare=compare)
+
+    else:
+        #Basic chunking - works with any iterable
+        #Will yield lists
+
+        chunk = []
+        for element in iterable:
+            if not chunk or compare(key(chunk[-1]), key(element)):
+                chunk.append(element)
+            else:
+                yield chunk
+                chunk = [element]
+        if chunk:
+            yield chunk
+
 def cluster_filter(vec,filter=identity):  # This has a terrible name...I'm not sure what to rename it so if you think of something, go for it!
     # EXAMPLE: cluster_filter([2,3,5,9,4,6,1,2,3,4],lambda x:x%2==1) --> [[3, 5, 9], [1], [3]]  <---- It separated all chunks of odd numbers
     # region Unoptimized, much slower version (that I kept because it might help explain what this function does):
@@ -12834,126 +12913,6 @@ def remove_all_whitespace(string):
 #     return '\n'.join(line for line in string.splitlines() if line.strip())
 
 #region OpenCV Helpers
-
-def labeled_image(image,
-                  text:str,
-                  size=15,
-                  position='top',
-                  align='center',
-                  text_color=(255,255,255),
-                  background_color=(0,0,0),
-                  flip_text=False,
-                 ):
-    #Adds a label to an image and returns an image
-    #'size' is either measured in pixels, or is in proportion to the image size
-    #EXAMPLES:
-    #     image=load_image('http://hi-bk.com/wp-content/uploads/2020/08/hibkdog.png',use_cache=True)
-    #     display_image(labeled_image(image,'hello',10))
-    #     display_image(labeled_image(image,'hello',25))
-    #     display_image(labeled_image(image,'hello',.1))
-    #     display_image(labeled_image(image,'hello',.1,align='left'))
-    #     display_image(labeled_image(image,'hello',.1,align='right'))
-    #     display_image(labeled_image(image,'hello',.1,align='center'))
-    #     display_image(labeled_image(image,'hello',.1,position='top'))
-    #     display_image(labeled_image(image,'hello',.1,position='bottom'))
-    #     display_image(labeled_image(image,'hello',.5))
-    #     display_image(labeled_image(image,'hello',.9))
-    #     display_image(labeled_image(image,'hello habba booboo gabba',.9))
-    #     display_image(labeled_image(image,'hello habba booboo gabba',.1))
-    #TODO: Add multiple colors, such as black on white
-
-    assert is_image(image)
-    assert position in ['top','bottom','left','right']
-    assert align in ['left','right','center']
-    assert isinstance(size,float) or isinstance(size,int)
-    assert size>0
-
-    if position in ['left', 'right']:
-        angle = 90 if position=='left' else -90
-         
-        image=rotate_image(image,angle)
-        image = labeled_image(
-            image=image,
-            text=text,
-            size=size,
-            position="top",
-            align=align,
-            text_color=text_color,
-            background_color=background_color,
-            flip_text=flip_text
-        )
-        image=rotate_image(image,-angle)
-
-        return image
-
-    text=str(text)
-    
-    if position in ['top','bottom']:
-        if isinstance(size,float):
-            height=int(get_image_height(image)*size)
-        else:
-            assert isinstance(size,int)
-            height=size
-            
-        height=max(height,1)         #Label height in pixels
-        width=get_image_width(image) #Label width in pixels
-        
-        label=cv_text_to_image(text,color=text_color)
-        label=cv_resize_image(label,height/get_image_height(label))  
-        if get_image_width(label)>width:
-            label=cv_resize_image(label,width/get_image_width(label))
-            
-        label=as_rgb_image(label)
-        
-        label=crop_image(label,height=height,origin='center')
-        label=crop_image(label,width=width,origin={'left'  :'top left'    ,
-                                                   'right' :'bottom right',
-                                                   'center':'center'      ,}[align])
-                                                   
-        if flip_text:
-            label=rp.rotate_image(label,180)
-        
-        if position=='top':
-            return vertically_concatenated_images(label,image)
-        
-        if position=='bottom':
-            return vertically_concatenated_images(image,label)
-        
-    assert False,'This line should be unreachable'
-
-def labeled_images(images,labels,*args,**kwargs):
-    #The plural of labeled_image
-    images=list(images)
-    labels=list(labels)
-    assert len(images)==len(labels)
-    return [labeled_image(image,label,*args,**kwargs) for image,label in zip(images,labels)]
-
-def cv_text_to_image(text,*,scale=2,font=3,thickness=2,color=(255,255,255),tight_fit=False,background_color=(0,0,0)):
-    lines=text.splitlines()
-    images=[]
-    for line in lines:
-        images.append(_single_line_cv_text_to_image(line,scale=scale,font=font,thickness=thickness,color=color,tight_fit=tight_fit,background_color=background_color))
-    return vertically_concatenated_images(images)
-def _single_line_cv_text_to_image(text,*,scale,font,thickness,color,tight_fit,background_color):
-    #EXAMPLE:
-    #    display_image(cv_text_to_image('HELLO WORLD! '))
-    #This is a helper function for cv_text_to_image, which can handle multi-line text
-    assert isinstance(text,str)
-    assert isinstance(font,int)
-    cv2=pip_import('cv2')
-    dims=cv2.getTextSize(text,font,scale,thickness)[0][::-1] #The dimensions of the output image
-    #UPDATE: added the *2 in dims[0]*2 below to prevent the lowercase letter y's tail from being cut off
-    temp=2 if tight_fit else 1
-    from math import ceil
-    image=np.zeros((ceil(dims[0]*1.333*temp+thickness//2+1),dims[1]*temp,3),np.uint8)
-    image[:,:,0]+=background_color[0]
-    image[:,:,1]+=background_color[1]
-    image[:,:,2]+=background_color[2]
-    image= cv2.putText(image,text,(0,dims[0]),font,scale,color,thickness)
-    if tight_fit:
-        image=crop_image_zeros(image)
-    return image
-
 def cv_bgr_rgb_swap(image_or_video):
     #Works for both images AND video
     #Opencv has an annoying feature: it uses BGR instead of RGB. Heckin' hipsters. This swaps RGB to BGR, vice-versa.
@@ -14433,8 +14392,8 @@ def memoized_property(method):
     #           return self._thing
     #       except Exception:
     #           self.thing=fancy_calculations()
-    #           return self._thing
     #
+    #           return self._thing
     #This function takes the hassle of creating a private variable away, and automatically creates the self._thing
     #The completely equivalent function, using @memoized_property, is shown below
     #    
@@ -14452,6 +14411,212 @@ def memoized_property(method):
     memoized_property=property(memoized_property)
     return memoized_property
 #endregion
+
+
+def labeled_image(image,
+                  text:str,
+                  size=15,
+                  position='top',
+                  align='center',
+                  text_color=(255,255,255),
+                  background_color=(0,0,0),
+                  flip_text=False,
+                 ):
+    #Adds a label to an image and returns an image
+    #'size' is either measured in pixels, or is in proportion to the image size
+    #EXAMPLES:
+    #     image=load_image('http://hi-bk.com/wp-content/uploads/2020/08/hibkdog.png',use_cache=True)
+    #     display_image(labeled_image(image,'hello',10))
+    #     display_image(labeled_image(image,'hello',25))
+    #     display_image(labeled_image(image,'hello',.1))
+    #     display_image(labeled_image(image,'hello',.1,align='left'))
+    #     display_image(labeled_image(image,'hello',.1,align='right'))
+    #     display_image(labeled_image(image,'hello',.1,align='center'))
+    #     display_image(labeled_image(image,'hello',.1,position='top'))
+    #     display_image(labeled_image(image,'hello',.1,position='bottom'))
+    #     display_image(labeled_image(image,'hello',.5))
+    #     display_image(labeled_image(image,'hello',.9))
+    #     display_image(labeled_image(image,'hello habba booboo gabba',.9))
+    #     display_image(labeled_image(image,'hello habba booboo gabba',.1))
+    #TODO: Add multiple colors, such as black on white
+
+    assert is_image(image)
+    assert position in ['top','bottom','left','right']
+    assert align in ['left','right','center']
+    assert isinstance(size,float) or isinstance(size,int)
+    assert size>0
+    assert len(background_color)==3
+    assert len(text_color)==3
+
+    if position in ['left', 'right']:
+        angle = 90 if position=='left' else -90
+         
+        image=rotate_image(image,angle)
+        image = labeled_image(
+            image=image,
+            text=text,
+            size=size,
+            position="top",
+            align=align,
+            text_color=text_color,
+            background_color=background_color,
+            flip_text=flip_text
+        )
+        image=rotate_image(image,-angle)
+
+        return image
+
+    text=str(text)
+    
+    if position in ['top','bottom']:
+        if isinstance(size,float):
+            height=int(get_image_height(image)*size)
+        else:
+            assert isinstance(size,int)
+            height=size
+            
+        height=max(height,1)         #Label height in pixels
+        width=get_image_width(image) #Label width in pixels
+        
+        label=cv_text_to_image(text)
+
+        label=cv_resize_image(label,height/get_image_height(label))  
+        if get_image_width(label)>width:
+            label=cv_resize_image(label,width/get_image_width(label))
+            
+        label=as_rgb_image(label)
+        
+        label=crop_image(label,height=height,origin='center')
+        label=crop_image(label,width=width,origin={'left'  :'top left'    ,
+                                                   'right' :'bottom right',
+                                                   'center':'center'      ,}[align])
+
+        #Apply colors to label
+        #We need to turn the RGB byte color into RGBA float color. 
+        #TODO: Make a method for this in RP along with other color conversion methods... 
+        background_color=tuple(float_clamp(int(x/255),0,1) for x in background_color) + (1,) 
+        label=blend_images(background_color,text_color,label)
+                                                   
+        if flip_text:
+            label=rp.rotate_image(label,180)
+        
+        if position=='top':
+            return vertically_concatenated_images(label,image)
+        
+        if position=='bottom':
+            return vertically_concatenated_images(image,label)
+        
+    assert False,'This line should be unreachable'
+
+def labeled_images(images,labels,*args,**kwargs):
+    #The plural of labeled_image
+    images=list(images)
+    labels=list(labels)
+    assert len(images)==len(labels)
+    return [labeled_image(image,label,*args,**kwargs) for image,label in zip(images,labels)]
+
+@memoized
+def _cv_char_to_image(char: str, width=None, height=None, **kwargs):
+    assert len(char) == 1
+    output = cv_text_to_image(char, **kwargs)
+    if width is not None or height is not None:
+        output = crop_image(output, height, width, origin="center")
+    return output
+
+
+def _cv_text_to_image_monospace(text, **kwargs):
+    #Right now this is approx 2x slower than non-monospace, even with the optimizations. I could probably optimize it more but meh
+    #Note: This guarentees that all characters in the output image will be monospaced
+    #However, it does NOT guarentee that two output images will have the *same* spacing, though it gets close.
+    #TODO: Do that...we will probably need to simply add all printable chars to the 'chars' variable
+
+    import string
+
+    def horizontally_concatenated_images(images):
+        #Faster for this use case; we have better assumptions about the images.
+        return np.column_stack(tuple(images))
+
+    #def vertically_concatenated_images(images):
+    #    #Faster for this use case; we have better assumptions about the images.
+    #    return np.row_stack(tuple(images))
+
+    chars = set(text) | set(string.printable)
+    chars = {char: _cv_char_to_image(char, **kwargs) for char in chars}
+    char_height = max(x.shape[0] for x in chars.values())
+    char_width  = max(x.shape[1] for x in chars.values())
+    chars = {
+        char: _cv_char_to_image(char, char_height, char_width, **kwargs)
+        for char in chars
+    }
+
+    lines = line_split(text)
+    lines = [[chars[char] for char in line] for line in lines]
+    lines = [horizontally_concatenated_images(line) for line in lines]
+
+    output = vertically_concatenated_images(lines)
+
+    return output
+
+def cv_text_to_image(text,
+                     *,
+                     scale=2,
+                     font=3,
+                     thickness=2,
+                     color=(255, 255, 255),
+                     tight_fit=False,
+                     background_color=(0, 0, 0),
+                     monospace=False,
+                    ):
+
+    if monospace:
+        return _cv_text_to_image_monospace(
+            text,
+            scale=scale,
+            font=font,
+            thickness=thickness,
+            color=color,
+            tight_fit=tight_fit,
+            background_color=background_color,
+        )
+
+    lines = text.splitlines()
+    images = []
+    for line in lines:
+        images.append(
+            _single_line_cv_text_to_image(
+                line,
+                scale=scale,
+                font=font,
+                thickness=thickness,
+                color=color,
+                tight_fit=tight_fit,
+                background_color=background_color,
+            )
+        )
+    return vertically_concatenated_images(images)
+
+def _single_line_cv_text_to_image(text,*,scale,font,thickness,color,tight_fit,background_color):
+    #EXAMPLE:
+    #    display_image(cv_text_to_image('HELLO WORLD! '))
+    #This is a helper function for cv_text_to_image, which can handle multi-line text
+    assert isinstance(text,str)
+    assert isinstance(font,int)
+    cv2=pip_import('cv2')
+    dims=cv2.getTextSize(text,font,scale,thickness)[0][::-1] #The dimensions of the output image
+    #UPDATE: added the *2 in dims[0]*2 below to prevent the lowercase letter y's tail from being cut off
+    temp=2 if tight_fit else 1
+    from math import ceil
+    image=np.zeros((ceil(dims[0]*1.333*temp+thickness//2+1),dims[1]*temp,3),np.uint8)
+    image[:,:,0]+=background_color[0]
+    image[:,:,1]+=background_color[1]
+    image[:,:,2]+=background_color[2]
+    image= cv2.putText(image,text,(0,dims[0]),font,scale,color,thickness)
+    if tight_fit:
+        image=crop_image_zeros(image)
+    return image
+
+
+
 
 def strip_file_extension(file_path):
     #'x.png'        --> 'x'
