@@ -12879,7 +12879,7 @@ def labeled_image(image,
             position="top",
             align=align,
             text_color=text_color,
-            background_color=(0,0,0),
+            background_color=background_color,
             flip_text=flip_text
         )
         image=rotate_image(image,-angle)
