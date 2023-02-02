@@ -12841,6 +12841,7 @@ def labeled_image(image,
                   position='top',
                   align='center',
                   text_color=(255,255,255),
+                  background_color=(0,0,0),
                   flip_text=False,
                  ):
     #Adds a label to an image and returns an image
@@ -12878,6 +12879,7 @@ def labeled_image(image,
             position="top",
             align=align,
             text_color=text_color,
+            background_color=(0,0,0),
             flip_text=flip_text
         )
         image=rotate_image(image,-angle)
