@@ -14492,11 +14492,12 @@ def labeled_image(image,
                                                    'center':'center'      ,}[align])
 
         #Apply colors to label
-        #We need to turn the RGB byte color into RGBA float color. 
-        #TODO: Make a method for this in RP along with other color conversion methods... 
-        background_color=tuple(float_clamp(int(x/255),0,1) for x in background_color) + (1,) 
+        #We need to turn the RGB byte color into RGBA float color.
+        #TODO: Make a method for this in RP along with other color conversion methods...
+        background_color=tuple(float_clamp(x/255,0,1) for x in background_color) + (1,)
+        text_color      =tuple(float_clamp(x/255,0,1) for x in text_color      ) + (1,)
         label=blend_images(background_color,text_color,label)
-                                                   
+
         if flip_text:
             label=rp.rotate_image(label,180)
         
@@ -14565,7 +14566,7 @@ def cv_text_to_image(text,
                      color=(255, 255, 255),
                      tight_fit=False,
                      background_color=(0, 0, 0),
-                     monospace=False,
+                     monospace=False
                     ):
 
     if monospace:
