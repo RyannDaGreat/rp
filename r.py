@@ -14566,7 +14566,7 @@ def cv_text_to_image(text,
                      color=(255, 255, 255),
                      tight_fit=False,
                      background_color=(0, 0, 0),
-                     monospace=False,
+                     monospace=False
                     ):
 
     if monospace:
