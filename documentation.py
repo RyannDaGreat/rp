@@ -178,6 +178,8 @@ MICROCOMPLETIONS:
 			\dgx  deepgenx                (auto-completes your code using deepgenx. See https://deepgenx.com/. It's like GitHub Copilot, except open source and made with GPT-J. Needs internet.)
 			\gpt  gpt3                    (auto-completes your code with gpt3. Needs internet. Mostly just for fun...but might have good uses.)
 			\min  minify                  (Minifies your code - making it as small as possible. Uses https://github.com/dflook/python-minifier)
+			\sdo  strip docstrings        (Removes all docstrings from your code)
+			\irp  inline rp stuff         (Works iteratively. Will inline anything in your code from rp, assuming it was coming from the implicit 'from rp import *'. Use it repeatedly, until you've gone deep enough.)
 
 	FOR LOOPS:
 		COMPREHENSION:
