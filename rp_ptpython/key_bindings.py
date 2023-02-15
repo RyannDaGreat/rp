@@ -2522,6 +2522,7 @@ def load_python_bindings(python_input):
                                          '\\ac':'align_char',
                                          '\\sw':'strip_whitespace',
                                          '\\sc':'strip_comments',
+                                         '\\sdo':'strip_docstrings',
                                          '\\mla':'multi line arguments',
                                          '\\fo':'for',
                                          '\\fi':'import_from_swap',
@@ -2559,6 +2560,7 @@ def load_python_bindings(python_input):
                                          '\\dilp':'diff_local_paste',
                                          '\\diph':'diff_pt_history',
                                          '\\qph':'query_pt_history',
+                                         '\\irp':'inline_rp',
                                          }
                         # header_commands.update(header_jump_commands)
                         header_commands.update(header_arg_commands)
@@ -2843,6 +2845,19 @@ def load_python_bindings(python_input):
                                     from rp import strip_python_comments
                                     text=buffer.document.text
                                     text=strip_python_comments(text)
+                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                if header=='strip_docstrings':
+                                    from rp import strip_python_docstrings
+                                    text=buffer.document.text
+                                    text=strip_python_docstrings(text)
+                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                if header=='inline_rp':
+                                    from rp.r import _inline_rp_code
+                                    text=buffer.document.text
+                                    try:
+                                        text=_inline_rp_code(text)
+                                    except:
+                                        text='#inline_rp ERROR'
                                     buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
                                 if header=='repr':
                                     #A shortcut to `repr\py

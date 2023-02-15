@@ -14566,7 +14566,7 @@ def cv_text_to_image(text,
                      color=(255, 255, 255),
                      tight_fit=False,
                      background_color=(0, 0, 0),
-                     monospace=False
+                     monospace=False,
                     ):
 
     if monospace:
@@ -18873,6 +18873,35 @@ def python_2_to_3(code:str)->str:
     return text_file_to_string(temp_file_path)
     return (stdout_data.decode())
 
+def strip_python_docstrings(code: str) -> str:
+    """
+    This function removes all docstrings from functions and classes in the input Python code. 
+    The code is first parsed into an abstract syntax tree (AST), and then each function and class in the tree 
+    is searched for docstrings, which are removed. The resulting code is then returned as a string.
+
+    Example:
+    code = '''def foo():
+        "This is a docstring."
+        print("Hello World!")
+    '''
+    stripped_code = strip_docstrings(code)
+    print(stripped_code) # "def foo():\n    print("Hello World!")\n"
+
+    :param code: A string of Python code.
+    :return: A string of Python code with all docstrings removed.
+    """
+    # print( 'strip_python_docstrings: I think this function is wrong. ChatGPT screwed up. Please rewrite this function by hand. Reference https://stackoverflow.com/questions/1769332/script-to-remove-python-comments-docstrings to start.')
+    pip_import('astor')
+
+    import ast
+    import astor
+
+    tree = ast.parse(code)
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            node.body = [n for n in node.body if not isinstance(n, ast.Expr) or not isinstance(n.value, ast.Str)]
+    return astor.to_source(tree)
+
 def strip_python_comments(code:str):
     #Takes a string, and returns a string
     #Removes all python #comments from code with a scalpel (not touching anything else)
@@ -22042,6 +22071,167 @@ def list_transpose(list_of_lists:list):
 
     assert len(set(map(len,list_of_lists)))==1, 'Right now list_transpose only handles rectangular list_of_lists. This functionality may be added in the future.'
     return list(map(list,zip(*list_of_lists)))
+
+def monkey_patch(target, name=None):
+    """
+    A decorator used to add a method to an object.
+
+    :param target: The object to which the method should be added.
+    :param name: (optional) The name of the method. If not provided, the name of the function being decorated will be used.
+    :return: The `patcher` function, which takes a single argument `func` (the method to be added to the target object).
+
+    Example:
+    --------
+    class Thing:
+        pass
+
+    @monkey_patch(Thing)
+    def __repr__(self):
+        return "Hello!"
+
+    print(Thing())  # Output: "Hello!"
+    """
+    def patcher(func):
+        """
+        Adds the `func` method to the `target` object with the specified `name`.
+        """
+        setattr(target, name or func.__name__, func)
+    return patcher
+
+def _inline_rp_code(code):
+    #/p is a big library, and some people might not like that.
+    #This function helps you to inline any functions in your code that might be from rp.
+    #That assumes they were imported as "from rp import *"
+    #You use this function iteratively; until completion.
+    #Note that the output can be quite large as many functions in rp are interconnected
+    #This is why it's iterative - at every step remove the things you don't care about so it doesn't baloon too big for your tastes
+    #This is done with microcompletion \irp for inline_rp
+    def extract_imports(code: str) -> dict:
+        #Written by chatgpt: https://shareg.pt/k1YDlMk
+        """
+        Extracts imports from Python code and returns them as a dictionary.
+    
+        The dictionary has two top-level keys, 'import' and 'from', corresponding
+        to the two ways to import modules in Python. The values for the 'import'
+        key are dictionaries where the keys are the module names and the values
+        are sets of any aliases that the module was imported as. The values for
+        the 'from' key are nested dictionaries where the keys are the module names,
+        the values are dictionaries where the keys are the imported things (either
+        a single name or the '*' wildcard) and the values are sets of any aliases
+        that the thing was imported as.
+    
+        Example:
+        >>> code = '''
+        ... from numpy import tri, diff, fabs as float_abs, ones, ones_like, fabs
+        ... import numba
+        ... import numpy as np
+        ... import numpy.random as random, threading as threader
+        ... import random as builtin_random
+        ... from typing import List
+        ... from rp import *
+        ... '''
+        >>> extract_imports(code)
+        {
+            'import': {
+                'numba': {'numba'},
+                'np': {'np'},
+                'numpy': {'numpy'},
+                'random': {'builtin_random'},
+                'threader': {'threading'}
+            },
+            'from': {
+                'numpy': {
+                    'tri': {'tri'},
+                    'diff': {'diff'},
+                    'float_abs': {'float_abs', 'fabs'},
+                    'ones': {'ones'},
+                    'ones_like': {'ones_like'}
+                },
+                'typing': {
+                    'List': {'List'}
+                },
+                'rp': {
+                    '*' : {'*'}
+                }
+            }
+        }
+        """
+        import ast
+        imports = {
+            'import': {},
+            'from': {}
+        }
+    
+        tree = ast.parse(code)
+    
+        for node in tree.body:
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    module = alias.name
+                    if alias.asname:
+                        imports['import'].setdefault(module, set()).add(alias.asname)
+                    else:
+                        imports['import'].setdefault(module, set()).add(module)
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module
+                for alias in node.names:
+                    thing = alias.name
+                    if alias.asname:
+                        imports['from'].setdefault(module, {}).setdefault(thing, set()).add(alias.asname)
+                    else:
+                        imports['from'].setdefault(module, {}).setdefault(thing, set()).add(thing)
+    
+        return imports
+    
+    def remove_first_import_line(code):
+        #Removes the first line of code, assuming it's an import
+        #If it's multiple lines long, it means removing the first line will result in invalid syntax'
+        #So, we keep removing them until it becomes valid again; ergo we've removed the first import line
+        assert is_valid_python_syntax(code)
+        lines=code.splitlines()
+        lines=lines[1:]
+        while not is_valid_python_syntax(line_join(lines)):
+            lines=lines[1:]
+        return line_join(lines)
+            
+    def get_code(module,name):
+        try:
+            title='%s.%s'%(module,name)
+            thing=getattr(__import__(module),name)
+            if get_source_file(thing)!=get_module_path_from_name(module):
+                #return ''
+                return '#Foriegn: '+title #Foriegn code not from that module
+            if callable(thing):
+                try:
+                    return get_source_code(getattr(__import__(module),name))
+                except Exception:
+                    return 'def %s:pass#failed to get source code of %s'%(name,title)
+            else:
+                #return ''
+                return 'Uncallable: '+title
+        except Exception:
+            #return ''
+            return '#Failed: '+title
+    
+    def unarpy(code):
+        module='rp.r'
+        code='from %s import *\n'%module+code
+        code=_removestar(code)
+        imports=extract_imports(code)
+        try:
+            module_imports = imports['from'][module]
+        except KeyError:
+            return code
+        names=[name for name in module_imports if name in module_imports[name]]
+        items=[]
+        for name in names:
+            item=get_code(module,name)
+            if item not in code:
+                code=code+'\n'+item
+        code=remove_first_import_line(code)
+        return code
+    
+    return unarpy(code)
 
 del re
 
