@@ -5187,22 +5187,24 @@ def k_means_analysis(data_vectors,k_or_initial_centroids,iterations,tries):
     #   ∴ total_distortion == ∑d²
     #   ∴ len(c) == k ⨁ len(c) == len(k)
     return centroids,total_distortion,parent_centroid_indexes,parent_centroid_distances
+
 def is_iterable(x):
     try:
         #MOST PROPER WAY:
-        from collections.abc import Iterable
-        return isinstance(x,Iterable)
-
+        # from collections.abc import Iterable
+        # return isinstance(x,Iterable)
 
         #PREVIOUS WAY:
-        # if hasattr(x,'__iter__') or hasattr(x,'__getitem__'):
-        #     return True
+        from collections.abc import Iterable
+        if isinstance(x,Iterable) or hasattr(x,'__iter__') or hasattr(x,'__getitem__'):
+            return True
         
         #OLDEST WAY:
         # for _ in x: pass
         # return True
     except:
         return False
+
 def space_split(x: str) -> list:
     return list(filter(lambda y:y != '',x.split(" ")))  # Splits things by spaces but doesn't allow empty parts
 def deepcopy_multiply(iterable,factor: int):
@@ -6109,7 +6111,7 @@ def harmonic_analysis_via_least_squares(wave,harmonics:int):
     phases=np.arctan2(*out)
     return np.asarray([amplitudes,phases])  # https://www.desmos.com/calculator/fnlwi71n9x
 
-def cluster_by_key(iterable,key)->list:
+def cluster_by_key(iterable,key,as_dict=False)->list:
     #Iterable is a list of values
     #Key is a function that takes a value from iterable and returns a hashable
     assert callable(key)
@@ -6121,6 +6123,8 @@ def cluster_by_key(iterable,key)->list:
         if k not in outputs:
             outputs[k]=[]
         outputs[k].append(value)
+    if as_dict:
+        return outputs
     return list(outputs.values())
     
 def chunk_by_key(iterable, key=lambda x: x, compare=lambda x, y: x == y):
@@ -6915,7 +6919,7 @@ def _update_cd_history():
 
 cdc_protected_prefixes=[]
 def _cdh_folder_is_protected(x):
-    return not folder_exists(x) and any(x.startswith(prefix) for prefix in cdc_protected_prefixes)
+    return  (any(x.startswith(prefix) for prefix in cdc_protected_prefixes)) and not folder_exists(x)
 
 def _clean_cd_history():
     #Removes all nonexistant paths from CDH
@@ -9549,8 +9553,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         NB  $extract_code_from_ipynb()
         NBA  $extract_code_from_ipynb(ans)
         NBC  $r._clear_jupyter_notebook_outputs()
-        NBCA $r._nbca(ans)
-        NBCH $r._nbca($get_all_files(file_extension_filter='ipynb'))
+        NBCA $r._nbca(ans) # Clear a notebook
+        NBCH $r._nbca($get_all_files(file_extension_filter='ipynb')) #Clear all notebooks in the current directory
+        NBCHY $r._nbca($get_all_files(file_extension_filter='ipynb'), auto_yes=True) #Clear all notebooks in the current directory without confirmation
         NCA  $r._nbca(ans)
 
         INS $input_select("Select:",ans)
@@ -10962,6 +10967,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 fansi_print("ACAT: Copying to your ans the contents of "+repr(file_name),"blue",'bold')
                                 if is_valid_url(file_name) and get_file_extension(file_name) in 'jpg png gif tiff tga jpeg bmp exr'.split():
                                     user_message='ans=__import__("rp").load_image(%s)'%repr(file_name)
+                                elif file_name.endswith('.ipynb'):
+                                    #Unlike json or other formats that could be loaded, ipynb's are almost always generated automatically
+                                    #They're best used as code!
+                                    user_message="""ans=__import__("rp").extract_code_from_ipynb(%s)"""%repr(file_name)
                                 else: 
                                     user_message='ans='+repr(_load_text_from_file_or_url(file_name))
                             except UnicodeDecodeError:
@@ -10975,6 +10984,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     user_message="""ans=__import__("torch").load(%s,map_location='cpu')"""%repr(file_name)
                                 elif file_name.endswith('.npy') and module_exists('numpy'):
                                     user_message="""ans=__import__("numpy").load(%s)"""%repr(file_name)
+                                elif file_name.endswith('.pkl'):
+                                    user_message="""ans=__import__("rp").load_pickled_value(%s)"""%repr(file_name)
                                 else:
                                     user_message='ans=__import__("rp").file_to_bytes(%s)'%repr(file_name)
                                     # assert False,'Failed to read file '+repr(file_name)
@@ -13499,8 +13510,9 @@ def _cv_morphological_helper(image,diameter,cv_method,*,copy,circular,iterations
     #Used for erosion, dilation, and other functions.
     #Please see the documentation if you'd like to know what a morpholocical filter is:
     #https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_imgproc/py_morphological_ops/py_morphological_ops.html
+    image=as_byte_image(image)
     original_dtype=image.dtype
-    if image.dtype==bool:image=image.astype(np.uint8)
+    # if image.dtype==bool:image=image.astype(np.uint8)
     if copy:image=image.copy()
     if diameter==0:return image
     if circular:
@@ -13512,7 +13524,7 @@ def _cv_morphological_helper(image,diameter,cv_method,*,copy,circular,iterations
         for kernel in (diameter,1),(1,diameter):
             kernel = np.ones(kernel,image.dtype)
             image  = cv_method(image,kernel,iterations=iterations)
-    if original_dtype==bool:image=image.astype(bool)
+    if original_dtype==bool:image=as_binary_image(image)
     return image
 def cv_erode (image,diameter=2,*,copy=True,circular=False,iterations=1):
     #TODO min_filter is now kinda redundant, and slower if you dont have opencv. What to do about that?
@@ -21424,16 +21436,16 @@ def _display_filetype_size_histogram(root='.'):
     _maybe_display_string_in_pager(printed_lines)
     print(printed_lines)
 
-def _nbca(paths):
+def _nbca(paths,auto_yes=False):
     if isinstance(paths,str):
         paths=line_split(paths)
     for x in paths:
         if file_exists(x) and x.endswith('.ipynb'):
-            _clear_jupyter_notebook_outputs(x)
+            _clear_jupyter_notebook_outputs(x,auto_yes=auto_yes)
         else:
             print(fansi("r.nbca: Skipping; not a ipynb file:",'yellow'),x)
 
-def _clear_jupyter_notebook_outputs(path:str=None):
+def _clear_jupyter_notebook_outputs(path:str=None, auto_yes=False):
     #This clears all outputs of a jupyter notebook file
     #This is useful when the file gets so large it crashes the web browser (storing too many images in it etc)
     #Source: https://stackoverflow.com/questions/28908319/how-to-clear-an-ipython-notebooks-output-in-all-cells-from-the-linux-terminal
@@ -21443,12 +21455,16 @@ def _clear_jupyter_notebook_outputs(path:str=None):
 
     assert get_file_extension(path)=='ipynb','clear_jupyter_notebook_outputs: You must select a .ipynb file'
 
-    if input_yes_no('Are you sure you want to clear the outputs of '+path+'?'):
+    if auto_yes or input_yes_no('Are you sure you want to clear the outputs of '+path+'?'):
         pip_import('jupyter')
         command=sys.executable+' -m jupyter nbconvert --ClearOutputPreprocessor.enabled=True --clear-output '+path
-        print('Original file size:',get_file_size(path))
+        original_file_size=get_file_size(path)
         shell_command(command)
-        print('New file size:',get_file_size(path))
+        new_file_size=get_file_size(path)
+        color='green' if new_file_size!=original_file_size else 'blue'
+        fansi_print(path,color,'bold')
+        fansi_print('    - Original file size: %s'%original_file_size,color,'bold')
+        fansi_print('    - New file size: %s'%get_file_size(path),color,'bold')
 
     return path
 
