@@ -79,5 +79,6 @@
 /Users/Ryan/PycharmProjects/QuickPython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
 /Users/Ryan/.config/alacritty
+/Users/Ryan/Desktop/Aydin
 /Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
