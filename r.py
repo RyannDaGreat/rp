@@ -2137,7 +2137,7 @@ def save_images(images,paths:list=None,skip_overwrites=False,show_progress=False
 
     if show_progress:
         number_of_images_saved=0
-        show_time_remaining=eta(len(paths))
+        show_time_remaining=eta(len(paths),title='Saving Images')
         start_time=gtoc()
     
     assert len(paths)==len(images),'Must have exactly one path to go with every image'
@@ -9451,6 +9451,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         
         HC CDH
         HD CDH
+        HDF  CDH FAST
+        CDHF CDH FAST
 
         DA CDA
 
@@ -11455,15 +11457,50 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 # user_message="__import__('os').mkdir(%s)"%repr(new_dir)
                                 user_message=''
 
-                        elif user_message=='CDH':
+                        elif user_message in {'CDH', 'CDH FAST'} :
                             fansi_print("CDH --> CD History --> Please select an entry to cd into!",'blue','bold')
                             hist=_get_cd_history()
+                            fast=user_message=='CDH FAST' or fansi_is_disabled()
                             if not hist:
                                 fansi_print("    CDH: There are no history entries. Try going somwhere else; for example with 'CD ..'",'red')
                                 user_message=''
                             else:
+                                slow_stringify = lambda x: fansi(
+                                    x,
+                                    "blue"
+                                    if _cdh_folder_is_protected(x)
+                                    else "yellow"
+                                    if folder_exists(x)
+                                    else "red",
+                                    "bold" if x in sys.path else None,
+                                )
+                                fast_stringify = lambda x: fansi(
+                                    x,
+                                    "blue"
+                                    if _cdh_folder_is_protected(x)
+                                    # else "yellow"
+                                    # if folder_exists(x)
+                                    else "white",
+                                    "bold" if x in sys.path else None,
+                                )
+                                if fast:
+                                    def precache_all():
+                                        #Make it so we can use CDH later...maybe make this funciton disableable in the future just in case...
+                                        par_map(folder_exists,hist)
+                                        # for x in hist:
+                                        #     folder_exists(x) #The harddrive will usually cache this somehow idk...it makes it faster the second time around
+                                    run_as_new_thread(precache_all)
+
+                                        
+                                # stringify=identity if fast else slow_stringify
+                                stringify=fast_stringify if fast else slow_stringify
                                 import sys
-                                new_dir=input_select("Please choose a directory",_get_cd_history()[::-1], stringify=lambda x:fansi(x,'blue' if _cdh_folder_is_protected(x) else 'yellow' if folder_exists(x) else 'red','bold' if x in sys.path else None), reverse=True)
+                                new_dir = input_select(
+                                    "Please choose a directory",
+                                    hist[::-1],
+                                    stringify=stringify,
+                                    reverse=True,
+                                )
                                 user_message='import sys,os;os.chdir('+repr(new_dir)+');sys.path.append(os.getcwd())# '+user_message
 
                                 #The next two lines are duplicated code from the below 'CD' section!
@@ -16407,8 +16444,8 @@ class VideoWriterMP4:
 
         rp.pip_import('ffmpeg', 'ffmpeg-python')
 
-        if isinstance(video_bitrate,str) and video_bitrate in 'small medium large max':
-            video_bitrate = {'small':100000,'medium':1000000,'large':10000000,'max':10000000000}[video_bitrate]
+        if isinstance(video_bitrate,str) and video_bitrate in 'low medium high max':
+            video_bitrate = {'low':100000,'medium':1000000,'high':10000000,'max':10000000000}[video_bitrate]
 
         assert path.endswith('.mp4')
         assert isinstance(video_bitrate,int)
@@ -22248,6 +22285,207 @@ def _inline_rp_code(code):
         return code
     
     return unarpy(code)
+
+from functools import lru_cache
+@lru_cache(maxsize=None)
+def _init_nvml():
+    pip_import("py3nvml")
+    from py3nvml.py3nvml import nvmlInit
+
+    nvmlInit()
+
+
+def _get_gpu_memory_info(gpu_id):
+    _init_nvml()
+    from py3nvml.py3nvml import nvmlDeviceGetMemoryInfo
+
+    handle = _get_gpu_handle(gpu_id)
+    return nvmlDeviceGetMemoryInfo(handle)
+
+
+def _get_gpu_handle(gpu_id):
+    _init_nvml()
+    from py3nvml.py3nvml import nvmlDeviceGetHandleByIndex
+
+    return nvmlDeviceGetHandleByIndex(gpu_id)
+
+
+def get_gpu_count():
+    """
+    Returns the number of available GPUs.
+
+    Example:
+    >>> get_gpu_count()
+    4
+    """
+    _init_nvml()
+    from py3nvml.py3nvml import nvmlDeviceGetCount
+
+    return nvmlDeviceGetCount()
+
+
+def get_all_gpu_ids():
+    return list(range(get_gpu_count()))
+
+
+def get_gpu_pids(gpu_id):
+    """
+    Returns a list of process IDs running on the given GPU.
+
+    Args:
+        gpu_id (int): The ID of the GPU.
+
+    Example:
+    >>> get_gpu_pids(0)
+    [12345, 67890]
+    >>> get_gpu_pids()
+    [[12345, 67890], [], [], [35534]]
+    """
+    if gpu_id is None:
+        return [get_used_vram(gpu_id=i, pid=pid) for i in get_all_gpu_ids()]
+
+    _init_nvml()
+    from py3nvml.py3nvml import nvmlDeviceGetComputeRunningProcesses
+
+    handle = _get_gpu_handle(gpu_id)
+    running_processes = nvmlDeviceGetComputeRunningProcesses(handle)
+    return [proc.pid for proc in running_processes]
+
+
+def get_free_vram(gpu_id=None):
+    """
+    Returns the amount of free VRAM for a GPU given its ID.
+    The returned value is in bytes.
+    If gpu_id is None, returns a list of free VRAM for all GPUs.
+
+    Args:
+        gpu_id (int, optional): The ID of the GPU. Default is None.
+
+    Example:
+    >>> get_free_vram(0)
+    1140111360
+    >>> get_free_vram()
+    [1140111360, 1132892160, 1140111360, 1132892160]
+    """
+    if gpu_id is None:
+        return [get_free_vram(gpu_id=i) for i in get_all_gpu_ids()]
+
+    memory_info = _get_gpu_memory_info(gpu_id)
+    return memory_info.free
+
+
+def get_total_vram(gpu_id=None):
+    """
+    Returns the total amount of VRAM for a GPU given its ID.
+    The returned value is in bytes.
+    If gpu_id is None, returns a list of total VRAM for all GPUs.
+
+    Args:
+        gpu_id (int, optional): The ID of the GPU. Default is None.
+
+    Example:
+    >>> get_total_vram(0)
+    1179648000
+    >>> get_total_vram()
+    [1179648000, 1179648000, 1179648000, 1179648000]
+    """
+    if gpu_id is None:
+        return [get_total_vram(gpu_id=i) for i in get_all_gpu_ids()]
+
+    memory_info = _get_gpu_memory_info(gpu_id)
+    return memory_info.total
+
+
+def get_used_vram(gpu_id=None, pid=None):
+    """
+    Returns the amount of used VRAM for a GPU given its ID or for a specific process ID.
+    If a process ID is not specified, it will return the total amount used by that GPU across all processes.
+    The returned value is in bytes.
+    If gpu_id is None, returns a list of used VRAM for all GPUs.
+
+    Args:
+        gpu_id (int, optional): The ID of the GPU. Default is None.
+        pid (int, optional): The ID of the process. Default is None.
+
+    Example:
+    >>> get_used_vram(0)
+    385875968
+    >>> get_used_vram()
+    [385875968, 458752000, 385875968, 458752000]
+    >>> get_used_vram(pid=12345)
+    [0, 0, 385875968, 0]
+    """
+    if gpu_id is None:
+        return [get_used_vram(gpu_id=i, pid=pid) for i in get_all_gpu_ids()]
+
+    if pid is None:
+        memory_info = _get_gpu_memory_info(gpu_id)
+        return memory_info.used
+
+    pids = get_gpu_pids(gpu_id)
+    if pid not in pids:
+        return 0
+
+    used_vram_list = [get_used_vram(gpu_id, pid=p) for p in pids]
+    process_vram = used_vram_list[pids.index(pid)]
+    return process_vram
+
+
+def get_gpu_with_most_free_vram():
+    """
+    Returns the GPU ID with the most free VRAM and the amount
+    of free VRAM in bytes.
+
+    Example:
+    >>> get_gpu_with_most_free_vram()
+    2
+    """
+    return max(get_all_gpu_ids(), key=get_free_vram)
+
+
+def get_gpu_name(gpu_id=None):
+    """
+    Returns the name of a GPU given its ID.
+    The returned value is a string.
+    If gpu_id is None, returns a list of names for all GPUs.
+
+    Args:
+        gpu_id (int, optional): The ID of the GPU. Default is None.
+
+    Example:
+    >>> get_gpu_name(3)
+    NVIDIA RTX A5000
+    >>> get_gpu_name()
+    ['NVIDIA RTX A5000', 'NVIDIA RTX A5000', 'NVIDIA RTX A5000', 'NVIDIA RTX A5000']
+    """
+    if gpu_id is None:
+        return [get_gpu_name(gpu_id=i) for i in get_all_gpu_ids()]
+
+    from py3nvml.py3nvml import nvmlDeviceGetName
+
+    handle = _get_gpu_handle(gpu_id)
+    return nvmlDeviceGetName(handle)
+
+
+def get_vram_used_by_current_process(gpu_id=None):
+    """
+    Returns the amount of VRAM used by the current process for each GPU or a specific GPU.
+
+    Args:
+        gpu_id (int, optional): The ID of the GPU. If None, returns a list of VRAM usage for all GPUs.
+
+    Example:
+    >>> get_vram_used_by_current_process()
+    [0, 385875968, 0, 0]
+    >>> get_vram_used_by_current_process(0)
+    0
+    >>> get_vram_used_by_current_process(1)
+    385875968
+    """
+    import os
+
+    current_pid = os.getpid()
+    return get_used_vram(gpu_id=gpu_id, pid=current_pid)
 
 del re
 
