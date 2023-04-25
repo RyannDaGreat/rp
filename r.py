@@ -22328,7 +22328,7 @@ def get_all_gpu_ids():
     return list(range(get_gpu_count()))
 
 
-def get_gpu_pids(gpu_id):
+def get_gpu_pids(gpu_id=None):
     """
     Returns a list of process IDs running on the given GPU.
 
@@ -22342,7 +22342,7 @@ def get_gpu_pids(gpu_id):
     [[12345, 67890], [], [], [35534]]
     """
     if gpu_id is None:
-        return [get_used_vram(gpu_id=i, pid=pid) for i in get_all_gpu_ids()]
+        return [get_gpu_pids(gpu_id=i) for i in get_all_gpu_ids()]
 
     _init_nvml()
     from py3nvml.py3nvml import nvmlDeviceGetComputeRunningProcesses
