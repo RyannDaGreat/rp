@@ -22632,10 +22632,10 @@ def print_gpu_summary(
         total_vram = human_readable_file_size(get_total_vram(gpu_id))
         if include_percent_vram:
             percent_vram = 100 * used_vram / get_total_vram(gpu_id)
-            used_vram_text = f"{used_vram_human: >7} {percent_vram: >5.1f}%"
+            used_vram_text = "{: >7} {: >5.1f}%".format(used_vram_human, percent_vram)
         if include_temperature:
             temperature = get_gpu_temperature(gpu_id)
-            temperature_text = f"{temperature}°C"
+            temperature_text = "{}°C".format(temperature)
 
         if include_processes:
             processes = get_gpu_pids(gpu_id)
@@ -22649,11 +22649,11 @@ def print_gpu_summary(
             for username, pid_vram_list in user_process_vram.items():
                 total_user_vram = sum(vram for _, vram in pid_vram_list)
                 user_processes = ", ".join(
-                    f"{pid} {human_readable_file_size(vram)}"
+                    "{} {}".format(pid, human_readable_file_size(vram))
                     for pid, vram in pid_vram_list
                 )
                 process_text.append(
-                    f"[bold blue]{username}[/] [bold yellow]{human_readable_file_size(total_user_vram)}[/]: {user_processes}"
+                    "[bold blue]{}[/] [bold yellow]{}[/]: {}".format(username, human_readable_file_size(total_user_vram), user_processes)
                 )
             process_column_text = "; ".join(process_text)
         else:
