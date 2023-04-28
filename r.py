@@ -12542,7 +12542,29 @@ def get_process_memory():
     process = psutil.Process(os.getpid())
     return process.memory_info().rss#Get this process's total memory in bytes
 
+def get_username_from_process_id(pid: int) -> str:
+    """
+    Returns the username associated with the given process ID (pid).
+    Made by ChatGPT: https://sharegpt.com/c/Tvzy0Rt
+    """
+    pip_import('psutil')
+    import psutil
+
+    try:
+        process = psutil.Process(pid)
+        username = process.username()
+        return username
+    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+        raise Exception("The process with PID {} does not exist or could not be accessed.".format(pid))
+
+def get_username():
+    #Get the username of the current python process
+    import getpass
+    return getpass.getuser()
+    return get_username_from_process_id(get_process_id()) #This should work too
+
 def get_process_id():
+    #Get the current process id, aka pid
     import os
     return os.getpid()
 
@@ -21500,7 +21522,7 @@ def _clear_jupyter_notebook_outputs(path:str=None, auto_yes=False):
         new_file_size=get_file_size(path)
         color='green' if new_file_size!=original_file_size else 'blue'
         fansi_print(path,color,'bold')
-        fansi_print('    - Original file size: %s'%original_file_size,color,'bold')
+        fansi_print('    - Old file size: %s'%original_file_size,color,'bold')
         fansi_print('    - New file size: %s'%get_file_size(path),color,'bold')
 
     return path
@@ -21796,6 +21818,46 @@ class ImageDataset:
         if self.transform:
             image=self.transform(image)
         return image
+
+def select_torch_device(n=0, *, silent=False):
+    """Returns a torch device with the nth highest available vram. If there is a tie, return the GPU with the lowest id.
+    We allow you to specify n, so that you can choose the n best GPU's by running this function on n=0, n=1, n=2 etc."""
+
+    import torch
+
+    selected_gpu_id = get_gpu_with_most_free_vram(n)
+    gpu_count = get_gpu_count()
+    if gpu_count == 0:
+        if not silent:
+            fansi_print('We have no GPUs. Selecting "cpu".',style='bold')
+        output=torch.device("cpu")
+    
+
+    elif gpu_count == 1:
+        #if not silent:
+            #fansi_print('We only have 1 GPU to choose from. Selecting "cuda:0".',style='bold')
+        output=torch.device("cuda:0")
+    
+    else:
+        #if not silent:
+            #fansi_print('Selecting "cuda:%i"'%selected_gpu_id,style='bold')
+        output=torch.device("cuda:%i"%selected_gpu_id)
+
+    if not silent and gpu_count>0:
+        gpu_summary=print_gpu_summary(silent=True)
+        lines=gpu_summary.splitlines()
+        
+        arrow_header='Selecting %s –––> '%output
+        empty_header=' '*len(arrow_header)
+        arrow_header=fansi(arrow_header,style='bold')
+        headers=[empty_header for _ in lines]
+        headers[3+selected_gpu_id]=arrow_header
+        lines=[header+line for header,line in zip(headers,lines)]
+        print(line_join(lines))
+
+    return output
+        
+        
 
 def load_yaml_file(path):
     #EXAMPLE:
@@ -22426,21 +22488,22 @@ def get_used_vram(gpu_id=None, pid=None):
     if pid not in pids:
         return 0
 
-    used_vram_list = [get_used_vram(gpu_id, pid=p) for p in pids]
-    process_vram = used_vram_list[pids.index(pid)]
+    from py3nvml.py3nvml import nvmlDeviceGetComputeRunningProcesses
+    handle = _get_gpu_handle(gpu_id)
+    running_processes = nvmlDeviceGetComputeRunningProcesses(handle)
+    process_vram = next((proc.usedGpuMemory for proc in running_processes if proc.pid == pid), 0)
     return process_vram
 
 
-def get_gpu_with_most_free_vram():
+def get_gpu_with_most_free_vram(n=0):
     """
-    Returns the GPU ID with the most free VRAM and the amount
-    of free VRAM in bytes.
+    Returns the GPU ID with the most nth most free VRAM. If there is a tie, returns the GPU with the lowest ID.
 
     Example:
     >>> get_gpu_with_most_free_vram()
     2
     """
-    return max(get_all_gpu_ids(), key=get_free_vram)
+    return sorted(get_all_gpu_ids(), key=get_free_vram, reverse=True)[n]
 
 
 def get_gpu_name(gpu_id=None):
@@ -22486,6 +22549,134 @@ def get_vram_used_by_current_process(gpu_id=None):
 
     current_pid = os.getpid()
     return get_used_vram(gpu_id=gpu_id, pid=current_pid)
+
+def get_gpu_temperature(gpu_id=None):
+    """
+    Returns the temperature of a GPU in celcius given its ID.
+    If gpu_id is None, returns a list of temperatures for all GPUs.
+
+    Args:
+        gpu_id (int, optional): The ID of the GPU. Default is None.
+
+    Example:
+    >>> get_gpu_temperature(0)
+    65
+    >>> get_gpu_temperature()
+    [65, 61, 62, 63]
+    """
+    if gpu_id is None:
+        return [get_gpu_temperature(gpu_id=i) for i in get_all_gpu_ids()]
+
+    _init_nvml()
+    from py3nvml.py3nvml import nvmlDeviceGetTemperature, NVML_TEMPERATURE_GPU
+    handle = _get_gpu_handle(gpu_id)
+    temperature = nvmlDeviceGetTemperature(handle, NVML_TEMPERATURE_GPU)
+    return temperature
+
+def print_gpu_summary(
+    include_processes=True,
+    include_temperature=True,
+    include_percent_vram=True,
+    silent=False,
+):
+    """
+    Prints a summary of GPU information using the Rich library.
+
+    Args:
+        include_date (bool, optional): If True, includes the date in the output. Defaults to True.
+        include_processes (bool, optional): If True, includes the processes running on each GPU. Defaults to True.
+        include_temperature (bool, optional): If True, includes the temperature of each GPU. Defaults to True.
+        include_percent_vram (bool, optional): If True, includes the percentage of VRAM usage for each GPU. Defaults to True.
+        silent (bool, optional): If True, does not print the output to the console but instead returns it as a string. Defaults to False.
+
+    Returns:
+        Optional[str]: If silent, returns the GPU summary as a string, including ANSI escape sequences for color. Else, returns None.
+
+    Example:
+        >>> print_gpu_summary()
+        ┏━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+        ┃ GPU ID ┃       Name       ┃      Used      ┃   Free ┃  Total ┃ Temp ┃ Processes                   ┃
+        ┡━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+        │   0    │ NVIDIA RTX A5000 │  13.9GB  57.7% │ 10.1GB │ 24.0GB │ 35°C │ ryan 13.5GB: 1763785 13.5GB │
+        │   1    │ NVIDIA RTX A5000 │ 311.6MB   1.3% │ 23.7GB │ 24.0GB │ 43°C │                             │
+        │   2    │ NVIDIA RTX A5000 │  12.1GB  50.5% │ 11.9GB │ 24.0GB │ 43°C │ ryan 11.8GB: 1794352 11.8GB │
+        │   3    │ NVIDIA RTX A5000 │ 311.6MB   1.3% │ 23.7GB │ 24.0GB │ 39°C │                             │
+        └────────┴──────────────────┴────────────────┴────────┴────────┴──────┴─────────────────────────────┘
+    """
+    from rich.console import Console
+    from collections import defaultdict
+    from rich.table import Table
+
+    console = Console(record=True)
+    console.begin_capture()
+
+    # Create a table with a pretty border
+    table = Table(show_header=True, header_style="bold magenta", title_justify="center")
+    table.add_column("GPU ID", style="dim", justify="center")
+    table.add_column("Name", style="dim", justify="center")
+    table.add_column("Used", style="red", justify="center")
+    table.add_column("Free", style="green", justify="right")
+    table.add_column("Total", style="cyan", justify="right")
+    if include_temperature:
+        table.add_column("Temp", style="blue", justify="center")
+    if include_processes:
+        table.add_column("Processes", style="cyan", justify="left")
+
+    # Get GPU data
+    gpu_ids = get_all_gpu_ids()
+    for gpu_id in gpu_ids:
+        name = get_gpu_name(gpu_id)
+        used_vram = get_used_vram(gpu_id)
+        used_vram_human = human_readable_file_size(used_vram)
+        free_vram = human_readable_file_size(get_free_vram(gpu_id))
+        total_vram = human_readable_file_size(get_total_vram(gpu_id))
+        if include_percent_vram:
+            percent_vram = 100 * used_vram / get_total_vram(gpu_id)
+            used_vram_text = f"{used_vram_human: >7} {percent_vram: >5.1f}%"
+        if include_temperature:
+            temperature = get_gpu_temperature(gpu_id)
+            temperature_text = f"{temperature}°C"
+
+        if include_processes:
+            processes = get_gpu_pids(gpu_id)
+            user_process_vram = defaultdict(list)
+            for pid in processes:
+                pid_vram = get_used_vram(gpu_id, pid=pid)
+                username = get_username_from_process_id(pid)
+                user_process_vram[username].append((pid, pid_vram))
+
+            process_text = []
+            for username, pid_vram_list in user_process_vram.items():
+                total_user_vram = sum(vram for _, vram in pid_vram_list)
+                user_processes = ", ".join(
+                    f"{pid} {human_readable_file_size(vram)}"
+                    for pid, vram in pid_vram_list
+                )
+                process_text.append(
+                    f"[bold blue]{username}[/] [bold yellow]{human_readable_file_size(total_user_vram)}[/]: {user_processes}"
+                )
+            process_column_text = "; ".join(process_text)
+        else:
+            process_column_text = ""
+
+        table.add_row(
+            str(gpu_id),
+            name,
+            used_vram_text,
+            free_vram,
+            total_vram,
+            temperature_text if include_temperature else "",
+            process_column_text,
+        )
+
+    console.print(table)
+
+    console.end_capture()
+    output = console.export_text(styles=True)
+    if silent:
+        return output
+    else:
+        print(output)
 
 del re
 
