@@ -12832,6 +12832,7 @@ known_pypi_module_package_names={
     'slugify': 'python-slugify',
     'smart_open': 'smart-open',
     'spacy_legacy': 'spacy-legacy',
+    'speech_recognition': 'SpeechRecognition', #Needs pyaudio, and needs portaudio. I'm not sure if pyaudio needs portaudio?
     'sphinx': 'Sphinx',
     'sphinx_rtd_theme': 'sphinx-rtd-theme',
     'sphinxcontrib': 'sphinxcontrib-htmlhelp',
@@ -12854,6 +12855,7 @@ known_pypi_module_package_names={
     'websockets/extensions': 'websockets',
     'werkzeug': 'Werkzeug',
     'wheel-platform-tag-is-broken-on-empty-wheels-see-issue-141': 'sklearn',
+    'whisper': 'openai-whisper',
     'xontrib': 'xonsh',
     'yapftests': 'yapf',
     'yaml':'PyYAML',
@@ -13127,6 +13129,7 @@ def cv_find_contours(image,*,include_every_pixel=False):
     # 'contour.is_inner' is always the same as 'not contour.is_outer'. It returns whether it is an inner or an outer contour
     #If include_every_pixel is true, we include every single coordinate in our contour, using CHAIN_APPROX_NONE. Otherwise, opencv will simplify vertical and horizontal segments of pixels into a single edge (which is almost lossless)
     image=as_grayscale_image(image)
+    image=as_byte_image(image)
     raw_contours, hierarchy = cv2.findContours(image,cv2.RETR_CCOMP,cv2.CHAIN_APPROX_NONE if include_every_pixel else cv2.CHAIN_APPROX_SIMPLE)[-2:]
 
 
@@ -13147,6 +13150,28 @@ def cv_find_contours(image,*,include_every_pixel=False):
     except TypeError:pass#ERROR: TypeError: 'NoneType' object is not iterable (due to hierarchy being None before hierarchy=hierarchy[0])
 
     return contours
+
+def cv_simplify_contour(contour, epsilon=0.001):
+    """
+    Simplifies a closed contour using the Ramer-Douglas-Peucker algorithm.
+
+    Parameters:
+    contour (numpy.ndarray): The input contour, a 2D NumPy array of shape (n, 1, 2) or (n, 2), where n is the number of points, OR a complex-numbered vector of shape (n,)
+    epsilon (float, optional): The approximation accuracy, a non-negative value. This is the maximum distance between the original contour and its approximation. A smaller value results in a more accurate approximation. Default is 0.03.
+
+    Returns:
+    numpy.ndarray: A simplified contour, a 2D NumPy array of shape (m, 2), where m is the number of points in the simplified contour.
+    """
+    pip_import("cv2")
+    import cv2
+
+    big_number = 1000
+    contour = as_cv_contour(contour * big_number)  # It turns into ints
+    print(contour)
+    approx_contour = cv2.approxPolyDP(contour, epsilon, closed=True)
+    approx_contour = as_points_array(approx_contour)
+    approx_contour = approx_contour / big_number
+    return approx_contour
 
 def cv_distance_to_contour(contour,x,y):
     #Return the distance from x,y to the point on contour closest to x,y
@@ -18655,8 +18680,8 @@ def longest_common_suffix(a,b):
         out=''.join(out)
     return out
 
-def input_keypress():#catch_keyboard_interrupt=False): <---- TODO: Implement catch_keyboard_interrupt correctly! right now it doesn't work...
-    #If catch_keyboard_interrupt is True, when you press control+c, it will return the control+c character instead of throwing a KeyboardInterrupt
+def input_keypress(handle_keyboard_interrupt=True):#handle_keyboard_interrupt=False): <---- TODO: Implement handle_keyboard_interrupt correctly! right now it doesn't work...
+    #If handle_keyboard_interrupt is True, when you press control+c, it will return the control+c character instead of throwing a KeyboardInterrupt
     #Blocks the code until you press some key on the keyboard
     #Returns the characters sent to a terminal after you press that key
     #Original code from https://stackoverflow.com/questions/983354/how-do-i-make-python-wait-for-a-pressed-key
@@ -18714,7 +18739,7 @@ def input_keypress():#catch_keyboard_interrupt=False): <---- TODO: Implement cat
             ret.append(c)
             c = sys.stdin.read(1)
     except KeyboardInterrupt:
-        # if catch_keyboard_interrupt:
+        # if handle_keyboard_interrupt:
         #     ret.append('\x03')
         # else:
             raise
@@ -18722,7 +18747,10 @@ def input_keypress():#catch_keyboard_interrupt=False): <---- TODO: Implement cat
         # restore old state
         termios.tcsetattr(fd, termios.TCSAFLUSH, attrs_save)
         fcntl.fcntl(fd, fcntl.F_SETFL, flags_save)
-    return ''.join(tuple(ret))
+    output= ''.join(tuple(ret))
+    if output=='\x03' and not handle_keyboard_interrupt:
+        raise KeyboardInterrupt
+    return output
 
 def input_select_path(root=None,
                       *,
