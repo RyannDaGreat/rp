@@ -21879,10 +21879,10 @@ def select_torch_device(n=0, *, silent=False):
     import torch
 
     if currently_running_mac():
-        if not torch.backends.mps.is_available():
+        if not hasattr(torch.backends,'mps') or not torch.backends.mps.is_available():
             # Check that MPS is available
             if not silent:
-                if not torch.backends.mps.is_built():
+                if not hasattr(torch.backends,'mps') or not torch.backends.mps.is_built():
                     print(
                         end="MPS not available because the current PyTorch install was not "
                         "built with MPS enabled."
@@ -21896,7 +21896,7 @@ def select_torch_device(n=0, *, silent=False):
             device = torch.device("cpu")
         else:
             if not silent:
-                print("Returning MPS because its available, and you're running on a Mac.")
+                print("Returning MPS because you're on a Mac, and it's available.")
             device = torch.device("mps")
         return device
 
