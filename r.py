@@ -10868,7 +10868,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             split=[x[::-1] for x in user_message[::-1].split('.?',1)][::-1]#Split on the last ?.
                             if not qans:
                                 assert len(split)==2
-                                value=eval(split[0],scope())
+                                try:    
+                                    value=eval(split[0],scope())
+                                except BaseException as e:
+                                    print_stack_trace(e)
                                 query=split[1]
 
                                 if query and not query.isnumeric():
@@ -21847,17 +21850,71 @@ class ImageDataset:
             image=self.transform(image)
         return image
 
+        
 def select_torch_device(n=0, *, silent=False):
-    """Returns a torch device with the nth highest available vram. If there is a tie, return the GPU with the lowest id.
-    We allow you to specify n, so that you can choose the n best GPU's by running this function on n=0, n=1, n=2 etc."""
+    """
+    Returns a torch device with the nth highest available VRAM. In case of ties for VRAM availability,
+    the GPUs are considered in the order of their IDs, and the value of n determines which of the tied GPUs
+    will be selected. You can choose the nth best GPU by running this function with n=0, n=1, n=2, etc.
+
+    When the specified n is greater than or equal to the number of available GPUs, the function wraps n around
+    using modulus in a cyclic manner, distributing the selection across the available GPUs.
+
+    For example, if you have 4 GPUs with free VRAMs [200, 0, 100, 100] and you select n=0, you will get 'cuda:1'.
+    If you select n=1, you will get 'cuda:2', as it's the GPU with the second highest free VRAM.
+    If you select n=2, you will get 'cuda:3', and if you select n=3, you get 'cuda:0' and so on.
+    If you select n=5, you will get 'cuda:1' again, as it cycles through the available GPUs.
+
+    If the device is a Mac with MPS (Metal Performance Shaders) available, an MPS-enabled device will be 
+    returned. If MPS is not available, the function falls back to the CPU.
+
+    If no GPUs are available or CUDA is not supported, the function returns the CPU.
+
+    :param n: The index for selecting the GPU with the nth highest available VRAM (zero-based). If n is greater
+              than or equal to the number of available GPUs, it will cycle through the GPUs.
+    :param silent: If True, suppresses printed output. Defaults to False.
+    :return: A torch.device object corresponding to the selected device.
+    """
 
     import torch
 
-    selected_gpu_id = get_gpu_with_most_free_vram(n)
+    if currently_running_mac():
+        if not torch.backends.mps.is_available():
+            # Check that MPS is available
+            if not silent:
+                if not torch.backends.mps.is_built():
+                    print(
+                        end="MPS not available because the current PyTorch install was not "
+                        "built with MPS enabled."
+                    )
+                else:
+                    print(
+                        end="MPS not available because the current MacOS version is not 12.3+ "
+                        "and/or you do not have an MPS-enabled device on this machine."
+                    )
+                print(" Falling back to CPU.")
+            device = torch.device("cpu")
+        else:
+            if not silent:
+                print("Returning MPS because its available, and you're running on a Mac.")
+            device = torch.device("mps")
+        return device
+
+    if not torch.cuda.is_available():
+        fansi_print("Selecting CPU because torch.cuda is not available - either you don't have cuda, or torch wasn't compiled to support it.",style='bold')
+        return torch.device('cpu')
+
     gpu_count = get_gpu_count()
+    if not silent and n>=gpu_count:
+        new_n = n % gpu_count
+        print("You selected index n=%i (zero-based). The GPU selection will cycle through the %i available GPUs. We've set n to %i (GPU index after cycling)." % (n, gpu_count, new_n))
+        n = new_n
+
+    selected_gpu_id = get_gpu_with_most_free_vram(n)
+
     if gpu_count == 0:
         if not silent:
-            fansi_print('We have no GPUs. Selecting "cpu".',style='bold')
+            fansi_print("We have no GPUs. Selecting 'cpu'.",style='bold')
         output=torch.device("cpu")
     
 
@@ -21881,10 +21938,11 @@ def select_torch_device(n=0, *, silent=False):
         headers=[empty_header for _ in lines]
         headers[3+selected_gpu_id]=arrow_header
         lines=[header+line for header,line in zip(headers,lines)]
-        print(line_join(lines))
+        if not silent:
+            print(line_join(lines))
 
     return output
-        
+
         
 
 def load_yaml_file(path):
