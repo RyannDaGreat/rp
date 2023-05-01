@@ -269,6 +269,130 @@ class SetCurrentDirectoryTemporarily:
             
     def __exit__(self,*args):
         set_current_directory(self.original_dir)
+
+
+class TemporarilySetAttr:
+    """
+    A context manager for temporarily setting attributes on an object.
+    
+    Usage:
+        with TemporarilySetAttr(obj, attr1=value1, attr2=value2):
+            # do something with obj that requires temporary attribute values
+
+    # Other examples and testable examples are included below:
+
+    Example 1 (Graphics - Drawing shapes with temporary styles):
+        with TemporarilySetAttr(shape, fill_color='red', stroke_width=3):
+            draw_shape(shape)
+
+    Example 2 (Scientific Computing - Using temporary units in a physics simulation):
+        with TemporarilySetAttr(physics_object, unit_system='imperial'):
+            compute_gravitational_force(physics_object)
+
+    Example 3 (Web Scraping - Temporarily changing request headers):
+        with TemporarilySetAttr(request, **{'headers': {'User-Agent': 'Custom-UA'}}):
+            response = fetch_data(request)
+
+    Testable examples:
+        class Test:
+            def __init__(self):
+                self.attr = 0
+
+        instance = Test()
+
+        with TemporarilySetAttr(instance, attr=42):
+            assert instance.attr == 42
+        assert instance.attr == 0
+
+        with TemporarilySetAttr(instance, attr=42, new_attr=100):
+            assert instance.attr == 42
+            assert instance.new_attr == 100
+        assert instance.attr == 0
+        assert not hasattr(instance, 'new_attr')
+
+    Written with the aid of GPT4: https://sharegpt.com/c/eis0skz
+    """
+
+    def __init__(self, instance, **kwargs):
+        self.instance = instance
+        self.old_attrs = {}
+        self.new_attrs = kwargs
+
+    def __enter__(self):
+        for attr, new_value in self.new_attrs.items():
+            if hasattr(self.instance, attr):
+                self.old_attrs[attr] = getattr(self.instance, attr)
+            setattr(self.instance, attr, new_value)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        for attr, old_value in self.old_attrs.items():
+            setattr(self.instance, attr, old_value)
+        for attr in self.new_attrs:
+            if attr not in self.old_attrs:
+                delattr(self.instance, attr)
+
+class TemporarilySetItem:
+    """
+    A context manager for temporarily setting items in a container (list, dict, etc.).
+    
+    Usage:
+        with TemporarilySetItem(container, {key1: value1, key2: value2}):
+            # do something with the container that requires temporary values
+
+    # Other examples and testable examples are included below:
+
+    Example 1 (Text Processing - Temporarily changing specific words in a list):
+        words = ['The', 'quick', 'brown', 'fox']
+        with TemporarilySetItem(words, {1: 'slow', 2: 'red'}):
+            process_text(words)
+
+    Example 2 (Data Analysis - Temporarily modifying data points in a dataset):
+        data = {'a': 42, 'b': 7, 'c': 15}
+        with TemporarilySetItem(data, {'a': 100, 'b': 5}):
+            analyze_outliers(data)
+
+    Example 3 (Configuration - Temporarily changing settings in a configuration dictionary):
+        config = {'mode': 'production', 'log_level': 'info'}
+        with TemporarilySetItem(config, {'mode': 'development', 'log_level': 'debug'}):
+            run_tests(config)
+
+    Testable examples:
+
+        my_list = [1, 2, 3, 4]
+
+        with TemporarilySetItem(my_list, {2: 42}):
+            assert my_list[2] == 42
+        assert my_list[2] == 3
+
+        my_dict = {'a': 1, 'b': 2}
+
+        with TemporarilySetItem(my_dict, {'a': 42, 'c': 3}):
+            assert my_dict['a'] == 42
+            assert my_dict['c'] == 3
+        assert my_dict['a'] == 1
+        assert 'c' not in my_dict
+
+    Written with the aid of GPT4: https://sharegpt.com/c/cJgZmJa
+    """
+
+    def __init__(self, container, mapping):
+        self.container = container
+        self.old_items = {}
+        self.new_items = mapping
+        
+    def __enter__(self):
+        for key, new_value in self.new_items.items():
+            if key in self.container:
+                self.old_items[key] = self.container[key]
+            self.container[key] = new_value
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        for key in self.new_items:
+            if key in self.old_items:
+                self.container[key] = self.old_items[key]
+            else:
+                del self.container[key]
+
         
 #THIS IS DEPRECATED IN FAVOR OF get_all_paths
 # def get_all_file_names(file_name_ending: str = '',file_name_must_contain: str = '',folder_path: str = get_current_directory(),show_debug_narrative: bool = False):
@@ -14510,6 +14634,184 @@ def memoized_property(method):
     memoized_property=property(memoized_property)
     return memoized_property
 #endregion
+
+class CachedInstances:
+    """
+    A base class that provides caching for instances of derived classes.
+
+    The CachedInstances class is designed to cache and reuse instances of the classes
+    that inherit from it. It helps prevent the creation of multiple instances with the
+    same arguments, which can be useful when dealing with resource-intensive objects
+    like deep learning models or other objects that require significant setup time.
+
+    Instances are cached based on the constructor's arguments. When an object is
+    requested with the same arguments as a previously created object, the cached
+    instance is returned instead of creating a new one.
+
+    The cache is implemented using an rp.HandyDict, which allows for more complex keys,
+    such as lists and other non-hashable types, to be used cached arguments.
+
+    Example Use Cases:
+        1. Prevent multiple connections to the same database by caching instances of a database connection class.
+        2. Avoid repeating complex mathematical calculations by caching instances of a class that performs these calculations.
+        3. Save time and resources by avoiding redundant machine learning model training with the caching of instances of a class that trains these models.
+
+    Coded with the partial aid of Gpt4: https://sharegpt.com/c/ZJTpahK
+
+    Example 1:
+        class MyClass(CachedInstances):
+            def __init__(self, value):
+                self.value = value
+
+        # Create an instance with value 42
+        instance1 = MyClass(42)
+        instance2 = MyClass(42)
+
+        # Create an instance with value 100
+        instance3 = MyClass(100)
+
+        # Test that instances with the same arguments are the same object
+        assert instance1 is instance2
+        assert instance1 is not instance3
+        assert instance2 is not instance3
+
+    Example 2:
+        class MyDeviceClass(CachedInstances):
+            def __init__(self, device):
+                self.device = device
+                self.warn_if_multiple_devices()
+
+            def warn_if_multiple_devices(self):
+                devices = set(instance.device for instance in type(self).cache.values())
+                if len(devices) > 1:
+                    print("Multiple devices detected: {}. It's recommended to use a single device.".format(devices))
+
+        instance1 = MyDeviceClass("cpu")
+        instance2 = MyDeviceClass("gpu0")
+        instance3 = MyDeviceClass("gpu1")
+
+        # A warning will be issued about multiple devices being used. This is useful for torch in particular, where we might not want to use multiple GPU's for the same task
+        # OUTPUT:
+        #    Multiple devices detected: {'gpu0', 'cpu'}. It's recommended to use a single device.
+        #    Multiple devices detected: {'gpu0', 'cpu', 'gpu1'}. It's recommended to use a single device.
+
+    Example 3:
+        #The power of HandyDict: caching non-typically-hashable objects
+
+        class MyListClass(CachedInstances):
+            def __init__(self, my_list):
+                self.my_list = my_list
+
+        # Create instances with the same list
+        list1 = [1, 2, 3]
+        list2 = [1, 2, 3]
+        list3 = [4, 5, 6]
+
+        instance1 = MyListClass(list1)
+        instance2 = MyListClass(list2)
+        instance3 = MyListClass(list3)
+
+        # Test that instances with the same lists are the same object
+        assert instance1 is instance2
+        assert instance1 is not instance3
+
+    Example 4:
+        # It correctly handles subclasses
+        
+        class ParentClass(CachedInstances):
+            def __init__(self, value):
+                self.value = value
+
+        class ChildClass(ParentClass):
+            pass
+
+        # Create instances of ParentClass and ChildClass with the same value
+        parent_instance1 = ParentClass(42)
+        child_instance1 = ChildClass(42)
+
+        # Create instances of ParentClass and ChildClass with different values
+        parent_instance2 = ParentClass(100)
+        child_instance2 = ChildClass(100)
+
+        # Test that instances with the same arguments but different classes are not the same object
+        assert parent_instance1 is not child_instance1
+        assert parent_instance2 is not child_instance2
+
+        # Test that instances with the same arguments and same class are the same object
+        assert parent_instance1 is ParentClass(42)
+        assert child_instance1 is ChildClass(42)
+
+        # Test that instances with different arguments and same class are not the same object
+        assert parent_instance1 is not parent_instance2
+        assert child_instance1 is not child_instance2
+    """
+
+    _init_lock = threading.Lock()
+
+    def __new__(cls, *args, **kwargs):
+        """
+        Create a new instance or return an existing one from the cache based on the arguments.
+
+        Args:
+            cls (Type[object]): The class for which the new instance is being created.
+            *args (Any): Positional arguments passed to the constructor.
+            **kwargs (Any): Keyword arguments passed to the constructor.
+
+        Returns:
+            object: The new or cached instance of the class.
+        """
+        all_args = (args, kwargs)
+        cache = cls.cache
+        if all_args not in cache:
+            # Cache miss: Create a new instance
+            instance = super().__new__(cls)
+            cache[all_args] = instance
+            # __init__ will be called automatically after __new__
+        else:
+            # Cache hit: Use the existing instance
+
+            # We want to prevent __init__ from being called twice because it may
+            # cause unintended side effects, such as resetting the state of an
+            # existing object or causing resource leaks (e.g., opening multiple
+            # connections to a database). Therefore, when an existing instance
+            # is returned from the cache, we temporarily replace the __init__
+            # method with a no-op function to avoid calling it again.
+
+            with cls._init_lock:
+                # Temporarily replace the __init__ method with a no-op function
+                old_init = cls.__init__
+
+                def new_init(self, *args, **kwargs):
+                    """Restore the original __init__ method."""
+                    cls.__init__ = old_init  # Restore the original __init__ method
+
+                cls.__init__ = new_init  # Replace the __init__ method with the new_init function
+
+        return cache[all_args]
+    
+    @classmethod
+    @property
+    def cache(cls):
+        """
+        Return the cache dictionary for instances of the derived class.
+
+        Returns:
+            HandyDict: A HandyDict object that maps cache keys (based on the constructor arguments) to the cached instances.
+        """
+        assert isinstance(cls, type)
+        if not "_instance_cache" in vars(cls):
+            # Check if '_instance_cache' is in the dictionary of the current class (vars(cls))
+            # instead of using hasattr(cls, '_instance_cache') to prevent the cache from being
+            # shared between the parent class and its subclasses.
+            #
+            # Using hasattr(cls, '_instance_cache') would return True if any ancestor of cls has
+            # '_instance_cache' attribute. This would lead to sharing the same cache between the
+            # parent class and its subclasses, which is not desired. By checking if
+            # '_instance_cache' is in vars(cls), we ensure that each class has its own separate cache.
+            #
+            # See Example 4
+            cls._instance_cache = HandyDict()
+        return cls._instance_cache
 
 
 def labeled_image(image,
