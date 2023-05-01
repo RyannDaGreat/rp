@@ -274,7 +274,7 @@ class SetCurrentDirectoryTemporarily:
 class TemporarilySetAttr:
     """
     A context manager for temporarily setting attributes on an object.
-    
+
     Usage:
         with TemporarilySetAttr(obj, attr1=value1, attr2=value2):
             # do something with obj that requires temporary attribute values
@@ -282,15 +282,39 @@ class TemporarilySetAttr:
     # Other examples and testable examples are included below:
 
     Example 1 (Graphics - Drawing shapes with temporary styles):
+        # Instead of doing this:
+        old_fill_color = shape.fill_color
+        old_stroke_width = shape.stroke_width
+        shape.fill_color = 'red'
+        shape.stroke_width = 3
+        draw_shape(shape)
+        shape.fill_color = old_fill_color
+        shape.stroke_width = old_stroke_width
+
+        # Use TemporarilySetAttr like this:
         with TemporarilySetAttr(shape, fill_color='red', stroke_width=3):
             draw_shape(shape)
 
     Example 2 (Scientific Computing - Using temporary units in a physics simulation):
+        # Instead of doing this:
+        old_unit_system = physics_object.unit_system
+        physics_object.unit_system = 'imperial'
+        compute_gravitational_force(physics_object)
+        physics_object.unit_system = old_unit_system
+
+        # Use TemporarilySetAttr like this:
         with TemporarilySetAttr(physics_object, unit_system='imperial'):
             compute_gravitational_force(physics_object)
 
     Example 3 (Web Scraping - Temporarily changing request headers):
-        with TemporarilySetAttr(request, **{'headers': {'User-Agent': 'Custom-UA'}}):
+        # Instead of doing this:
+        old_headers = request.headers
+        request.headers = {'User-Agent': 'Custom-UA'}
+        response = fetch_data(request)
+        request.headers = old_headers
+
+        # Use TemporarilySetAttr like this:
+        with TemporarilySetAttr(request, headers={'User-Agent': 'Custom-UA'}):
             response = fetch_data(request)
 
     Testable examples:
@@ -310,7 +334,7 @@ class TemporarilySetAttr:
         assert instance.attr == 0
         assert not hasattr(instance, 'new_attr')
 
-    Written with the aid of GPT4: https://sharegpt.com/c/eis0skz
+    Written with the aid of GPT4: https://sharegpt.com/c/ZXG65TG
     """
 
     def __init__(self, instance, **kwargs):
@@ -342,19 +366,48 @@ class TemporarilySetItem:
     # Other examples and testable examples are included below:
 
     Example 1 (Text Processing - Temporarily changing specific words in a list):
+        # Instead of doing this:
+        old_word_1 = words[1]
+        old_word_2 = words[2]
+        words[1] = 'slow'
+        words[2] = 'red'
+        process_text(words)
+        words[1] = old_word_1
+        words[2] = old_word_2
+
+        # Use TemporarilySetItem like this:
         words = ['The', 'quick', 'brown', 'fox']
         with TemporarilySetItem(words, {1: 'slow', 2: 'red'}):
             process_text(words)
 
     Example 2 (Data Analysis - Temporarily modifying data points in a dataset):
+        # Instead of doing this:
+        old_a = data['a']
+        old_b = data['b']
+        data['a'] = 100
+        data['b'] = 5
+        analyze_outliers(data)
+        data['a'] = old_a
+        data['b'] = old_b
+
+        # Use TemporarilySetItem like this:
         data = {'a': 42, 'b': 7, 'c': 15}
         with TemporarilySetItem(data, {'a': 100, 'b': 5}):
             analyze_outliers(data)
 
     Example 3 (Configuration - Temporarily changing settings in a configuration dictionary):
+        # Instead of doing this:
+        old_mode = config['mode']
+        old_log_level = config['log_level']
+        config['mode'] = 'development'
+        config['log_level'] = 'debug'
+        run_tests(config)
+        config['mode'] = old_mode
+        config['log_level'] = old_log_level
+
+        # Use TemporarilySetItem like this:
         config = {'mode': 'production', 'log_level': 'info'}
         with TemporarilySetItem(config, {'mode': 'development', 'log_level': 'debug'}):
-            run_tests(config)
 
     Testable examples:
 
@@ -372,7 +425,7 @@ class TemporarilySetItem:
         assert my_dict['a'] == 1
         assert 'c' not in my_dict
 
-    Written with the aid of GPT4: https://sharegpt.com/c/cJgZmJa
+    Written with the aid of GPT4: https://sharegpt.com/c/ZXG65TG
     """
 
     def __init__(self, container, mapping):
