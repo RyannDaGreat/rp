@@ -22294,29 +22294,44 @@ class ImageDataset:
         return image
 
         
-def select_torch_device(n=0, *, silent=False):
+def select_torch_device(n=0, *, silent=False, prefer_used=False):
     """
-    Returns a torch device with the nth highest available VRAM. In case of ties for VRAM availability,
-    the GPUs are considered in the order of their IDs, and the value of n determines which of the tied GPUs
-    will be selected. You can choose the nth best GPU by running this function with n=0, n=1, n=2, etc.
+    Returns the appropriate PyTorch device based on the available hardware and system configuration.
+    
+    This function selects the best device for running PyTorch operations based on the user's
+    hardware, OS, and settings. It supports GPU devices if available and falls back to CPU if
+    needed. The function also supports Macs with MPS (Metal Performance Shaders) and
+    allows for GPU cycling to balance workload across multiple GPUs.
+    
+    The function selects the GPU with the nth highest available VRAM. In the case of ties for VRAM
+    availability, GPUs are considered in the order of their IDs, and n determines which of the tied
+    GPUs will be selected. If n >= number of available GPUs, the function wraps around using
+    modulus, cycling through the available GPUs.
 
-    When the specified n is greater than or equal to the number of available GPUs, the function wraps n around
-    using modulus in a cyclic manner, distributing the selection across the available GPUs.
+    Args:
+        n (int, optional): The index of the GPU to select based on available VRAM (zero-based). Defaults to 0.
+        silent (bool, optional): If True, suppresses print statements. Defaults to False.
+        prefer_used (bool, optional): If True, selects a GPU already in use by the current
+            process if available. Defaults to False.
 
-    For example, if you have 4 GPUs with free VRAMs [200, 0, 100, 100] and you select n=0, you will get 'cuda:1'.
-    If you select n=1, you will get 'cuda:2', as it's the GPU with the second highest free VRAM.
-    If you select n=2, you will get 'cuda:3', and if you select n=3, you get 'cuda:0' and so on.
-    If you select n=5, you will get 'cuda:1' again, as it cycles through the available GPUs.
+    Returns:
+        torch.device: The selected PyTorch device ('cpu', 'mps', or 'cuda:<gpu_id>').
+        
+    Examples:
+        - If you have 4 GPUs with free VRAMs [200, 0, 100, 100] and you select n=0, you will get 'cuda:1'.
+        - If you select n=1, you will get 'cuda:2', as it's the GPU with the second highest free VRAM.
+        - If you select n=2, you will get 'cuda:3', and if you select n=3, you get 'cuda:0' and so on.
+        - If you select n=5, you will get 'cuda:1' again, as it cycles through the available GPUs.
 
-    If the device is a Mac with MPS (Metal Performance Shaders) available, an MPS-enabled device will be 
-    returned. If MPS is not available, the function falls back to the CPU.
-
-    If no GPUs are available or CUDA is not supported, the function returns the CPU.
-
-    :param n: The index for selecting the GPU with the nth highest available VRAM (zero-based). If n is greater
-              than or equal to the number of available GPUs, it will cycle through the GPUs.
-    :param silent: If True, suppresses printed output. Defaults to False.
-    :return: A torch.device object corresponding to the selected device.
+    Edge Cases:
+        - If running on a Mac without MPS support, the function falls back to CPU.
+        - If no GPUs are available, the function selects the CPU.
+        - If n >= number of available GPUs, the function cycles through the available GPUs
+          and selects one based on the index n % number of GPUs.
+        - If prefer_used is set and no GPUs are currently in use by the process, the function
+          selects an available GPU based on the index n.
+        - If prefer_used is set and there are GPUs currently in use by the process, the function
+          will select from those GPUs.
     """
 
     import torch
@@ -22347,28 +22362,33 @@ def select_torch_device(n=0, *, silent=False):
         fansi_print("Selecting CPU because torch.cuda is not available - either you don't have cuda, or torch wasn't compiled to support it.",style='bold')
         return torch.device('cpu')
 
-    gpu_count = get_gpu_count()
+    all_gpus = get_all_gpu_ids()
+    used_gpus = get_gpu_ids_used_by_process()
+
+    if prefer_used and used_gpus and not silent:
+        if len(used_gpus)==1:
+            print("This computer has %i GPUs, but we will be choosing cuda:%i because we're already using it." % (len(all_gpus), used_gpus[0]))
+        if len(used_gpus)>1:
+            print("This computer has %i GPUs, but we will be choosing from the subset %s because we're already using them." % (len(all_gpus), str(available_gpus)))
+        available_gpus = used_gpus
+    else:
+        available_gpus = all_gpus
+
+    gpu_count = len(available_gpus)
+
     if not silent and n>=gpu_count:
         new_n = n % gpu_count
         print("You selected index n=%i (zero-based). The GPU selection will cycle through the %i available GPUs. We've set n to %i (GPU index after cycling)." % (n, gpu_count, new_n))
         n = new_n
 
-    selected_gpu_id = get_gpu_with_most_free_vram(n)
+    selected_gpu_id = get_gpu_with_most_free_vram(n, choices=available_gpus)
 
     if gpu_count == 0:
         if not silent:
             fansi_print("We have no GPUs. Selecting 'cpu'.",style='bold')
         output=torch.device("cpu")
     
-
-    elif gpu_count == 1:
-        #if not silent:
-            #fansi_print('We only have 1 GPU to choose from. Selecting "cuda:0".',style='bold')
-        output=torch.device("cuda:0")
-    
     else:
-        #if not silent:
-            #fansi_print('Selecting "cuda:%i"'%selected_gpu_id,style='bold')
         output=torch.device("cuda:%i"%selected_gpu_id)
 
     if not silent and gpu_count>0:
@@ -22919,6 +22939,16 @@ def get_all_gpu_ids():
     return list(range(get_gpu_count()))
 
 
+def get_gpu_ids_used_by_process(pid=None):
+    """Get a list of all GPU's used by a given process. Defaults to the current process."""
+    if pid is None:
+        pid = get_process_id()
+        return get_gpu_ids_used_by_process(pid)
+
+    used_gpu_ids = [gpu_id for gpu_id, pids in enumerate(get_gpu_pids()) if pid in pids]
+    return used_gpu_ids
+
+
 def get_gpu_pids(gpu_id=None):
     """
     Returns a list of process IDs running on the given GPU.
@@ -23024,15 +23054,23 @@ def get_used_vram(gpu_id=None, pid=None):
     return process_vram
 
 
-def get_gpu_with_most_free_vram(n=0):
+def get_gpu_with_most_free_vram(n=0, choices=None):
     """
-    Returns the GPU ID with the most nth most free VRAM. If there is a tie, returns the GPU with the lowest ID.
+    Returns the GPU ID with the nth most free VRAM. If there is a tie, the function will prioritize GPUs with lower IDs.
+    
+    Args:
+    n (int, optional): Indicates which GPU to return based on free VRAM. 0 returns the GPU with the most free VRAM, 1 returns the GPU with the second most free VRAM, and so on. Defaults to 0.
+    choices (list, optional): A list of GPU IDs to choose from. If not provided, all available GPUs will be considered.
 
     Example:
     >>> get_gpu_with_most_free_vram()
     2
+    >>> get_gpu_with_most_free_vram(choices=[0, 1, 3])
+    1
     """
-    return sorted(get_all_gpu_ids(), key=get_free_vram, reverse=True)[n]
+    if choices is None:
+        choices = get_all_gpu_ids()
+    return sorted(choices, key=get_free_vram, reverse=True)[n]
 
 
 def get_gpu_name(gpu_id=None):
