@@ -14735,7 +14735,7 @@ class CachedInstances:
                 self.warn_if_multiple_devices()
 
             def warn_if_multiple_devices(self):
-                devices = set(instance.device for instance in type(self).cache.values())
+                devices = set(instance.device for instance in type(self).instance_cache.values())
                 if len(devices) > 1:
                     print("Multiple devices detected: {}. It's recommended to use a single device.".format(devices))
 
@@ -14814,7 +14814,7 @@ class CachedInstances:
             object: The new or cached instance of the class.
         """
         all_args = (args, kwargs)
-        cache = cls.cache
+        cache = cls.instance_cache
         if all_args not in cache:
             # Cache miss: Create a new instance
             instance = super().__new__(cls)
@@ -14844,7 +14844,7 @@ class CachedInstances:
     
     @classmethod
     @property
-    def cache(cls):
+    def instance_cache(cls):
         """
         Return the cache dictionary for instances of the derived class.
 
