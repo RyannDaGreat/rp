@@ -76,9 +76,11 @@
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/parso
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Users/Ryan/Desktop/CleanCode/Resume/Latex/Attempt1
-/Users/Ryan/PycharmProjects/QuickPython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
 /Users/Ryan/.config/alacritty
 /Users/Ryan/Desktop/Aydin
+/Users/Ryan/PycharmProjects/QuickPython
+/Users/Ryan/PycharmProjects/QuickPython/rp-0.1.676
+/Users/Ryan/PycharmProjects/QuickPython/rp-0.1.676/rp
 /Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
