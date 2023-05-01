@@ -644,6 +644,91 @@ def print_fansi_reference_table() -> None:
         #From https://superuser.com/questions/285381/how-does-the-tmux-color-palette-work/285400
         os.system('bash -c \'for i in {0..255}; do  printf "\\x1b[38;5;${i}mcolor%-5i\\x1b[0m" $i ; if ! (( ($i + 1 ) % 8 )); then echo ; fi ; done\'')
 
+def _old_fansi_syntax_highlighting(code: str,namespace=(),style_overrides={}):
+    # PLEASE NOTE THAT I DID NOT WRITE SOME OF THIS CODE!!! IT CAME FROM https://github.com/akheron/cpython/blob/master/Tools/scripts/highlight.py
+    # Assumes code was written in python.
+    # Method mainly intended for rinsp.
+    # I put it in the r class for convenience.
+    # Works when I paste methods in but doesn't seem to play nicely with rinsp. I don't know why yet.
+    # See the highlight_sourse_in_ansi module for more stuff including HTML highlighting etc.
+    default_ansi={
+        'comment':('\033[0;31m','\033[0m'),
+        'string':('\033[0;32m','\033[0m'),
+        'docstring':('\033[0;32m','\033[0m'),
+        'keyword':('\033[0;33m','\033[0m'),
+        'builtin':('\033[0;35m','\033[0m'),
+        'definition':('\033[0;33m','\033[0m'),
+        'defname':('\033[0;34m','\033[0m'),
+        'operator':('\033[0;33m','\033[0m'),
+    }
+    default_ansi.update(style_overrides)
+    try:
+        import keyword,tokenize,cgi,re,functools
+        try:
+            import builtins
+        except ImportError:
+            import builtins as builtins
+        def is_builtin(s):
+            'Return True if s is the name of a builtin'
+            return hasattr(builtins,s) or s in namespace
+        def combine_range(lines,start,end):
+            'Join content from a range of lines between start and end'
+            (srow,scol),(erow,ecol)=start,end
+            if srow == erow:
+                return lines[srow - 1][scol:ecol],end
+            rows=[lines[srow - 1][scol:]] + lines[srow: erow - 1] + [lines[erow - 1][:ecol]]
+            return ''.join(rows),end
+        def analyze_python(source):
+            '''Generate and classify chunks of Python for syntax highlighting.
+               Yields tuples in the form: (category, categorized_text).
+            '''
+            lines=source.splitlines(True)
+            lines.append('')
+            readline=functools.partial(next,iter(lines),'')
+            kind=tok_str=''
+            tok_type=tokenize.COMMENT
+            written=(1,0)
+            for tok in tokenize.generate_tokens(readline):
+                prev_tok_type,prev_tok_str=tok_type,tok_str
+                tok_type,tok_str,(srow,scol),(erow,ecol),logical_lineno=tok
+                kind=''
+                if tok_type == tokenize.COMMENT:
+                    kind='comment'
+                elif tok_type == tokenize.OP and tok_str[:1] not in '{}[](),.:;@':
+                    kind='operator'
+                elif tok_type == tokenize.STRING:
+                    kind='string'
+                    if prev_tok_type == tokenize.INDENT or scol == 0:
+                        kind='docstring'
+                elif tok_type == tokenize.NAME:
+                    if tok_str in ('def','class','import','from'):
+                        kind='definition'
+                    elif prev_tok_str in ('def','class'):
+                        kind='defname'
+                    elif keyword.iskeyword(tok_str):
+                        kind='keyword'
+                    elif is_builtin(tok_str) and prev_tok_str != '.':
+                        kind='builtin'
+                if kind:
+                    if written != (srow,scol):
+                        text,written=combine_range(lines,written,(srow,scol))
+                        yield '',text
+                    text,written=tok_str,(erow,ecol)
+                    yield kind,text
+            line_upto_token,written=combine_range(lines,written,(erow,ecol))
+            yield '',line_upto_token
+        def ansi_highlight(classified_text,colors=default_ansi):
+            'Add syntax highlighting to source code using ANSI escape sequences'
+            # http://en.wikipedia.org/wiki/ANSI_escape_code
+            result=[]
+            for kind,text in classified_text:
+                opener,closer=colors.get(kind,('',''))
+                result+=[opener,text,closer]
+            return ''.join(result)
+        return ansi_highlight(analyze_python(code))
+    except Exception:
+        return code  # Failed to highlight code, presumably because of an import error.
+
 def fansi_syntax_highlighting(code: str,
                               namespace=(),
                               style_overrides:dict={},
@@ -651,6 +736,9 @@ def fansi_syntax_highlighting(code: str,
                               show_line_numbers:bool=False,
                               lazy:bool=False,
                               ):
+    if not lazy and not show_line_numbers and not line_wrap_width:
+        return _old_fansi_syntax_highlighting(code,namespace,style_overrides) #This one is less glitchy. Use it when we can until the new one is fixed.
+        
     #TODO: Because of the way it was programmed, it now included an extraneous new empty line on the top of the output. Feel free to remove that later brutishly lol (just lob it off the final output)
     #If lazy==True, this function returns a generator of strings that should be printed sequentially without new lines
     #If line_wrap_width is an int, it will wrap the whole output to that width - this is suprisingly tricky to do because of the ansi escape codes
