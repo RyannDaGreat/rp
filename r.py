@@ -9822,7 +9822,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         NBC  $r._clear_jupyter_notebook_outputs()
         NBCA $r._nbca(ans) # Clear a notebook
         NBCH $r._nbca($get_all_files(file_extension_filter='ipynb')) #Clear all notebooks in the current directory
-        NBCHY $r._nbca($get_all_files(file_extension_filter='ipynb'), auto_yes=True) #Clear all notebooks in the current directory without confirmation
+        NBCHY $r._nbca($get_all_files(file_extension_filter='ipynb',sort_by='size')[::-1], auto_yes=True) #Clear all notebooks in the current directory without confirmation
         NCA  $r._nbca(ans)
 
         INS $input_select("Select:",ans)
@@ -14887,6 +14887,17 @@ class CachedInstances:
         assert child_instance1 is not child_instance2
     """
 
+    # TODO: Fix CachedInstances to handle default arguments correctly.
+    # Ensure instances with unspecified default arguments are treated
+    # as equivalent to instances with specified default arguments.
+    # Consider robustness when working with built-in or C-implemented classes.
+    # Example issue:
+    #   class Thing(CachedInstances):
+    #       def __init__(self, key=0):
+    #           pass
+    #   assert Thing() is Thing(0), 'This assertion fails! TODO: Fix it'
+    # More info: https://shareg.pt/TDRhtYp
+
     _init_lock = threading.Lock()
 
     def __new__(cls, *args, **kwargs):
@@ -18302,6 +18313,125 @@ def _get_all_english_words_lowercase():
 def is_an_english_word(word):
     #This function is not case sensitive
     return word.lower() in _get_all_english_words_lowercase()
+
+def split_sentences(text, language='english'):
+    """
+    Splits the input text into sentences based on the specified language.
+
+    This function uses the Punkt tokenizer, which is an unsupervised machine learning
+    algorithm for sentence tokenization developed by Kiss and Strunk. It effectively
+    segments text into sentences based on punctuation and capitalization cues. The Punkt
+    tokenizer is part of the Natural Language Toolkit (nltk) library in Python.
+
+    The function is designed to work with multiple languages:
+        'english'
+        'spanish'
+        'french'
+        'italian'
+        'german'
+        'russian'
+        'portuguese'
+        'greek'
+        'estonian'
+        'dutch'
+        'slovene'
+        'swedish'
+        'czech'
+        'finnish'
+        'malayalam'
+        'norwegian'
+        'danish'
+        'turkish'
+        'polish'
+
+    To see the full list of supported languages and their corresponding codes, run the following code snippet:
+        print(rp.r._get_punkt_languages())
+
+    Parameters:
+        text (str): The input text to be split into sentences.
+        language (str): The langauge to be split
+
+    Returns:
+        list: A list of sentences extracted from the input text.
+
+    Example:
+        text = "Hello! This is an example of splitting sentences. How are you doing today?"
+        sentences = split_sentences(text)
+        print(sentences)
+        # Output: ['Hello!', 'This is an example of splitting sentences.', 'How are you doing today?']
+
+    Alternative Libraries:
+        An alternative library for sentence tokenization is spaCy, which provides a more comprehensive
+        natural language processing pipeline and supports a wide range of languages. If you need more advanced
+        NLP capabilities or prefer a different tokenizer, consider using the spaCy library.
+
+    Written with the partial aid of GPT4: https://sharegpt.com/c/ialPWcW
+    """
+
+    #Imports and downloads
+    pip_import("nltk")
+    _ensure_punkt_downloaded()
+    import nltk
+    from nltk.tokenize import sent_tokenize
+
+    
+    #Input assertions
+    assert isinstance(text, str)
+    assert language in _get_punkt_languages(), 'Language %s is not supported. Please choose from: %s'%(language, _get_punkt_languages())
+
+    return sent_tokenize(text)
+
+@memoized
+def _ensure_punkt_downloaded():
+    # Ensure nltk is installed and punkt is downloaded
+    pip_import("nltk")
+    import nltk
+    try:
+        nltk.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt')
+
+@memoized
+def _get_punkt_languages():
+    """
+    Gets a list of languages supported by nltk's punkt (sentence splitter)
+    Current languages as of writing:
+        greek
+        english
+        estonian
+        dutch
+        portuguese
+        slovene
+        spanish
+        swedish
+        french
+        czech
+        finnish
+        malayalam
+        russian
+        norwegian
+        german
+        danish
+        turkish
+        italian
+        polish
+    """
+    pip_import('nltk')
+    _ensure_punkt_downloaded()
+
+    import os
+    from nltk.data import find
+    
+    output=[]
+    
+    punkt_path = str(find('tokenizers/punkt'))
+    language_dirs = os.listdir(punkt_path)
+    
+    for lang_dir in language_dirs:
+        if lang_dir.endswith('.pickle'):
+            output.append(lang_dir.split('.')[0])
+    
+    return output
 
 def connected_to_internet():
     #Return True if we're online, else False
@@ -22367,9 +22497,9 @@ def select_torch_device(n=0, *, silent=False, prefer_used=False):
 
     if prefer_used and used_gpus and not silent:
         if len(used_gpus)==1:
-            print("This computer has %i GPUs, but we will be choosing cuda:%i because we're already using it." % (len(all_gpus), used_gpus[0]))
+            print("This computer has %i GPUs, but we will be choosing cuda:%i because we're already using it."              % (len(all_gpus),     used_gpus[0]))
         if len(used_gpus)>1:
-            print("This computer has %i GPUs, but we will be choosing from the subset %s because we're already using them." % (len(all_gpus), str(available_gpus)))
+            print("This computer has %i GPUs, but we will be choosing from the subset %s because we're already using them." % (len(all_gpus), str(used_gpus)  ))
         available_gpus = used_gpus
     else:
         available_gpus = all_gpus
