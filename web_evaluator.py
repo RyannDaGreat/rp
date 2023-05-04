@@ -2,6 +2,7 @@ import socket
 import json
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import argparse
 
 import rp
 
@@ -202,13 +203,67 @@ class Client:
             result=[Evaluation.from_dict(x) for x in result]
         return result
 
-if __name__=='__main__':
+
+def interactive_mode():
     if rp.input_yes_no("Is this the server? No means this is the client."):
         print("Running the server.")
         run_server()
     else:
         print("Running the client.")
         import readline
-        client=Client(input("Enter the server's IP: "))
+        client = Client(input("Enter the server's IP: "))
         while True:
             print(client.evaluate(input(" >>> ")))
+
+if __name__ == '__main__':
+    try:
+        parser = argparse.ArgumentParser(prog='web_evaluator.py', description='Web Evaluator: Remote Python code execution server and client',
+                                         formatter_class=argparse.RawTextHelpFormatter)
+        parser.add_argument('-p', '--port', type=int, default=DEFAULT_SERVER_PORT, help='Server port (default: 43234)')
+
+        subparsers = parser.add_subparsers(dest='mode', title='Modes', metavar='{server,s,client,c}', help='Select "server" or "client" mode')
+
+        # Server mode arguments
+        server_parser = subparsers.add_parser('server', aliases=['s'], help='Run the script as a server')
+
+        # Client mode arguments
+        client_parser = subparsers.add_parser('client', aliases=['c'], help='Run the script as a client')
+        client_parser.add_argument('server_ip', type=str, help='Server IP address (e.g., 192.168.1.10)')
+
+        parser.epilog = '''Examples:
+      Run the script interactively (no arguments):
+        python3 script_name.py
+
+      Run as a server with the default port:
+        python3 script_name.py server
+
+      Run as a server with a custom port:
+        python3 script_name.py server -p 12345
+
+      Run as a client connecting to a server IP and default port:
+        python3 script_name.py client 192.168.1.10
+
+      Run as a client connecting to a server IP and custom port:
+        python3 script_name.py client 192.168.1.10 -p 12345
+        '''
+
+        args, unknown = parser.parse_known_args()
+
+        if unknown:
+            print("Unknown arguments provided. Switching to interactive mode.")
+            interactive_mode()
+        elif args.mode in ('server', 's'):
+            print("Running the server.")
+            run_server(server_port=args.port)
+        elif args.mode in ('client', 'c'):
+            print("Running the client.")
+            client = Client(args.server_ip, server_port=args.port)
+            import readline
+            while True:
+                print(client.evaluate(input(" >>> ")))
+        else:
+            interactive_mode()
+
+    except KeyboardInterrupt:
+        print("Received KeyboardInterrupt. Exiting.")
+
