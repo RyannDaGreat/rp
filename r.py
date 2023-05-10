@@ -150,7 +150,18 @@ def identity(*args):
 # endregion
 # region ［list_flatten］
 #FORMERLY CALLED list_pop (a bit of a misnomer; I know that now, after having taken CSE214.)
-list_flatten=lambda list_2d:scoop(lambda old,new:list(old) + list(new),list_2d,[])
+
+def list_flatten(list_2d):
+    #Old, MUCH SLOWER version: list_flatten=lambda list_2d:scoop(lambda old,new:list(old) + list(new),list_2d,[])
+    #
+    #Example Speed boost over scoop:
+    # List size: 21000
+    #    Time taken by list comprehension: 0.032008200883865356 seconds
+    #    Time taken by itertools.chain: 0.016012614592909813 seconds
+    #    Time taken by scoop: 64.72587646916509 seconds
+    # See https://gist.github.com/SqrtRyan/91dd2edd469c0cef1a545bc576efabf0
+    from itertools import chain
+    return list(chain.from_iterable(list_2d))
 list_pop=list_flatten#Just because I'm used to list_pop, even though it doesn't make much sense lol. Thought of 'popping' the inner brackets of [[a,b],[c,d]] to [a,b,c,d] as if the inner brackets looked like bubbles to be popped. Has no relationship to popping an item off a stack or queue lol
 # endregion
 # region ［summation，product］
@@ -1285,6 +1296,83 @@ def overlay_images(*images):
         output=blend_images(output,image)
     return output
     
+def get_checkerboard_image(height=64,
+                           width=64,
+                           *,
+                           tile_size=8,
+                           first_color=(1.0, 1.0, 1.0, 1.0),
+                           second_color=(0.0, 0.0, 0.0, 1.0),
+                          ):
+    """
+    Generate a checkerboard image as a numpy array in HWC form.
+    Default parameters look like an actual game checkerboard.
+
+    Parameters:
+        - height: int
+            The height of the output image.
+        - width: int
+            The width of the output image.
+        - tile_size: int or tuple of int (tile_height, tile_width)
+            The size of each checkerboard tile. If an int is given, the tiles are square.
+        - first_color: tuple of float (r, g, b, a)
+            The color of the top left tile (and every other even tile)
+        - second_color: tuple of float (r, g, b, a)
+            The color of the second tile (and every other odd tile)
+
+    Returns:
+        - img: ndarray
+            A numpy array of shape (height, width, 4), representing the checkerboard image.
+            Each pixel is a 4-tuple of float values representing an RGBA color.
+
+    Example:
+        >>> img = get_checkerboard_image(100, 200, (20, 30), (1, 1, 1, 1), (0, 0, 0, 1))
+        >>> img.shape
+        (100, 200, 4)
+
+    Example:
+        # Alpha image with checkerboard background
+        rgba_image=load_image('https://bellard.org/bpg/2.png')
+        height,width=get_image_dimensions(rgba_image)
+        background=get_checkerboard_image(height,width, second_color=.75) #You can use floats as colors
+        composite=blend_images(background,rgba_image)
+        display_image(composite)
+
+    Example:
+        for h in range(1,32):
+            for w in range(1,32):
+                display_image(get_checkerboard_image(256,256,(h,w)))
+
+    Written with GPT4's help.
+    """
+    import numpy as np
+    import math
+
+    # Handle both int and tuple tile_size
+    tile_height, tile_width = (
+        (tile_size, tile_size) if isinstance(tile_size, int) else tile_size
+    )
+
+    # Create the base tiles
+    second_tile = rp.as_rgba_image(uniform_float_color_image(tile_height, tile_width, second_color))
+    first_tile  = rp.as_rgba_image(uniform_float_color_image(tile_height, tile_width, first_color ))
+
+    # Create the base tile
+    base_tile_row1 = np.hstack((first_tile, second_tile))
+    base_tile_row2 = np.hstack((second_tile, first_tile))
+    base_tile = np.vstack((base_tile_row1, base_tile_row2))
+
+    # Calculate the number of repetitions needed
+    reps_y = math.ceil(height / (2 * tile_height))
+    reps_x = math.ceil(width / (2 * tile_width))
+
+    # Repeat the base tile to cover the image size
+    img = np.tile(base_tile, (reps_y, reps_x, 1))
+
+    # Crop to the desired image size
+    img = img[:height, :width, :]
+
+    return img
+
 def _crop_images_to_max_or_min_size(*images,origin='top left',criterion=max):
     
     images=detuple(images)
@@ -1324,6 +1412,76 @@ def crop_images_to_min_size(*images,origin='top left'):
     #    display_image_slideshow(crop_images_to_min_size(ans))
     #    display_image_slideshow(crop_images_to_min_size(ans,origin='center'))
     return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=min)
+
+def crop_image_to_square(image, *, origin="center", grow=False):
+    """
+    Crops an image so that it becomes square.
+    If grow==True, the image can become larger instead of smaller
+        (this means it pads the image with black transparent pixels)
+    """
+    assert is_image(image)
+    assert isinstance(origin,str)
+    
+    if grow:
+        size = max(get_image_dimensions(image))
+    else:
+        size = min(get_image_dimensions(image))
+        
+    image = crop_image(image, height=size, width=size, origin=origin)
+    
+    return image
+
+def crop_image_at_random_position(image, height, width, include_position=False):
+    """
+    Returns a randomly-positioned cropped version of the input image with the specified height and width.
+    
+    This function is useful for data augmentation, as it can create multiple different crops from the same image,
+    increasing the variability in the training dataset and helping the model generalize better.
+    
+    Parameters:
+        image : numpy.ndarray
+            The input image, as defined by rp.is_image
+        height : int
+            The height of the cropped image.
+        width : int
+            The width of the cropped image.
+        include_position : bool
+            If true, will instead output a tuple (cropped_image, (x, y))
+
+    Returns:
+        cropped_image : numpy.ndarray
+            A randomly-positioned cropped image of the original
+        
+    Raises:
+        ValueError
+            If the crop dimensions are larger than the original image dimensions.
+        
+    Examples:
+        >>> img = np.random.randint(0, 256, size=(300, 400, 3), dtype=np.uint8)
+        >>> cropped_img = crop_image_at_random_position(img, 100, 100)
+        >>> cropped_img.shape
+        (100, 100, 3)
+        
+        >>> cropped_img = crop_image_at_random_position(img, 200, 200)
+        >>> cropped_img.shape
+        (200, 200, 3)
+    """
+    assert is_image(image)
+    
+    img_height, img_width = get_image_dimensions(image)
+    
+    if height > img_height or width > img_width:
+        raise ValueError("Crop dimensions must be smaller than or equal to the original image dimensions.")
+    
+    y = randint(0, img_height - height)
+    x = randint(0, img_width  - width)
+    
+    cropped_image = image[y:y + height, x:x + width]
+    
+    if include_position:
+        return cropped_image, (x,y)
+
+    return cropped_image
 
 def trim_video(video,length:int):
     #This function takes a video and a length, and returns a video with that length
@@ -3931,6 +4089,7 @@ def matching_indices(x,l,check=lambda x,y:x == y,key=None)->list:
         if check(key(x),key(y)):
             out.append(i)
     return out
+
 def gather(iterable,*indices):
     # indices ∈ list of integers
     indices=detuple(indices)
@@ -3938,6 +4097,7 @@ def gather(iterable,*indices):
     assert is_iterable(iterable),"The 'iterable' parameter you fed in is not an iterable!"
     assert is_iterable(indices),"You need to feed in a list of indices, not just a single index.  indices == " + str(indices)
     return [iterable[i] for i in indices]  # ≣list(map(lambda i:iterable[i],indices))
+
 def pop_gather(x,*indices):
     # Uses CSE214 definition of 'pop', in the context of popping stacks.
     # It is difficult to simultaneously delete multiple indices in a list.
@@ -3954,6 +4114,240 @@ def pop_gather(x,*indices):
     for a,b in enumerate(sorted(set(indices))):
         del x[b - a]
     return out
+
+def gather_vars(*var_names, frames_back=1, skip_missing=False):
+    """
+    Collect the given variable names from the specified scope into an EasyDict.
+
+    This function takes any number of variable names in different formats as arguments and
+    collects them into an EasyDict. The variable names can be provided as separate strings,
+    space-separated strings, lists of strings, or any combination of these formats.
+
+    Args:
+        *var_names: Variable names to be gathered. These can be provided in various formats.
+        frames_back: An integer specifying the number of frames to go back to find the correct scope. Default is 1.
+        skip_missing: If True, the output will simply omit any variables it can't find. Otherwise, it will throw an error if any variables are missing.
+
+    Returns:
+        An EasyDict containing the variables specified by the given names.
+
+    Examples:
+        a = 1
+        b = 2
+        c = 3
+        d = 4
+        e = 5
+
+        # Different input formats for gather_vars
+        result1 = gather_vars('a', 'b', 'c', 'd', 'e')
+        result2 = gather_vars('a b c d e')
+        result3 = gather_vars(['a', 'b', 'c', 'd', 'e'])
+        result4 = gather_vars('a', 'b', ['c', 'd', 'e'])
+        result5 = gather_vars(['a', 'b', 'c'], 'd', 'e')
+        result6 = gather_vars('a b', ['c', 'd'], {'e'})
+
+        # All results are equivalent and have the same values
+        assert result1 == result2 == result3 == result4 == result5 == result6
+
+    Examples:
+        >>> a=5
+        >>> b=6
+        >>> del c
+        >>> gather_vars('a b c',skip_missing=True)
+                ans = {'a': 5, 'b': 6}
+        >>> gather_vars('a b c',skip_missing=False)
+                ERROR: KeyError: "Can't find variable 'c'"
+
+    Written partially with GPT4: https://shareg.pt/g9N1X3U
+    """
+    assert frames_back>=1, 'gather_vars is useless if we don\'t look at least one frame back'
+
+    pip_import('easydict')
+    
+    import itertools
+    import inspect
+    from easydict import EasyDict
+
+    flattened_var_names = list(itertools.chain.from_iterable(
+        (arg.split() if isinstance(arg, str) else arg) for arg in var_names))
+
+    frame = inspect.currentframe()
+    for _ in range(frames_back):
+        frame = frame.f_back
+    local_vars = frame.f_locals
+
+    result_dict = {}
+    for name in flattened_var_names:
+        if name in local_vars:
+           result_dict[name] = local_vars[name]
+        elif not skip_missing:
+            raise KeyError("Can't find variable '%s'"%name)
+
+    return EasyDict(result_dict)
+
+def bundle_vars(*args, **kwargs):
+    """
+    Collect the given variables from the calling scope into an EasyDict.
+
+    This function takes any number of local variable names as arguments and
+    collects them into an EasyDict. Optionally, you can also pass additional
+    key-value pairs as keyword arguments to be included in the output.
+
+    Note: This function will raise a ValueError if an expression is passed as an argument,
+    as it only supports variable names (e.g., bad: bundle_vars(a + b), good: bundle_vars(a, b)).
+
+    Examples:
+        x = 1
+        y = 2
+        result = bundle_vars(x, y)
+        print(result.x)  # Output: 1
+        print(result.y)  # Output: 2
+
+        a = 5
+        b = 6
+        c = 11
+        result = bundle_vars(a, b, c, extra_var=123)
+        print(result.a)  # Output: 5
+        print(result.b)  # Output: 6
+        print(result.c)  # Output: 11
+        print(result.extra_var)  # Output: 123
+
+    Raises:
+        ValueError: If an expression is passed as an argument (e.g., bad: bundle_vars(a + b), good: bundle_vars(a, b))
+
+    Written partially with GPT4: https://shareg.pt/g9N1X3U
+    """
+    #TODO: This currently only works when the arguments are put *ON THE SAME LINE*. It also can't handle when two bundle_vars are on the same line.
+    #TODO: Look into the implementation of icecream to figure out how. Icecream has some nice classes like Source, that when you use pudb for an icecream.ic call, you'll see
+    pip_import('easydict')
+
+    import ast
+    import inspect
+    import astor
+    from easydict import EasyDict
+
+    frame = inspect.currentframe().f_back # Get the previous frame (the calling function's frame)
+    line = inspect.getframeinfo(frame).code_context[0].strip() # Get the line of code that called bundle_vars
+    parsed_code = ast.parse(line) # Parse the line of code into an AST (Abstract Syntax Tree)
+
+    # Find the bundle_vars function call node in the AST
+    call_node = None
+    for node in ast.walk(parsed_code):
+        if isinstance(node, ast.Call) and hasattr(node.func, "id") and node.func.id == "bundle_vars":
+            call_node = node
+            break
+
+    if call_node is not None:
+        # Check if any argument is an expression and raise an error if so
+        for arg in call_node.args:
+            if not isinstance(arg, ast.Name):
+                raise ValueError("Only variable names are supported, expressions are not allowed (e.g., bad: bundle_vars(a + b), good: bundle_vars(a, b))")
+
+        variable_names = [astor.to_source(arg).strip() for arg in call_node.args] # Get the variable names passed to bundle_vars
+        result_dict = gather_vars(*variable_names, frames_back=2) # Use gather_vars to get the variables from the calling scope
+        result_dict.update(kwargs) # Add any extra keyword arguments to the dictionary
+        return EasyDict(result_dict) # Return the result as an EasyDict
+    else:
+        raise RuntimeError("Couldn't find the variable names")
+
+def destructure(d: dict) -> tuple:
+    """
+    Extracts values from a dictionary based on the variable names in the
+    assignment expression in the calling line of code. 
+    Mimics Javascript's destructuring assignment feature.
+
+    The main purpose of this function is to make your code just a little shorter and less redundant.
+    It compliments rp.bundle_vars and rp.gather_vars quite nicely.
+
+    Note: This function should be considered voodoo, as it's very strange!
+    It can make your code less redundant, but relies on being able to find
+    you source code - an assumption which doesnt always hold (for example,
+    in ptpython or the default python repl. Jupyter and rp work fine though.)
+
+
+    Parameters
+    ----------
+    d : dict
+        The dictionary from which to extract values.
+
+    Returns
+    -------
+    tuple or value
+        A tuple of extracted values, or a single value if only one is extracted.
+
+    Examples
+    --------
+        d = {'x': 1, 'y': 2, 'z': 3}
+        
+        # Destructuring into multiple variables
+        >>> x, y = destructure(d)
+        >>> print(x, y)
+        1 2
+
+        # Destructuring into a single variable
+        >>> z = destructure(d)
+        >>> print(z)
+        3
+
+        # Useful for getting kwargs out
+        def make_color(**kwargs):
+            red,green,blue = destructure(kwargs)
+
+    Pitfalls
+    --------
+        # Variables on the left-hand side must match keys in the dictionary.
+        >>> a, b = destructure(d)
+        KeyError: 'Key not found in the provided dictionary.'
+
+        # The function must be used within an assignment operation.
+        >>> destructure(d)
+        ValueError: 'Destructuring must be used within an assignment operation.'
+
+        # The function doesn't support nested destructuring.
+        >>> d = {'p': {'q': 4}}
+        >>> p.q = destructure(d)
+        AttributeError: 'tuple' object has no attribute 'q'
+
+        # Multi-line assignments are not supported
+        >>> a, \
+        ... b = destructure(d)
+        TypeError: 'Cannot unpack non-iterable int object.'
+    """
+
+    import inspect
+    import ast
+
+    # Get the source code of the line that called this function
+    frame = inspect.currentframe().f_back
+    info = inspect.getframeinfo(frame)
+    code = info.code_context[0].strip()
+
+    # Use the ast module to parse the source code into a syntax tree
+    tree = ast.parse(code)
+
+    try:
+        # Find the Assign node (i.e., the assignment operation)
+        assign_node = next(node for node in ast.walk(tree) if isinstance(node, ast.Assign))
+
+        # Check if there are multiple assignment targets
+        if isinstance(assign_node.targets[0], ast.Tuple):
+            # Extract the variable names from the left-hand side of the assignment
+            var_names = [target.id for target in assign_node.targets[0].elts]
+        else:  # Single target
+            var_names = [assign_node.targets[0].id]
+    except StopIteration:
+        raise Error("Destructuring must be used within an assignment operation.")
+
+    # Use the variable names as keys to get the corresponding values from the dictionary
+    values = tuple(d[name] for name in var_names)
+
+    # Return single value instead of a tuple if there is only one value
+    if len(values) == 1:
+        return values[0]
+    
+    return values
+
+
 # endregion
 # region  List/Dict Functions/Displays: ［list_to_index_dict，invert_dict，invert_dict，invert_list_to_dict，dict_to_list，list_set，display_dict，display_list］
 def list_to_index_dict(l: list) -> dict:
@@ -9549,6 +9943,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         MV
         LS
         LST
+        LSN
         CD
         CDP
         CDA
@@ -10915,7 +11310,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         fansi_print("CCAT: Copying to your clipboard the contents of "+repr(file_name),"blue")
                         string_to_clipboard(_load_text_from_file_or_url(file_name))
 
-                    elif user_message=='LS' or user_message=='LST':
+                    elif user_message=='LS' or user_message=='LST' or user_message=='LSN':
                         import os
 
                         printed_lines=[]
@@ -10923,6 +11318,12 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             printed_lines.append(line)
 
                         paths=sorted(sorted(os.listdir()),key=is_a_directory)
+
+                        if user_message=='LSN':
+                            fansi_print("LSN -> Printing all paths from LS sorted by Number (number)",'blue','bold')
+                            paths=[path for path in paths if path_exists(path)]
+                            paths=sorted(paths,key=lambda x:(len(x),x))
+                            paths=sorted(paths,key=is_a_directory)
 
                         if user_message=='LST':
                             fansi_print("LST -> Printing all paths from LS sorted by Time (date_modified)",'blue','bold')
@@ -11748,7 +12149,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     if _cdh_folder_is_protected(x)
                                     # else "yellow"
                                     # if folder_exists(x)
-                                    else "white",
+                                    else "gray",
                                     "bold" if x in sys.path else None,
                                 )
                                 if fast:
@@ -13188,6 +13589,15 @@ def pip_import(module_name,package_name=None):
     """
 
     assert isinstance(module_name,str),'pip_import: error: module_name must be a string, but got type '+repr(type(module_name))#Probably better done with raise typerror but meh whatever
+
+    try:
+        #This is approx 20 times faster than the old code using importlib.import_module(module_name)
+        #Apparently thats slow but __import__ is fast
+        #Idk why? But this makes it much faster...maybe I can phase out importlib from this function entirely...but thats for another day
+        return __import__(module_name)
+    except ModuleNotFoundError:
+        #If we can't find the module, continue on...
+        pass
 
     if package_name is None:
         package_name=module_name
@@ -15508,6 +15918,52 @@ def _os_listdir_files(folder):
     from os.path import isfile, join
     onlyfiles = [f for f in listdir(folder) if isfile(join(folder, f))]
     return onlyfiles
+
+def folder_is_empty(folder: str = ".") -> bool:
+    """
+    Determines whether a folder is empty or not.
+
+    This function uses os.scandir() to iterate over the contents of the given folder,
+    which is more efficient than os.listdir() as it avoids generating a complete list
+    of the folder contents. The function will return False as soon as it finds a single
+    entry in the folder, minimizing the amount of data needed to be transferred.
+
+    Errors raised:
+        - TypeError: If the folder argument is not a string.
+        - FileNotFoundError: If the folder does not exist.
+        - NotADirectoryError: If the given path exists but is not a directory.
+
+    Args:
+        folder (str): The path to the folder whose emptiness will be checked.
+
+    Returns:
+        bool: True if the folder is empty, False otherwise.
+
+    Examples:
+        >>> folder_is_empty('/path/to/empty/folder')
+        True
+
+        >>> folder_is_empty('/path/to/non-empty/folder')
+        False
+
+    Coded partially with GPT4: https://shareg.pt/Vk8tu6k
+    """
+    if not isinstance(folder, str):
+        raise TypeError("The 'folder' argument must be a string, but got type %s" % str(type(folder)))
+
+    try:
+        entries = os.scandir(folder)
+        for _ in entries:
+            entries.close()
+            return False
+        entries.close()
+        return True
+    except FileNotFoundError:
+        raise FileNotFoundError(f"The folder '{folder}' does not exist.")
+    except NotADirectoryError:
+        raise NotADirectoryError(f"The path '{folder}' exists but is not a directory.")
+
+directory_is_empty=folder_is_empty
 
 def random_file(folder=None):
     #Returns the path of a random file in that folder
@@ -20599,6 +21055,14 @@ def cv_resize_image(image,size,interp='bilinear'):
     
     return out
 
+def cv_resize_images(*images, size, interp='bilinear'):
+    images=detuple(images)
+    assert all(is_image(x) for x in images), 'Not all given images satisfy rp.is_image'
+    images=[cv_resize_image(image, size, interp) for image in images]
+    return images
+
+resize_images = cv_resize_images  # For now, they will be the same thing
+    
 def torch_resize_image(image,size,interp='bilinear'):
     #Valid sizes:
     #    - A single number: Will scale the entire image by that size
@@ -20625,9 +21089,64 @@ def torch_resize_image(image,size,interp='bilinear'):
 
     return out.squeeze(0)
 
+def resize_image_to_hold(image, height: int = None, width: int = None, *, interp='bilinear', allow_shrink=True):
+    """
+    Resizes an image so that the specified bounding box can fit entirely inside the image, while maintaining the
+    aspect ratio of the input image.
+    If not allow_shrink, it will not resize the image if it can already hold the given bounds
+
+    Also see this function's sister: rp.resize_image_to_fit
+
+    :param image: The input image to be resized.
+    :param height: The height of the bounding box (default is None).
+    :param width: The width of the bounding box (default is None).
+    :param interp: Interpolation method to be used while resizing (default is 'bilinear').
+    :param allow_shrink: A boolean flag that determines if the image can be shrunk (default is True).
+    :return: The resized image with the specified dimensions fitting inside.
+    
+    EXAMPLES:
+        im=uniform_float_color_image(height=200,width=300,color=(0,0,0))
+        assert resize_image_to_hold(im, height=100 ,width=None,allow_shrink=True ).shape == ( 100,  150, 3) 
+        assert resize_image_to_hold(im, height=100 ,width=100 ,allow_shrink=True ).shape == ( 100,  150, 3)
+        assert resize_image_to_hold(im, height=None,width=100 ,allow_shrink=True ).shape == (  67,  100, 3)
+        assert resize_image_to_hold(im, height=None,width=100 ,allow_shrink=False).shape == ( 200,  300, 3)
+        assert resize_image_to_hold(im, height=None,width=1000,allow_shrink=False).shape == ( 667, 1000, 3)
+        assert resize_image_to_hold(im, height=None,width=1000,allow_shrink=True ).shape == ( 667, 1000, 3)
+        assert resize_image_to_hold(im, height=1000,width=1000,allow_shrink=True ).shape == (1000, 1500, 3)
+        assert resize_image_to_hold(im, height=1000,width=None,allow_shrink=True ).shape == (1000, 1500, 3)
+        assert resize_image_to_hold(im, height=1000,width=None,allow_shrink=False).shape == (1000, 1500, 3)
+    """
+    assert rp.is_image(image)
+    assert height is not None or width is not None
+
+    if allow_shrink:
+        assert height or width, ('If allow_shrink is True, at least one dimension must be nonzero. '
+                                 'Scaling an image to a factor of 0 is not allowed.')
+
+    image_height, image_width = rp.get_image_dimensions(image)
+
+    if height is None and width is None:
+        return image + 0  # Return an unmodified copy
+
+    scale = 0
+    if height is not None and height > image_height * scale:
+        scale = height / image_height
+
+    if width is not None and width > image_width * scale:
+        scale = width / image_width
+
+    if not allow_shrink and scale < 1:
+        scale = 1
+
+    assert scale > 0, 'Invalid arguments resulted in a scale of 0.'
+
+    return rp.cv_resize_image(image, scale, interp=interp)
+
 def resize_image_to_fit(image, height:int=None, width:int=None, *, interp='bilinear', allow_growth=True):
-    #Scale on both axes evenly to fit in this bounding box
-    #If not allow_growth, it won't modify the image if height and width are larger than the input image
+    """
+    Scale image on both axes evenly to fit in this bounding box
+    If not allow_growth, it won't modify the image if height and width are larger than the input image
+    """
     #TODO: Make height or width optional (done), make cv_resize_image interchangeable with resize_image (todo)
     
     assert rp.is_image(image)
@@ -20653,6 +21172,26 @@ def resize_image_to_fit(image, height:int=None, width:int=None, *, interp='bilin
         scale = width / image_width
         
     return rp.cv_resize_image(image, scale, interp=interp)
+
+def resize_images_to_max_size(*images, interp="bilinear"):
+    #Makes sure all images have the same height and width
+    #Does this by stretching all images to the max size found
+    #EXAMPLE:
+    #    ans='https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg&auto=webp https://s3.amazonaws.com/cdn-origin-etr.akc.org/wp-content/uploads/2017/11/13002248/GettyImages-187066830.jpg https://hips.hearstapps.com/hmg-prod.s3.amazonaws.com/images/best-small-dog-breeds-cavalier-king-charles-spaniel-1598992577.jpg?crop=0.468xw:1.00xh;0.259xw,0&resize=480:*'.split()
+    #    ans=load_images(ans)
+    #    display_image_slideshow(ans)
+    #    display_image_slideshow(resize_images_to_max_size(ans))
+    return resize_images(*images, size=get_max_image_dimensions(*images), interp=interp)
+
+def resize_images_to_min_size(*images, interp="bilinear"):
+    #Makes sure all images have the same height and width
+    #Does this by stretching all images to the min size found
+    #EXAMPLE:
+    #    ans='https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg&auto=webp https://s3.amazonaws.com/cdn-origin-etr.akc.org/wp-content/uploads/2017/11/13002248/GettyImages-187066830.jpg https://hips.hearstapps.com/hmg-prod.s3.amazonaws.com/images/best-small-dog-breeds-cavalier-king-charles-spaniel-1598992577.jpg?crop=0.468xw:1.00xh;0.259xw,0&resize=480:*'.split()
+    #    ans=load_images(ans)
+    #    display_image_slideshow(ans)
+    #    display_image_slideshow(resize_images_to_min(ans))
+    return resize_images(*images, size=get_min_image_dimensions(*images), interp=interp)
 
 def _iterfzf(*args,**kwargs):
     pip_import('iterfzf')
@@ -22257,6 +22796,84 @@ def line_graph_via_bokeh(values, *,
         show(fig) #Display the graph
     finally:
         curdoc().theme = old_theme
+
+def histogram_via_bokeh(values, bins:int=50, *,
+                        xlabel:str = None,
+                        ylabel:str = None,
+                        title :str = None,
+                        logx:float = None,
+                        logy:float = None,
+                        height:float = 400,
+                        width :float = None):
+    """
+    Uses the Bokeh library to display an interactive histogram in an IPython notebook
+    Only works in IPython notebooks right now
+    
+    EXAMPLES:
+        # Run these in an iPython notebook, such as Jupyter Lab or Google Colab
+        import numpy as np
+        import random
+        histogram_via_bokeh(np.random.randn(1000), bins=50, height=400, width=400)
+        histogram_via_bokeh([random.randint(0, 100) for _ in range(1000)], bins=20, xlabel='Value', ylabel='Frequency', title='Random Integers Histogram')
+    
+    """
+    #TODO: Consolidate redundant code between this function and line_graph_via_bokeh, which came first.
+    #Written partially with GPT4: https://shareg.pt/SieYJms
+    
+    
+    assert running_in_jupyter_notebook(), 'histogram_via_bokeh is meant to be used in a notebook (like Colab or Jupyter Lab etc)'
+
+    _initialize_bokeh()
+    import bokeh
+    from bokeh.plotting import figure, show
+    from bokeh.io import curdoc, output_notebook
+    from bokeh.themes import built_in_themes
+
+    fig_kwargs = {}
+    if title  is not None: assert isinstance(title ,str) ; fig_kwargs['title'       ] = title
+    if xlabel is not None: assert isinstance(xlabel,str) ; fig_kwargs['x_axis_label'] = xlabel
+    if ylabel is not None: assert isinstance(ylabel,str) ; fig_kwargs['y_axis_label'] = ylabel
+    if logx              :                                 fig_kwargs['x_axis_type' ] = 'log'
+    if logy              :                                 fig_kwargs['y_axis_type' ] = 'log'
+    if height is not None:                                 fig_kwargs['height'      ] = height
+    if width  is not None:                                 fig_kwargs['width'       ] = width
+
+    fig_kwargs['tools'] = 'pan,wheel_zoom,box_zoom,reset,hover,crosshair'
+
+    fig = figure(**fig_kwargs)
+
+    crosshair = fig.tools[-1]
+    crosshair.line_color = '#999999'
+
+    fig.tools.append(bokeh.models.ZoomInTool ())
+    fig.tools.append(bokeh.models.ZoomOutTool())
+    fig.tools.append(bokeh.models.SaveTool   ())
+
+    fig.toolbar.logo=None
+
+    if title is not None:
+        fig.title.align = 'center'
+
+    if width is None:
+        fig.sizing_mode = 'stretch_width'
+
+    hist, edges = np.histogram(values, bins=bins)
+
+    if logy:
+        hist = np.array(hist, dtype=np.float64)
+        hist[hist == 0] = np.nan
+
+    fig.quad(top=hist, bottom=0, left=edges[:-1], right=edges[1:], fill_color='#007FFF', line_color="white", alpha=0.6)
+
+    theme = 'dark_minimal'
+    assert theme in built_in_themes, repr(theme) + ' not in ' + repr(built_in_themes)
+    old_theme = curdoc().theme
+    try:
+        curdoc().theme = theme
+        show(fig)
+    finally:
+        curdoc().theme = old_theme
+
 
 def get_git_remote_url(repo='.'):
     assert folder_exists(repo)
