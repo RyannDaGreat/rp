@@ -191,16 +191,23 @@ def summation(x,start=None):
     #     out+=y
     # return out
 
-def unique(iterable):
-    #Removes duplicates but preserves order
-    #Works with things that aren't conventionally hashable, like numpy arrays
-    #    (this is because it uses handy_hash)
-    #EXAMPLE:
-    #     >>> list(unique([4,3,5,4,3,2]))
-    #    ans = [4, 3, 5, 2]
-    seen=set()
+def unique(iterable, key=identity):
+    """
+    Removes duplicates but preserves order
+    Works with things that aren't conventionally hashable, like numpy arrays
+       (this is because it uses handy_hash)
+    EXAMPLE:
+        >>> list(unique([4,3,5,4,3,2]))
+       ans = [4, 3, 5, 2]
+    EXAMPLE:
+        >>> list(unique('alpha beta delta alpha'.split()))
+       ans = ['alpha', 'beta', 'delta']
+        >>> list(unique('alpha beta delta alpha'.split(),key=len))
+       ans = ['alpha', 'beta']
+    """
+    seen = set()
     for item in iterable:
-        tag=handy_hash(item)
+        tag = handy_hash(key(item))
         if tag not in seen:
             seen.add(tag)
             yield item
@@ -1301,7 +1308,7 @@ def get_checkerboard_image(height=64,
                            *,
                            tile_size=8,
                            first_color=(1.0, 1.0, 1.0, 1.0),
-                           second_color=(0.0, 0.0, 0.0, 1.0),
+                           second_color=(0.0, 0.0, 0.0, 1.0)
                           ):
     """
     Generate a checkerboard image as a numpy array in HWC form.
@@ -15186,6 +15193,42 @@ def memoized_property(method):
     return memoized_property
 #endregion
 
+class ClassProperty:
+    """
+    Descriptor (used as a decorator) that creates class-level 'properties' in Python.
+    
+    This class is a workaround for the lack of support for @classmethod in combination with @property in Python <= 3.8.
+    It mimics the behavior of the @property decorator but for classes, not instances.
+    
+    Syntax in Python 3.9 and later:
+        class MyClass:
+            _class_data = 10
+
+            @classmethod
+            @property
+            def class_data(cls):
+                return cls._class_data
+        
+        print(MyClass.class_data)  # prints: 10
+    
+    Equivalent syntax using ClassProperty in Python 3.8 and earlier:
+        class MyClass:
+            _class_data = 10
+
+            @ClassProperty
+            def class_data(cls):
+                return cls._class_data
+
+        print(MyClass.class_data)  # prints: 10
+    """
+    def __init__(self, getter):
+        self.getter = getter
+
+    def __get__(self, instance, owner):
+        return self.getter(owner)
+
+
+
 class CachedInstances:
     """
     A base class that provides caching for instances of derived classes.
@@ -15351,8 +15394,7 @@ class CachedInstances:
 
         return cache[all_args]
     
-    @classmethod
-    @property
+    @ClassProperty
     def instance_cache(cls):
         """
         Return the cache dictionary for instances of the derived class.
@@ -15959,9 +16001,9 @@ def folder_is_empty(folder: str = ".") -> bool:
         entries.close()
         return True
     except FileNotFoundError:
-        raise FileNotFoundError(f"The folder '{folder}' does not exist.")
+        raise FileNotFoundError("The folder '%s' does not exist."%folder)
     except NotADirectoryError:
-        raise NotADirectoryError(f"The path '{folder}' exists but is not a directory.")
+        raise NotADirectoryError("The path '%s' exists but is not a directory."%folder)
 
 directory_is_empty=folder_is_empty
 
@@ -21414,6 +21456,31 @@ def apply_image_function_per_channel(image,function):
     channels=extract_image_channels(image)
     return compose_image_from_channels(*(function(channel) for channel in channels))
 
+def with_alpha_channel(image, alpha):
+    """
+    Assigns an alpha channel to an image
+    The alpha can either be given as a number between 0 and 1,
+    or a grayscale image whose brigtness will be used as alpha
+    
+    Will output an RGBA float image
+    """
+    if is_number(alpha):
+        # Assume alpha is a float between 0 and 1
+        alpha = uniform_float_color_image(*get_image_dimensions(image), alpha)
+
+    assert is_image(image)
+    assert is_image(alpha)
+    assert get_image_dimensions(image) == get_image_dimensions(alpha)
+
+    alpha = as_grayscale_image(alpha)
+    alpha = as_float_image(alpha)
+
+    image = as_rgba_image(image)
+    image = as_float_image(image)
+    image[:, :, 3] = alpha
+
+    return image
+
 pterm=pseudo_terminal#Just a shortcut. Not to be used in code; just Colab etc where I don't want to type pseudo_terminal. What?? Don't look at me like that - I'm lazy lol
 
 #def rich_print(*args,**kwargs):
@@ -23483,6 +23550,68 @@ def list_transpose(list_of_lists:list):
     assert len(set(map(len,list_of_lists)))==1, 'Right now list_transpose only handles rectangular list_of_lists. This functionality may be added in the future.'
     return list(map(list,zip(*list_of_lists)))
 
+def dict_transpose(dic):
+    """
+    Transposes a nested dictionary, reversing the roles of keys and sub-keys.
+    Skips keys that do not exist in all sub-dictionaries.
+
+    Example 1:
+        >>> d = {
+        ...     'a': {'q': 1, 'w': 2},
+        ...     'b': {'q': 3, 'e': 4},
+        ...     'c': {'r': 5, 't': 6}
+        ... }
+        >>> dict_transpose(d)
+        {
+            'q': {'a': 1, 'b': 3},
+            'w': {'a': 2},
+            'e': {'b': 4},
+            'r': {'c': 5},
+            't': {'c': 6}
+        }
+
+    Example 2:
+        >>> d = {
+        ...     'x': {'y': 10, 'z': 20},
+        ...     'v': {'y': 30, 'w': 40}
+        ... }
+        >>> dict_transpose(d)
+        {
+            'y': {'x': 10, 'v': 30},
+            'z': {'x': 20},
+            'w': {'v': 40}
+        }
+
+    Example 3:
+        >>> #This function is its own inverse
+        >>> ans
+        ans = {'w': {'a': 2}, 'q': {'b': 3, 'a': 1}, 't': {'c': 6}, 'r': {'c': 5}, 'e': {'b': 4}}
+        >>> dict_transpose(ans)
+        ans = {'b': {'q': 3, 'e': 4}, 'c': {'t': 6, 'r': 5}, 'a': {'w': 2, 'q': 1}}
+        >>> dict_transpose(ans)
+        ans = {'w': {'a': 2}, 'q': {'b': 3, 'a': 1}, 't': {'c': 6}, 'r': {'c': 5}, 'e': {'b': 4}}
+
+    Parameters:
+        dic (dict): The dictionary to transpose
+
+    Returns:
+        dict: The transposed dictionary
+    """
+
+    # keys = set().union(*dic.values())  # get all unique keys from sub-dictionaries
+    keys = unique(list_flatten(dic.values()))  # preserve ordering
+    
+    out = {}
+    for key in keys:
+        temp = {}
+        for main_key, sub_dic in dic.items():
+            if key in sub_dic:  # only add key if it exists
+                temp[main_key] = sub_dic[key]
+        if temp:  # only add to output if there's at least one key
+            out[key] = temp
+    return out
+
+
 def monkey_patch(target, name=None):
     """
     A decorator used to add a method to an object.
@@ -23887,20 +24016,49 @@ def get_gpu_temperature(gpu_id=None):
     temperature = nvmlDeviceGetTemperature(handle, NVML_TEMPERATURE_GPU)
     return temperature
 
+def get_gpu_utilization(gpu_id=None):
+    """
+    Returns a % of how busy a GPU is.
+
+    Returns the utilization of a GPU in percentage given its ID.
+    If gpu_id is None, returns a list of utilization for all GPUs.
+
+    Gives the percent of time over the past second during which 
+    one or more kernels were executing on the GPU.
+
+    Args:
+        gpu_id (int, optional): The ID of the GPU. Default is None.
+
+    Example:
+    >>> get_gpu_utilization(0)
+    30
+    >>> get_gpu_utilization()
+    [30, 40, 50, 60]
+    """
+    if gpu_id is None:
+        return [get_gpu_utilization(gpu_id=i) for i in get_all_gpu_ids()]
+
+    _init_nvml()
+    from py3nvml.py3nvml import nvmlDeviceGetUtilizationRates
+    handle = _get_gpu_handle(gpu_id)
+    utilization = nvmlDeviceGetUtilizationRates(handle)
+    return utilization.gpu
+
 def print_gpu_summary(
     include_processes=True,
     include_temperature=True,
     include_percent_vram=True,
+    include_utilization=True,
     silent=False,
 ):
     """
     Prints a summary of GPU information using the Rich library.
 
     Args:
-        include_date (bool, optional): If True, includes the date in the output. Defaults to True.
         include_processes (bool, optional): If True, includes the processes running on each GPU. Defaults to True.
         include_temperature (bool, optional): If True, includes the temperature of each GPU. Defaults to True.
         include_percent_vram (bool, optional): If True, includes the percentage of VRAM usage for each GPU. Defaults to True.
+        include_utilization (bool, optional): If True, includes the GPU utilization. Defaults to True.
         silent (bool, optional): If True, does not print the output to the console but instead returns it as a string. Defaults to False.
 
     Returns:
@@ -23933,6 +24091,8 @@ def print_gpu_summary(
     table.add_column("Total", style="cyan", justify="right")
     if include_temperature:
         table.add_column("Temp", style="blue", justify="center")
+    if include_utilization:
+        table.add_column("Util", style="yellow", justify="center")
     if include_processes:
         table.add_column("Processes", style="cyan", justify="left")
 
@@ -23950,6 +24110,8 @@ def print_gpu_summary(
         if include_temperature:
             temperature = get_gpu_temperature(gpu_id)
             temperature_text = "{}°C".format(temperature)
+        if include_utilization:
+            utilization = "{}%".format(get_gpu_utilization(gpu_id)).rjust(4)
 
         if include_processes:
             processes = get_gpu_pids(gpu_id)
@@ -23980,8 +24142,10 @@ def print_gpu_summary(
             free_vram,
             total_vram,
             temperature_text if include_temperature else "",
+            utilization if include_utilization else "",
             process_column_text,
         )
+
 
     console.print(table)
 
