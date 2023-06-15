@@ -5382,26 +5382,45 @@ def MIDI_output(message: list):
     For more: see http://pydoc.net/Python/python-rtmidi/0.4.3b1/rtmidi.midiconstants/
     """
     pip_import('rtmidi')
+#     try:
+#         # Can control applications like FL Studio etc
+#         # Use this for arduino etc
+#         global __midiout
+#         if not __midiout:
+#             import rtmidi  # pip3 install python-rtmidi
+#             __midiout=rtmidi.RtMidiOut()
+#             try:
+#                 available_ports=__midiout.get_ports()
+#             except AttributeError:#AttributeError: 'midi.RtMidiOut' object has no attribute 'get_ports': See https://stackoverflow.com/questions/38166344/attributeerror-in-python-rtmidi-sample-code
+#                 available_ports=__midiout.ports
+#             if available_ports:
+#                 __midiout.open_port(0)
+#                 print("r.MIDI_output: Port Output Name: '" + __midiout.get_ports()[0])
+#             else:
+#                 __midiout.open_virtual_port("My virtual output")
+#         __midiout.send_message(message)  # EXAMPLE MESSGES: # note_on = [0x90, 98, 20] # channel 1, middle C, velocity 112   note_off = [0x80, 98, 0]
+#     except OverflowError as e:
+#         fansi_print("ERROR: r.MIDI_Output: " + str(e) + ": ",'red',new_line=False)
+#         fansi_print(message,'cyan')
+
+
+    import rtmidi
+    global __midiout
+    if not __midiout:
+        __midiout = rtmidi.MidiOut()
+
+        if __midiout.get_port_count():
+            __midiout.open_port(0)
+            print("MIDI_output: Port Output Name: '" + __midiout.get_port_name(0) + "'")
+        else:
+            __midiout.open_virtual_port("My virtual output")
+
     try:
-        # Can control applications like FL Studio etc
-        # Use this for arduino etc
-        global __midiout
-        if not __midiout:
-            import rtmidi  # pip3 install python-rtmidi
-            __midiout=rtmidi.RtMidiOut()
-            try:
-                available_ports=__midiout.get_ports()
-            except AttributeError:#AttributeError: 'midi.RtMidiOut' object has no attribute 'get_ports': See https://stackoverflow.com/questions/38166344/attributeerror-in-python-rtmidi-sample-code
-                available_ports=__midiout.ports
-            if available_ports:
-                __midiout.open_port(0)
-                print("r.MIDI_output: Port Output Name: '" + __midiout.get_ports()[0])
-            else:
-                __midiout.open_virtual_port("My virtual output")
-        __midiout.send_message(message)  # EXAMPLE MESSGES: # note_on = [0x90, 98, 20] # channel 1, middle C, velocity 112   note_off = [0x80, 98, 0]
+        __midiout.send_message(message)
     except OverflowError as e:
-        fansi_print("ERROR: r.MIDI_Output: " + str(e) + ": ",'red',new_line=False)
-        fansi_print(message,'cyan')
+        print("ERROR: MIDI_Output: " + str(e) + ": ", end="")
+        print(message)
+
 def MIDI_control(controller_number: int,value: float):  # Controller_number is custom integer, and value is between 0 and 1
     MIDI_output([176,controller_number,int(float_clamp(value,0,1) * 127)])
 def MIDI_control_precisely(coarse_controller_number: int,fine_controller_number: int,value: float):  # TWO bytes of data!!
@@ -10164,6 +10183,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RV  ryanvimrc
         RX  ryanxonshrc
 
+        UU $set_current_directory('../..');fansi_print(get_current_directory(),'blue','bold')
+        UUU $set_current_directory('../../..');fansi_print(get_current_directory(),'blue','bold')
+        UUUU $set_current_directory('../../../..');fansi_print(get_current_directory(),'blue','bold')
+        UUUUU $set_current_directory('../../../../..');fansi_print(get_current_directory(),'blue','bold')
+
         LSF LSQ
         FDZ LSZ
         FDQ LSQ
@@ -10309,6 +10333,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         UU $unshorten_url(ans)
 
+        GP $print_gpu_summary()
 
         CLS CLEAR
         VV !vim
@@ -15145,22 +15170,43 @@ def args_hash(function,*args,**kwargs):
     return hash(frozenset(hashes))
 
 
+#def memoized(function):
+#    #TODO: when trying to @memoize fibbonacci, and calling fibbonacci(4000), python crashes with SIGABRT. I have no idea why. This function really doesn't use any non-vanilla python code.
+#    #Uses args_hash to hash function inputs...
+#    #This is meant to be a permanent cache (as opposed to a LRU aka 'Least Recently Used' cache, which deletes cached values if they haven't been used in a while)
+#    #If you wish to temporarily memoize a function (let's call if F), you can create a new function cached(F), and put it in a scope that will run out eventually so that there are no memory leaks.
+#    #Some things can't be hashed by default, I.E. lists etc. But all lists can be converted to tuples, which CAN be hashed. This is where hashers come in. Hashers are meant to help you memoize functions that might have non-hashable arguments, such as numpy arrays.
+#    cache=dict()
+#    assert callable(function),'You can\'t memoize something that isn\'t a function (you tried to memoize '+repr(function)+', which isn\'t callable)'
+#    def memoized_function(*args,**kwargs):
+#        key=args_hash(function,*args,**kwargs)
+#        if not key in cache:
+#            cache[key]=function(*args,**kwargs)
+#        return cache[key]
+#    memoized_function.__name__+=function.__name__
+#    memoized_function.original_function=function #So we can inspect it in rp
+#    memoized_function.cache=cache #So we can inspect it, or even clear it
+#    return memoized_function
+
 def memoized(function):
     #TODO: when trying to @memoize fibbonacci, and calling fibbonacci(4000), python crashes with SIGABRT. I have no idea why. This function really doesn't use any non-vanilla python code.
     #Uses args_hash to hash function inputs...
     #This is meant to be a permanent cache (as opposed to a LRU aka 'Least Recently Used' cache, which deletes cached values if they haven't been used in a while)
     #If you wish to temporarily memoize a function (let's call if F), you can create a new function cached(F), and put it in a scope that will run out eventually so that there are no memory leaks.
     #Some things can't be hashed by default, I.E. lists etc. But all lists can be converted to tuples, which CAN be hashed. This is where hashers come in. Hashers are meant to help you memoize functions that might have non-hashable arguments, such as numpy arrays.
-    cache=dict()
-    assert callable(function),'You can\'t memoize something that isn\'t a function (you tried to memoize '+repr(function)+', which isn\'t callable)'
-    def memoized_function(*args,**kwargs):
-        key=args_hash(function,*args,**kwargs)
-        if not key in cache:
-            cache[key]=function(*args,**kwargs)
+    import functools
+    cache = dict()
+    assert callable(function), 'You can\'t memoize something that isn\'t a function (you tried to memoize '+repr(function)+', which isn\'t callable)'
+
+    @functools.wraps(function)
+    def memoized_function(*args, **kwargs):
+        key = args_hash(function, *args, **kwargs)
+        if key not in cache:
+            cache[key] = function(*args, **kwargs)
         return cache[key]
-    memoized_function.__name__+=function.__name__
-    memoized_function.original_function=function #So we can inspect it in rp
-    memoized_function.cache=cache #So we can inspect it, or even clear it
+
+    memoized_function.original_function = function
+    memoized_function.cache = cache
     return memoized_function
 
 def memoized_property(method):
@@ -16345,10 +16391,18 @@ def grid_concatenated_images(image_grid):
     output_image=vertically_concatenated_images(image_grid)
     return output_image
 
-def tiled_images(images,length=None,border_color=(.5,.5,.5,1),border_thickness=1):
+def tiled_images(images,length=None,border_color=(.5,.5,.5,1),border_thickness=1,transpose=False):
     #EXAMPLE:
     #   display_image_in_terminal_color(tiled_images([load_image('https://i.pinimg.com/236x/36/69/39/36693999b6e24b1d06d0ee21c9ae320d--caged-nicolas-cage.jpg')]*25))
     #Sugar for what I often do with grid_concatenated_images
+    
+    if transpose:
+        #Tile the images from top to bottom instead of left to right. Length is now vertical
+        images=[rotate_image(i,90) for i in images]
+        output=tiled_images(images,length=length,border_color=border_color,border_thickness=border_thickness,transpose=False)
+        output=rotate_image(output,-90)
+        return output
+
     images=list(images)
     from math import ceil
     if length is None:
@@ -16359,6 +16413,7 @@ def tiled_images(images,length=None,border_color=(.5,.5,.5,1),border_thickness=1
     output=grid_concatenated_images(images)
     output=bordered_image_solid_color(output,color=border_color,thickness=border_thickness,bottom=0,right=0)
     return output
+
 
 def vertically_flipped_image(image):
     #Flips (aka mirrors) an image vertically
@@ -23534,6 +23589,83 @@ def load_dyaml_file(path:str)->dict:
 if __name__ == "__main__":
     print(end='\r')
     _pterm()
+
+
+def resize_list(array:list, length: int):
+    """
+    This function stretches or compresses a list to a given length using nearest-neighbor interpolation. 
+    The last element of the input list is always included in the output list, regardless of the target length.
+
+    Parameters:
+        array (list): The input list to resize.
+        length (int): The target length of the list.
+
+    Assumptions:
+        The function assumes that the target length is a non-negative integer.
+
+    Returns:
+        list: The resized list to the target length.
+
+    Examples:
+        >>> resize_list([0,1,2,3,4], 5)
+        [0, 1, 2, 3, 4]
+        # The target length is the length of the input array. No change.
+
+        >>> resize_list([0,1,2,3,4,5,6,7,8,9], 5)
+        [0, 2, 4, 6, 9]
+        # Elements are skipped when resizing to a shorter length, but the last element is always included.
+
+        >>> resize_list([1,2,3,4,5,6,7,8,9], 3)
+        [1, 5, 9]
+
+        >>> resize_list([1,2,3,4,5,6,7,8,9], 5)
+        [1, 3, 5, 7, 9]
+
+        >>> resize_list([0,1,2,3,4], 10)
+        [0, 0, 1, 1, 2, 2, 3, 3, 4, 4]
+        # Elements are duplicated during resizing to a longer length.
+
+        >>> resize_list([0,1,2,3,4], 1)
+        [4]
+        # Even when resizing to length 1, the last element is included.
+
+        >>> resize_list(range(3000000000000000),4)
+        [0, 1000000000000000, 1999999999999999, 2999999999999999]
+        # Pro-tip: this ran in .00001 seconds! You can use it to get indices by passing in a range object
+
+    """
+
+    assert isinstance(length, int), "Length must be an integer, but got %s instead"%repr(type(length))
+    assert length >= 0, "Length must be a non-negative integer, but got %i instead"%length
+
+    if len(array) > 1 and length > 1:
+        step = (len(array) - 1) / (length - 1)
+    else:
+        step = 0  # default step size to 0 if array has only 1 element or target length is 1
+
+    return [array[round(i * step)] for i in range(length)]
+
+
+def resize_list_to_fit(array:list, max_length:int):
+    """
+    Will squeeze the input array to fit in the given max_length if it has to.
+    If the array is already smaller than the max_length, it won't be changed.
+
+    Examples:
+        >>> resize_list_to_fit([0,1,2,3,4,5,6,7,8,9], 5)
+        [0, 2, 4, 6, 8]
+        # It was resized to size 5, because len(array)==10 which is larger than max_length==5
+
+        >>> resize_list_to_fit([0,1,2,3,4], 10)
+        [0, 1, 2, 3, 4]
+        # It was unchanged because len(array)==5 which is fits in max_length==10
+    """
+
+    if len(array)<max_length:
+        return [*array]
+    else:
+        return resize_list(array,max_length)
+
 
 def list_transpose(list_of_lists:list):
     #EXAMPLE:
