@@ -13522,6 +13522,11 @@ def get_process_id():
     import os
     return os.getpid()
 
+def process_exists(pid: int) -> bool:
+    pip_import('psutil')
+    import psutil
+    return psutil.pid_exists(pid)
+
 def regex_match(string,regex)->bool:
     #returns true if the regex describes the whole string
     import re
@@ -24337,14 +24342,20 @@ def get_gpu_pids(gpu_id=None):
     [[12345, 67890], [], [], [35534]]
     """
     if gpu_id is None:
-        return [get_gpu_pids(gpu_id=i) for i in get_all_gpu_ids()]
+        out = [get_gpu_pids(gpu_id=i) for i in get_all_gpu_ids()]
+    else:
+        _init_nvml()
+        from py3nvml.py3nvml import nvmlDeviceGetComputeRunningProcesses
 
-    _init_nvml()
-    from py3nvml.py3nvml import nvmlDeviceGetComputeRunningProcesses
+        handle = _get_gpu_handle(gpu_id)
+        running_processes = nvmlDeviceGetComputeRunningProcesses(handle)
+        out = [proc.pid for proc in running_processes]
 
-    handle = _get_gpu_handle(gpu_id)
-    running_processes = nvmlDeviceGetComputeRunningProcesses(handle)
-    return [proc.pid for proc in running_processes]
+        # Make sure all the processes exist! Sometimes, without this check it will return processes that aren't real.
+        # I have no idea why. This only ever happened at Adobe on Sensei. It might be a bug in the py3nvml library?
+        out = [x for x in out if process_exists(x)]
+
+    return out
 
 
 def get_free_vram(gpu_id=None):
