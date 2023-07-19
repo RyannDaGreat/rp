@@ -1847,6 +1847,27 @@ def random_permutation(n) -> list or str:
         return shuffled(n)
     return list(np.random.permutation(n))  # random_permutation(5) ⟶ [3, 2, 1, 4, 0]
 
+def is_a_permutation(permutation):
+    # A permutation is a list of ints ranging from 0 to len(permutation)-1
+    # It's used to specify a reordering of an array
+    return set(range(len(permutation))) == set(permutation)
+
+def inverse_permutation(permutation):
+    # Returns the 'undo' of a given permutation
+    #EXAMPLE:
+    #    a=list(range(100))
+    #    p=random_permutation(100)
+    #    assert a==gather(p,inverse_permutation(p))
+    assert is_a_permutation(permutation)
+    # Create an empty list of the same length as the permutation
+    inverse = [0] * len(permutation)
+    # For each index-value pair in the permutation
+    for i, p in enumerate(permutation):
+        # Set the value of the index at the value in the inverse
+        inverse[p] = i
+    return inverse
+
+
 def randint(a_inclusive,b_inclusive=0):
     # If both a and b are specified, the range is inclusive, choose from range［a，b] ⋂ ℤ
     # Otherwise, if only a is specified, choose random element from the range ［a，b) ⋂ ℤ
@@ -2697,6 +2718,220 @@ def save_openexr_image(image, file_path):
     output_file.writePixels({channels[i] : image[:,:,i].astype(np.float32).tobytes() for i in range(num_channels)})
     output_file.close()
 
+def _get_files_from_paths(paths, get_files=None):
+    """
+    Takes a folder, a list of files, or a list of files and folders as input - all of which can be globbed. 
+    It applies all globbings, then for each folder it fetches releveant files and includes them in the output.
+    This function is used in other functions to preprocess some argument that aims to specify a bunch of files.
+
+    It will always return a list of paths, none of which should be folders
+    """
+
+    if get_files is None:
+        get_files = rp.get_all_files
+
+    from glob import glob
+    if isinstance(paths,str):
+        paths = [paths]
+    paths = list_flatten(glob(x) for x in paths)
+    paths = list_flatten(get_files(x) if is_a_folder(x) else [x] for x in paths)
+    return paths
+
+def convert_image_file(
+    input_file,
+    new_extension=None,
+    output_folder=None,
+    *,
+    skip_overwrite=False,
+    image_transform=lambda image, image_file: image,
+    name_transform=lambda file_name: file_name,
+    load_image=lambda path       : rp.load_image(path       ),
+    save_image=lambda image, path: rp.save_image(image, path),
+):
+    """
+    Converts an image file to a specified format and saves it to the provided output folder.
+    It can also be used to resize image files or recolor them or whatever - beyond just filetype conversions.
+
+    Args:
+        input_file (str): Path to the image file to be converted.
+        new_extension (str, optional): Desired extension for the output files. If None, the extension is not changed.
+        output_folder (str, optional): Path to the folder where the converted image will be saved. 
+                                        If not provided, the image is saved in the same folder as the input file.
+        skip_overwrite (bool, optional): If True, won't overwrite existing files. Defaults to False.
+        image_transform (func, optional): A function that modifies the image before it's saved again. 
+                                          It should take in an image and a path string and return an image.
+                                          It also works if you pass it a 1-argument function like lambda image:image.
+        name_transform (func, optional): Modifies the image name (without extension). Takes in the old name and returns a new one.
+                                         Defaults to no change. But you might want to have something like lambda x:"new_"+x etc.
+                                         Note that it will receive a file name like "image" and not "image.png" or "/path/to/image.png"
+                                         It should return an image name in the same way (no /'s or file extensions)
+        load_image (func, optional): A function to load the image file. Defaults to rp.load_image(path).
+        save_image (func, optional): A function to save the image file. Defaults to rp.save_image(image, path).
+
+    Returns:
+        str: Path to the output file.
+
+    Raises:
+        TypeError: If the input file, output folder, or new extension is not a string.
+    """
+
+    if output_folder is None:
+        output_folder = get_parent_folder(input_file)
+    if new_extension is None:
+        new_extension = get_file_extension(input_file)
+    
+    if not isinstance(input_file   , str): raise TypeError("Input file must be a string, but got %s."   %type(input_file   ))
+    if not isinstance(new_extension, str): raise TypeError("New extension must be a string, but got %s."%type(new_extension))
+    if not isinstance(output_folder, str): raise TypeError("Output folder must be a string, but got %s."%type(output_folder))
+
+    input_file_name = get_file_name(input_file, include_file_extension=False)
+    output_file_name = input_file_name
+    output_file_name = name_transform(output_file_name)
+    output_file_name = with_file_extension(output_file_name, new_extension)
+    output_file = path_join(output_folder, output_file_name)
+
+    assert isinstance(output_file, str)
+
+    if file_exists(output_file) and skip_overwrite:
+        return output_file
+
+    image = load_image(input_file)
+
+    try:
+        image = image_transform(image, input_file)
+    except TypeError:
+        image = image_transform(image)
+
+    return save_image(image, output_file)
+
+def convert_image_files(
+    input_files=".",
+    new_extension=None, 
+    output_folder=None,
+    *, 
+    strict=True,
+    show_progress=False, 
+    skip_overwrite=False, 
+    image_transform=lambda image, image_file: image,
+    name_transform=lambda file_name: file_name,
+    load_image=lambda path       : rp.load_image(path       ),
+    save_image=lambda image, path: rp.save_image(image, path)
+):
+
+    """
+    Converts multiple image files to a specified format and saves them to the provided output folder. The function
+    leverages concurrent processing for enhanced performance. The function also includes a strict mode that controls
+    how the function behaves when an image fails to convert.
+
+    It can also be used to resize image files or recolor them or whatever - beyond just filetype conversions.
+
+    Args:
+        input_files (list or str): Paths to the image files to be converted, or a folder containing image files.
+                                   Defaults to '.', aka all images in the current working directory.
+        new_extension (str, optional): Desired extension for the output files. If None, the extension is not changed.
+        output_folder (str, optional): Path to the folder where the converted images will be saved.
+                                       If not provided, the images are saved in the same folder as the input files.
+        strict (bool, optional): Controls what happens when an image fails to convert. 
+                                 If True (default), an error is raised.
+                                 If False, images that fail to convert are skipped.
+                                 If None, positions of images that fail to convert are filled with None in the output.
+        show_progress (bool, optional): If True, shows a progress bar. Defaults to False.
+        skip_overwrite (bool, optional): If True, won't overwrite existing files. Defaults to False.
+        image_transform (func, optional): A function that modifies the images before they're saved again. 
+                                          It should take in an image and a path string and return an image.
+                                          It also works if you pass it a 1-argument function like lambda image:image.
+        name_transform (func, optional): Modifies the image name (without extension). Takes in the old name and returns a new one.
+                                         Defaults to no change. But you might want to have something like lambda x:"new_"+x etc.
+                                         Note that it will receive a file name like "image" and not "image.png" or "/path/to/image.png"
+                                         It should return an image name in the same way (no /'s or file extensions)
+        load_image (func, optional): A function to load the image file. Defaults to rp.load_image(path).
+        save_image (func, optional): A function to save the image file. Defaults to rp.save_image(image, path).
+
+    Returns:
+        list: Paths to the output files.
+
+    Raises:
+        TypeError: If the input files, output folder, or new extension is not of type string.
+    
+    Example:
+        convert_image_files(
+            "photoshop_files/*.psd",
+            new_extension="png",
+            output_folder="output_files",
+            image_transform=lambda image, path: labeled_image(
+                resize_image(image, 0.1), text=get_file_name(path)),
+            name_transform=lambda name: "smaller_labeled_" + name,
+            show_progress=True,
+            skip_overwrite=True,
+        )
+
+    """
+    
+    assert is_iterable(input_files), "Input files should be a list of files or a string (a folder path), but got {}.".format(type(input_files))
+    assert output_folder is None or isinstance(output_folder, str), "Output folder must be a string, but got {}.".format(type(output_folder))
+    assert strict in {True, False, None}, 'The \'strict\' parameter must be set to either True, False, or None.'
+    
+    input_files = _get_files_from_paths(input_files, get_files=get_all_image_files)
+
+    cancelled = False
+    output_files = []
+
+    def _convert_image(input_file):
+        nonlocal cancelled
+        if cancelled:
+            if isinstance(cancelled, Exception):
+                raise cancelled
+            else:
+                return None
+
+        try:
+            output = convert_image_file(input_file, new_extension, output_folder, 
+                                        skip_overwrite = skip_overwrite,
+                                        image_transform = image_transform,
+                                        name_transform = name_transform,
+                                        load_image = load_image, 
+                                        save_image = save_image)
+
+        except Exception as e:
+            if strict is True:
+                cancelled = e
+                raise
+            elif strict is None:
+                output = None
+
+        if show_progress and not cancelled:
+            nonlocal number_of_images_converted
+            number_of_images_converted += 1
+            show_time_remaining(number_of_images_converted)
+
+        return output
+
+    try:
+        if show_progress:
+            number_of_images_converted = 0
+            show_time_remaining = eta(len(input_files), title='Converting Images')
+            start_time = gtoc()
+
+        output_files = par_map(_convert_image, input_files)
+
+        if strict is False:
+            output_files = [output_file for output_file in output_files if output_file is not None]
+
+        if show_progress:
+            end_time = gtoc()
+            elapsed_time = end_time - start_time
+            sys.stdout.write('\033[2K\033[1G')  # erase and go to beginning of line
+            print('Converted %i images in %.3f seconds' % (len(output_files), elapsed_time))
+
+    except KeyboardInterrupt:
+        cancelled = True
+        raise
+
+    return output_files
+
+
+
+
 # endregion
 # region Text-To-Speech: ［text_to_speech，text_to_speech_via_apple，text_to_speech_via_google，text_to_speech_voices_comparison，text_to_speech_voices_for_apple，text_to_speech_voices_for_google，text_to_speech_voices_all，text_to_speech_voices_favorites］
 # region ［text_to_speech_via_apple］
@@ -3427,6 +3662,24 @@ def display_image(image,block=False):
             if image.dtype==bool:
                 image=image.astype(float)
             cv_imshow(image,wait=10 if not block else 1000000)#Hit esc in the image to exit it
+
+def with_alpha_checkerboard(image, tile_size=8, first_color=1.0, second_color=0.75):
+    checkers = get_checkerboard_image(
+        *get_image_dimensions(image),
+        tile_size=tile_size,
+        first_color=first_color,
+        second_color=second_color
+    )
+    return blend_images(checkers, image)
+
+def display_alpha_image(image, tile_size=8, first_color=1.0, second_color=0.75):
+    alpha_checkerboard_image = with_alpha_checkerboard(
+        image, 
+        tile_size=tile_size,
+        first_color=first_color,
+        second_color=second_color
+    )
+    display_image(alpha_checkerboard_image)
 
 def _display_image_slideshow_animated(images):
     #This works best on Jupyter notebooks right now
@@ -16731,13 +16984,21 @@ def hex_color_to_byte_color(hex_color:str):
     #EXAMPLE:
     #     >>> hex_color_to_byte_color('#007FFF')
     #    ans = (0, 127, 255)
-    assert len(hex_color)==len('#ABCDEF')
-    hex_color=hex_color[1:]
+    if len(hex_color)==len('#ABCDEF'):
+        hex_color=hex_color[1:]
+    assert len(hex_color)==len('ABCDEF')
     r=int(hex_color[0:2],16)
     g=int(hex_color[2:4],16)
     b=int(hex_color[4:6],16)
     return r,g,b
 hex_color_to_tuple = hex_color_to_byte_color #This was its old name. This is here to preserve compatiability.
+
+def hex_color_to_float_color(hex_color:str):
+    #EXAMPLE:
+    #     >>> hex_color_to_byte_color('#007FFF')
+    #    ans = (0, .5, 1)
+    color=hex_color_to_byte_color(hex_color)
+    return tuple(x/255 for x in color)
 
 def byte_color_to_hex_color(byte_color:tuple):
     #EXAMPLE:
@@ -16899,6 +17160,57 @@ def split_tensor_into_regions(tensor,*counts,flat=True,strict=False):
         out=out.reshape(*(np.product(out.shape[:len(counts)]),*out.shape[len(counts):]))
 
     return out
+
+def apply_tensor_mapping(indices_tensor, mapping_tensor):
+    """
+    The final dim of the indices_tensor is mapped to its corresponding address in mapping tensor
+
+    More simply, output[x,y]=mapping_tensor[indices_tensor[x,y]] for all x,y
+    It uses broadcasting, so that can change the output shape depending on the length of the indices.
+
+    SLOWER SIMPLER VERSION:
+        def apply_tensor_mapping_slowly(indices_tensor, mapping_tensor):
+            indices_tensor = indices_tensor.astype(int)
+            mapping_tensor = mapping_tensor.astype(int)
+            
+            indices_shape = indices_tensor.shape
+            mapping_shape = mapping_tensor.shape
+
+            assert len(mapping_shape) >= indices_shape[-1]
+            
+            output_shape = indices_shape[:-1] + mapping_shape[indices_shape[-1]:]
+            output = np.zeros(output_shape)
+
+            for indices in itertools.product(*[range(dim) for dim in output_shape]):
+                tensor_indices = indices[:len(indices_shape[:-1])]
+                output_indices = indices[len(indices_shape[:-1]):]
+                
+                output[indices] = mapping_tensor[*indices_tensor[tensor_indices], *output_indices]
+
+            return output
+    """
+    indices_tensor = indices_tensor.astype(int)
+
+    indices_shape = indices_tensor.shape
+    mapping_shape = mapping_tensor.shape
+
+    assert len(mapping_shape) >= indices_shape[-1]
+
+    T = indices_shape[:-1]
+    M = mapping_shape[indices_shape[-1]:]
+
+    output_shape = T + M
+
+    # Flatten indices_tensor until the last dimension
+    indices = indices_tensor.reshape(-1, indices_shape[-1]).T
+
+    # Use this as index to the mapping_tensor
+    output = mapping_tensor[tuple(indices)]
+
+    # Reshape the result back to the output shape
+    output = output.reshape(output_shape)
+
+    return output
 
 def bordered_image_solid_color(image,color=(1.,1.,1.,1.),thickness=1,width=None,height=None,top=None,bottom=None,left=None,right=None):
     #Add a pixel border of color around the image with a solid color
@@ -20749,6 +21061,28 @@ def get_image_value(image):
     assert is_image(image)
     return rgb_to_hsv(image)[:,:,2]
 
+def get_rgb_byte_color_identity_mapping_image():
+    #Save this image, and color-grade it. Then the new image can be used as a map!
+    #TODO: When rgb_mapping_cube_to_image is fast, this can be simplified to rgb_mapping_cube_to_image(get_rgb_byte_color_identity_mapping_cube())
+
+    # Creating a meshgrid for x and y coordinates
+    x, y = np.meshgrid(np.arange(4096), np.arange(4096))
+
+    # Creating color values based on the equations you provided
+    R = x % 256
+    G = y % 256
+    B = (x // 256) % 16 + 16 * (y // 256)
+
+    # Stacking all three color channels together to create an image tensor
+    image = np.stack([R, G, B], axis=-1).astype(np.uint8)
+    
+    #Output verification
+    assert is_rgb_image(image)
+    assert is_byte_image(image)
+    assert get_image_dimensions(image)==(4096,4096)
+    
+    return image
+
 def apply_colormap_to_image(image,colormap_name='viridis'):
     # https://stackoverflow.com/questions/52498777/apply-matplotlib-or-custom-colormap-to-opencv-image/52626636
     # EXAMPLE:
@@ -23905,6 +24239,38 @@ def _inline_rp_code(code):
     
     return unarpy(code)
 
+
+def get_free_ram() -> int:
+    """
+    Get the amount of RAM currently free.
+
+    :return: The amount of free RAM in bytes.
+    """
+    pip_import('psutil')
+    import psutil
+    return psutil.virtual_memory().available
+
+def get_total_ram() -> int:
+    """
+    Get the total amount of RAM.
+
+    :return: The total amount of RAM in bytes.
+    """
+    pip_import('psutil')
+    import psutil
+    return psutil.virtual_memory().total
+
+def get_used_ram() -> int:
+    """
+    Get the amount of RAM currently in use.
+
+    :return: The amount of used RAM in bytes.
+    """
+    pip_import('psutil')
+    import psutil
+    return get_total_ram() - get_free_ram()
+
+
 from functools import lru_cache
 @lru_cache(maxsize=None)
 def _init_nvml():
@@ -24288,6 +24654,23 @@ def print_gpu_summary(
     else:
         print(output)
 
+
+def type_string_with_keyboard(s, time_per_stroke=1/30):
+    pip_import('pynput')
+    from pynput.keyboard import Controller, Key
+    import time
+
+    keyboard = Controller()
+
+    for character in s:
+        if character == '\n':
+            keyboard.press(Key.enter)
+            keyboard.release(Key.enter)
+        else:
+            keyboard.press(character)
+            keyboard.release(character)
+
+        time.sleep(time_per_stroke)
 del re
 
 #TODO: Fix this. It can help extract function defs among other useful thins
