@@ -35,7 +35,6 @@
 /Users/Ryan/Desktop/CleanCode/Resume/Latex
 /Users/Ryan/Desktop/CleanCode/Resume
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/pygments/lexers
-/Users/Ryan/Desktop/CleanCode
 /Users/Ryan/Desktop/Screenshots
 /Users/Ryan/Downloads/halved_photos
 /Users/Ryan/Desktop/CleanCode/Github/robosuite
@@ -53,7 +52,6 @@
 /Users/Ryan/Desktop/CleanCode/Sandbox/Lightwave/Lightwave_Wavebox_Transceiver
 /Users/Ryan/Desktop/CleanCode/LightWave/Hardware Source/Legacy Backups
 /Users/Ryan/Desktop/CleanCode/LightWave/Hardware Source
-/Users/Ryan/Desktop/CleanCode/LightWave
 /Users/Ryan/Desktop/real
 /Users/Ryan/Desktop/images
 /Users/Ryan/63.1
@@ -70,7 +68,6 @@
 /Users/Ryan/.ssh
 /Users/Ryan/.config/lazygit
 /Users/Ryan/Downloads
-/Users/Ryan/Desktop
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/parso
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
@@ -81,6 +78,11 @@
 /Users/Ryan/PycharmProjects/QuickPython
 /Users/Ryan/PycharmProjects/QuickPython/rp-0.1.676
 /Users/Ryan/PycharmProjects/QuickPython/rp-0.1.676/rp
-/Users/Ryan
 /
+/Users/Ryan/Desktop
+/Users/Ryan/Desktop/CleanCode
+/Users/Ryan/Desktop/CleanCode/LightWave
+/Users/Ryan/Desktop/CleanCode/LightWave/NextGen
+/Users/Ryan/Desktop/CleanCode/LightWave/NextGen/axoloti
+/Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp

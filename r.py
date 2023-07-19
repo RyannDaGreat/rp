@@ -2746,7 +2746,7 @@ def convert_image_file(
     image_transform=lambda image, image_file: image,
     name_transform=lambda file_name: file_name,
     load_image=lambda path       : rp.load_image(path       ),
-    save_image=lambda image, path: rp.save_image(image, path),
+    save_image=lambda image, path: rp.save_image(image, path)
 ):
     """
     Converts an image file to a specified format and saves it to the provided output folder.
