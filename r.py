@@ -3496,7 +3496,7 @@ def _display_image_in_notebook_via_ipyplot(image):
     pip_import('ipyplot').plot_images(images=[image],img_width=image_width,labels=[''])
     #pip_import('ipyplot').plot_images(images=[image],img_width=image_width,labels=[''],force_b64=True)#force_b64 is set to true so that ipyplot doesn't complain when we're in google colab: ' WARNING! Google Colab Environment detected!   If images are not displaying properly please try setting `base_64` param to `True`.' This has never been an issue, but the warning is annoying
 
-def _display_image_in_notebook_via_ipython(image):
+def _display_image_in_notebook_via_ipython_and_cv2(image):
     import IPython
     return IPython.display.display_png(encode_image_to_bytes(image,'png'),raw=True)
 
@@ -3570,15 +3570,31 @@ def display_embedded_video_in_notebook(video,framerate:int=30,filetype:str='gif'
     
     display_html(html,raw=True)
 
+def _display_image_in_ipython_via_PIL(image):
+    pip_import('PIL')
+    pip_import('IPython')
+    from PIL import Image
+    import IPython.display as display
+    
+    assert is_image(image)
+    if is_grayscale_image(image):
+        image=as_rgb_image(image)
+    image = as_byte_image(image)
+
+    display.display(Image.fromarray(image))
 
 def display_image_in_notebook(image):
     #Display an image at full resolution in a jupyter notebook
 
     #First method: Try to use iPython.display to do it directly. It's faster than ipyplot, and gives crisper images on my macbook.
-    try: _display_image_in_notebook_via_ipython(image);return
+    try: _display_image_in_notebook_via_ipython_and_cv2(image);return
     except Exception: pass
 
-    #Second method: If that fails, try ipyplot. It gives good image displays as well.
+    #Second method: Try using PIL to display the image. This method seems to work just as well as the cv2 one.
+    try: _display_image_in_ipython_via_PIL(image);return
+    except Exception: pass
+
+    #Second method: If that fails, try ipyplot. It gives good image displays as well, but they have borders...
     try: _display_image_in_notebook_via_ipyplot(image);return
     except Exception: raise
 
