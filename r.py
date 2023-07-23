@@ -2810,6 +2810,7 @@ def convert_image_files(
     output_folder=None,
     *, 
     strict=True,
+    parallel=True,
     show_progress=False, 
     skip_overwrite=False, 
     image_transform=lambda image, image_file: image,
@@ -2835,6 +2836,7 @@ def convert_image_files(
                                  If True (default), an error is raised.
                                  If False, images that fail to convert are skipped.
                                  If None, positions of images that fail to convert are filled with None in the output.
+        parallel (bool, optional): If True, runs multithreaded. Otherwise computes in main thread.
         show_progress (bool, optional): If True, shows a progress bar. Defaults to False.
         skip_overwrite (bool, optional): If True, won't overwrite existing files. Defaults to False.
         image_transform (func, optional): A function that modifies the images before they're saved again. 
@@ -2912,7 +2914,8 @@ def convert_image_files(
             show_time_remaining = eta(len(input_files), title='Converting Images')
             start_time = gtoc()
 
-        output_files = par_map(_convert_image, input_files)
+        mapper = par_map if parallel else seq_map
+        output_files = mapper(_convert_image, input_files)
 
         if strict is False:
             output_files = [output_file for output_file in output_files if output_file is not None]
@@ -3496,7 +3499,7 @@ def _display_image_in_notebook_via_ipyplot(image):
     pip_import('ipyplot').plot_images(images=[image],img_width=image_width,labels=[''])
     #pip_import('ipyplot').plot_images(images=[image],img_width=image_width,labels=[''],force_b64=True)#force_b64 is set to true so that ipyplot doesn't complain when we're in google colab: ' WARNING! Google Colab Environment detected!   If images are not displaying properly please try setting `base_64` param to `True`.' This has never been an issue, but the warning is annoying
 
-def _display_image_in_notebook_via_ipython_and_cv2(image):
+def _display_image_in_notebook_via_ipython(image):
     import IPython
     return IPython.display.display_png(encode_image_to_bytes(image,'png'),raw=True)
 
@@ -3570,31 +3573,15 @@ def display_embedded_video_in_notebook(video,framerate:int=30,filetype:str='gif'
     
     display_html(html,raw=True)
 
-def _display_image_in_ipython_via_PIL(image):
-    pip_import('PIL')
-    pip_import('IPython')
-    from PIL import Image
-    import IPython.display as display
-    
-    assert is_image(image)
-    if is_grayscale_image(image):
-        image=as_rgb_image(image)
-    image = as_byte_image(image)
-
-    display.display(Image.fromarray(image))
 
 def display_image_in_notebook(image):
     #Display an image at full resolution in a jupyter notebook
 
     #First method: Try to use iPython.display to do it directly. It's faster than ipyplot, and gives crisper images on my macbook.
-    try: _display_image_in_notebook_via_ipython_and_cv2(image);return
+    try: _display_image_in_notebook_via_ipython(image);return
     except Exception: pass
 
-    #Second method: Try using PIL to display the image. This method seems to work just as well as the cv2 one.
-    try: _display_image_in_ipython_via_PIL(image);return
-    except Exception: pass
-
-    #Second method: If that fails, try ipyplot. It gives good image displays as well, but they have borders...
+    #Second method: If that fails, try ipyplot. It gives good image displays as well.
     try: _display_image_in_notebook_via_ipyplot(image);return
     except Exception: raise
 
@@ -6914,11 +6901,15 @@ def split_python_tokens(code: str):
 
     return list(get_all_token_strings(code))
 
-def int_clamp(x: int,min_value: int,max_value: int) -> int:
+def clamp(x,min_value,max_value):
     return min([max([min_value,x]),max_value])
+
+def int_clamp(x: int,min_value: int,max_value: int) -> int:
+    return clamp(x,min_value,max_value)
+
 def float_clamp(x: float,min_value: float,max_value: float) -> float:
     # noinspection PyTypeChecker
-    return int_clamp(x,min_value,max_value)
+    return clamp(x,min_value,max_value)
 
 
 def print_highlighed_stack_trace(error:BaseException):
@@ -17031,6 +17022,12 @@ def byte_color_to_hex_color(byte_color:tuple):
     
     return '#'+''.join('{:02X}'.format(a) for a in byte_color)
 
+def byte_color_to_float_color(byte_color):
+    return tuple(x/255 for x in byte_color)
+
+def float_color_to_byte_color(float_color):
+    return tuple(round(clamp(x*255,0,255)) for x in float_color)
+
 
 def get_color_hue(color):
     assert is_float_color(color),'For now, get_color_hue only works with float_colors and returns a float between 0 and 1'
@@ -21650,6 +21647,113 @@ def _iterfzf(*args,**kwargs):
     from iterfzf import iterfzf
     return iterfzf(*args,**kwargs)
 
+def cv_inpaint_image(image, mask, radius=3, *, algorithm: str = "TELEA"):
+    """
+    Inpaint an image using OpenCV's inpainting methods.
+    The inpainting will be super smooth, and does not use any machine learning
+
+    Parameters:
+        - image: The input image to be inpainted, expected to be in RGB format with byte values.
+        - mask: A binary mask indicating the regions to inpaint. Must be the same size as `image`.
+        - radius: The radius of a circular neighborhood of each point to inpaint. Defines how far the inpainting method 
+          can reach for information while inpainting. Larger values consider more of the surrounding pixels. Default is 3.
+        - algorithm: The inpainting method to use. Can be "TELEA" or "NS". Default is "TELEA".
+          "TELEA" uses the method by Alexandru Telea [An Image Inpainting Technique Based on the Fast Marching Method].
+          "NS" uses the method by Bertalmio, Marcelo, Andrea L. Bertozzi, and Guillermo Sapiro [Navier-Stokes, Fluid Dynamics, and Image and Video Inpainting].
+
+    Returns:
+        - inpainted_image: The inpainted image, in the same format and size as the input image.
+
+    Example:
+        image=load_image('https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png')
+        mask=np.zeros_like(image).astype(bool)
+        mask[128:-128,128:-128]=True #Will inpaint where mask==True
+        display_image(cv_inpaint_image(image,mask))
+    """
+    
+    #Imports and setup
+    pip_import("cv2")
+    import cv2
+    algorithms = dict(TELEA=cv2.INPAINT_TELEA, NS=cv2.INPAINT_NS)
+
+    #Input assertions
+    assert is_image(image) and is_image(mask)
+    assert get_image_dimensions(mask) == get_image_dimensions(image), 'mask and image must have same height and width'
+    assert isinstance(radius,int) and radius>=1
+    assert algorithm in algorithms, repr(algorithm) + ' is not in '+repr(list(algorithms))
+        
+    #Input conversions
+    image = as_byte_image(image)
+    image = as_rgb_image(image)
+    mask = as_byte_image(as_binary_image(mask))
+    mask = as_grayscale_image(mask)
+    algorithm = algorithms[algorithm]
+
+    #The actual inpainting
+    inpainted_image = cv2.inpaint(image, mask, radius, flags=algorithm)
+
+    #Output assertions
+    assert is_rgb_image(inpainted_image)
+    assert is_byte_image(inpainted_image)
+    assert get_image_dimensions(inpainted_image) == get_image_dimensions(image)
+
+    return inpainted_image
+
+def cv_floodfill_mask(image, position:tuple, tolerance: int = 32, *, bridge_diagonals=False):
+    """
+    A wrapper for cv2.floodfill
+    Takes in an image, and returns a binary mask of same dimensions
+    It acts like the paint bucket tool applied to the given position,
+    and fills all pixels adjacently that are within the given tolerance.
+    The connectivity parameter can either be 4 or 8, and if it
+
+    EXAMPLE:
+        image = load_image("https://wallpapers.com/images/hd/girl-aesthetic-looking-up-the-sky-l7l5dq0nsmnq8j70.jpg")
+        mask = cv2_floodfill_mask(image, position=(0, 0), tolerance=10)
+        display_alpha_image(with_alpha_channel(image,~mask))
+    """
+    pip_import('cv2')
+    import cv2
+
+    assert is_image(image)
+    image = as_rgb_image(image)
+    image = as_byte_image(image)
+    height, width = get_image_dimensions(image)
+
+    # position is an (x,y) tuple for pixel position
+    x, y = position
+    x = int(x)
+    y = int(y)
+
+    # tolerance has to be an RGB color
+    tolerance = (tolerance, tolerance, tolerance)
+
+    # When filling, should we bridge diagonal gaps? That's called "8-way connectivity"
+    # To get that, set connectivity to 8. Otherwise, if we only want to traverse
+    # up down left and right, set connectivity to 4-way via connectivity==4
+    connectivity=8 if bridge_diagonals else 4
+    assert connectivity in (4,8)
+
+    #cv2.floodfill() mutates image! However, its ok - it's only a copy.
+    _,_,mask,_=cv2.floodFill(
+        image,         #image
+        None,          #mask
+        (x,y),         #seedpoint
+        (255,255,255), #newval
+        tolerance,     #lodiff
+        tolerance,     #updiff
+        connectivity,  #flags
+    )
+
+    assert is_grayscale_image(mask)
+    mask = as_binary_image(mask*255)
+    assert mask.shape == (height + 2, width + 2)
+
+    mask = mask[1:-1, 1:-1]
+    assert get_image_dimensions(mask) == get_image_dimensions(image)
+
+    return mask
+
 def breadth_first_path_iterator(root='.'):
     #As opposed to a depth-first path iterator, this goes through every file and directory from the root in a breadth-first manner
     #It returns a generator instead of a list, which makes computations more efficient (especially for FZF)
@@ -24367,9 +24471,9 @@ def get_gpu_pids(gpu_id=None):
         running_processes = nvmlDeviceGetComputeRunningProcesses(handle)
         out = [proc.pid for proc in running_processes]
 
-        # Make sure all the processes exist! Sometimes, without this check it will return processes that aren't real.
-        # I have no idea why. This only ever happened at Adobe on Sensei. It might be a bug in the py3nvml library?
-        out = [x for x in out if process_exists(x)]
+    # Make sure all the processes exist! Sometimes, without this check it will return processes that aren't real.
+    # I have no idea why. This only ever happened at Adobe on Sensei. It might be a bug in the py3nvml library?
+    out = [x for x in out if process_exists(x)]
 
     return out
 
@@ -24698,6 +24802,86 @@ def type_string_with_keyboard(s, time_per_stroke=1/30):
             keyboard.release(character)
 
         time.sleep(time_per_stroke)
+
+def delaunay_interpolation_weights(key_points, query_points):
+    """
+    This function calculates the interpolation weights for each query point based
+    on the Delaunay triangulation of the data points.
+
+    Args:
+        key_points (np.array): A 2d array of data points for Delaunay triangulation.
+        query_points (np.array): A 2d array of query points to be interpolated,
+                                 or a single 1d vector query point. Note: if 
+                                 query_points.ndim==1, then the outputs of this 
+                                 function are no longer 2d, and will be 1d instead.
+
+    Returns:
+        tuple: A tuple containing two arrays, one with the indices of the vertices
+               for each simplex and another with the corresponding weights for
+               interpolation. 
+               
+    Note:
+        For repeated calls with the same key points, it's more efficient to reuse 
+        a Delaunay object than to recreate it each time due to the costly nature 
+        of Delaunay triangulation. If that is your use case, modify this function.
+        
+    Example:
+       >>> delaunay_interpolation_weights(np.random.randn(100,2), np.random.rand(3,2))
+        ans=(
+               [[ 4, 50, 28],
+                [70,  2, 20],
+                [50, 68, 28]]
+              ,
+               [[0.248, 0.057, 0.695],
+                [0.305, 0.006, 0.689],
+                [0.241, 0.143, 0.616]]
+            )
+            #Note that a simplex has (num dim + 1) points. For example, to interp in 1d space, you need two points to lerp between.
+
+    Original Source: https://stackoverflow.com/questions/30373912/interpolation-with-delaunay-triangulation-n-dim
+    GPT4 Cleanup: https://chat.openai.com/share/a365f99a-4350-4743-80b5-6ee49ed3414e
+    """
+    
+    # Import things
+    pip_import('scipy')
+    import numpy as np
+    from scipy.spatial import Delaunay
+
+    key_points=as_numpy_array(key_points)
+    query_points=as_numpy_array(query_points)
+    
+    if query_points.ndim == 1:
+        # Special case: we're querying a single point
+        query_points = [query_points]
+        vertices, weights = delaunay_interpolation_weights(key_points, query_points)
+        return vertices[0], weights[0]
+
+    # Assert key and query points are matrices, and have the same vector length
+    assert key_points.ndim == 2
+    assert query_points.ndim == 2
+    assert key_points.shape[1] == query_points.shape[1]
+
+    # Create Delaunay object and find simplices containing each query point
+    delaunay = Delaunay(key_points)
+    simplices = delaunay.find_simplex(query_points)
+
+    # Get the vertices and transformation matrices for each simplex
+    vertices = delaunay.vertices[simplices]
+    transform = delaunay.transform[simplices]
+
+    # Calculate barycentric coordinates for each query point
+    bary_coords = np.einsum('ijk,ik->ij', transform[:,:key_points.shape[1],:key_points.shape[1]],
+                            query_points - transform[:,key_points.shape[1],:])
+
+    # Compute weights for each vertex of the simplex
+    weights = np.c_[bary_coords, 1 - bary_coords.sum(axis=1)]
+
+    # Output shape assertions
+    assert vertices.shape == weights.shape == (len(query_points), key_points.shape[1] + 1)
+
+    return vertices, weights
+
+
 del re
 
 #TODO: Fix this. It can help extract function defs among other useful thins
