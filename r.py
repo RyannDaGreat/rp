@@ -24881,6 +24881,51 @@ def delaunay_interpolation_weights(key_points, query_points):
 
     return vertices, weights
 
+def argrank(x):
+    """
+    This function is like np.argsort, EXCEPT:
+        - It works element-wise right now! Not on a given axis.
+        - It will give equal elements the same rank!
+            - In other words, whereas 
+                 assert np.argsort(vector).max()==len(vector)-1,
+                instead,
+                 assert argrank   (vector).max()==len(set(vector))-1
+                 
+    TODO:
+        - Add support for non-elementwise rankings and non-numpy objects
+          like lists and torch tensors etc
+                                      
+    EXAMPLE:
+        ans = [[90 90 90 20 10]
+               [30 40 70 20 50]
+               [ 0 50 10 20 80]
+               [70 10 30 40 40]
+               [30 20  0 90 60]]
+         >>> argrank(ans)
+        ans = [[9 9 9 2 1]
+               [3 4 7 2 5]
+               [0 5 1 2 8]
+               [7 1 3 4 4]
+               [3 2 0 9 6]]
+         >>> ans**2+5 #Squaring and adding a constant to positive numbers preserves ranking
+        ans = [[86 86 86  9  6]
+               [14 21 54  9 30]
+               [ 5 30  6  9 69]
+               [54  6 14 21 21]
+               [14  9  5 86 41]]
+         >>> argrank(ans)
+        ans = [[9 9 9 2 1]
+               [3 4 7 2 5]
+               [0 5 1 2 8]
+               [7 1 3 4 4]
+               [3 2 0 9 6]]
+    """
+    x=as_numpy_array(x)
+    _,ranks = np.unique(x.flatten(),return_inverse=True)
+    ranks=ranks.reshape(x.shape)
+    return ranks
+
+
 
 del re
 
