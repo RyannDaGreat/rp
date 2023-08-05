@@ -2565,6 +2565,9 @@ def save_image(image,file_name=None,add_png_extension: bool = True):
     if add_png_extension and not has_file_extension(file_name):#Save a png file by default
         file_name+=".png"
 
+    if get_file_extension(file_name).lower() in 'jpg jpeg'.split():
+        image=as_rgb_image(image)
+
     imsave(file_name,image)
 
     return file_name
@@ -2677,7 +2680,8 @@ def save_image_jpg(image,path,*,quality=100,add_extension=True):
     from PIL import Image
     if not get_file_extension(path).lower() in {'jpeg','jpg'}:
         path+='.jpg'
-    return Image.fromarray(image).save(path, "JPEG", quality=quality, optimize=False, progressive=True)
+    none= Image.fromarray(image).save(path, "JPEG", quality=quality, optimize=False, progressive=True)
+    return path
 
 def save_openexr_image(image, file_path):
     #Counterpart to load_openexr_image
@@ -2879,6 +2883,8 @@ def convert_image_files(
     output_files = []
 
     def _convert_image(input_file):
+        output = None #I'm not sure why but somehow the controlflow can avoid declaring output in some edge case. Instead of debugging it I'll just fix it here.
+
         nonlocal cancelled
         if cancelled:
             if isinstance(cancelled, Exception):
@@ -3503,6 +3509,7 @@ def _display_image_in_notebook_via_ipython(image):
     import IPython
     return IPython.display.display_png(encode_image_to_bytes(image,'png'),raw=True)
 
+
 def display_video(video,framerate=30):
     #Video can either be a string, or a video (aka a 4d tensor or iterable of images)
     if running_in_jupyter_notebook():
@@ -3574,8 +3581,25 @@ def display_embedded_video_in_notebook(video,framerate:int=30,filetype:str='gif'
     display_html(html,raw=True)
 
 
-def display_image_in_notebook(image):
+def _display_downloadable_image_in_notebook_via_ipython(image, file_name:str):
+    #When clicked, the image will be downloaded with the given file name
+    pip_import("IPython")
+    file_name=with_file_extension(file_name,'png')
+    import base64
+    from IPython.display import HTML,display
+    img_str = base64.b64encode(encode_image_to_bytes(image,'png')).decode('utf-8')
+    html = '<a href="data:image/png;base64,{img_str}" download="displayed_image.png">' \
+           '<img src="data:image/png;base64,{img_str}" /></a>'.replace('{image_str}',image_str)
+    display(HTML(html))
+
+def display_image_in_notebook(image, file_name:str=None):
     #Display an image at full resolution in a jupyter notebook
+
+    if file_name is not None:
+        assert isinstance(file_name,str), 'The given file name must be a string, but got type %s'%type(file_name)
+        if not has_file_extension(file_name):
+            file_name=with_file_extension(file_name,'png')
+        _display_downloadable_image_in_notebook_via_ipython(image, file_name)
 
     #First method: Try to use iPython.display to do it directly. It's faster than ipyplot, and gives crisper images on my macbook.
     try: _display_image_in_notebook_via_ipython(image);return
@@ -6442,6 +6466,130 @@ def sync_sorted(*lists_in_descending_sorting_priority,key=identity):
         return tuple(zip(*sorted(zip(*lists_in_descending_sorting_priority),key=lambda x:tuple(map(key,x)))))
 sync_sort=sync_sorted#For backwards compatiability
     
+def _contains_func_y(y):
+    #Used in contains_any, contains_all, in_any, in_all
+    y=detuple(y)
+    if not hasattr(y,'__contains__') or type(y) in [str, bytes]:
+        #Without this, contains_any('abc','axyz')==True
+        #Because it would iterate through the letters
+        y=[y]
+    return y
+    
+
+def contains_any(x,*y):
+    """
+    Returns True if x contains any of y.
+
+    EXAMPLES:
+        assert contains_any('texture','tex') == True
+        assert contains_any('tex','texture') == False
+        assert contains_any('texture',['tex']) == True
+        assert contains_any('texture','abc') == False
+        assert contains_any('texture','abc','tex') == True
+        assert contains_any('texture',['abc','tex']) == True
+        assert contains_any([1,2,3,4],1) == True
+        assert contains_any([1,2,3,4],2) == True
+        assert contains_any([1,2,3,4],5) == False
+        assert contains_any([1,2,3,4],5,6) == False
+        assert contains_any([1,2,3,4],5,6,1) == True
+        assert contains_any([1,2,3,4],5,6,1,2) == True
+        assert contains_any([1,2,3,4],[5,6,1,2]) == True
+        assert contains_any([1,2,3,4],[1,2]) == True
+        assert contains_any([1,2,3,4],[5,6]) == False
+    """
+    assert hasattr(x,'__contains__'),'x cannot contain anything. type(x)=='+repr(type(x))
+    y=_contains_func_y(y)
+    return any(z in x for z in y)
+
+def contains_all(x,*y):
+    """
+    Returns True if x contains all of y.
+
+    EXAMPLES:
+        assert contains_all('texture','t', 'e', 'x') == True
+        assert contains_all('texture','z') == False
+        assert contains_all('texture',['t', 'e', 'x']) == True
+        assert contains_all([1,2,3,4],1, 2) == True
+        assert contains_all([1,2,3,4],1, 5) == False
+        assert contains_all([1,2,3,4],[1,2]) == True
+        assert contains_all([1,2,3,4],[5,6]) == False
+    """
+    assert hasattr(x,'__contains__'),'x cannot contain anything. type(x)=='+repr(type(x))
+    y=_contains_func_y(y)
+    return all(z in x for z in y)
+
+def in_any(x,*y):
+    """
+    Returns True if x is in any of y.
+
+    EXAMPLES:
+        assert in_any('tex','texture', 'textbook') == True
+        assert in_any('abc','texture', 'textbook') == False
+        assert in_any(1,[1,2,3], [2,3,4]) == True
+        assert in_any(5,[1,2,3], [2,3,4]) == False
+    """
+    y=_contains_func_y(y)
+    assert all(hasattr(z,'__contains__') for z in y), 'Not all y can contain things: '+str(set(map(type,y)))
+    return any(x in z for z in y)
+
+def in_all(x,*y):
+    """
+    Returns True if x is in all of y.
+
+    EXAMPLES:
+        assert in_all('tex','texture', 'textbook') == False
+        assert in_all('t','texture', 'textbook') == True
+        assert in_all(1,[1,2,3], [1,3,4]) == True
+        assert in_all(5,[1,2,3], [2,3,4]) == False
+        assert in_all(5,[5,1,2,3], [2,3,4]) == False
+        assert in_all(5,[5,1,2,3], [5,2,3,4]) == True
+    """
+    y=_contains_func_y(y)
+    assert all(hasattr(z,'__contains__') for z in y), 'Not all y can contain things: '+str(set(map(type,y)))
+    return all(x in z for z in y)
+
+def contains_sort(array, *, key=lambda x: x, contains=lambda x, y: y in x, reverse=False):
+    """
+    Sorts a list of strings such that for every pair of indices i, j (i<=j),
+    if S[i] is a substring of S[j], then S[i] comes before S[j] in the sorted list.
+    If neither string is a substring of the other, the function falls back to
+    lexicographic comparison.
+
+    Parameters:
+    S (list of str): List of strings to sort
+
+    Returns:
+    list of str: Sorted list of strings
+
+    Example:
+    >>> contains_sort(["abc", "ab", "abcd"])
+    ['ab', 'abc', 'abcd']
+
+    >>> contains_sort(["123", "23", "12"])
+    ['12', '123', '23']
+
+    >>> contains_sort(["rat", "cat", "animal", "bat"])
+    ['rat', 'cat', 'bat', 'animal']
+
+    >>> contains_sort(["abc", "aabc", "aaabc"])
+    ['abc', 'aabc', 'aaabc']
+    """
+
+    import functools
+
+    def cmp(a, b):
+        if contains(b, a):
+            return -1
+        elif contains(a, b):
+            return 1
+        else:
+            ka = key(a)
+            kb = key(b)
+            return (ka > kb) - (ka < kb)
+
+    return sorted(array, key=functools.cmp_to_key(cmp),reverse=reverse)
+contains_sorted=contains_sort
+
 def sync_shuffled(*lists):
     #Shuffles lists in sync with one another
     #EXAMPLE:
@@ -8066,6 +8214,17 @@ def restart_python():
     print("killall Python\nsleep 2\npython3 "+repr(__file__))
     system("killall Python\nsleep 2\npython3 "+repr(__file__))
 
+def reload_module(module):
+    import importlib
+    importlib.reload(module)
+
+def reload_rp():
+    #If rp changes mid-notebook, here's a convenient way to reload it
+    import rp
+    reload_module(rp)
+    import rp
+    return rp
+    
 def eta(total_n,min_interval=.3,title="r.eta"):
     # DEMO:
     # a = eta(2000,title='test')
@@ -8861,6 +9020,17 @@ def launch_xonsh():
     finally:
         #We definitely want to restore the old arguments
         sys.argv=old_sys_argv
+    
+def with_line_numbers(string,prefix='%i. '):
+    """
+     >>> with_line_numbers('a\nb\nc')
+     ans = 0. a
+           1. b
+           2. c
+    """
+    lines=string.splitlines()
+    lines=[prefix%i+e for i,e in enumerate(lines)]
+    return line_join(lines)
     
 def number_of_lines(string):
     return string.count('\n')+1 #This is probably more efficient than the line below this one...
@@ -10229,6 +10399,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         MV
         LS
         LST
+        LSD
         LSN
         CD
         CDP
@@ -10434,6 +10605,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         FOF fansioff
         FOFF fansioff
 
+        UOF UNDO OFF
+        UON UNDO ON
+
         RRC ryanrprc
         RTC ryantmuxrc
         RVC ryanvimrc
@@ -10520,10 +10694,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         VCL $delete_file($get_absolute_path('~/.viminfo'))#VimClear_use_when_VCOPY_doesnt_work_properly
 
         ALSF $get_all_paths(get_current_directory(),include_files=True,include_folders=False,relative=True)
-        LSAG  $get_all_paths  (relative=False,sort_by='name')
-        LSAFG $get_all_files  (relative=False,sort_by='name')
-        LSADG $get_all_folders(relative=False,sort_by='name')
+        LSAG  $get_all_paths  (relative=False,sort_by='name') #LSA Global
+        LSAFG $get_all_files  (relative=False,sort_by='name') #LSA Files Global
+        LSADG $get_all_folders(relative=False,sort_by='name') #LSA Directories Global
         LSM   $pip_import('iterfzf').iterfzf($get_all_paths('.',relative=False,sort_by='name'),multi=True,exact=True)
+        LSAI  $get_all_image_files()
 
         IASM $import_all_submodules(ans,verbose=True);
 
@@ -11092,7 +11267,18 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
                     elif user_message == 'DMORE':
                         fansi_print("DMORE --> Entering a post-mortem debugger","blue")
-                        pip_import('pudb').post_mortem(error.__traceback__)
+                        tb=error.__traceback__
+                        if currently_in_a_tty() and not currently_running_windows():
+                            try:
+                                pip_import('pudb').post_mortem(tb)
+                            except Exception:
+                                import pdb
+                                #In jupyter, this will somehow magically become ipdb. Idk how that works but it does.
+                                pdb.post_mortem(tb)
+                        else:
+                            import pdb
+                            pdb.post_mortem(tb)
+
                         # fansi_print("DMORE has not yet been implemented. It will be a post mortem debugger for your error using rp_ptpdb",'red','bold')
 
                     elif user_message.startswith('MOD SET'):
@@ -11207,6 +11393,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
                         print('Python version: '+version+' at '+fansi(sys.executable,'magenta'))
                         print('Current time: '+_format_datetime(get_current_date()))
+                        print('Disk space: '+'%s / %s used   :  %s free'%(human_readable_file_size(get_used_disk_space()),human_readable_file_size(get_total_disk_space()),human_readable_file_size(get_free_disk_space())))
+                        print('RAM: '+'%s / %s used   :  %s free'%(human_readable_file_size(get_used_ram()),human_readable_file_size(get_total_ram()),human_readable_file_size(get_free_ram())))
                         print('Computer details:')
                         print(bullet+'Operating system: '+fansi('('+os_name+') ','red','bold')+fansi(platform.platform(),'red'))
                         print(bullet+'Computer name: '+name)
@@ -11602,7 +11790,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         fansi_print("CCAT: Copying to your clipboard the contents of "+repr(file_name),"blue")
                         string_to_clipboard(_load_text_from_file_or_url(file_name))
 
-                    elif user_message=='LS' or user_message=='LST' or user_message=='LSN':
+                    elif user_message=='LS' or user_message=='LST' or user_message=='LSN' or user_message=='LSD':
                         import os
 
                         printed_lines=[]
@@ -11615,6 +11803,17 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             fansi_print("LSN -> Printing all paths from LS sorted by Number (number)",'blue','bold')
                             paths=[path for path in paths if path_exists(path)]
                             paths=sorted(paths,key=lambda x:(len(x),x))
+                            paths=sorted(paths,key=is_a_directory)
+
+                        if user_message=='LSD':
+                            def file_size_key(x):
+                                if is_a_file(x):
+                                    return get_file_size(x, human_readable=False)
+                                else:
+                                    return 0
+                            fansi_print("LSD -> Printing all paths from LS sorted by Disk Size (size)",'blue','bold')
+                            paths=[path for path in paths if path_exists(path)]
+                            paths=sorted(paths,key=file_size_key)
                             paths=sorted(paths,key=is_a_directory)
 
                         if user_message=='LST':
@@ -11638,7 +11837,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
                         text=line_join(printed_lines)
 
-                        if user_message=='LST':
+                        if user_message=='LST' or user_message=='LSD':
                             dates=[_format_datetime(date_modified(path)) for path in paths]
                             dates=[fansi(date,'blue',None) for date in dates]
                             dates=line_join(dates)
@@ -15945,6 +16144,10 @@ def strip_file_extension(file_path):
     # For more, see: https://stackoverflow.com/questions/678236/how-to-get-the-filename-without-the-extension-from-a-path-in-python
     return os.path.splitext(file_path)[0]
 
+def strip_file_extensions(*file_paths):
+    "Plural of strip_file_extension"
+    return [strip_file_extension(x) for x in detuple(file_paths)]
+
 def get_file_extension(file_path):
     #'x.png'        --> 'png'
     #'text.txt'     --> 'txt'
@@ -16015,6 +16218,11 @@ def get_path_name(path,include_file_extension=True):
     return output
 get_folder_name=get_directory_name=get_file_name=get_path_name
 
+def get_path_names(*paths, include_file_extensions=True):
+    "Plural of get_path_name"
+    return [get_path_name(path, include_file_extensions) for path in detuple(paths)]
+get_folder_names=get_directory_names=get_file_names=get_path_names
+
 def get_relative_path(path,parent_directory=None):
     #Take an absolute path, and turn it into a relative path starting from parent_directory
     #parent_directory's default is get_current_directory()
@@ -16022,6 +16230,10 @@ def get_relative_path(path,parent_directory=None):
         parent_directory=get_current_directory()
     assert isinstance(parent_directory,str),'parent_directory must be a string representing the root path to compare the given path against'
     return os.path.relpath(path,parent_directory)
+
+def get_relative_paths(*paths, parent_directory=None):
+    "Plural of get_relative_path"
+    return [get_relative_path(path, parent_directory) for path in detuple(paths)]
 
 def get_absolute_path(path,*,physical=True):
     #Given a relative path, return its absolute path
@@ -16031,6 +16243,10 @@ def get_absolute_path(path,*,physical=True):
         path=os.path.realpath(path)#Get rid of any symlinks in the path
     return os.path.abspath(path)
 
+def get_absolute_paths(*paths,physical=True):
+    "Plural of get_absolute_path"
+    return [get_absolute_path(path, physical=physical) for path in detuple(paths)]
+
 def has_file_extension(file_path):
     return get_file_extension(file_path)!=''
 
@@ -16039,11 +16255,13 @@ def date_modified(path):
     timestamp=os.path.getmtime(path)#Measured in seconds
     import datetime
     return datetime.datetime.fromtimestamp(timestamp)
+
 def date_created(path):
     #Get the date a path was created
     timestamp=os.path.getctime(path)#Measured in seconds
     import datetime
     return datetime.datetime.fromtimestamp(timestamp)
+
 def date_accessed(path):
     #Get the date a path was accessed
     timestamp=os.path.getatime(path)#Measured in seconds
@@ -16660,7 +16878,9 @@ def tiled_images(images,length=None,border_color=(.5,.5,.5,1),border_thickness=1
     #EXAMPLE:
     #   display_image_in_terminal_color(tiled_images([load_image('https://i.pinimg.com/236x/36/69/39/36693999b6e24b1d06d0ee21c9ae320d--caged-nicolas-cage.jpg')]*25))
     #Sugar for what I often do with grid_concatenated_images
-    
+    #length can be None, an int, or a float specifying aspect ratio
+    #WARNING: Using length as an aspect ratio is NOT to be used in any code that will last; that functionality is subject to change! Please don't be afraid to make it better (right now the aspect ratio implicitly assumes all the given images are the same size and square...which they're not) 
+
     if transpose:
         #Tile the images from top to bottom instead of left to right. Length is now vertical
         images=[rotate_image(i,90) for i in images]
@@ -16670,15 +16890,20 @@ def tiled_images(images,length=None,border_color=(.5,.5,.5,1),border_thickness=1
 
     images=list(images)
     from math import ceil
-    if length is None:
-        length=max(1,int(ceil(len(images)**.5)))
+
+    length_is_aspect_ratio = isinstance(length, float) and 0 < length
+    if length is None or length_is_aspect_ratio:
+        ratio = length
+        length = max(1, int(ceil(len(images) ** 0.5)))
+        if length_is_aspect_ratio:
+            length = int(ceil(length * ratio))
+
     format_image=lambda image: bordered_image_solid_color(image,color=border_color,thickness=border_thickness,top=0,left=0)
     images=[format_image(image) for image in images]
     images=split_into_sublists(images,length)
     output=grid_concatenated_images(images)
     output=bordered_image_solid_color(output,color=border_color,thickness=border_thickness,bottom=0,right=0)
     return output
-
 
 def vertically_flipped_image(image):
     #Flips (aka mirrors) an image vertically
@@ -18277,6 +18502,12 @@ def make_directory(path):
         return str(path)
 make_folder=make_directory
 
+def make_directories(*paths):
+    paths=detuple(paths)
+    for path in paths:
+        make_directory(path)
+make_folders=make_directories
+
 def delete_all_paths_in_directory(directory,*,permanent=True,include_files=True,include_folders=True,recursive=False):
     assert directory_exists(directory)
     delete_paths(get_all_paths(directory,include_folders=include_folders,include_files=include_files),permanent=permanent)
@@ -18289,6 +18520,83 @@ def delete_all_files_in_directory(directory,*,recursive=False,permanent=True):
 delete_all_files_in_folder=delete_all_files_in_directory
 
 path_join=joined_paths=os.path.join#Synonyms for whatever comes into my head at the moment when using the rp terminal
+
+def get_unique_copy_path(path: str, *, suffix: str = "_copy%i") -> str:
+    """
+    Generates a new file path that does not conflict with any existing files by appending a suffix to the file name. The function does not create the file itself, just provides the path.
+
+    TLDR: Lets you create file paths like
+        hello.txt
+        hello_copy.txt
+        hello_copy1.txt
+        hello_copy2.txt
+        hello_copy3.txt
+        hello_copy4.txt
+        ...
+
+    Parameters
+    ----------
+    path : str
+        The original file path.
+    suffix : str, optional
+        The suffix to append to the file name (default is "_copy%i"). Must contain exactly one "%i", which is replaced with the number of the existing copies of the file.
+
+    Returns
+    -------
+    str
+        The new, non-conflicting file path.
+
+    Examples
+    --------
+    >>> get_unique_copy_path("/home/user/hello.txt")
+    "/home/user/hello_copy.txt"
+
+    If "/home/user/hello_copy.txt" already exists:
+    >>> get_unique_copy_path("/home/user/hello.txt")
+    "/home/user/hello_copy1.txt"
+
+    If "/home/user/hello_copy.txt" and "/home/user/hello_copy1.txt" already exists:
+    >>> get_unique_copy_path("/home/user/hello.txt")
+    "/home/user/hello_copy2.txt"
+
+    You can also provide a custom suffix:
+    >>> get_unique_copy_path("/home/user/hello.txt", "_backup%i")
+    "/home/user/hello_backup.txt"
+
+    If "/home/user/hello_backup.txt" already exists:
+    >>> get_unique_copy_path("/home/user/hello.txt", "_backup%i")
+    "/home/user/hello_backup1.txt"
+    """
+
+    assert suffix.count("%i") == 1
+    assert isinstance(path, str)
+
+    def apply_suffix_to_name(name, suffix, num_copies):
+        assert num_copies >= 0
+        if num_copies == 0:
+            new_suffix = suffix.replace("%i", "")
+        else:
+            new_suffix = suffix % num_copies
+        return name + new_suffix
+
+    def apply_suffix_to_path(path, suffix, num_copies):
+        folder = get_parent_folder(path)
+        file = get_file_name(path)
+        name = strip_file_extension(path)
+        extension = get_file_extension(path)
+        new_name = apply_suffix_to_name(name, suffix, num_copies)
+        new_file = with_file_extension(new_name, extension)
+        new_path = path_join(folder, new_file)
+        return new_path
+
+    original_path = path
+
+    num_copies = 0
+    while path_exists(path):
+        path = apply_suffix_to_path(original_path, suffix, num_copies=num_copies)
+        num_copies += 1
+
+    return path
 
 _old_gists_path=path_join(get_parent_folder(__file__),'old_gists.txt') #This has to come after path_join and get_parent_folder are defined
 
@@ -20139,6 +20447,15 @@ def longest_common_suffix(a,b):
         out=''.join(out)
     return out
 
+def longest_common_substring(a,b):
+    #https://pypi.org/project/pylcs/
+    #Doesn't seem to be super efficient...would be better if it just returned the first index; then I could use longest_common_prefix on it
+    #TODO: Add a pure-python fallback in-case pylcs fails (its implemented in C++)
+    pip_import('pylcs')
+    import pylcs
+    res = pylcs.lcs_string_idx(a, b)
+    return ''.join([b[i] for i in res if i != -1])
+
 def input_keypress(handle_keyboard_interrupt=True):#handle_keyboard_interrupt=False): <---- TODO: Implement handle_keyboard_interrupt correctly! right now it doesn't work...
     #If handle_keyboard_interrupt is True, when you press control+c, it will return the control+c character instead of throwing a KeyboardInterrupt
     #Blocks the code until you press some key on the keyboard
@@ -20843,7 +21160,7 @@ def make_zip_file_from_folder(src_folder:str=None, dst_zip_file:str=None)->str:
         print("Please select a folder whose contents you'd like to zip:")
         src_folder=input_select_folder()
         
-    temp_path=temporary_file_path()
+    temp_path=get_unique_copy_path(src_folder) #Zip files can be large and time consuming to create. Don't overwrite them - make a copy.
     import shutil
     shutil.make_archive(temp_path, 'zip', src_folder)
     temp_path+='.zip'
@@ -21961,6 +22278,10 @@ def extract_image_channels(image):
     return np.transpose(image,(2,0,1))
 extract_rgb_channels=extract_image_channels
 extract_rgba_channels=extract_image_channels
+
+def extract_alpha_channel(image):
+    image=as_rgba_image(image)
+    return image[:,:,3]
 
 def apply_image_function_per_channel(image,function):
     #Apply a grayscale funcion on every image channel individually
@@ -24866,7 +25187,12 @@ def delaunay_interpolation_weights(key_points, query_points):
     simplices = delaunay.find_simplex(query_points)
 
     # Get the vertices and transformation matrices for each simplex
-    vertices = delaunay.vertices[simplices]
+    try:
+        vertices = delaunay.vertices[simplices]
+    except AttributeError:
+        #DeprecationWarning: Delaunay attribute 'vertices' is deprecated in favour of 'simplices' and will be removed in Scipy 1.11.0.
+        vertices = delaunay.simplices[simplices]
+
     transform = delaunay.transform[simplices]
 
     # Calculate barycentric coordinates for each query point
@@ -24881,51 +25207,37 @@ def delaunay_interpolation_weights(key_points, query_points):
 
     return vertices, weights
 
-def argrank(x):
-    """
-    This function is like np.argsort, EXCEPT:
-        - It works element-wise right now! Not on a given axis.
-        - It will give equal elements the same rank!
-            - In other words, whereas 
-                 assert np.argsort(vector).max()==len(vector)-1,
-                instead,
-                 assert argrank   (vector).max()==len(set(vector))-1
-                 
-    TODO:
-        - Add support for non-elementwise rankings and non-numpy objects
-          like lists and torch tensors etc
-                                      
-    EXAMPLE:
-        ans = [[90 90 90 20 10]
-               [30 40 70 20 50]
-               [ 0 50 10 20 80]
-               [70 10 30 40 40]
-               [30 20  0 90 60]]
-         >>> argrank(ans)
-        ans = [[9 9 9 2 1]
-               [3 4 7 2 5]
-               [0 5 1 2 8]
-               [7 1 3 4 4]
-               [3 2 0 9 6]]
-         >>> ans**2+5 #Squaring and adding a constant to positive numbers preserves ranking
-        ans = [[86 86 86  9  6]
-               [14 21 54  9 30]
-               [ 5 30  6  9 69]
-               [54  6 14 21 21]
-               [14  9  5 86 41]]
-         >>> argrank(ans)
-        ans = [[9 9 9 2 1]
-               [3 4 7 2 5]
-               [0 5 1 2 8]
-               [7 1 3 4 4]
-               [3 2 0 9 6]]
-    """
-    x=as_numpy_array(x)
-    _,ranks = np.unique(x.flatten(),return_inverse=True)
-    ranks=ranks.reshape(x.shape)
-    return ranks
 
+def get_total_disk_space():
+    """Returns the total size of your hard drive in bytes"""
+    import shutil
+    path="/" #In the future this might be an argument to specify the disk
+    total, used, free = shutil.disk_usage(path)
+    return total
 
+def get_used_disk_space():
+    """Returns the amount of your hard drive that holds data in bytes"""
+    import shutil
+    path="/" #In the future this might be an argument to specify the disk
+    total, used, free = shutil.disk_usage(path)
+    return used
+
+def get_free_disk_space():
+    """Returns the amount of your hard drive that doesnt hold data in bytes"""
+    import shutil
+    path="/" #In the future this might be an argument to specify the disk
+    total, used, free = shutil.disk_usage(path)
+    return free
+
+def get_mask_iou(*masks):
+    """Calculates the IOU (intersection over union) of multiple binary masks"""
+    masks=detuple(masks)
+    assert all(is_image(mask) for mask in masks), 'All masks must be images as defined by rp.is_image'
+    assert set(get_image_dimensions(mask) for mask in masks)==1, 'All masks must have the same dimensions'
+    masks = as_numpy_array([as_binary_image(as_grayscale_image(mask)) for mask in masks])
+    intersection = np.min(masks, axis=0)
+    union = np.max(masks, axis=0)
+    return np.sum(intersection) / np.sum(union)
 
 del re
 
