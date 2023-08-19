@@ -133,7 +133,7 @@ def run_server(server_port:int=None,scope:dict=None):
     print("Server stopped.")
 
 class Client:
-    def __init__(self,server_name:str,server_port:int=None):
+    def __init__(self,server_name:str="localhost",server_port:int=None):
         #server_name is like "127.0.1.33" or like "glass.local"
         if server_port is None:
             server_port = DEFAULT_SERVER_PORT
