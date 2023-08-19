@@ -21278,18 +21278,25 @@ def make_zip_file_from_folder(src_folder:str=None, dst_zip_file:str=None)->str:
         src_folder=input_select_folder()
         
     assert is_a_folder(src_folder)
-    temp_path=src_folder+'.zip'
-    temp_path=get_unique_copy_path(temp_path) #Zip files can be large and time consuming to create. Don't overwrite them - make a copy.
-    temp_path=temp_path[:-len('.zip')]
     
-    import shutil
-    shutil.make_archive(temp_path, 'zip', src_folder)
-    temp_path+='.zip'
+    tmp_path=temporary_file_path()
+
+    try:
+        import shutil
+        shutil.make_archive(tmp_path, 'zip', src_folder)
+    except KeyboardInterrupt:
+        delete_file(tmp_path+'.zip') #It will be corrupted. Don't waste space
+        raise
+    tmp_path+='.zip'
 
     if dst_zip_file is None:
-        dst_zip_file=temp_path
-    else:
-        move_file(temp_path,dst_zip_file)
+        new_path=src_folder+'.zip'
+        new_path=get_unique_copy_path(new_path) #Zip files can be large and time consuming to create. Don't overwrite them - make a copy.
+        new_path=new_path[:-len('.zip')]
+        new_path+='.zip'
+        dst_zip_file=new_path
+
+    move_file(tmp_path,dst_zip_file)
         
     return dst_zip_file
 
