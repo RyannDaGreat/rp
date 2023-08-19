@@ -464,6 +464,93 @@ class TemporarilySetItem:
             else:
                 del self.container[key]
 
+
+def ConditionalContext(condition, context_manager, *args, **kwargs):
+    """
+    A context manager to conditionally enter another context based on a given condition.
+
+    This utility facilitates cleaner and concise management of conditional contexts without deep nesting.
+
+    Parameters:
+    - condition (bool or callable): A flag or a function returning a bool to determine 
+      if the context should be entered.
+    - context_manager (callable): A function, lambda, or class instance that returns/provides a context manager.
+    - *args, **kwargs: Arguments and keyword arguments to be passed to the context_manager.
+
+    Usage:
+    ```python
+    with conditional_context(some_condition, some_context, arg1, arg2, key=value):
+        # Your code here...
+    ```
+
+    This usage is equivalent to the following, but with less branching and nesting:
+    ```python
+    if some_condition:
+        with some_context(arg1, arg2, key=value):
+            # Your code here...
+    else:
+        # Your code here... (Same as inside the context)
+    ```
+
+    The `conditional_context` streamlines the structure, making the code more readable and easier to maintain.
+
+    Note: The context managers are instantiated and arguments are passed only if their respective conditions are True (or evaluate to True).
+
+    Returns:
+    - Context manager based on the condition.
+
+    EXAMPLES:
+    ```python
+    def test_conditional_context():
+        import random
+        from contextlib import contextmanager
+
+        @contextmanager
+        def sample_context():
+            print("Entered the context!")
+            yield
+            print("Exiting the context!")
+
+        # Condition set randomly
+        random_condition = random.choice([True, False])
+        print(f"Random condition: {random_condition}")
+
+        # Using conditional_context
+        with conditional_context(random_condition, sample_context):
+            print("Inside the conditional context.")
+        print()
+
+        # Equivalent traditional method
+        if random_condition:
+            with sample_context():
+                print("Inside the traditional context.")
+        else:
+            print("Inside the traditional context.")
+
+    #This will print the same thing twice, because it works!
+    test_conditional_context()
+    ```
+
+    This test showcases how the conditional context manager works equivalently to the traditional method while providing a cleaner structure. The output for both scenarios will match, demonstrating its effectiveness.
+    
+    Aided by GPT4: https://chat.openai.com/share/36186fdf-fc23-4c82-8394-d29e5cbbd32d
+    """
+    from contextlib import contextmanager
+
+    @contextmanager
+    def wrapper():
+        if callable(condition):
+            condition_val = condition()
+        else:
+            condition_val = condition
+
+        if condition_val:
+            with context_manager(*args, **kwargs):
+                yield
+        else:
+            yield
+
+    return wrapper()
         
 #THIS IS DEPRECATED IN FAVOR OF get_all_paths
 # def get_all_file_names(file_name_ending: str = '',file_name_must_contain: str = '',folder_path: str = get_current_directory(),show_debug_narrative: bool = False):
@@ -5098,6 +5185,9 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
         neednewline=False
         try:
             print(col(tab+"LEN: ")+str(len(object)),end=' ')
+            if isinstance(object,bytes) or isinstance(object,str):
+                print(col('aka '+human_readable_file_size(len(object))),end=' ')
+                
             neednewline=True
         except Exception:pass
         if isinstance(object,str):
@@ -7060,7 +7150,7 @@ def float_clamp(x: float,min_value: float,max_value: float) -> float:
     return clamp(x,min_value,max_value)
 
 
-def print_highlighed_stack_trace(error:BaseException):
+def print_highlighted_stack_trace(error:BaseException):
     #Uses pygments to print a stack trace with syntax highlighting
     from traceback import format_exception
     from pygments import highlight
@@ -9021,15 +9111,19 @@ def launch_xonsh():
         #We definitely want to restore the old arguments
         sys.argv=old_sys_argv
     
-def with_line_numbers(string,prefix='%i. '):
+def with_line_numbers(string,prefix='%i. ',start_from=0):
     """
      >>> with_line_numbers('a\nb\nc')
      ans = 0. a
            1. b
            2. c
+     >>> with_line_numbers('a\nb\nc', start_from=1)
+     ans = 1. a
+           2. b
+           3. c
     """
     lines=string.splitlines()
-    lines=[prefix%i+e for i,e in enumerate(lines)]
+    lines=[prefix%(i+start_from)+e for i,e in enumerate(lines)]
     return line_join(lines)
     
 def number_of_lines(string):
@@ -10747,11 +10841,15 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         GP $get_parent_directory(ans)
 
         FCA $web_copy_path(ans)
-        FCH print("FCH->FileCopyHere");$web_copy_path('.')
+        FCH print("FCH->FileCopyHere");$web_copy_path(get_absolute_path('.'))
         RMA $r._rma(ans)
         RNA $rename_file(ans,input_default(fansi('NewPathName:','blue'),get_file_name(ans)))
         APA $r._absolute_path_ans(ans)
         RPA $r._relative_path_ans(ans)
+
+        UZA $unzip_to_folder(ans)
+        ZIH $make_zip_file_from_folder(get_absolute_path('.'))
+        ZIA $make_zip_file_from_folder(ans)
 
         RST __import__('os').system('reset')
         RS  __import__('os').system('reset')
@@ -11244,7 +11342,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         else:
                             try:
                                 #By default, try to print a syntax-highlighted stack trace. Fall back to a regular one.
-                                print_highlighed_stack_trace(error)   
+                                print_highlighted_stack_trace(error)   
                             except:
                                 print_stack_trace(error,True,'')
 
@@ -16161,7 +16259,12 @@ def get_file_extension(file_path):
 def with_file_extension(path:str,extension:str,*,replace=False):
     #Replaces or adds a file extension to a path
     #
+    #If extension is blank, and replace=False, path won't be changed
+    #If extension is blank, and replace=True, then this is equivalent to strip_file_extension
+    #
     #EXAMPLES:
+    #    >>> with_file_extension('doggy','')
+    #   ans = doggy
     #    >>> with_file_extension('doggy.png','jpg')
     #   ans = doggy.png.jpg
     #    >>> with_file_extension('doggy.png','.jpg')
@@ -16178,10 +16281,16 @@ def with_file_extension(path:str,extension:str,*,replace=False):
     #   ans = doggy.png
     #    >>> with_file_extension('path/to/doggy','png')
     #   ans = path/to/doggy.png
+    #
+    #EXAMPLES:
+    #    path='path'        ; assert path==with_file_extension(path,get_file_extension(path))
+    #    path='path.'       ; assert path==with_file_extension(path,get_file_extension(path))
+    #    path='path.png'    ; assert path==with_file_extension(path,get_file_extension(path))
+    #    path='path.png.jpg'; assert path==with_file_extension(path,get_file_extension(path))
 
     if extension.startswith('.'):
         extension=extension[1:]
-    if not has_file_extension(path):
+    if not has_file_extension(path) and extension!="":
         return path+'.'+extension
     else:
         if get_file_extension(path)==extension:
@@ -16193,6 +16302,7 @@ def with_file_extension(path:str,extension:str,*,replace=False):
 
 def with_file_name(path:str,name:str):
     #Returns the path with a new file name, keeping the old file extension
+    #If the file extension in 'name' is specified though, it will keep the new extension
     #
     #EXAMPLE:
     #     >>> with_file_name('some/parent/folder/file.txt','untitled')
@@ -16200,9 +16310,9 @@ def with_file_name(path:str,name:str):
     #
     parent_folder=get_parent_folder(path)
     file_name=get_file_name(path)
-    assert path==path_join(parent_folder,file_name)
+    assert get_absolute_path(path)==get_absolute_path(path_join(parent_folder,file_name))
     
-    extension=get_file_extension(file_name)
+    extension=get_file_extension(file_name) if not has_file_extension(name) else get_file_extension(name)
     file_name=strip_file_extension(file_name)
     file_name=name
     file_name=with_file_extension(file_name,extension)
@@ -17208,6 +17318,9 @@ def random_rgba_binary_color():
 def random_grayscale_binary_color():
     return (random_chance(1/2))
 
+def random_hex_color(hashtag=True):
+    return byte_color_to_hex_color(random_rgb_byte_color())
+
 def is_color(color):
     return is_iterable(color) and all(is_number(x) for x in color)
 def is_binary_color(color):
@@ -17223,7 +17336,7 @@ def hex_color_to_byte_color(hex_color:str):
     #    ans = (0, 127, 255)
     if len(hex_color)==len('#ABCDEF'):
         hex_color=hex_color[1:]
-    assert len(hex_color)==len('ABCDEF')
+    assert len(hex_color)==len('ABCDEF'), 'Hex colors must be RGB'
     r=int(hex_color[0:2],16)
     g=int(hex_color[2:4],16)
     b=int(hex_color[4:6],16)
@@ -17237,7 +17350,7 @@ def hex_color_to_float_color(hex_color:str):
     color=hex_color_to_byte_color(hex_color)
     return tuple(x/255 for x in color)
 
-def byte_color_to_hex_color(byte_color:tuple):
+def byte_color_to_hex_color(byte_color:tuple, hashtag=True):
     #EXAMPLE:
     #    >>> byte_color_to_hex_color((0,255,127))
     #    ans = #00FF7F
@@ -17245,13 +17358,17 @@ def byte_color_to_hex_color(byte_color:tuple):
 
     byte_color = [int(min(255,max(0,x))) for x in byte_color]
     
-    return '#'+''.join('{:02X}'.format(a) for a in byte_color)
+    return ('#' if hashtag else '')+''.join('{:02X}'.format(a) for a in byte_color)
+
 
 def byte_color_to_float_color(byte_color):
     return tuple(x/255 for x in byte_color)
 
 def float_color_to_byte_color(float_color):
     return tuple(round(clamp(x*255,0,255)) for x in float_color)
+
+def float_color_to_hex_color(float_color):
+    return byte_color_to_hex_color(float_color_to_byte_color(float_color))
 
 
 def get_color_hue(color):
@@ -21160,7 +21277,11 @@ def make_zip_file_from_folder(src_folder:str=None, dst_zip_file:str=None)->str:
         print("Please select a folder whose contents you'd like to zip:")
         src_folder=input_select_folder()
         
-    temp_path=get_unique_copy_path(src_folder) #Zip files can be large and time consuming to create. Don't overwrite them - make a copy.
+    assert is_a_folder(src_folder)
+    temp_path=src_folder+'.zip'
+    temp_path=get_unique_copy_path(temp_path) #Zip files can be large and time consuming to create. Don't overwrite them - make a copy.
+    temp_path=temp_path[:-len('.zip')]
+    
     import shutil
     shutil.make_archive(temp_path, 'zip', src_folder)
     temp_path+='.zip'
@@ -21191,6 +21312,8 @@ def extract_zip_file(zip_file_path,folder_path=None):
     else:
         #If it's not a zip file, don't give up. We can still unzip rar, jar, 7z, and other filetypes with the help of pyunpack
         _extract_archive_via_pyunpack(zip_file_path, folder_path)
+
+    _maybe_unbury_folder(folder_path) #If it created something like unzipped_folder/unzipped_folder/contents make it into unzipped_folder/contents instead
 
     return folder_path
 unzip_to_folder=extract_zip_file
@@ -21237,6 +21360,114 @@ def _extract_archive_via_pyunpack(archive_path, folder_path):
     Archive(archive_path).extractall(folder_path)
 
     return folder_path
+
+def _maybe_unbury_folder(folder):
+    """
+    Checks if the given folder contains a single subfolder with the same name.
+    If so, it moves all contents of the subfolder to the main folder 
+    and then deletes the subfolder, effectively "unburying" or "flattening" the structure by one level.
+    
+    This is particularly useful for correcting certain zip extraction behaviors 
+    that result in structures like 'zip_folder.zip --> zip_folder/zip_folder/contents' 
+    rather than the expected 'zip_folder.zip --> zip_folder/contents'.
+
+    Args:
+    - folder (str): The path to the folder to check and potentially unbury.
+    
+    Returns:
+    - unburied (bool): Returns True if we made changes, and False if nothing changed
+    
+    EXAMPLES:
+        1. Perfect Match:
+            maybe_unbury_folder("path/to/MyFolder")
+            Before:
+                MyFolder
+                |-- MyFolder
+                    |-- file1.txt
+                    |-- file2.txt
+            After:
+                MyFolder
+                |-- file1.txt
+                |-- file2.txt
+
+        2. Name Mismatch:
+            maybe_unbury_folder("path/to/ParentFolder")
+            Before:
+                ParentFolder
+                |-- ChildFolder
+                    |-- doc1.doc
+                    |-- pic1.jpg
+            After:
+                ParentFolder
+                |-- ChildFolder
+                    |-- doc1.doc
+                    |-- pic1.jpg
+
+        3. Multiple Contents:
+            maybe_unbury_folder("path/to/OuterFolder")
+            Before:
+                OuterFolder
+                |-- InnerFolder
+                    |-- song1.mp3
+                |-- notes.txt
+            After:
+                OuterFolder
+                |-- InnerFolder
+                    |-- song1.mp3
+                |-- notes.txt
+
+        4. Subfolder with File:
+            maybe_unbury_folder("path/to/MainDir")
+            Before:
+                MainDir
+                |-- file3.txt
+            After:
+                MainDir
+                |-- file3.txt
+
+        5. Nested Perfect Match:
+            maybe_unbury_folder("path/to/TopLevel")
+            Before:
+                TopLevel
+                |-- TopLevel
+                    |-- TopLevel
+                        |-- image1.png
+            After (two calls):
+                TopLevel
+                |-- image1.png
+
+        6. Same Name but Multiple Contents:
+            maybe_unbury_folder("path/to/MixedFolder")
+            Before:
+                MixedFolder
+                |-- MixedFolder
+                    |-- video1.mp4
+                |-- report.pdf
+            After:
+                MixedFolder
+                |-- MixedFolder
+                    |-- video1.mp4
+                |-- report.pdf
+    """
+    paths=get_all_paths(folder)
+
+    #When using "compress" option on Mac's finder GUI, it automatically puts a "__MACOSX" folder in there - it's junk.
+    #We don't count this as important when considering whether to unbury. Todo: Should we delete it? Right now we're leaving it be.
+    ignorable_paths = '__MACOSX'.split()
+    paths = [x for x in paths if get_path_name(x) not in ignorable_paths]
+
+    if not len(paths)==1:
+        return False
+    subfolder=paths[0]
+    if not is_a_folder(subfolder):
+        return False
+    if get_folder_name(folder)==get_folder_name(subfolder):
+        for path in get_all_paths(subfolder):
+            move_path(path,folder)
+        assert folder_is_empty(subfolder)
+        delete_folder(subfolder)
+        return True
+    return False
 
 def get_normal_map(bump_map):
     #Turn a bump map aka a height map, into a normal map
@@ -21395,6 +21626,47 @@ def get_image_saturation(image):
 def get_image_value(image):
     assert is_image(image)
     return rgb_to_hsv(image)[:,:,2]
+
+get_image_brightness=get_image_value
+
+def with_image_hue(image,hue):
+    hue=as_grayscale_image(hue)
+    hue=as_float_image(hue)
+    image=as_rgb_image(image)
+    image=as_float_image(image)
+    
+    hsv=rgb_to_hsv(image)
+    hsv[:,:,0]=hue
+    rgb=hsv_to_rgb(hsv)
+    
+    return rgb
+
+def with_image_saturation(image,saturation):
+    saturation=as_grayscale_image(saturation)
+    saturation=as_float_image(saturation)
+    image=as_rgb_image(image)
+    image=as_float_image(image)
+    
+    hsv=rgb_to_hsv(image)
+    hsv[:,:,1]=saturation
+    rgb=hsv_to_rgb(hsv)
+    
+    return rgb
+
+def with_image_brightness(image,brightness):
+    brightness=as_grayscale_image(brightness)
+    brightness=as_float_image(brightness)
+    image=as_rgb_image(image)
+    image=as_float_image(image)
+    
+    hsv=rgb_to_hsv(image)
+    hsv[:,:,2]=brightness
+    rgb=hsv_to_rgb(hsv)
+    
+    return rgb
+
+
+
 
 def get_rgb_byte_color_identity_mapping_image():
     #Save this image, and color-grade it. Then the new image can be used as a map!
@@ -24794,7 +25066,11 @@ def get_gpu_pids(gpu_id=None):
 
     # Make sure all the processes exist! Sometimes, without this check it will return processes that aren't real.
     # I have no idea why. This only ever happened at Adobe on Sensei. It might be a bug in the py3nvml library?
-    out = [x for x in out if process_exists(x)]
+    if gpu_id is None:
+        out = [[x for x in y if process_exists(x)] for y in out]
+    else:
+        assert isinstance(gpu_id,int)
+        out = [x for x in out if process_exists(x)]
 
     return out
 
@@ -25233,11 +25509,99 @@ def get_mask_iou(*masks):
     """Calculates the IOU (intersection over union) of multiple binary masks"""
     masks=detuple(masks)
     assert all(is_image(mask) for mask in masks), 'All masks must be images as defined by rp.is_image'
-    assert set(get_image_dimensions(mask) for mask in masks)==1, 'All masks must have the same dimensions'
+    assert len(set(get_image_dimensions(mask) for mask in masks))==1, 'All masks must have the same dimensions, but got shapes '+repr(set(get_image_dimensions(mask) for mask in masks))
     masks = as_numpy_array([as_binary_image(as_grayscale_image(mask)) for mask in masks])
     intersection = np.min(masks, axis=0)
     union = np.max(masks, axis=0)
-    return np.sum(intersection) / np.sum(union)
+
+    numerator = np.sum(intersection)
+    denominator = np.sum(union)
+    
+    if denominator==0:
+        # No division by 0 errors
+        return 0
+    else:
+        return np.sum(intersection) / np.sum(union)
+
+def fuzzy_match(array, target, equals=lambda x, y: x == y):
+    """
+    Returns True if each element in array can be found in sequence
+    (though not necessarily consecutively) within target. Otherwise, returns False.
+    
+    This runs in O(n) time and O(1) space, where n is the length of the target. 
+    The function is optimized for strings using the fuzzy_string_match method.
+
+    Examples:
+    --------
+        >>> fuzzy_match([1, 2, 3, 4], [2, 3])
+        True
+        >>> fuzzy_match([1, 2, 3, 4], [2, 2])
+        False
+        >>> fuzzy_match([1, 2, 3, 4], [2, 4])
+        True
+        >>> fuzzy_match([1, 2, 3, 4], [3, 4])
+        True
+    """
+    
+    # A potential shortcut
+    try:
+        if len(target) > len(array):
+            # In this case, we can return False right away
+            return False
+        if len(target)==0:
+            # An empty list is contained in everything...
+            return True
+    except TypeError:
+        # If either array or target don't support len()
+        # It's ok, we can still treat them as iterators
+        pass
+
+    # A potential shortcut for strings
+    # MUST CHECK EQUALS IS DEFAULT VALUE
+    # TODO
+    #if isinstance(array, str):
+    #    try:
+    #        target = "".join(target)
+    #        # fuzzy_string_match is faster than this function because it uses regex
+    #        return fuzzy_string_match(array, target)
+    #    except Exception:
+    #        # If we can't join it to be a string, it contained non-strings
+    #        # If it contained non-strings, it can't be found array, which is str
+    #        return False
+
+    # The meat of this function - it's quite simple.
+    target_iter = iter(target)
+    for a in array:
+        for t in target_iter:
+            if equals(t, a):
+                break
+        else:
+            return False
+    return True
+
+    #     def test_fuzzy_match():
+    #         assert fuzzy_match([1, 2, 3, 4],[]) == True
+    #         assert fuzzy_match([2, 3], [1, 2, 3, 4]) == True
+    #         assert fuzzy_match([2, 2], [1, 2, 3, 4]) == False
+    #         assert fuzzy_match([2, 4], [1, 2, 3, 4]) == True
+    #         assert fuzzy_match([3, 4], [1, 2, 3, 4]) == True
+    #         assert fuzzy_match([1,3, 4], [1, 2, 3, 4]) == True
+    #         assert fuzzy_match([1,2,3, 4], [1, 2, 3, 4]) == True
+    #         assert fuzzy_match([1,3, 4,1], [1, 2, 3, 4]) == False
+    #         assert fuzzy_match([2,3, 4], [1, 2, 3, 4]) == True
+    #         assert fuzzy_match([2,1,3, 4], [1, 2, 3, 4]) == False
+    #         assert fuzzy_match([2,1,3, 4,5], [1, 2, 3, 4]) == False # 
+    #
+    #         # Testing with generators
+    #         generator_1 = (i for i in [2, 3])
+    #         generator_2 = (i for i in [1, 2, 3, 4])
+    #         assert fuzzy_match(generator_1, generator_2) == False
+    #
+    #         print("All tests passed!")
+    #
+    #
+    # # Running the test function
+    #     test_fuzzy_match()
 
 del re
 
