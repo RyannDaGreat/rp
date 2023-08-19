@@ -84,5 +84,5 @@
 /Users/Ryan/Desktop/CleanCode/LightWave
 /Users/Ryan/Desktop/CleanCode/LightWave/NextGen
 /Users/Ryan/Desktop/CleanCode/LightWave/NextGen/axoloti
-/Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+/Users/Ryan
