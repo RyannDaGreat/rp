@@ -5907,7 +5907,11 @@ def text_file_to_string(file_path: str,use_cache=False) -> str:
         _text_file_to_string_cache[file_path]=current_date,current_text
         return current_text
             
-    return open(file_path).read()
+    try:
+        return open(file_path).read()
+    except UnicodeDecodeError:
+        #UnicodeDecodeError: 'ascii' codec can't decode byte 0xc3 in position 4781: ordinal not in range(128)
+        return open(file_path, encoding='latin').read()
 
 def append_line_to_file(line:str,file_path:str):
     #Adds a line to the end of a text file, or creates a new text file if none exists
@@ -10628,6 +10632,47 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         FC FCOPY
         MLP MLPASTE
 
+        TPWC web_copy(printed(tmux_paste()))
+        WCTP web_copy(printed(tmux_paste()))
+        TPCO string_to_clipboard(printed(str(tmux_paste())))
+        COTP string_to_clipboard(printed(str(tmux_paste())))
+        TPLC local_copy(printed(tmux_paste()))
+        LCTP local_copy(printed(tmux_paste()))
+        TPVC vim_copy(printed(str(tmux_paste())))
+        VCTP vim_copy(printed(str(tmux_paste())))
+        WPTC tmux_copy(printed(str(web_paste())))
+        TCWP tmux_copy(printed(str(web_paste())))
+        WPCO string_to_clipboard(printed(str(web_paste())))
+        COWP string_to_clipboard(printed(str(web_paste())))
+        WPLC local_copy(printed(web_paste()))
+        LCWP local_copy(printed(web_paste()))
+        WPVC vim_copy(printed(str(web_paste())))
+        VCWP vim_copy(printed(str(web_paste())))
+        PATC tmux_copy(printed(str(string_from_clipboard())))
+        TCPA tmux_copy(printed(str(string_from_clipboard())))
+        PAWC web_copy(printed(string_from_clipboard()))
+        WCPA web_copy(printed(string_from_clipboard()))
+        PALC local_copy(printed(string_from_clipboard()))
+        LCPA local_copy(printed(string_from_clipboard()))
+        PAVC vim_copy(printed(str(string_from_clipboard())))
+        VCPA vim_copy(printed(str(string_from_clipboard())))
+        LPTC tmux_copy(printed(str(local_paste())))
+        TCLP tmux_copy(printed(str(local_paste())))
+        LPWC web_copy(printed(local_paste()))
+        WCLP web_copy(printed(local_paste()))
+        LPCO string_to_clipboard(printed(str(local_paste())))
+        COLP string_to_clipboard(printed(str(local_paste())))
+        LPVC vim_copy(printed(str(local_paste())))
+        VCLP vim_copy(printed(str(local_paste())))
+        VPTC tmux_copy(printed(str(vim_paste())))
+        TCVP tmux_copy(printed(str(vim_paste())))
+        VPWC web_copy(printed(vim_paste()))
+        WCVP web_copy(printed(vim_paste()))
+        VPCO string_to_clipboard(printed(str(vim_paste())))
+        COVP string_to_clipboard(printed(str(vim_paste())))
+        VPLC local_copy(printed(vim_paste()))
+        LCVP local_copy(printed(vim_paste()))
+
         AA ACATA
         ACA ACATA
         AC ACAT
@@ -10779,11 +10824,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         NBCHY $r._nbca($get_all_files(file_extension_filter='ipynb',sort_by='size')[::-1], auto_yes=True) #Clear all notebooks in the current directory without confirmation
         NCA  $r._nbca(ans)
 
-        INS $input_select("Select:",ans)
-        ISA $input_select("Select:",ans)
-        ISM $pip_import('iterfzf').iterfzf(ans,multi=True,exact=True)
-        IMA $pip_import('iterfzf').iterfzf(ans,multi=True,exact=True)
-        IMS $pip_import('iterfzf').iterfzf(ans,multi=True,exact=True)
+        INS $input_select("Select:", line_split(ans) if isinstance(ans,str) else ans)
+        ISA $input_select("Select:", line_split(ans) if isinstance(ans,str) else ans)
+        ISM $pip_import('iterfzf').iterfzf(line_split(ans) if isinstance(ans,str) else ans,multi=True,exact=True)
+        IMA $pip_import('iterfzf').iterfzf(line_split(ans) if isinstance(ans,str) else ans,multi=True,exact=True)
+        IMS $pip_import('iterfzf').iterfzf(line_split(ans) if isinstance(ans,str) else ans,multi=True,exact=True)
 
         VCL $delete_file($get_absolute_path('~/.viminfo'))#VimClear_use_when_VCOPY_doesnt_work_properly
 
@@ -22295,7 +22340,7 @@ def cv_inpaint_image(image, mask, radius=3, *, algorithm: str = "TELEA"):
 
     return inpainted_image
 
-def cv_floodfill_mask(image, position:tuple, tolerance: int = 32, *, bridge_diagonals=False):
+def cv_floodfill_mask(image, position: tuple, tolerance: int = 32, *, bridge_diagonals=False):
     """
     A wrapper for cv2.floodfill
     Takes in an image, and returns a binary mask of same dimensions
@@ -22308,7 +22353,7 @@ def cv_floodfill_mask(image, position:tuple, tolerance: int = 32, *, bridge_diag
         mask = cv2_floodfill_mask(image, position=(0, 0), tolerance=10)
         display_alpha_image(with_alpha_channel(image,~mask))
     """
-    pip_import('cv2')
+    pip_import("cv2")
     import cv2
 
     assert is_image(image)
@@ -22327,22 +22372,23 @@ def cv_floodfill_mask(image, position:tuple, tolerance: int = 32, *, bridge_diag
     # When filling, should we bridge diagonal gaps? That's called "8-way connectivity"
     # To get that, set connectivity to 8. Otherwise, if we only want to traverse
     # up down left and right, set connectivity to 4-way via connectivity==4
-    connectivity=8 if bridge_diagonals else 4
-    assert connectivity in (4,8)
+    connectivity = 8 if bridge_diagonals else 4
+    assert connectivity in (4, 8)
 
-    #cv2.floodfill() mutates image! However, its ok - it's only a copy.
-    _,_,mask,_=cv2.floodFill(
-        image,         #image
-        None,          #mask
-        (x,y),         #seedpoint
-        (255,255,255), #newval
-        tolerance,     #lodiff
-        tolerance,     #updiff
-        connectivity,  #flags
+    # cv2.floodfill() mutates image! However, its ok - it's only a copy.
+    mask = np.zeros([x + 2 for x in get_image_dimensions(image)], dtype=np.uint8)
+    z, u, mask, y = cv2.floodFill(
+        image,  # image
+        mask,  # mask
+        (x, y),  # seedpoint
+        (255, 255, 255),  # newval
+        tolerance,  # lodiff
+        tolerance,  # updiff
+        connectivity,  # flags
     )
 
     assert is_grayscale_image(mask)
-    mask = as_binary_image(mask*255)
+    mask = as_binary_image(mask * 255)
     assert mask.shape == (height + 2, width + 2)
 
     mask = mask[1:-1, 1:-1]
@@ -24163,19 +24209,71 @@ def as_numpy_images(images):
         images=images.transpose(0,2,3,1)
         return images   
     else:
-        raise TypeError('Unsupported image datatype: %s'%type(images))
+        if not is_iterable(images):
+            raise TypeError('Unsupported image datatype: %s ; its not even iterable!'%type(images))
+        if all(is_pil_image(x) for x in images):
+            return [as_numpy_image(x) for x in images]
+        else:
+            raise TypeError('Unsupported image datatype: %s'%type(images))
+
+def is_pil_image(image):
+    if not str(type(image))=="<class 'PIL.Image.Image'>":
+        #A quick check we can do without importing anything
+        return False
+    try:
+        from PIL.Image import Image
+        return isinstance(image, Image)
+    except ImportError:
+        #If we don't have PIL installed...then obviously its not a PIL image
+        return False
+
+def as_pil_image(image):
+    assert is_image(image), 'as_pil_image: Input is not an image as defined by rp.is_image'
+    pip_import('PIL')
+    from PIL.Image import fromarray
+    
+    if not is_grayscale_image(image) and not is_byte_image(image):
+        #PIL.Image.fromarray can't handle:
+        #    RGBA float images
+        #    RGBA binary images
+        #    RGB float images
+        #    RGB binary images
+        #But it can handle:
+        #    RGB byte images
+        #    RGBA byte images
+        #    Grayscale binary images
+        #    Grayscale float images
+        #    Grayscale byte images
+        image = as_byte_image(image)
+
+    return fromarray(image)
 
 def as_numpy_image(image):
     if isinstance(image,np.ndarray):
         return image.copy()
     elif _is_torch_tensor(image):
         return as_numpy_images(image[None])[0]
+    elif is_pil_image(image):
+        return as_numpy_array(image)
     else:
         assert False,'Unsupported image type: '+str(type(image))
     
 def as_torch_images(images):
     if _is_numpy_array(images) or all(is_image(x) for x in images):
+
+        #Convert to floating point, because that will happen anyway...
+        if _is_numpy_array(images) and images.dtype==np.uint8:
+            images=images/255
+        else:
+            images=[as_float_image(x) for x in images]
+
+        if len(set(map(get_image_dimensions,images)))==1:
+            images=as_numpy_array(images)
+        else:
+            return [as_torch_image(x) for x in images]
+
         assert len(images.shape)!=3,'Grayscale images are not yet supported'
+
         images=images.transpose(0,3,1,2)
         import torch
         images=torch.Tensor(images)
@@ -24189,6 +24287,8 @@ def as_torch_images(images):
 def as_torch_image(image):
     if _is_torch_tensor(image):
         return image.clone()
+    elif is_pil_image(image):
+        return as_torch_image(as_numpy_image(image))
     elif isinstance(image,np.ndarray):
         return as_torch_images(image[None])[0]
     else:
