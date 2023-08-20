@@ -851,7 +851,10 @@ def start(text=None):
                 line_number=int(line_number)
                 file_size=total_disc_bytes(file)
                 total_num_lines=number_of_lines_in_file(file)
-                print(fansi('Line %4i / %i (%s):  '%(line_number,total_num_lines,human_readable_file_size(file_size)),'green','bold','black')+fansi(get_absolute_path(file),'green','underlined','black')+fansi(' '*1000,None,None,'black'))
+
+
+
+                print(fansi('Line %4i / %i (%s):  '%(line_number,total_num_lines,human_readable_file_size(file_size)),'green','bold','black')+fansi((file),'green','underlined','black')+fansi(' '*1000,None,None,'black'))
 
 
                 max_megabytes=1
