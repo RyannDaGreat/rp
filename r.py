@@ -10632,46 +10632,46 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         FC FCOPY
         MLP MLPASTE
 
-        TPWC web_copy(printed(tmux_paste()))
-        WCTP web_copy(printed(tmux_paste()))
-        TPCO string_to_clipboard(printed(str(tmux_paste())))
-        COTP string_to_clipboard(printed(str(tmux_paste())))
-        TPLC local_copy(printed(tmux_paste()))
-        LCTP local_copy(printed(tmux_paste()))
-        TPVC vim_copy(printed(str(tmux_paste())))
-        VCTP vim_copy(printed(str(tmux_paste())))
-        WPTC tmux_copy(printed(str(web_paste())))
-        TCWP tmux_copy(printed(str(web_paste())))
-        WPCO string_to_clipboard(printed(str(web_paste())))
-        COWP string_to_clipboard(printed(str(web_paste())))
-        WPLC local_copy(printed(web_paste()))
-        LCWP local_copy(printed(web_paste()))
-        WPVC vim_copy(printed(str(web_paste())))
-        VCWP vim_copy(printed(str(web_paste())))
-        PATC tmux_copy(printed(str(string_from_clipboard())))
-        TCPA tmux_copy(printed(str(string_from_clipboard())))
-        PAWC web_copy(printed(string_from_clipboard()))
-        WCPA web_copy(printed(string_from_clipboard()))
-        PALC local_copy(printed(string_from_clipboard()))
-        LCPA local_copy(printed(string_from_clipboard()))
-        PAVC vim_copy(printed(str(string_from_clipboard())))
-        VCPA vim_copy(printed(str(string_from_clipboard())))
-        LPTC tmux_copy(printed(str(local_paste())))
-        TCLP tmux_copy(printed(str(local_paste())))
-        LPWC web_copy(printed(local_paste()))
-        WCLP web_copy(printed(local_paste()))
-        LPCO string_to_clipboard(printed(str(local_paste())))
-        COLP string_to_clipboard(printed(str(local_paste())))
-        LPVC vim_copy(printed(str(local_paste())))
-        VCLP vim_copy(printed(str(local_paste())))
-        VPTC tmux_copy(printed(str(vim_paste())))
-        TCVP tmux_copy(printed(str(vim_paste())))
-        VPWC web_copy(printed(vim_paste()))
-        WCVP web_copy(printed(vim_paste()))
-        VPCO string_to_clipboard(printed(str(vim_paste())))
-        COVP string_to_clipboard(printed(str(vim_paste())))
-        VPLC local_copy(printed(vim_paste()))
-        LCVP local_copy(printed(vim_paste()))
+        TPWC $web_copy($printed($tmux_paste()))
+        WCTP $web_copy($printed($tmux_paste()))
+        TPCO $string_to_clipboard($printed(str($tmux_paste())))
+        COTP $string_to_clipboard($printed(str($tmux_paste())))
+        TPLC $local_copy($printed($tmux_paste()))
+        LCTP $local_copy($printed($tmux_paste()))
+        TPVC $vim_copy($printed(str($tmux_paste())))
+        VCTP $vim_copy($printed(str($tmux_paste())))
+        WPTC $tmux_copy($printed(str($web_paste())))
+        TCWP $tmux_copy($printed(str($web_paste())))
+        WPCO $string_to_clipboard($printed(str($web_paste())))
+        COWP $string_to_clipboard($printed(str($web_paste())))
+        WPLC $local_copy($printed($web_paste()))
+        LCWP $local_copy($printed($web_paste()))
+        WPVC $vim_copy($printed(str($web_paste())))
+        VCWP $vim_copy($printed(str($web_paste())))
+        PATC $tmux_copy($printed(str($string_from_clipboard())))
+        TCPA $tmux_copy($printed(str($string_from_clipboard())))
+        PAWC $web_copy($printed($string_from_clipboard()))
+        WCPA $web_copy($printed($string_from_clipboard()))
+        PALC $local_copy($printed($string_from_clipboard()))
+        LCPA $local_copy($printed($string_from_clipboard()))
+        PAVC $vim_copy($printed(str($string_from_clipboard())))
+        VCPA $vim_copy($printed(str($string_from_clipboard())))
+        LPTC $tmux_copy($printed(str($local_paste())))
+        TCLP $tmux_copy($printed(str($local_paste())))
+        LPWC $web_copy($printed($local_paste()))
+        WCLP $web_copy($printed($local_paste()))
+        LPCO $string_to_clipboard($printed(str($local_paste())))
+        COLP $string_to_clipboard($printed(str($local_paste())))
+        LPVC $vim_copy($printed(str($local_paste())))
+        VCLP $vim_copy($printed(str($local_paste())))
+        VPTC $tmux_copy($printed(str($vim_paste())))
+        TCVP $tmux_copy($printed(str($vim_paste())))
+        VPWC $web_copy($printed($vim_paste()))
+        WCVP $web_copy($printed($vim_paste()))
+        VPCO $string_to_clipboard($printed(str($vim_paste())))
+        COVP $string_to_clipboard($printed(str($vim_paste())))
+        VPLC $local_copy($printed($vim_paste()))
+        LCVP $local_copy($printed($vim_paste()))
 
         AA ACATA
         ACA ACATA
@@ -10691,6 +10691,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         PF PROF
         PO PROF
+        POD PROF DEEP
 
         N  NEXT
         P  PREV
@@ -10756,10 +10757,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RV  ryanvimrc
         RX  ryanxonshrc
 
-        UU $set_current_directory('../..');fansi_print(get_current_directory(),'blue','bold')
-        UUU $set_current_directory('../../..');fansi_print(get_current_directory(),'blue','bold')
-        UUUU $set_current_directory('../../../..');fansi_print(get_current_directory(),'blue','bold')
-        UUUUU $set_current_directory('../../../../..');fansi_print(get_current_directory(),'blue','bold')
+        UU $set_current_directory('../..');$fansi_print(get_current_directory(),'blue','bold')
+        UUU $set_current_directory('../../..');$fansi_print(get_current_directory(),'blue','bold')
+        UUUU $set_current_directory('../../../..');$fansi_print(get_current_directory(),'blue','bold')
+        UUUUU $set_current_directory('../../../../..');$fansi_print(get_current_directory(),'blue','bold')
 
         LSF LSQ
         FDZ LSZ
@@ -10805,11 +10806,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
          KH DISKH
 
         GOO  $open_google_search_in_web_browser(str(ans))
-        GOOP $open_google_search_in_web_browser(string_from_clipboard())
+        GOOP $open_google_search_in_web_browser($string_from_clipboard())
 
         SMI $os.system("nvidia-smi");
         NVT $os.system("nvtop");#sudo_apt_install_nvtop
-        NVI $pip_import('nvitop');pip_import('nvitop.__main__').main()
+        NVI $pip_import('nvitop');$pip_import('nvitop.__main__').main()
         ZSH $os.system("zsh");
 
         BA   $os.system("bash");
@@ -10877,6 +10878,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         LNAH $os.symlink(ans,$get_file_name(ans));ans=$get_file_name(ans)#Created_Symlink
         LN   $os.symlink(ans,$get_file_name(ans));ans=$get_file_name(ans)#Created_Symlink
 
+        TMDA $os.system('tmux list-sessions -F "#{session_name}" | xargs -I % tmux detach -s %') #Detach all users from all tmux sessions
+    
         RF    $random_element($get_all_files())
         RD    $random_element($get_all_directories())
         RE    $random_element(ans)
@@ -10886,14 +10889,14 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         GP $get_parent_directory(ans)
 
         FCA $web_copy_path(ans)
-        FCH print("FCH->FileCopyHere");$web_copy_path(get_absolute_path('.'))
+        FCH print("FCH->FileCopyHere");$web_copy_path($get_absolute_path('.'))
         RMA $r._rma(ans)
-        RNA $rename_file(ans,input_default(fansi('NewPathName:','blue'),get_file_name(ans)))
+        RNA $rename_file(ans,$input_default($fansi('NewPathName:','blue'),$get_file_name(ans)))
         APA $r._absolute_path_ans(ans)
         RPA $r._relative_path_ans(ans)
 
         UZA $unzip_to_folder(ans)
-        ZIH $make_zip_file_from_folder(get_absolute_path('.'))
+        ZIH $make_zip_file_from_folder($get_absolute_path('.'))
         ZIA $make_zip_file_from_folder(ans)
 
         RST __import__('os').system('reset')
@@ -10901,7 +10904,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         DAPI __import__('rp.pypi_inspection').pypi_inspection.display_all_pypi_info()
 
-        DISC $display_image_slideshow('.',display=display_image_in_terminal_color)
+        DISC $display_image_slideshow('.',display=$display_image_in_terminal_color)
 
         FZM $pip_import('iterfzf').iterfzf(ans,multi=True)
 
@@ -10916,8 +10919,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         CLS CLEAR
         VV !vim
 
+        RCLAHF $os.system(printed("rclone copy --progress --transfers 128 %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself! The 'F' stands for fast, which is because this skips checksums - it wont overwrite any files ever!
+        RCLAH $os.system(printed("rclone copy --checksum --progress --transfers 128 %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself!
+
         DR $r._display_columns(dir(),'dir():')
-        DUSHA human_readable_file_size(sum(get_file_size(x,False)for x in enlist(ans)))
+        DUSHA $human_readable_file_size(sum($get_file_size(x,False)for x in $enlist(ans)))
 
         QPHP $r._input_select_multiple_history_multiline() #Query Prompt-Toolkit History Paragraphs (F3)
         QPH  $r._input_select_multiple_history() #Query Prompt-Toolkit History Lines (F3)
@@ -10930,8 +10936,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         FARTA  $r._fart(ans); #Find and replace text in paths specified by ans. Tip: best to use this with FDT
         AFARTA $r._fart(ans)  #Find and replace text in paths specified by ans. Tip: best to use this with FDT
 
-        HTTP os.system(sys.executable+' -m http.server')
-        HTP  os.system(sys.executable+' -m http.server')
+        HTTP $os.system($sys.executable+' -m http.server')
+        HTP  $os.system($sys.executable+' -m http.server')
 
         '''.replace('$',rp_import)
         # SA string_to_text_file(input("Filename:"),str(ans))#SaveAnsToFile
@@ -11057,7 +11063,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                     if user_message in command_shortcuts and user_message not in scope():
                         original_user_message=user_message
                         user_message=command_shortcuts[user_message]
-                        fansi_print("Transformed input to "+repr(user_message)+' because variable '+repr(original_user_message)+' doesn\'t exist but is a shortcut in SHORTCUTS','magenta','bold')
+                        fansi_print("Transformed input to "+repr(user_message.replace(rp_import,''))+' because variable '+repr(original_user_message)+' doesn\'t exist but is a shortcut in SHORTCUTS','magenta','bold')
 
                     if user_message.strip().isalpha() and user_message.strip() and user_message.islower() and not user_message.strip() in scope() and user_message.upper().strip() in help_commands_no_spaces_to_spaces:
                         original_user_message=user_message
@@ -23886,7 +23892,8 @@ def _clear_jupyter_notebook_outputs(path:str=None, auto_yes=False):
 
     if auto_yes or input_yes_no('Are you sure you want to clear the outputs of '+path+'?'):
         pip_import('jupyter')
-        command=sys.executable+' -m jupyter nbconvert --ClearOutputPreprocessor.enabled=True --clear-output '+path
+        escaped_path = '"'+path+'"'
+        command=sys.executable+' -m jupyter nbconvert --ClearOutputPreprocessor.enabled=True --clear-output '+escaped_path
         original_file_size=get_file_size(path)
         shell_command(command)
         new_file_size=get_file_size(path)
@@ -25571,10 +25578,11 @@ def delaunay_interpolation_weights(key_points, query_points):
 
     # Get the vertices and transformation matrices for each simplex
     try:
-        vertices = delaunay.vertices[simplices]
-    except AttributeError:
-        #DeprecationWarning: Delaunay attribute 'vertices' is deprecated in favour of 'simplices' and will be removed in Scipy 1.11.0.
         vertices = delaunay.simplices[simplices]
+    except AttributeError:
+        #In case we're using an older version
+        #DeprecationWarning: Delaunay attribute 'vertices' is deprecated in favour of 'simplices' and will be removed in Scipy 1.11.0.
+        vertices = delaunay.vertices[simplices]
 
     transform = delaunay.transform[simplices]
 
