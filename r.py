@@ -1918,12 +1918,62 @@ def random_index(array_length_or_array_itself):
         return random_index(len(array_length_or_array_itself))
 
 def random_element(x):
-    if isinstance(x,dict):
-        return random_element(list(x.values()))
-    if isinstance(x,set):
-        x=list(x)
-    assert is_iterable(x)
-    return x[random_index(len(x))]
+    """
+    Returns a random element from an iterable, dictionary-like, or set-like object.
+    
+    Parameters:
+        x (iterable or Mapping or Set): The collection to choose from.
+    
+    Returns:
+        object: A randomly chosen element from x.
+    
+    EXAMPLES:
+        >>> import numpy as np
+        >>> import torch
+        >>> import pandas as pd
+        >>> from collections import defaultdict, OrderedDict
+        >>> from easydict import EasyDict
+        >>> 
+        >>> assert random_element({'a': 1, 'b': 2}) in [1, 2]
+        >>> assert random_element(defaultdict(int, {'a': 1, 'b': 2})) in [1, 2]
+        >>> assert random_element(OrderedDict({'a': 1, 'b': 2})) in [1, 2]
+        >>> assert random_element(EasyDict({'a': 1, 'b': 2})) in [1, 2]
+        >>> assert random_element({1, 2, 3}) in [1, 2, 3]
+        >>> assert random_element(frozenset([1, 2, 3])) in [1, 2, 3]
+        >>> assert random_element([1, 2, 3]) in [1, 2, 3]
+        >>> assert random_element(np.array([1, 2, 3])) in [1, 2, 3]
+        >>> assert random_element(torch.tensor([1, 2, 3])) in [1, 2, 3]
+        >>> assert random_element(pd.Series([1, 2, 3])) in [1, 2, 3]        
+    
+    Refactored with GPT4: https://chat.openai.com/share/352d630c-fc34-4f36-b302-e4989c7c98b9
+
+    Original Version:
+        def random_element(x):
+            if isinstance(x,dict):
+                return random_element(list(x.values()))
+            if isinstance(x,set):
+                x=list(x)
+            assert is_iterable(x)
+            return x[random_index(len(x))]
+    """
+
+    from collections.abc import Mapping, Set, Iterable
+    import random
+
+    if isinstance(x, Mapping):
+        keys = list(x.keys())
+        chosen_key = keys[random_index(keys)]
+        return x[chosen_key]
+
+    elif isinstance(x, Set):
+        return random_element(list(x))
+
+    elif isinstance(x, Iterable):
+        index = random_index(x)
+        return x[index]
+
+    else:
+        raise ValueError("Input must be iterable, dictionary-like, or set-like.")
 
 def random_choice(*choices):
     return random_element(choices)
@@ -5032,14 +5082,23 @@ def force_restore_warnings():
 #    import dis
 #    return dis.Bytecode(lambda x:x + 1).dis()
 
-def _format_datetime(date)->str:
-    #EXAMPLE:
-    #    ans = 2021-06-12 23:23:51.569487
-    #     >>> ans.strftime('%b %d, %Y at %-I:%M:%S%p')
-    #    ans = Jun 12, 2021 at 11:23:51PM
+def format_date(date)->str:
+    """
+    This function formats datetimes the way I personally like to read them.
+
+    EXAMPLE:
+        >>> get_current_date()
+        ans = 2023-08-22 14:06:01.764838
+        >>> format_date(ans)
+        ans = Tue Aug 22, 2023 at 2:06:01PM
+
+    TODO: In the future, only if I want to, I'll add another argument to let you customize the date string. But I really like this format lol
+    """
     import datetime
     assert isinstance(date,datetime.datetime)
     return date.strftime('%a %b %d, %Y at %-I:%M:%S%p')
+_format_datetime = format_date #For compatiability - older code used rp.r._format_datetime
+
     
 
 _rinsp_temp_object=None
@@ -6555,10 +6614,91 @@ def translate(to_translate,to_language="en",from_language="auto"):
         # else:
         #     result=unescape(re_result[0])
         # return result
-def sync_sorted(*lists_in_descending_sorting_priority,key=identity):
-        # Sorts main_list and reorders all *lists_in_descending_sorting_priority the same way, in sync with main_list
-        return tuple(zip(*sorted(zip(*lists_in_descending_sorting_priority),key=lambda x:tuple(map(key,x)))))
+
+def sync_sorted(*lists_in_descending_sorting_priority, key=None, reversed=False):
+    """
+    Sorts the first list and reorders all other lists to have the same order as the sorted first list.
+    
+    Parameters:
+        *lists_in_descending_sorting_priority: One or more lists to be sorted.
+                                               The first list is the main list based on which other lists will be reordered.
+        key (function or list of functions, optional): A single key function or a list of key functions.
+                                                       A key of None signifies the identity function - aka no key is applied.
+                                                       If there's a tie in the first list, subsequent key functions can break the tie.
+                                                       If 'None' is used in the list, the identity function will be used for that list.
+                                                       Defaults to None, aka the identity function (lambda x: x).
+        reversed (bool, optional): If set to True, sorts the lists in descending order. Defaults to False.
+        
+    Returns:
+        tuple: A tuple of lists sorted and reordered in sync with the first list.
+
+    Examples:
+        #TODO: Make better examples
+
+        >>> # Basic example with ties in the first list
+        >>> sync_sorted([1, 1, 2], ['c', 'a', 'b'])
+        ([1, 1, 2], ['a', 'c', 'b'])
+
+        >>> # Sorting in descending order
+        >>> sync_sorted([1, 1, 2], ['c', 'a', 'b'], reversed=True)
+        ([2, 1, 1], ['b', 'a', 'c'])
+
+        >>> # Using a list of key functions, with 'None' to denote identity function
+        >>> sync_sorted([1, 1, 2], ['c', 'a', 'b'], [3, 2, 1], key=[None, str, None])
+        ([1, 1, 2], ['a', 'c', 'b'], [2, 3, 1])
+
+        >>> # Handling empty lists
+        >>> sync_sorted([], [], [])
+        ([], [], [])
+
+        >>> # Using 'reversed' parameter with multiple keys
+        >>> sync_sorted([1, 1, 2], ['c', 'a', 'b'], [3, 1, 1], key=[None, str, None], reversed=True)
+        ([2, 1, 1], ['b', 'c', 'a'], [1, 3, 1])
+
+    Notes:
+        This used to be implemented as a one-liner, but it wasn't as readable and didn't handle they key as well.
+        Old implementation:
+            def sync_sorted(*lists_in_descending_sorting_priority,key=identity):
+                # Sorts main_list and reorders all *lists_in_descending_sorting_priority the same way, in sync with main_list
+                return tuple(zip(*sorted(zip(*lists_in_descending_sorting_priority),key=lambda x:tuple(map(key,x)))))
+        It was refactored with GPT4: https://chat.openai.com/share/a8975a0c-3199-42f0-b4ad-ef9232ab6ef1
+    """
+    
+    # Input assertions
+    assert key is None or callable(key) or is_iterable(key) and all(callable(x) or x is None for x in key), 'The given key must be None, a key function, or a list of keys'
+    assert len(set(map(len,lists_in_descending_sorting_priority))), 'All lists must have the same length'
+
+    # Determine whether key is a single function or a list of functions
+    if key is None or callable(key):
+        keys = [key]
+    else:
+        keys = key
+
+    # Combine lists element-wise into a list of tuples
+    combined_lists = zip(*lists_in_descending_sorting_priority)
+
+    # Sort the combined list of tuples based on the keys
+    def sorting_key(x):
+        for i in range(len(x)):
+            if i < len(keys) and keys[i] is not None:
+                yield keys[i](x[i])
+            else:
+                yield x[i]
+
+    sorted_combined_lists = sorted(
+        combined_lists, key=lambda x: tuple(sorting_key(x)), reverse=reversed
+    )
+
+    # Unpack the sorted tuples back into separate lists
+    sorted_separate_lists = zip(*sorted_combined_lists)
+
+    # Convert sorted lists from tuples to lists and return them as a tuple of lists
+    return tuple(list(sorted_list) for sorted_list in sorted_separate_lists)
 sync_sort=sync_sorted#For backwards compatiability
+
+# def sync_sorted(*lists_in_descending_sorting_priority,key=identity):
+#         # Sorts main_list and reorders all *lists_in_descending_sorting_priority the same way, in sync with main_list
+#         return tuple(zip(*sorted(zip(*lists_in_descending_sorting_priority),key=lambda x:tuple(map(key,x)))))
     
 def _contains_func_y(y):
     #Used in contains_any, contains_all, in_any, in_all
@@ -10812,6 +10952,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         NVT $os.system("nvtop");#sudo_apt_install_nvtop
         NVI $pip_import('nvitop');$pip_import('nvitop.__main__').main()
         ZSH $os.system("zsh");
+        BOP TOP
 
         BA   $os.system("bash");
         S   $os.system("sh");
@@ -15086,7 +15227,8 @@ def squared_euclidean_distance(from_point,to_point):
     #Example:   euclidean_distance([0,0,0],[1,1,0]) ==== 2
     ###NOTE we use float64 because float128 can cause problems with some libraries and is annoying to deal with...
     ###Note: We convert to np.complex256 for maximum accuracy across all datatypes
-    return float(np.sum(np.abs((np.asarray(to_point,dtype=np.complex256)-np.asarray(from_point,dtype=np.complex256)))**2))
+    return float(np.sum(np.abs(as_numpy_array(to_point)-as_numpy_array(from_point))**2))
+    return float(np.sum(np.abs((np.asarray(to_point,dtype=np.complex256)-np.asarray(from_point,dtype=np.complex256)))**2)) #This breaks on my M1 mac - cant handle that datatype
 
 def euclidean_distance(from_point,to_point):
     #from_point and to_point are like (x0,y0,...) or [x0,y0,z0,...], or some numpy equivalent
@@ -17073,37 +17215,78 @@ def vertically_flipped_image(image):
 def horizontally_flipped_image(image):
     #Flips (aka mirrors) an image horizontally
     return image[:,::-1]
+
+def least_squares_regression_line_coeffs(X, Y=None, include_correlation=False):
+    """
+    Computes the coefficients for a least squares regression line.
     
-def least_squares_regression_line_coeffs(X,Y=None,include_correlation=False):
+    Parameters:
+        - X: List of x-values, list of (x, y) pairs, or list of y-values.
+            - If X is a list of x-values, Y must be provided.
+            - If X is a list of (x, y) pairs, Y should be set to None.
+            - If X is a list of y-values, Y should be set to None.
+        - Y: List of y-values when X is a list of x-values; otherwise, should be None.
+        - include_correlation: Boolean flag to include the correlation coefficient in the output.
+
+    Returns:
+        - A tuple (m, b) such that Y = m*X + b.
+        - If include_correlation is True, returns a tuple (m, b, r).
+    
+    Notes:
+        - Works with complex numbers.
+        - Computational complexity is O(n).
+    
+    Examples:
+        >>> least_squares_regression_line_coeffs([1, 2, 3], [2, 4, 3])
+        (1, 1)
+        
+        >>> least_squares_regression_line_coeffs([(1, 2), (2, 4), (3, 3)])
+        (1, 1)
+        
+        >>> least_squares_regression_line_coeffs([2, 4, 3])
+        (1, 2)
+    """
     #Return m, b such that Y ≈ m*X+b
     #TODO I can't figure out why vectorization makes this SLOWER in bulk....attempted code below...
     #Note: This generalizes to complex numbers (and can be used to calculate least-squares euclidean affine in LINEAR TIME)!
     #If include_correlation is True, it will include the correlation coefficient (r), and so this function would return a tuple of length 3 instead of length 2 (return m,b,r instead of just m,b)
     #Has O(n) complexity as opposed to least_squares_euclidean_affine's original matrix implementation, which takes at least O(n^3) time because of numpy's matrix multiplication implementation
     #X and Y can be separate X,Y values, or X can be a list of points (AKA either X=[2,5,7,3...] and Y=[2,4,8,3...] or X=[[1,2],[4,5],[6,7]...] and Y=None)
+
+    assert len(X) > 0
     if Y is None:
-        X,Y=zip(*X)
-    Y=np.asarray(Y)
-    X=np.asarray(X)
-    # assert len(X.shape)==1
-    # assert len(Y.shape)==1
-    assert X.shape==Y.shape
-    Σ=lambda x:np.sum(x)
-    μ=lambda x:np.mean(x)
-    Xn=X-μ(X)#Xn is short for 'X normalized'
-    Yn=Y-μ(Y)
-    ΣXnYn=Σ(Xn*Yn)
-    ΣXnXn=Σ(Xn*Xn)
-    m=ΣXnYn/ΣXnXn
-    b=μ(Y)-μ(m*X)
+        if is_number(X[0]):
+            Y = X
+            X = np.arange(len(X))
+        else:
+            X, Y = zip(*X)
+
+    Y = as_numpy_array(Y)
+    X = as_numpy_array(X)
+
+    assert X.shape == Y.shape
+
+    Σ = lambda x: np.sum(x)
+    μ = lambda x: np.mean(x)
+
+    #Xn is short for 'X normalized'
+    Xn = X - μ(X)
+    Yn = Y - μ(Y)
+
+    ΣXnYn = Σ(Xn * Yn)
+    ΣXnXn = Σ(Xn * Xn)
+
+    m = ΣXnYn / ΣXnXn
+    b = μ(Y) - μ(m * X)
+
     if include_correlation:
         #Formula from https://www.statsdirect.com/help/regression_and_correlation/simple_linear.htm
-        normalized=lambda x:x/np.linalg.norm(x)
-        r=np.sum(normalized(Xn)*np.conj(normalized(Yn)))#Centered-about-the-mean, normalized cosine-similarity is the same thing as correlation
-        return m,b,r
+        normalized = lambda x: x / np.linalg.norm(x)
+        r = np.sum(normalized(Xn) * np.conj(normalized(Yn)))#Centered-about-the-mean, normalized cosine-similarity is the same thing as correlation
+        return m, b, r
     else:
-        return m,b
-
+        return m, b
+    
 def magnitude(x,**kwargs):
     #Get the total magnitude
     return np.sqrt(np.sum(np.abs(x)**2,**kwargs))
@@ -18302,6 +18485,7 @@ class VideoWriterMP4:
         self.finished=True
         
 def save_video_mp4(frames, path, framerate=60, *, video_bitrate='high', height=None, width=None):
+    """
     # frames: a list of images as defined by rp.is_image(). Saves an .mp4 file at the path
     # Note that frames can also be a generator, as opposed to a numpy array.
     # This can let you save larger videos that would otherwise make your computer run out of memory.
@@ -18312,6 +18496,7 @@ def save_video_mp4(frames, path, framerate=60, *, video_bitrate='high', height=N
     # 10000000  : (32.7MB)
     # 100000000 : (93.0MB)
     # 1000000000: (93.0MB) It seems to be the maximum size
+    """
     
     height = None if height is None else height
     width  = None if width  is None else width 
@@ -18411,10 +18596,12 @@ def save_video_mp4(frames, path, framerate=60, *, video_bitrate='high', height=N
 
 
 def save_video(images,path,framerate=60):
+    """
     #TODO: add options for sound and framerate. Possibly quality options but probably not (that should be delegated to a function meant for a specific format)
     #Save a series of images into a video.
     #Note that the file extension used in path decides the kind of video that will be exported.
     #For example, save_video(images,'video.mp4') saves an mp4 file whilst save_video(images,'video.avi') saves an avi file
+    """
     assert get_file_extension(path) in 'mp4 avi'.split(), 'This function currently supports .mp4 and .avi files'
 
     if path.endswith('.mp4'):
@@ -18480,19 +18667,24 @@ def path_exists(path):
 # is_a_path=path_exists #Can be confused with complex vector paths etc, and also this isn't that descriptive...don't want code to be dependent on this synonym...
 
 def rename_path(path,new_name):
+    """
     #EXAMPLE:
     #   rename_path("apple/bananna/cherry.jpg","coconut.png")
     #       is equivalent to (in bash)
     #   mv .apple/bananna/cherry.jpg apple/bananna/coconut.png
+    """
     os.rename(path,os.path.join(get_path_parent(path),new_name))
+
 rename_file=rename_path#Synonyms that might make more sense to read in their context than rename_path
 rename_folder=rename_path
 rename_directory=rename_path
 
 def move_path(from_path,to_path):
+    """
     #Like the 'mv' command
     #Move a folder or file into a given directory if to_path is a directory,
     #otherwise just rename the path
+    """
     
     make_directory(get_parent_directory(to_path))#Make sure it has somewhere to go. If the destination folder doesn't already exist, create it.
     if is_a_directory(to_path):
@@ -18508,12 +18700,14 @@ def move_path(from_path,to_path):
 move_file=move_directory=move_folder=move_path#Synonyms that might make more sense to read in their context than rename_path
 
 def delete_file(path,*,permanent=True):
+    """
     # Deletes a file at a given path
     # permanent exists for safety reasons. It can be False in case you make a stupid mistake like deleting this file. When false, it will send your files to the trash bin on your system (Mac,Windows,Linux, etc)
     # By default, though, permanent=True, becuase when it's not it can cause your hard-drive to fill up without you expecting it (you don't normally expect to keep files when calling a function called delete file, which doesn't actually free your hard-drive when permanent=False)
     # http://stackoverflow.com/questions/3628517/how-can-i-move-file-into-recycle-bin-trash-on-different-platforms-using-pyqt4
     # https://pypi.python.org/pypi/Send2Trash
     # pip3 install Send2Trash
+    """
     import os
     assert os.path.exists(path),"r.delete_file: There is no file to delete. The path you specified, '" + path + "', does not exist!"  # This is to avoid the otherwise cryptic errors you would get later on with this method
     assert file_exists(path),"r.delete_file: The path you selected exists, but is not a file: %s"%path
@@ -18525,12 +18719,14 @@ def delete_file(path,*,permanent=True):
         send2trash.send2trash(path)  # This is MUCH safer than when delete_permanently is turned on. This will have the same effect as deleting it in finder/explorer: it will send your file to the trash bin instead of immediately deleting it forever.
 
 def delete_folder(path,*,recursive=True,permanent=True):
+    """
     #Will recursively delete a folder and all of its contents
     # permanent exists for safety reasons. It can be False in case you make a stupid mistake like deleting this file. When false, it will send your files to the trash bin on your system (Mac,Windows,Linux, etc)
     # By default, though, permanent=True, becuase when it's not it can cause your hard-drive to fill up without you expecting it (you don't normally expect to keep files when calling a function called delete file, which doesn't actually free your hard-drive when permanent=False)
     # http://stackoverflow.com/questions/3628517/how-can-i-move-file-into-recycle-bin-trash-on-different-platforms-using-pyqt4
     # https://pypi.python.org/pypi/Send2Trash
     # pip3 install Send2Trash
+    """
     import shutil
     assert os.path.exists(path),"r.delete_folder: There is no folder to delete. The path you specified, '" + path + "', does not exist!"  
     assert folder_exists(path),"r.delete_folder: The path you selected exists, but is not a folder: %s"%path
@@ -18545,11 +18741,13 @@ def delete_folder(path,*,recursive=True,permanent=True):
 delete_directory=delete_folder
 
 def delete_path(path,*,permanent=True):
+    """
     # permanent exists for safety reasons. It can be False in case you make a stupid mistake like deleting this file. When false, it will send your files to the trash bin on your system (Mac,Windows,Linux, etc)
     # By default, though, permanent=True, becuase when it's not it can cause your hard-drive to fill up without you expecting it (you don't normally expect to keep files when calling a function called delete file, which doesn't actually free your hard-drive when permanent=False)
     # http://stackoverflow.com/questions/3628517/how-can-i-move-file-into-recycle-bin-trash-on-different-platforms-using-pyqt4
     # https://pypi.python.org/pypi/Send2Trash
     # pip3 install Send2Trash
+    """
     assert os.path.exists(path),"r.delete_path: There is no folder or file to delete. The path you specified, '" + path + "', does not exist!"  
     if is_a_file(path):
         delete_file(path,permanent=permanent)
@@ -18559,9 +18757,11 @@ def delete_path(path,*,permanent=True):
         assert False, "This should be impossible...it appears that path %s exists but is neither a file nor a folder."%path
 
 def _delete_paths_helper(*paths,permanent=True,delete_function=delete_path):
+    """
     #EXAMPLE:  delete_paths( 'a.jpg','b.jpg' )
     #EXAMPLE:  delete_paths(['a.jpg','b.jpg'])
     #EXAMPLE:  delete_paths(('a.jpg','b.jpg'))
+    """
     paths=detuple(paths)
     if isinstance(paths,str):
         paths=[paths] #if we gave a single path as an argument, turn it into a list so we can iterate over it...
@@ -18580,9 +18780,11 @@ def delete_folders(*paths,permanent=True):
 delete_directories=delete_folders
 
 def copy_path(from_path,to_path,*,extract=False):
+    """
     #Chooses between copy_directory and copy_file, whichever makes more sense.
     #If extract is True, it will copy only the contents of the folder to the destination, as opposed to copying the actual folder itself.
     #Works with both files and directories. If given a directory, it will be copied recursively.
+    """
     assert path_exists(from_path),'Cannot copy from from_path='+repr(from_path)+' because that path does not exist'
     if is_a_directory(from_path):
         copy_directory(from_path,to_path,extract=extract)
@@ -18590,19 +18792,23 @@ def copy_path(from_path,to_path,*,extract=False):
         copy_file(from_path,to_path)
 
 def copy_to_folder(from_path,to_path):
+    """
     #Copy a file or directory to a folder, keeping the same file name
     #For example, copy_to_folder('/docs/text.txt','some/folder/path') will create a new file whose path is 'some/folder/path/text.txt'
     #This can be nicer than copy_path, because then we don't have to rewrite the file name twice.
     #This function also works with folders, and copies them recursively.
+    """
     assert is_a_folder(to_path),'to_path must be a folder, but '+repr(to_path)+' either does not exist or is not a folder'
     dest=path_join(to_path,get_path_name(from_path))
     copy_path(from_path,dest)
 copy_to_directory=copy_to_folder
 
 def copy_directory(from_path,to_path,*,extract=False):
+    """
     #Recursively copy a directory.
     #If extract is True, it will copy only the contents of the folder to the destination, as opposed to copying the actual folder itself.
     #Note: the default extract=False must not change. Future versions of rp must respect this.
+    """
     assert path_exists     (from_path),'rp.copy_directory error: Cant copy from path '+repr(from_path)+' because that path does not exist'
     assert is_a_directory  (from_path),'rp.copy_directory error: from_path='+repr(from_path)+' is not a directory, and this function is specifically meant to copy directories.'
     assert not file_exists (to_path  ),'rp.copy_directory error: Cant copy a directory into a file. from_path='+repr(from_path)+' is a directory and to_path='+repr(to_path)+' is a file.'
@@ -18616,7 +18822,7 @@ def copy_directory(from_path,to_path,*,extract=False):
 copy_folder=copy_directory
 
 def copy_file(from_path,to_path):
-    #Copy a single file from from_path to to_path, where to_path is either a folder or a file that will be overridden
+    "Copy a single file from from_path to to_path, where to_path is either a folder or a file that will be overridden"
     assert file_exists(from_path),'copy_file copies a file from from_path to to_path, but from_path='+repr(from_path)+' is not a file'
     # assert path_exists(to_path),'to_path must be either a directory or a file that will be overwritten, but to_path='+repr(to_path)+' does not exist' # <--- This seems silly. If this assertion still seems silly in the year 2022...get rid of it forever lol
     import shutil
@@ -18625,6 +18831,7 @@ def copy_file(from_path,to_path):
     shutil.copyfile(from_path,to_path)
 
 def get_path_parent(path):
+    """
     #Works for directories and files
     #EXAMPLES:
     #   ⮤ get_path_parent('oaijsd/odjf/aoijf/sdojif.ojf')
@@ -18637,6 +18844,7 @@ def get_path_parent(path):
     #  ans = /
     #   ⮤ get_path_parent('/aps/asda/sokd.asd')
     #  ans = /aps/asda
+    """
     import pathlib
     return str(pathlib.Path(path).parent)
 get_file_folder=get_path_parent#Synonyms that might make more sense to read in their context than get_path_parent
@@ -18647,10 +18855,12 @@ get_parent_directory=get_parent_folder=get_path_parent
 
 
 def make_directory(path):
+    """
     #Will make a directory if it doesn't allready exist. If it does already exist, it won't throw an error.
     #However, it will throw an error if the specified path is impossible to make without deleting some file.
     #Can make nested paths that don't exist yet. You don't have to manually create every level.
     #For example, let's say you don't have Jumble, Fizz, or Buzz on your computer. make_directory('Jumble/Fizz/Buzz') will create three directories nested inside of each other
+    """
     try:
         if not directory_exists(path):
             os.mkdir(path)
@@ -18770,6 +18980,7 @@ _old_gists_path=path_join(get_parent_folder(__file__),'old_gists.txt') #This has
 
 _get_cutscene_frame_numbers_cache={}
 def get_cutscene_frame_numbers(video_path,*,use_cache=False):
+    """
     #Returns a list of ints containing all the framenumers of the cutscenes in a video
     #Confirmed to work with mp4 files
     #Note: Right now this only supports reading from a video file, as opposed to reading from a numpy array containing
@@ -18783,6 +18994,7 @@ def get_cutscene_frame_numbers(video_path,*,use_cache=False):
     #            input('Hit enter to continue')
     #        cv_imshow(frame)
     #        sleep(1/30)
+    """
     pip_import('cv2')#Needed for scenedetect
     pip_import('scenedetect')
 
@@ -18835,12 +19047,14 @@ def get_cutscene_frame_numbers(video_path,*,use_cache=False):
     return output
 
 def send_text_message(message,number):
+    """
     #number is a phone number. Can be an int or a string
     #Once this no longer works (which it eventually won't, because it's running on a free trial), replace the credentials with your own twilio trial account
     #OR create a fallback that doesnt use twilio
     #EXAMPLE:
     #    send_text_message('Hello, World!',15436781234)
     #CODE FROM: https://www.twilio.com/docs/sms/quickstart/python#install-python-and-the-twilio-helper-library
+    """
     account_sid = 'AC35ef9db2c1104ea2764964cf0ddb7ebb'
     auth_token  = '0543decd5b2eb41e82393e8015c92f48'
     from_number = '16313052383'
@@ -18856,6 +19070,7 @@ def send_text_message(message,number):
                  )
 
 def crop_image(image, height: int = None, width: int = None, origin='top left'):
+    """
     #Returns a cropped image to the specified width and height
     #If either hieght or width aren't specified (and left as None), their size will be untouched
     #    (This means you can crop an image only by height, for example, without having to manually specify its width)
@@ -18874,6 +19089,7 @@ def crop_image(image, height: int = None, width: int = None, origin='top left'):
     #        for theta in np.linspace(0,pi):
     #            display_image(crop_image(ans,100+1000*np.cos(theta)**2,100+1000*np.sin(theta)**2,'center'))
     #            sleep(1/60)
+    """
 
 
     assert is_image(image)
@@ -18925,8 +19141,10 @@ def crop_image(image, height: int = None, width: int = None, origin='top left'):
     return out
 
 def crop_image_zeros(image):
+    """
     #Given some big image that is surrounded by black, or 0-alpha transparency, crop out that excess region
     #TODO: Give examples
+    """
     assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
     if is_grayscale_image(image):
         points=np.argwhere(image)#Crop out the black regions
@@ -18945,6 +19163,7 @@ def crop_image_zeros(image):
     return cropped
 
 def cv_contour_to_segment(contour):
+    """
     #TODO: provide a visual example
     #The way OpenCV extracts single-pixel-wide non-looping contours is to treat those contours as loops, where the second half of the points are just the first-half of the points mirrored
     #If we want to find the start/end points of a segment, we need to find the two points of symmetry (which are visually obvious, but its not a given that they exist such as if we have a T-junction)
@@ -18953,6 +19172,7 @@ def cv_contour_to_segment(contour):
     #This function can be used to get the starting and end points of the segment, which is a bit of a tricky problem.
     #The output of a contour given to this function should have half the original length.
     #WARNING: This function doesn't check to see if the contour you gave it is actually a segment; be careful! You can usually check to see if a contour is a segment (if using cv_find_contours) by seeing if contour.is_solid_white is True (AKA if the contour doesn't enclose any non-white,area)
+    """
     contour=as_complex_vector(contour)
     if len(contour)<=3:
         return contour.copy()
@@ -18961,6 +19181,7 @@ def cv_contour_to_segment(contour):
     return np.roll(contour,(len(contour)-i)//2)[:len(contour)//2]
 
 def whiten_points_covariance(points):
+    """
     #Whiten the covariance matrix of a list of n-dimensional points, and return a list of new points.
     #Also works with 2d-contours represented as indicated by is_points_array, is_complex_vector, and is_cv_contour
     #EXAMPLE CODE:
@@ -18972,6 +19193,7 @@ def whiten_points_covariance(points):
     #    whitened=whiten_points_covariance(points)
     #    print('Displaying points after whitening (note how it looks like a unit normal distribution now)')
     #    scatter_plot(whitened)
+    """
     pip_import('sklearn')
     from sklearn.decomposition import PCA
     # contour=as_numpy_array(points)
@@ -18983,22 +19205,27 @@ def whiten_points_covariance(points):
     return whitened
 
 def visible_string_ljust(string,width,fillchar=' '):
+    """
     #Trying to be as much like str.ljust as possible, with a small tweak:
     #str.ljust doesn't ignore ansi escape sequences, nor does it take into account unicode character widths.
     #The small tweak is that this function does (as best as it can).
     #This function works with fansi well, but str.ljust does not.
+    """
     delta_width=max(0,width-visible_string_length(string))
     return string+fillchar*delta_width
 
 def visible_string_rjust(string,width,fillchar=' '):
+    """
     #Trying to be as much like str.rjust as possible, with a small tweak:
     #str.rjust doesn't ignore ansi escape sequences, nor does it take into account unicode character widths.
     #The small tweak is that this function does (as best as it can).
     #This function works with fansi well, but str.rjust does not.
+    """
     delta_width=max(0,width-visible_string_length(string))
     return fillchar*delta_width+string
 
 def visible_string_center(string,width,fillchar=' '):
+    """
     #Trying to be as much like str.center as possible, with a small tweak:
     #str.center doesn't ignore ansi escape sequences, nor does it take into account unicode character widths.
     #The small tweak is that this function does (as best as it can).
@@ -19014,6 +19241,7 @@ def visible_string_center(string,width,fillchar=' '):
     #    ans = +a++
     #     ⮤ 'a'.center(5,'+')
     #    ans = ++a++
+    """
     delta_width=max(0,width-visible_string_length(string))
     delta_left =delta_width//2
     delta_right=delta_width-delta_left
@@ -19021,6 +19249,7 @@ def visible_string_center(string,width,fillchar=' '):
 
 
 def make_string_rectangular(string,align='left',fillchar=' '):
+    """
     #EXAMPLES:
     # ⮤ s='The mathematician\nPlotting his past relations\n"ex" and "why" axis'
     # ⮤ make_string_rectangular(s,'right',fillchar='-')
@@ -19038,6 +19267,7 @@ def make_string_rectangular(string,align='left',fillchar=' '):
     #     ans = -----The mathematician-----
     #     Plotting his past relations
     #     ----"ex" and "why" axis----
+    """
     align_methods={'left':visible_string_ljust,
                   'right':visible_string_rjust,
                  'center':visible_string_center}
@@ -19048,12 +19278,13 @@ def make_string_rectangular(string,align='left',fillchar=' '):
     width=string_width(string)
     return line_join(align_method(line,width,fillchar) for line in lines)
 def string_is_rectangular(string):
-    #Returns true if all lines of the string have the same length
+    "Returns true if all lines of the string have the same length"
     lines=line_split(string)
     max_line_length=string_width(string)
     return all(len(line)==max_line_length for line in lines)
 
 def horizontally_concatenated_strings(*strings,rectangularize=False,fillchar=' '):
+    """
     #The fillchar parameter only matters if rectangularize is True
     #EXAMPLE:
     # ⮤ horizontally_concatenated_strings('Why\nHello\nThere!','My\nName\nIs\nBob','Pleased\nTo\nMeet\nYou!',rectangularize=False)
@@ -19073,6 +19304,7 @@ def horizontally_concatenated_strings(*strings,rectangularize=False,fillchar=' '
     # abc
     #  bc
     #   c
+    """
     strings=delist(detuple(strings))
     for string in strings:
         assert isinstance(string,str),'Type '+repr(type(string))+' is not a string, and cannot be concatenated with this function'
@@ -19094,6 +19326,7 @@ def vertically_concatenated_strings(*strings):
     return line_join(strings)
 
 def wrap_string_to_width(string,width):
+    """
     #TODO: Make this work with visible_string_length so that unicode chars/ansi codes are supported
     #EXAMPLE:
     # ⮤ wrap_string_to_width('Hello\nWorld!',2)
@@ -19103,6 +19336,7 @@ def wrap_string_to_width(string,width):
     #    Wo
     #    rl
     #    d!
+    """
     assert width>=0,'Cannot have negative width'
     lines=[]
     for line in line_split(string):
@@ -19113,70 +19347,72 @@ def bordered_string(string,*,
                     weight=1,width     =None,     height=None,     left=None,     right=None,     bottom=None,     top=None,
                     fill=' ',width_fill=None,height_fill=None,left_fill=None,right_fill=None,bottom_fill=None,top_fill=None,
                     bottom_right_fill=None,bottom_left_fill=None,top_right_fill=None,top_left_fill=None):
-        #NOTE: 99% of the time you should be using a rectangular string, as you can tell with string_is_rectangular
-        #These examples showcase the usage of a NON-rectangular string to show why, but the rest is hopefully intuitive
-        #EXAMPLES:
-        # ⮤ bordered_string('Hello\nWorld!',fill='-',weight=3)
-        #ans = -----------
-        #-----------
-        #-----------
-        #---Hello---
-        #---World!---
-        #------------
-        #------------
-        #------------
-        #⮤ bordered_string('Hello\nWorld!',fill='-',weight=3,top=0)
-        #ans = ---Hello---
-        #---World!---
-        #------------
-        #------------
-        #------------
-        #⮤ bordered_string('Hello\nWorld!',fill='-',weight=3,right=3)
-        #ans = -----------
-        #-----------
-        #-----------
-        #---Hello---
-        #---World!---
-        #------------
-        #------------
-        #------------
-        #⮤ bordered_string('Hello\nWorld!',fill='-',weight=3,right=1)
-        #ans = ---------
-        #---------
-        #---------
-        #---Hello-
-        #---World!-
-        #----------
-        #----------
-        #----------
-        #⮤ bordered_string('Hello\nWorld!',fill='-',bottom_fill='+',weight=3,right=1)
-        #ans = ---------
-        #---------
-        #---------
-        #---Hello-
-        #---World!-
-        #++++++++++
-        #++++++++++
-        #++++++++++
-        #⮤ bordered_string('Hello\nWorld!',fill='-',bottom_fill='+',weight=3,right=1,bottom_right_fill='O')
-        #ans = ---------
-        #---------
-        #---------
-        #---Hello-
-        #---World!-
-        #+++++++++O
-        #+++++++++O
-        #+++++++++O
-        #⮤ print(bordered_string('Hello\nWorld!',width_fill='│',height_fill='─',top_right_fill='┐',top_left_fill='┌',bottom_left_fill='└',bottom_right_fill='┘'))
-        #┌─────┐
-        #│Hello│
-        #│World!│
-        #└──────┘
-        #⮤ print(bordered_string(make_string_rectangular('Hello\nWorld!'),width_fill='│',height_fill='─',top_right_fill='┐',top_left_fill='┌',bottom_left_fill='└',bottom_right_fill='┘'))
-        #┌──────┐
-        #│Hello │
-        #│World!│
-        #└──────┘
+    """
+    #NOTE: 99% of the time you should be using a rectangular string, as you can tell with string_is_rectangular
+    #These examples showcase the usage of a NON-rectangular string to show why, but the rest is hopefully intuitive
+    #EXAMPLES:
+    # ⮤ bordered_string('Hello\nWorld!',fill='-',weight=3)
+    #ans = -----------
+    #-----------
+    #-----------
+    #---Hello---
+    #---World!---
+    #------------
+    #------------
+    #------------
+    #⮤ bordered_string('Hello\nWorld!',fill='-',weight=3,top=0)
+    #ans = ---Hello---
+    #---World!---
+    #------------
+    #------------
+    #------------
+    #⮤ bordered_string('Hello\nWorld!',fill='-',weight=3,right=3)
+    #ans = -----------
+    #-----------
+    #-----------
+    #---Hello---
+    #---World!---
+    #------------
+    #------------
+    #------------
+    #⮤ bordered_string('Hello\nWorld!',fill='-',weight=3,right=1)
+    #ans = ---------
+    #---------
+    #---------
+    #---Hello-
+    #---World!-
+    #----------
+    #----------
+    #----------
+    #⮤ bordered_string('Hello\nWorld!',fill='-',bottom_fill='+',weight=3,right=1)
+    #ans = ---------
+    #---------
+    #---------
+    #---Hello-
+    #---World!-
+    #++++++++++
+    #++++++++++
+    #++++++++++
+    #⮤ bordered_string('Hello\nWorld!',fill='-',bottom_fill='+',weight=3,right=1,bottom_right_fill='O')
+    #ans = ---------
+    #---------
+    #---------
+    #---Hello-
+    #---World!-
+    #+++++++++O
+    #+++++++++O
+    #+++++++++O
+    #⮤ print(bordered_string('Hello\nWorld!',width_fill='│',height_fill='─',top_right_fill='┐',top_left_fill='┌',bottom_left_fill='└',bottom_right_fill='┘'))
+    #┌─────┐
+    #│Hello│
+    #│World!│
+    #└──────┘
+    #⮤ print(bordered_string(make_string_rectangular('Hello\nWorld!'),width_fill='│',height_fill='─',top_right_fill='┐',top_left_fill='┌',bottom_left_fill='└',bottom_right_fill='┘'))
+    #┌──────┐
+    #│Hello │
+    #│World!│
+    #└──────┘
+    """
     width =weight if width  is None else width
     height=weight if height is None else height
     top   =height if top    is None else top
@@ -19211,16 +19447,17 @@ def bordered_string(string,*,
     return line_join(lines)
 
 def simple_boxed_string(string,align='center',chars='│─┐┌└┘'):
+    """
     #EXAMPLE:
-    #⮤ s="I don't have any kids\n\nBut I like making dad jokes\n\nI am a faux pa"
-    #⮤ print(simple_boxed_string(s,'center'))
-    #┌───────────────────────────┐
-    #│   I don't have any kids   │
-    #│                           │
-    #│But I like making dad jokes│
-    #│                           │
-    #│       I am a faux pa      │
-    #└───────────────────────────┘
+    #    >>> s="I don't have any kids\n\nBut I like making dad jokes\n\nI am a faux pa"
+    #    >>> print(simple_boxed_string(s,'center'))
+    #    ┌───────────────────────────┐
+    #    │   I don't have any kids   │
+    #    │                           │
+    #    │But I like making dad jokes│
+    #    │                           │
+    #    │       I am a faux pa      │
+    #    └───────────────────────────┘
     #EXAMPLE That demonstrates not only this function but several other console-string functions in rp at once:
     #    def griddify(string_lists):
     #        def uniform_boxify(strings,height,width):
@@ -19239,6 +19476,7 @@ def simple_boxed_string(string,align='center',chars='│─┐┌└┘'):
     #        return grid
     #    strings=[[fansi(wrap_string_to_width(random_namespace_hash(randint(10,30)),5),random_element(['green','blue','yellow','red','magenta','gray','cyan']),per_line=True)for _ in range(5)]for _ in range(10)]
     #    print(simple_boxed_string(griddify(strings)))
+    """
     return bordered_string(make_string_rectangular(string,align=align),
         width_fill       =chars[0],
         height_fill      =chars[1],
@@ -19819,7 +20057,6 @@ def _string_pager_via_click(string):
     click=pip_import('click')
     click.echo_via_pager(string)
 
-
 def string_pager(string):
     #Uses a python-based pager, similar to the program 'less', where you can scroll and search through things
     #What is a pager? See: https://en.wikipedia.org/wiki/Terminal_pager
@@ -19858,6 +20095,7 @@ def set_mouse_position(*position):
     assert len(position)==2 and all(map(is_number,position)),'Invalid input: expected (x,y) pair but got position='+repr(position)
     x,y=position#I'm being explicit here for readability
     _get_pynput_mouse_controller().position=x,y
+
 def record_mouse_positions(duration=1,rate=60):
     """
     #Record the mouse position for (duration) seconds, taking (rate) samples per second
@@ -19869,6 +20107,7 @@ def record_mouse_positions(duration=1,rate=60):
         out.append(get_mouse_position())
         sleep(1/rate)
     return out
+
 def playback_mouse_positions(positions,rate=60):
     """
     #Play back a list of mouse positions at (rate) positions per second
@@ -19886,12 +20125,14 @@ def mouse_left_click():
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().click(pynput.mouse.Button.left)
+
 def mouse_right_click():
     """
     #Trigger the mouse's right click button
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().click(pynput.mouse.Button.right)
+
 def mouse_middle_click():
     """
     #Trigger the mouse's middle click button
@@ -19906,6 +20147,7 @@ def mouse_left_press():
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().press(pynput.mouse.Button.left)
+
 def mouse_right_press():
     """
     #Press the mouse's right button
@@ -19913,6 +20155,7 @@ def mouse_right_press():
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().press(pynput.mouse.Button.right)
+
 def mouse_middle_press():
     """
     #Press the mouse's middle button
@@ -19928,6 +20171,7 @@ def mouse_left_release():
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().release(pynput.mouse.Button.left)
+
 def mouse_right_release():
     """
     #Release the mouse's right button
@@ -19935,6 +20179,7 @@ def mouse_right_release():
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().release(pynput.mouse.Button.right)
+
 def mouse_middle_release():
     """
     #Release the mouse's middle button
@@ -20089,16 +20334,62 @@ def is_a_module(object):
     import builtins
     return type(object)==type(builtins)
 
+def date_to_epoch_seconds(datetime_obj) -> float:
+    """Converts a datetime object to seconds since the Unix epoch; aka seconds since January 1st, 1970 at 00:00:00 UTC"""
+    from datetime import datetime as dt_class
+    
+    epoch = dt_class.utcfromtimestamp(0)
+    delta = datetime_obj - epoch
+    return delta.total_seconds()
+
+def date_to_epoch_millis(datetime_obj) -> int:
+    """Converts a datetime object to milliseconds since the Unix epoch; aka millis since January 1st, 1970 at 00:00:00 UTC"""
+    return int(date_to_epoch_seconds(datetime_obj) * 1000)
+
+def epoch_seconds_to_date(epoch_seconds: float) -> 'datetime':
+    """Converts epoch time in seconds to a datetime object; returns a datetime representing the time since January 1st, 1970 at 00:00:00 UTC"""
+    from datetime import datetime, timedelta
+    
+    epoch = datetime.utcfromtimestamp(0)
+    return epoch + timedelta(seconds=epoch_seconds)
+
+def epoch_millis_to_date(epoch_millis: int) -> 'datetime':
+    """Converts epoch time in milliseconds to a datetime object; returns a datetime representing the time since January 1st, 1970 at 00:00:00 UTC"""
+    epoch_seconds = epoch_millis / 1000.0
+    return epoch_seconds_to_date(epoch_seconds)
+
 def get_current_date():
     """
     #This is annoying to type...so I added this function as a bit of sugar.
     """
     import datetime
     return datetime.datetime.now()
+
 def string_to_date(string):
     """
-    # Given a date represented as a string, turn it into a datetime object and return it
-    # https://stackoverflow.com/questions/466345/converting-string-into-datetime
+    Given a date represented as a string, turn it into a datetime object and return it
+    It can handle many different formats - it's very flexible!
+
+    https://stackoverflow.com/questions/466345/converting-string-into-datetime
+
+    >>> string_to_date('monday, aug 15th 2015 at 8:40 pm')
+    datetime.datetime(2015, 8, 15, 20, 40)
+    >>> format_date(string_to_date('now'))
+    ans = Tue Aug 22, 2023 at 1:55:59PM
+    >>> format_date(string_to_date('7pm'))
+    ans = Tue Aug 22, 2023 at 7:00:00PM
+    >>> format_date(string_to_date('7am'))
+    ans = Tue Aug 22, 2023 at 7:00:00AM
+    >>> format_date(string_to_date('tomorrow 7am'))
+    ans = Wed Aug 23, 2023 at 7:00:00AM
+    >>> format_date(string_to_date('jan 18 1975'))
+    ans = Sat Jan 18, 1975 at 12:00:00AM
+    >>> format_date(string_to_date('jan 18 1975 at 4:30pm 35 seconds'))
+    ans = Sat Jan 18, 1975 at 4:30:35PM
+    >>> format_date(string_to_date('Sat Jan 18, 1975 at 4:30:35PM'))
+    ans = Sat Jan 18, 1975 at 4:30:35AM
+    >>> format_date(string_to_date('2023-08-28 00:00:00'))
+    ans = Mon Aug 28, 2023 at 12:00:00AM
     """
     timestring=pip_import('timestring')
     return timestring.Date(string).date
