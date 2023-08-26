@@ -10392,8 +10392,8 @@ def _view_image_via_textual_imageview(image):
             delete_file(path)
 
 def _view_with_pyfx(data):
-    from pyfx.app import PyfxApp
-    from pyfx.model import DataSourceType
+    from rp.libs.pyfx.app import PyfxApp
+    from rp.libs.pyfx.model import DataSourceType
 
     if isinstance(data,str) and not '\n' in data and is_utf8_file(data):
         if data.endswith('.json'):
