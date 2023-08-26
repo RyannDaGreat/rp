@@ -17407,7 +17407,7 @@ def rp_iglob(*files, follow_symlinks=False, check_exists=False):
                     if follow_symlinks or not os.path.islink(filepath):
                         yield filepath
         else:
-            raise TypeError(f"Unsupported type: {type(file_pattern)}")
+            raise TypeError("Unsupported type: "+str(type(file_pattern))+")")
 
 def rp_glob(*args,**kwargs):
     return list(rp_iglob(*args,**kwargs))
