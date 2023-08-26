@@ -1010,6 +1010,7 @@ PSEUDO TERMINAL COMMANDS:
 			You can also do "?.fourier" to search *non-interactively* for the query "fourier". Good for when you aren't running this in a terminal, or you want to record the output. Press control+c to cancel it prematurely.
 			You can also do "?.1" or "?.2" to search interactively with a maximum recursion depth of 1 or 2 respectively (or 3, or 4 etc - whatever floats your boat)
 		?v: Will attempt to edit the source code of the target in vim. Will position the cursor nicely for you in that file too.
+			For numpy images, it will instead launch an interactive image viewer in the terminal
 		?s: Will print str(target).
 		?t: Will let you interactively view a large numerical matrix or pandas table in a terminal. Equivalent to the TAB command.
 		?e: Will display information about each attribute of the target. If there are functions with no arguments, it evaluates them (such as __len__ etc). It uses the 'peepdis' library to do this (its on pypi).
