@@ -2187,6 +2187,139 @@ def is_valid_url(url:str)->bool:
         return all([result.scheme, result.netloc])
     except Exception:
         return False
+
+
+def _erase_terminal_line():
+    sys.stdout.write('\033[2K\033[1G')#erase and go to beginning of line https://stackoverflow.com/questions/5290994/remove-and-replace-printed-items
+
+def load_files(
+    load_file,
+    file_paths,
+    num_threads:int=None,
+    show_progress=False,
+    strict=True,
+    include_paths=False,
+):
+    """
+    Load a list of files with optional multithreading.
+
+    - load_file (function): A function to load a single file. Expected signature: load_file(str) -> any.
+    - file_paths (iterable): Paths to the files to be loaded. It's ok if this iterator is slow - paths are loaded concurrently with files.
+    - num_threads (int, optional): Number of threads for concurrent loading. Defaults to 32 if set to None. If set to 0, runs on the main thread.
+    - show_progress (True, False, 'eta' or 'tqdm'): Whether to show a progress bar. If set to 'tqdm', uses tqdm library. If set to 'eta', uses rp.eta. Defaults to False.
+    - strict (True, False, or None): Behavior if a file fails to load. True throws an error, False skips the file, None yields None.
+    - include_paths (bool): If True, yields (path, content) tuples instead of just the contents of each file.
+
+    Yields:
+    - any or None: The content of each file, or None if the file fails to load and strict is set to None.
+                   Or, if include_paths is True, will return tuples of (path, content) instead.
+
+    This function is a generator that yields the loaded files one by one.
+
+
+    TODO: This function is more powerful than the arg names and function name imply. This could be used for general-purpose parallelism with loading bars and error handling. Make a more generalized version of this function and then re-implement a shorter version of this function that uses it.
+    TODO: Make a save_files version of this - big question: can a save_files function be implemented with the load_files function (and more elegantly with the above generalized version?)
+    TODO: The eta can't display a specific message like "loading images" etc - it's locked to load_files right now. How can I *elegantly* allow this naming but also allow it to use tqdm? 
+    TODO: Make convert_image_files take advantage of this function
+    """
+
+    assert strict is True or strict is False or strict is None, "The 'strict' parameter must be set to either True, False, or None."
+    assert show_progress in {True, False, "tqdm", "eta"} or isinstance(show_progress, str) and starts_with_any(show_progress, 'eta:'), "The 'show_progress' parameter must be either True, False, or 'tqdm'."
+    assert num_threads is None or isinstance(num_threads, int) and num_threads >= 0, "Must have at least 1 thread, or set num_threads=0 to run in the main thread only"
+    assert is_iterable(file_paths), 'rp.load_files: file_paths must be iterable, but type(file_paths) is '+str(type(file_paths))
+    assert is_callable(load_file), 'rp.load_files: load_file must be a function that takes a file path and returns a value, but type(load_file) is '+str(type(load_file))
+
+    if num_threads is None:
+        # Choose a nice default value
+        num_threads = 32 
+
+    SKIP = object()  # Special object indicating a skipped file
+    cancelled = None  # Will be set if any thread, including the main thread, throws an error
+
+    # Define progress_func here...
+    if show_progress:
+        file_paths = list(file_paths)
+        assert hasattr(file_paths,"__len__"), "Cannot show progress because file_paths doesnt have a length"
+        num_paths = len(file_paths)
+
+    if show_progress == "tqdm":
+        pip_import('tqdm') # Ensures tqdm is installed
+        from tqdm import tqdm
+        pbar = tqdm(total=num_paths)
+        def progress_func(action):
+            if action == "update":
+                pbar.update(1)
+            elif action == "done":
+                pbar.close()
+
+    elif show_progress == True or isinstance(show_progress, str) and (show_progress=='eta' or show_progress.startswith('eta:')):
+        eta_title = 'Loading Files'
+        if isinstance(show_progress, str) and show_progress.startswith('eta:'):
+            # This is currently-undocumented functionality, used internally in rp. Maybe I'll document it in the future
+            eta_title = show_progress[len('eta:'):]
+        show_eta = eta(num_paths, title=eta_title)
+        num_yielded = 0
+        start_time = gtoc()
+        def progress_func(action):
+            nonlocal num_yielded
+            if action == "update":
+                num_yielded += 1
+                show_eta(num_yielded)
+            elif action == "done":
+                elapsed_time = gtoc() - start_time
+                _erase_terminal_line()
+                print("load_files: Done! Loaded %i files in %.3f seconds"%(num_yielded, elapsed_time))#This is here because of the specifics of the eta function we're using to display progress
+
+    else:
+        def progress_func(action):
+            pass
+
+
+    def _load_file(path):
+
+        nonlocal cancelled
+        if cancelled:
+            raise cancelled
+
+        try:
+            content = load_file(path)
+        except BaseException as e:
+            if strict is True:
+                cancelled = e
+                raise
+            elif strict is False:
+                content = SKIP
+            else:
+                assert strict is None
+                content = None
+        
+        progress_func("update")
+        
+        if content is SKIP or not include_paths:
+            return content
+        return path, content
+    
+    def skip_filter(iterable):
+        return filter(lambda x: x is not SKIP, iterable)
+
+    try:
+        if not num_threads:
+            # Load all the files in the main thread
+            yield from skip_filter(map(_load_file, file_paths))
+        else:
+            # Load files with multiple threads
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=num_threads) as executor:
+                yield from skip_filter(executor.map(_load_file, file_paths))
+
+        progress_func("done")
+
+    except BaseException as e:
+        cancelled = e
+        raise
+
+
+
 # region  Saving/Loading Images: ［load_image，load_image_from_url，save_image，save_image_jpg］
 
 
@@ -2282,7 +2415,7 @@ class LazyLoadedImages:
     def __len__(self):
         return len(self.image_paths)
 
-def load_images(*locations,use_cache=False,show_progress=False,strict=True):
+def load_images(*locations,use_cache=False,show_progress=False,num_threads=None,strict=True):
     #Simply the plural form of load_image
     #This is much faster than using load_image sequentially because it's multithreaded. I've had performance boosts of up to 8x speed
     #This function will throw an error if any one of the images fails to load
@@ -2305,6 +2438,12 @@ def load_images(*locations,use_cache=False,show_progress=False,strict=True):
         return load_images(locations,use_cache=use_cache,show_progress=show_progress,strict=strict)
     if isinstance(locations,str):
         locations=[locations]
+
+    if show_progress in ['eta',True]: show_progress='eta:Loading Images'
+    return list(load_files(lambda path:load_image(path,use_cache=use_cache), locations, show_progress=show_progress, strict=strict, num_threads=num_threads))
+
+    """
+    #The below code works perfectly fine! But since load_files (implemented much later, and actually based on the below code) has a variable number of threads, it's just a teeny bit faster, and now makes this function more concise
 
     if show_progress:
         number_of_images_loaded=0
@@ -2361,6 +2500,7 @@ def load_images(*locations,use_cache=False,show_progress=False,strict=True):
         print('rp.load_images: Done! Loaded %i images in %.3f seconds'%(len(images),elapsed_time))#This is here because of the specifics of the eta function we're using to display progress
 
     return images
+    """
 
 
 #     output=[]
@@ -5972,6 +6112,19 @@ def text_file_to_string(file_path: str,use_cache=False) -> str:
         #UnicodeDecodeError: 'ascii' codec can't decode byte 0xc3 in position 4781: ordinal not in range(128)
         return open(file_path, encoding='latin').read()
 
+# load_text_file = text_file_to_string
+
+def load_text_files(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False):
+    """
+    Plural of text_file_to_string
+    Please see load_files and rp_iglob for more information
+    Yields the strings as a generator
+    """
+    paths = rp_iglob(paths)
+    load_file = lambda path: text_file_to_string(path, use_cache=use_cache)
+    if show_progress in ['eta',True]: show_progress='eta:Loading text files'
+    yield from load_files(load_file, paths, use_cache=use_cache, show_progress=show_progress, strict=strict, num_threads=num_threads)
+
 def append_line_to_file(line:str,file_path:str):
     #Adds a line to the end of a text file, or creates a new text file if none exists
     if not file_exists(file_path):
@@ -5983,10 +6136,21 @@ def append_line_to_file(line:str,file_path:str):
         finally:
             file.close()
 
-def load_json(path):
-    text=text_file_to_string(path)
+def load_json(path, use_cache=False):
+    text=text_file_to_string(path, use_cache=use_cache)
     import json
     return json.loads(text)
+
+def load_jsons(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False):
+    """
+    Plural of load_json
+    Please see load_files and rp_iglob for more information
+    Yields the jsons as an iterator
+    """
+    paths = rp_iglob(paths)
+    load_file = lambda path: load_json(path, use_cache=use_cache)
+    if show_progress in ['eta',True]: show_progress='eta:Loading JSON files'
+    yield from load_files(load_file, paths, show_progress=show_progress, strict=strict, num_threads=num_threads)
 
 def save_json(data,path,*,pretty=False):
     import json
@@ -5995,6 +6159,238 @@ def save_json(data,path,*,pretty=False):
     else:
         text=json.dumps(data)
     return string_to_text_file(path,text)
+
+def load_yaml_file(path, use_cache=False):
+    #EXAMPLE:
+    #    >>> load_yaml_file('alphablock_without_ssim_256.yaml')
+    #    ans = {'max_iter': 300000, 'batch_size': 5, 'image_save_iter': 250, ...(etc)... }
+    pip_import('yaml')
+    import yaml
+    assert file_exists(path)
+    text=text_file_to_string(path, use_cache=use_cache)
+    data=yaml.safe_load(text)
+    return data
+
+def load_yaml_files(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False):
+    """
+    Plural of load_yaml_file
+    Please see load_files and rp_iglob for more information
+    Yields the jsons as an iterator
+    """
+    paths = rp_iglob(paths)
+    load_file = lambda path: load_yaml_file(path, use_cache=use_cache)
+    if show_progress in ['eta',True]: show_progress='eta:Loading YAML files'
+    yield from load_files(load_file, paths, show_progress=show_progress, strict=strict, num_threads=num_threads)
+
+def parse_dyaml(code:str)->dict:
+    #This is like DJSON, except for YAML
+    #TODO: Migrate this function into its own module.
+    #Look at the test_parse_dyaml_junctions() function to see how this language works, it's pretty simple
+    #The only differences between this and YAML:
+    #   - When a key has multiple colons in it, like a:b:c:, it's equivalent to multiple lines of keys
+    #   - When a key has commas in it, its value is duplicated
+    #This was used in the TRITON codebase's config files!
+
+    assert isinstance(code,str)
+
+            
+    class Junction:
+        def __init__(self,key,value):
+            self.key  =key
+            self.value=value
+            
+        def __repr__(self):
+            #           u250c                           u2510
+            #           u2502   u250c        u2510              u2502      u250c          u2510
+            return fansi(str(self.key) + ":", "cyan") + str(self.value)
+            #           u2502   u2514        u2518              u2502      u2514          u2518
+            #           u2514                           u2518
+        
+        def __iter__(self):
+            yield self.key
+            yield self.value
+          
+        @property
+        def is_leaf(self):  
+            return not isinstance(self.value, JunctionList)
+            
+    class JunctionList(list):
+        #In this module, every JunctionList created is a list of Junction instances
+        pass
+
+    def handle_key_colons(junction)->Junction:
+        #If we have a key like "a:b:c",
+        #Make [a:b:c: z] into [a:[b:[c:z]]]
+        #EXAMPLE:
+        #     >>> handle_key_colons(Junction('a:b:c','z'))
+        #    ans = a:[b:[c:z]]
+        key,value=junction
+        assert isinstance(key,str)
+        path=key.split(':')
+        output=value
+        for sub_key in path[::-1]:
+            output=Junction(sub_key,output)
+            output=[output]
+            output=JunctionList(output)
+        return output[0]
+
+    def split_colon_keys(junctions)->JunctionList:
+        output=JunctionList()
+        for junction in junctions:
+            if not junction.is_leaf:
+                junction.value=split_colon_keys(junction.value)
+            junction=handle_key_colons(junction)
+            output.append(junction)
+        return output
+            
+
+    def parse_dyaml_junctions(src)->JunctionList:
+        # https://stackoverflow.com/questions/44904290/getting-duplicate-keys-in-yaml-using-python
+        # We deliberately define a fresh class inside the function,
+        # because add_constructor is a class method and we don't want to
+        # mutate pyyaml classes.
+
+        pip_import('yaml','PyYAML')
+        
+        import yaml
+        
+        class PreserveDuplicatesLoader(yaml.loader.Loader):
+            pass
+
+        def map_constructor(loader, node):
+            """Walk the mapping, recording any duplicate keys."""
+            
+            deep=False
+            mapping=JunctionList()
+            for key_node, value_node in node.value:
+                key = loader.construct_object(key_node, deep=deep)
+                value = loader.construct_object(value_node, deep=deep)
+
+                #mapping.setdefault(key,[]).append(value)
+                mapping.append(Junction(key,value))
+
+            return mapping
+
+        PreserveDuplicatesLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, map_constructor)
+        
+        return yaml.load(src, PreserveDuplicatesLoader)
+
+    def expand_comma_keys(junctions) -> JunctionList:
+        #Note that there may be duplicate lists in multiple places
+        #This saves memory
+        
+        assert isinstance(junctions, JunctionList)
+        
+        from copy import deepcopy
+
+        output = JunctionList()
+
+        for key,value in junctions:
+            if isinstance(value, JunctionList):
+                value=expand_comma_keys(value)
+            for sub_key in key.split(','):
+                value=deepcopy(value)
+                junction = Junction(sub_key, value)
+                output.append(junction)
+                
+        return output
+
+    def apply_deltas_from_junctions(junctions:JunctionList,recipient:dict):
+        #Apply all the junctions as deltas
+        
+        for key,value in junctions:
+            if isinstance(value,JunctionList):
+                apply_deltas_from_junctions(value,recipient.setdefault(key,{}))
+            else:
+                recipient[key]=value
+        return recipient
+
+    def junctions_to_dict(junctions:JunctionList)->dict:
+        output={}
+        return apply_deltas_from_junctions(junctions,{})
+
+    def parse_dyaml(src)->dict:
+        junctions=parse_dyaml_junctions(src)
+        junctions=split_colon_keys(junctions)
+        junctions=expand_comma_keys(junctions)
+        return junctions_to_dict(junctions)
+
+    def test_parse_dyaml_junctions():
+
+        code="""
+        a:
+            b:
+                c: boochy
+            b,q:
+                c,d: creepy
+            b:
+                c: cri
+        a:b:
+                e: {"Hil":87}
+        w,x:y,z: pup
+        """
+
+        print(code)
+        print(parenthesizer_automator(str(                                   parse_dyaml_junctions(code)  )))
+        print(parenthesizer_automator(str(                  split_colon_keys(parse_dyaml_junctions(code)) )))
+        print(parenthesizer_automator(str(expand_comma_keys(split_colon_keys(parse_dyaml_junctions(code))))))
+        print(parenthesizer_automator(str(parse_dyaml(code))))
+
+        # RESULT:
+        #        a:
+        #            b:
+        #                c: boochy
+        #            b,q:
+        #                c,d: creepy
+        #            b:
+        #                c: cri
+        #        a:b:
+        #                e: {"Hil":87}
+        #        w,x:y,z: pup
+        #    
+        #    ┌                                                                            ┐
+        #    │  ┌                                         ┐      ┌          ┐             │
+        #    │  │  ┌        ┐      ┌          ┐    ┌     ┐│      │  ┌      ┐│             │
+        #    [a:[b:[c:boochy], b,q:[c,d:creepy], b:[c:cri]], a:b:[e:[Hil:87]], w,x:y,z:pup]
+        #    │  │  └        ┘      └          ┘    └     ┘│      │  └      ┘│             │
+        #    │  └                                         ┘      └          ┘             │
+        #    └                                                                            ┘
+        #    ┌                                                                                ┐
+        #    │                                                 ┌              ┐               │
+        #    │  ┌                                         ┐    │  ┌          ┐│               │
+        #    │  │  ┌        ┐      ┌          ┐    ┌     ┐│    │  │  ┌      ┐││      ┌       ┐│
+        #    [a:[b:[c:boochy], b,q:[c,d:creepy], b:[c:cri]], a:[b:[e:[Hil:87]]], w,x:[y,z:pup]]
+        #    │  │  └        ┘      └          ┘    └     ┘│    │  │  └      ┘││      └       ┘│
+        #    │  └                                         ┘    │  └          ┘│               │
+        #    │                                                 └              ┘               │
+        #    └                                                                                ┘
+        #    ┌                                                                                                                                   ┐
+        #    │                                                                               ┌              ┐                                    │
+        #    │  ┌                                                                       ┐    │  ┌          ┐│                                    │
+        #    │  │  ┌        ┐    ┌                  ┐    ┌                  ┐    ┌     ┐│    │  │  ┌      ┐││    ┌            ┐    ┌            ┐│
+        #    [a:[b:[c:boochy], b:[c:creepy, d:creepy], q:[c:creepy, d:creepy], b:[c:cri]], a:[b:[e:[Hil:87]]], w:[y:pup, z:pup], x:[y:pup, z:pup]]
+        #    │  │  └        ┘    └                  ┘    └                  ┘    └     ┘│    │  │  └      ┘││    └            ┘    └            ┘│
+        #    │  └                                                                       ┘    │  └          ┘│                                    │
+        #    │                                                                               └              ┘                                    │
+        #    └                                                                                                                                   ┘
+        #    ┌                                                                                                                                                            ┐
+        #    │     ┌                                                                                       ┐                                                              │
+        #    │     │     ┌                                           ┐                                     │                                                              │
+        #    │     │     │                                ┌         ┐│       ┌                            ┐│       ┌                      ┐       ┌                      ┐│
+        #    {'a': {'b': {'c': 'cri', 'd': 'creepy', 'e': {'Hil': 87}}, 'q': {'c': 'creepy', 'd': 'creepy'}}, 'w': {'y': 'pup', 'z': 'pup'}, 'x': {'y': 'pup', 'z': 'pup'}}
+        #    │     │     │                                └         ┘│       └                            ┘│       └                      ┘       └                      ┘│
+        #    │     │     └                                           ┘                                     │                                                              │
+        #    │     └                                                                                       ┘                                                              │
+        #    └                                                                                                                                                            ┘
+
+    return parse_dyaml(code)
+
+def load_dyaml_file(path:str)->dict:
+    assert file_exists(path)
+    code=text_file_to_string(path)
+    return parse_dyaml(code)
+
+
 
 # endregion
 # region MATLAB Integration: ［matlab_session，matlab，matlab_pseudo_terminal］
@@ -6699,6 +7095,15 @@ sync_sort=sync_sorted#For backwards compatiability
 # def sync_sorted(*lists_in_descending_sorting_priority,key=identity):
 #         # Sorts main_list and reorders all *lists_in_descending_sorting_priority the same way, in sync with main_list
 #         return tuple(zip(*sorted(zip(*lists_in_descending_sorting_priority),key=lambda x:tuple(map(key,x)))))
+
+def starts_with_any(string,*prefixes):
+    prefixes=detuple(prefixes)
+    return any(string.startswith(x) for x in prefixes)
+
+def ends_with_any(string,*suffixes):
+    prefixes=detuple(prefixes)
+    return any(string.endswith(x) for x in suffixes)
+
     
 def _contains_func_y(y):
     #Used in contains_any, contains_all, in_any, in_all
@@ -9967,6 +10372,25 @@ def _get_env_info():
     
     return get_env_info()
 
+def _view_image_via_textual_imageview(image):
+    #Views image in a terminal
+    assert isinstance(image,str) or is_image(image)
+    
+    pip_import('textual_imageview','textual-imageview')
+    import textual_imageview.app
+    
+    if isinstance(image,str):
+        app = textual_imageview.app.ImageViewerApp(image)
+        app.run()
+    else:
+        assert is_image(image)
+        try:
+            path=temporary_file_path('png')
+            save_image(image, path)
+            _view_image_via_textual_imageview(path)
+        finally:
+            delete_file(path)
+
 def _view_with_pyfx(data):
     from pyfx.app import PyfxApp
     from pyfx.model import DataSourceType
@@ -11887,17 +12311,25 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                     # endregion
                     # region  Short-hand rinsp
                     elif user_message=='?v' or user_message=='VIMA':
-                        if user_message=='VIMA':
-                            fansi_print("VIMA (VIM ans) is an alias for ?v","blue",'bold',)
-                        fansi_print("?v --> Running rp.vim(ans)...","blue",'bold',new_line=False)
-                        vim(get_ans())
-                        fansi_print("done!","blue",'bold')
+                        if not is_image(get_ans()):
+                            if user_message=='VIMA':
+                                fansi_print("VIMA (VIM ans) is an alias for ?v","blue",'bold',)
+                            fansi_print("?v --> Running rp.vim(ans)...","blue",'bold',new_line=False)
+                            vim(get_ans())
+                            fansi_print("done!","blue",'bold')
+                        else:
+                            fansi_print("?v --> Viewing image in terminal interactively","blue",'bold',new_line=False)
+                            _view_image_via_textual_imageview(get_ans())
                     elif user_message.endswith('?v') and not '\n' in user_message:
-                        fansi_print("?v --> Running rp.vim(%s)..."%user_message,"blue",'bold',new_line=False)
                         user_message=user_message[:-2]
                         value=eval(user_message,scope())
-                        fansi_print("done!","blue",'bold')
-                        vim(value)
+                        if not is_image(value):
+                            fansi_print("?v --> Running rp.vim(%s)..."%user_message,"blue",'bold',new_line=False)
+                            fansi_print("done!","blue",'bold')
+                            vim(value)
+                        else:
+                            fansi_print("?v --> Viewing image in terminal interactively","blue",'bold',new_line=False)
+                            _view_image_via_textual_imageview(value)
                     elif user_message=='?s':
                         fansi_print("?s --> string viewer --> shows str(ans)","blue",'bold')
                         string=str(get_ans())
@@ -12408,6 +12840,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             if user_message=='ACATA':
                                 fansi_print('ACATA --> ans CAT ans --> Copies the contents of the file or url at \'ans\' to ans','blue','bold')
                                 user_message='ACAT '+str(get_ans())
+
                                 
                             if user_message=='ACAT':
                                 fansi_print('ACAT --> ans CAT --> Copies a file\'s contents to ans --> Please select a file!','blue','bold')
@@ -12424,7 +12857,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     #They're best used as code!
                                     user_message="""ans=__import__("rp").extract_code_from_ipynb(%s)"""%repr(file_name)
                                 else: 
-                                    user_message='ans='+repr(_load_text_from_file_or_url(file_name))
+                                    text_len_threshold = 10000  # If it's longer than this we just put the load text command to make the history cleaner...
+                                    text_set_command = repr(_load_text_from_file_or_url(file_name))
+                                    if len(text_set_command) > text_len_threshold:
+                                        text_set_command = '__import__("rp").text_file_to_string(%s)'%repr(file_name)
+                                    user_message='ans='+text_set_command
                             except UnicodeDecodeError:
                                 if is_video_file(file_name):
                                     user_message='ans=__import__("rp").load_video(%s)'%repr(file_name)
@@ -16855,6 +17292,128 @@ def random_file(folder=None):
         return path_join(folder,output) #Return something like './__main__.py'
 #endregion
 
+
+def _has_globbing_characters(pattern):
+    """
+    Check if a pattern string contains any of the special globbing characters used by Python's glob module.
+
+    Special globbing characters in Python's glob module are exhaustively:
+    * : Matches any number of any characters including none
+    ? : Matches any single character
+    [ : Marks the start of a character class
+    ] : Marks the end of a character class
+
+    Note: As of the last update in September 2021, these special characters are not listed programmatically
+    within the Python glob module itself but are described in its documentation.
+
+    Args:
+    pattern (str): The pattern string to check.
+
+    Returns:
+    bool: True if the pattern contains special globbing characters, False otherwise.
+    """
+    import re
+    return bool(re.search(r'[\*\?\[\]]', pattern))
+
+
+def rp_iglob(*files, follow_symlinks=False, check_exists=False):
+    '''
+    Generator that recursively yields file paths based on glob-like patterns, multi-line 
+    strings, or iterables like lists and file objects. Suitable for streaming large sets 
+    of file paths without loading them all into memory at once.
+    
+    Parameters:
+        - *files: Accepts one or more glob-like patterns, multi-line strings, or iterables 
+                  like lists or file objects.
+        - follow_symlinks (bool): Whether to follow symbolic links when encountered. This is 
+                                  particularly relevant when using glob patterns that are 
+                                  inherently recursive like '**/*'.
+        - check_exists (bool): If True, filters out paths that don't exist. It's useful to 
+                               disable this for many reasons, including that doing that can be slow.
+                               Default glob.glob behaviour eliminates nonexistent files though, so:
+                                   assert glob.glob('file_that_doesnt_exist.txt')==[]
+                               Inconsistent with default glob.glob, we default check_exists=False
+                  
+    Yields:
+        - File paths as strings that match the given patterns.
+    
+    Examples:
+    
+        1. Using simple globs
+            for filepath in rp_iglob("*.txt"):
+                print(filepath)
+        
+        2. Using multi-line strings
+            multi_line_str = """
+            *.txt
+            *.md
+            """
+            for filepath in rp_iglob(multi_line_str):
+                print(filepath)
+        
+        3. Using a list of patterns
+            patterns = ["*.txt", "*.md"]
+            for filepath in rp_iglob(patterns):
+                print(filepath)
+        
+        4. Using a file object
+            with open("file_patterns.txt", "r") as f:
+                for filepath in rp_iglob(f):
+                    print(filepath)
+        
+        5. Mixing multiple types
+            patterns = ["*.txt", "*.md"]
+            multi_line_str = """
+            *.py
+            *.json
+            """
+            with open("file_patterns.txt", "r") as f:
+                for filepath in rp_iglob("*.csv", patterns, multi_line_str, f):
+                    print(filepath)
+        
+        6. Using recursion to search sub-directories
+            for filepath in rp_iglob("**/*.txt"):
+                print(filepath)
+        
+        7. Gets all files/folders recursively but doesnt go into symlinks
+            for filepath in rp_iglob("**", follow_symlinks=False):
+                print(filepath)
+    
+    Edge Cases:
+    
+        1. Unsupported type: Raises TypeError if an unsupported type is encountered.
+        2. Empty lines in multi-line string: Ignored.
+        
+    '''
+    import glob
+    import os
+    for file_pattern in files:
+        # If the input is a multi-line string
+        if isinstance(file_pattern, str) and '\n' in file_pattern:
+            for line in file_pattern.strip().split('\n'):
+                if line:  # Skip empty lines
+                    yield from rp_iglob(line, follow_symlinks=follow_symlinks)
+        # If the input is an iterable but not a str (e.g., a list or a file object)
+        elif not isinstance(file_pattern, str) and hasattr(file_pattern, '__iter__'):
+            for item in file_pattern:
+                if item:  # Skip empty lines/items
+                    yield from rp_iglob(item, follow_symlinks=follow_symlinks)
+        # If the input is a single-line string
+        elif isinstance(file_pattern, str):
+            if not _has_globbing_characters(file_pattern) and not check_exists:
+                yield file_pattern
+            else:
+                for filepath in glob.iglob(file_pattern, recursive=True):  # Enable recursion
+                    if follow_symlinks or not os.path.islink(filepath):
+                        yield filepath
+        else:
+            raise TypeError(f"Unsupported type: {type(file_pattern)}")
+
+def rp_glob(*args,**kwargs):
+    return list(rp_iglob(*args,**kwargs))
+
+
+
 def fractional_integral_in_frequency_domain(coefficients,n=1):
     #WARNING: Make sure to use the right kind of fft (np.fft.rfft vs np.fft.fft)
     #This function integrates or differentiates signals using just their fourier coefficients, and returns a new set coefficients
@@ -17604,6 +18163,67 @@ def float_color_to_byte_color(float_color):
 def float_color_to_hex_color(float_color):
     return byte_color_to_hex_color(float_color_to_byte_color(float_color))
 
+def color_name_to_float_color(color_name: str):
+    """
+    Given a color name, this function returns an RGB float color
+    EXAMPLE:
+        assert color_name_to_float_color('green') == (0., 1., 0.)
+    """
+    assert isinstance(color_name, str)
+    color_name = color_name.strip()
+    color_name = color_name.lower()
+    color_name = color_name.replace("_", "")
+    color_name = color_name.replace(" ", "")
+
+    rp_colors = dict(
+        # My color definitions
+        red=(1.0, 0.0, 0.0),
+        green=(0.0, 1.0, 0.0),
+        blue=(0.0, 0.0, 1.0),
+        cyan=(0.0, 1.0, 1.0),
+        magenta=(1.0, 0.0, 1.0),
+        yellow=(1.0, 1.0, 0.0),
+        white=(1.0, 1.0, 1.0),
+        black=(0.0, 0.0, 0.0),
+        grey=(0.5, 0.5, 0.5),
+        gray=(0.5, 0.5, 0.5),
+        orange=(1.0, 0.5, 0.0),
+        purple=(1.0, 0.5, 0.0),
+        # CSS3 Weird Names
+        aqua=(0.0, 1.0, 1.0),
+        lime=(0.0, 1.0, 0.0),
+        fuchsia=(1.0, 0.0, 1.0),
+        # CSS3 Names with perfect fractions
+        chartreuse=(0.5, 1.0, 0.0),
+        darkblue=(0.0, 0.0, 0.5),
+        darkcyan=(0.0, 0.5, 0.5),
+        darkmagenta=(0.5, 0.0, 0.5),
+        darkred=(0.5, 0.0, 0.0),
+        maroon=(0.5, 0.0, 0.0),
+        navy=(0.0, 0.0, 0.5),
+        olive=(0.5, 0.5, 0.0),
+        teal=(0.0, 0.5, 0.5),
+        silver=(0.8, 0.8, 0.8),
+    )
+
+    if color_name in rp_colors:
+        return rp_colors[color_name]
+
+    else:
+        # Use CSS3 webcolors
+        # There are only 147 webcolors - we can probably inline this
+        pip_import("webcolors")
+        import webcolors
+
+        hex_color = webcolors.name_to_hex(color_name)
+        float_color = hex_color_to_float_color(hex_color)
+        return float_color
+
+def color_name_to_byte_color(color_name):
+    return float_color_to_byte_color(color_name_to_float_color(color_name))
+
+def color_name_to_hex_color(color_name):
+    return float_color_to_hex_color(color_name_to_float_color(color_name))
 
 def get_color_hue(color):
     assert is_float_color(color),'For now, get_color_hue only works with float_colors and returns a float between 0 and 1'
@@ -19579,6 +20199,31 @@ def edit_distance(string_from, string_to):
     return tbl[i,j]
 levenshtein_distance=edit_distance#Synonyms, for now...
 
+def edit_image_in_terminal(image):
+    #Silly function that launches mspaint on an image in the terminal
+    #Not very practical but fun
+    #This function isn't written well at the moment - if the saved image > 500kb it breaks becuase of a built-in parameter in textual_paint
+    #You can change that variable in their source code
+    pip_import('textual_paint','textual-paint')
+    assert currently_in_a_tty()
+    assert isinstance(image,str) or is_image(image)
+    if isinstance(image,str):
+        assert is_image_file(image)
+        image=load_image(image)
+        os.system('textual-paint '+repr(path))
+        edited=load_image(path)
+        return edited
+    else:
+        image=resize_image_to_fit(image,512,512, allow_growth=False) #If it's too big it will be super duper slow!
+        path=temporary_file_path('png')
+        try:
+            save_image(image,path)
+        finally:
+            delete_file(path)
+    return edited
+
+    
+    
 class Timeout:  
     #TODO: Make this work on windows (I won't think it will work on anything but UNIX because of the signal handling)
     # https://stackoverflow.com/questions/2281850/timeout-function-if-it-takes-too-long-to-finish
@@ -24733,18 +25378,6 @@ def select_torch_device(n=0, *, silent=False, prefer_used=False):
     return output
 
         
-
-def load_yaml_file(path):
-    #EXAMPLE:
-    #    >>> load_yaml_file('alphablock_without_ssim_256.yaml')
-    #    ans = {'max_iter': 300000, 'batch_size': 5, 'image_save_iter': 250, ...(etc)... }
-    pip_import('yaml')
-    import yaml
-    assert file_exists(path)
-    text=text_file_to_string(path)
-    data=yaml.safe_load(text)
-    return data
-
 def _removestar(code:str):
     #Takes something like:
     #    from numpy import *
@@ -24835,213 +25468,6 @@ class DictReader:
 
     def __repr__(self):
         return 'DictReader('+repr(self._data)+')'
-
-def parse_dyaml(code:str)->dict:
-    #This is like DJSON, except for YAML
-    #TODO: Migrate this function into its own module.
-    #Look at the test_parse_dyaml_junctions() function to see how this language works, it's pretty simple
-    #The only differences between this and YAML:
-    #   - When a key has multiple colons in it, like a:b:c:, it's equivalent to multiple lines of keys
-    #   - When a key has commas in it, its value is duplicated
-    
-    assert isinstance(code,str)
-
-            
-    class Junction:
-        def __init__(self,key,value):
-            self.key  =key
-            self.value=value
-            
-        def __repr__(self):
-            #           u250c                           u2510
-            #           u2502   u250c        u2510              u2502      u250c          u2510
-            return fansi(str(self.key) + ":", "cyan") + str(self.value)
-            #           u2502   u2514        u2518              u2502      u2514          u2518
-            #           u2514                           u2518
-        
-        def __iter__(self):
-            yield self.key
-            yield self.value
-          
-        @property
-        def is_leaf(self):  
-            return not isinstance(self.value, JunctionList)
-            
-    class JunctionList(list):
-        #In this module, every JunctionList created is a list of Junction instances
-        pass
-
-    def handle_key_colons(junction)->Junction:
-        #If we have a key like "a:b:c",
-        #Make [a:b:c: z] into [a:[b:[c:z]]]
-        #EXAMPLE:
-        #     >>> handle_key_colons(Junction('a:b:c','z'))
-        #    ans = a:[b:[c:z]]
-        key,value=junction
-        assert isinstance(key,str)
-        path=key.split(':')
-        output=value
-        for sub_key in path[::-1]:
-            output=Junction(sub_key,output)
-            output=[output]
-            output=JunctionList(output)
-        return output[0]
-
-    def split_colon_keys(junctions)->JunctionList:
-        output=JunctionList()
-        for junction in junctions:
-            if not junction.is_leaf:
-                junction.value=split_colon_keys(junction.value)
-            junction=handle_key_colons(junction)
-            output.append(junction)
-        return output
-            
-
-    def parse_dyaml_junctions(src)->JunctionList:
-        # https://stackoverflow.com/questions/44904290/getting-duplicate-keys-in-yaml-using-python
-        # We deliberately define a fresh class inside the function,
-        # because add_constructor is a class method and we don't want to
-        # mutate pyyaml classes.
-
-        pip_import('yaml','PyYAML')
-        
-        import yaml
-        
-        class PreserveDuplicatesLoader(yaml.loader.Loader):
-            pass
-
-        def map_constructor(loader, node):
-            """Walk the mapping, recording any duplicate keys."""
-            
-            deep=False
-            mapping=JunctionList()
-            for key_node, value_node in node.value:
-                key = loader.construct_object(key_node, deep=deep)
-                value = loader.construct_object(value_node, deep=deep)
-
-                #mapping.setdefault(key,[]).append(value)
-                mapping.append(Junction(key,value))
-
-            return mapping
-
-        PreserveDuplicatesLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, map_constructor)
-        
-        return yaml.load(src, PreserveDuplicatesLoader)
-
-    def expand_comma_keys(junctions) -> JunctionList:
-        #Note that there may be duplicate lists in multiple places
-        #This saves memory
-        
-        assert isinstance(junctions, JunctionList)
-        
-        from copy import deepcopy
-
-        output = JunctionList()
-
-        for key,value in junctions:
-            if isinstance(value, JunctionList):
-                value=expand_comma_keys(value)
-            for sub_key in key.split(','):
-                value=deepcopy(value)
-                junction = Junction(sub_key, value)
-                output.append(junction)
-                
-        return output
-
-    def apply_deltas_from_junctions(junctions:JunctionList,recipient:dict):
-        #Apply all the junctions as deltas
-        
-        for key,value in junctions:
-            if isinstance(value,JunctionList):
-                apply_deltas_from_junctions(value,recipient.setdefault(key,{}))
-            else:
-                recipient[key]=value
-        return recipient
-
-    def junctions_to_dict(junctions:JunctionList)->dict:
-        output={}
-        return apply_deltas_from_junctions(junctions,{})
-
-    def parse_dyaml(src)->dict:
-        junctions=parse_dyaml_junctions(src)
-        junctions=split_colon_keys(junctions)
-        junctions=expand_comma_keys(junctions)
-        return junctions_to_dict(junctions)
-
-    def test_parse_dyaml_junctions():
-
-        code="""
-        a:
-            b:
-                c: boochy
-            b,q:
-                c,d: creepy
-            b:
-                c: cri
-        a:b:
-                e: {"Hil":87}
-        w,x:y,z: pup
-        """
-
-        print(code)
-        print(parenthesizer_automator(str(                                   parse_dyaml_junctions(code)  )))
-        print(parenthesizer_automator(str(                  split_colon_keys(parse_dyaml_junctions(code)) )))
-        print(parenthesizer_automator(str(expand_comma_keys(split_colon_keys(parse_dyaml_junctions(code))))))
-        print(parenthesizer_automator(str(parse_dyaml(code))))
-
-        # RESULT:
-        #        a:
-        #            b:
-        #                c: boochy
-        #            b,q:
-        #                c,d: creepy
-        #            b:
-        #                c: cri
-        #        a:b:
-        #                e: {"Hil":87}
-        #        w,x:y,z: pup
-        #    
-        #    ┌                                                                            ┐
-        #    │  ┌                                         ┐      ┌          ┐             │
-        #    │  │  ┌        ┐      ┌          ┐    ┌     ┐│      │  ┌      ┐│             │
-        #    [a:[b:[c:boochy], b,q:[c,d:creepy], b:[c:cri]], a:b:[e:[Hil:87]], w,x:y,z:pup]
-        #    │  │  └        ┘      └          ┘    └     ┘│      │  └      ┘│             │
-        #    │  └                                         ┘      └          ┘             │
-        #    └                                                                            ┘
-        #    ┌                                                                                ┐
-        #    │                                                 ┌              ┐               │
-        #    │  ┌                                         ┐    │  ┌          ┐│               │
-        #    │  │  ┌        ┐      ┌          ┐    ┌     ┐│    │  │  ┌      ┐││      ┌       ┐│
-        #    [a:[b:[c:boochy], b,q:[c,d:creepy], b:[c:cri]], a:[b:[e:[Hil:87]]], w,x:[y,z:pup]]
-        #    │  │  └        ┘      └          ┘    └     ┘│    │  │  └      ┘││      └       ┘│
-        #    │  └                                         ┘    │  └          ┘│               │
-        #    │                                                 └              ┘               │
-        #    └                                                                                ┘
-        #    ┌                                                                                                                                   ┐
-        #    │                                                                               ┌              ┐                                    │
-        #    │  ┌                                                                       ┐    │  ┌          ┐│                                    │
-        #    │  │  ┌        ┐    ┌                  ┐    ┌                  ┐    ┌     ┐│    │  │  ┌      ┐││    ┌            ┐    ┌            ┐│
-        #    [a:[b:[c:boochy], b:[c:creepy, d:creepy], q:[c:creepy, d:creepy], b:[c:cri]], a:[b:[e:[Hil:87]]], w:[y:pup, z:pup], x:[y:pup, z:pup]]
-        #    │  │  └        ┘    └                  ┘    └                  ┘    └     ┘│    │  │  └      ┘││    └            ┘    └            ┘│
-        #    │  └                                                                       ┘    │  └          ┘│                                    │
-        #    │                                                                               └              ┘                                    │
-        #    └                                                                                                                                   ┘
-        #    ┌                                                                                                                                                            ┐
-        #    │     ┌                                                                                       ┐                                                              │
-        #    │     │     ┌                                           ┐                                     │                                                              │
-        #    │     │     │                                ┌         ┐│       ┌                            ┐│       ┌                      ┐       ┌                      ┐│
-        #    {'a': {'b': {'c': 'cri', 'd': 'creepy', 'e': {'Hil': 87}}, 'q': {'c': 'creepy', 'd': 'creepy'}}, 'w': {'y': 'pup', 'z': 'pup'}, 'x': {'y': 'pup', 'z': 'pup'}}
-        #    │     │     │                                └         ┘│       └                            ┘│       └                      ┘       └                      ┘│
-        #    │     │     └                                           ┘                                     │                                                              │
-        #    │     └                                                                                       ┘                                                              │
-        #    └                                                                                                                                                            ┘
-
-    return parse_dyaml(code)
-
-def load_dyaml_file(path:str)->dict:
-    assert file_exists(path)
-    code=text_file_to_string(path)
-    return parse_dyaml(code)
 
 if __name__ == "__main__":
     print(end='\r')

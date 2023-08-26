@@ -8,6 +8,7 @@ packages = [
     'PyYAML',
     'pyflann',#TODO: This needs to be fixed. It's broken for python3. It needs to be fixed using 2to3, and then inlined into this rp package. This is needed for flann_dict
     'Pyperclip',
+    'pyfx',
     'apriltag',
     'art',
     'astor',
@@ -97,6 +98,7 @@ packages = [
     'suplemon',
     'sympy',
     'tabview',
+    'textual-imageview',
     'timg',
     'torch',
     'transliterate',
