@@ -68,13 +68,10 @@
 /Users/Ryan/.ssh
 /Users/Ryan/.config/lazygit
 /Users/Ryan/Downloads
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/parso
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Users/Ryan/Desktop/CleanCode/Resume/Latex/Attempt1
 /Users/Ryan/.config/alacritty
 /Users/Ryan/Desktop/Aydin
-/Users/Ryan/PycharmProjects/QuickPython
 /Users/Ryan/PycharmProjects/QuickPython/rp-0.1.676
 /Users/Ryan/PycharmProjects/QuickPython/rp-0.1.676/rp
 /
@@ -84,5 +81,12 @@
 /Users/Ryan/Desktop/CleanCode/LightWave/NextGen
 /Users/Ryan/Desktop/CleanCode/LightWave/NextGen/axoloti
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/parso
+/Users/Ryan/PycharmProjects/QuickPython/rp/libs/pyflann
+/Users/Ryan/PycharmProjects/QuickPython/rp/libs/parso
+/Users/Ryan/PycharmProjects/QuickPython/rp/libs
+/Users/Ryan/PycharmProjects/QuickPython/rp
+/Users/Ryan/PycharmProjects/QuickPython
 /Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
