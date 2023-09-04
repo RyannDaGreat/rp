@@ -24796,6 +24796,7 @@ class AprilTag:
         return 'AprilTag(corners=%s, id_number=%i, family=%s)'%(repr(self.corners.tolist()),self.id_number,self.family)
         
 def detect_apriltags(image,family:str='tag36h11'):
+    """
     #Apriltags are a particular type of AR Marker, which looks like a QR Code
     #Apriltags are lower resolution than normal QR codes though
     #Each apriltag corresponds to a single number
@@ -24838,6 +24839,7 @@ def detect_apriltags(image,family:str='tag36h11'):
     #            #image=unwarped_perspective_image(image,r.corners)
     #    
     #        display_image(image)
+    """
 
     family=family.lower()    
     supported_families='tag25h9 tag36h11 tagCircle21h7 tagCircle49h12 tagCustom48h12 tagStandard41h12 tagStandard52h13'.split()
@@ -24974,13 +24976,13 @@ def _clear_jupyter_notebook_outputs(path:str=None, auto_yes=False):
         pip_import('jupyter')
         escaped_path = '"'+path+'"'
         command=sys.executable+' -m jupyter nbconvert --ClearOutputPreprocessor.enabled=True --clear-output '+escaped_path
-        original_file_size=get_file_size(path)
+        original_file_size=get_file_size(path,human_readable=True)
         shell_command(command)
-        new_file_size=get_file_size(path)
+        new_file_size=get_file_size(path,human_readable=True)
         color='green' if new_file_size!=original_file_size else 'blue'
         fansi_print(path,color,'bold')
         fansi_print('    - Old file size: %s'%original_file_size,color,'bold')
-        fansi_print('    - New file size: %s'%get_file_size(path),color,'bold')
+        fansi_print('    - New file size: %s'%get_file_size(path,human_readable=True),color,'bold')
 
     return path
 
