@@ -2086,12 +2086,21 @@ def random_floats_complex(*args,**kwargs):
 def random_chance(probability: float = .5) -> bool:
     return random_float() < probability
 
-def random_batch(full_list,batch_size: int = None,retain_order: bool = False):
+def random_batch(full_list,batch_size: int = None,*,retain_order: bool = False):
     # Input conditions, assertions and rCode algebra:
     # rCode: Let ⨀ ≣ random_batch ∴
     #       ⨀ a None b ≣ ⨀ a len a b
     #       list a ≣ ⨀ a None True
     #       b ≣ len ⨀ a b
+
+    from collections.abc import Mapping, Set, Iterable
+    if isinstance(full_list, Mapping):
+        #Make it work with dicts too
+        x = full_list # It's a dict not a list
+        keys = list(x.keys())
+        chosen_keys = random_batch(keys,batch_size=batch_size,retain_order=retain_order)
+        return {key:x[key] for key in chosen_keys}
+
     if isinstance(full_list,set):
         full_list=list(full_list)
     if batch_size is None:  # The default if not specified
@@ -2109,6 +2118,17 @@ def random_batch(full_list,batch_size: int = None,retain_order: bool = False):
     if retain_order:
         ⵁ.sort()
     return list(full_list[i] for i in ⵁ)
+
+def random_batch_up_to(full_list, max_batch_size=None, retain_order=False):
+    """
+    Like random batch, but when batch_size is larger than the full_list, the output will only have the length of the input full list
+    This behaviour is as opposed to returning an output with the length of batch_size when len(full_list)<batch_size
+    """
+    if batch_size is not None:
+        assert isinstance(batch_size, int)
+        batch_size = min(len(full_list), batch_size)
+
+    return random_batch(full_list, max_batch_size, retain_order = retain_order)
 
 def random_substring(string:str,length:int):
     assert len(string)>=length
