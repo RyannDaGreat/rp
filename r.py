@@ -6103,6 +6103,7 @@ def string_to_text_file(file_path: str,string: str,) -> None:
         file.write(string,)
 
     file.close()
+    return file_path
 
 
 _text_file_to_string_cache={}
@@ -6143,7 +6144,7 @@ def load_text_files(*paths, use_cache=False, strict=True, num_threads=None, show
     paths = rp_iglob(paths)
     load_file = lambda path: text_file_to_string(path, use_cache=use_cache)
     if show_progress in ['eta',True]: show_progress='eta:Loading text files'
-    yield from load_files(load_file, paths, use_cache=use_cache, show_progress=show_progress, strict=strict, num_threads=num_threads)
+    yield from load_files(load_file, paths, show_progress=show_progress, strict=strict, num_threads=num_threads)
 
 def append_line_to_file(line:str,file_path:str):
     #Adds a line to the end of a text file, or creates a new text file if none exists
