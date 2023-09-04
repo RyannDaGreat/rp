@@ -10456,6 +10456,30 @@ def _view_with_pyfx(data):
 
     PyfxApp().run(DataSourceType.VARIABLE, data)
 
+def _view_json_via_jtree(json):
+    pip_import('jtree')
+    if isinstance(json,str):
+        assert file_exists(json)    
+        import jtree
+        jtree.JSONTreeApp(open(json)).run()
+    else:
+        temp_json_path=temporary_file_path('json')
+        try:
+            save_json(json,temp_json_path)
+            _view_json_via_jtree(temp_json_path)
+        finally:
+            delete_file(temp_json_path)
+            
+def _view_interactive_json(data):
+    try:
+        import json
+
+        json.dumps(data)
+        _view_json_via_jtree(data)
+    except Exception:
+        _view_with_pyfx(data)
+
+
 def _get_processor_name():
     import os, platform, subprocess, re
     #https://stackoverflow.com/questions/4842448/getting-processor-information-in-python
@@ -12425,13 +12449,13 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         pterm_pretty_print(value,with_lines=False)
                         #pip_import('rich').print(value)
                     elif user_message=='?j':
-                        fansi_print("?j --> JSON Viewer --> Interactively displaying ans with collapsible menus with r._view_with_pyfx(ans)","blue",'bold')
-                        _view_with_pyfx(get_ans())
+                        fansi_print("?j --> JSON Viewer --> Interactively displaying ans with collapsible menus with r._view_interactive_json(ans)","blue",'bold')
+                        _view_interactive_json(get_ans())
                     elif user_message.endswith('?j') and not '\n' in user_message:
                         user_message=user_message[:-2]
-                        fansi_print("?j --> JSON Viewer --> Interactively displaying ans with collapsible menus with r._view_with_pyfx","blue",'bold')
+                        fansi_print("?j --> JSON Viewer --> Interactively displaying ans with collapsible menus with r._view_interactive_json","blue",'bold')
                         value=eval(user_message,scope())
-                        _view_with_pyfx(value)
+                        _view_interactive_json(value)
                     elif user_message=='?i':
                         fansi_print("?i --> PyPI Package Inspection:","blue",'bold')
                         import rp.pypi_inspection as pi
