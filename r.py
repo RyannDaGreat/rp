@@ -14091,7 +14091,7 @@ def human_readable_file_size(file_size:int):
                 return "%3.1f%s" % (file_size, count)
         file_size /= 1024.0
 
-def get_file_size(path:str, human_readable:bool=True):
+def get_file_size(path:str, human_readable:bool=False):
     #Gets the filesize of the given path
     #Can also get the size of folders
     #If human_readable is True, it will return a string.
