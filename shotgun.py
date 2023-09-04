@@ -26,6 +26,7 @@ packages = [
     'embeddify',
     'exofrills',
     'fbchat',
+    'frogmouth',
     'getmac',
     'git',
     'glances',
