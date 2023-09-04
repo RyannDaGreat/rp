@@ -17766,7 +17766,9 @@ def vertically_concatenated_images(*image_list):
     return np.rot90(horizontally_concatenated_images([np.rot90(image,-1) for image in reversed(image_list)]))
 
 def grid_concatenated_images(image_grid):  
+    """
     #Given a list of lists of images, like [[image1, image2],[image3,image4]], join them all together into one big image
+    #If you want to skip an image in the grid, you can use None to represent a 1x1 transparent pixel
     #Often, when given a list of images you want to put into a grid, 
     #   split_into_sublists(images, number_of_images_per_row) will be a good companion function!
     #   See the example functions...
@@ -17804,13 +17806,22 @@ def grid_concatenated_images(image_grid):
     #    ans=split_into_sublists(ans,10)
     #    ans=grid_concatenated_images(ans)
     #    display_image(ans)
+    #EXAMPLE:
+    #    i='https://hips.hearstapps.com/hmg-prod/images/dog-puppy-on-garden-royalty-free-image-1586966191.jpg?crop=0.752xw:1.00xh;0.175xw,0&resize=1200:*'
+    #    i=cv_resize_image(load_image(i),(256,256))
+    #    display_image(grid_concatenated_images([[None,i,None],[i,None,i],[None,i,None]]))
+    """
 
     image_grid=list(image_grid)
     max_image_widths=[0]*max(map(len,image_grid))
 
+    #A 1x1 transparent pixel
+    null_img = uniform_float_color_image(1,1,(0,0,0,0))
+
     for y,image_row in enumerate(image_grid):
         image_grid[y]=image_row=list(image_row)
         for x,image in enumerate(image_row):
+            if image is None: image=null_img
             assert is_image(image),'All inputs must be images, but '+repr(image)+' is not an image as defined by rp.is_image()!'
             image_grid[y][x]=as_rgba_image(as_float_image(image))
             max_image_widths[x]=max(max_image_widths[x],get_image_width(image))
