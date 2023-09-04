@@ -76,6 +76,8 @@
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
+nnoremap gr gT
+
 set nocompatible              " be iMproved, required
 filetype off                  " required
 
@@ -325,7 +327,7 @@ map! <F9> ^[:call ToggleWrap()<CR>
 
 
 "Tons of vim color schemes
-Plugin 'noah/vim256-color' " 256-color schemes for vim
+Plugin 'RyannDaGreat/vim-wombat256mod' " 256-color schemes for vim
 function! Fansi()
     " Color schemes are disabled because it lags over SSH. Probably because it uses more bandwidth for 256 colors?
     "      See https://github.com/noah/vim256-color/tree/master/colors
