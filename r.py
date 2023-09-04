@@ -2247,7 +2247,7 @@ def load_files(
     assert show_progress in {True, False, "tqdm", "eta"} or isinstance(show_progress, str) and starts_with_any(show_progress, 'eta:'), "The 'show_progress' parameter must be either True, False, or 'tqdm'."
     assert num_threads is None or isinstance(num_threads, int) and num_threads >= 0, "Must have at least 1 thread, or set num_threads=0 to run in the main thread only"
     assert is_iterable(file_paths), 'rp.load_files: file_paths must be iterable, but type(file_paths) is '+str(type(file_paths))
-    assert is_callable(load_file), 'rp.load_files: load_file must be a function that takes a file path and returns a value, but type(load_file) is '+str(type(load_file))
+    assert callable(load_file), 'rp.load_files: load_file must be a function that takes a file path and returns a value, but type(load_file) is '+str(type(load_file))
 
     if num_threads is None:
         # Choose a nice default value
@@ -4064,7 +4064,7 @@ def display_qr_code_in_terminal(text):
     #    #Done in Alacritty or the default Mac Terminal
     #    display_qr_code_in_terminal('https://google.com')
     #EXAMPLE:
-    #    #This one is really annoying: it will cover the entire camera of the iPhone that sees it for a brief moment
+    #    #This one is really annoying (funny prank): it will cover the entire camera of the iPhone that sees it for a brief moment
     #    display_qr_code_in_terminal('a'*2300)
     pip_import('qrcode')
     import qrcode
@@ -5544,7 +5544,7 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
             path=object
             if file_exists(path):
                 append_stat('FILE STATS')
-                append_stat('size',get_file_size(path))
+                append_stat('size',get_file_size(path,human_readable=True))
                 if is_image_file(path):
                     append_stat('resolution',str(get_image_file_dimensions(path)))
                 if is_utf8_file(path):
