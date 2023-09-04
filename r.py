@@ -24850,6 +24850,52 @@ def detect_apriltags(image,family:str='tag36h11'):
     results = [AprilTag(result.corners,result.tag_id,result.tag_family.decode("utf-8")) for result in results]
     return results
 
+def get_apriltag_image(value:int, family:str='tag36h11',size=1):
+    """
+    Returns an image with the apriltag corresponding to the given value
+    Please note: the output images are of minimum resolution - they're very small!
+                 this is what the size option is for. You can specify a factor or a resolution.
+    See https://pypi.org/project/moms-apriltag/
+    Example:
+        tag = get_apriltag_image(123, scale=64)
+        display_image(tag)
+    """
+    assert isinstance(family, str)
+
+    pip_import("moms_apriltag")
+    import moms_apriltag
+
+    if family in moms_apriltag.apriltags_v2:
+        generator_class = moms_apriltag.TagGenerator2
+    elif family in moms_apriltag.apriltags_v3:
+        generator_class = moms_apriltag.TagGenerator3
+    else:
+        raise ValueError(
+            "Invalid apriltag family: "
+            + repr(family)
+            + "\n"
+            + "Please choose from "
+            + repr(moms_apriltag.apriltags_v2 + moms_apriltag.apriltags_v3)
+        )
+
+    tag_generator = generator_class(family)
+    
+    tag = tag_generator.generate(value,scale=1)
+    assert is_grayscale_image(tag)
+    assert is_byte_image(tag)
+
+    #Resize the tag nicely
+    tag = cv_resize_image(tag, size=size, interp='nearest')
+    
+    #This should really be a binary image, conceptually speaking
+    tag=as_binary_image(tag)
+
+    return tag
+
+def get_apriltag_images(*values, family:str='tag36h11', size=1):
+    values=detuple(values)
+    return [get_apriltag_image(value=v,family=family,size=size) for v in values]
+
 def _display_filetype_size_histogram(root='.'):
     assert is_a_folder(root)
 
