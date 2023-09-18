@@ -14639,10 +14639,11 @@ def is_number(x):
 def line_join(iterable,separator='\n'):
     return separator.join(map(str,iterable))
 
+_pip_install_needs_sudo=True
 def pip_install(pip_args:str):
     assert isinstance(pip_args,str),'pip_args must be a string like "numpy --upgrade" or "rp --upgrade --no-cache --user" etc'
     import os
-    if currently_running_unix():
+    if currently_running_unix() and rp.r._pip_install_needs_sudo:
         #Attempt to get root priveleges. Sometimes we need root priveleges to install stuff. If we're on unix, attempt to become the root for this process. There's probably a better way to do this but idk how and don't really care that much even though I probably should...
         os.system('sudo echo')#This should only prompt for a password once...making the next command run in sudo.
     os.system(sys.executable+' -m pip install '+pip_args)
@@ -14874,7 +14875,8 @@ class _rp_persistent_set:
 
 _pip_import_blacklist=_rp_persistent_set()
 
-def pip_import(module_name,package_name=None):
+_pip_import_autoyes=False
+def pip_import(module_name,package_name=None,*,auto_yes=False):
     """
     TODO: Make this function only request sudo if we need it. Otherwise it's a nuisance.
     TODO: Add an "always" option to "yes" and "no" for installing modules.
@@ -14929,7 +14931,7 @@ def pip_import(module_name,package_name=None):
         if module_exists(module_name) or module_name in _pip_import_blacklist:
             raise #We're getting an import error for some reason other than not having installed the module
         if connected_to_internet():
-            if running_in_google_colab() or input_yes_no("Failed to import module "+repr(module_name)+'. You might be able to get this module by installing package '+repr(package_name)+' with pip. Would you like to try that?'):
+            if auto_yes or rp.r._pip_import_autoyes or running_in_google_colab() or input_yes_no("Failed to import module "+repr(module_name)+'. You might be able to get this module by installing package '+repr(package_name)+' with pip. Would you like to try that?'):
                 print("Attempting to install",package_name,'with pip...')
                 pip_install(package_name)
                 fansi_print("pip_import: successfully installed package "+repr(package_name)+"; attempting to import it...",'green',new_line=False)
@@ -22013,6 +22015,10 @@ _default_rprc="""## %s
 ## Add the current directory to the path, letting us import any files in the directory we booted rp in
 ## For example, if we run 'rp' in a directory with 'thing.py', let us run 'import thing.py' by enabling the belowline
 __import__("sys").path.append(__import__("os").getcwd())
+
+#Should we automatically download any pip_imports?
+#__import__("rp").r._pip_import_autoyes=True
+#__import__("rp").r._pip_install_needs_sudo=False
 
 ## Import the rp library's whole namespace. It's not nessecary, but it exposes a lot of useful functions without
 #from rp import *
