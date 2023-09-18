@@ -3912,17 +3912,31 @@ def display_image_in_notebook(image, file_name:str=None):
 #    image=as_rgb_image(as_byte_image(image))
 #    pip_import('ipyplot').plot_images([image],img_width=width(image))
 
+
+
+
+
+_disable_display_image=False #Set rp.r._disable_display_image=True to disable the display_image function. Right now this is undocumented functionality, might make it documented later on via helper functions like enable_display_image() and disable_display_image()
+
 def display_image(image,block=False):
     #Very simple to understand: this function displays an image.
     #At first, it tries to use matplotlib and if that errors it falls back to opencv's imshow function.
     #By default this function will not halt your code, but if you set block=True, it will.
     #This function works in Jupyter Notebooks such as google colab, and will automatically scale the DPI of the output such that the full-resolution image is shown (don't take this for granted)
     #You can pass this function binary, rgb, rgba, grayscale matrices -- most types of images (see rp.is_image() for more information)
+
+    if _disable_display_image:
+        fansi_print("rp.display_image: Currently disabled; no image displayed",'yellow')
+        return
     
-    if currently_in_a_tty() and running_in_ssh() and not running_in_ipython():
+    if currently_in_a_tty() and running_in_ssh() and not running_in_ipython() :
+    # if currently_in_a_tty() and not currently_running_desktop() and not running_in_ipython() :   #THIS MIGHT BE BETTER - this one is more recent, but I decided to make minimal changes today. Maybe uncomment this in the future if you want.
         #Let display_image work in terminals too, when in ssh and we have no GUI or ipynb options
         display_image_in_terminal_color(image)
         return
+
+    if not currently_running_desktop():
+        fansi_print("rp.display_image: Warning, no image was displayed - not in desktop environment.",'yellow') #Please note that cv2.imshow will usually segfault if there's no desktop environment!
 
     if isinstance(image,str):
         fansi_print("display_image usually meant for use with numpy arrays, but you passed it a string, so we'll try to load the image load_image("+repr(image)+") and display that.")
