@@ -22623,6 +22623,78 @@ def currently_in_a_tty():
         #Perhaps the current stdout, maybe patched, breaks when we do this...
         return False
 
+@memoized
+def currently_running_desktop(*,verbose=False):
+    """
+    Determines if a desktop environment is currently running.
+
+    Parameters:
+    - verbose (bool): Whether to print detailed information about how the desktop environment was detected.
+
+    Returns:
+    - bool: True if a desktop environment is detected, False otherwise.
+    
+    TODO: Right now, because of the caching, verbose will only work once. 
+    
+    Made with GPT4: https://chat.openai.com/share/b69ee840-7dfd-4110-9f42-ddc75e88d0a9
+    Relevant Stack Overflow: https://stackoverflow.com/questions/2035657/what-is-my-current-desktop-environment
+
+    This function has not been thoroughly tested yet! If there are any bugs please fix them!
+    """
+    import os
+    import platform
+    import subprocess
+    import re
+
+    os_type = platform.system()
+
+    if os_type == 'Linux':
+        # Environment variable checks
+        for env_var in ['DISPLAY', 'WAYLAND_DISPLAY', 'XDG_CURRENT_DESKTOP', 'DESKTOP_SESSION', 'KDE_FULL_SESSION', 'GNOME_DESKTOP_SESSION_ID']:
+            if env_var in os.environ:
+                if verbose:
+                    print("Detected Desktop Environment via {} environment variable.".format(env_var))
+                return True
+        
+        # Running process checks
+        try:
+            running_processes = subprocess.Popen(["ps", "axw"], stdout=subprocess.PIPE).stdout.read().decode('utf-8')
+            desktop_processes = ['gnome-shell', 'plasmashell', 'xfce4-session', 'mate-session', 'xfce-mcs-manage', 'ksmserver']
+            for process in desktop_processes:
+                if re.search(r'\b{}\b'.format(re.escape(process)), running_processes):
+                    if verbose:
+                        print("Detected Desktop Environment via running process: {}.".format(process))
+                    return True
+        except Exception as e:
+            if verbose:
+                print("An error occurred while checking running processes: {}".format(e))
+
+        if verbose:
+            print("No desktop environment detected.")
+        return False
+
+    elif os_type == 'Windows':
+        if 'SESSIONNAME' in os.environ and os.environ['SESSIONNAME'] == 'Console':
+            if verbose:
+                print("Detected desktop environment on Windows via SESSIONNAME environment variable.")
+            return True
+        if verbose:
+            print("No desktop environment detected on Windows.")
+        return False
+
+    elif os_type == 'Darwin':
+        if 'HOME' in os.environ:
+            if verbose:
+                print("Detected desktop environment on macOS via HOME environment variable.")
+            return True
+        if verbose:
+            print("No desktop environment detected on macOS.")
+        return False
+
+    else:
+        if verbose:
+            print("Unsupported OS: {}".format(os_type))
+        return False
 
 def _maybe_display_string_in_pager(string,with_line_numbers=True):
     #Display the string in the pager if it's too long
