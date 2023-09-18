@@ -11400,10 +11400,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RV  ryanvimrc
         RX  ryanxonshrc
 
-        UU $set_current_directory('../..');$fansi_print(get_current_directory(),'blue','bold')
-        UUU $set_current_directory('../../..');$fansi_print(get_current_directory(),'blue','bold')
-        UUUU $set_current_directory('../../../..');$fansi_print(get_current_directory(),'blue','bold')
-        UUUUU $set_current_directory('../../../../..');$fansi_print(get_current_directory(),'blue','bold')
+        UU $set_current_directory('../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUU $set_current_directory('../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUU $set_current_directory('../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUUU $set_current_directory('../../../../..');$fansi_print($get_current_directory(),'blue','bold')
 
         LSF LSQ
         FDZ LSZ
@@ -11469,15 +11469,15 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         NBCHY $r._nbca($get_all_files(file_extension_filter='ipynb',sort_by='size')[::-1], auto_yes=True) #Clear all notebooks in the current directory without confirmation
         NCA  $r._nbca(ans)
 
-        INS $input_select("Select:", line_split(ans) if isinstance(ans,str) else ans)
-        ISA $input_select("Select:", line_split(ans) if isinstance(ans,str) else ans)
-        ISM $pip_import('iterfzf').iterfzf(line_split(ans) if isinstance(ans,str) else ans,multi=True,exact=True)
-        IMA $pip_import('iterfzf').iterfzf(line_split(ans) if isinstance(ans,str) else ans,multi=True,exact=True)
-        IMS $pip_import('iterfzf').iterfzf(line_split(ans) if isinstance(ans,str) else ans,multi=True,exact=True)
+        INS $input_select("Select:", $line_split(ans) if isinstance(ans,str) else ans)
+        ISA $input_select("Select:", $line_split(ans) if isinstance(ans,str) else ans)
+        ISM $pip_import('iterfzf').iterfzf($line_split(ans) if isinstance(ans,str) else ans,multi=True,exact=True)
+        IMA $pip_import('iterfzf').iterfzf($line_split(ans) if isinstance(ans,str) else ans,multi=True,exact=True)
+        IMS $pip_import('iterfzf').iterfzf($line_split(ans) if isinstance(ans,str) else ans,multi=True,exact=True)
 
         VCL $delete_file($get_absolute_path('~/.viminfo'))#VimClear_use_when_VCOPY_doesnt_work_properly
 
-        ALSF $get_all_paths(get_current_directory(),include_files=True,include_folders=False,relative=True)
+        ALSF $get_all_paths($get_current_directory(),include_files=True,include_folders=False,relative=True)
         LSAG  $get_all_paths  (relative=False,sort_by='name') #LSA Global
         LSAFG $get_all_files  (relative=False,sort_by='name') #LSA Files Global
         LSADG $get_all_folders(relative=False,sort_by='name') #LSA Directories Global
@@ -11552,6 +11552,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         FZM $pip_import('iterfzf').iterfzf(ans,multi=True)
 
+        NLS $fansi_print(len($os.listdir()),"blue","bold")
+        DUSH !du -sh
+
         PTS ptsave
         ST   settitle
         STIT settitle
@@ -11563,8 +11566,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         CLS CLEAR
         VV !vim
 
-        RCLAHF $os.system(printed("rclone copy --progress --transfers 128 %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself! The 'F' stands for fast, which is because this skips checksums - it wont overwrite any files ever!
-        RCLAH $os.system(printed("rclone copy --checksum --progress --transfers 128 %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself!
+        RCLAHF $os.system($printed("rclone copy --progress --transfers 128 %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself! The 'F' stands for fast, which is because this skips checksums - it wont overwrite any files ever!
+        RCLAH $os.system($printed("rclone copy --checksum --progress --transfers 128 %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself!
 
         DR $r._display_columns(dir(),'dir():')
         DUSHA $human_readable_file_size(sum($get_file_size(x,False)for x in $enlist(ans)))
@@ -11583,8 +11586,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         HTTP $os.system($sys.executable+' -m http.server')
         HTP  $os.system($sys.executable+' -m http.server')
 
-        FMA $pip_import("frogmouth");os.system('frogmouth '+repr(ans)) # Displays markdown
-        MDA $pip_import("frogmouth");os.system('frogmouth '+repr(ans)) # Displays markdown
+        FMA $pip_import("frogmouth");$os.system('frogmouth '+repr(ans)) # Displays markdown
+        MDA $pip_import("frogmouth");$os.system('frogmouth '+repr(ans)) # Displays markdown
 
         '''.replace('$',rp_import)
         # SA string_to_text_file(input("Filename:"),str(ans))#SaveAnsToFile
