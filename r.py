@@ -22047,9 +22047,9 @@ def _set_ryan_rprc():
     
 
 def _set_ryan_vimrc():
-    try:pip_import('isort')
+    try:pip_import('isort',auto_yes=True)
     except Exception:print("Skipped pip install isort...")
-    try:pip_import('macchiato','black-macchiato')
+    try:pip_import('macchiato','black-macchiato',auto_yes=True)
     except Exception:print("Skipped pip install black-macchiato...")
     vimrc=text_file_to_string(get_module_path_from_name('rp.ryan_vimrc'))
     string_to_text_file(get_absolute_path('~/.vimrc'),vimrc)
