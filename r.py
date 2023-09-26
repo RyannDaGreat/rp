@@ -2215,10 +2215,12 @@ def _erase_terminal_line():
 def load_files(
     load_file,
     file_paths,
+    *,
     num_threads:int=None,
     show_progress=False,
     strict=True,
     include_paths=False,
+    lazy=False
 ):
     """
     Load a list of files with optional multithreading.
@@ -2242,6 +2244,29 @@ def load_files(
     TODO: The eta can't display a specific message like "loading images" etc - it's locked to load_files right now. How can I *elegantly* allow this naming but also allow it to use tqdm? 
     TODO: Make convert_image_files take advantage of this function
     """
+    files = _load_files(
+        load_file,
+        file_paths,
+        num_threads,
+        show_progress,
+        strict,
+        include_paths,
+    )
+
+    if lazy:
+        return files
+    else:
+        return list(files)
+
+def _load_files(
+    load_file,
+    file_paths,
+    num_threads:int=None,
+    show_progress=False,
+    strict=True,
+    include_paths=False,
+):
+    "Helper function for load_files"
 
     assert strict is True or strict is False or strict is None, "The 'strict' parameter must be set to either True, False, or None."
     assert show_progress in {True, False, "tqdm", "eta"} or isinstance(show_progress, str) and starts_with_any(show_progress, 'eta:'), "The 'show_progress' parameter must be either True, False, or 'tqdm'."
@@ -2460,7 +2485,7 @@ def load_images(*locations,use_cache=False,show_progress=False,num_threads=None,
         locations=[locations]
 
     if show_progress in ['eta',True]: show_progress='eta:Loading Images'
-    return list(load_files(lambda path:load_image(path,use_cache=use_cache), locations, show_progress=show_progress, strict=strict, num_threads=num_threads))
+    return load_files(lambda path:load_image(path,use_cache=use_cache), locations, show_progress=show_progress, strict=strict, num_threads=num_threads)
 
     """
     #The below code works perfectly fine! But since load_files (implemented much later, and actually based on the below code) has a variable number of threads, it's just a teeny bit faster, and now makes this function more concise
@@ -3935,8 +3960,9 @@ def display_image(image,block=False):
         display_image_in_terminal_color(image)
         return
 
-    if not currently_running_desktop():
+    if not running_in_ipython() and not currently_running_desktop():
         fansi_print("rp.display_image: Warning, no image was displayed - not in desktop environment.",'yellow') #Please note that cv2.imshow will usually segfault if there's no desktop environment!
+        return
 
     if isinstance(image,str):
         fansi_print("display_image usually meant for use with numpy arrays, but you passed it a string, so we'll try to load the image load_image("+repr(image)+") and display that.")
@@ -6149,7 +6175,7 @@ def text_file_to_string(file_path: str,use_cache=False) -> str:
 
 # load_text_file = text_file_to_string
 
-def load_text_files(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False):
+def load_text_files(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False, lazy=False):
     """
     Plural of text_file_to_string
     Please see load_files and rp_iglob for more information
@@ -6158,7 +6184,7 @@ def load_text_files(*paths, use_cache=False, strict=True, num_threads=None, show
     paths = rp_iglob(paths)
     load_file = lambda path: text_file_to_string(path, use_cache=use_cache)
     if show_progress in ['eta',True]: show_progress='eta:Loading text files'
-    yield from load_files(load_file, paths, show_progress=show_progress, strict=strict, num_threads=num_threads)
+    return load_files(load_file, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
 
 def append_line_to_file(line:str,file_path:str):
     #Adds a line to the end of a text file, or creates a new text file if none exists
@@ -6176,7 +6202,7 @@ def load_json(path, use_cache=False):
     import json
     return json.loads(text)
 
-def load_jsons(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False):
+def load_jsons(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False, lazy=False):
     """
     Plural of load_json
     Please see load_files and rp_iglob for more information
@@ -6185,7 +6211,7 @@ def load_jsons(*paths, use_cache=False, strict=True, num_threads=None, show_prog
     paths = rp_iglob(paths)
     load_file = lambda path: load_json(path, use_cache=use_cache)
     if show_progress in ['eta',True]: show_progress='eta:Loading JSON files'
-    yield from load_files(load_file, paths, show_progress=show_progress, strict=strict, num_threads=num_threads)
+    return load_files(load_file, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
 
 def save_json(data,path,*,pretty=False):
     import json
@@ -6206,7 +6232,7 @@ def load_yaml_file(path, use_cache=False):
     data=yaml.safe_load(text)
     return data
 
-def load_yaml_files(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False):
+def load_yaml_files(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False, lazy=False):
     """
     Plural of load_yaml_file
     Please see load_files and rp_iglob for more information
@@ -6215,7 +6241,7 @@ def load_yaml_files(*paths, use_cache=False, strict=True, num_threads=None, show
     paths = rp_iglob(paths)
     load_file = lambda path: load_yaml_file(path, use_cache=use_cache)
     if show_progress in ['eta',True]: show_progress='eta:Loading YAML files'
-    yield from load_files(load_file, paths, show_progress=show_progress, strict=strict, num_threads=num_threads)
+    return load_files(load_file, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
 
 def parse_dyaml(code:str)->dict:
     #This is like DJSON, except for YAML
@@ -14702,6 +14728,7 @@ known_pypi_module_package_names={
     '_sentencepiece': 'sentencepiece',
     '_sounddevice': 'sounddevice',
     'absl': 'absl-py',
+    'ahocorasick': 'pyahocorasick',
     'async_timeout': 'async-timeout',
     'atari_py': 'atari-py',
     'babel': 'Babel',
@@ -19521,12 +19548,16 @@ def copy_path(from_path,to_path,*,extract=False):
     #Chooses between copy_directory and copy_file, whichever makes more sense.
     #If extract is True, it will copy only the contents of the folder to the destination, as opposed to copying the actual folder itself.
     #Works with both files and directories. If given a directory, it will be copied recursively.
+    Should return the path of the newly copied file
     """
     assert path_exists(from_path),'Cannot copy from from_path='+repr(from_path)+' because that path does not exist'
+
+    #The logic of what happens when to_path is a directory should be handled by copy_directory and copy_file respectively
+
     if is_a_directory(from_path):
-        copy_directory(from_path,to_path,extract=extract)
+        return copy_directory(from_path,to_path,extract=extract)
     else:
-        copy_file(from_path,to_path)
+        return copy_file(from_path,to_path)
 
 def copy_to_folder(from_path,to_path):
     """
@@ -19537,25 +19568,99 @@ def copy_to_folder(from_path,to_path):
     """
     assert is_a_folder(to_path),'to_path must be a folder, but '+repr(to_path)+' either does not exist or is not a folder'
     dest=path_join(to_path,get_path_name(from_path))
-    copy_path(from_path,dest)
+    return copy_path(from_path,dest)
+
 copy_to_directory=copy_to_folder
 
-def copy_directory(from_path,to_path,*,extract=False):
+#def copy_directory(from_path,to_path,*,extract=False):
+#    """
+#    #Recursively copy a directory.
+#    #If extract is True, it will copy only the contents of the folder to the destination, as opposed to copying the actual folder itself.
+#    #Note: the default extract=False must not change. Future versions of rp must respect this.
+#    """
+#    assert path_exists   (from_path),'rp.copy_directory error: Cant copy from path '+repr(from_path)+' because that path does not exist'
+#    assert is_a_directory(from_path),'rp.copy_directory error: from_path='+repr(from_path)+' is not a directory, and this function is specifically meant to copy directories.'
+#    if not extract:
+#        #We want to make a NEW folder at to_path because extract is False
+#        #We will extract into this path
+#        if is_a_folder(to_path):
+#            to_path=path_join(to_path,get_directory_name(from_path))
+#            if path_exists(to_path):
+#                #This will throw an error - but I'll make the message different depending on whether its a file or folder.
+#                assert not file_exists(to_path),'rp.copy_directory error: Cant copy a directory into a file. from_path='+repr(from_path)+' is a directory and to_path='+repr(to_path)+' is a file.'
+#                assert not folder_exists(to_path),'rp.copy_directory error: Will not overwrite existing folder (extract is False). from_path='+repr(from_path)+' is a directory and to_path='+repr(to_path)+' is also already a directory.'
+#                assert False, 'Internal assertion - we should have thrown an error by now'
+#        else:
+#            assert not file_exists(to_path),'rp.copy_directory error: Cant copy a directory into a file. from_path='+repr(from_path)+' is a directory and to_path='+repr(to_path)+' is a file.'
+#    else:
+#        assert not file_exists(to_path),'rp.copy_directory error: Cant copy a directory into a file. from_path='+repr(from_path)+' is a directory and to_path='+repr(to_path)+' is a file.'
+#    make_directory(to_path) #Make sure the destination path can exist...
+#    #Do the actual copying - extract into to_path
+#    from importlib import reload
+#    import distutils.dir_util
+#    reload(distutils.dir_util)#I don't know why, but when I copied a folder, deleted it, then told it to copy again, it broke with "ERROR: distutils.errors.DistutilsFileError: could not create 'TestJam/Wampo/prompt_toolkit/filters/.DS_Store': No such file or directory" and reloading the module appeared to fix it. This reloading doesn't appear to damage performance, I clocked it at 0.0003399848937988281 seconds
+#    distutils.dir_util.copy_tree(from_path,to_path)#Copy the directory's contents recursively...
+#    return to_path
+
+
+def copy_directory(from_path, to_path, *, extract=False, follow_symlinks=False):
     """
-    #Recursively copy a directory.
-    #If extract is True, it will copy only the contents of the folder to the destination, as opposed to copying the actual folder itself.
-    #Note: the default extract=False must not change. Future versions of rp must respect this.
+    Recursively copy a directory.
+    
+    If extract is True, it will copy only the contents of the folder to the destination, as opposed 
+    to copying the actual folder itself. If false, it must create a new folder, just like `cp -r`. 
+    
+    If follow_symlinks is True, symlinks will be followed, and their contents will be copied;
+    otherwise, the symlinks themselves will be copied. This is like `cp -L` aka `cp --dereference`
+    
+    Args:
+    from_path (str): The source directory path.
+    to_path (str): The destination directory path.
+    extract (bool, optional): Whether to extract the contents of the folder. Defaults to False.
+    follow_symlinks (bool, optional): Whether to follow and copy the contents of symlinks. 
+                                      Defaults to False.
+    
+    Returns:
+    str: The path to the copied directory.
+
     """
-    assert path_exists     (from_path),'rp.copy_directory error: Cant copy from path '+repr(from_path)+' because that path does not exist'
-    assert is_a_directory  (from_path),'rp.copy_directory error: from_path='+repr(from_path)+' is not a directory, and this function is specifically meant to copy directories.'
-    assert not file_exists (to_path  ),'rp.copy_directory error: Cant copy a directory into a file. from_path='+repr(from_path)+' is a directory and to_path='+repr(to_path)+' is a file.'
-    if not directory_exists(to_path  ):make_directory(to_path)#Make sure the destination path can exist...
-    assert directory_exists(to_path  ),'rp.copy_directory error: Internal logical assertion. If this fails, then copy_directory is broken. make_directory should either be successful or throw an error.'
-    if not extract:to_path=make_directory(path_join(to_path,get_directory_name(from_path)))
-    from importlib import reload
-    import distutils.dir_util
-    reload(distutils.dir_util)#I don't know why, but when I copied a folder, deleted it, then told it to copy again, it broke with "ERROR: distutils.errors.DistutilsFileError: could not create 'TestJam/Wampo/prompt_toolkit/filters/.DS_Store': No such file or directory" and reloading the module appeared to fix it. This reloading doesn't appear to damage performance, I clocked it at 0.0003399848937988281 seconds
-    distutils.dir_util.copy_tree(from_path,to_path)#Copy the directory's contents recursively...
+    # Note: the default extract=False and follow_symlinks=False must not change. Future versions of rp must respect this.
+    # TODO: add argument ignore (iterable, optional): A set of paths we don't copy. Can include folders and supports globbing.
+    #       also possible ignore as a function that takes in a path and returns a bool
+    #       please note that shutil.copytree supports this functionality! Gpt4 is a good starting point lolol
+
+    # Input assertions
+    assert path_exists   (from_path),'rp.copy_directory error: Cant copy from path '+repr(from_path)+' because that path does not exist'
+    assert is_a_directory(from_path),'rp.copy_directory error: from_path='+repr(from_path)+' is not a directory, and this function is specifically meant to copy directories.'
+
+    if not extract:
+        #We want to make a NEW folder at to_path because extract is False
+        #We will extract into this path
+        if is_a_folder(to_path):
+            to_path=path_join(to_path,get_directory_name(from_path))
+            if path_exists(to_path):
+                #This will throw an error - but I'll make the message different depending on whether its a file or folder.
+                assert not file_exists(to_path),'rp.copy_directory error: Cant copy a directory into a file. from_path='+repr(from_path)+' is a directory and to_path='+repr(to_path)+' is a file.'
+                assert not folder_exists(to_path),'rp.copy_directory error: Will not overwrite existing folder (extract is False). from_path='+repr(from_path)+' is a directory and to_path='+repr(to_path)+' is also already a directory.'
+                assert False, 'Internal assertion - we should have thrown an error by now'
+        else:
+            assert not file_exists(to_path),'rp.copy_directory error: Cant copy a directory into a file. from_path='+repr(from_path)+' is a directory and to_path='+repr(to_path)+' is a file.'
+    else:
+        assert not file_exists(to_path),'rp.copy_directory error: Cant copy a directory into a file. from_path='+repr(from_path)+' is a directory and to_path='+repr(to_path)+' is a file.'
+
+    make_directory(to_path) #Make sure the destination path can exist...
+    
+    #This was in the old version of copy_directory...I'm not sure why we need it?
+    # from importlib import reload
+    # import distutils.dir_util
+    # reload(distutils.dir_util)#I don't know why, but when I copied a folder, deleted it, then told it to copy again, it broke with "ERROR: distutils.errors.DistutilsFileError: could not create 'TestJam/Wampo/prompt_toolkit/filters/.DS_Store': No such file or directory" and reloading the module appeared to fix it. This reloading doesn't appear to damage performance, I clocked it at 0.0003399848937988281 seconds
+
+    #Do the actual copying - extract into to_path
+    shutil.copytree(from_path, to_path, symlinks=follow_symlinks)
+
+    return to_path
+
+
 copy_folder=copy_directory
 
 def copy_file(from_path,to_path):
@@ -19566,6 +19671,62 @@ def copy_file(from_path,to_path):
     if is_a_directory(to_path):
         to_path=path_join(to_path,get_file_name(from_path))
     shutil.copyfile(from_path,to_path)
+    return to_path
+
+def copy_paths(
+    from_paths,
+    to_paths,
+    *,
+    extract=False,
+    skip_existing=False,
+    follow_symlinks=False,  # This is the default behaiour in bash and zsh. In python though, shutil.copy defaults follow_symlinks to True, meaning it would copy the contents of a symlink - not the symlink itself.
+    num_threads: int = None,
+    show_progress=False,
+    strict=True,
+    lazy=False
+):
+    "A fast, parallelized version of copy_path"
+    # You can glob the from_paths however youd like. See rp_iglob's documentation for more details!
+    from_paths = rp_glob(from_paths)
+
+    # Right now, we only support to_paths as a folder or an explicit list of destinations (1 per source)
+    if isinstance(to_paths, str):
+        # A single folder
+        if path_exists(to_paths):
+            assert is_a_folder(to_paths)
+        else:
+            make_folder(to_paths)
+        to_paths = [path_join(to_paths, get_path_name(path)) for path in from_paths]
+        assert len(set(to_paths)) == len(
+            set(from_paths)
+        ), "Must be a 1-to-1 mapping from sources to destinations"
+    else:
+        # A list of destinations
+        assert is_iterable(to_paths)
+        assert len(to_paths) == len(
+            from_paths
+        ), "Must be a 1-to-1 mapping from sources to destinations"
+        assert all(isinstance(x, str) for x in to_paths)
+
+    def do_copy(pair):
+        from_path, to_path = pair
+        if skip_existing and path_exists(to_path):
+            return
+        return copy_path(from_path, to_path, extract=extract)
+
+    if show_progress in ['eta',True]: show_progress='eta:Copying paths'
+
+    pairs = list(zip(from_paths, to_paths))
+    return load_files(
+        do_copy,
+        pairs,
+        num_threads=num_threads,
+        show_progress=show_progress,
+        strict=strict,
+        include_paths=False,
+        lazy=lazy,
+    )
+
 
 def get_path_parent(path):
     """
@@ -19616,6 +19777,12 @@ def make_directory(path):
             directory.mkdir()
         return str(path)
 make_folder=make_directory
+
+def take_directory(path):
+    "ZSH's take command combined mkdir with cd"
+    path=make_directory(path)
+    set_current_directory(path)
+    return path
 
 def make_directories(*paths):
     paths=detuple(paths)
@@ -26373,6 +26540,7 @@ def print_gpu_summary(
         │   3    │ NVIDIA RTX A5000 │ 311.6MB   1.3% │ 23.7GB │ 24.0GB │ 39°C │                             │
         └────────┴──────────────────┴────────────────┴────────┴────────┴──────┴─────────────────────────────┘
     """
+    pip_import('rich')
     from rich.console import Console
     from collections import defaultdict
     from rich.table import Table
