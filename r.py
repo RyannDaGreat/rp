@@ -3831,6 +3831,45 @@ def _display_image_in_notebook_via_ipython(image):
     import IPython
     return IPython.display.display_png(encode_image_to_bytes(image,'png'),raw=True)
 
+def add_ipython_kernel(kernel_name: str, display_name: str = None):
+    """
+    Add the current Python interpreter as a Jupyter IPython kernel.
+
+    Parameters:
+    - kernel_name: The name for the kernel, as it would appear in the command to start it. For example, "python3.9".
+    - display_name: The name as it appears in the Jupyter UI. Defaults to kernel_name. Example: "Python 3.9.5".
+
+    Usage:
+    add_current_python_as_kernel("python39", "Python 3.9.5")
+    """
+    pip_import('ipykernel')    
+
+    import sys
+    import subprocess
+
+    assert isinstance(kernel_name, str)
+    assert display_name is None or isinstance(display_name, str)
+
+    if display_name is None:
+        display_name = kernel_name
+
+    command = [
+        sys.executable, "-m", "ipykernel", "install", "--user",
+        "--name", kernel_name,
+        "--display-name", "Python " + display_name
+    ]
+
+    try:
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stderr = result.stderr.decode()
+    except Exception as e:
+        raise RuntimeError("Error running subprocess: " + str(e))
+
+    if result.returncode != 0:
+        raise RuntimeError("Error adding kernel: " + stderr)
+
+    print("Successfully added Python " + display_name + " as a Jupyter kernel.")
+
 
 def display_video(video,framerate=30):
     #Video can either be a string, or a video (aka a 4d tensor or iterable of images)
@@ -9859,6 +9898,45 @@ def symlink_is_broken(path:str):
 # def symlink_works(path:str):
 #     return not symlink_is_broken(path)
 
+def make_hardlink(original_path, hardlink_path):
+    if path_exists(hardlink_path) and not path_exists(original_path):
+        # If the caller of this function gets the arguments backwards, fix it automatically
+        hardlink_path, original_path = original_path, hardlink_path
+        
+    if is_a_folder(hardlink_path):
+        hardlink_path = path_join(hardlink_path, get_file_name(original_path))
+
+    assert path_exists(original_path), "Can't create hardlink to %s because that path does not exist!" % original_path
+    assert not is_a_folder(original_path) or is_symbolic_link(original_path), "Can't create a hardlink to a folder, only to files: " + original_path
+    assert not path_exists(hardlink_path), "Can't create hardlink at %s because a file already exists there!" % hardlink_path
+    
+    import os
+    os.link(original_path, hardlink_path)
+    
+    return hardlink_path
+
+def replace_symlink_with_hardlink(symlink_path):
+    """Replaces a symlink with a hardlink"""
+    assert isinstance(symlink_path,str), 'replace_symlink_with_hardlink: Input path must be a string'
+    assert is_symlink(symlink_path), 'replace_symlink_with_hardlink: Path is not a symlink: '+symlink_path
+    read_path=read_symlink(symlink_path)
+    assert not is_a_folder(read_path), 'Cannot hardlink to a folder from symlink '+symlink_path+'   -->   '+read_path
+    delete_file(symlink_path)
+    hardlink_path=symlink_path
+    return make_hardlink(read_path,hardlink_path)
+
+def replace_symlinks_with_hardlinks(
+        *symlink_paths,
+        num_threads: int = None,
+        show_progress=False,
+        strict=True,
+        lazy=False
+    ):
+    """Plural of replace_symlink_with_hardlink. TODO: Parallelize this (maybe with load_files), and add strict, num_threads, etc"""
+    symlink_paths = rp_iglob(symlink_paths)
+    return load_files(replace_symlink_with_hardlink, symlink_paths, lazy=lazy, strict=strict, show_progress=show_progress, num_threads=num_threads)
+
+
 def make_symlink(original_path,symlink_path):
 
     if path_exists(symlink_path) and not path_exists(original_path):
@@ -11138,6 +11216,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RETURN  (RET)
         SUSPEND (SUS)
         CLEAR
+        PIP
         WARN
         GPU
         TOP
@@ -13005,6 +13084,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     user_message="""ans=__import__("numpy").load(%s)"""%repr(file_name)
                                 elif file_name.endswith('.pkl'):
                                     user_message="""ans=__import__("rp").load_pickled_value(%s)"""%repr(file_name)
+                                elif file_name.endswith('.parquet'):
+                                    user_message="""ans=__import__("rp").pip_import("pandas").read_parquet(%s)"""%repr(file_name)
                                 else:
                                     user_message='ans=__import__("rp").file_to_bytes(%s)'%repr(file_name)
                                     # assert False,'Failed to read file '+repr(file_name)
@@ -13437,6 +13518,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             fansi_print("MV --> Moves a file or folder to a folder",'blue','bold')
                             user_message= repr(_mv())
                                 
+                        elif user_message.startswith("PIP "):
+                            fansi_print("PIP --> Equivalent to %pip in IPython ",'blue','bold')
+                            command = sys.executable + ' -m pip '+user_message[len('PIP '):]
+                            user_message = "__import__('os').system(" + repr(command) + ")"
+                            fansi_print("Transformed command into: " + user_message,'magenta')
 
                         elif user_message.startswith("TAKE ") or user_message =='TAKE' or user_message=='MKDIR' or user_message.startswith('MKDIR '):
                             make=user_message.startswith('MKDIR')
@@ -17449,7 +17535,11 @@ def _has_globbing_characters(pattern):
     return bool(re.search(r'[\*\?\[\]]', pattern))
 
 
-def rp_iglob(*files, follow_symlinks=False, check_exists=False):
+def rp_iglob(
+    *files, 
+    # follow_symlinks=False, 
+    check_exists=False
+    ):
     '''
     Generator that recursively yields file paths based on glob-like patterns, multi-line 
     strings, or iterables like lists and file objects. Suitable for streaming large sets 
@@ -17458,9 +17548,9 @@ def rp_iglob(*files, follow_symlinks=False, check_exists=False):
     Parameters:
         - *files: Accepts one or more glob-like patterns, multi-line strings, or iterables 
                   like lists or file objects.
-        - follow_symlinks (bool): Whether to follow symbolic links when encountered. This is 
-                                  particularly relevant when using glob patterns that are 
-                                  inherently recursive like '**/*'.
+        # - follow_symlinks (bool): Whether to follow symbolic links when encountered. This is 
+        #                           particularly relevant when using glob patterns that are 
+        #                           inherently recursive like '**/*'.
         - check_exists (bool): If True, filters out paths that don't exist. It's useful to 
                                disable this for many reasons, including that doing that can be slow.
                                Default glob.glob behaviour eliminates nonexistent files though, so:
@@ -17508,9 +17598,9 @@ def rp_iglob(*files, follow_symlinks=False, check_exists=False):
             for filepath in rp_iglob("**/*.txt"):
                 print(filepath)
         
-        7. Gets all files/folders recursively but doesnt go into symlinks
-            for filepath in rp_iglob("**", follow_symlinks=False):
-                print(filepath)
+        # 7. Gets all files/folders recursively but doesnt go into symlinks
+        #     for filepath in rp_iglob("**", follow_symlinks=False):
+        #         print(filepath)
     
     Edge Cases:
     
@@ -17525,19 +17615,19 @@ def rp_iglob(*files, follow_symlinks=False, check_exists=False):
         if isinstance(file_pattern, str) and '\n' in file_pattern:
             for line in file_pattern.strip().split('\n'):
                 if line:  # Skip empty lines
-                    yield from rp_iglob(line, follow_symlinks=follow_symlinks)
+                    yield from rp_iglob(line)#, follow_symlinks=follow_symlinks)
         # If the input is an iterable but not a str (e.g., a list or a file object)
         elif not isinstance(file_pattern, str) and hasattr(file_pattern, '__iter__'):
             for item in file_pattern:
                 if item:  # Skip empty lines/items
-                    yield from rp_iglob(item, follow_symlinks=follow_symlinks)
+                    yield from rp_iglob(item)#, follow_symlinks=follow_symlinks)
         # If the input is a single-line string
         elif isinstance(file_pattern, str):
             if not _has_globbing_characters(file_pattern) and not check_exists:
                 yield file_pattern
             else:
                 for filepath in glob.iglob(file_pattern, recursive=True):  # Enable recursion
-                    if follow_symlinks or not os.path.islink(filepath):
+                    # if follow_symlinks or not os.path.islink(filepath):
                         yield filepath
         else:
             raise TypeError("Unsupported type: "+str(type(file_pattern))+")")
@@ -18395,11 +18485,13 @@ def get_image_dimensions(image):
 def get_image_height(image):
     #Return the image's height measured in pixels
     assert is_image(image)
+    if is_pil_image(image):return image.height
     return image.shape[0]
 
 def get_image_width(image):
     #Return the image's width measured in pixels
     assert is_image(image)
+    if is_pil_image(image):return image.width
     return image.shape[1]
 
 #TODO: Finish color conversions
@@ -19465,12 +19557,24 @@ move_file=move_directory=move_folder=move_path#Synonyms that might make more sen
 
 def delete_file(path,*,permanent=True):
     """
-    # Deletes a file at a given path
-    # permanent exists for safety reasons. It can be False in case you make a stupid mistake like deleting this file. When false, it will send your files to the trash bin on your system (Mac,Windows,Linux, etc)
-    # By default, though, permanent=True, becuase when it's not it can cause your hard-drive to fill up without you expecting it (you don't normally expect to keep files when calling a function called delete file, which doesn't actually free your hard-drive when permanent=False)
-    # http://stackoverflow.com/questions/3628517/how-can-i-move-file-into-recycle-bin-trash-on-different-platforms-using-pyqt4
-    # https://pypi.python.org/pypi/Send2Trash
-    # pip3 install Send2Trash
+    Deletes a file at a given path.
+    
+    Args:
+        path (str): Path to the file.
+        permanent (bool, optional): If True, delete file permanently. Otherwise, move to trash. Defaults to True.
+
+    permanent exists for safety reasons. It can be False in case you make a stupid mistake like deleting this file. When false, it will send your files to the trash bin on your system (Mac,Windows,Linux, etc)
+    By default, though, permanent=True, becuase when it's not it can cause your hard-drive to fill up without you expecting it (you don't normally expect to keep files when calling a function called delete file, which doesn't actually free your hard-drive when permanent=False)
+
+    References:
+        - http://stackoverflow.com/questions/3628517/how-can-i-move-file-into-recycle-bin-trash-on-different-platforms-using-pyqt4
+        - https://pypi.python.org/pypi/Send2Trash
+        - pip3 install Send2Trash
+
+    Note:
+        This function does not follow symlinks. If you want to delete the target of a symlink, 
+        you can resolve the symlink first using a helper function like `read_symlink(path)` 
+        and then call this function.
     """
     import os
     assert os.path.exists(path),"r.delete_file: There is no file to delete. The path you specified, '" + path + "', does not exist!"  # This is to avoid the otherwise cryptic errors you would get later on with this method
@@ -19481,6 +19585,8 @@ def delete_file(path,*,permanent=True):
         pip_import('send2trash')
         import send2trash  # This is much safer. By default, we move files to the trash bin. That way we can't accidentally delete our whole directory for good ;)
         send2trash.send2trash(path)  # This is MUCH safer than when delete_permanently is turned on. This will have the same effect as deleting it in finder/explorer: it will send your file to the trash bin instead of immediately deleting it forever.
+
+
 
 def delete_folder(path,*,recursive=True,permanent=True):
     """
@@ -25565,7 +25671,7 @@ def as_numpy_images(images):
         if all(is_pil_image(x) for x in images):
             return [as_numpy_image(x) for x in images]
         else:
-            raise TypeError('Unsupported image datatype: %s'%type(images))
+            raise TypeError('Unsupported image datatype: %s of %s'%(type(images),repr(set(map(type,images)))))
 
 def is_pil_image(image):
     if not str(type(image))=="<class 'PIL.Image.Image'>":
@@ -25802,19 +25908,69 @@ def _removestar(code:str):
     from removestar.removestar import fix_code
     return fix_code(code,file='filename is irrelevant')
         
-def file_line_iterator(file_name):
-    #Opens a file and iterates through its lines
-    #Needs a better name
-    file=open(file_name)
+#def file_line_iterator(file_name):
+#    #Opens a file and iterates through its lines
+#    #Needs a better name
+#    file=open(file_name)
+#    while True:
+#        line=file.readline()
+#        if not line:
+#            return
+#        #I DONT KNOW WHY THIS ASSERTION DOESN'T ALWAYS WORK BUT SOMETIMES IT FAILS...
+#        if line.endswith('\n'):
+#            yield line[:-1]
+#        else:
+#            yield line
+
+def file_line_iterator(file_name, *, with_len=False):
+    """
+    Opens a file and iterates through its lines.
+    
+    This function requires a better name. The purpose of this function is to provide
+    an iterator that reads lines from a given file one by one.
+    
+    Args:
+        file_name (str): The path to the file to be read.
+        with_len (bool, optional): If set to True, precomputes the number 
+            of lines in the file using the `number_of_lines_in_file` function. 
+            This can be useful for tools like tqdm to show progress. 
+            Defaults to False.
+    
+    Returns:
+        Iterator: An iterator that yields lines from the given file.
+    """
+    file = open(file_name)
+    if with_len:
+        length = number_of_lines_in_file(file_name)
+        iterator = _IteratorWithLen(_file_line_gen(file), length)
+    else:
+        iterator = _file_line_gen(file)
+    return iterator
+
+def _file_line_gen(file):
     while True:
-        line=file.readline()
+        line = file.readline()
         if not line:
+            file.close()
             return
-        #I DONT KNOW WHY THIS ASSERTION DOESN'T ALWAYS WORK BUT SOMETIMES IT FAILS...
         if line.endswith('\n'):
             yield line[:-1]
         else:
             yield line
+
+class _IteratorWithLen:
+    def __init__(self, iterator, length: int):
+        self.iterator = iterator
+        self._length = length
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return next(self.iterator)
+
+    def __len__(self):
+        return self._length
     
 @memoized
 def get_all_ttf_fonts():
@@ -26843,6 +26999,13 @@ def fuzzy_match(array, target, equals=lambda x, y: x == y):
     #
     # # Running the test function
     #     test_fuzzy_match()
+
+def get_only(collection):
+    """Return the sole item of the collection."""
+    assert len(collection) == 1, "Expected length of 1"
+    return next(iter(collection))
+
+
 
 del re
 
