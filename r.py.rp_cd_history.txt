@@ -68,7 +68,6 @@
 /Users/Ryan/.ssh
 /Users/Ryan/.config/lazygit
 /Users/Ryan/Downloads
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Users/Ryan/Desktop/CleanCode/Resume/Latex/Attempt1
 /Users/Ryan/.config/alacritty
 /Users/Ryan/Desktop/Aydin
@@ -89,4 +88,5 @@
 /Users/Ryan/PycharmProjects/QuickPython/rp
 /Users/Ryan/PycharmProjects/QuickPython
 /Users/Ryan
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
