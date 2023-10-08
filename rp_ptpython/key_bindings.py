@@ -1999,14 +1999,16 @@ def handle_character(buffer,char,event=None):
             return True
 
         if not after and char==' ' and before.isalpha():
-            autocaps = 'cd py pym apy apym acat cat vim tab fd op rm rn run mv ccat ncat pip'.split()
+            autocaps = 'cd py pym apy apym acat cat vim tab fd op rm rn run mv ccat ncat pip take mkdir'.split()
             shortcuts = {
                 'tk':'TAKE',
                 'ac':'ACAT',
                 'ca':'CAT',
-                'vi':'VIM',
                 'mk':'MKDIR',
                 'op':'OPEN',
+                'pipi':'PIP install',
+                'vi':'VIM',
+                'v' :'VIM',
             }
 
             token=None
