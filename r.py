@@ -13569,7 +13569,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             if starts_with_any(user_message, 'APY', 'APYM'):
                                 user_message = '__import__("rp").shell_command(' + repr(command) + ')'
                             elif starts_with_any(user_message, 'PY', 'PYM'):
-                                user_message = '__import__("os").system(' + repr(command) + ')'
+                                user_message = '__import__("os").system(' + repr(command) + ');'
                             else:
                                 assert False, 'impossible'
 
