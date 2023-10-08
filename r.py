@@ -13534,7 +13534,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             if user_message=='PIP freeze':
                                 user_message = "__import__('rp').shell_command(" + repr(command) + ")"
                             else:
-                                user_message = "__import__('os').system(" + repr(command) + ")"
+                                user_message = "__import__('os').system(" + repr(command) + ");"
                             fansi_print("Transformed command into: " + user_message,'magenta')
 
                         elif starts_with_any(user_message, 'PY ', 'APY ', 'PYM ', 'APYM') or user_message.startswith("APY ") or user_message in 'PY APY PYM APYM'.split():
