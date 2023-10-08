@@ -226,7 +226,7 @@ class PythonCompleter(Completer):
                     yield module_name
             yield from yield_from_candidates(get_module_names())
             return 
-        if starts_with_any(before_line,'RN ','RM ','VIM ','OPEN ','FD ','WANS ','MV ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
+        if starts_with_any(before_line,'RN ','RM ','VIM ','OPEN ','FD ','WANS ','MV ','PIP ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
             yield from yield_from_candidates(os.listdir())
             return 

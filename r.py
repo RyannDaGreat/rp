@@ -11703,6 +11703,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         ZG !lazygit
 
+        # ZGA $os.system('cd '+ans'+' && lazygit') #NOT Ready yet - CDA's logic is more complex and can handle funcs and modules, this could only handle strings...
+
         FART   $r._fart();    #Find and replace text in current directory (recursively). Tip: best to use this with FDT
         AFART  $r._fart()     #Find and replace text in current directory (recursively). Tip: best to use this with FDT
         FARTA  $r._fart(ans); #Find and replace text in paths specified by ans. Tip: best to use this with FDT
