@@ -11714,6 +11714,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         FMA $pip_import("frogmouth");$os.system('frogmouth '+repr(ans)) # Displays markdown
         MDA $pip_import("frogmouth");$os.system('frogmouth '+repr(ans)) # Displays markdown
 
+        PIF PIP freeze
+
         '''.replace('$',rp_import)
         # SA string_to_text_file(input("Filename:"),str(ans))#SaveAnsToFile
         # BB set_current_directory(r._get_cd_history()[-2]);fansi_print('BB-->CDH1-->'+get_current_directory(),'blue','bold')#Use_BB_instead_of_CDH_<enter>_1_<enter>_to_save_time_when_starting_rp
