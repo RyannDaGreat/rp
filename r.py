@@ -11163,6 +11163,15 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         SRUNA
         SSRUNA
 
+        <Python>
+        PY
+        PYM
+        APY
+        APYM
+        PIP
+        RUN
+        RUNA
+
         <Simple Timer>
         TICTOC
         TICTOC ON
@@ -11216,7 +11225,6 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RETURN  (RET)
         SUSPEND (SUS)
         CLEAR
-        PIP
         WARN
         GPU
         TOP
@@ -11276,8 +11284,6 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         NCATA
         CCATA
         ACATA
-        RUN
-        RUNA
         PWD
         CPWD
         APWD
@@ -13521,7 +13527,52 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         elif user_message.startswith("PIP "):
                             fansi_print("PIP --> Equivalent to %pip in IPython ",'blue','bold')
                             command = sys.executable + ' -m pip '+user_message[len('PIP '):]
-                            user_message = "__import__('os').system(" + repr(command) + ")"
+                            if user_message=='PIP freeze':
+                                user_message = "__import__('rp').shell_command(" + repr(command) + ")"
+                            else:
+                                user_message = "__import__('os').system(" + repr(command) + ")"
+                            fansi_print("Transformed command into: " + user_message,'magenta')
+
+                        elif starts_with_any(user_message, 'PY ', 'APY ', 'PYM ', 'APYM') or user_message.startswith("APY ") or user_message in 'PY APY PYM APYM'.split():
+
+                            #Extract the arguments
+                            if user_message.startswith('PYM'):
+                                command=user_message[len('PYM'):]
+                                fansi_print("PY --> Runs python -m command using sys.executable",'blue','bold')
+                            elif user_message.startswith('APYM'):
+                                command=user_message[len('APYM'):]
+                                fansi_print("PY --> Runs python -m command using sys.executable and returns resulting stdout as ans",'blue','bold')
+                            elif user_message.startswith('PY'):
+                                command=user_message[len('PY'):]
+                                fansi_print("PY --> Runs python command using sys.executable",'blue','bold')
+                            elif user_message.startswith('APY'):
+                                command=user_message[len('APY'):]
+                                fansi_print("PY --> Runs python command using sys.executable and returns resulting stdout as ans",'blue','bold')
+                            else:
+                                assert False, 'impossible'
+
+                            command=command.strip()
+
+                            #If args left blank start dialog
+                            if not command:
+                                command = input("Args: ")
+
+                            #Maybe add -m
+                            if starts_with_any(user_message, 'PYM', 'APYM'):
+                                command = sys.executable +' -m '+command 
+                            elif starts_with_any(user_message, 'PY', 'APY'):
+                                command = sys.executable +' '+command 
+                            else:
+                                assert False, 'impossible'
+
+                            #Use shell_command or os.system
+                            if starts_with_any(user_message, 'APY', 'APYM'):
+                                user_message = '__import__("rp").shell_command(' + repr(command) + ')'
+                            elif starts_with_any(user_message, 'PY', 'PYM'):
+                                user_message = '__import__("os").system(' + repr(command) + ')'
+                            else:
+                                assert False, 'impossible'
+
                             fansi_print("Transformed command into: " + user_message,'magenta')
 
                         elif user_message.startswith("TAKE ") or user_message =='TAKE' or user_message=='MKDIR' or user_message.startswith('MKDIR '):
@@ -25942,7 +25993,7 @@ def file_line_iterator(file_name, *, with_len=False):
     file = open(file_name)
     if with_len:
         length = number_of_lines_in_file(file_name)
-        iterator = _IteratorWithLen(_file_line_gen(file), length)
+        iterator = IteratorWithLen(_file_line_gen(file), length)
     else:
         iterator = _file_line_gen(file)
     return iterator
@@ -25958,7 +26009,7 @@ def _file_line_gen(file):
         else:
             yield line
 
-class _IteratorWithLen:
+class IteratorWithLen:
     def __init__(self, iterator, length: int):
         self.iterator = iterator
         self._length = length
