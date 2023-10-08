@@ -715,7 +715,7 @@ _previous_before_line=None
 _previous_result=False
 def get_if_in_string_or_comment(before_line,after_line,buffer):
     if not '\n' in buffer.text:
-        if re.fullmatch(r'((!|!!|PY |PYM |APY |APYM |CD |RUN |MKDIR |CAT |ACAT |VIM |RUN |OPEN |RM |RN |TAB |TAKE |([A-Z]+ )).*)',before_line):#Things we want to turn microcompletions off for
+        if re.fullmatch(r'((!|!!|PY |PYM |APY |APYM |CD |RUN |MKDIR |CAT |ACAT |VIM |RUN |OPEN |RM |RN |TAB |TAKE |MV |CCAT |NCAT |WANS |EDIT |([A-Z]+ )).*)',before_line):#Things we want to turn microcompletions off for
             return True
     #This function attempts to make an nearly equivalent but faster version of true_get_if_in_string_or_comment
     global _previous_result,_previous_after_line,_previous_before_line
@@ -1999,7 +1999,7 @@ def handle_character(buffer,char,event=None):
             return True
 
         if not after and char==' ' and before.isalpha():
-            autocaps = 'cd py pym apy apym acat cat vim tab fd op rm rn run'.split()
+            autocaps = 'cd py pym apy apym acat cat vim tab fd op rm rn run mv ccat ncat pip'.split()
             shortcuts = {
                 'tk':'TAKE',
                 'ac':'ACAT',

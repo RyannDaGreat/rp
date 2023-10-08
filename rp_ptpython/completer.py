@@ -213,7 +213,8 @@ class PythonCompleter(Completer):
         # if re.fullmatch(r'\s*def\s+\w+\s*\((\s*\w+\s*(\=\s*[^\s].*)?\s*\,\s*)*\w*',before_line) and after_line.strip()=='):':
         #     return#Don't autocomplete function paramater names
 
-        if before_line.startswith('CD ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
+        from rp import starts_with_any
+        if starts_with_any(before_line,'CD ','RN ','RM ','VIM ','OPEN ','ACAT ','CAT ','TAKE ','MKDIR ','FD ','TAB ','PY ','APY ','PYM ','APYM ','RUN ','NCAT ','CCAT ','WANS ','MV ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
             from rp import is_a_directory
             yield from yield_from_candidates([x for x in os.listdir() if is_a_directory(x)])
