@@ -219,6 +219,13 @@ class PythonCompleter(Completer):
             from rp import is_a_directory
             yield from yield_from_candidates([x for x in os.listdir() if is_a_directory(x)])
             return 
+        if starts_with_any(before_line,'PYM ','APYM ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
+            def get_module_names():
+                import pkgutil
+                for _, module_name, _ in pkgutil.iter_modules():
+                    yield module_name
+            yield from yield_from_candidates(get_module_names())
+            return 
         if starts_with_any(before_line,'RN ','RM ','VIM ','OPEN ','FD ','WANS ','MV ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
             yield from yield_from_candidates(os.listdir())
