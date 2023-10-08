@@ -214,12 +214,16 @@ class PythonCompleter(Completer):
         #     return#Don't autocomplete function paramater names
 
         from rp import starts_with_any
-        if starts_with_any(before_line,'CD ','RN ','RM ','VIM ','OPEN ','ACAT ','CAT ','TAKE ','MKDIR ','FD ','TAB ','PY ','APY ','PYM ','APYM ','RUN ','NCAT ','CCAT ','WANS ','MV ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
+        if starts_with_any(before_line,'CD ','TAKE ','MKDIR ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
             from rp import is_a_directory
             yield from yield_from_candidates([x for x in os.listdir() if is_a_directory(x)])
             return 
-        if re.fullmatch(r'(CAT |NCAT |CCAT |OPEN ).*',before) and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
+        if starts_with_any(before_line,'RN ','RM ','VIM ','OPEN ','FD ','WANS ','MV ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
+            import os
+            yield from yield_from_candidates(os.listdir())
+            return 
+        if re.fullmatch(r'(CAT |NCAT |CCAT |OPEN |ACAT |TAB |RUN |PY |APY |PYM |APYM ).*',before) and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
             from rp import is_a_file
             yield from yield_from_candidates([x for x in os.listdir() if is_a_file(x)])
