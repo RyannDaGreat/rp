@@ -166,7 +166,7 @@ def run_code(code,mode,namespace,exv):
 
 
 
-#################################    EXITING THE DEBUGGER #######################################
+#################################    EXITING THE DEBUGGER   #######################################
 
 
         return exv(interpereter.compile(code,fc(code),mode) or exec(code),namespace,namespace)
