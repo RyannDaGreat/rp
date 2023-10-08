@@ -72,6 +72,27 @@ def handle_run_cell(event):
         run_arbitrary_code_without_destroying_buffer(cell_code,event,put_in_history=True)#To include or not to include...which one??
     main()
 
+def is_callable_token(token_name):
+    assert isinstance(token_name,str)
+    token_name=token_name.strip()
+    import rp.r_iterm_comm as r_iterm_comm
+    try:
+        return callable(eval(token_name,r_iterm_comm.globa))
+    except Exception as e:
+        return False
+
+def is_iterable_token(token_name):
+    assert isinstance(token_name,str)
+    token_name=token_name.strip()
+    import rp.r_iterm_comm as r_iterm_comm
+    from rp import is_iterable
+    try:
+        return is_iterable(eval(token_name,r_iterm_comm.globa))
+    except Exception as e:
+        return False
+
+
+
 def edit_event_buffer_in_vim(event):
         buffer=event.cli.current_buffer
         document=buffer.document
@@ -694,7 +715,7 @@ _previous_before_line=None
 _previous_result=False
 def get_if_in_string_or_comment(before_line,after_line,buffer):
     if not '\n' in buffer.text:
-        if re.fullmatch(r'((!|!!|CD |RUN |([A-Z]+ )).*)',before_line):#Things we want to turn microcompletions off for
+        if re.fullmatch(r'((!|!!|PY |PYM |APY |APYM |CD |RUN |MKDIR |CAT |ACAT |VIM |RUN |OPEN |RM |RN |TAB |TAKE |([A-Z]+ )).*)',before_line):#Things we want to turn microcompletions off for
             return True
     #This function attempts to make an nearly equivalent but faster version of true_get_if_in_string_or_comment
     global _previous_result,_previous_after_line,_previous_before_line
@@ -1977,11 +1998,35 @@ def handle_character(buffer,char,event=None):
             #Do nothing
             return True
 
-        if before=='cd' and not after and char==' ':
-            #Allow 'cd thing' to be 'CD thing'
-            buffer.delete_before_cursor(2)
-            buffer.insert_text('CD ')
-            return True
+        if not after and char==' ' and before.isalpha():
+            autocaps = 'cd py pym apy apym acat cat vim tab fd op rm rn run'.split()
+            shortcuts = {
+                'tk':'TAKE',
+                'ac':'ACAT',
+                'ca':'CAT',
+                'vi':'VIM',
+                'mk':'MKDIR',
+                'op':'OPEN',
+            }
+
+            token=None
+            if before in autocaps:
+                token = before.upper()
+            elif before in shortcuts:
+                token=shortcuts[before]
+
+            if token is not None and not is_callable_token(before) and not is_iterable_token(before):
+                #Allow 'cd thing' to be 'CD thing'
+                buffer.delete_before_cursor(len(before))
+                buffer.insert_text(token+' ')
+                return True
+
+        #OLD VERSION
+        #if before=='cd' and not after and char==' ':
+        #    #Allow 'cd thing' to be 'CD thing'
+        #    buffer.delete_before_cursor(2)
+        #    buffer.insert_text('CD ')
+        #    return True
 
         if set(after)<=set('])}') and not '\n' in before:
             if char=='\n' and before.endswith('/'):
