@@ -4006,6 +4006,8 @@ def display_image(image,block=False):
     if isinstance(image,str):
         fansi_print("display_image usually meant for use with numpy arrays, but you passed it a string, so we'll try to load the image load_image("+repr(image)+") and display that.")
         image=load_image(image)
+    if is_pil_image(image):
+        image=as_numpy_image(image)
     if not isinstance(image,np.ndarray) and not isinstance(image,list):
         try:
             import torch
@@ -6239,7 +6241,16 @@ def append_line_to_file(line:str,file_path:str):
 def load_json(path, use_cache=False):
     text=text_file_to_string(path, use_cache=use_cache)
     import json
-    return json.loads(text)
+    out = json.loads(text)
+    if not isinstance(out, dict):
+        return out
+    try:
+        #If we have this library installed, use it.
+        #But don't be pushy about it - no pip_import here.
+        from easydict import EasyDict
+        return EasyDict(out)
+    except ImportError:
+        return out
 
 def load_jsons(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False, lazy=False):
     """
@@ -8540,6 +8551,7 @@ def display_image_in_terminal(image,dither=True,auto_resize=True,bordered=False)
     #
     if isinstance(image,str):
         image=load_image(image)
+    image=as_numpy_image(image)
     def width(image) -> int:
         return len(image)
     def height(image) -> int:
