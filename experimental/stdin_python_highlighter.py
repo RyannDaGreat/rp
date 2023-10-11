@@ -831,6 +831,13 @@ def start(text=None):
     # HARDCODED_WIDTH=None
 
     text=text or sys.stdin.read()
+
+    lines=text.splitlines()
+    if len(lines)==1 and '\\n' in lines[0]:
+        #Some glitch idk why makes it a single line in tmux on sensei
+        lines=lines[0].split('\\n')
+        text='\n'.join(lines)
+
     width=int(sys.argv[1])
 
     text=text.replace('\\"','"')
