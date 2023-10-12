@@ -69,7 +69,7 @@ def fansi_syntax_highlighting(code: str,
     }
     default_ansi.update(style_overrides)
     try:
-        import keyword,tokenize,cgi,re,functools
+        import keyword,tokenize,re,functools
         try:
             import builtins
         except ImportError:
