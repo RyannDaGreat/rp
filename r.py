@@ -11329,6 +11329,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         #
         # <Truly Unimportant>
         # IHISTORY (IHIST)
+        # RYAN RPRC YES #Theres a shortcut RRY for this, we don't really need to document it...
+        # RYAN VIMRC YES #Theres a shortcut RVY for this, we don't really need to document it...
         # """
 
         help_commands=[]#All commands, so we can search through them and turn uncapitablized ones into capitalized ones
@@ -11479,6 +11481,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         PP PREV
         
         UP UPDATE
+        UPWA if $input_yes_no(ans+"\\n\\n"+$fansi("Set r.py to this?",'red','bold')): $string_to_text_file($get_module_path($rp), ans)
 
         B CDB
         U CDU
@@ -11536,6 +11539,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RT  ryantmuxrc
         RV  ryanvimrc
         RX  ryanxonshrc
+        RRY  RYAN RPRC YES
+        RVY  RYAN VIMRC YES
 
         UU $set_current_directory('../..');$fansi_print($get_current_directory(),'blue','bold')
         UUU $set_current_directory('../../..');$fansi_print($get_current_directory(),'blue','bold')
@@ -13175,8 +13180,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             user_message='ans = '+repr(get_absolute_path('~/.tmux.conf'))
 
 
-                        elif user_message=='RYAN VIMRC':
-                            if input_yes_no('Would you like to add Ryan Burgert\'s vim settings to your ~/.vimrc?'):
+                        elif user_message=='RYAN VIMRC' or user_message=='RYAN VIMRC YES':
+                            if 'YES' in user_message or input_yes_no('Would you like to add Ryan Burgert\'s vim settings to your ~/.vimrc?'):
                                 _set_ryan_vimrc()
                                 user_message='ans = '+repr(get_absolute_path('~/.vimrc'))
                             
@@ -13195,11 +13200,21 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             vim(get_absolute_path('~/.vimrc'))
                             user_message='ans = '+repr(get_absolute_path('~/.vimrc'))
 
-                        elif user_message == 'RYAN RPRC':
+                        elif user_message == 'RYAN RPRC' or user_message=='RYAN RPRC YES':
                             #This isn't in the help documentation, because it's something I made for myself. You can use it too though!
-                            if input_yes_no('Would you like to add Ryan Burgert\'s default settings to your rprc?'):
-                                _get_ryan_rprc_path()
-                            user_message='from rp import *\nans='+repr(rprc_file_path)
+                            if user_message=='RYAN RPRC YES' or input_yes_no('Would you like to add Ryan Burgert\'s default settings to your rprc?'):
+                                # _get_ryan_rprc_path() #This already exists!
+                                for line in [
+                                    "",
+                                    "# < Ryan RPRC Start >",
+                                    "from rp import *",
+                                    "__import__('rp').r._pip_import_autoyes=True",
+                                    "__import__('rp').r._pip_install_needs_sudo=False",
+                                    "# < Ryan RPRC End >",
+                                    "",
+                                ]:
+                                    append_line_to_file(line,rprc_file_path)
+                                user_message='from rp import *\nans='+repr(rprc_file_path)
 
                         elif user_message == 'GMORE':
                             fansi_print("GMORE --> 'google-search MORE' --> Searching the web for your error...","red",'bold')
@@ -13554,16 +13569,16 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             #Extract the arguments
                             if user_message.startswith('PYM'):
                                 command=user_message[len('PYM'):]
-                                fansi_print("PY --> Runs python -m command using sys.executable",'blue','bold')
+                                fansi_print("PYM --> Runs python -m command using sys.executable",'blue','bold')
                             elif user_message.startswith('APYM'):
                                 command=user_message[len('APYM'):]
-                                fansi_print("PY --> Runs python -m command using sys.executable and returns resulting stdout as ans",'blue','bold')
+                                fansi_print("APYM --> Runs python -m command using sys.executable and returns resulting stdout as ans",'blue','bold')
                             elif user_message.startswith('PY'):
                                 command=user_message[len('PY'):]
                                 fansi_print("PY --> Runs python command using sys.executable",'blue','bold')
                             elif user_message.startswith('APY'):
                                 command=user_message[len('APY'):]
-                                fansi_print("PY --> Runs python command using sys.executable and returns resulting stdout as ans",'blue','bold')
+                                fansi_print("APY --> Runs python command using sys.executable and returns resulting stdout as ans",'blue','bold')
                             else:
                                 assert False, 'impossible'
 
@@ -19596,7 +19611,9 @@ def rename_path(path,new_name):
     #       is equivalent to (in bash)
     #   mv .apple/bananna/cherry.jpg apple/bananna/coconut.png
     """
-    os.rename(path,os.path.join(get_path_parent(path),new_name))
+    new_path=os.path.join(get_path_parent(path),new_name)
+    os.rename(path,new_path)
+    return new_path
 
 rename_file=rename_path#Synonyms that might make more sense to read in their context than rename_path
 rename_folder=rename_path
