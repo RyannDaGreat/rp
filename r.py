@@ -11482,6 +11482,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         
         UP UPDATE
         UPWA if $input_yes_no(ans+"\\n\\n"+$fansi("Set r.py to this?",'red','bold')): $string_to_text_file($get_module_path($rp), ans)
+        UPYE PIP install rp --upgrade --no-cache 
 
         B CDB
         U CDU
