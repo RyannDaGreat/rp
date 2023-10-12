@@ -4761,7 +4761,7 @@ def gather(iterable,*indices,as_dict=False):
     # indices ∈ list of integers
     """
     indices=detuple(indices)
-    indices=delist(indices)
+    # indices=delist(indices)
     assert is_iterable(iterable),"The 'iterable' parameter you fed in is not an iterable!"
     assert is_iterable(indices),"You need to feed in a list of indices, not just a single index.  indices == " + str(indices)
     if not as_dict:
