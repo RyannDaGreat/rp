@@ -11479,10 +11479,6 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         P  PREV
         NN NEXT
         PP PREV
-        
-        UP UPDATE
-        UPWA if $input_yes_no(ans+"\\n\\n"+$fansi("Set r.py to this?",'red','bold')): $string_to_text_file($get_module_path($rp), ans)
-        UPYE PIP install rp --upgrade --no-cache 
 
         B CDB
         U CDU
@@ -11564,6 +11560,14 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         LVL LEVEL
         LV LEVEL
         L LEVEL
+
+        SHOGA r._pip_install_multiple(ans, shotgun=True) #Shotgun Ans - works well with PIF
+        PIMA r._pip_install_multiple(ans, shotgun=False) #Pip Install Multiple Ans - works well with PIF
+        PIRA pip_install('-r '+ans)
+        
+        UP UPDATE
+        UPWA if $input_yes_no(ans+"\\n\\n"+$fansi("Set r.py to this?",'red','bold')): $string_to_text_file($get_module_path($r), ans)
+        UPYE PIP install rp --upgrade --no-cache 
 
         DK DISK
         DD DITTO
@@ -14876,6 +14880,70 @@ def module_exists(module_name):
         return True
     except ImportError:
         return False
+
+def _pip_install_multiple(packages, shotgun=True, quiet=False):
+    """
+    Install multiple packages via pip.
+
+    If shotgun is True:
+        Try to install each package individually. If a package fails, the function
+        continues with the next package.
+    
+    If shotgun is False:
+        Attempt to install all packages. If any package fails, none will be installed.
+        This is similar to installing packages in one go using a requirements.txt file.
+    
+    Args:
+        packages (str or list): A list of packages or a string of space-separated package names.
+        shotgun (bool): Installation strategy. See description above.
+        quiet (bool): If True, suppress pip's output.
+
+    Returns:
+        List[str]: A list of successfully installed packages.
+    """
+    import sys
+    import subprocess
+    import shlex
+
+    if isinstance(packages, str):
+        packages = line_split(packages)
+
+    assert is_iterable(packages)
+    assert all(isinstance(x, str) for x in packages)
+    packages = list(packages)
+    
+    successful_packages = []
+    base_command = [sys.executable, '-m', 'pip', 'install']
+    
+    if quiet:
+        base_command.append('-q')
+
+    if not shotgun:
+        # Install all packages in one go
+        quoted_packages = [shlex.quote(pkg) for pkg in packages]
+        command = base_command + quoted_packages
+        result = subprocess.run(command)
+        
+        if result.returncode == 0:  # if the command was successful
+            print(fansi("All packages were successfully installed!", "green"))
+            return packages
+        else:
+            print(fansi("Failed to install one or more packages. None were installed.", "red"))
+            return []
+    else:
+        for package in packages:
+            command = base_command + [shlex.quote(package)]
+            result = subprocess.run(command)
+            
+            if result.returncode == 0:  # if the command was successful
+                successful_packages.append(package)
+                print(fansi("Successfully installed {}.".format(package), "green"))
+            else:
+                print(fansi("Failed to install {}. Continuing with the next package.".format(package), "red"))
+
+        return successful_packages
+
+
 
 known_pypi_module_package_names={
     # To update this list, copy-paste the output of rp.pypi_inspection.get_pypi_module_package_names()
