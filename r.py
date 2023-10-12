@@ -10634,6 +10634,7 @@ def _ISM(ans):
     else:
         if isinstance(ans,str):
             ans=line_split(ans)
+            return line_join(_ISM(ans))
         return pip_import('iterfzf').iterfzf(ans,multi=True,exact=True)
 
 def _view_with_pyfx(data):
