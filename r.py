@@ -4755,13 +4755,19 @@ def matching_indices(x,l,check=lambda x,y:x == y,key=None)->list:
             out.append(i)
     return out
 
-def gather(iterable,*indices):
+def gather(iterable,*indices,as_dict=False):
+    """
+    TODO: Add skip_missing or strict option (idk which yet but probably skip_missing if following in lines with gather_vars)
     # indices ∈ list of integers
+    """
     indices=detuple(indices)
     indices=delist(indices)
     assert is_iterable(iterable),"The 'iterable' parameter you fed in is not an iterable!"
     assert is_iterable(indices),"You need to feed in a list of indices, not just a single index.  indices == " + str(indices)
-    return [iterable[i] for i in indices]  # ≣list(map(lambda i:iterable[i],indices))
+    if not as_dict:
+        return [iterable[i] for i in indices]  # ≣list(map(lambda i:iterable[i],indices))
+    else:
+        return {i:iterable[i] for i in indices}
 
 def pop_gather(x,*indices):
     # Uses CSE214 definition of 'pop', in the context of popping stacks.
@@ -5012,6 +5018,47 @@ def destructure(d: dict) -> tuple:
     
     return values
 
+def _filter_dict_via_fzf(input_dict):
+    """Uses fzf to select a subset of a dict and returns that dict."""
+    #Refactored using GPT4 from a mess: https://chat.openai.com/share/66251028-75eb-4c55-960c-1e7477e34060
+
+    pip_import('iterfzf')
+    import iterfzf
+
+    # Extract dictionary items
+    items_list = list(input_dict.items())
+    keys, values = list_transpose(items_list)
+    sorted_keys, sorted_values = sync_sorted(keys, values)
+
+    # Define a utility function inside the main function to reduce the number of repeated tasks
+    def format_string(item):
+        if '\n' in item:
+            return repr(item)
+        return item
+
+    formatted_values = map(format_string, sorted_values)
+    formatted_keys = map(format_string, sorted_keys)
+    
+    # Join lines and format the display
+    joined_values = line_join(formatted_values)
+    joined_keys = line_join(formatted_keys)
+    
+    separator = ' | '
+    for char in separator:
+        joined_keys = make_string_rectangular(joined_keys + char, fillchar=char)
+
+    display_str = horizontally_concatenated_strings(joined_keys, joined_values)
+    display_lines = display_str.splitlines()
+
+    # Use fzf to select lines
+    selected_lines = iterfzf.iterfzf(display_lines, multi=True, exact=True)
+    selected_indices = [display_lines.index(line) for line in selected_lines]
+
+    # Extract the selected keys
+    selected_keys = [sorted_keys[index] for index in selected_indices]
+
+    # Return the dictionary subset
+    return gather(input_dict, selected_keys, as_dict=True)
 
 # endregion
 # region  List/Dict Functions/Displays: ［list_to_index_dict，invert_dict，invert_dict，invert_list_to_dict，dict_to_list，list_set，display_dict，display_list］
@@ -10574,6 +10621,21 @@ def _view_image_via_textual_imageview(image):
         finally:
             delete_file(path)
 
+def _ISM(ans):
+    #Input Select Multi
+    #TODO make it for things other than lists of strings, like lists of ints. To do this make it into a line-numbered string dict -> values then use those values to look up keys ->  get answer. Better yet create a fzf wrapper for this task - to select non-string things!
+    try:
+        ans=dict(ans)
+    except Exception:
+        pass
+
+    if isinstance(ans,dict):
+        return _filter_dict_via_fzf(ans)
+    else:
+        if isinstance(ans,str):
+            ans=line_split(ans)
+        return pip_import('iterfzf').iterfzf(ans,multi=True,exact=True)
+
 def _view_with_pyfx(data):
     from rp.libs.pyfx.app import PyfxApp
     from rp.libs.pyfx.model import DataSourceType
@@ -11595,6 +11657,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         DKH DISKH
          KH DISKH
 
+
+        PRP PYM rp
+
         GOO  $open_google_search_in_web_browser(str(ans))
         GOOP $open_google_search_in_web_browser($string_from_clipboard())
 
@@ -11618,9 +11683,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         INS $input_select("Select:", $line_split(ans) if isinstance(ans,str) else ans)
         ISA $input_select("Select:", $line_split(ans) if isinstance(ans,str) else ans)
-        ISM $pip_import('iterfzf').iterfzf($line_split(ans) if isinstance(ans,str) else ans,multi=True,exact=True)
-        IMA $pip_import('iterfzf').iterfzf($line_split(ans) if isinstance(ans,str) else ans,multi=True,exact=True)
-        IMS $pip_import('iterfzf').iterfzf($line_split(ans) if isinstance(ans,str) else ans,multi=True,exact=True)
+        ISM $r._ISM(ans) #Input Select Multi
+        IMA $r._ISM(ans) #Input Select Multi
+        IMS $r._ISM(ans) #Input Select Multi
+
+        ISENV $r._ISM($os.environ) #Input Select (multiple) Environment (variables)
 
         VCL $delete_file($get_absolute_path('~/.viminfo'))#VimClear_use_when_VCOPY_doesnt_work_properly
 
