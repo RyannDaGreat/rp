@@ -22618,6 +22618,10 @@ set -g default-terminal "screen-256color"
         string_to_text_file(conf_path,conf)
         shell_command('git clone https://github.com/tmux-plugins/tmux-yank ~/clone/path')
         print("Succesfully configured your tmux! Please restart tmux to see the changes.")
+    try:
+        os.system('tmux source-file ~/.tmux.conf') #Refresh tmux conf if possible
+    except Exception:
+        pass
 
 
 def can_convert_object_to_bytes(x:object)->bool:
