@@ -10791,6 +10791,8 @@ def _input_select_multiple_history(history_filename=history_filename):
 
     return out
 
+_need_module_refresh=False #Set to true if we do something with pip. Used by pterm
+
 #def pudb_shell(_globals,_locals_):
 #    #https://documen.tician.de/pudb/shells.html
 #    pseudo_terminal(_globals,_locals)
@@ -10950,7 +10952,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         out[k]=d[k]# Failed to copy
             return out
 
-        need_module_refresh=False #Set to true if we do something with pip
+        global _need_module_refresh
 
         def get_snapshot():# Snapshot of our dicts/scope
             # exec(mini_terminal)
@@ -11877,7 +11879,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             # print("GC!")
                             # garbage_collector_timer=tic()
 
-                        if need_module_refresh:
+                        if _need_module_refresh:
                             _refresh_autocomplete_module_list()
 
 
@@ -13653,10 +13655,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             command = sys.executable + ' -m pip '+user_message[len('PIP '):]
                             if user_message=='PIP freeze':
                                 user_message = "__import__('rp').shell_command(" + repr(command) + ")"
-                                need_module_refresh=True
+                                _need_module_refresh=True
                             else:
                                 user_message = "__import__('os').system(" + repr(command) + ");"
-                                need_module_refresh=True
+                                _need_module_refresh=True
                             fansi_print("Transformed command into: " + user_message,'magenta')
 
                         elif starts_with_any(user_message, 'PY ', 'APY ', 'PYM ', 'APYM') or user_message.startswith("APY ") or user_message in 'PY APY PYM APYM'.split():
@@ -15038,6 +15040,10 @@ def _pip_install_multiple(packages, shotgun=True, quiet=False):
                 print(fansi("Failed to install {}. Continuing with the next package.".format(package), "red"))
 
         return successful_packages
+
+    global _need_module_refresh
+    _need_module_refresh=True
+
 
 
 
