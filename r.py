@@ -11743,6 +11743,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RD    $random_element($get_all_directories())
         RE    $random_element(ans)
 
+        LJ LINE JOIN ANS
+
         DCI $display_image_in_terminal_color(ans)
         
         GP $get_parent_directory(ans)
@@ -12888,6 +12890,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
                         _maybe_display_string_in_pager(text)
 
+
                     elif user_message=='WANS':
                         fansi_print("WANS -> Write ans to a file (can be text, bytes, or an image)","blue",'bold')
                         path=input(fansi("(Enter blank path to select and overwrite an existing file)\nPath: ",'blue','bold'))
@@ -12948,6 +12951,19 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             #The following line hasn't been a problem in a while, and the message is kinda a nuisance
                             # fansi_print('Will try to run Xonsh (a python-based alternative to bash). Note that its the same runtime as. If it fails to launch properly, try "pip3 install prompt-toolkit pygments --upgrade". If it\'s fine, ignore this message.','blue')
                             user_message='__import__("rp").launch_xonsh()'  # Import xonsh, run the shell, then update the directory
+
+                        elif user_message == 'LINE JOIN ANS':
+                            #This isn't in the help because this is really meant to be used by shortcuts so the message can be multiplexed between list-> string and string->list
+                            ans=get_ans()
+                            if isinstance(ans,str):
+                                user_message="ans.splitlines()"
+                            else:
+                                if all(isinstance(x,str) for x in ans):
+                                    user_message="'\\n'.join(ans)"
+                                else:
+                                    user_message="'\\n'.join(map(str,ans))"
+
+                            fansi_print("Transformed input to "+repr(user_message),'magenta','bold')
 
                         elif user_message=='AVIMA':
                             fansi_print("AVIMA --> Letting you edit ans in vim as a string","blue",'bold')
@@ -14988,7 +15004,8 @@ def _pip_install_multiple(packages, shotgun=True, quiet=False):
 
     if not shotgun:
         # Install all packages in one go
-        quoted_packages = [shlex.quote(pkg) for pkg in packages]
+        # quoted_packages = [shlex.quote(pkg) for pkg in packages]
+        quoted_packages = list_flatten([shlex.split(pkg) for pkg in packages])
         command = base_command + quoted_packages
         result = subprocess.run(command)
         
@@ -15000,7 +15017,7 @@ def _pip_install_multiple(packages, shotgun=True, quiet=False):
             return []
     else:
         for package in packages:
-            command = base_command + [shlex.quote(package)]
+            command = base_command + shlex.split(package)
             result = subprocess.run(command)
             
             if result.returncode == 0:  # if the command was successful
