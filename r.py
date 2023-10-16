@@ -14990,6 +14990,9 @@ def _pip_install_multiple(packages, shotgun=True, quiet=False):
     import shlex
 
     if isinstance(packages, str):
+        if file_exists(packages):
+            fansi_print("Reading packages from "+repr(packages), 'blue')
+            packages=text_file_to_string(packages)
         packages = line_split(packages)
 
     assert is_iterable(packages)
