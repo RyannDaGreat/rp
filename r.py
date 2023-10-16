@@ -10950,6 +10950,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         out[k]=d[k]# Failed to copy
             return out
 
+        need_module_refresh=False #Set to true if we do something with pip
+
         def get_snapshot():# Snapshot of our dicts/scope
             # exec(mini_terminal)
             return list(map(deep_dark_dict_copy,dicts))
@@ -11875,6 +11877,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             # print("GC!")
                             # garbage_collector_timer=tic()
 
+                        if need_module_refresh:
+                            _refresh_autocomplete_module_list()
 
 
 
@@ -13649,8 +13653,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             command = sys.executable + ' -m pip '+user_message[len('PIP '):]
                             if user_message=='PIP freeze':
                                 user_message = "__import__('rp').shell_command(" + repr(command) + ")"
+                                need_module_refresh=True
                             else:
                                 user_message = "__import__('os').system(" + repr(command) + ");"
+                                need_module_refresh=True
                             fansi_print("Transformed command into: " + user_message,'magenta')
 
                         elif starts_with_any(user_message, 'PY ', 'APY ', 'PYM ', 'APYM') or user_message.startswith("APY ") or user_message in 'PY APY PYM APYM'.split():
@@ -14932,6 +14938,9 @@ def is_number(x):
     # except Exception:pass#Maybe we don't have torch.
     return False
 
+def _refresh_autocomplete_module_list():
+    from rp.rp_ptpython.completer import get_all_importable_module_names
+    get_all_importable_module_names()
 
 def line_join(iterable,separator='\n'):
     return separator.join(map(str,iterable))
@@ -14944,8 +14953,7 @@ def pip_install(pip_args:str):
         #Attempt to get root priveleges. Sometimes we need root priveleges to install stuff. If we're on unix, attempt to become the root for this process. There's probably a better way to do this but idk how and don't really care that much even though I probably should...
         os.system('sudo echo')#This should only prompt for a password once...making the next command run in sudo.
     os.system(sys.executable+' -m pip install '+pip_args)
-    from rp.rp_ptpython.completer import get_all_importable_module_names
-    get_all_importable_module_names()
+    _refresh_autocomplete_module_list()
     #DONT DELETE THIS COMMENT BLOCK: An alternative way to install things with pip:
     #    from pip.__main__ import _main as pip
     #    errored=pip(['install', package_name]+['--upgrade']*upgrade)
