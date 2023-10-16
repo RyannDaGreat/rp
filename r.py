@@ -11628,8 +11628,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         LV LEVEL
         L LEVEL
 
-        SHOGA r._pip_install_multiple(ans, shotgun=True) #Shotgun Ans - works well with PIF
-        PIMA r._pip_install_multiple(ans, shotgun=False) #Pip Install Multiple Ans - works well with PIF
+        SHOGA $pip_install_multiple(ans, shotgun=True) #Shotgun Ans - works well with PIF
+        PIMA $pip_install_multiple(ans, shotgun=False) #Pip Install Multiple Ans - works well with PIF
         PIRA pip_install('-r '+ans)
         
         UP UPDATE
@@ -14975,7 +14975,7 @@ def module_exists(module_name):
     except ImportError:
         return False
 
-def _pip_install_multiple(packages, shotgun=True, quiet=False):
+def pip_install_multiple(packages, shotgun=True, quiet=False):
     """
     Install multiple packages via pip.
 
