@@ -5032,6 +5032,7 @@ def _filter_dict_via_fzf(input_dict):
 
     # Define a utility function inside the main function to reduce the number of repeated tasks
     def format_string(item):
+        item=str(item)
         if '\n' in item:
             return repr(item)
         return item
@@ -15255,7 +15256,7 @@ class _rp_persistent_set:
 
 _pip_import_blacklist=_rp_persistent_set()
 
-_pip_import_autoyes=False
+_pip_import_autoyes=False #This will always be a private variable, but it might be exposed via a function
 def pip_import(module_name,package_name=None,*,auto_yes=False):
     """
     TODO: Make this function only request sudo if we need it. Otherwise it's a nuisance.
@@ -20016,6 +20017,7 @@ def copy_directory(from_path, to_path, *, extract=False, follow_symlinks=False):
     # import distutils.dir_util
     # reload(distutils.dir_util)#I don't know why, but when I copied a folder, deleted it, then told it to copy again, it broke with "ERROR: distutils.errors.DistutilsFileError: could not create 'TestJam/Wampo/prompt_toolkit/filters/.DS_Store': No such file or directory" and reloading the module appeared to fix it. This reloading doesn't appear to damage performance, I clocked it at 0.0003399848937988281 seconds
 
+    import shutil
     #Do the actual copying - extract into to_path
     shutil.copytree(from_path, to_path, symlinks=follow_symlinks)
 
