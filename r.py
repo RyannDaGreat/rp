@@ -4077,14 +4077,14 @@ def with_alpha_checkerboard(image, tile_size=8, first_color=1.0, second_color=0.
     )
     return blend_images(checkers, image)
 
-def display_alpha_image(image, tile_size=8, first_color=1.0, second_color=0.75):
+def display_alpha_image(image, block=False, tile_size=8, first_color=1.0, second_color=0.75):
     alpha_checkerboard_image = with_alpha_checkerboard(
         image, 
         tile_size=tile_size,
         first_color=first_color,
         second_color=second_color
     )
-    display_image(alpha_checkerboard_image)
+    display_image(alpha_checkerboard_image, block=block)
 
 def _display_image_slideshow_animated(images):
     #This works best on Jupyter notebooks right now
@@ -23309,84 +23309,378 @@ def get_image_file_dimensions(image_file_path:str):
     import imagesize
     return imagesize.get(image_file_path)[::-1]#Returns (height, width)
 
-def rgb_to_hsv(image):
-    #Takes an RGB image and returns an HSV image
-    #Any alpha channels will be removed
-    #EXAMPLE: Animating a rainbow doggy
-    #    i=load_image('https://www.rover.com/blog/wp-content/uploads/2018/04/ThinkstockPhotos-485251240-960x540.jpg')
-    #    for _ in range(100):
-    #        i=rgb_to_hsv(i)
-    #        i[:,:,0]+=.05
-    #        i=hsv_to_rgb(i)
-    #        display_image(i)
-    assert is_image(image)
-    image=as_float_image(image)
-    image=as_rgb_image(image)
-    pip_import('skimage')
-    import skimage.color as color
-    return color.rgb2hsv(image)
 
-def hsv_to_rgb(image):
-    #Takes an RGB image and returns an HSV image
-    #Any alpha channels will be removed
-    assert is_image(image)
-    image=as_float_image(image)
-    image=as_rgb_image(image)
-    pip_import('skimage')
-    import skimage.color as color
-    return color.hsv2rgb(image)
+_hsv_to_rgb_cache = None
+
+def _hsv_to_rgb_via_numpy(hsv_image):
+    """
+    Convert an HSV image to RGB using numpy.
+    The input HSV values are assumed to be in the range [0, 1].
+    """
+    h, s, v = hsv_image[:, :, 0], hsv_image[:, :, 1], hsv_image[:, :, 2]
+    h%=1
+
+    i = (h * 6).astype(np.int)
+    f = h * 6 - i
+    p = v * (1 - s)
+    one_minus_f = 1 - f
+    q = v - v * s * f
+    t = v - v * s * one_minus_f
+
+    i = i % 6  # To ensure values are in [0, 5]
+
+    # Initialize an empty RGB image
+    rgb_image = np.empty(hsv_image.shape, dtype=hsv_image.dtype)
+
+    mask = i == 0
+    rgb_image[mask] = v[mask], t[mask], p[mask]
+
+    mask = i == 1
+    rgb_image[mask] = q[mask], v[mask], p[mask]
+
+    mask = i == 2
+    rgb_image[mask] = p[mask], v[mask], t[mask]
+
+    mask = i == 3
+    rgb_image[mask] = p[mask], q[mask], v[mask]
+
+    mask = i == 4
+    rgb_image[mask] = t[mask], p[mask], v[mask]
+
+    mask = i == 5
+    rgb_image[mask] = v[mask], p[mask], q[mask]
+
+    return rgb_image
+
+def _hsv_to_rgb_via_numba(hsv_image):
+    """
+    Convert an HSV image to RGB using Numba for optimization.
+    The input HSV values are assumed to be in the range [0, 1].
+    """
+    h, s, v = hsv_image[:, :, 0], hsv_image[:, :, 1], hsv_image[:, :, 2]
+    h%=1
+
+    i = (h * 6).astype(np.int32)
+    f = h * 6 - i
+    p = v * (1 - s)
+    q = v - v * s * f
+    t = v - v * s * (1 - f)
+
+    i = i % 6
+
+    # Initialize an empty RGB image
+    rgb_image = np.empty(hsv_image.shape, dtype=hsv_image.dtype)
+
+    for x in range(hsv_image.shape[0]):
+        for y in range(hsv_image.shape[1]):
+            if i[x, y] == 0:
+                rgb_image[x, y] = v[x, y], t[x, y], p[x, y]
+            elif i[x, y] == 1:
+                rgb_image[x, y] = q[x, y], v[x, y], p[x, y]
+            elif i[x, y] == 2:
+                rgb_image[x, y] = p[x, y], v[x, y], t[x, y]
+            elif i[x, y] == 3:
+                rgb_image[x, y] = p[x, y], q[x, y], v[x, y]
+            elif i[x, y] == 4:
+                rgb_image[x, y] = t[x, y], p[x, y], v[x, y]
+            elif i[x, y] == 5:
+                rgb_image[x, y] = v[x, y], p[x, y], q[x, y]
+
+    return rgb_image
+
+_rgb_to_hsv_cache = None
+
+def _rgb_to_hsv_via_numpy(rgb_image):
+    """
+    Convert an RGB image to HSV using numpy.
+    The input RGB values are assumed to be in the range [0, 1].
+    """
+    r, g, b = rgb_image[:, :, 0], rgb_image[:, :, 1], rgb_image[:, :, 2]
+    
+    max_val = np.maximum(r, np.maximum(g, b))
+    min_val = np.minimum(r, np.minimum(g, b))
+    delta = max_val - min_val
+    
+    v = max_val
+    s = np.where(max_val != 0, delta / max_val, 0)
+    
+    h = np.zeros_like(r)
+    
+    mask = (max_val == r) & (g >= b)
+    h[mask] = 60 * (g[mask] - b[mask]) / delta[mask]
+    
+    mask = (max_val == r) & (g < b)
+    h[mask] = 60 * (g[mask] - b[mask]) / delta[mask] + 360
+    
+    mask = max_val == g
+    h[mask] = 60 * (b[mask] - r[mask]) / delta[mask] + 120
+    
+    mask = max_val == b
+    h[mask] = 60 * (r[mask] - g[mask]) / delta[mask] + 240
+    
+    h = h % 360
+    h /= 360  # Normalize to [0, 1]
+    
+    hsv_image = np.stack([h, s, v], axis=-1)
+    return hsv_image
+
+def _rgb_to_hsv_via_numba(rgb_image):
+    """
+    Convert an RGB image to HSV using Numba for optimization.
+    The input RGB values are assumed to be in the range [0, 1].
+    """
+    r, g, b = rgb_image[:, :, 0], rgb_image[:, :, 1], rgb_image[:, :, 2]
+    
+    h = np.zeros_like(r)
+    s = np.zeros_like(r)
+    v = np.zeros_like(r)
+    
+    for x in range(rgb_image.shape[0]):
+        for y in range(rgb_image.shape[1]):
+            max_val = max(r[x, y], g[x, y], b[x, y])
+            min_val = min(r[x, y], g[x, y], b[x, y])
+            delta = max_val - min_val
+            
+            v[x, y] = max_val
+            s[x, y] = 0 if max_val == 0 else delta / max_val
+            
+            if max_val == r[x, y]:
+                if g[x, y] >= b[x, y]:
+                    h[x, y] = 60 * (g[x, y] - b[x, y]) / delta if delta != 0 else 0
+                else:
+                    h[x, y] = 60 * (g[x, y] - b[x, y]) / delta + 360 if delta != 0 else 0
+            elif max_val == g[x, y]:
+                h[x, y] = 60 * (b[x, y] - r[x, y]) / delta + 120
+            elif max_val == b[x, y]:
+                h[x, y] = 60 * (r[x, y] - g[x, y]) / delta + 240
+    
+    h /= 360  # Normalize to [0, 1]
+
+    # Instead of np.stack, manually create the hsv_image
+    hsv_image = np.empty_like(rgb_image)
+    hsv_image[:, :, 0] = h
+    hsv_image[:, :, 1] = s
+    hsv_image[:, :, 2] = v
+    
+    return hsv_image
+
+
+
+#OLDER, SLOWER VERSION (27x slower than numba)
+#def rgb_to_hsv(image):
+#    #Takes an RGB image and returns an HSV image
+#    #Any alpha channels will be removed
+#    #EXAMPLE: Animating a rainbow doggy
+#    #    i=load_image('https://www.rover.com/blog/wp-content/uploads/2018/04/ThinkstockPhotos-485251240-960x540.jpg')
+#    #    for _ in range(100):
+#    #        i=rgb_to_hsv(i)
+#    #        i[:,:,0]+=.05
+#    #        i=hsv_to_rgb(i)
+#    #        display_image(i)
+#    assert is_image(image)
+#    image=as_float_image(image)
+#    image=as_rgb_image(image)
+#    pip_import('skimage')
+#    import skimage.color as color
+#    return color.rgb2hsv(image)
+
+#OLDER, SLOWER VERSION (27x slower than numba)
+#def hsv_to_rgb(image):
+#    #Takes an RGB image and returns an HSV image
+#    #Any alpha channels will be removed
+#    assert is_image(image)
+#    image=as_float_image(image)
+#    image=as_rgb_image(image)
+#    pip_import('skimage')
+#    import skimage.color as color
+#    return color.hsv2rgb(image)
+
+def hsv_to_rgb(hsv_image):
+    """
+    Convert an HSV image to RGB.
+
+    Install Numba to get a massive speed boost!
+
+    Initially, the conversion was done using skimage's hsv2rgb function. However, 
+    this method was found to be slow. As an optimization, this function first 
+    attempts to use Numba to speed up the conversion. If Numba cannot be imported 
+    or used, it falls back to a numpy-based implementation.
+
+    The input HSV values are assumed to be in the range [0, 1].
+    """
+    global _hsv_to_rgb_cache
+
+    assert is_image(hsv_image)
+    alpha=extract_alpha_channel(hsv_image) if is_rgba_image(hsv_image) else None #Try to preserve alpha channel
+    hsv_image = as_rgb_image(as_float_image(hsv_image))
+
+    if _hsv_to_rgb_cache is not None:
+        return _hsv_to_rgb_cache(hsv_image)
+
+    try:
+        from numba import jit
+        numba_version = _hsv_to_rgb_via_numba
+        _hsv_to_rgb_cache = jit(nopython=True)(numba_version)
+    except ImportError:
+        _hsv_to_rgb_cache = _hsv_to_rgb_via_numpy
+
+    output = _hsv_to_rgb_cache(hsv_image)
+
+    if alpha is not None:
+        output=with_alpha_channel(output,alpha)
+
+    return output
+
+def rgb_to_hsv(rgb_image):
+    """
+    Convert an RGB image to HSV.
+
+    Install Numba to get a massive speed boost!
+
+    Initially, the conversion was done using skimage's rgb2hsv function. However, 
+    this method was found to be slow. As an optimization, this function first 
+    attempts to use Numba to speed up the conversion. If Numba cannot be imported 
+    or used, it falls back to a numpy-based implementation.
+
+    The input RGB values are assumed to be in the range [0, 1].
+    """
+    global _rgb_to_hsv_cache
+
+    assert is_image(rgb_image)
+    alpha=extract_alpha_channel(rgb_image) if is_rgba_image(rgb_image) else None #Try to preserve alpha channel
+    rgb_image = as_rgb_image(as_float_image(rgb_image))
+
+    if _rgb_to_hsv_cache is not None:
+        return _rgb_to_hsv_cache(rgb_image)
+
+    try:
+        from numba import jit
+        numba_version = _rgb_to_hsv_via_numba
+        _rgb_to_hsv_cache = jit(nopython=True)(numba_version)
+    except ImportError:
+        _rgb_to_hsv_cache = _rgb_to_hsv_via_numpy
+
+    output = _rgb_to_hsv_cache(rgb_image)
+
+    if alpha is not None:
+        output=with_alpha_channel(output,alpha)
+
+    return output
 
 def get_image_hue(image):
+    """Takes in an image as defined by rp.is_image and returns a matrix"""
     assert is_image(image)
     return rgb_to_hsv(image)[:,:,0]
 
 def get_image_saturation(image):
+    """Takes in an image as defined by rp.is_image and returns a matrix"""
     assert is_image(image)
     return rgb_to_hsv(image)[:,:,1]
 
 def get_image_value(image):
+    """Takes in an image as defined by rp.is_image and returns a matrix"""
     assert is_image(image)
     return rgb_to_hsv(image)[:,:,2]
 
 get_image_brightness=get_image_value
 
-def with_image_hue(image,hue):
-    hue=as_grayscale_image(hue)
-    hue=as_float_image(hue)
-    image=as_rgb_image(image)
-    image=as_float_image(image)
-    
-    hsv=rgb_to_hsv(image)
-    hsv[:,:,0]=hue
-    rgb=hsv_to_rgb(hsv)
-    
+def get_image_red(image):
+    """Takes in an image as defined by rp.is_image and returns a matrix"""
+    image=as_numpy_image(image)
+    if is_grayscale_image(image):
+        image=as_rgb_image(image)
+    return image[:,:,0]
+        
+def get_image_green(image):
+    """Takes in an image as defined by rp.is_image and returns a matrix"""
+    image=as_numpy_image(image)
+    if is_grayscale_image(image):
+        image=as_rgb_image(image)
+    return image[:,:,1]
+
+def get_image_blue(image):
+    """Takes in an image as defined by rp.is_image and returns a matrix"""
+    image=as_numpy_image(image)
+    if is_grayscale_image(image):
+        image=as_rgb_image(image)
+    return image[:,:,2]
+
+def with_image_hue(image, hue):
+    """Sets the image hue. The hue can either be given as an image, or as a number."""
+    alpha=extract_alpha_channel(image) if is_rgba_image(image) else None
+
+    image = as_rgb_image(image)
+    image = as_float_image(image)
+
+    if is_number(hue):
+        value = hue
+        hue = as_grayscale_image(image)
+        hue[:] = value
+
+    hue = as_grayscale_image(hue)
+    hue = as_float_image(hue)
+    hue = hue % 1
+
+    hsv = rgb_to_hsv(image)
+    hsv[:, :, 0] = hue
+    rgb = hsv_to_rgb(hsv)
+
+    if alpha is not None:
+        rgba=with_alpha_channel(rgb,alpha)
+        return rgba
+
     return rgb
 
-def with_image_saturation(image,saturation):
-    saturation=as_grayscale_image(saturation)
-    saturation=as_float_image(saturation)
-    image=as_rgb_image(image)
-    image=as_float_image(image)
-    
-    hsv=rgb_to_hsv(image)
-    hsv[:,:,1]=saturation
-    rgb=hsv_to_rgb(hsv)
-    
+
+def with_image_saturation(image, saturation):
+    """Sets the image saturation. The saturation can either be given as an image, or as a number."""
+    alpha=extract_alpha_channel(image) if is_rgba_image(image) else None
+
+    image = as_rgb_image(image)
+    image = as_float_image(image)
+
+    if is_number(saturation):
+        value = saturation
+        saturation = as_grayscale_image(image)
+        saturation[:] = value
+
+    saturation = as_grayscale_image(saturation)
+    saturation = as_float_image(saturation)
+
+    hsv = rgb_to_hsv(image)
+    hsv[:, :, 1] = saturation
+    rgb = hsv_to_rgb(hsv)
+
+    if alpha is not None:
+        rgba=with_alpha_channel(rgb,alpha)
+        return rgba
+
     return rgb
 
-def with_image_brightness(image,brightness):
-    brightness=as_grayscale_image(brightness)
-    brightness=as_float_image(brightness)
-    image=as_rgb_image(image)
-    image=as_float_image(image)
-    
-    hsv=rgb_to_hsv(image)
-    hsv[:,:,2]=brightness
-    rgb=hsv_to_rgb(hsv)
-    
+def with_image_brightness(image, brightness):
+    """Sets the image brightness. The brightness can either be given as an image, or as a number."""
+    alpha=extract_alpha_channel(image) if is_rgba_image(image) else None
+
+    image = as_rgb_image(image)
+    image = as_float_image(image)
+
+    if is_number(brightness):
+        value = brightness
+        brightness = as_grayscale_image(image)
+        brightness[:] = value
+
+    brightness = as_grayscale_image(brightness)
+    brightness = as_float_image(brightness)
+
+    hsv = rgb_to_hsv(image)
+    hsv[:, :, 2] = brightness
+    rgb = hsv_to_rgb(hsv)
+
+    if alpha is not None:
+        rgba=with_alpha_channel(rgb,alpha)
+        return rgba
+
     return rgb
-
-
 
 
 def get_rgb_byte_color_identity_mapping_image():
