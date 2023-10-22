@@ -11559,6 +11559,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         HDF  CDH FAST
         CDHF CDH FAST
 
+        GMP $get_module_path(ans)
+
         DA CDA
 
         RU RUN
@@ -21616,6 +21618,9 @@ def get_module_path_from_name(module_name):
 
 def get_module_path(module):
     #Returns the file path of a given python module
+    if not is_a_module(module) and hasattr(module,'__module__'):
+        #This will work for functions too
+        module=module.__module__
     if isinstance(module,str):
         return get_module_path_from_name(module)
     import inspect

@@ -2009,6 +2009,11 @@ def handle_character(buffer,char,event=None):
                 'rmd':'!rmdir',
                 # 'rmr':'!rm -rf',
                 # 'rmm':'!rm -rf',
+                
+                'ba':'!bash',
+                'sh':'!sh',
+                'z':'!zsh',
+                'tm':'!tmux',
 
                 'tk':'TAKE',
                 'ac':'ACAT',
