@@ -11800,6 +11800,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         QPH  $r._input_select_multiple_history() #Query Prompt-Toolkit History Lines (F3)
         QVH  $r._input_select_multiple_history($pterm_history_filename) #Query VHISTORY
 
+        TMD !tmux d
+        TMA !tmux a
+        TM  !tmux
+
         ZG !lazygit
 
         # ZGA $os.system('cd '+ans'+' && lazygit') #NOT Ready yet - CDA's logic is more complex and can handle funcs and modules, this could only handle strings...
