@@ -11583,6 +11583,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         VHE VIMH
         VIH VIMH
 
+        GPP $get_path_parent(ans)
+
         # GO GC
 
         MON MONITOR
@@ -20425,6 +20427,7 @@ def shift_image(image,x=0,y=0,*,allow_growth=True):
         image = crop_image(image,height,width)
     
     return image
+
 
 def crop_image(image, height: int = None, width: int = None, origin='top left'):
     """
