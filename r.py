@@ -4931,6 +4931,7 @@ def destructure(d: dict) -> tuple:
     It compliments rp.bundle_vars and rp.gather_vars quite nicely.
 
     Note: This function should be considered voodoo, as it's very strange!
+    It's extremely convenient though and can make your life easier.
     It can make your code less redundant, but relies on being able to find
     you source code - an assumption which doesnt always hold (for example,
     in ptpython or the default python repl. Jupyter and rp work fine though.)
@@ -20341,6 +20342,89 @@ def send_text_message(message,number):
                      from_='+'+str(from_number),
                      to='+'+number
                  )
+    
+def shift_image(image,x=0,y=0,*,allow_growth=True):
+    """
+    Shifts an image on the x and y axes, in image coordinates
+
+    As y increases the image moves down
+    As x increases the image moves to the right
+    
+
+    EXAMPLE: Random Sticker Placement
+
+        sticker=cv_resize_image(crop_image_zeros(load_image('https://www.freeiconspng.com/download/49400')),1/2)
+        background=load_image('https://i.natgeofe.com/n/c9107b46-78b1-4394-988d-53927646c72b/1095_3x2.jpg')
+
+        scale=.25
+        sticker=cv_resize_image(sticker,scale)
+        background=cv_resize_image(background,scale)
+
+        composition=background
+
+        for _ in range(1000):
+            sticker_height,sticker_width=get_image_dimensions(sticker)
+            background_height,background_width=get_image_dimensions(background)
+
+            #Two types of random shifts - comment one out to see the other    
+
+            #First type of shift
+            #shift_x=random_int(-sticker_width,background_width+sticker_width)
+            #shift_y=random_int(-sticker_height,background_height+sticker_height)
+
+            #Second type of shift: within the background - don't let it go outside
+            shift_x=random_int(0,background_width-sticker_width)
+            shift_y=random_int(0,background_height-sticker_height)
+
+            shifted_sticker=shift_image(sticker,shift_x,shift_y)
+            composition=blend_images(composition,shifted_sticker)
+            composition=crop_image(composition,background_height,background_width)
+            display_image(composition)
+            
+            print(_)
+            
+    EXAMPLE: Moving in a circular pattern
+    
+        image=load_image('https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png')
+        image=cv_resize_image(image,(128,128))
+        for _ in range(5):
+            for angle in range(360):
+                angle/=360
+                angle*=tau
+                x=np.cos(angle)+1-.3
+                y=np.sin(angle)+1-.3
+                x*=100
+                y*=100
+                s=image
+                s=as_rgba_image(s)
+                s=crop_image(s,300,300)
+                s=shift_image(s,x,y,allow_growth=False)
+                display_alpha_image(s)
+    """
+    image=as_float_image(image)
+    image=as_rgba_image(image)
+
+    assert is_image(image)
+    x=round(x)
+    y=round(y)
+    
+    height,width=get_image_dimensions(image)
+    
+    null_color=(0,0,0,0)
+    null_image=uniform_float_color_image(height,width,null_color)
+
+    if x<=-width or y<=-height or not allow_growth and (x>=width or y>=height):
+        image = null_image
+    else:
+        if x>0 or y>0:
+            image=bordered_image_solid_color(image,null_color,thickness=0,left=max(x,0),top=max(y,0))
+        if x<0 or y<0:
+            image=image[max(-y,0):,max(-x,0):]
+            
+    if not allow_growth:
+        image = crop_image(image,height,width)
+    
+    return image
 
 def crop_image(image, height: int = None, width: int = None, origin='top left'):
     """
