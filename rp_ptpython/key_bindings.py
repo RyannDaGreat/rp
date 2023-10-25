@@ -2014,6 +2014,8 @@ def handle_character(buffer,char,event=None):
                 'sh':'!sh',
                 'z':'!zsh',
                 'tm':'!tmux',
+                'api':'!sudo apt install',
+                'apt':'!sudo apt',
 
                 'tk':'TAKE',
                 'ac':'ACAT',

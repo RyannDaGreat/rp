@@ -11754,6 +11754,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RE    $random_element(ans)
 
         LJ LINE JOIN ANS
+        AJ JSON ANS
+        JA JSON ANS
 
         DCI $display_image_in_terminal_color(ans)
         
@@ -12978,6 +12980,19 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     user_message="'\\n'.join(ans)"
                                 else:
                                     user_message="'\\n'.join(map(str,ans))"
+
+                            fansi_print("Transformed input to "+repr(user_message),'magenta','bold')
+
+                        elif user_message == 'JSON ANS':
+                            #This isn't in the help because this is really meant to be used by shortcuts so the message can be multiplexed between list-> string and string->list
+                            ans=get_ans()
+                            if isinstance(ans,str):
+                                if not '\n' in ans and ans.endswith('.json') and file_exists(ans):
+                                    user_message="load_json(ans)"
+                                else:
+                                    user_message="import json\nans=json.loads(ans)"
+                            else:
+                                user_message="import json\nans=json.dumps(ans)"
 
                             fansi_print("Transformed input to "+repr(user_message),'magenta','bold')
 
