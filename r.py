@@ -25676,7 +25676,8 @@ def _fdt_for_command_line():
 
 
 def _fzf_multi_grep(print_instructions=True):
-    
+    pip_import('iterfzf')
+
     heap=_MinFileSizeHeap()
 
     zero_width_space='\u200b' #Prevents file names from being included in the search
