@@ -97,7 +97,15 @@ def seq_map(func,*iterables):
     # Like par_map, this def features non-lazy evaluation! (Unlike python's map function, which does not. Proof: map(print,['hello']) does not print anything, but [*map(print,['hello'])] does.)
     return list(map(func,*iterables))  # Basically it's exactly like python's built-in map function, except it forces it to evaluate everything inside it before it returns the output.
 from multiprocessing.dummy import Pool as ThreadPool  # ⟵ par_map uses ThreadPool. We import it now so we don't have to later, when we use par_map.
-def par_map(func,*iterables,number_of_threads=None,chunksize=None):
+
+
+
+def _legacy_par_map(func,*iterables,number_of_threads=None,chunksize=None):
+    #THE OLD IMPLEMENTATION: There's nothing wrong with it, it was just old and messy.
+    #REST IN PEACE OLD FRIEND! (Made this early in freshman year like 7 years ago lol - its 2023 now)
+    #TODO: Test the new one in python3.5!! Just in case its still useful, for compatiability I leave it in here as _legacy_par_map
+
+
     # Multi-threaded map function. When I figure out a way to do parallel computations, this def (conveniently high-level) will be replaced.
     try:
         par_pool=ThreadPool(number_of_threads)
@@ -109,6 +117,89 @@ def par_map(func,*iterables,number_of_threads=None,chunksize=None):
         return out
     except RuntimeError:  # ⟵ Assuming we got "RuntimeError: can't start new thread", we will calculate it sequentially instead. It will give the same result, but it won't be in parallel.
         return seq_map(func,*iterables)
+
+
+
+def par_map(func,*iterables,num_threads=None):
+    "See lazy_par_map for doc"
+    return list(lazy_par_map(func,*iterables,num_threads=num_threads))
+
+
+
+def lazy_par_map(func, *iterables, num_threads=None, buffer_limit=None):
+    """
+    A parallelized version of the built-in map using ThreadPoolExecutor.
+    
+    Parameters:
+        - func: The function to apply to the items.
+        - *iterables: Input iterables. The function is applied to the results of zipping these iterables.
+        - num_threads (optional): The number of worker threads to use. 
+                                 If 0, the function will work synchronously like the built-in map.
+                                 If not provided, defaults to 32.
+        - buffer_limit (optional): The maximum number of tasks to keep in the executor at any given time.
+                                   If not provided, there's no constraint on the number of tasks.
+                                   This is useful for conserving memory, such as loading millions of images lazily.
+
+    Returns:
+        - An iterator that yields results as tasks complete.
+    """
+    from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+    
+    if num_threads is not None and (not isinstance(num_threads, int) or num_threads < 0):
+        raise ValueError("num_threads must be None or an integer >= 0")
+
+    if buffer_limit is not None and (not isinstance(buffer_limit, int) or buffer_limit < 1):
+        raise ValueError("buffer_limit must be None or an integer >= 1")
+
+    if num_threads is None:
+        num_threads = 32
+    
+    if num_threads == 0:
+        yield from map(func, *iterables)
+        return
+    
+    iterable = zip(*iterables)
+    iterator = iter(iterable)
+    
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        if buffer_limit is None:
+            yield from executor.map(func, *iterables)
+            return
+        
+        futures = set()
+
+        # Load up the initial buffer_limit tasks
+        for _ in range(buffer_limit):
+            try:
+                args = next(iterator)
+                futures.add(executor.submit(func, *args))
+            except StopIteration:
+                break
+
+        while futures:
+            done, _ = wait(futures, return_when=FIRST_COMPLETED)  # wait for any future to complete
+
+            for future in done:
+                yield future.result()
+                futures.remove(future)
+                
+                try:
+                    args = next(iterator)
+                    futures.add(executor.submit(func, *args))
+                except StopIteration:
+                    pass
+
+
+
+
+
+
+
+
+
+
+
+
 # endregion
 # region ［seq‚ par］
 def seq(funcs,*init):
@@ -2219,8 +2310,9 @@ def load_files(
     num_threads:int=None,
     show_progress=False,
     strict=True,
-    include_paths=False,
-    lazy=False
+    lazy=False,
+    buffer_limit=None,
+    include_paths=False #Might be removed...
 ):
     """
     Load a list of files with optional multithreading.
@@ -2244,12 +2336,15 @@ def load_files(
     TODO: The eta can't display a specific message like "loading images" etc - it's locked to load_files right now. How can I *elegantly* allow this naming but also allow it to use tqdm? 
     TODO: Make convert_image_files take advantage of this function
     """
+    assert not include_paths, "I would like to remove this argument for simplicity - this could just be worked into load_file. Remove this assertion if you decide you actually think this is useful..."
+
     files = _load_files(
         load_file,
         file_paths,
         num_threads,
         show_progress,
         strict,
+        buffer_limit,
         include_paths,
     )
 
@@ -2264,6 +2359,7 @@ def _load_files(
     num_threads:int=None,
     show_progress=False,
     strict=True,
+    buffer_limit=None,
     include_paths=False,
 ):
     "Helper function for load_files"
@@ -2313,7 +2409,7 @@ def _load_files(
             elif action == "done":
                 elapsed_time = gtoc() - start_time
                 _erase_terminal_line()
-                print("load_files: Done! Loaded %i files in %.3f seconds"%(num_yielded, elapsed_time))#This is here because of the specifics of the eta function we're using to display progress
+                print("%s: Done! Loaded %i files in %.3f seconds"%(eta_title, num_yielded, elapsed_time))#This is here because of the specifics of the eta function we're using to display progress
 
     else:
         def progress_func(action):
@@ -2353,9 +2449,12 @@ def _load_files(
             yield from skip_filter(map(_load_file, file_paths))
         else:
             # Load files with multiple threads
-            from concurrent.futures import ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=num_threads) as executor:
-                yield from skip_filter(executor.map(_load_file, file_paths))
+            yield from skip_filter(lazy_par_map(
+                _load_file,
+                file_paths,
+                num_threads=num_threads, 
+                buffer_limit=buffer_limit,
+            ))
 
         progress_func("done")
 
@@ -26557,6 +26656,124 @@ def select_torch_device(n=0, *, silent=False, prefer_used=False):
             print(line_join(lines))
 
     return output
+
+
+def _torch_device_to_index(device):
+    """
+    Convert a given device specifier into its corresponding index.
+    
+    The function handles multiple formats for specifying devices, 
+    such as "cuda:3", torch.device(3), or int(3).
+    
+    Args:
+        device (str, int, torch.device): Device specifier.
+    
+    Returns:
+        int: Device index.
+    
+    Raises:
+        TypeError: If the device format is not understood.
+        ValueError: If the device format is understood but is not valid (e.g., 'cpu').
+    """
+    
+    # If device is already an integer.
+    if isinstance(device, int):
+        return device
+
+    # If device is a string in format "cuda:x".
+    elif isinstance(device, str) and ":" in device:
+        try:
+            _, index_str = device.split(":")
+            return int(index_str)
+        except (ValueError, AttributeError):
+            # Failed to split or convert to int, so fall back to the PyTorch logic.
+            pass
+
+    # If device has a valid index attribute.
+    elif hasattr(device, "index") and device.index is not None:
+        return device.index
+
+    # Fall back to torch-specific logic.
+    try:
+        pip_import('torch')
+        import torch
+        index = torch.device(device).index
+        if index is not None:
+            return index
+        else:
+            # If the result is None, then it's possibly an invalid device format.
+            raise ValueError("The device '%s' is not valid. For example, 'cpu' is not a valid GPU device."%device)
+    except (ImportError, ValueError):
+        raise TypeError(
+            "_torch_device_to_index: Can't make sense of the input, which is of type "+str(type(device))
+        )
+
+
+def set_cuda_visible_devices(*devices):
+    """
+    Sets the CUDA_VISIBLE_DEVICES environment variable.
+    
+    This configuration restricts which GPUs are visible to libraries like PyTorch, TensorFlow, etc.
+    The function should be used before any GPU-specific function calls.
+    The visible devices will be carried over to child processes - very useful for running other people's
+        code if they didn't make a way to select the GPU's it runs on (i.e. if they use "tensor.cuda()" everywhere)
+    
+    The devices can be specified in various ways:
+        - Integer indices (e.g., 0, 1, 2).
+        - Strings with the format "cuda:x" (e.g., "cuda:0").
+        - torch.device objects.
+    
+    Args:
+        devices: Variable length argument list containing GPU devices to set as visible.
+                 Each device can be an integer, a string in the format "cuda:x", or a torch.device object.
+                 If no devices are provided, all GPUs will be made visible.
+    
+    Returns:
+        list[int]: Indices of the previously visible GPUs.
+        
+    Raises:
+        TypeError: If a provided device format is not understood.
+        ValueError: If a valid device format is provided but does not correspond to a GPU (e.g., 'cpu').
+    
+    Note:
+        Ensure you have the necessary libraries installed if passing objects like torch.device.
+
+    Examples:
+        >>> set_cuda_visible_devices(select_torch_device())
+        [] #Example output - the default is all are visible
+        >>> set_cuda_visible_devices()
+        [0, 1, 2]  # example output, the previously visible GPUs
+        >>> set_cuda_visible_devices([])
+        [0]  # example output
+        >>> set_cuda_visible_devices('cuda:0', 3)
+        [0, 2]  # example output
+        >>> set_cuda_visible_devices(('cuda:0', 3))
+        [0, 1]  # example output
+    """
+    
+    devices = detuple(devices)
+    if not is_iterable(devices):
+        devices = [devices]
+
+    devices = [_torch_device_to_index(device) for device in devices]
+    assert all(isinstance(x, int) for x in devices), "All devices should be represented as integers."
+
+    env_key = "CUDA_VISIBLE_DEVICES"
+    prev_visible_devices = os.environ.get(env_key, list())
+
+    # Set the CUDA_VISIBLE_DEVICES environment variable.
+    if devices:
+        devices_str = ",".join(map(str, devices))
+        os.environ[env_key] = devices_str
+    elif env_key in os.environ:
+        del os.environ[env_key]
+
+    # Process previous visible devices for the output.
+    if prev_visible_devices:
+        prev_visible_devices = list(map(int, prev_visible_devices.split(',')))
+
+    return prev_visible_devices
+
 
         
 def _removestar(code:str):
