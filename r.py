@@ -137,8 +137,9 @@ def lazy_par_map(func, *iterables, num_threads=None, buffer_limit=None):
                                  If 0, the function will work synchronously like the built-in map.
                                  If not provided, defaults to 32.
         - buffer_limit (optional): The maximum number of tasks to keep in the executor at any given time.
-                                   If not provided, there's no constraint on the number of tasks.
-                                   This is useful for conserving memory, such as loading millions of images lazily.
+                                   If set to 0, there's no constraint on the number of tasks.
+                                   This is useful for conserving memory, such as loading millions of images lazily in a dataloader that processes them slowly.
+                                   If not provided, defaults to num_threads.
 
     Returns:
         - An iterator that yields results as tasks complete.
@@ -148,12 +149,15 @@ def lazy_par_map(func, *iterables, num_threads=None, buffer_limit=None):
     if num_threads is not None and (not isinstance(num_threads, int) or num_threads < 0):
         raise ValueError("num_threads must be None or an integer >= 0")
 
-    if buffer_limit is not None and (not isinstance(buffer_limit, int) or buffer_limit < 1):
-        raise ValueError("buffer_limit must be None or an integer >= 1")
+    if buffer_limit is not None and (not isinstance(buffer_limit, int) or buffer_limit < 0):
+        raise ValueError("buffer_limit must be None or an integer >= 0")
 
     if num_threads is None:
         num_threads = 32
     
+    if buffer_limit is None:
+        buffer_limit = num_threads
+
     if num_threads == 0:
         yield from map(func, *iterables)
         return
@@ -162,7 +166,7 @@ def lazy_par_map(func, *iterables, num_threads=None, buffer_limit=None):
     iterator = iter(iterable)
     
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        if buffer_limit is None:
+        if not buffer_limit:
             yield from executor.map(func, *iterables)
             return
         
