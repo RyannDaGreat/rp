@@ -136,9 +136,9 @@ def lazy_par_map(func, *iterables, num_threads=None, buffer_limit=None):
         - num_threads (optional): The number of worker threads to use. 
                                  If 0, the function will work synchronously like the built-in map.
                                  If not provided, defaults to 32.
-        - buffer_limit (optional): The maximum number of tasks to keep in the executor at any given time.
-                                   If set to 0, there's no constraint on the number of tasks.
-                                   This is useful for conserving memory, such as loading millions of images lazily in a dataloader that processes them slowly.
+        - buffer_limit (optional): The maximum size of the buffer. Without this, this function isn't really very lazy lol.
+                                   If set to 0, there's no constraint on the number of stored items and it will try to precalculate everything.
+                                   A buffer_limit is useful for conserving memory, such as loading millions of images lazily in a dataloader that processes them slowly.
                                    If not provided, defaults to num_threads.
 
     Returns:
@@ -6345,6 +6345,10 @@ def text_file_to_string(file_path: str,use_cache=False) -> str:
     #   It will refresh the cache entry if it's out of date even if use_cache is True.
     #   TODO: Make this happen on load_image, etc...all other functions that read from a file and have use_cache as an option
 
+    if is_valid_url(file_path):
+        #TODO: Add caching for when we use urls
+        return curl(file_path)
+
     file_path=get_absolute_path(file_path)#Make sure it recognizes ~/.vimrc AKA with the ~ attached. Also, don't cache the same file twice under a relative and absolute path
 
     assert file_exists(file_path),'File %s does not exist'%file_path
@@ -10902,6 +10906,28 @@ _need_module_refresh=False #Set to true if we do something with pip. Used by pte
 #    #https://documen.tician.de/pudb/shells.html
 #    pseudo_terminal(_globals,_locals)
 
+
+def _view_markdown_in_terminal(file_or_string):
+    
+    pip_import("frogmouth")
+
+    path=file_or_string.strip()
+
+    if file_exists(path):
+        path=file_or_string
+        temp_path=False
+    else:
+        path=temporary_file_path('md')
+        path=string_to_text_file(path,file_or_string)
+        temp_path=True
+
+    os.system('frogmouth '+repr(path)) # Displays markdown
+
+    if temp_path:
+        delete_file(path)
+
+
+
 _cd_history=[]
 def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseudo_terminal_style(),enable_ptpython=True,eval=eval,exec=exec,rprc=''):
     try:
@@ -11845,7 +11871,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         GCLP $git_clone($string_from_clipboard())
         GCLA $git_clone(ans)
         GURL $get_git_remote_url()
-        WGA $os.system('wget\\x20'+ans)
+        WGA if $os.system('wget\\x20'+ans)==0: ans=$get_file_name(ans)
 
         LNAH $os.symlink(ans,$get_file_name(ans));ans=$get_file_name(ans)#Created_Symlink
         LN   $os.symlink(ans,$get_file_name(ans));ans=$get_file_name(ans)#Created_Symlink
@@ -11924,8 +11950,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         HTTP $os.system($sys.executable+' -m http.server')
         HTP  $os.system($sys.executable+' -m http.server')
 
-        FMA $pip_import("frogmouth");$os.system('frogmouth '+repr(ans)) # Displays markdown
-        MDA $pip_import("frogmouth");$os.system('frogmouth '+repr(ans)) # Displays markdown
+        FMA $r._view_markdown_in_terminal(ans) # Displays markdown
+        MDA $r._view_markdown_in_terminal(ans) # Displays markdown
 
         PIF PIP freeze
 
@@ -15133,9 +15159,18 @@ def pip_install_multiple(packages, shotgun=True, quiet=False):
             packages=text_file_to_string(packages)
         packages = line_split(packages)
 
+    def fix_package(package):
+        if '@' in package and len(package.strip().split())==3:
+            #clip @ git+https://github.com/openai/CLIP.git
+            #    is installed via
+            #pip install git+https://github.com/openai/CLIP.git
+            package=package.strip().split()[-1]
+        return package
+
     assert is_iterable(packages)
     assert all(isinstance(x, str) for x in packages)
-    packages = list(packages)
+    packages = list(map(fix_package, packages))
+
     
     successful_packages = []
     base_command = [sys.executable, '-m', 'pip', 'install']
@@ -15754,7 +15789,7 @@ def cv_contour_length(contour,closed=False):
     contour=as_cv_contour(contour)
     return cv2.arcLength(contour,closed=closed)
 
-def cv_contour_area(contour,closed=False):
+def cv_contour_area(contour):#,closed=False):
     cv2=pip_import('cv2')
     contour=as_cv_contour(contour)
     return cv2.contourArea(contour)
@@ -20218,23 +20253,34 @@ def copy_paths(
     )
 
 
-def get_path_parent(path):
+def get_path_parent(path_or_url:str):
     """
-    #Works for directories and files
-    #EXAMPLES:
-    #   ⮤ get_path_parent('oaijsd/odjf/aoijf/sdojif.ojf')
-    #  ans = oaijsd/odjf/aoijf
-    #   ⮤ get_path_parent('/')
-    #  ans = /
-    #   ⮤ get_path_parent('/apsokd')
-    #  ans = /
-    #   ⮤ get_path_parent('/apsokd.asd')
-    #  ans = /
-    #   ⮤ get_path_parent('/aps/asda/sokd.asd')
-    #  ans = /aps/asda
+    Retrieve the parent directory or URL of the given path or URL.
+    
+    Examples:
+        get_path_parent('oaijsd/odjf/aoijf/sdojif.ojf')      -> 'oaijsd/odjf/aoijf'
+        get_path_parent('/')                                 -> '/'
+        get_path_parent('/apsokd')                           -> '/'
+        get_path_parent('/apsokd.asd')                       -> '/'
+        get_path_parent('/aps/asda/sokd.asd')                -> '/aps/asda'
+        get_path_parent('http://www.example.com/path/to')    -> 'http://www.example.com/path'
+        get_path_parent('http://www.example.com/?query')     -> 'http://www.example.com/'
+        get_path_parent('http://www.example.com/')           -> 'http://www.example.com/'
+        get_path_parent('s3://bucket/key/to/object')         -> 's3://bucket/key/to'
     """
-    import pathlib
-    return str(pathlib.Path(path).parent)
+    
+    # Parse the input
+    from urllib.parse import urlparse, urlunparse
+    parsed = urlparse(path_or_url)
+    
+    # Check if it's a URL (based on the presence of a scheme)
+    if parsed.scheme:
+        path_parent = '/'.join(parsed.path.rstrip('/').split('/')[:-1]) or '/'
+        return urlunparse((parsed.scheme, parsed.netloc, path_parent, parsed.params, parsed.query, parsed.fragment))
+    else:  # It's a filesystem path
+        import pathlib
+        return str(pathlib.Path(path_or_url).parent)
+
 get_file_folder=get_path_parent#Synonyms that might make more sense to read in their context than get_path_parent
 get_file_directory=get_path_parent
 get_parent_directory=get_parent_folder=get_path_parent
@@ -23819,6 +23865,61 @@ def get_image_blue(image):
         image=as_rgb_image(image)
     return image[:,:,2]
 
+
+def _with_image_channel(image, color_img_or_value, channel_idx):
+    """
+    Helper function to apply a color image or value to a given channel in the main image.
+    :param image: The main image
+    :param color_img_or_value: Either an image of the color or a single numeric value.
+    :param channel_idx: The channel index (0 for red, 1 for green, 2 for blue)
+    :return: Image with modified color channel.
+    """
+    assert is_image(image)
+    assert is_image(color_img_or_value) or is_number(color_img_or_value)
+    
+    if is_image(color_img_or_value):
+        assert get_image_dimensions(image) == get_image_dimensions(color_img_or_value), 'Images must be the same size'
+    
+    if is_grayscale_image(image):
+        image = as_rgb_image(image)
+
+    image = as_float_image(image)
+    
+    if is_number(color_img_or_value):
+        color_image = image + 0
+        color_image[:] = color_img_or_value
+    else:
+        color_image = color_img_or_value
+
+    color_image = as_float_image(color_image)
+    color_image = as_grayscale_image(color_image)
+    
+    image[:, :, channel_idx] = color_image
+    
+    return image
+
+
+def with_image_red(image, red):
+    """
+    Modify the red channel of the image with the given red image or value.
+    Returns a float image.
+    """
+    return _with_image_channel(image, red, 0)
+
+def with_image_green(image, green):
+    """
+    Modify the green channel of the image with the given green image or value.
+    Returns a float image.
+    """
+    return _with_image_channel(image, green, 1)
+
+def with_image_blue(image, blue):
+    """
+    Modify the blue channel of the image with the given blue image or value.
+    Returns a float image.
+    """
+    return _with_image_channel(image, blue, 2)
+
 def with_image_hue(image, hue):
     """Sets the image hue. The hue can either be given as an image, or as a number."""
     alpha=extract_alpha_channel(image) if is_rgba_image(image) else None
@@ -24785,6 +24886,8 @@ def extract_alpha_channel(image):
     image=as_rgba_image(image)
     return image[:,:,3]
 
+# get_image_alpha=extract_alpha_channel #Uncomment this if you think it would make the code nicer!
+
 def apply_image_function_per_channel(image,function):
     #Apply a grayscale funcion on every image channel individually
     assert is_image(image)
@@ -24817,6 +24920,8 @@ def with_alpha_channel(image, alpha):
     image[:, :, 3] = alpha
 
     return image
+
+# with_image_alpha=with_alpha_channel #You can uncomment this if you ever think it will enhance readability along with the functions with_image_green and with_image_hue etc
 
 pterm=pseudo_terminal#Just a shortcut. Not to be used in code; just Colab etc where I don't want to type pseudo_terminal. What?? Don't look at me like that - I'm lazy lol
 
