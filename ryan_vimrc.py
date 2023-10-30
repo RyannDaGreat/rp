@@ -318,9 +318,6 @@ map! <F9> ^[:call ToggleWrap()<CR>
 " Toggle relative line number
     nmap <F3> : set invrelativenumber <CR>
 
-" Toggle Minimap
-    nmap <F4> : MinimapToggle <CR>
-
 " Toggle NERDTree
     nmap <F5> : NERDTreeTabsToggle <CR>
     " nmap <F5> : NERDTreeToggle <CR>
@@ -500,3 +497,48 @@ command! ZoomToggle call s:ZoomToggle()
 nnoremap <silent> <C-W>z :ZoomToggle<CR>
 
 syntax on
+
+set shortmess-=S "Show the count of the search like item 5/10 etc https://stackoverflow.com/questions/4668623/show-count-of-matches-in-vim
+
+Plugin 'simeji/winresizer' "Use control+e to resize windows
+
+" Shifting lines   https://chat.openai.com/share/05160497-c34c-426f-b9f6-8cf10aec09f5
+    " Normal Mode: Move current line down with Ctrl-j
+    nnoremap <C-j> :m .+1<CR>==
+    " Normal Mode: Move current line up with Ctrl-k
+    nnoremap <C-k> :m .-2<CR>==
+    " Visual Mode: Move selected lines down with Ctrl-j
+    vnoremap <C-j> :m '>+1<CR>gv=gv
+    " Visual Mode: Move selected lines up with Ctrl-k
+    vnoremap <C-k> :m '<-2<CR>gv=gv
+
+"Shifting Tabs
+    " Use gr to go to the previous tab
+    nnoremap gr :tabprevious<CR>
+
+    " Use gt to go to the next tab
+    nnoremap gt :tabnext<CR>
+
+    " Move current tab one position to the left, with wrap-around
+    nnoremap gR :if tabpagenr() == 1<CR>:tabmove $<CR>:else<CR>:tabmove -1<CR>:endif<CR><CR>
+
+    " Move current tab one position to the right, with wrap-around
+    nnoremap gT :if tabpagenr() == tabpagenr('$')<CR>:tabmove 0<CR>:else<CR>:tabmove +1<CR>:endif<CR><CR>
+
+"Buffer switching [b and ]b
+    " Use ]b to go to the next buffer
+    nnoremap ]b :bnext<CR>
+
+    " Use [b to go to the previous buffer
+    nnoremap [b :bprevious<CR>
+
+"Minimap toggle and Statusbar toggle and tab bar toggle
+    " Toggle the tab bar between always displaying and displaying only when there are multiple tabs using F4+t
+    nnoremap <F4>t :if &showtabline == 2<CR>:set showtabline=1<CR>:else<CR>:set showtabline=2<CR>:endif<CR><CR>
+
+    " Toggle the status bar between always displaying and displaying only when there are multiple windows using F4+s
+    nnoremap <F4>s :if &laststatus == 2<CR>:set laststatus=1<CR>:else<CR>:set laststatus=2<CR>:endif<CR><CR>
+
+    " Toggle Minimap
+    nmap <F4><F4> : MinimapToggle <CR>
+
