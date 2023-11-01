@@ -76,7 +76,6 @@
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
-nnoremap gr gT
 
 set nocompatible              " be iMproved, required
 filetype off                  " required
@@ -295,15 +294,15 @@ set expandtab
     hi LineNr ctermbg=black
     hi CursorLineNR cterm=bold ctermfg=lightcyan
 
-function ToggleWrap()
- if (&wrap == 1)
-   set nowrap
- else
-   set wrap
- endif
-endfunction
-map <F7> :call ToggleWrap()<CR>
-map! <F9> ^[:call ToggleWrap()<CR>
+" function ToggleWrap()
+"  if (&wrap == 1)
+"    set nowrap
+"  else
+"    set wrap
+"  endif
+" endfunction
+" map <F7> :call ToggleWrap()<CR>
+" map! <F9> ^[:call ToggleWrap()<CR>
 
 
 "let us toggle paste mode with the shortcut key:
@@ -324,25 +323,63 @@ map! <F9> ^[:call ToggleWrap()<CR>
 
 
 "Tons of vim color schemes
-Plugin 'RyannDaGreat/vim-wombat256mod' " 256-color schemes for vim
+Plugin 'dracula/vim'
+Plugin 'franbach/miramare'
+Plugin 'ghifarit53/tokyonight-vim'
+Plugin 'sickill/vim-monokai'
+Plugin 'noah/vim256-color' " 256-color schemes for vim
+Plugin 'RyannDaGreat/vim-wombat256mod'
+Plugin 'kyoz/purify' ", { 'rtp': 'vim' }
 function! Fansi()
     " Color schemes are disabled because it lags over SSH. Probably because it uses more bandwidth for 256 colors?
     "      See https://github.com/noah/vim256-color/tree/master/colors
     "     Use: Type ':color t\' and you'll see a list of themes to choose from
     "      NOTE: The default color theme is set torwards the bottom of the .vimrc file, in a function that's run after loading vim
+
+    # set termguicolors "For RLAB. I'm basically always using truecolor terminals nowadays...
+
+    " highlight Normal ctermfg=grey ctermbg=240
+
     if !exists("g:colors_name")
          colorscheme wombat256mod
          set t_Co=256 "Enable 256 colors in vim
     elseif g:colors_name=='wombat256mod'
 
-        colorscheme        distinguished
-    elseif g:colors_name=='distinguished'
+        colorscheme        wombat256mod_grb
+    elseif g:colors_name=='wombat256mod_grb'
 
-        colorscheme        hybrid
-    elseif g:colors_name=='hybrid'
+        " colorscheme        wombat256mod_rbg
+    " elseif g:colors_name=='wombat256mod_rbg'
+
+        " colorscheme        wombat256mod_brg
+    " elseif g:colors_name=='wombat256mod_brg'
+
+        colorscheme        wombat256mod_bgr
+    elseif g:colors_name=='wombat256mod_bgr'
+
+        " colorscheme        wombat256mod_gbr
+    " elseif g:colors_name=='wombat256mod_gbr'
+
+        " colorscheme        distinguished
+    " elseif g:colors_name=='distinguished'
+
+    "     colorscheme        hybrid
+    " elseif g:colors_name=='hybrid'
 
         colorscheme        jellybeans
     elseif g:colors_name=='jellybeans'
+
+        colorscheme        darcula
+    elseif g:colors_name=='Darcula'
+
+        colorscheme        miramare
+    elseif g:colors_name=='miramare'
+
+        colorscheme        monokai
+    elseif g:colors_name=='monokai'
+
+        colorscheme        tokyonight
+    elseif g:colors_name=='tokyonight'
 
         colorscheme        flattown
     elseif g:colors_name=='flattown'
@@ -365,12 +402,33 @@ function! Fansi()
         colorscheme        codeschool
     elseif g:colors_name=='codeschool'
 
+        colorscheme        dracula
+    elseif g:colors_name=='dracula'
+
         colorscheme        default
     elseif g:colors_name=='default'
 
         colorscheme        wombat256mod
     endif
     
+    "SET BACKGROUND BRIGHTNESS:
+    " highlight Normal ctermbg=233
+    highlight Normal ctermbg=234
+
+    "UPDATE GITGUTTER COLORS: https://github.com/airblade/vim-gitgutter/issues/614
+    highlight DiffAdd guifg=black guibg=wheat1
+    highlight DiffChange guifg=black guibg=skyblue1
+    highlight DiffDelete guifg=black guibg=gray45 gui=none
+    let g:gitgutter_override_sign_column_highlight = 0
+    highlight clear SignColumn
+    highlight GitGutterDelete guifg=#ff2222 ctermfg=red cterm=bold ctermbg=234
+    highlight GitGutterAdd    guifg=#009900 ctermfg=green cterm=bold ctermbg=234
+    highlight GitGutterChange guifg=#bbbb00 ctermfg=yellow cterm=bold ctermbg=234
+    highlight GitGutterChangeDelete ctermfg=4
+
+    highlight ALEErrorSign ctermfg=199 cterm=bold
+
+
     "Display the color
     echo g:colors_name
 
@@ -444,6 +502,9 @@ let g:move_key_modifier = 'C'
 noremap <MiddleMouse> <4-LeftMouse>
 noremap <MiddleDrag> <LeftDrag>
 
+" Increase vim's command history size. By default it only stores the 15 most recent commands.
+" https://vi.stackexchange.com/questions/2920/how-to-further-increase-cmdline-history-size
+set viminfo=!,'10000,<50,s10,h,:10000
 
 " Allows for shortcuts that let you select in functions, classes, etc
 " https://github.com/jeetsukumaran/vim-pythonsense
@@ -452,7 +513,9 @@ Plugin 'jeetsukumaran/vim-pythonsense'
 " https://github.com/mduan/python.vim
 " This is complementary to vim-pythonsense
 " Adds shortcuts for jumping between python blocks etc  
-Plugin 'mduan/python.vim'
+" Plugin 'mduan/python.vim'
+Plugin 'RyannDaGreat/python.vim' "I removed all ] shortcuts from it as they interfere with my own shortcuts
+
 
 " Allows us to select entire python blocks, with vai (visualselect all indent) etc and vii (visual select in indent)
 Plugin 'michaeljsmith/vim-indent-object'
@@ -533,12 +596,159 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
     nnoremap [b :bprevious<CR>
 
 "Minimap toggle and Statusbar toggle and tab bar toggle
+
     " Toggle the tab bar between always displaying and displaying only when there are multiple tabs using F4+t
     nnoremap <F4>t :if &showtabline == 2<CR>:set showtabline=1<CR>:else<CR>:set showtabline=2<CR>:endif<CR><CR>
+    nnoremap <leader>jt :if &showtabline == 2<CR>:set showtabline=1<CR>:else<CR>:set showtabline=2<CR>:endif<CR><CR>
 
     " Toggle the status bar between always displaying and displaying only when there are multiple windows using F4+s
     nnoremap <F4>s :if &laststatus == 2<CR>:set laststatus=1<CR>:else<CR>:set laststatus=2<CR>:endif<CR><CR>
+    nnoremap <leader>js :if &laststatus == 2<CR>:set laststatus=1<CR>:else<CR>:set laststatus=2<CR>:endif<CR><CR>
 
     " Toggle Minimap
     nmap <F4><F4> : MinimapToggle <CR>
+    nmap <leader>j<leader>j : MinimapToggle <CR>
+
+    " Toggle Gitgutter
+    nmap <F4>g : GitGutterToggle <CR>
+    nmap <leader>jg : GitGutterToggle <CR>
+
+    " Outliner
+    nnoremap <F4>o :Voom python<cr>:set syntax=python<cr>
+    nnoremap <leader>jo :Voom python<cr>:set syntax=python<cr>
+
+    "Doesn't work - idk why
+    " " NerdTree
+    " nnoremap <F4>b : NERDTreeTabsToggle <CR>
+    " nnoremap <leader>jb : NERDTreeTabsToggle <CR>
+
+
+
+"Added Nov1 2023
+    "GIT STUFF
+        "NERDTREE
+            " A plugin that lets us see which files are modified in NERDTree
+            Plugin 'Xuyuanp/nerdtree-git-plugin'
+            let g:NERDTreeGitStatusIndicatorMapCustom = {
+                            \ 'Modified'  :'✹',
+                            \ 'Staged'    :'✚',
+                            \ 'Untracked' :'✭',
+                            \ 'Renamed'   :'➜',
+                            \ 'Unmerged'  :'═',
+                            \ 'Deleted'   :'✖',
+                            \ 'Dirty'     :'✗',
+                            \ 'Ignored'   :'☒',
+                            \ 'Clean'     :'✔︎',
+                            \ 'Unknown'   :'?',
+                            \ }
+        "GIT GUTTER: [h, ]h
+            Plugin 'airblade/vim-gitgutter'
+            call gitgutter#disable() " Disable it by default
+            set updatetime=100 " This is the recommended update interval from airblade/gitgutter's github page. By default, it's 4 seconds.
+            nmap ]h <Plug>(GitGutterNextHunk)
+            nmap [h <Plug>(GitGutterPrevHunk)
+            omap ih <Plug>(GitGutterTextObjectInnerPending)
+            omap ah <Plug>(GitGutterTextObjectOuterPending)
+            xmap ih <Plug>(GitGutterTextObjectInnerVisual)
+            xmap ah <Plug>(GitGutterTextObjectOuterVisual)
+            nmap <leader>hu <Plug>(GitGutterUndoHunk)
+            " Git Gutter"
+            set updatetime=250
+            let g:gitgutter_max_signs = 500
+            " No mapping
+            let g:gitgutter_map_keys = 0
+            " Colors
+            let g:gitgutter_override_sign_column_highlight = 0
+            highlight clear SignColumn
+            highlight GitGutterDelete guifg=#ff2222 ctermfg=1
+            highlight GitGutterAdd    guifg=#009900 ctermfg=2
+            highlight GitGutterChange guifg=#bbbb00 ctermfg=3
+            highlight GitGutterChangeDelete ctermfg=4
+        "GITIGNORE SYTAX HIGHLIGHTING
+            Plugin 'gisphm/vim-gitignore' " Highlight .gitignore files
+    "PYTHON STUFF
+        "IMPORT SORT: ^i
+            if has('python3')
+                Plugin 'fisadev/vim-isort' " You need pip install isort for this to work. Activate with control+i in visual mode, or the :ISort command
+            endif
+        "MACCHIATO: ⌥l
+            Plugin 'smbl64/vim-black-macchiato' "Autformat specific sections of python code using   pip install black-macchiato
+            autocmd FileType python xmap <buffer> <Esc>l <plug>(BlackMacchiatoSelection)
+            autocmd FileType python nmap <buffer> <Esc>l <plug>(BlackMacchiatoCurrentLine)
+        "RPY FILES
+            autocmd BufRead,BufNewFile *.rpy set filetype=python "Treat .rpy files as python files
+        "OUTLINER
+            Plugin 'vim-voom/VOoM' " Add an outliner for python so we can quickly jump between functions and classes
+            nnoremap <F9> :Voom python<cr>:set syntax=python<cr>
+    "EDITING
+        "LINE WRAP: f7
+            function ToggleWrap()
+            if (&wrap == 1)
+                if (&linebreak == 1)
+                    set nolinebreak
+                else
+                    set nowrap
+                    set breakindent! "The second time we go around, toggle whether we wrap at the far left, or at the paragraphs
+                endif
+             else
+                set wrap
+               set linebreak
+             endif
+            endfunction
+            map <F7> :call ToggleWrap()<CR>
+    "NAVIGATION
+        "FILE HISTORY: \p
+            let MRU_Max_Menu_Entries=10000 "They said it would get slow if this is a large number. Let's find out...
+            Plugin 'yegappan/mru' "Let us have more than vim's default 10 recent files
+            nnoremap <leader>p :MRU<cr>
+            autocmd BufEnter * MruRefresh " Always get rid of files that no longer exist from the MRU. Clean up the temp files that no longer exist...
+        "NERDTREE VISUAL MODE
+            Plugin 'PhilRunninger/nerdtree-visual-selection' " Lets us use visual selection mode in NERDTree, then do operations such as 'T' for loading tab on all files in that selection
+        "TABLINE: \xtn
+            " Plugin 'mg979/vim-xtabline' "Make the tabline prettier with separators etc. Supports renaming tabs, searching through tabs, saving bookmarks, custom themes and more. \x? will show you the help menu.
+            Plugin 'RyannDaGreat/vim-xtabline' "I modified it because I don't like it adding annoying keyboard shortcuts I can't get rid of, like backspace in normal mode
+
+            "FIX THE DEFAULT TAB HIGHLIGHTING: (this plugin makes it really hard to see the highlighted tab in the default color scheme)
+            function! SetDefaultTabbarTheme()
+                hi TabLine     ctermfg=255 ctermbg=238 cterm=NONE "an  inactive tab
+                hi TabLineSel  ctermfg=17  ctermbg=190 cterm=NONE "the selected tab
+                hi TabLineFill ctermfg=255 ctermbg=238 cterm=NONE "the unused   portion of the tab line (not enough tabs)
+                hi XTFill      ctermbg=black cterm=bold "the background of the tab bar
+                hi XTSelect    ctermbg=blue ctermfg=black
+                hi XTSelectMod ctermbg=blue ctermfg=yellow cterm=bold
+                hi XTNum cterm=bold
+                hi XTNumSel cterm=bold ctermbg=blue ctermfg=black
+
+                hi Folded ctermbg=black cterm=italic
+                hi StatusLine ctermfg=white "selected status line
+                hi StatusLineNC ctermfg=blue  "unselected status line
+            endfunction
+
+            " This is the solution suggested to me by the author: https://github.com/mg979/vim-xtabline/issues/34
+            " To use it, run :XTabTheme custom_theme
+            function CustomTheme()
+            return {
+            \"XTSelect":      [ 'black', 'blue',   'NONE',   'NONE',   1 ],
+            \"XTSelectMod":   [ 'black', 'blue',   'NONE',   'NONE',   1 ],
+            \"XTVisible":     [ 'blue', 'black',   'NONE',   'NONE',   0 ],
+            \"XTVisibleMod":  [ 'blue', 'black',   'NONE',   'NONE',   1 ],
+            \"XTHidden":      [ 'blue', 'black',   'NONE',   'NONE',   0 ],
+            \"XTHiddenMod":   [ 'blue', 'black',   'NONE',   'NONE',   0 ],
+            \"XTExtra":       [ 'blue', 'black',   'NONE',   'NONE',   1 ],
+            \"XTExtraMod":    [ 'blue', 'black',   'NONE',   'NONE',   1 ],
+            \"XTSpecial":     [ 'blue', 'black',   'NONE',   'NONE',   1 ],
+            \"XTNumSel":      [ 'black', 'blue',   'NONE',   'NONE',   0 ],
+            \"XTNum":         [ 'blue', 'black',   'NONE',   'NONE',   0 ],
+            \"XTCorner":      [ 'blue', 'black',   'NONE',   'NONE',   0 ],
+            \"XTFill":        [ 'blue', 'black',   'NONE',   'NONE',   0 ],
+            \}
+            endfunction
+            au VimEnter * call xtabline#hi#generate('custom_theme', CustomTheme())
+
+
+            "This is how to run a function AFTER all plugins have been loaded:
+            au VimEnter * call SetDefaultTabbarTheme()
+
+
+
 

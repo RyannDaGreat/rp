@@ -8768,6 +8768,8 @@ def display_image_in_terminal_color(image):
 def auto_canny(image,sigma=0.33,lower=None,upper=None):
     pip_import('cv2')
     cv2=pip_import('cv2')
+    image=as_numpy_image(image)
+
     if image.dtype!=np.uint8:
         image=full_range(image,0,255).astype(np.uint8)
 
@@ -13341,6 +13343,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     #Unlike json or other formats that could be loaded, ipynb's are almost always generated automatically
                                     #They're best used as code!
                                     user_message="""ans=__import__("rp").extract_code_from_ipynb(%s)"""%repr(file_name)
+                                elif is_image_file(file_name):
+                                    user_message='ans=__import__("rp").load_image(%s)'%repr(file_name)
                                 else: 
                                     text_len_threshold = 10000  # If it's longer than this we just put the load text command to make the history cleaner...
                                     text_set_command = repr(_load_text_from_file_or_url(file_name))
@@ -13350,8 +13354,6 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             except UnicodeDecodeError:
                                 if is_video_file(file_name):
                                     user_message='ans=__import__("rp").load_video(%s)'%repr(file_name)
-                                elif is_image_file(file_name):
-                                    user_message='ans=__import__("rp").load_image(%s)'%repr(file_name)
                                 elif is_sound_file(file_name):
                                     user_message='ans=__import__("rp").load_sound_file(%s)'%repr(file_name)
                                 elif (file_name.endswith('.pt') or file_name.endswith('.pth')) and module_exists('torch'):
@@ -23506,6 +23508,9 @@ def currently_running_desktop(*,verbose=False):
 
 def _maybe_display_string_in_pager(string,with_line_numbers=True):
     #Display the string in the pager if it's too long
+    import rp.r_iterm_comm as ric
+    if ric.pseudo_terminal_level == 0: #Don't block terminal output if we're not in pseudo terminal! That can cause issues for pretty printing in a headless job, for example.
+        return
     if currently_in_a_tty():
         # if number_of_lines_in_terminal(string) > get_terminal_height()*.75:
         if number_of_lines_in_terminal(string) > get_terminal_height()-5:#This takes into account the prompt-toolkit prompt height, which I believe is hardcoded to 7 lines from the bottom of the terminal
@@ -24886,7 +24891,7 @@ def extract_alpha_channel(image):
     image=as_rgba_image(image)
     return image[:,:,3]
 
-# get_image_alpha=extract_alpha_channel #Uncomment this if you think it would make the code nicer!
+get_image_alpha=extract_alpha_channel #Uncomment this if you think it would make the code nicer!
 
 def apply_image_function_per_channel(image,function):
     #Apply a grayscale funcion on every image channel individually
@@ -24921,7 +24926,7 @@ def with_alpha_channel(image, alpha):
 
     return image
 
-# with_image_alpha=with_alpha_channel #You can uncomment this if you ever think it will enhance readability along with the functions with_image_green and with_image_hue etc
+with_image_alpha=with_alpha_channel #You can uncomment this if you ever think it will enhance readability along with the functions with_image_green and with_image_hue etc
 
 pterm=pseudo_terminal#Just a shortcut. Not to be used in code; just Colab etc where I don't want to type pseudo_terminal. What?? Don't look at me like that - I'm lazy lol
 
