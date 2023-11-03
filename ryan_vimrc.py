@@ -191,8 +191,6 @@ Plugin 'severin-lemaignan/vim-minimap' " Adds a minimap to vim. Can be seen by p
 
 Plugin 'eugen0329/vim-esearch' " The vim-easysearch plugin. This plugin adds the ability to search for text in files with the \ff command
 
-Plugin 'davidhalter/jedi-vim' " This adds python-specific refactoring abilities
-
 Plugin 'nathanaelkane/vim-indent-guides'
 
 " Plugin 'christoomey/vim-system-copy' "This doesn't seem to work...
@@ -327,7 +325,7 @@ Plugin 'dracula/vim'
 Plugin 'franbach/miramare'
 Plugin 'ghifarit53/tokyonight-vim'
 Plugin 'sickill/vim-monokai'
-Plugin 'noah/vim256-color' " 256-color schemes for vim
+"Plugin 'noah/vim256-color' " 256-color schemes for vim
 Plugin 'RyannDaGreat/vim-wombat256mod'
 Plugin 'kyoz/purify' ", { 'rtp': 'vim' }
 function! Fansi()
@@ -336,7 +334,7 @@ function! Fansi()
     "     Use: Type ':color t\' and you'll see a list of themes to choose from
     "      NOTE: The default color theme is set torwards the bottom of the .vimrc file, in a function that's run after loading vim
 
-    # set termguicolors "For RLAB. I'm basically always using truecolor terminals nowadays...
+    " set termguicolors "For RLAB. I'm basically always using truecolor terminals nowadays...
 
     " highlight Normal ctermfg=grey ctermbg=240
 
@@ -622,6 +620,9 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
     " nnoremap <F4>b : NERDTreeTabsToggle <CR>
     " nnoremap <leader>jb : NERDTreeTabsToggle <CR>
 
+    "Linting Toggle
+    map <leader>jl :ALEToggle<return>
+
 
 
 "Added Nov1 2023
@@ -643,7 +644,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
                             \ }
         "GIT GUTTER: [h, ]h
             Plugin 'airblade/vim-gitgutter'
-            call gitgutter#disable() " Disable it by default
+            silent! call gitgutter#disable() " Disable it by default
             set updatetime=100 " This is the recommended update interval from airblade/gitgutter's github page. By default, it's 4 seconds.
             nmap ]h <Plug>(GitGutterNextHunk)
             nmap [h <Plug>(GitGutterPrevHunk)
@@ -680,6 +681,31 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         "OUTLINER
             Plugin 'vim-voom/VOoM' " Add an outliner for python so we can quickly jump between functions and classes
             nnoremap <F9> :Voom python<cr>:set syntax=python<cr>
+        "JEDI: \g, K, \u, ^[space], \r
+            if has('python3') "On Macs, this doesn't work. Don't spam errors.
+                Plugin 'davidhalter/jedi-vim' " This adds python-specific refactoring abilities
+            endif
+        "LINTING: \jl, ]l, [l
+            "ALE:
+                "Python linting! Toggle with F3
+                "NOTE: To be useful, I need to dig into this and disable stupid errors...
+                Plugin 'dense-analysis/ale'
+                let g:ale_enabled=0 "Disable ale by default
+                let g:ale_linters={'python':['pyflakes']} " I coudn't care less about the other linters...flake8 has pep8 in it, so screw it...just use pyflakes which is a subset of flake8
+                autocmd VimEnter * nnoremap ]l :ALENextWrap<cr>
+                autocmd VimEnter * nnoremap [l :ALEPreviousWrap<cr>
+                "]l and [l stand for next lint and prev lint
+                let g:ale_set_highlights = 0 "Ale's in-text highlights are really bad; they're always at the beginning or end of a line and don't indicate anything important that the gutter doesn't
+                highlight clear ALEErrorSign
+                hi  ALEErrorSign ctermfg=Red
+                let g:ale_python_pyflakes_executable = 'pyflakes3' "https://vi.stackexchange.com/questions/20508/switch-pyflakes-linter-from-python2-to-python3-in-ale
+            "FLAKE8:
+                " "This one isn't as good yet...might delete from my vimrc...I've had more luck with ALE: despite it's horrible defaults, it's actually pretty nice once configured
+                " Plugin 'nvie/vim-flake8' "Let us analyze our python code...
+                " "NOTE: To be useful, I need to dig into this and disable stupid errors...
+                " autocmd FileType python nmap <buffer> <esc><F3> :call flake8#Flake8()<CR>
+                " " Errors to ignore: https://stackoverflow.com/questions/59241007/flake8-disable-all-formatting-rules
+                " let g:syntastic_python_flake8_args='--ignore=E101,E111,E112,E113,E114,E115,E116,E121,E122,E123,E124,E125,E126,E127,E128,E129,E131,E133,E201,E202,E203,E211,E221,E222,E223,E224,E225,E226,E227,E228,E231,E241,E242,E251,E261,E262,E265,E266,E271,E272,E273,E274,E301,E302,E303,E304,E401,E402,E501,E502,E701,E702,E703,E704,E711,E712,E713,E714,E721,E731,E901,E902,W191,W291,W292,W293,W391,W503,W601,W602,W603,W604' "This doesn't actually seem to help...
     "EDITING
         "LINE WRAP: f7
             function ToggleWrap()
@@ -697,11 +723,14 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             endfunction
             map <F7> :call ToggleWrap()<CR>
     "NAVIGATION
+        "TAB KEY:
+            nnoremap <Tab> <C-w>w
+            nnoremap <S-Tab> <C-w>W
         "FILE HISTORY: \p
             let MRU_Max_Menu_Entries=10000 "They said it would get slow if this is a large number. Let's find out...
             Plugin 'yegappan/mru' "Let us have more than vim's default 10 recent files
             nnoremap <leader>p :MRU<cr>
-            autocmd BufEnter * MruRefresh " Always get rid of files that no longer exist from the MRU. Clean up the temp files that no longer exist...
+            autocmd BufEnter * silent! MruRefresh " Always get rid of files that no longer exist from the MRU. Clean up the temp files that no longer exist...
         "NERDTREE VISUAL MODE
             Plugin 'PhilRunninger/nerdtree-visual-selection' " Lets us use visual selection mode in NERDTree, then do operations such as 'T' for loading tab on all files in that selection
         "TABLINE: \xtn
@@ -743,7 +772,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             \"XTFill":        [ 'blue', 'black',   'NONE',   'NONE',   0 ],
             \}
             endfunction
-            au VimEnter * call xtabline#hi#generate('custom_theme', CustomTheme())
+            au VimEnter * silent! call xtabline#hi#generate('custom_theme', CustomTheme())
 
 
             "This is how to run a function AFTER all plugins have been loaded:
