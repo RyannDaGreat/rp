@@ -5252,6 +5252,7 @@ def rip_music(URL: str,output_filename: str = default_rip_music_output_filename,
     # NOTE: youtube_dl has MANY more cool capabilities such as extracting the title/author/cover picture of the songs…
     #   …as well as breing able to download entire play-lists at once! youtube_dl can also rip videos; which could be very useful in another context!
     # EXAMPLE: play_sound_file_via_afplay(rip_music('https://www.youtube.com/watch?v=HcgEHrwdSO4'))
+    pip_import('youtube_dl')
     import youtube_dl
     ydl_opts= \
         {
@@ -5279,6 +5280,7 @@ def rip_info(URL: str):
     # … like_count，playlist，playlist_index，requested_formats，requested_subtitles，resolution，…
     # … start_time，stretched_ratio，subtitles，tags，thumbnail，thumbnails，title，upload_date，…
     # … uploader，uploader_id，uploader_url，vbr，vcodec，view_count，webpage_url，webpage_url_basename，width］
+    pip_import('youtube_dl')
     from youtube_dl import YoutubeDL
     return YoutubeDL().extract_info(URL,download=False)
 # endregion
@@ -9256,6 +9258,7 @@ def merged_dicts(*dict_args):
     Given any number of dicts, shallow copy and merge into a new dict,
     precedence goes to key value pairs in latter dicts.
     """
+    dict_args=detuple(dict_args)
     result = {}
     for dictionary in dict_args:
         result.update(dictionary)
@@ -11830,6 +11833,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         IMS $r._ISM(ans) #Input Select Multi
 
         ISENV $r._ISM($os.environ) #Input Select (multiple) Environment (variables)
+        ENV   $r._ISM($os.environ) #Input Select (multiple) Environment (variables)
 
         VCL $delete_file($get_absolute_path('~/.viminfo'))#VimClear_use_when_VCOPY_doesnt_work_properly
 
@@ -13054,6 +13058,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             if is_image(get_ans()):
                                 path=save_image(get_ans(),path)
                                 fansi_print("WANS: Wrote image file to "+path,'blue','bold')
+                            elif get_file_extension(path)=='json' and not isinstance(get_ans(),str):
+                                save_json(get_ans(),path)
                             elif isinstance(get_ans(),bytes):
                                 bytes_to_file(str(get_ans()),path)
                                 fansi_print("WANS: Wrote binary file to "+path,'blue','bold')
@@ -13343,6 +13349,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     #Unlike json or other formats that could be loaded, ipynb's are almost always generated automatically
                                     #They're best used as code!
                                     user_message="""ans=__import__("rp").extract_code_from_ipynb(%s)"""%repr(file_name)
+                                # elif file_name.endswith('.json'):
+                                #     #This works fine! But currently disabled in favor of "aa aj"
+                                #     user_message="""ans=__import__("rp").load_json(%s)"""%repr(file_name)
+                                elif file_name.endswith('.yaml'):
+                                    user_message="""ans=__import__("rp").load_yaml(%s)"""%repr(file_name)
                                 elif is_image_file(file_name):
                                     user_message='ans=__import__("rp").load_image(%s)'%repr(file_name)
                                 else: 
@@ -22879,37 +22890,124 @@ def _set_ryan_tmux_conf():
     conf='''
 #Ryan Burgert's Tmux config
 #Main changes:
+#   * Note: These shortcuts are all preceded by Control+B
 #   - You can use the mouse to move panes around
 #   - The history limit is way higher than the default
+#   - Ctrl+S toggles the visibility of the status bar
+#   - Let Control-HJKL (with shift key) resize panes
+#   - Changing the leader (useful in nested sessions):
+#       - NOTE: To activate this, uncomment the section titled CHANGING THE LEADER
+#       - Alt+a sets the leader to Alt+B 
+#       - Control+A sets the leader to Control+B
 #   - Vim-like bindings have been added:
 #       - hjkl for pane navigation
 #       - When in copy move (after ctrl+b then [), use 'v' to start a selection then 'y' to yank it
 #           - When this selection is yanked, it's sent to your system clipboard, which means you can paste it again somewhere else (i.e. sublime text, for example). NOTE: On Linux, please install 'sudo apt install xclip' to make this work!)
+#   - Reordering tabs
+#       - N and P move the current tab right and left, respectively
+#   - Use capital C to create new window with same directory as current pane (as opposed to lower-case c)
 
-set -g mouse on 
-set -g history-limit 99999
-# set-option -g prefix M-b
+
+#BASICS:
+    set -g mouse on 
+
+    set -g history-limit 99999
+    
+    #Don't let us have weird gaps between window numbers...
+    #https://unix.stackexchange.com/questions/21742/renumbering-windows-in-tmux
+    set-option -g renumber-windows on
 
 
-#Allow vim-like navigation: https://stackoverflow.com/questions/30719042/tmux-using-hjkl-to-navigate-panes
-set -g status-keys vi
-setw -g mode-keys vi
-# smart pane switching with awareness of vim splits
-bind h select-pane -L
-bind j select-pane -D
-bind k select-pane -U
-bind l select-pane -R
-bind-key -T copy-mode-vi 'v' send -X begin-selection     # Begin selection in copy mode.
-bind-key -T copy-mode-vi 'C-v' send -X rectangle-toggle  # Begin selection in copy mode.
+#YANKING:
+    # Let tmux copy to the system clipboard.
+    # First, please run   git clone https://github.com/tmux-plugins/tmux-yank ~/clone/path
+    run-shell ~/clone/path/yank.tmux
+    set -g @yank_with_mouse on
+    set -g @yank_selection_mouse 'clipboard' # or 'primary' or 'secondary'
 
-# Let tmux copy to the system clipboard.
-# First, please run   git clone https://github.com/tmux-plugins/tmux-yank ~/clone/path
-run-shell ~/clone/path/yank.tmux
-set -g @yank_with_mouse on
-set -g @yank_selection_mouse 'clipboard' # or 'primary' or 'secondary'
 
-#Let tmux use 256 colors, instead of being limited to plain boring ascii colors
-set -g default-terminal "screen-256color"
+#BINDINGS
+    #REORDER TABS
+        #Reorder TMUX tabs
+        #https://superuser.com/questions/343572/how-do-i-reorder-tmux-windows
+        bind-key P swap-window -t -1\; select-window -t -1
+        bind-key N swap-window -t +1\; select-window -t +1
+    #VIM NAVIGATION
+        #Allow vim-like navigation: https://stackoverflow.com/questions/30719042/tmux-using-hjkl-to-navigate-panes
+        set -g status-keys vi
+        setw -g mode-keys vi
+        # smart pane switching with awareness of vim splits
+        bind h select-pane -L
+        bind j select-pane -D
+        bind k select-pane -U
+        bind l select-pane -R
+        bind-key -T copy-mode-vi 'v' send -X begin-selection     # Begin selection in copy mode.
+        bind-key -T copy-mode-vi 'C-v' send -X rectangle-toggle  # Begin selection in copy mode.
+    #RESIZING HJKL
+        #Let Control-HJKL (with shift key) resize panes
+        bind C-J resize-pane -D 10
+        bind C-K resize-pane -U 10
+        bind C-H resize-pane -L 10
+        bind C-L resize-pane -R 10
+    #BREAK PANE:
+        #Turn a pane into a tab
+        bind-key b "break-pane"
+    #COMPATIABILITY:
+        #Let control+arrow keys work through tmux 
+        #https://stackoverflow.com/questions/38133250/cannot-get-control-arrow-keys-working-in-vim-through-tmux
+        set-window-option -g xterm-keys on
+    #TOGGLE STATUSBAR:
+        bind-key C-s set-option -g status #Ctrl+S toggles the visibility of the status bar
+    #SEND/JOIN PANES:
+        #Shortcut for joining panes: https://maciej.lasyk.info/2014/Nov/19/tmux-join-pane/
+        #Note: You need to enter two numbers, not one. For example, 1.3 or 3.4 not just 0. You can see what's what with ^b+w or ^b+q on a given tab
+        bind-key s command-prompt -p "Send pane to:"  "join-pane -t '%%'"
+        bind-key S command-prompt -p "Join pane from:"  "join-pane -s '%%'"
+    #RENAMING SESSION:
+        bind-key ` command-prompt "rename-window %%"
+    #CHANGING THE LEADER:
+        # bind-key M-a set-option -g prefix M-b # Alt+a sets the leader to Alt+B
+        # bind-key C-a set-option -g prefix C-b # Control+A sets the leAder to Control+B
+
+#OPTIONS:
+    #ESCAPE:
+        #set-option -g prefix M-b
+        #NOTE: With this option, simply pressing 'escape' will take a 1 second delay. Set bindings in other programs appropriately (like in lazygit), don't use this, or just wait it out
+    #AUTO-CD:
+        #Stay in the same directory when splitting panes
+        bind '"' split-window -c "#{pane_current_path}"
+        bind % split-window -h -c "#{pane_current_path}"
+        bind C new-window -c "#{pane_current_path}"  #Use capital C to create new window with same directory as current pane
+    #COLORS:
+        #Let tmux use 256 colors, instead of being limited to plain boring ascii colors
+        set -g default-terminal "screen-256color"
+        # set -g default-terminal "tmux-256color"
+        # set -g default-terminal "xterm"
+
+        #TRUECOLOR SUPPORT!!!
+        #NOTE: If you're using MOSH, you won't get 24 bit color support (aka truecolor support). The code exists in the mosh github repo, but the last release was in 2015...(as of 2022 writing this, it was 7 years ago...)
+        #To get 24 bit color support in mosh you have to build it yourself! I PROMISE IT'S NOT THAT BAD (it's really quick)! https://github.com/mobile-shell/mosh/wiki/Build-Instructions
+        #I was referred there by https://github.com/mobile-shell/mosh/issues/649
+        set-option -sa terminal-overrides ",xterm*:Tc" #This somehow enables Truecolor...idk why but it works on Macx! From https://herrbischoff.com/2020/08/how-to-enable-italics-in-tmux/
+    #THEME:
+        #STATUSBAR:
+            #COLOR:
+                #Pro tip: To see all 256 colors, use rp.print_fansi_reference_table()
+                # set -g status-style bg=colour97 #Set the color of the status bar
+                # set -g pane-active-border-style bg=default,fg=colour97 #The border colors between panes
+                # set -g mode-style bg=colour213,fg=black #Set the color of text selection
+            #TEXT: 
+                ## Better status, such as AM PM time. TODO: Configure this. It's a mess right now...
+                ## See https://arcolinux.com/everything-you-need-to-know-about-tmux-status-bar/
+                ## set -g status-right "#[fg=cyan]%A, %d %b %Y %I:%M %p"
+                ## set-option -g status-right "#[fg=green,bg=default,bright]#(tmux-mem-cpu-load) "
+                ## set-option -ag status-right "#[fg=red,dim,bg=default]#(uptime | cut -f 4-5 -d ' ' | cut -f 1 -d ',') "
+                ## set-option -ag status-right " #[fg=white,bg=default]%a%l:%M:%S %p#[default] #[fg=blue]%Y-%m-%d
+                ## set -g status-right '#[fg=white]#(hostname)@#(host `hostname` | cut -d " " -f 4)'
+                #set -g status-right '#[fg=cyan]#(hostname) : '
+                #set -ag status-right "#[fg=cyan]#(uptime | cut -f 4-5 -d ' ' | cut -f 1 -d ',') "
+                ## set -ag status-right "#[fg=cyan]%A, %d %b %Y %I:%M %p"
+                #set -ag status-right "#[fg=cyan]: %b %d %I:%M %p"
     '''
     conf_path=get_absolute_path("~/.tmux.conf")
     if not file_exists(conf_path) or input_yes_no("You already have a tmux config file ~/.tmux.conf, would you like to overwrite it?"):
