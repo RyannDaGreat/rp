@@ -9252,17 +9252,80 @@ def get_all_submodule_names(module):
 #         return os.path.isdir(d) and glob.glob(os.path.join(d, '__init__.py*'))
 #     return list(filter(is_package, os.listdir(dir)))
 
-def merged_dicts(*dict_args):
+# def merged_dicts(*dict_args):
+#     """
+#     SOURCE: https://stackoverflow.com/questions/38987/how-to-merge-two-dictionaries-in-a-single-expression
+#     Given any number of dicts, shallow copy and merge into a new dict,
+#     precedence goes to key value pairs in latter dicts.
+#     """
+#     # dict_args=detuple(dict_args)
+#     result = {}
+#     for dictionary in dict_args:
+#         result.update(dictionary)
+#     return result
+
+def merged_dicts(*dicts, precedence='last', mutate=False):
     """
-    SOURCE: https://stackoverflow.com/questions/38987/how-to-merge-two-dictionaries-in-a-single-expression
-    Given any number of dicts, shallow copy and merge into a new dict,
-    precedence goes to key value pairs in latter dicts.
+    Merge given dictionaries into a new dictionary or mutate the first one.
+    The type of the resulting dictionary will be the same as the type of the first dictionary provided
+    if mutate is False. Precedence determines which dictionary's values will take priority in case of key conflicts.
+
+    Args:
+        *dicts: Variable length dictionary list or a single iterable of dictionaries.
+        precedence (str): Determines precedence. 'first' means dictionaries listed first take precedence,
+                          'last' means dictionaries listed last take precedence.
+        mutate (bool): If True, the first dictionary provided will be mutated instead of creating a new one.
+
+    Returns:
+        A new dictionary that is a merge of the given dictionaries, or the first dictionary if mutate is True.
+        If non-dicts are given, such as EasyDict, the type of the first dict given will be used.
+
+    Raises:
+        ValueError: If 'precedence' is not 'first' or 'last', or if any provided argument is not a dictionary.
+
+    Examples:
+        Example 1: merged_dicts({'a': 1}, {'b': 2}, {'a': 3})  # Output: {'a': 3, 'b': 2}
+        Example 2: merged_dicts({'a': 1}, {'b': 2}, {'a': 3}, precedence='first')  # Output: {'a': 1, 'b': 2}
+        Example 3: merged_dicts(dict1, {'b': 2}, mutate=True)  # `dict1` is now {'a': 1, 'b': 2}
+        Example 4: merged_dicts(dict1, {'b': 2})  # `dict1` remains {'a': 1}, `result` is {'a': 1, 'b': 2}
+        Example 5: merged_dicts()  # Output: {}
+        Example 6: merged_dicts([{'a': 1}, {'b': 2}])  # Output: {'a': 1, 'b': 2}
+        Example 7: Handling non-dict Mapping objects
+            from easydict import EasyDict
+            edict1 = EasyDict({'a': 1})
+            edict2 = EasyDict({'b': 2})
+            merged_dicts(edict1, edict2)  # Expected output: EasyDict({'a': 1, 'b': 2})
+        
     """
-    dict_args=detuple(dict_args)
-    result = {}
-    for dictionary in dict_args:
-        result.update(dictionary)
+    from collections.abc import Mapping, Iterable
+    
+    # Validate precedence argument
+    if precedence not in ('first', 'last'):
+        raise ValueError("Invalid precedence value: '{}'. Precedence must be either 'first' or 'last'.".format(precedence))
+
+    # Flatten the input if a single iterable is provided.
+    if len(dicts) == 1 and isinstance(dicts[0], Iterable) and not isinstance(dicts[0], Mapping):
+        dicts = dicts[0]
+
+    # Check to make sure all the dicts are there
+    if not all(isinstance(d, Mapping) for d in dicts):
+        raise ValueError("All arguments must be Mapping objects, but they weren't. We got types "+repr(list(map(type,dicts))))
+
+    # Determine the order of dictionary processing based on precedence.
+    dicts = list(reversed(dicts)) if precedence == 'first' else dicts
+
+    # Find the first dict if there is one, otherwise make a new one
+    first_dict = dicts[0] if len(dicts) else {}
+
+    # If mutate is True, the first dictionary is updated directly.
+    result = first_dict if mutate else type(first_dict)()
+
+    # Merge the dicts into result
+    for d in dicts:
+        result.update(d)
+
     return result
+
 
 def keys_and_values_to_dict(keys,values):
     #EXAMPLE:
