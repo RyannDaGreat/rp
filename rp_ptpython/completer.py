@@ -35,6 +35,38 @@ def get_all_importable_module_names():
 
 from threading import Thread
 Thread(target=get_all_importable_module_names).start()
+    
+
+_get_apt_completions_cache=None
+def get_apt_completions():
+    #Gets all installable apt packages. Perhaps migrate this to rp?
+    global _get_apt_completions_cache
+    if _get_apt_completions_cache is not None:
+        return _get_apt_completions_cache.copy()
+    else:
+        import subprocess
+        # Update package lists with 'sudo apt update'
+        # subprocess.run(['sudo', 'apt', 'update'], stdout=subprocess.PIPE)
+        
+        try:
+            # Get the list of all available packages
+            result = subprocess.run(['apt-cache', 'dumpavail'], stdout=subprocess.PIPE, text=True)
+            
+            # Decode the byte string into a string, split by newline
+            package_list = result.stdout.split('\n')
+            
+            # Extract package names
+            packages = set()
+            for line in package_list:
+                if line.startswith('Package: '):
+                    package_name = line.split(' ')[1]
+                    packages.add(package_name)
+            
+            _get_apt_completions_cache= packages
+        except Exception:
+            _get_apt_completions_cache=[]
+
+        return _get_apt_completions_cache
 
 class PythonCompleter(Completer):
     """
@@ -242,7 +274,23 @@ class PythonCompleter(Completer):
             return 
         if (before_line.startswith('!') or before_line.startswith('ARG ')) and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
-            yield from yield_from_candidates([x for x in os.listdir()])
+            bls=before_line.split()
+            if before_line.startswith('!sudo apt install'):
+                yield from yield_from_candidates(get_apt_completions())
+                return
+            if before_line.startswith("!") and not (
+                    before_line[1:].startswith("/") or before_line[1:].startswith(".")
+                ) and (
+                    len(bls) == 1
+                    and (before_line.strip() == before_line or bls[0]=='!sudo')
+                    or len(bls) == 2
+                    and bls[0] == "!sudo"
+                    and (not bls[1].startswith(".") or bls[1].startswith("/"))
+                    and before_line==before_line.strip()
+                ):
+                    yield from yield_from_candidates(get_sys_com())
+            else:
+                yield from yield_from_candidates([x for x in os.listdir()])
             return 
 
         import re
