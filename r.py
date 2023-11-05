@@ -6396,7 +6396,7 @@ def append_line_to_file(line:str,file_path:str):
         finally:
             file.close()
 
-def load_json(path, use_cache=False):
+def load_json(path, *, use_cache=False):
     text=text_file_to_string(path, use_cache=use_cache)
     import json
     out = json.loads(text)
@@ -6989,6 +6989,7 @@ def is_iterable(x):
         return False
 
 def space_split(x: str) -> list:
+    #Please don't use this - it's old and made it before I knew python well. Just use x.split().
     return list(filter(lambda y:y != '',x.split(" ")))  # Splits things by spaces but doesn't allow empty parts
 def deepcopy_multiply(iterable,factor: int):
     # Used for multiplying lists without copying their addresses
@@ -7047,6 +7048,51 @@ def shell_command(command: str,as_subprocess=False,return_printed_stuff_as_strin
         else:
             from os import system
             system(command)
+
+def get_system_commands():
+    """
+    Retrieve a list of executable commands available in the system's PATH.
+    
+    The function returns a list of command names that are executable by the os.system().
+    It has been confirmed to work on UNIX-like systems (Mac and Linux).
+    Note: This function has not yet been tested on Windows
+
+    Returns:
+        A list of strings representing the command names
+
+    Example:
+        get_system_commands() --> ["ls", "pwd", "python3.8", "man", ... ]
+    """
+    
+    assert not currently_running_windows(), 'r.get_system_commands has not been tested on Windows yet. Feel free to add that!'
+
+    import os
+    import subprocess
+
+    env_paths = os.environ['PATH']
+    paths = env_paths.split(os.pathsep)
+    
+    commands = set()
+
+    for path in paths:
+        if os.path.isdir(path):
+            with os.scandir(path) as entries:
+                for entry in entries:
+                    try:
+                        # Check if the entry is a file and it's executable
+                        if entry.is_file() and os.access(entry.path, os.X_OK):
+                            commands.add(entry.name)
+                    except Exception:
+                        # Permission errors - ignore them
+                        pass
+                    
+    # Turn the set into a list by sorting it in a convenient way to view
+    commands=sorted(commands)
+    commands=sorted(commands,key=len)
+
+    return commands
+
+
 def printed(message,value_to_be_returned=None,end='\n'):  # For debugging...perhaps this is obsolete now that I have pseudo_terminal though.
     print(str(value_to_be_returned if value_to_be_returned is not None else message),end=end)
     return value_to_be_returned or message
@@ -11897,6 +11943,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         ISENV $r._ISM($os.environ) #Input Select (multiple) Environment (variables)
         ENV   $r._ISM($os.environ) #Input Select (multiple) Environment (variables)
+
+        GSC   $r._ISM($get_system_commands())
+        SCO   $r._ISM($get_system_commands())
 
         VCL $delete_file($get_absolute_path('~/.viminfo'))#VimClear_use_when_VCOPY_doesnt_work_properly
 
