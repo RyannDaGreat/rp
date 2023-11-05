@@ -288,7 +288,8 @@ class PythonCompleter(Completer):
                     and (not bls[1].startswith(".") or bls[1].startswith("/"))
                     and before_line==before_line.strip()
                 ):
-                    yield from yield_from_candidates(get_sys_com())
+                    import rp
+                    yield from yield_from_candidates(rp.r._get_cached_system_commands())
             else:
                 yield from yield_from_candidates([x for x in os.listdir()])
             return 
