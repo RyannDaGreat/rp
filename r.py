@@ -7076,15 +7076,15 @@ def get_system_commands():
 
     for path in paths:
         if os.path.isdir(path):
-            with os.scandir(path) as entries:
-                for entry in entries:
-                    try:
-                        # Check if the entry is a file and it's executable
-                        if entry.is_file() and os.access(entry.path, os.X_OK):
-                            commands.add(entry.name)
-                    except Exception:
-                        # Permission errors - ignore them
-                        pass
+            entries= os.scandir(path)
+            for entry in entries:
+                try:
+                    # Check if the entry is a file and it's executable
+                    if entry.is_file() and os.access(entry.path, os.X_OK):
+                        commands.add(entry.name)
+                except Exception:
+                    # Permission errors - ignore them
+                    pass
                     
     # Turn the set into a list by sorting it in a convenient way to view
     commands=sorted(commands)
