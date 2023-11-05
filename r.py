@@ -7093,6 +7093,27 @@ def get_system_commands():
     return commands
 
 
+_get_sys_commands_cache=set()
+def _get_cached_system_commands():
+    #Meant for internal use in pterm! Both kibble and autocomplete.
+    #rp.get_system_commands can take .05 seconds to complete. Do it in a separate thread upon request.
+    global _get_sys_commands_cache
+
+    import rp
+
+    def update_sys_commands():
+        #It doesn't delete anything - that should hopefully prevent any thread collision fuckyness
+        global _get_sys_commands_cache
+        _get_sys_commands_cache|=set(rp.get_system_commands())
+
+    if not _get_sys_commands_cache:
+        #If it's empty populate it for the first time
+        update_sys_commands()
+    else:
+        rp.run_as_new_thread(update_sys_commands)
+
+    return _get_sys_commands_cache
+
 def printed(message,value_to_be_returned=None,end='\n'):  # For debugging...perhaps this is obsolete now that I have pseudo_terminal though.
     print(str(value_to_be_returned if value_to_be_returned is not None else message),end=end)
     return value_to_be_returned or message

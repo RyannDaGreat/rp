@@ -92,25 +92,6 @@ def is_iterable_token(token_name):
         return False
 
 
-_get_sys_commands_cache=set()
-def get_sys_commands():
-    #rp.get_system_commands can take .05 seconds to complete. Do it in a separate thread upon request.
-    global _get_sys_commands_cache
-
-    import rp
-
-    def update_sys_commands():
-        #It doesn't delete anything - that should hopefully prevent any thread collision fuckyness
-        global _get_sys_commands_cache
-        _get_sys_commands_cache|=set(rp.get_system_commands())
-
-    if not _get_sys_commands_cache:
-        #If it's empty populate it for the first time
-        update_sys_commands()
-    else:
-        rp.run_as_new_thread(update_sys_commands)
-
-    return _get_sys_commands_cache
     
 
 
@@ -2022,7 +2003,8 @@ def handle_character(buffer,char,event=None):
         if not after and char==' ' and before.replace('_','').isalpha():
             autocaps = 'cd py pym apy apym acat cat vim tab fd rn run ccat ncat pip take mkdir'.split()
 
-            shortcuts = {c:'!'+c for c in get_sys_commands()}
+            import rp
+            shortcuts = {c:'!'+c for c in rp.r._get_cached_system_commands()}
 
             shortcuts.update({
                 'mv':'!mv',

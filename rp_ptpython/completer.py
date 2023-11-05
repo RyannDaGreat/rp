@@ -275,9 +275,6 @@ class PythonCompleter(Completer):
         if (before_line.startswith('!') or before_line.startswith('ARG ')) and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
             bls=before_line.split()
-            if before_line.startswith('!sudo apt install'):
-                yield from yield_from_candidates(get_apt_completions())
-                return
             if before_line.startswith("!") and not (
                     before_line[1:].startswith("/") or before_line[1:].startswith(".")
                 ) and (
@@ -288,8 +285,12 @@ class PythonCompleter(Completer):
                     and (not bls[1].startswith(".") or bls[1].startswith("/"))
                     and before_line==before_line.strip()
                 ):
+                if before_line.startswith('!sudo apt install'):
+                    yield from yield_from_candidates(get_apt_completions())
+                else:
                     import rp
-                    yield from yield_from_candidates(rp.r._get_cached_system_commands())
+                    get_sys_com=rp.r._get_cached_system_commands
+                    yield from yield_from_candidates(get_sys_com())
             else:
                 yield from yield_from_candidates([x for x in os.listdir()])
             return 
