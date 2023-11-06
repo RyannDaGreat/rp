@@ -5159,6 +5159,10 @@ def _filter_dict_via_fzf(input_dict):
     selected_lines = iterfzf.iterfzf(display_lines, multi=True, exact=True)
     selected_indices = [display_lines.index(line) for line in selected_lines]
 
+    if selected_indices is None:
+        # The user cancelled. I'm not sure what the best thing is to return here...so I'll return None for now.
+        return None
+
     # Extract the selected keys
     selected_keys = [sorted_keys[index] for index in selected_indices]
 
@@ -13599,7 +13603,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             #This isn't in the help documentation, because it's something I made for myself. You can use it too though!
                             if user_message=='RYAN RPRC YES' or input_yes_no('Would you like to add Ryan Burgert\'s default settings to your rprc?'):
                                 # _get_ryan_rprc_path() #This already exists!
-                                for line in [
+                                rprc_lines = [
                                     "",
                                     "# < Ryan RPRC Start >",
                                     "from rp import *",
@@ -13607,9 +13611,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     "__import__('rp').r._pip_install_needs_sudo=False",
                                     "# < Ryan RPRC End >",
                                     "",
-                                ]:
+                                ]
+                                for line in rprc_lines:
                                     append_line_to_file(line,rprc_file_path)
-                                user_message='from rp import *\nans='+repr(rprc_file_path)
+                                user_message=line_join(rprc_lines+['ans='+repr(rprc_file_path)])
 
                         elif user_message == 'GMORE':
                             fansi_print("GMORE --> 'google-search MORE' --> Searching the web for your error...","red",'bold')
