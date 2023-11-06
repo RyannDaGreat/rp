@@ -3949,7 +3949,13 @@ def add_ipython_kernel(kernel_name: str = None, display_name: str = None):
 
     if kernel_name is None:
         print("Please enter the title of the new iPython kernel:")
-        kernel_name = input_default(' > ', _get_session_title())
+        default = _get_session_title()
+
+        # Kernel names can't have whitespace
+        default = default.strip() 
+        default = '-'.join(default.split())
+
+        kernel_name = input_default(' > ', default)
 
     import sys
     import subprocess
