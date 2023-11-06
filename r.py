@@ -3934,7 +3934,7 @@ def _display_image_in_notebook_via_ipython(image):
     import IPython
     return IPython.display.display_png(encode_image_to_bytes(image,'png'),raw=True)
 
-def add_ipython_kernel(kernel_name: str, display_name: str = None):
+def add_ipython_kernel(kernel_name: str = None, display_name: str = None):
     """
     Add the current Python interpreter as a Jupyter IPython kernel.
 
@@ -3946,6 +3946,10 @@ def add_ipython_kernel(kernel_name: str, display_name: str = None):
     add_current_python_as_kernel("python39", "Python 3.9.5")
     """
     pip_import('ipykernel')    
+
+    if kernel_name is None:
+        print("Please enter the title of the new iPython kernel:")
+        kernel_name = input_default(' > ', _get_session_title())
 
     import sys
     import subprocess
@@ -9863,8 +9867,30 @@ def _set_session_title(title=None):
             current_title=pyin.session_title
             print("Current session title:",repr(current_title))
         print("Please enter a new session title:")
-        title=input(" > ")
+        title=input_default(" > ", _get_session_title())
     pyin.session_title=title
+
+def _get_session_title():
+    if hasattr(pyin,'session_title'):
+        current_title=pyin.session_title
+    else:
+        current_title=""
+    return current_title
+
+def _get_default_session_title():
+    current=_get_session_title()
+
+    if current:
+        return current
+    if running_in_conda():
+        return get_conda_name()
+    if running_in_venv():
+        return get_venv_name()
+
+    return ""
+
+def _set_default_session_title():
+    _set_session_title(_get_default_session_title())
 
 def _set_pterm_theme(ui_theme_name=None,code_theme_name=None):
     #EXAMPLE:
@@ -11960,6 +11986,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         NBCHY $r._nbca($get_all_files(file_extension_filter='ipynb',sort_by='size')[::-1], auto_yes=True) #Clear all notebooks in the current directory without confirmation
         NCA  $r._nbca(ans)
 
+        IPYK $add_ipython_kernel()
+
         INS $input_select("Select:", $line_split(ans) if isinstance(ans,str) else ans)
         ISA $input_select("Select:", $line_split(ans) if isinstance(ans,str) else ans)
         ISM $r._ISM(ans) #Input Select Multi
@@ -13607,6 +13635,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     "",
                                     "# < Ryan RPRC Start >",
                                     "from rp import *",
+                                    "__import__('rp').r._set_default_session_title()",
                                     "__import__('rp').r._pip_import_autoyes=True",
                                     "__import__('rp').r._pip_install_needs_sudo=False",
                                     "# < Ryan RPRC End >",
@@ -19100,6 +19129,43 @@ def running_in_ssh():
     #Returns True iff this Python session was started over SSH
     #https://stackoverflow.com/questions/35352921/how-to-check-if-python-script-is-being-called-remotely-via-ssh
     return 'SSH_CLIENT' in os.environ or 'SSH_TTY' in os.environ or 'SSH_CONNECTION' in os.environ
+
+def running_in_conda():
+    "Returns True if this python process is from a Conda environment, and False otherwise"
+    key='CONDA_PREFIX'
+    exe=sys.executable
+    env=os.environ
+    if key not in env:
+        return False
+    return exe==path_join(env[key],'bin','python')
+
+def running_in_venv():
+    "Returns True if this python process is from a virtual environment (venv), and False otherwise"
+    key='VIRTUAL_ENV'
+    exe=sys.executable
+    env=os.environ
+    if key not in env:
+        return False
+    return exe==path_join(env[key],'bin','python')
+
+def get_conda_name():
+    "Returns the name of the current conda environment. Throws an error if it can't find it."
+    key='CONDA_DEFAULT_ENV'
+    env=os.environ
+    if key not in env:
+        assert not running_in_conda(), 'If this assertion fails, I misunderstood how conda affects environment variables. This assertion should never fail.'
+        raise KeyError("r.get_conda_env_name: Can't get the name of the current conda environment - CONDA_DEFAULT_ENV is not set. Are you sure this python process is running in conda?")
+    return env[key]
+
+def get_venv_name():
+    "Returns the name of the current python virtual environment (venv). Throws an error if it can't find it."
+    key='VIRTUAL_ENV'
+    env=os.environ
+    if key not in env:
+        assert not running_in_venv(), 'If this assertion fails, I misunderstood how venv affects environment variables. This assertion should never fail.'
+        raise KeyError("r.get_conda_env_name: Can't get the name of the current python virtual environment (venv) - VIRTUAL_ENV is not set. Are you sure this python process is running in a python virtual environment?")
+    return get_folder_name(env[key])
+
 
 def split_tensor_into_regions(tensor,*counts,flat=True,strict=False):
     #Return the tensor into multiple rectangular regions specified by th number of cuts we make on each dimension.
