@@ -79,7 +79,6 @@
 /Users/Ryan/Desktop/CleanCode/LightWave
 /Users/Ryan/Desktop/CleanCode/LightWave/NextGen
 /Users/Ryan/Desktop/CleanCode/LightWave/NextGen/axoloti
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/parso
 /Users/Ryan/PycharmProjects/QuickPython/rp/libs/pyflann
 /Users/Ryan/PycharmProjects/QuickPython/rp/libs/parso
@@ -89,4 +88,5 @@
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Users/Ryan
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
