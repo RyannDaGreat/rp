@@ -11078,6 +11078,10 @@ _need_module_refresh=False #Set to true if we do something with pip. Used by pte
 #    pseudo_terminal(_globals,_locals)
 
 
+def _profile_vim_startup_plugins():
+    from rp.libs.profile_vim_plugins import run
+    run()
+
 def _view_markdown_in_terminal(file_or_string):
     
     pip_import("frogmouth")
@@ -11916,6 +11920,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         UUU $set_current_directory('../../..');$fansi_print($get_current_directory(),'blue','bold')
         UUUU $set_current_directory('../../../..');$fansi_print($get_current_directory(),'blue','bold')
         UUUUU $set_current_directory('../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+
+        VIMPROF $r._profile_vim_startup_plugins()
 
         LSF LSQ
         FDZ LSZ
