@@ -669,9 +669,10 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             Plugin 'gisphm/vim-gitignore' " Highlight .gitignore files
     "PYTHON STUFF
         "IMPORT SORT: ^i
-            if has('python3')
-                Plugin 'fisadev/vim-isort' " You need pip install isort for this to work. Activate with control+i in visual mode, or the :ISort command
-            endif
+            "DISABLED Because it slowed down startup (only a tiny bit - like .04 seconds)
+            " if has('python3')
+            "     Plugin 'fisadev/vim-isort' " You need pip install isort for this to work. Activate with control+i in visual mode, or the :ISort command
+            " endif
         "MACCHIATO: ⌥l
             Plugin 'smbl64/vim-black-macchiato' "Autformat specific sections of python code using   pip install black-macchiato
             autocmd FileType python xmap <buffer> <Esc>l <plug>(BlackMacchiatoSelection)
@@ -729,8 +730,8 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         "FILE HISTORY: \p
             let MRU_Max_Menu_Entries=10000 "They said it would get slow if this is a large number. Let's find out...
             Plugin 'yegappan/mru' "Let us have more than vim's default 10 recent files
-            nnoremap <leader>p :MRU<cr>
-            autocmd BufEnter * silent! MruRefresh " Always get rid of files that no longer exist from the MRU. Clean up the temp files that no longer exist...
+            nnoremap <leader>p :MruRefresh<cr>:MRU<cr>
+            " autocmd BufEnter * silent! MruRefresh " Always get rid of files that no longer exist from the MRU. Clean up the temp files that no longer exist...
         "NERDTREE VISUAL MODE
             Plugin 'PhilRunninger/nerdtree-visual-selection' " Lets us use visual selection mode in NERDTree, then do operations such as 'T' for loading tab on all files in that selection
         "TABLINE: \xtn
