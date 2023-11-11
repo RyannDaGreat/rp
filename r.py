@@ -139,10 +139,25 @@ def lazy_par_map(func, *iterables, num_threads=None, buffer_limit=None):
         - buffer_limit (optional): The maximum size of the buffer. Without this, this function isn't really very lazy lol.
                                    If set to 0, there's no constraint on the number of stored items and it will try to precalculate everything.
                                    A buffer_limit is useful for conserving memory, such as loading millions of images lazily in a dataloader that processes them slowly.
+                                   For example, if we want to load 1,000,000 images from URLs lazily, if we don't have a buffer limit, 
+                                       it will try making 1,000,000 http requests all at once - which can prevent the first ones from completing in a reasonable time.
+                                       It also means you'd have to store all 1,000,000 images in memory even before you need them - which could crash your python runtime.
                                    If not provided, defaults to num_threads.
 
     Returns:
         - An iterator that yields results as tasks complete.
+
+    Examples:
+        def test_par_map():
+            def func(index):
+                time=random_float(0,1)
+                sleep(time)
+                print(index)
+                return index
+            return list(lazy_par_map(func,range(10),buffer_limit=3,num_threads=3))
+
+        ans=test_par_map()
+        assert ans==sorted(ans),'lazy_par_map failed to preserve order with a non-zero buffer_limit'
     """
     from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
     
@@ -163,7 +178,7 @@ def lazy_par_map(func, *iterables, num_threads=None, buffer_limit=None):
         return
     
     iterable = zip(*iterables)
-    iterator = iter(iterable)
+    iterator = enumerate(iter(iterable))
     
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         if not buffer_limit:
@@ -172,11 +187,20 @@ def lazy_par_map(func, *iterables, num_threads=None, buffer_limit=None):
         
         futures = set()
 
+        # We need to preserve the order of the inputs
+        results = {} #Maps index -> result
+        yield_index=0
+        def wrapper(index):
+            def new_func(*args):
+                value=func(*args)
+                return index,value
+            return new_func
+
         # Load up the initial buffer_limit tasks
         for _ in range(buffer_limit):
             try:
-                args = next(iterator)
-                futures.add(executor.submit(func, *args))
+                iterator_index, args = next(iterator)
+                futures.add(executor.submit(wrapper(iterator_index), *args))
             except StopIteration:
                 break
 
@@ -184,24 +208,21 @@ def lazy_par_map(func, *iterables, num_threads=None, buffer_limit=None):
             done, _ = wait(futures, return_when=FIRST_COMPLETED)  # wait for any future to complete
 
             for future in done:
-                yield future.result()
+                result_index,value = future.result()
+                results[result_index]=value
                 futures.remove(future)
                 
                 try:
-                    args = next(iterator)
-                    futures.add(executor.submit(func, *args))
+                    iterator_index,args = next(iterator)
+                    futures.add(executor.submit(wrapper(iterator_index), *args))
                 except StopIteration:
                     pass
-
-
-
-
-
-
-
-
-
-
+                
+            while yield_index in results:
+                yield results[yield_index]
+                yield_index+=1
+            
+                
 
 
 # endregion
@@ -9889,9 +9910,9 @@ def _get_default_session_title():
     if current:
         return current
     if running_in_conda():
-        return get_conda_name()
+        return ' '+get_conda_name()+' '
     if running_in_venv():
-        return get_venv_name()
+        return ' '+get_venv_name()+' '
 
     return ""
 
@@ -11828,6 +11849,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         VPLC $local_copy($printed($vim_paste()))
         LCVP $local_copy($printed($vim_paste()))
 
+        A ACATA
         AA ACATA
         ACA ACATA
         AC ACAT
