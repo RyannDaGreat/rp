@@ -2049,6 +2049,10 @@ def handle_character(buffer,char,event=None):
                 'sss' :'!aws s3',
             })
 
+            for item in 'import'.split():
+                #There are some programs we don't want to complete...yes, these are real programs you can enounter in bash...
+                del shortcuts[item]
+
             token=None
             if before in autocaps:
                 token = before.upper()
