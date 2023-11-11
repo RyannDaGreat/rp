@@ -120,9 +120,12 @@ def _legacy_par_map(func,*iterables,number_of_threads=None,chunksize=None):
 
 
 
-def par_map(func,*iterables,num_threads=None):
-    "See lazy_par_map for doc"
-    return list(lazy_par_map(func,*iterables,num_threads=num_threads))
+def par_map(func,*iterables,num_threads=None,buffer_limit=0):
+    """
+    See lazy_par_map for doc. 
+    buffer_limit defaults to 0 because we return everything all at once anyway and therefore don't care about how long we wait for the first item, and we have to store all the outputs in memory anyway.
+    """
+    return list(lazy_par_map(func,*iterables,num_threads=num_threads,buffer_limit=buffer_limit))
 
 
 
