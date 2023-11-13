@@ -2987,6 +2987,14 @@ def save_image(image,file_name=None,add_png_extension: bool = True):
         # image=as_float_image(image).astype(np.float32)
         save_openexr_image(image, file_name)
         return file_name
+
+    elif get_file_extension(file_name)=='jpg':
+        try:
+            #Try to save using this jpg-specific method - it guarentees 100% quality
+            return save_image_jpg(image,file_name)
+        except Exception:
+            #Use some other method to save it
+            pass
     else:
         #Suppress any warnings about losing data when coming from a float_image...that's a given, considering that png's only have one byte per color channel...
         image=as_byte_image(image)
@@ -6435,6 +6443,7 @@ def append_line_to_file(line:str,file_path:str):
             file.close()
 
 def load_json(path, *, use_cache=False):
+    pip_import('easydict') #I might make this a pip requirement of rp...its so useful!
     text=text_file_to_string(path, use_cache=use_cache)
     import json
     out = json.loads(text)
@@ -7475,7 +7484,7 @@ def starts_with_any(string,*prefixes):
     return any(string.startswith(x) for x in prefixes)
 
 def ends_with_any(string,*suffixes):
-    prefixes=detuple(prefixes)
+    suffixes=detuple(suffixes)
     return any(string.endswith(x) for x in suffixes)
 
     
@@ -11625,7 +11634,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         ?h (?/)
         ?e
         ?p
-        ?c
+        ?c ?+c ?c+
         ?i
         ?r
         ?j
@@ -12275,7 +12284,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         split=user_message.split('/')
                         left=''.join(split[:-1])
                         right=split[-1]
-                        if right in 'p e s v t h c r i j'.split():
+                        if right in 'p e s v t h c r i j c+ +c'.split():
                             #/p --> ?p   /e --> ?e   /t --> ?t   /s ---> ?s    /v --> ?v     /h --> ?h     /c --> ?c     /r --> ?r    /i --> ?i
                             if not right in scope():
                                 user_message=left+'?'+right
@@ -13365,11 +13374,43 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 user_message=repr(get_source_code(get_ans()))
                             except TypeError:
                                 user_message=repr(type(get_source_code(get_ans())))
-                        elif user_message.endswith('?c') and not '\n' in user_message:
-                            user_message=user_message[:-2]
-                            fansi_print("?c --> Getting source code --> ans = rp.get_source_code(%s)..."%user_message,"blue",'bold')
-                            value=eval(user_message,scope())
-                            user_message=repr(get_source_code(value))
+
+                        elif ends_with_any(user_message,'?c','?+c','?c+') and not '\n' in user_message:
+                            #You can do 
+                            #     load_image?c+   ---   adds the source code of load_image to the top of the current str(ans)
+                            #     load_image?+c   ---   adds the source code of load_image to the bottom of the current str(ans)
+                            #     load_image,save_image?c   ---   loads the source code of both load_image and save_image, one on top of the other
+
+
+                            if user_message.endswith('?c'):
+                                user_message=user_message[:-2]
+                                start=[]
+                                end=[]
+                            if user_message.endswith('?c+'):
+                                user_message=user_message[:-3]
+                                start=[]
+                                end=[str(get_ans())]
+                            if user_message.endswith('?+c'):
+                                user_message=user_message[:-3]
+                                start=[str(get_ans())]
+                                end=[]
+
+                            values=eval(user_message,scope())
+
+                            if is_iterable(values):
+                                fansi_print("?c --> Getting source code --> ans = rp.get_source_code(%s)..."%user_message,"blue",'bold')
+                            else:
+                                fansi_print("?c --> Getting source code --> ans = line_join(map(rp.get_source_code,%s))..."%user_message,"blue",'bold')
+                                values=[values]
+
+                            parts=[]
+                            for value in values:
+                                try:
+                                    parts.append(get_source_code(value))
+                                except Exception:
+                                    print_stack_trace()
+
+                            user_message=repr(line_join(start+parts+end))
 
                         elif user_message=='?r':
                             fansi_print("?r --> rich.inspect(ans)","blue",'bold')
@@ -26598,25 +26639,28 @@ def line_graph_via_bokeh(values, *,
                          height:float = 400, #Height of the display. 375 is the minimum height to see all tools at once with title and ylabel.
                          width :float = None #Width of the display. Set to None for maximal width.
                         ):
-    #Uses the Bokeh library to display an interactive line graph in an IPython notebook
-    #Only works in IPython notebooks right now
-    #
-    #TODO:
-    #    - Currently only displays one graph at a time. Might add the ability to do multiple graphs in the future.
-    #    - Currently doesn't let you use custom x-coordinates. Might add that functionality in the future.
-    #    - Currently doesn't support legend labels, custom colors, custom line widths, etc. This should be added.
-    #    - Currently only uses a dark theme. Should add custom themes in the future.
-    #    - Allow custom log-axis bases (not just base 10)
-    #
-    #NOTES:
-    #    - This function should be as similar to rp.line_graph() as possible, while still getting as much ...
-    #        ... bokeh-specific functionality as possible
-    #
-    #EXAMPLES:
-    #    #Run these in an iPython notebook, such as Jupyter Lab or Google Colab       
-    #    line_graph_via_bokeh(random_ints(4),height=400,width=400);
-    #    line_graph_via_bokeh(random_ints(40),logy=True,logx=False);
-    #    line_graph_via_bokeh(random_ints(40),logy=True,logx=True,title='New Jersey',xlabel='Cows',ylabel='Time');
+    """
+    Uses the Bokeh library to display an interactive line graph in an IPython notebook
+    Only works in IPython notebooks right now
+    
+    TODO:
+        - Currently only displays one graph at a time. Might add the ability to do multiple graphs in the future.
+        - Currently doesn't let you use custom x-coordinates. Might add that functionality in the future.
+        - Currently doesn't support legend labels, custom colors, custom line widths, etc. This should be added.
+        - Currently only uses a dark theme. Should add custom themes in the future.
+        - Allow custom log-axis bases (not just base 10)
+    
+    NOTES:
+        - This function should be as similar to rp.line_graph() as possible, while still getting as much ...
+            ... bokeh-specific functionality as possible
+    
+    EXAMPLES:
+        #Run these in an iPython notebook, such as Jupyter Lab or Google Colab       
+        line_graph_via_bokeh(random_ints(4),height=400,width=400);
+        line_graph_via_bokeh(random_ints(40),logy=True,logx=False);
+        line_graph_via_bokeh(random_ints(40),logy=True,logx=True,title='New Jersey',xlabel='Cows',ylabel='Time');
+        line_graph_via_bokeh({"Cows":random_ints(40),"Donkeys":random_ints(40)}logy=True,logx=True,title='New Jersey',xlabel='Cows',ylabel='Time');
+    """
     
     assert running_in_jupyter_notebook(), 'line_graph_via_bokeh is meant to be used in a notebook (like Colab or Jupyter Lab etc)'
 

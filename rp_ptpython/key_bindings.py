@@ -2051,7 +2051,8 @@ def handle_character(buffer,char,event=None):
 
             for item in 'import'.split():
                 #There are some programs we don't want to complete...yes, these are real programs you can enounter in bash...
-                del shortcuts[item]
+                if item in shortcuts:
+                    del shortcuts[item]
 
             token=None
             if before in autocaps:
