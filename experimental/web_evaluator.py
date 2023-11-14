@@ -46,6 +46,9 @@ class Evaluation:
         self.is_eval=False
         self.is_exec=False
         self.errored=False
+
+        exec=eval=rp.exeval #Use rp.exeval instead of exec or eval, because this produces better stack traces
+
         try:
             if rp.is_valid_python_syntax(self.code,mode='eval'):
                 self.is_eval=True
@@ -58,6 +61,7 @@ class Evaluation:
         except BaseException as error:
             self.error=error
             self.errored=True
+            rp.print_stack_trace(error)
 
         return self
 
