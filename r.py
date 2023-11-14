@@ -28415,7 +28415,7 @@ def killport(port: int):
     import signal
 
     # Find processes listening on the specified port
-    command = f"lsof -i tcp:{port} -t"
+    command = "lsof -i tcp:%s -t"%port
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     pids, errors = process.communicate()
 
@@ -28430,9 +28430,9 @@ def killport(port: int):
     for pid in pids:
         if pid.isdigit():
             os.kill(int(pid), signal.SIGKILL)
-            print(f"Killed process with PID: {pid}")
+            print("Killed process with PID: "+str(pid))
         else:
-            print(f"No process found on port {port}")
+            print("No process found on port "+str(port))
 
 
 del re
