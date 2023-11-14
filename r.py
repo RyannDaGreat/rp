@@ -9630,13 +9630,34 @@ def _ipython_exeval_maker(scope={}):
 _ipython_exeval=None
 
 # region This section MUST come last! This is for if we're running the 'r' class as the main thread (runs pseudo_terminal)―――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――
-def exeval(code,*dicts,exec,eval,tictoc=False,profile=False,ipython=False):
+
+def exeval(code:str, scope=None):
+    """
+    Performs either exec(code) or eval(code) and returns the result
+    The code will be patched into the linecache - so you can get stack traces from it!
+    By default it uses the scope of the caller
+    """
+
+    if scope is None:
+        #Execute code in the scope of the caller
+        scope=get_scope(1)
+
+    result, error = _pterm_exeval(code, scope)
+
+    if error is not None:
+        raise error
+
+    return result
+
+def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,ipython=False):
     # Evaluate or execute within descending hierarchy of dicts
     # merged_dict=merged_dicts(*reversed(dicts))# # Will merge them in descending priority of dicts' namespaces
     # region HOPEFULLY just a temporary patch
     # assert len(dicts)<=1
     # if len(dicts)<=1:
     # print("exeval")
+    if len(dicts)==0:
+      dicts=[get_scope(1)]
     merged_dict=dicts[0]
     # endregion
 
@@ -11493,8 +11514,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
             #return s
         try:
             #TODO: For some reason psuedo_terminal doesnt capture the scope it was called in. IDK why. Fix that. The next few lines are a patch and should eventually not be nesecay once bugs are fixed.
-            exeval("None",*dicts,exec=exec,eval=eval)#I don't know why this is necessary (and haven't really tried to debug it) but without running something before importing all from rp nothihng works....
-            exeval(rprc,*dicts,exec=exec,eval=eval)#Try to import RP
+            _pterm_exeval("None",*dicts,exec=exec,eval=eval)#I don't know why this is necessary (and haven't really tried to debug it) but without running something before importing all from rp nothihng works....
+            _pterm_exeval(rprc,*dicts,exec=exec,eval=eval)#Try to import RP
         except BaseException as e:
             print("PSEUDO TERMINAL ERROR: FAILED TO IMPORT RP...THIS SHOULD BE IMPOSSIBLE...WAT")
             print_stack_trace(e)
@@ -14492,7 +14513,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                         _reload_modules()
                                     except BaseException as E:
                                         fansi_print('RELOAD Error: Failed to reload modules because: '+str(E),'blue')
-                                result,__error=exeval(user_message,
+                                result,__error=_pterm_exeval(user_message,
                                                       *dicts,
                                                       exec=exec,
                                                       eval=eval,
@@ -28386,6 +28407,32 @@ def get_only(collection):
     assert len(collection) == 1, "Expected length of 1"
     return next(iter(collection))
 
+
+def killport(port: int):
+    "Kills any process using that port"
+    import subprocess
+    import os
+    import signal
+
+    # Find processes listening on the specified port
+    command = f"lsof -i tcp:{port} -t"
+    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    pids, errors = process.communicate()
+
+    if errors:
+        print("Error:", errors.decode())
+        return
+
+    # Extract PIDs from the output
+    pids = pids.decode().strip().split('\n')
+    
+    # Kill each process
+    for pid in pids:
+        if pid.isdigit():
+            os.kill(int(pid), signal.SIGKILL)
+            print(f"Killed process with PID: {pid}")
+        else:
+            print(f"No process found on port {port}")
 
 
 del re
