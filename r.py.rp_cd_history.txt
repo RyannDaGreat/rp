@@ -6,7 +6,6 @@
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1/images
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5
 /Library/Frameworks/Python.framework/Versions/3.5/lib
 /Library/Frameworks/Python.framework/Versions/3.5
@@ -83,10 +82,11 @@
 /Users/Ryan/PycharmProjects/QuickPython/rp/libs/pyflann
 /Users/Ryan/PycharmProjects/QuickPython/rp/libs/parso
 /Users/Ryan/PycharmProjects/QuickPython/rp/libs
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
 /Users/Ryan
 /Users/Ryan/PycharmProjects/QuickPython/rp
 /Users/Ryan/PycharmProjects/QuickPython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
