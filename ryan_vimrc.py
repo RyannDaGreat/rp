@@ -723,7 +723,18 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
              endif
             endfunction
             map <F7> :call ToggleWrap()<CR>
+        " INDENTATION:
+            " Disabled because it doesn't work very well - it made my vimrc use tabs, and rp have 2-spaces-indent.
+            " Plugin 'tpope/vim-sleuth' "Auto-detects what indentation the file uses
     "NAVIGATION
+        "SEARCHING: * 
+            " Allows us to search for text with * from visual mode
+            Plugin 'bronson/vim-visual-star-search' " How was this not already a thing? 
+        "WINDOW PANE JUMPING: -
+            " When you press -, letters appear on each pane - and you press the letter of the one you want to jump to
+            Plugin 'https://github.com/t9md/vim-choosewin'
+            nmap  -  <Plug>(choosewin)
+            let g:choosewin_overlay_enable = 1
         "TAB KEY:
             nnoremap <Tab> <C-w>w
             nnoremap <S-Tab> <C-w>W
@@ -732,6 +743,47 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             Plugin 'yegappan/mru' "Let us have more than vim's default 10 recent files
             nnoremap <leader>p :MruRefresh<cr>:MRU<cr>
             " autocmd BufEnter * silent! MruRefresh " Always get rid of files that no longer exist from the MRU. Clean up the temp files that no longer exist...
+        "SESSIONS: \ss \sl \sg
+            "Save Session (saves to both global and local)
+            nnoremap <Leader>ss :mks! .session.vim<CR>:mks! ~/.session.vim<CR>
+
+            ""Local Session Load
+            "<nnoremap> <leader>sl :source .session.vim
+
+            " Global variable for session file name
+            let g:session_file_name = '.session.vim'
+
+            " Function: LoadSession
+            " Description: This function searches for a session file (defined by g:session_file_name)
+            " starting from the current directory and moving up the directory tree until it reaches the root.
+            " It loads the first session file found. If no such file is found in any
+            " of the parent directories up to the root, it notifies the user.
+            " https://chat.openai.com/share/67bb94f3-e10c-422e-86b2-55133b7ffb7d
+            function! LoadSession()
+                let current_dir = getcwd()
+                let found_session = 0
+                " Loop through parent directories to find the session file
+                while current_dir != "/"
+                    " Check if the session file is readable in the current directory
+                    if filereadable(current_dir . '/' . g:session_file_name)
+                        " Source the session file and notify the user
+                        execute 'source ' . current_dir . '/' . g:session_file_name
+                        echo "Loaded session from " . current_dir . '/' . g:session_file_name
+                        let found_session = 1
+                        break
+                    endif
+                    " Move to the parent directory
+                    let current_dir = fnamemodify(current_dir, ':h')
+                endwhile
+                " Notify the user if no session file was found
+                if found_session == 0
+                    echo "No " . g:session_file_name . " file found in any parent directory."
+                endif
+            endfunction
+
+            nnoremap <Leader>sl :call LoadSession()<CR>
+            nnoremap <Leader>sg :call source ~/.session.vim<CR>
+
         "NERDTREE VISUAL MODE
             Plugin 'PhilRunninger/nerdtree-visual-selection' " Lets us use visual selection mode in NERDTree, then do operations such as 'T' for loading tab on all files in that selection
         "TABLINE: \xtn
@@ -778,6 +830,133 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
 
             "This is how to run a function AFTER all plugins have been loaded:
             au VimEnter * call SetDefaultTabbarTheme()
+
+    "EXPERIMENTAL
+        "Peekaboo will show you the contents of the registers on the sidebar when you hit " or @ in normal mode or <CTRL-R> in insert mode. The sidebar is automatically closed on subsequent key strokes.
+        "You can toggle fullscreen mode by pressing spacebar.
+        Plugin 'junegunn/vim-peekaboo'
+
+        " Plugin 'RyannDaGreat/vim-signature' "This takes a non-trivial time to start (not bad, but not super fast either). I don't really use marks - this plugin's purpose is to preview where marks are in the gutter.
+
+        "WHICHKEY - Try pressing \<space>l then wait for a second - a menu should appear. This is experimental and I'll use it to make my config easier to use!
+            Plugin 'liuchengxu/vim-which-key'
+
+            " Define prefix dictionary
+            let g:which_key_map =  {}
+
+            let g:mapleader = "\<Space>"
+            let g:maplocalleader = ','
+            nnoremap <silent> <leader>      :<c-u>WhichKey '<Space>'<CR>
+            nnoremap <silent> <localleader> :<c-u>WhichKey  ','<CR>
+
+            nnoremap <leader>1 :1wincmd w<CR>
+            let g:which_key_map.1 = 'which_key_ignore'
+
+            nnoremap <leader>_a :echom '_a'<CR>
+            nnoremap <leader>_b :echom '_b'<CR>
+            let g:which_key_map['_'] = { 'name': 'which_key_ignore' }
+
+            nnoremap <silent> <leader> :<c-u>WhichKey '<Space>'<CR>
+            vnoremap <silent> <leader> :<c-u>WhichKeyVisual '<Space>'<CR>
+
+            call which_key#register('<Space>', "g:which_key_map")
+
+            call which_key#register('<Space>', "g:which_key_map", 'n')
+            call which_key#register('<Space>', "g:which_key_map_visual", 'v')
+
+            " Second level dictionaries:
+            " 'name' is a special field. It will define the name of the group, e.g., leader-f is the "+file" group.
+            " Unnamed groups will show a default empty string.
+
+            " =======================================================
+            " Create menus based on existing mappings
+            " =======================================================
+            " You can pass a descriptive text to an existing mapping.
+
+            let g:which_key_map.f = { 'name' : '+file' }
+
+            nnoremap <silent> <leader>fs :update<CR>
+            let g:which_key_map.f.s = 'save-file'
+
+            nnoremap <silent> <leader>fd :e $MYVIMRC<CR>
+            let g:which_key_map.f.d = 'open-vimrc'
+
+            nnoremap <silent> <leader>oq  :copen<CR>
+            nnoremap <silent> <leader>ol  :lopen<CR>
+            let g:which_key_map.o = {
+                  \ 'name' : '+open',
+                  \ 'q' : 'open-quickfix'    ,
+                  \ 'l' : 'open-locationlist',
+                  \ }
+
+            " =======================================================
+            " Create menus not based on existing mappings:
+            " =======================================================
+            " Provide commands(ex-command, <Plug>/<C-W>/<C-d> mapping, etc.)
+            " and descriptions for the existing mappings.
+            "
+            " Note:
+            " Some complicated ex-cmd may not work as expected since they'll be
+            " feed into `feedkeys()`, in which case you have to define a decicated
+            " Command or function wrapper to make it work with vim-which-key.
+            " Ref issue #126, #133 etc.
+            let g:which_key_map.b = {
+                  \ 'name' : '+buffer' ,
+                  \ '1' : ['b1'        , 'buffer 1']        ,
+                  \ '2' : ['b2'        , 'buffer 2']        ,
+                  \ 'd' : ['bd'        , 'delete-buffer']   ,
+                  \ 'f' : ['bfirst'    , 'first-buffer']    ,
+                  \ 'h' : ['Startify'  , 'home-buffer']     ,
+                  \ 'l' : ['blast'     , 'last-buffer']     ,
+                  \ 'n' : ['bnext'     , 'next-buffer']     ,
+                  \ 'p' : ['bprevious' , 'previous-buffer'] ,
+                  \ '?' : ['Buffers'   , 'fzf-buffer']      ,
+                  \ }
+
+            let g:which_key_map.l = {
+                  \ 'name' : '+lsp',
+                  \ 'f' : ['spacevim#lang#util#Format()'          , 'formatting']       ,
+                  \ 'r' : ['spacevim#lang#util#FindReferences()'  , 'references']       ,
+                  \ 'R' : ['spacevim#lang#util#Rename()'          , 'rename']           ,
+                  \ 's' : ['spacevim#lang#util#DocumentSymbol()'  , 'document-symbol']  ,
+                  \ 'S' : ['spacevim#lang#util#WorkspaceSymbol()' , 'workspace-symbol'] ,
+                  \ 'g' : {
+                    \ 'name': '+goto',
+                    \ 'd' : ['spacevim#lang#util#Definition()'     , 'definition']      ,
+                    \ 't' : ['spacevim#lang#util#TypeDefinition()' , 'type-definition'] ,
+                    \ 'i' : ['spacevim#lang#util#Implementation()' , 'implementation']  ,
+                    \ },
+                  \ }
+
+
+
+        "Paste NoPaste: An alternative to 'set paste' and 'set nopaste' that preserves indent etc
+            " Define global variables to store settings
+            let g:original_tabstop = 0
+            let g:original_shiftwidth = 0
+            let g:original_softtabstop = 0
+            let g:original_expandtab = 0
+
+            function! SaveSettings()
+                let g:original_tabstop = &tabstop
+                let g:original_shiftwidth = &shiftwidth
+                let g:original_softtabstop = &softtabstop
+                let g:original_expandtab = &expandtab
+            endfunction
+
+            function! RestoreSettings()
+                let &tabstop = g:original_tabstop
+                let &shiftwidth = g:original_shiftwidth
+                let &softtabstop = g:original_softtabstop
+                let &expandtab = g:original_expandtab
+            endfunction
+
+            " Define Paste command
+            command Paste call SaveSettings() | set paste
+
+            " Define NoPaste command
+            command NoPaste set nopaste | call RestoreSettings()
+
 
 
 

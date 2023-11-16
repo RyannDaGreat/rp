@@ -24863,6 +24863,10 @@ def torch_resize_image(image,size,interp='bilinear'):
 
     return out.squeeze(0)
 
+def resize_images_to_hold(*images, height: int = None, width: int = None, interp='bilinear', allow_shrink=True):
+    images=detuple(images)
+    return [resize_image_to_hold(x,height,width,interp=interp,allow_shrink=allow_shrink) for x in images]
+
 def resize_image_to_hold(image, height: int = None, width: int = None, *, interp='bilinear', allow_shrink=True):
     """
     Resizes an image so that the specified bounding box can fit entirely inside the image, while maintaining the
@@ -24946,6 +24950,10 @@ def resize_image_to_fit(image, height:int=None, width:int=None, *, interp='bilin
         scale = width / image_width
         
     return rp.cv_resize_image(image, scale, interp=interp)
+
+def resize_images_to_fit(*images, height: int = None, width: int = None, interp='bilinear', allow_growth=True):
+    images=detuple(images)
+    return [resize_image_to_fit(x,height,width,interp=interp,allow_growth=allow_growth) for x in images]
 
 def resize_images_to_max_size(*images, interp="bilinear"):
     #Makes sure all images have the same height and width
