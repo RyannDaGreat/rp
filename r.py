@@ -1382,7 +1382,7 @@ def uniform_float_color_image(height:int,width:int,color:tuple):
     #    image=tiled_images(random_color_tiles,border_thickness=0)
     #    display_image(image) #The result will look like https://i.imgur.com/COlmGRT.png 
     #
-    assert height>0 and width>0
+    assert height>=0 and width>=0
     assert is_number(color) or is_color(color) and len(color) in {3,4}, 'Color should be a number, an RGB float color, or an RGBA float color'
     
     if is_number(color):
@@ -2212,6 +2212,21 @@ def random_batch(full_list,batch_size: int = None,*,retain_order: bool = False):
     #       list a ≣ ⨀ a None True
     #       b ≣ len ⨀ a b
 
+    # Check if the input is a pandas DataFrame by class name and presence of .iloc
+    if full_list.__class__.__name__ == 'DataFrame' and hasattr(full_list, 'iloc'):
+        if batch_size is None:
+            batch_size = len(full_list)
+        assert 0 <= batch_size <= len(full_list), "batch_size must be between 0 and the number of rows in the DataFrame"
+        
+        # Use random_batch recursively to select random row indices
+        random_indices = random_batch(
+            range(len(full_list)),
+            batch_size,
+            retain_order=retain_order,
+        )
+
+        return full_list.iloc[random_indices]
+
     from collections.abc import Mapping, Set, Iterable
     if isinstance(full_list, Mapping):
         #Make it work with dicts too
@@ -2222,10 +2237,11 @@ def random_batch(full_list,batch_size: int = None,*,retain_order: bool = False):
 
     if isinstance(full_list,set):
         full_list=list(full_list)
+
     if batch_size is None:  # The default if not specified
         # If we don't specify the batch size, assume that we simply want a shuffled version of the full_list
         if retain_order:
-            return full_list  # A result of the rCode algebra. This simply speeds up the process.
+            return list(full_list)  # A result of the rCode algebra. This simply speeds up the process.
         batch_size=len(full_list)
     else:
         assert 0 <= batch_size <= len(full_list),"batch_size == " + str(batch_size) + " ⋀ len(full_list) == " + str(len(full_list)) + "，∴  ¬ (0 <= batch_size <= len﹙full_list﹚)   Explanation: We do not allow duplicates, ∴ we cannot generate a larger batch than we have elements to choose from full_list"
@@ -2243,11 +2259,14 @@ def random_batch_up_to(full_list, max_batch_size=None, retain_order=False):
     Like random batch, but when batch_size is larger than the full_list, the output will only have the length of the input full list
     This behaviour is as opposed to returning an output with the length of batch_size when len(full_list)<batch_size
     """
-    if batch_size is not None:
-        assert isinstance(batch_size, int)
-        batch_size = min(len(full_list), batch_size)
 
-    return random_batch(full_list, max_batch_size, retain_order = retain_order)
+    if max_batch_size is not None:
+        assert isinstance(max_batch_size, int)
+        batch_size = min(len(full_list), max_batch_size)
+    else:
+        batch_size = max_batch_size
+
+    return random_batch(full_list, batch_size, retain_order = retain_order)
 
 def random_substring(string:str,length:int):
     assert len(string)>=length
@@ -3129,6 +3148,7 @@ def save_image_to_imgur(image):
                 
 def save_image_jpg(image,path,*,quality=100,add_extension=True):
     #If add_extension is True, will add a '.jpg' or '.jpeg' extension to path IFF it doesn't allready end with such an extension (AKA 'a/b/c.jpg' -> 'a/b/c.jpg' BUT 'a/b/c.png' -> 'a/b/c.png.jpg')
+    make_directory(get_parent_folder(path)) #Make sure the directory exists
     image=np.asarray(image)
     image=as_rgb_image(image)
     image=as_byte_image(image)
@@ -6375,6 +6395,7 @@ def save_pickled_value(file_name: str,*variables):
 # endregion
 # region  .txt ⟷ str: ［string_to_text_file，text_file_to_string］
 def string_to_text_file(file_path: str,string: str,) -> None:
+    "string_to_text_file(file_path, string) writes text file"
     file_path=get_absolute_path(file_path)#Make sure it recognizes ~/.vimrc AKA with the ~ attached
     file=open(file_path,"w")
     try:
@@ -6389,6 +6410,7 @@ def string_to_text_file(file_path: str,string: str,) -> None:
 
 _text_file_to_string_cache={}
 def text_file_to_string(file_path: str,use_cache=False) -> str:
+    "text_file_to_string(file_path) reads text file"
     #Only reason not to use use_cache is if you're worried about memory consumption
     #   It will refresh the cache entry if it's out of date even if use_cache is True.
     #   TODO: Make this happen on load_image, etc...all other functions that read from a file and have use_cache as an option
@@ -12051,6 +12073,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         NBCA $r._nbca(ans) # Clear a notebook
         NBCH $r._nbca($get_all_files(file_extension_filter='ipynb')) #Clear all notebooks in the current directory
         NBCHY $r._nbca($get_all_files(file_extension_filter='ipynb',sort_by='size')[::-1], auto_yes=True) #Clear all notebooks in the current directory without confirmation
+        NBCHYF $r._nbca($get_all_files(file_extension_filter='ipynb',sort_by='size')[::-1], auto_yes=True,parallel=True) #Clear all notebooks in the current directory without confirmation
         NCA  $r._nbca(ans)
 
         IPYK $add_ipython_kernel()
@@ -18646,8 +18669,8 @@ def grid_concatenated_images(image_grid):
     image_grid=list(image_grid)
     max_image_widths=[0]*max(map(len,image_grid))
 
-    #A 1x1 transparent pixel
-    null_img = uniform_float_color_image(1,1,(0,0,0,0))
+    #A 0x0 transparent pixel
+    null_img = uniform_float_color_image(0,0,(0,0,0,0))
 
     for y,image_row in enumerate(image_grid):
         image_grid[y]=image_row=list(image_row)
@@ -20980,11 +21003,12 @@ def crop_image(image, height: int = None, width: int = None, origin='top left'):
     
     return out
 
-def crop_image_zeros(image):
+def crop_image_zeros(image,*,output='image'):
     """
     #Given some big image that is surrounded by black, or 0-alpha transparency, crop out that excess region
     #TODO: Give examples
     """
+    assert output in 'image bounds'.split(),'output is a string indicating what the output type is - it can be either image or bounds but you gave type '+str(type(output))+' '+str(output)
     assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
     if is_grayscale_image(image):
         points=np.argwhere(image)#Crop out the black regions
@@ -20998,9 +21022,11 @@ def crop_image_zeros(image):
         points=[[0,0],[0,0]]
     top,left=np.min(points,axis=0)
     bottom,right=np.max(points,axis=0)+1
-    cropped=image[top:bottom,left:right]
-    #print(top,bottom,left,right)
-    return cropped
+    if output=='image':
+        cropped=image[top:bottom,left:right]
+        return cropped
+    if output=='bounds':
+        return top,bottom,left,right
 
 def cv_contour_to_segment(contour):
     """
@@ -26610,14 +26636,22 @@ def _display_filetype_size_histogram(root='.'):
     _maybe_display_string_in_pager(printed_lines)
     print(printed_lines)
 
-def _nbca(paths,auto_yes=False):
+def _nbca(paths,auto_yes=False,parallel=False):
     if isinstance(paths,str):
         paths=line_split(paths)
-    for x in paths:
-        if file_exists(x) and x.endswith('.ipynb'):
-            _clear_jupyter_notebook_outputs(x,auto_yes=auto_yes)
-        else:
-            print(fansi("r.nbca: Skipping; not a ipynb file:",'yellow'),x)
+    def do_path(x):
+        try:
+            if file_exists(x) and x.endswith('.ipynb'):
+                _clear_jupyter_notebook_outputs(x,auto_yes=auto_yes)
+            else:
+                print(fansi("r.nbca: Skipping; not a ipynb file:",'yellow'),x)
+        except Exception as e:
+            pass
+    if not parallel:
+        for x in paths:
+            do_path(x)
+    else:
+        par_map(do_path,paths)
 
 def _clear_jupyter_notebook_outputs(path:str=None, auto_yes=False):
     #This clears all outputs of a jupyter notebook file
