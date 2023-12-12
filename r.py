@@ -12067,6 +12067,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         S   $os.system("sh");
         Z   $os.system("zsh");
 
+        JL PYM jupyter lab
+        UNCOMMIT !git reset --soft HEAD^
+
         NB  $extract_code_from_ipynb()
         NBA  $extract_code_from_ipynb(ans)
         NBC  $r._clear_jupyter_notebook_outputs()
@@ -12075,6 +12078,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         NBCHY $r._nbca($get_all_files(file_extension_filter='ipynb',sort_by='size')[::-1], auto_yes=True) #Clear all notebooks in the current directory without confirmation
         NBCHYF $r._nbca($get_all_files(file_extension_filter='ipynb',sort_by='size')[::-1], auto_yes=True,parallel=True) #Clear all notebooks in the current directory without confirmation
         NCA  $r._nbca(ans)
+
+        JL PYM jupyter lab
 
         IPYK $add_ipython_kernel()
 
@@ -17691,8 +17696,16 @@ def labeled_image(image,
 
 def labeled_images(images,labels,*args,**kwargs):
     #The plural of labeled_image
+    assert is_iterable(labels)
+    assert is_iterable(images)
+
     images=list(images)
-    labels=list(labels)
+
+    if isinstance(labels,str):
+        labels=[labels]*len(images)
+    else:    
+        labels=list(labels)
+
     assert len(images)==len(labels)
     return [labeled_image(image,label,*args,**kwargs) for image,label in zip(images,labels)]
 
@@ -18603,6 +18616,13 @@ def horizontally_concatenated_images(*image_list):
     #This is different from np.column_stack because it handles images of different resolutions.
     #It also can mix RGB, greyscale, and RGBA images.
 
+    #try:
+    #    #Might be faster than converting all to RGBA then doing height stuff to them all
+    #    print("HORCAT SHORTCUT")
+    #    return np.concatenate(as_numpy_array(image_list), axis=2)
+    #except Exception as e:
+    #    pass
+
     image_list=[as_rgba_image(as_float_image(image)) for image in image_list]#Right now, bring the images to the max possible format for compatiability. Might make it smarter later such as to preserve the format if all input images are binary, for example.
     max_height=max(img.shape[0]for img in image_list)
     def heightify(img):
@@ -19459,6 +19479,10 @@ def bordered_image_solid_color(image,color=(1.,1.,1.,1.),thickness=1,width=None,
     image=np.concatenate(((left_pad,)*bool(left)+ (image,) +(right_pad ,)*bool(right )),axis=1)#Add left and right borders
     
     return image
+
+def bordered_images_solid_color(*images,color=(1.,1.,1.,1.),thickness=1,width=None,height=None,top=None,bottom=None,left=None,right=None):
+    images=detuple(images)
+    return [bordered_image_solid_color(x, color, thickness, width, height, top, bottom, left, right) for x in images]
 
 def get_principle_components(tensors,number_of_components=None):
     #Returns orthogonal, normalized, sorted-by-eigenvalue-in-descending-order principle components (retaining the shape of the original tensors, to make eigenfaces easy to extract for example)
@@ -26994,7 +27018,7 @@ def as_numpy_images(images):
     else:
         if not is_iterable(images):
             raise TypeError('Unsupported image datatype: %s ; its not even iterable!'%type(images))
-        if all(is_pil_image(x) for x in images):
+        if all((is_pil_image(x) or _is_torch_tensor(x) or _is_numpy_array(x)) for x in images):
             return [as_numpy_image(x) for x in images]
         else:
             raise TypeError('Unsupported image datatype: %s of %s'%(type(images),repr(set(map(type,images)))))
