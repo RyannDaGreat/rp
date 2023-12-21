@@ -1586,6 +1586,31 @@ def get_checkerboard_image(height=64,
 
     return img
 
+def with_drop_shadow(
+    image,
+    *,
+    x=0,
+    y=0,
+    color=(0, 0, 0, 1),
+    blur=10,
+    opacity=1
+):
+    """
+    Applies a drop shadow to an image
+    **DEFAULT ARGUMENT VALUES ARE SUBJECT TO CHANGE**
+    """
+    
+    image=as_float_image(image)
+    alpha=get_image_alpha(image)
+    shadow_alpha=shift_image(alpha,x,y,allow_growth=False)
+    shadow_alpha=cv_gauss_blur(shadow_alpha,sigma=blur)
+    height,width=get_image_dimensions(image)
+    shadow=with_alpha_channel(uniform_float_color_image(height,width,color),shadow_alpha*opacity)
+    return blend_images(shadow,image)
+
+def with_drop_shadows(images,**kwargs):
+    return [with_drop_shadow(image,**kwargs) for image in images]
+    
 def _crop_images_to_max_or_min_size(*images,origin='top left',criterion=max):
     
     images=detuple(images)
@@ -4048,9 +4073,15 @@ def display_video(video,framerate=30):
                 raise FileNotFoundError(video)
             assert is_video_file(video),repr(video)+' is not a video file'
             video=load_video(video)
-        for frame in video:
+        
+        time_start=gtoc()
+        time_per_frame=1/framerate
+
+        for i, frame in enumerate(video):
+            time_before_display = gtoc()
             display_image(frame)
-            sleep(1/framerate) #Todo: Make this more accurate
+            time_after_display = gtoc()
+            sleep(max(0, time_per_frame - (time_after_display - time_before_display)))
 
 def display_video_in_notebook(video,framerate=30):
     #Video can be either a string pointing to the path of a video, or the video itself. If it is the video itself, it will be embedded as a gif and displayed that way. 
@@ -4171,7 +4202,7 @@ def display_image(image,block=False):
     if isinstance(image,str):
         fansi_print("display_image usually meant for use with numpy arrays, but you passed it a string, so we'll try to load the image load_image("+repr(image)+") and display that.")
         image=load_image(image)
-    if is_pil_image(image):
+    if is_pil_image(image) or _is_torch_tensor(image):
         image=as_numpy_image(image)
     if not isinstance(image,np.ndarray) and not isinstance(image,list):
         try:
@@ -6471,13 +6502,9 @@ def load_json(path, *, use_cache=False):
     out = json.loads(text)
     if not isinstance(out, dict):
         return out
-    try:
-        #If we have this library installed, use it.
-        #But don't be pushy about it - no pip_import here.
-        from easydict import EasyDict
-        return EasyDict(out)
-    except ImportError:
-        return out
+
+    from easydict import EasyDict
+    return EasyDict(out)
 
 def load_jsons(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False, lazy=False):
     """
@@ -8881,6 +8908,7 @@ def display_image_in_terminal_color(image):
     pip_import('timg')
     if file_exists(image) or is_valid_url(image):
         image=load_image(image)
+    image=as_numpy_image(image)
     assert is_image(image)
     if get_image_height(image)%2:
         #We can only display pixel heights of 2,4,6,8 etc.
@@ -9210,11 +9238,49 @@ def split_into_sublists(l,sublist_len:int,strict=False,keep_remainder=True):
 
     return output
 
-def rotate_image(image, angle_in_degrees, interp='bilinear'):
-    #Returns a rotated image by angle_in_degrees, clockwise
-    #The output image size is usually not the same as the input size, unless the angle is 180 (or in the case of a square image, 90, 180, or 270)
-    #Usually, the output image size is larger than the input image size
-    image=as_numpy_array(image)
+def rotate_image(image,angle_in_degrees,interp='bilinear'):
+    """
+    Returns a rotated image by angle_in_degrees, clockwise
+    The output image size is usually not the same as the input size, unless the angle is 180 (or in the case of a square image, 90, 180, or 270)
+    Usually, the output image size is larger than the input image size
+
+    EXAMPLE:
+        def create_checkerboard_animation(image_url, D=3):
+            img = crop_image_to_square(load_image(image_url, use_cache=True))
+            tiles = split_tensor_into_regions(img, D, D)
+            frames = crop_images_to_max_size(
+                [
+                    tiled_images(
+                        [
+                            rotate_image(tile, angle * (1 if (i // D + i % D) % 2 else -1))
+                            for i, tile in enumerate(tiles)
+                        ],
+                        border_thickness=0,
+                    )
+                    for angle in [*[0] * 15, *range(91), *[90] * 15]
+                ],
+                origin="center",
+            )
+            display_video((frames + frames[::-1]) * 50, framerate=60)
+
+
+        create_checkerboard_animation(
+            "https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png"
+        )
+    """
+    image=as_numpy_image(image)
+    image=as_rgba_image(image)
+    alpha=get_image_alpha(image)
+    rotate=lambda x: _rotate_rgb_image(x, angle_in_degrees, interp)
+    alpha=rotate(alpha)
+    rgb=rotate(as_rgb_image(image))
+    return with_alpha_channel(rgb,alpha)
+
+def _rotate_rgb_image(image, angle_in_degrees, interp='bilinear'):
+    """
+    Will return an RGB image, not an RGBA one
+    """
+    image=as_numpy_image(image)
     assert is_image(image)
 
     #Handle the edge cases: 0, 90, 180, 270, 360, etc - we don't need OpenCV for this
@@ -9270,6 +9336,7 @@ def rotate_image(image, angle_in_degrees, interp='bilinear'):
 
     # perform the actual rotation and return the image
     return cv2.warpAffine(image, M, (nW, nH), flags=interp_method)
+
 
 def open_url_in_web_browser(url:str):
     from webbrowser import open
@@ -20009,10 +20076,8 @@ def save_video_avi(frames,path:str=None,framerate:int=30):
     pip_import('cv2')
     import cv2
     
-    if path is None:
-        path=temporary_file_path()
-    if not has_file_extension(path) or get_file_extension(path).lower()!='avi':
-        path+='.avi'
+    if path is None: path=_get_default_video_path('avi')
+    if not has_file_extension(path) or get_file_extension(path).lower()!='avi': path+='.avi'
         
     frames=as_numpy_array(frames)
     
@@ -20034,11 +20099,17 @@ def save_video_avi(frames,path:str=None,framerate:int=30):
         
     return path
 
+def _get_default_video_path(extension='mp4'):
+    return get_unique_copy_path('video.'+extension)
+
 class VideoWriterMP4:
     #Todo: If this ever gets fucky, try https://github.com/imageio/imageio-ffmpeg - it looks pretty good!
 
-    def __init__(self, path, framerate=60, video_bitrate='medium', height=None, width=None):
+    def __init__(self, path=None, framerate=60, video_bitrate='medium', height=None, width=None):
         # Originally from: https://github.com/kkroening/ffmpeg-python/issues/246
+
+        if path is None: path=_get_default_video_path()
+        if not has_file_extension(path) or get_file_extension(path).lower()!='mp4': path+='.mp4'
 
         rp.pip_import('ffmpeg', 'ffmpeg-python')
 
@@ -20119,7 +20190,7 @@ class VideoWriterMP4:
         self.process.wait()
         self.finished=True
         
-def save_video_mp4(frames, path, framerate=60, *, video_bitrate='high', height=None, width=None):
+def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', height=None, width=None):
     """
     # frames: a list of images as defined by rp.is_image(). Saves an .mp4 file at the path
     # Note that frames can also be a generator, as opposed to a numpy array.
@@ -20648,8 +20719,9 @@ get_file_folder=get_path_parent#Synonyms that might make more sense to read in t
 get_file_directory=get_path_parent
 get_parent_directory=get_parent_folder=get_path_parent
 
-
-
+def get_paths_parents(*paths_or_urls):
+    "Plural of get_path_parent"
+    return [get_path_parent(path) for path in detuple(paths_or_urls)]
 
 def make_directory(path):
     """
@@ -20700,7 +20772,62 @@ def delete_all_files_in_directory(directory,*,recursive=False,permanent=True):
     delete_all_paths_in_directory(directory,permanent=permanent,recursive=recursive,include_folders=False,include_files=True)
 delete_all_files_in_folder=delete_all_files_in_directory
 
-path_join=joined_paths=os.path.join#Synonyms for whatever comes into my head at the moment when using the rp terminal
+def path_join(*paths):
+    """
+    Joins given paths, which can be a combination of strings and non-string iterables (like lists, tuples).
+    An extension of os.path.join (wherever os.path.join works, so will this)
+    
+    Arguments:
+    *paths -- A combination of string(s) and/or iterable(s) representing paths
+
+    Returns:
+    A single string if all inputs are strings, or a list of strings if any input is a non-string iterable.
+    Raises ValueError if there is a length mismatch among non-string iterable arguments.
+
+    Examples:
+        path_join('a', 'b')
+            returns 'a/b'
+        path_join('a', ['b', 'c'])
+            returns ['a/b', 'a/c']
+        path_join(('a', 'b'), 'c')
+            returns ['a/c', 'b/c']
+        path_join(['a', 'b'], ('c', 'd'))
+            returns ['a/c', 'a/d', 'b/c', 'b/d']
+        path_join(['a', 'b'], 'z', ['c', 'd'])
+            returns ['a/z/c', 'a/z/d', 'b/z/c', 'b/z/d']
+        path_join(['a', 'b'], ['c'])
+            raises ValueError: Length mismatch among iterable arguments
+
+    Note on Usage:
+        path_join(['a', 'b', 'c']) treats the list as a single argument, returning the list itself.
+            returns ['a', 'b', 'c']
+        path_join(*['a', 'b', 'c']) or path_join('a', 'b', 'c') expands the list into individual arguments and joins them.
+            returns 'a/b/c'
+
+    Note:
+        All inputs must be iterable. Strings are considered as iterables.
+
+    https://chat.openai.com/share/45864fd0-669a-40bb-9cb0-4d717c3a7e4c
+
+    """
+    import os
+    import itertools
+
+    # Assuming is_iterable is a given function that checks if an object is an iterable but not a string
+    def is_iterable(obj):
+        return isinstance(obj, (list, tuple))
+
+    if any(is_iterable(p) for p in paths):
+        iterables = [p for p in paths if is_iterable(p)]
+        if len(set(map(len, iterables))) != 1:
+            raise ValueError("Length mismatch among iterable arguments")
+
+        product = itertools.product(*[p if is_iterable(p) else [p] for p in paths])
+        return [os.path.join(*path_tuple) for path_tuple in product]
+    else:
+        return os.path.join(*paths)
+
+joined_paths=path_join#Synonyms for whatever comes into my head at the moment when using the rp terminal
 
 def get_unique_copy_path(path: str, *, suffix: str = "_copy%i") -> str:
     """
