@@ -5588,7 +5588,18 @@ def format_date(date)->str:
     """
     import datetime
     assert isinstance(date,datetime.datetime)
-    return date.strftime('%a %b %d, %Y at %-I:%M:%S%p')
+
+    assert isinstance(date, datetime.datetime), "Input must be a datetime object"
+
+    # Format the date string and append the timezone abbreviation
+    formatted_date = date.strftime('%a %b %d, %Y at %-I:%M:%S%p')
+
+    if date.tzinfo is not None:
+        #If the date has a timezone, add it to the output
+         formatted_date += ' ' + date.tzname() #PST, EST, Etc
+
+    return formatted_date
+
 _format_datetime = format_date #For compatiability - older code used rp.r._format_datetime
 
     
@@ -9999,6 +10010,7 @@ def _load_pyin_settings_file():
                 setattr(pyin,attr,d[attr])
 
     _load_pyin_settings_from_dict(settings)
+    _set_default_session_title()
 
 def _save_pyin_settings_file():
     settings={}
@@ -11604,7 +11616,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         try:
             #TODO: For some reason psuedo_terminal doesnt capture the scope it was called in. IDK why. Fix that. The next few lines are a patch and should eventually not be nesecay once bugs are fixed.
             _pterm_exeval("None",*dicts,exec=exec,eval=eval)#I don't know why this is necessary (and haven't really tried to debug it) but without running something before importing all from rp nothihng works....
-            _pterm_exeval(rprc,*dicts,exec=exec,eval=eval)#Try to import RP
+            _,error=_pterm_exeval(rprc,*dicts,exec=exec,eval=eval)#Try to import RP
+            if error is not None:
+                fansi_print("ERROR in RPRC:",'red','bold')
+                print_verbose_stack_trace(error)
         except BaseException as e:
             print("PSEUDO TERMINAL ERROR: FAILED TO IMPORT RP...THIS SHOULD BE IMPOSSIBLE...WAT")
             print_stack_trace(e)
@@ -13829,7 +13844,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     "",
                                     "# < Ryan RPRC Start >",
                                     "from rp import *",
-                                    "__import__('rp').r._set_default_session_title()",
+                                    # "__import__('rp').r._set_default_session_title()", # now handled in _load_pyin_settings_file
                                     "__import__('rp').r._pip_import_autoyes=True",
                                     "__import__('rp').r._pip_install_needs_sudo=False",
                                     "# < Ryan RPRC End >",
