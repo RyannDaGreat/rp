@@ -11069,7 +11069,8 @@ def _ISM(ans):
     else:
         if isinstance(ans,str):
             ans=line_split(ans)
-            return line_join(_ISM(ans))
+            ans=ans[::-1] #Let us see the string properly
+            line_join(_ISM(ans)[::-1])
         return pip_import('iterfzf').iterfzf(ans,multi=True,exact=True)
 
 def _view_with_pyfx(data):
@@ -12046,7 +12047,12 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         VHE VIMH
         VIH VIMH
 
+        CM RMORE
+
         GPP $get_path_parent(ans)
+        GFN $get_file_name(ans)
+        GPN $get_path_name(ans)
+
 
         # GO GC
 
@@ -27126,6 +27132,58 @@ def get_git_info(folder='.'):
     info['untracked_files' ] = repo.untracked_files
     info['working_tree_dir'] = repo.working_tree_dir
     return info
+
+def get_git_date_modified(file_path):
+    """
+    Retrieves the date when a file was last modified according to git, returning a datetime object.
+    Raises exceptions with informative messages to help debug potential issues.
+
+    Parameters:
+        file_path (str): The path to the file within the git repository.
+
+    Returns:
+        datetime.datetime: The datetime object representing the last modification date of the file.
+
+    Raises:
+        FileNotFoundError: If the specified file does not exist.
+        EnvironmentError: If there are issues related to the Git environment or command execution.
+        ValueError: If the file is not tracked by Git or if date parsing fails.
+
+    Example:
+        >>> file_path = 'path/to/your/file'
+        >>> try:
+        >>>     print(get_git_date_modified(file_path))
+        >>> except Exception as e:
+        >>>     print(e)
+    """
+    import subprocess
+    import shlex
+    import os
+    from datetime import datetime
+
+    # Check if the file path exists
+    if not os.path.exists(file_path):
+        raise FileNotFoundError("The specified file '{}' does not exist.".format(file_path))
+
+    # Check if the current directory is a Git repository
+    is_git_repo_cmd = subprocess.run("git rev-parse --is-inside-work-tree", shell=True, text=True, capture_output=True)
+    if is_git_repo_cmd.returncode != 0:
+        raise EnvironmentError("Not a git repository. Git command output: {}".format(is_git_repo_cmd.stderr.strip()))
+
+    # Check if the file is tracked by Git
+    is_tracked_cmd = subprocess.run("git ls-files --error-unmatch {}".format(shlex.quote(file_path)), shell=True, text=True, capture_output=True)
+    if is_tracked_cmd.returncode != 0:
+        raise ValueError("The file '{}' is not tracked by Git. Git command output: {}".format(file_path, is_tracked_cmd.stderr.strip()))
+
+    # Running the git command
+    cmd = "git log -1 --format=%cd --date=iso {}".format(shlex.quote(file_path))
+    try:
+        result = subprocess.run(cmd, shell=True, check=True, text=True, capture_output=True)
+        return datetime.fromisoformat(result.stdout.strip())
+    except subprocess.CalledProcessError as e:
+        raise EnvironmentError("Git command failed: {}".format(e.stderr.strip()))
+    except ValueError as e:
+        raise ValueError("Date parsing error: {}. Git command output: {}".format(e, result.stdout.strip()))
 
 
 def _autoformat_python_code_via_black(code:str):
