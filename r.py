@@ -2114,10 +2114,16 @@ def random_element(x):
 
     elif isinstance(x, Iterable):
         index = random_index(x)
+        if _is_pandas_dataframe(x):
+            x=x.iloc
         return x[index]
 
     else:
         raise ValueError("Input must be iterable, dictionary-like, or set-like.")
+
+
+
+
 
 def random_choice(*choices):
     return random_element(choices)
@@ -6547,6 +6553,8 @@ def load_yaml_file(path, use_cache=False):
     data=yaml.safe_load(text)
     return data
 
+load_yaml = load_yaml_file #Alias
+
 def load_yaml_files(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False, lazy=False):
     """
     Plural of load_yaml_file
@@ -10431,7 +10439,7 @@ def replace_symlinks_with_hardlinks(
     return load_files(replace_symlink_with_hardlink, symlink_paths, lazy=lazy, strict=strict, show_progress=show_progress, num_threads=num_threads)
 
 
-def make_symlink(original_path,symlink_path):
+def make_symlink(original_path,symlink_path='.'):
 
     if path_exists(symlink_path) and not path_exists(original_path):
         #If the caller of this function gets the arguments backwards, fix it automatically
@@ -11070,7 +11078,7 @@ def _ISM(ans):
         if isinstance(ans,str):
             ans=line_split(ans)
             ans=ans[::-1] #Let us see the string properly
-            line_join(_ISM(ans)[::-1])
+            return line_join(_ISM(ans)[::-1])
         return pip_import('iterfzf').iterfzf(ans,multi=True,exact=True)
 
 def _view_with_pyfx(data):
@@ -12917,12 +12925,34 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
                         os_name = env_info.os or platform_type
 
+                        disk_stat_path='.' #VS /
                         print('Python version: '+version+' at '+fansi(sys.executable,'magenta'))
                         print('Current time: '+_format_datetime(get_current_date()))
-                        print('Disk space: '+'%s / %s used   :  %s free'%(human_readable_file_size(get_used_disk_space()),human_readable_file_size(get_total_disk_space()),human_readable_file_size(get_free_disk_space())))
-                        print('RAM: '+'%s / %s used   :  %s free'%(human_readable_file_size(get_used_ram()),human_readable_file_size(get_total_ram()),human_readable_file_size(get_free_ram())))
+                        print(
+                            "Disk space: "
+                            + "%s / %s used   :  %s free"
+                            % (
+                                human_readable_file_size(get_used_disk_space(disk_stat_path)),
+                                human_readable_file_size(get_total_disk_space(disk_stat_path)),
+                                human_readable_file_size(get_free_disk_space(disk_stat_path)),
+                            )
+                        )
+                        print(
+                            "RAM: "
+                            + "%s / %s used   :  %s free"
+                            % (
+                                human_readable_file_size(get_used_ram()),
+                                human_readable_file_size(get_total_ram()),
+                                human_readable_file_size(get_free_ram()),
+                            )
+                        )
                         print('Computer details:')
-                        print(bullet+'Operating system: '+fansi('('+os_name+') ','red','bold')+fansi(platform.platform(),'red'))
+                        print(
+                            bullet
+                            + "Operating system: "
+                            + fansi("(" + os_name + ") ", "red", "bold")
+                            + fansi(platform.platform(), "red")
+                        )
                         print(bullet+'Computer name: '+name)
                         print(bullet+'User Name: '+cyan(getpass.getuser()))
                         print(bullet+'CPU: '+cyan(_get_processor_name()))
@@ -13723,7 +13753,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             if file_name.startswith('~'):file_name=get_absolute_path(file_name)
                             try:
                                 fansi_print("ACAT: Copying to your ans the contents of "+repr(file_name),"blue",'bold')
-                                if is_valid_url(file_name) and get_file_extension(file_name) in 'jpg png gif tiff tga jpeg bmp exr'.split():
+                                if is_valid_url(file_name) and get_file_extension(file_name).lower() in 'jpg png gif tiff tga jpeg bmp exr'.split():
                                     user_message='ans=__import__("rp").load_image(%s)'%repr(file_name)
                                 elif file_name.endswith('.ipynb'):
                                     #Unlike json or other formats that could be loaded, ipynb's are almost always generated automatically
@@ -22546,17 +22576,76 @@ def inverse_norm_cdf(p,mean=0,std=1):
     x=z*std+mean
     return x
 
-def download_url(url,path=None):
-    #Download a file from a url and return the path it downloaded to. It no path is specified, it will choose one for you and return it (as a string)
-    #EXAMPLE: open_file_with_default_application(download_url('https://i.imgur.com/qSmVyCo.jpg'))#Show a picture of a cat
-    pip_import('requests')
-    import requests
+def is_s3_url(url):
+    "Returns true if the given string is an Amazon S3 URL"
+    return isinstance(url,str) and url.startswith('s3://')
+
+def download_url(url, path=None, *, skip_existing=False):
+    """
+    Download a file from a url and return the path it downloaded to. It no path is specified, it will choose one for you and return it (as a string)
+    EXAMPLE: open_file_with_default_application(download_url('https://i.imgur.com/qSmVyCo.jpg'))#Show a picture of a cat
+    """
     assert isinstance(url,str),'url should be a string, but got type '+repr(type(url))
+    assert path is None or isinstance(path,str),'path should be either None or a string, but got type '+repr(type(path))
+
     if path is None:
         path=get_file_name(url)
-    response = requests.get(url)
-    open(path,'wb').write(response.content)
-    return path
+
+    if is_s3_url(url):
+        import subprocess
+
+        try:
+            subprocess.check_call(['aws', 's3', 'cp', url, path, '--quiet'])
+        except subprocess.CalledProcessError as e:
+            raise Exception("rp.download_url failed to download s3 url %s to path %s: "%(url,path) + str(e))
+
+        return path
+        
+    elif is_valid_url(url):
+        pip_import('requests')
+        import requests
+
+        if path_exists(path) and skip_existing:
+            #Don't download anything - skip it if it already exists
+            return path
+
+        response = requests.get(url)
+        open(path,'wb').write(response.content)
+        return path
+    else:
+        raise ValueError("Invalid URL: "+str(url)[:1000])
+
+def download_urls(
+    *urls,
+    url_to_path=lambda url:get_file_name(url),
+    skip_existing=False,
+    strict=True,
+    num_threads=None,
+    show_progress=False,
+    buffer_limit=None,
+    lazy=False
+):
+    """
+    Plural of download_url
+    Tune the buffer_limit for optimal downloads to avoid too many concurrent downloads
+    """
+    urls=detuple(urls)
+    load_file = lambda url: download_url(
+        url = url,
+        path = url_to_path(url),
+        skip_existing = skip_existing,
+    )
+    if show_progress in ['eta',True]: show_progress='eta:Downloading URLs'
+
+    return load_files(
+        load_file,
+        urls,
+        show_progress=show_progress,
+        strict=strict,
+        num_threads=num_threads,
+        lazy=lazy,
+        buffer_limit=buffer_limit,
+    )
 
 def debug(level=0):
     #Launch a debugger at 'level' frames up from the frame where you call this function.
@@ -27191,19 +27280,40 @@ def _autoformat_python_code_via_black(code:str):
     import black
     return black.format_str(code,mode=black.Mode())
 
-def _is_numpy_array(x):
-    try:
-        import numpy
-        return isinstance(x,numpy.ndarray)
-    except Exception:
+
+def _is_instance_of_module_class(x, module_name: str, class_name: str) -> bool:
+    """
+    Determines if 'x' (object) is an instance of a class (specified by 'class_name') 
+    in a module (specified by 'module_name') efficiently, without importing the module. 
+    Ideal for environments where importing large libraries like numpy or torch is costly. 
+    Safely returns False, avoiding import errors if the library is not installed.
+
+    Example Usage:
+    _is_instance_of_module_class(x,     'numpy',     'ndarray'  ) # Checks if x is a numpy array
+    _is_instance_of_module_class(x,     'torch',     'Tensor'   ) # Checks if x is a torch Tensor
+    _is_instance_of_module_class(x,     'pandas',    'DataFrame') # Checks if x is a pandas DataFrame
+    _is_instance_of_module_class(image, 'PIL.Image', 'Image'    ) # Checks if x is a PIL Image
+    """
+    if module_name in sys.modules:
+        module = sys.modules[module_name]
+        class_ = getattr(module, class_name, None)
+        return isinstance(x, class_) if class_ is not None else False
+    else:
         return False
 
+
+def _is_numpy_array(x):
+    return _is_instance_of_module_class(x, 'numpy', 'ndarray')
+
 def _is_torch_tensor(x):
-    try:
-        import torch
-        return isinstance(x,torch.Tensor)
-    except Exception:
-        return False
+    return _is_instance_of_module_class(x, 'torch', 'Tensor')
+
+def _is_pandas_dataframe(x) -> bool:
+    return _is_instance_of_module_class(x, 'pandas', 'DataFrame')
+
+def is_pil_image(image) -> bool:
+    return _is_instance_of_module_class(image, 'PIL.Image', 'Image')
+
 
 def as_numpy_images(images):
     if _is_numpy_array(images):
@@ -27222,17 +27332,6 @@ def as_numpy_images(images):
             return [as_numpy_image(x) for x in images]
         else:
             raise TypeError('Unsupported image datatype: %s of %s'%(type(images),repr(set(map(type,images)))))
-
-def is_pil_image(image):
-    if not str(type(image))=="<class 'PIL.Image.Image'>":
-        #A quick check we can do without importing anything
-        return False
-    try:
-        from PIL.Image import Image
-        return isinstance(image, Image)
-    except ImportError:
-        #If we don't have PIL installed...then obviously its not a PIL image
-        return False
 
 def as_pil_image(image):
     assert is_image(image), 'as_pil_image: Input is not an image as defined by rp.is_image'
@@ -28549,24 +28648,21 @@ def delaunay_interpolation_weights(key_points, query_points):
     return vertices, weights
 
 
-def get_total_disk_space():
+def get_total_disk_space(path='/'):
     """Returns the total size of your hard drive in bytes"""
     import shutil
-    path="/" #In the future this might be an argument to specify the disk
     total, used, free = shutil.disk_usage(path)
     return total
 
-def get_used_disk_space():
+def get_used_disk_space(path='/'):
     """Returns the amount of your hard drive that holds data in bytes"""
     import shutil
-    path="/" #In the future this might be an argument to specify the disk
     total, used, free = shutil.disk_usage(path)
     return used
 
-def get_free_disk_space():
+def get_free_disk_space(path='/'):
     """Returns the amount of your hard drive that doesnt hold data in bytes"""
     import shutil
-    path="/" #In the future this might be an argument to specify the disk
     total, used, free = shutil.disk_usage(path)
     return free
 
