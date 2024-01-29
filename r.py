@@ -27900,6 +27900,10 @@ def resize_list(array:list, length: int):
 
     return [array[round(i * step)] for i in range(length)]
 
+def resize_lists_to_max_len(*lists):
+    lists=detuple(lists)
+    length=max(map(len,lists))
+    return [resize_list(l,length) for l in lists]
 
 def resize_list_to_fit(array:list, max_length:int):
     """
