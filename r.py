@@ -12012,6 +12012,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         MK MKDIR
         MA MKDIR
 
+        ` CD ~
+        D` CD ~
+        CD` CD ~
+
         PF PROF
         PO PROF
         POD PROF DEEP
@@ -12115,7 +12119,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         SHOGA $pip_install_multiple(ans, shotgun=True) #Shotgun Ans - works well with PIF
         PIMA $pip_install_multiple(ans, shotgun=False) #Pip Install Multiple Ans - works well with PIF
-        PIRA pip_install('-r '+ans)
+        PIRA $pip_install('-r '+ans)
+        PIR PIP install -r requirements.txt
         
         UP UPDATE
         UPWA if $input_yes_no(ans+"\\n\\n"+$fansi("Set r.py to this?",'red','bold')): $string_to_text_file($get_module_path($r), ans)
@@ -17998,6 +18003,18 @@ def with_file_extension(path:str,extension:str,*,replace=False):
                 path=strip_file_extension(path)
             return path+'.'+extension
 
+def with_file_extensions(*paths,extension:str=None,replace=False):
+    if extension is None:
+        if len(paths)==2 and isinstance(paths[1],str):
+            extension=paths[1] # Enable with_file_extensions(['a','b'],'png')
+            paths=paths[:1]
+        else:
+            assert False, 'Please specify a file extension'
+
+    paths=detuple(paths)
+
+    return [with_file_extension(path, extension, replace=replace) for path in paths]
+
 def with_file_name(path:str,name:str):
     #Returns the path with a new file name, keeping the old file extension
     #If the file extension in 'name' is specified though, it will keep the new extension
@@ -22582,6 +22599,7 @@ def is_s3_url(url):
 
 def download_url(url, path=None, *, skip_existing=False):
     """
+    Works with both HTTP and Aws S3 Urls
     Download a file from a url and return the path it downloaded to. It no path is specified, it will choose one for you and return it (as a string)
     EXAMPLE: open_file_with_default_application(download_url('https://i.imgur.com/qSmVyCo.jpg'))#Show a picture of a cat
     """
@@ -22627,7 +22645,7 @@ def download_urls(
 ):
     """
     Plural of download_url
-    Tune the buffer_limit for optimal downloads to avoid too many concurrent downloads
+    Tune the num_threads and buffer_limit for optimal downloads to avoid too many concurrent downloads
     """
     urls=detuple(urls)
     load_file = lambda url: download_url(
