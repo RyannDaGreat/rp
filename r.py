@@ -2114,7 +2114,7 @@ def random_element(x):
 
     elif isinstance(x, Iterable):
         index = random_index(x)
-        if _is_pandas_dataframe(x):
+        if _is_pandas_iloc_iterable(x):
             x=x.iloc
         return x[index]
 
@@ -3141,7 +3141,10 @@ def save_images(images,paths:list=None,skip_overwrites=False,show_progress=False
         if skip_overwrites and path_exists(path):
             pass #We do nothing, we're skipping this image!
         else:    
-            save_image(image,path)
+            maybe_path = save_image(image,path)
+            if maybe_path is not None:
+                #Sometimes save_image will change the filename, such as adding .png at the end
+                path=maybe_path
         
         if cancelled:
             return
@@ -3211,7 +3214,15 @@ def save_image_jpg(image,path,*,quality=100,add_extension=True):
     from PIL import Image
     if not get_file_extension(path).lower() in {'jpeg','jpg'}:
         path+='.jpg'
-    none= Image.fromarray(image).save(path, "JPEG", quality=quality, optimize=False, progressive=True)
+        
+    extra_kwargs={}
+    if quality==100:
+        #Chroma Subsampling != 0 --> Essentially gives Hue a lower resolution than brightness
+        #https://stackoverflow.com/questions/19303621/why-is-the-quality-of-jpeg-images-produced-by-pil-so-poor
+        #https://pillow.readthedocs.io/en/stable/reference/JpegPresets.html
+        extra_kwargs['subsampling']=0
+        
+    none= Image.fromarray(image).save(path, "JPEG", quality=quality, optimize=False, progressive=True,**extra_kwargs)
     return path
 
 def save_openexr_image(image, file_path):
@@ -18071,17 +18082,17 @@ def get_path_names(*paths, include_file_extensions=True):
     return [get_path_name(path, include_file_extensions) for path in detuple(paths)]
 get_folder_names=get_directory_names=get_file_names=get_path_names
 
-def get_relative_path(path,parent_directory=None):
-    #Take an absolute path, and turn it into a relative path starting from parent_directory
-    #parent_directory's default is get_current_directory()
-    if parent_directory is None:
-        parent_directory=get_current_directory()
-    assert isinstance(parent_directory,str),'parent_directory must be a string representing the root path to compare the given path against'
-    return os.path.relpath(path,parent_directory)
+def get_relative_path(path,root_directory=None):
+    #Take an absolute path, and turn it into a relative path starting from root_directory
+    #root_directory's default is get_current_directory()
+    if root_directory is None:
+        root_directory=get_current_directory()
+    assert isinstance(root_directory,str),'root_directory must be a string representing the root path to compare the given path against'
+    return os.path.relpath(path,root_directory)
 
-def get_relative_paths(*paths, parent_directory=None):
+def get_relative_paths(*paths, root_directory=None):
     "Plural of get_relative_path"
-    return [get_relative_path(path, parent_directory) for path in detuple(paths)]
+    return [get_relative_path(path, root_directory) for path in detuple(paths)]
 
 def get_absolute_path(path,*,physical=True):
     #Given a relative path, return its absolute path
@@ -27351,6 +27362,12 @@ def _is_torch_tensor(x):
 
 def _is_pandas_dataframe(x) -> bool:
     return _is_instance_of_module_class(x, 'pandas', 'DataFrame')
+
+def _is_pandas_series(x) -> bool:
+    return _is_instance_of_module_class(x, 'pandas', 'Series')
+
+def _is_pandas_iloc_iterable(x) -> bool:
+    return _is_pandas_series(x) or _is_pandas_dataframe(x)
 
 def is_pil_image(image) -> bool:
     return _is_instance_of_module_class(image, 'PIL.Image', 'Image')
