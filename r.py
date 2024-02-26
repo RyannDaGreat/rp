@@ -7213,6 +7213,7 @@ def get_system_commands():
         get_system_commands() --> ["ls", "pwd", "python3.8", "man", ... ]
     """
     
+    if currently_running_windows(): return [] #Don't crash rp for now. I'll test this some other time.
     assert not currently_running_windows(), 'r.get_system_commands has not been tested on Windows yet. Feel free to add that!'
 
     import os
@@ -11666,8 +11667,14 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         except BaseException as e:
             print("PSEUDO TERMINAL ERROR: FAILED TO IMPORT RP...THIS SHOULD BE IMPOSSIBLE...WAT")
             print_stack_trace(e)
+        SHOWN_PERMISSION_ERROR=False
         def add_to_successful_command_history(x):
-            _write_to_pterm_hist(x)
+            try:
+                _write_to_pterm_hist(x)
+            except PermissionError as e:
+                print_stack_trace(e)
+                print("PERMISSION ERROR SAVING PTERM HISTORY, FROM r._write_to_pterm_hist(...). COMMAND HISTORY NOT SAVED.")
+                print("THIS ERROR WILL ONLY BE SHOWN ONCE PER PSEUDO-TERMINAL SESSION TO AVOID SPAM")
             successful_command_history.append(x)
             import rp.r_iterm_comm
             rp.r_iterm_comm.successful_commands=successful_command_history.copy()
@@ -12325,8 +12332,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         CLS CLEAR
         VV !vim
 
-        RCLAHF $os.system($printed("rclone copy --progress --transfers 128 %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself! The 'F' stands for fast, which is because this skips checksums - it wont overwrite any files ever!
-        RCLAH $os.system($printed("rclone copy --checksum --progress --transfers 128 %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself!
+        RCLAHF $os.system($printed("rclone copy --progress --transfers 128 --metadata %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself! The 'F' stands for fast, which is because this skips checksums - it wont overwrite any files ever!
+        RCLAH $os.system($printed("rclone copy --checksum --progress --transfers 128 --metadata %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself!
 
         DR $r._display_columns(dir(),'dir():')
         DUSHA $human_readable_file_size(sum($get_file_size(x,False)for x in $enlist(ans)))
@@ -20810,7 +20817,8 @@ def get_path_parent(path_or_url:str):
     parsed = urlparse(path_or_url)
     
     # Check if it's a URL (based on the presence of a scheme)
-    if parsed.scheme:
+    if parsed.scheme and \
+       not (currently_running_windows() and parsed.scheme.isalpha() and len(parsed.scheme)==1): #make sure "c:\\things\\stuff" isn't interpereted as a network path...
         path_parent = '/'.join(parsed.path.rstrip('/').split('/')[:-1]) or '/'
         return urlunparse((parsed.scheme, parsed.netloc, path_parent, parsed.params, parsed.query, parsed.fragment))
     else:  # It's a filesystem path
@@ -20930,6 +20938,17 @@ def path_join(*paths):
         return os.path.join(*paths)
 
 joined_paths=path_join#Synonyms for whatever comes into my head at the moment when using the rp terminal
+
+
+def path_split(path):
+    assert isinstance(path,str)
+    sep='\\' if currently_running_windows() else '/'
+    out=path.split(sep)
+    if path.startswith('/') and sep=='/':
+        out=['/']+out
+    out=[x for x in out if x] #If // was anywhere in the path, it will have an '' in the split
+    return out
+
 
 def get_unique_copy_path(path: str, *, suffix: str = "_copy%i") -> str:
     """

@@ -35,6 +35,7 @@ def get_all_importable_module_names():
 
 from threading import Thread
 Thread(target=get_all_importable_module_names).start()
+Thread(target=lambda: __import__('rp').r._get_cached_system_commands).start()
     
 
 _get_apt_completions_cache=None
