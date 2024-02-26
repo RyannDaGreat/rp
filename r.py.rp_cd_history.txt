@@ -29,7 +29,6 @@
 /Users/Ryan/Documents/Image-Line/FL Studio/Projects
 /Users/Ryan/Documents/Image-Line/FL Studio
 /Users/Ryan/Documents/Image-Line
-/Users/Ryan/Documents
 /Users/Ryan/Desktop/CleanCode/Resume/Attempt1
 /Users/Ryan/Desktop/CleanCode/Resume/Latex
 /Users/Ryan/Desktop/CleanCode/Resume
@@ -63,7 +62,6 @@
 /Users/Ryan/Desktop/triton_paper/CORL
 /Library/LaunchAgents
 /Users/Ryan/Downloads/New xArm Models
-/Users/Ryan/Desktop/CleanCode/Sandbox
 /Users/Ryan/.ssh
 /Users/Ryan/.config/lazygit
 /Users/Ryan/Downloads
@@ -88,6 +86,9 @@
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/prompt_toolkit
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
+/Users/Ryan/Desktop/CleanCode/Sandbox
+/Users/Ryan/Documents
+/Users/Ryan/Documents/Adobe Scripts
 /Users/Ryan
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
