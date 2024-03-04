@@ -3292,7 +3292,8 @@ def convert_image_file(
     image_transform=lambda image, image_file: image,
     name_transform=lambda file_name: file_name,
     load_image=lambda path       : rp.load_image(path       ),
-    save_image=lambda image, path: rp.save_image(image, path)
+    save_image=lambda image, path: rp.save_image(image, path),
+    delete_original=False
 ):
     """
     Converts an image file to a specified format and saves it to the provided output folder.
@@ -3313,6 +3314,7 @@ def convert_image_file(
                                          It should return an image name in the same way (no /'s or file extensions)
         load_image (func, optional): A function to load the image file. Defaults to rp.load_image(path).
         save_image (func, optional): A function to save the image file. Defaults to rp.save_image(image, path).
+        delete_original (bool, optional): USE WITH CAUTION! If true, will delete the original input image after converting it.
 
     Returns:
         str: Path to the output file.
@@ -3348,7 +3350,12 @@ def convert_image_file(
     except TypeError:
         image = image_transform(image)
 
-    return save_image(image, output_file)
+    output = save_image(image, output_file)
+
+    if delete_original and file_exists(output) and file_exists(input_file):
+        delete_file(input_file)
+
+    
 
 def convert_image_files(
     input_files=".",
@@ -3362,7 +3369,8 @@ def convert_image_files(
     image_transform=lambda image, image_file: image,
     name_transform=lambda file_name: file_name,
     load_image=lambda path       : rp.load_image(path       ),
-    save_image=lambda image, path: rp.save_image(image, path)
+    save_image=lambda image, path: rp.save_image(image, path),
+    delete_original=False
 ):
 
     """
@@ -3394,6 +3402,7 @@ def convert_image_files(
                                          It should return an image name in the same way (no /'s or file extensions)
         load_image (func, optional): A function to load the image file. Defaults to rp.load_image(path).
         save_image (func, optional): A function to save the image file. Defaults to rp.save_image(image, path).
+        delete_original (bool, optional): USE WITH CAUTION! If true, will delete the original input image after converting it.
 
     Returns:
         list: Paths to the output files.
@@ -3440,7 +3449,8 @@ def convert_image_files(
                                         image_transform = image_transform,
                                         name_transform = name_transform,
                                         load_image = load_image, 
-                                        save_image = save_image)
+                                        save_image = save_image,
+                                        delete_original = delete_original)
 
         except Exception as e:
             if strict is True:
@@ -3473,6 +3483,7 @@ def convert_image_files(
             elapsed_time = end_time - start_time
             sys.stdout.write('\033[2K\033[1G')  # erase and go to beginning of line
             print('Converted %i images in %.3f seconds' % (len(output_files), elapsed_time))
+            #TODO: Sometimes it reports it converted 0 images when it actually worked just fine - it's not keeping track of how many conversions it made?
 
     except KeyboardInterrupt:
         cancelled = True
@@ -5614,7 +5625,34 @@ def force_restore_warnings():
 #    import dis
 #    return dis.Bytecode(lambda x:x + 1).dis()
 
-def format_date(date)->str:
+#def format_date(date)->str:
+#    """
+#    This function formats datetimes the way I personally like to read them.
+#
+#    EXAMPLE:
+#        >>> get_current_date()
+#        ans = 2023-08-22 14:06:01.764838
+#        >>> format_date(ans)
+#        ans = Tue Aug 22, 2023 at 2:06:01PM
+#
+#    TODO: In the future, only if I want to, I'll add another argument to let you customize the date string. But I really like this format lol
+#    """
+#    import datetime
+#    assert isinstance(date,datetime.datetime)
+#
+#    assert isinstance(date, datetime.datetime), "Input must be a datetime object"
+#
+#    # Format the date string and append the timezone abbreviation
+#    formatted_date = date.strftime('%a %b %d, %Y at %-I:%M:%S%p')
+#
+#    if date.tzinfo is not None:
+#        #If the date has a timezone, add it to the output
+#         formatted_date += ' ' + date.tzname() #PST, EST, Etc
+#
+#    return formatted_date
+
+
+def format_date(date):
     """
     This function formats datetimes the way I personally like to read them.
 
@@ -5625,20 +5663,35 @@ def format_date(date)->str:
         ans = Tue Aug 22, 2023 at 2:06:01PM
 
     TODO: In the future, only if I want to, I'll add another argument to let you customize the date string. But I really like this format lol
+    Made cross-platform (works on windows now) via GPT4: https://chat.openai.com/share/1af19e07-f63b-42df-ac9b-d2fa58b15715
     """
     import datetime
-    assert isinstance(date,datetime.datetime)
-
     assert isinstance(date, datetime.datetime), "Input must be a datetime object"
 
-    # Format the date string and append the timezone abbreviation
-    formatted_date = date.strftime('%a %b %d, %Y at %-I:%M:%S%p')
+    # Manually format the hour to remove leading zeros for cross-platform compatibility
+    hour = date.hour % 12
+    hour = hour if hour else 12  # Convert 0 hour to 12 for 12-hour clock
+    minute = date.minute
+    second = date.second
+    am_pm = 'AM' if date.hour < 12 else 'PM'
+
+    # Use platform-independent formatting for the rest of the date
+    date_part = date.strftime('%a %b %d, %Y')
+    time_part = f"{hour}:{minute:02d}:{second:02d}{am_pm}"
+
+    formatted_date = f"{date_part} at {time_part}"
 
     if date.tzinfo is not None:
-        #If the date has a timezone, add it to the output
-         formatted_date += ' ' + date.tzname() #PST, EST, Etc
+        # If the date has a timezone, add it to the output
+        formatted_date += ' ' + date.tzname()  # PST, EST, etc.
 
     return formatted_date
+
+
+def format_current_date():
+    return format_date(get_current_date())
+    
+
 
 _format_datetime = format_date #For compatiability - older code used rp.r._format_datetime
 
@@ -7998,35 +8051,65 @@ def mini_editor(out: str = "",namespace=(),message=""):  # Has syntax highlighti
     curses.wrapper(main)
     return out
 
-def get_terminal_size():  # In (ↈcolumns，ↈrows) tuple form
-    # From http://stackoverflow.com/questions/566746/how-to-get-linux-console-window-width-in-python/14422538#14422538
-    import os
-    env=os.environ
-    def ioctl_GWINSZ(fd):
-        try:
-            import fcntl,termios,struct,os
-            cr=struct.unpack('hh',fcntl.ioctl(fd,termios.TIOCGWINSZ,
-                                              '1234'))
-        except Exception:
-            return
-        return cr
-    cr=ioctl_GWINSZ(0) or ioctl_GWINSZ(1) or ioctl_GWINSZ(2)
-    if not cr:
-        try:
-            fd=os.open(os.ctermid(),os.O_RDONLY)
-            cr=ioctl_GWINSZ(fd)
-            os.close(fd)
-        except Exception:
-            pass
-    if not cr:
-        cr=(env.get('LINES',24),env.get('COLUMNS',80))
 
-        ### Use get(key[, default]) instead of a try/catch
-        # try:
-        #    cr = (env['LINES'], env['COLUMNS'])
-        # except Exception:
-        #    cr = (25, 80)
-    return int(cr[1]),int(cr[0])
+def get_terminal_size():
+    """
+    From http://stackoverflow.com/questions/566746/how-to-get-linux-console-window-width-in-python/14422538#14422538
+    Adapted for windows via GPT4: https://chat.openai.com/share/976384cd-69fe-46fa-bc75-9f1ed97c51ef
+    Returns a (width:int, height:int) tuple
+    """
+
+    import os
+    import platform
+
+    current_os = platform.system()
+    if current_os == 'Windows':
+        # For Windows
+        try:
+            import struct
+            from ctypes import windll, create_string_buffer
+            # stdin handle is -10
+            # stdout handle is -11
+            # stderr handle is -12
+            h = windll.kernel32.GetStdHandle(-12)
+            csbi = create_string_buffer(22)
+            res = windll.kernel32.GetConsoleScreenBufferInfo(h, csbi)
+            if res:
+                (bufx, bufy, curx, cury, wattr,
+                 left, top, right, bottom,
+                 maxx, maxy) = struct.unpack("hhhhHhhhhhh", csbi.raw)
+                sizex = right - left + 1
+                sizey = bottom - top + 1
+                return sizex, sizey
+        except:
+            # Default value if above method fails
+            return 80, 25
+    else:
+        # For Linux
+        def ioctl_GWINSZ(fd):
+            try:
+                import fcntl
+                import termios
+                import struct
+                cr = struct.unpack('hh', fcntl.ioctl(fd, termios.TIOCGWINSZ, '1234'))
+            except:
+                return
+            return cr
+        cr = ioctl_GWINSZ(0) or ioctl_GWINSZ(1) or ioctl_GWINSZ(2)
+        if not cr:
+            try:
+                fd = os.open(os.ctermid(), os.O_RDONLY)
+                cr = ioctl_GWINSZ(fd)
+                os.close(fd)
+            except:
+                pass
+        if not cr:
+            # Default size or try environment variables
+            cr = (os.environ.get('LINES', 25), os.environ.get('COLUMNS', 80))
+        return int(cr[1]), int(cr[0])
+
+
+
 def get_terminal_width():
     return get_terminal_size()[0]
 def get_terminal_height():
@@ -19442,29 +19525,38 @@ def running_in_google_colab():
     #Return true iff this function is called from google colab
     import sys
     return 'google.colab' in sys.modules
+  
+def _is_python_exe_root(root):
+    exe=sys.executable
+    if currently_running_windows():
+        return exe==path_join(root,'python.exe')
+    else: 
+        return exe==path_join(root,'bin','python')
 
 def running_in_ssh():
     #Returns True iff this Python session was started over SSH
     #https://stackoverflow.com/questions/35352921/how-to-check-if-python-script-is-being-called-remotely-via-ssh
     return 'SSH_CLIENT' in os.environ or 'SSH_TTY' in os.environ or 'SSH_CONNECTION' in os.environ
 
+def running_in_mamba():
+    "Returns True if this python process is from a Mamba environment, and False otherwise"
+    return 'MAMBA_ROOT_PREFIX' in os.environ and running_in_conda() #TODO: Make this more robust, for both Windows AND Unix
+
 def running_in_conda():
     "Returns True if this python process is from a Conda environment, and False otherwise"
     key='CONDA_PREFIX'
-    exe=sys.executable
     env=os.environ
     if key not in env:
         return False
-    return exe==path_join(env[key],'bin','python')
+    return _is_python_exe_root(env[key])
 
 def running_in_venv():
     "Returns True if this python process is from a virtual environment (venv), and False otherwise"
     key='VIRTUAL_ENV'
-    exe=sys.executable
     env=os.environ
     if key not in env:
         return False
-    return exe==path_join(env[key],'bin','python')
+    return _is_python_exe_root(env[key])
 
 def get_conda_name():
     "Returns the name of the current conda environment. Throws an error if it can't find it."
@@ -19928,6 +20020,8 @@ def input_default(prompt='', default=''):
     #From https://stackoverflow.com/questions/2533120/show-default-value-for-editing-on-python-input-possible
     #Note: A library called PyInquirer and inquirerpy do similar things with prompt toolkit, and they're fancy shmancy!
     #TODO: Add windows support
+    if currently_running_windows():
+        return input(prompt) #I don't know how to do this on windows yet. Don't crash it though.
     import readline
     readline.set_startup_hook(lambda: readline.insert_text(default))
     try:
@@ -28361,7 +28455,6 @@ def get_total_vram(gpu_id=None):
     memory_info = _get_gpu_memory_info(gpu_id)
     return memory_info.total
 
-
 def get_used_vram(gpu_id=None, pid=None):
     """
     Returns the amount of used VRAM for a GPU given its ID or for a specific process ID.
@@ -28381,12 +28474,23 @@ def get_used_vram(gpu_id=None, pid=None):
     >>> get_used_vram(pid=12345)
     [0, 0, 385875968, 0]
     """
+
+    def none_to_zero(used_vram):
+        if used_vram is None and currently_running_windows():
+            #I don't know why this happens on Windows - but pynvml returns None when getting the vram of a specific process
+            #I'll just return -1 so it doesnt crash downstream functions like the GP command right now
+            #But -1 is obviously nonsensical, so it lets us know it was due to an error
+            return -1
+        assert isinstance(used_vram,int)
+        return used_vram
+
     if gpu_id is None:
         return [get_used_vram(gpu_id=i, pid=pid) for i in get_all_gpu_ids()]
 
     if pid is None:
         memory_info = _get_gpu_memory_info(gpu_id)
-        return memory_info.used
+        return none_to_zero(memory_info.used)
+
 
     pids = get_gpu_pids(gpu_id)
     if pid not in pids:
@@ -28396,7 +28500,8 @@ def get_used_vram(gpu_id=None, pid=None):
     handle = _get_gpu_handle(gpu_id)
     running_processes = nvmlDeviceGetComputeRunningProcesses(handle)
     process_vram = next((proc.usedGpuMemory for proc in running_processes if proc.pid == pid), 0)
-    return process_vram
+    return none_to_zero(process_vram)
+
 
 
 def get_gpu_with_most_free_vram(n=0, choices=None):
