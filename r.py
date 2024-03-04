@@ -5677,9 +5677,9 @@ def format_date(date):
 
     # Use platform-independent formatting for the rest of the date
     date_part = date.strftime('%a %b %d, %Y')
-    time_part = f"{hour}:{minute:02d}:{second:02d}{am_pm}"
+    time_part = "{hour}:{minute:02d}:{second:02d}{am_pm}".format(hour=hour, minute=minute, second=second, am_pm=am_pm)
 
-    formatted_date = f"{date_part} at {time_part}"
+    formatted_date = "{date_part} at {time_part}".format(date_part=date_part, time_part=time_part)
 
     if date.tzinfo is not None:
         # If the date has a timezone, add it to the output
