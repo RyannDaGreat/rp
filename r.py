@@ -13015,7 +13015,6 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                     elif user_message == "LEVEL":
                         #TODO: add more info:
                         #       - If we're in VM
-                        #       - If we're in Anaconda
                         #       - rp version
                         #       - If we're in TMUX
                         #       - If we're in docker
@@ -13033,6 +13032,12 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             fansi_print("Google Colab",'yellow','bold')
                         elif running_in_jupyter_notebook():
                             fansi_print("Jupyter",'yellow','bold')
+                        if running_in_conda():
+                            try:fansi_print("Conda"+(" (Mamba) " if running_in_mamba() else "")+": "+str(get_conda_name()),'yellow','bold')
+                            except:print_stack_trace()
+                        if running_in_venv():
+                            try:fansi_print("VENV: "+str(get_venv_name()),'yellow','bold')
+                            except:print_stack_trace()
                         if currently_in_a_tty():
                             print("(Running in a terminal)")
                         else:
@@ -19531,7 +19536,7 @@ def _is_python_exe_root(root):
     if currently_running_windows():
         return exe==path_join(root,'python.exe')
     else: 
-        return exe==path_join(root,'bin','python')
+        return get_path_parent(exe)==path_join(root,'bin') and get_file_name(exe) in 'python python3'.split()
 
 def running_in_ssh():
     #Returns True iff this Python session was started over SSH
