@@ -21007,11 +21007,12 @@ def path_join(*paths):
         path_join(['a', 'b'], ['c'])
             raises ValueError: Length mismatch among iterable arguments
 
-    Note on Usage:
-        path_join(['a', 'b', 'c']) treats the list as a single argument, returning the list itself.
-            returns ['a', 'b', 'c']
-        path_join(*['a', 'b', 'c']) or path_join('a', 'b', 'c') expands the list into individual arguments and joins them.
-            returns 'a/b/c'
+    Special case:
+        If the input is simply a list of strings (just one argument), it will join those
+        path_join(['a', 'b'])
+            returns 'a/b'
+        path_join(['a', ['b', 'c']])
+            returns ['a/b', 'a/c']
 
     Note:
         All inputs must be iterable. Strings are considered as iterables.
@@ -21022,16 +21023,23 @@ def path_join(*paths):
     import os
     import itertools
 
-    # Assuming is_iterable is a given function that checks if an object is an iterable but not a string
-    def is_iterable(obj):
-        return isinstance(obj, (list, tuple))
+    def is_non_str_iterable(x):
+        return is_iterable(x) and not isinstance(x,str)
 
-    if any(is_iterable(p) for p in paths):
-        iterables = [p for p in paths if is_iterable(p)]
+    if len(paths)==1 and is_non_str_iterable(paths[0]):
+        #Special case: If the input is a single iterable, treat it like functions that use detuple
+        paths=paths[0]
+        paths=tuple(paths)
+
+    if any(is_non_str_iterable(p) for p in paths):
+        iterables = [p for p in paths if is_non_str_iterable(p)]
+        iterables = [list(i) for i in iterables] #Make sure they have len
         if len(set(map(len, iterables))) != 1:
             raise ValueError("Length mismatch among iterable arguments")
+        for iterable in iterables:
+            assert all(isinstance(x,str) for x in iterable), 'Received a list that isn\'t all strings, please see r.path_join\'s docstring. Bad list: '+str(iterable)
 
-        product = itertools.product(*[p if is_iterable(p) else [p] for p in paths])
+        product = itertools.product(*[p if is_non_str_iterable(p) else [p] for p in paths])
         return [os.path.join(*path_tuple) for path_tuple in product]
     else:
         return os.path.join(*paths)
