@@ -21019,6 +21019,9 @@ def path_join(*paths):
 
     https://chat.openai.com/share/45864fd0-669a-40bb-9cb0-4d717c3a7e4c
 
+
+    TODO: The current way it handles [['a','b'],['c','d']] --> 4 paths is so useless! No reason to make the lengths match - its taking the cartesian product and we end up with 4 paths! The idea was suppost to be that they would be in sync.......and broadcast..............this is garbage behaviour and needs to be fixed. THAT IS, unless, we WANT the product?? Like ['folder1','folder2'],['page.json','image.png'] --> ['folder1/page.json','folder1/image.png','folder2/page.json','folder2/image.png']
+
     """
     import os
     import itertools
@@ -21381,6 +21384,9 @@ def crop_image(image, height: int = None, width: int = None, origin='top left'):
     out[:common_height,:common_width]+=image[:common_height,:common_width]
     
     return out
+
+def crop_images(images, height:int = None, width:int=None, origin='top left'):
+    return [crop_image(image, height=height, width=width, origin=origin) for image in images]
 
 def crop_image_zeros(image,*,output='image'):
     """
