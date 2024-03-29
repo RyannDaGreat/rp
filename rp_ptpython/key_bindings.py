@@ -2048,6 +2048,14 @@ def handle_character(buffer,char,event=None):
                 'git' :'!git',
                 's3' :'!aws s3', #Doesnt work idk
                 'sss' :'!aws s3',
+
+                'mm':'!micromamba',
+                'mmi':'!micromamba install',
+                'mmu':'!micromamba uninstall',
+                'mma':'!micromamba activate',
+                'mmc':'!yes | micromamba create --name',
+                'mml':'!micromamba env list',
+                'mmr':'!micromamba remove --name',
             })
 
             for item in 'import'.split():
