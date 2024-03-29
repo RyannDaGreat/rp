@@ -15680,13 +15680,29 @@ def update_rp():
         pip_install("rp --upgrade --no-cache")
 
 def module_exists(module_name):
-    # https://www.tutorialspoint.com/How-to-check-if-a-python-module-exists-without-importing-it
-    import imp
+    """
+    Check if a Python module exists without importing it.
+
+    Args:
+        module_name (str): The name of the module to check.
+
+    Returns:
+        bool: True if the module exists, False otherwise.
+    """
     try:
-        imp.find_module(module_name)
-        return True
+        # Try to import the imp module
+        import imp
+        try:
+            imp.find_module(module_name)
+            return True
+        except ImportError:
+            return False
     except ImportError:
-        return False
+        # If imp is not available, fall back to importlib
+        import importlib.util
+        # Reference: https://stackoverflow.com/questions/check-if-python-module-exists-without-importing-it
+        return importlib.util.find_spec(module_name) is not None
+
 
 def pip_install_multiple(packages, shotgun=True, quiet=False):
     """
