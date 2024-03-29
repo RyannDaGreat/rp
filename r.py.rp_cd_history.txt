@@ -14,7 +14,6 @@
 /Library/Frameworks
 /Library
 /usr
-/Users
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot
 /Users/Ryan/Desktop/CleanCode/SBU/Research
 /Users/Ryan/Desktop/CleanCode/SBU/Research/ReverseDynamics
@@ -89,6 +88,7 @@
 /Users/Ryan/Desktop/CleanCode/Sandbox
 /Users/Ryan/Documents
 /Users/Ryan/Documents/Adobe Scripts
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
+/Users
 /Users/Ryan
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
