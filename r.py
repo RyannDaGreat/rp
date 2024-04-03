@@ -2299,32 +2299,75 @@ def random_batch_up_to(full_list, max_batch_size=None, retain_order=False):
 
     return random_batch(full_list, batch_size, retain_order = retain_order)
 
-def random_batch_with_replacement(full_list, batch_size: int = None):
+def random_batch_with_replacement(full_list, batch_size: int = None, method: str = "balanced"):
     """
-    Like random_batch, but it handles batch_size larger than len(full_list) by nicely repeating elements
-    It tries to do it nice and evenly, instead of simply randomly sampling it
-    EXAMPLES:
-         >>> random_batch_with_replacement([1,2,3],10)
-        ans = [1, 2, 3, 3, 2, 1, 2, 3, 1, 3]
-         >>> random_batch_with_replacement([1,2,3,4,5],20)
-        ans = [1, 4, 5, 3, 2, 5, 1, 2, 3, 4, 4, 3, 1, 5, 2, 1, 5, 3, 4, 2]
-    """
-    full_list=list(full_list)
-    assert batch_size >= 0
-    assert len(full_list)>0
-    
-    repeats=batch_size//len(full_list)
-    remainder=batch_size%len(full_list)
-    
-    output =list_flatten(shuffled(full_list) for _ in range(repeats))
-    output+=random_batch(full_list,remainder)
-    
-    return output
-    
+    Like random_batch, but it handles batch_size larger than len(full_list) by nicely repeating elements.
+    It supports different sampling methods specified by the 'method' argument.
 
-def random_substring(string:str,length:int):
+    Args:
+        full_list: The list to sample from.
+        batch_size: The desired size of the output batch.
+        method: The sampling method to use. Defaults to "balanced".
+            - "balanced": Perform balanced sampling. The function tries to distribute the elements evenly across the
+                          output list by repeating full_list and shuffling the elements. If duplicates are present,
+                          the distance between them is constrained by the size of full_list.
+            - "independent": Perform independent sampling with replacement. Each element in full_list has an equal probability
+                             of being selected in each draw, similar to drawing balls from a hat with replacement.
+                             There is no guarantee of duplicates, and if present, the distance between them can be arbitrary.
+                             This is the most basic possible type of sampling with replacement.
+
+    Returns:
+        A list of size batch_size containing elements sampled from full_list.
+
+    Examples:
+        >>> random_batch_with_replacement([1, 2, 3], 10, method="balanced")
+        [1, 2, 3, 3, 2, 1, 2, 3, 1, 3]
+
+        >>> random_batch_with_replacement([1, 2, 3, 4, 5], 20, method="balanced")
+        [1, 4, 5, 3, 2, 5, 1, 2, 3, 4, 4, 3, 1, 5, 2, 1, 5, 3, 4, 2]
+
+        >>> random_batch_with_replacement([1, 2, 3], 10, method="independent")
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]  # Astronomically unlikely, but possible with independent sampling
+        [3, 3, 1, 3, 3, 2, 3, 1, 2, 2]  # A more typical result of this code
+
+    Raises:
+        ValueError: If an unsupported sampling method is specified.
+        AssertionError: If the code reaches an unreachable state.
+    """
+    full_list = list(full_list)
+    assert batch_size >= 0
+    assert len(full_list) > 0
+
+    valid_methods = ["balanced", "independent"]
+
+    if method not in valid_methods:
+        raise ValueError("Unsupported sampling method: %s. Valid methods are: %s" % (method, ', '.join(valid_methods)))
+
+    if method == "balanced":
+        # Perform balanced sampling
+        repeats = batch_size // len(full_list)
+        remainder = batch_size % len(full_list)
+
+        output = list_flatten(shuffled(full_list) for _ in range(repeats))
+        output += random_batch(full_list, remainder)
+
+    elif method == "independent":
+        # Perform independent sampling with replacement
+        output = [random.choice(full_list) for _ in range(batch_size)]
+
+    else:
+        assert False, "This code is unreachable"
+
+    return output
+
+def random_substring(string:str,length:int=None):
+    if length is None:
+        #If length isn't given, choose a random length
+        length=random_int(0,len(string))
+
     assert len(string)>=length
     assert length>=0
+
     index=random_index(len(string)-length+1)
     return string[index:index+length]
 
