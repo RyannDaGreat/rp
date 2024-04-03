@@ -3103,14 +3103,30 @@ def save_image(image,file_name=None,add_png_extension: bool = True):
     return file_name
 
 def save_images(images,paths:list=None,skip_overwrites=False,show_progress=False):
-    #Save a list of images to a list of paths
-    #If no paths are specified, the image names will be their hash values.
-    #   In either case, this function returns a list of paths corresponsing to the image files that were saved
-    #This function is faster than using save_image sequentially, as it uses multiple threads
-    #If skip_overwrites is False, we won't overwrite any images that already have a given path name. This is especially useful when the image name is equal to it's hash code, as that can speed things up a lot (avoiding saving image files that don't need to be saved again saves you the time of having to write the same image file twice)
+    """
+    Save images to specified paths concurrently.
+
+    Parameters:
+        - images (list): List of image objects to save.
+        - paths (list, str, or None, optional): Determines the file paths for saving images.
+          * If None, each image is saved with a name derived from its hash value.
+          * If a string, treated as a format string (like 'image_%03i.png') to generate file paths.
+          * If a list, each element should be a path corresponding to each image.
+        - skip_overwrites (bool, optional): If True, does not overwrite existing files. Default is False.
+        - show_progress (bool, optional): If True, shows progress and estimated time remaining. Default is False.
+
+    Returns:
+        - list: Paths where images were saved.
+
+    Examples:
+        >>>  save_images(my_images, 'image_%03i.png', skip_overwrites=True, show_progress=True)
+
+    """
         
     if paths is None:
-        paths=[None]*len(images)
+        paths=random_namespace_hash()+'_%05i.png'
+        # paths=[None]*len(images)
+
         #if show_progress:
             #print("rp.save_images: No paths were specified for your %i images, so their names will be their hash values...calculating the image hash values...",end='',flush=True)
           #
@@ -3118,6 +3134,10 @@ def save_images(images,paths:list=None,skip_overwrites=False,show_progress=False
 #
         #if show_progress:
             #sys.stdout.write('\033[2K\033[1G')#erase and go to beginning of line https://stackoverflow.com/questions/5290994/remove-and-replace-printed-items
+
+    if isinstance(paths,str):
+        #Assume paths is a formattable string that takes an int index
+        paths=[paths % i for i in range(len(images))]
 
     if show_progress:
         number_of_images_saved=0
@@ -18030,6 +18050,7 @@ def cv_text_to_image(text,
                      monospace=False
                     ):
 
+
     if monospace:
         return _cv_text_to_image_monospace(
             text,
@@ -18081,13 +18102,15 @@ def _single_line_cv_text_to_image(text,*,scale,font,thickness,color,tight_fit,ba
 
 
 def strip_file_extension(file_path):
-    #'x.png'        --> 'x'
-    #'text.txt'     --> 'text'
-    #'text'         --> 'text'
-    #'text.jpg.txt' --> 'text.jpg'
-    #'a/b/c.png'    --> 'a/b/c'
-    #'a/b/c'        --> 'a/b/c'
-    # For more, see: https://stackoverflow.com/questions/678236/how-to-get-the-filename-without-the-extension-from-a-path-in-python
+    """
+    'x.png'        --> 'x'
+    'text.txt'     --> 'text'
+    'text'         --> 'text'
+    'text.jpg.txt' --> 'text.jpg'
+    'a/b/c.png'    --> 'a/b/c'
+    'a/b/c'        --> 'a/b/c'
+     For more, see: https://stackoverflow.com/questions/678236/how-to-get-the-filename-without-the-extension-from-a-path-in-python
+    """
     return os.path.splitext(file_path)[0]
 
 def strip_file_extensions(*file_paths):
@@ -18095,46 +18118,50 @@ def strip_file_extensions(*file_paths):
     return [strip_file_extension(x) for x in detuple(file_paths)]
 
 def get_file_extension(file_path):
-    #'x.png'        --> 'png'
-    #'text.txt'     --> 'txt'
-    #'text'         --> ''
-    #'text.jpg.txt' --> 'txt'
-    #'a/b/c.png'    --> 'png'
-    #'a/b/c'        --> ''
-    # For more, see: https://stackoverflow.com/questions/541390/extracting-extension-from-filename-in-python
+    """
+    'x.png'        --> 'png'
+    'text.txt'     --> 'txt'
+    'text'         --> ''
+    'text.jpg.txt' --> 'txt'
+    'a/b/c.png'    --> 'png'
+    'a/b/c'        --> ''
+     For more, see: https://stackoverflow.com/questions/541390/extracting-extension-from-filename-in-python
+    """
     return os.path.splitext(file_path)[1].rpartition('.')[2]
 
 def with_file_extension(path:str,extension:str,*,replace=False):
-    #Replaces or adds a file extension to a path
-    #
-    #If extension is blank, and replace=False, path won't be changed
-    #If extension is blank, and replace=True, then this is equivalent to strip_file_extension
-    #
-    #EXAMPLES:
-    #    >>> with_file_extension('doggy','')
-    #   ans = doggy
-    #    >>> with_file_extension('doggy.png','jpg')
-    #   ans = doggy.png.jpg
-    #    >>> with_file_extension('doggy.png','.jpg')
-    #   ans = doggy.png.jpg
-    #    >>> with_file_extension('doggy.png','.jpg',replace=True)
-    #   ans = doggy.jpg
-    #    >>> with_file_extension('doggy.png','.png')
-    #   ans = doggy.png
-    #    >>> with_file_extension('doggy.png','..png')
-    #   ans = doggy.png..png
-    #    >>> with_file_extension('doggy.png','png')
-    #   ans = doggy.png
-    #    >>> with_file_extension('doggy','png')
-    #   ans = doggy.png
-    #    >>> with_file_extension('path/to/doggy','png')
-    #   ans = path/to/doggy.png
-    #
-    #EXAMPLES:
-    #    path='path'        ; assert path==with_file_extension(path,get_file_extension(path))
-    #    path='path.'       ; assert path==with_file_extension(path,get_file_extension(path))
-    #    path='path.png'    ; assert path==with_file_extension(path,get_file_extension(path))
-    #    path='path.png.jpg'; assert path==with_file_extension(path,get_file_extension(path))
+    """
+    Replaces or adds a file extension to a path
+    
+    If extension is blank, and replace=False, path won't be changed
+    If extension is blank, and replace=True, then this is equivalent to strip_file_extension
+    
+    EXAMPLES:
+        >>> with_file_extension('doggy','')
+       ans = doggy
+        >>> with_file_extension('doggy.png','jpg')
+       ans = doggy.png.jpg
+        >>> with_file_extension('doggy.png','.jpg')
+       ans = doggy.png.jpg
+        >>> with_file_extension('doggy.png','.jpg',replace=True)
+       ans = doggy.jpg
+        >>> with_file_extension('doggy.png','.png')
+       ans = doggy.png
+        >>> with_file_extension('doggy.png','..png')
+       ans = doggy.png..png
+        >>> with_file_extension('doggy.png','png')
+       ans = doggy.png
+        >>> with_file_extension('doggy','png')
+       ans = doggy.png
+        >>> with_file_extension('path/to/doggy','png')
+       ans = path/to/doggy.png
+    
+    EXAMPLES:
+        path='path'        ; assert path==with_file_extension(path,get_file_extension(path))
+        path='path.'       ; assert path==with_file_extension(path,get_file_extension(path))
+        path='path.png'    ; assert path==with_file_extension(path,get_file_extension(path))
+        path='path.png.jpg'; assert path==with_file_extension(path,get_file_extension(path))
+    """
 
     if extension.startswith('.'):
         extension=extension[1:]
@@ -18455,6 +18482,10 @@ get_subdirectories=get_subfolders
 def _os_listdir_files(folder):
     #like get_all_files, but returns only file names and is a little faster
     #https://stackoverflow.com/questions/3207219/how-do-i-list-all-files-of-a-directory
+
+    return [entry.name for entry in os.scandir(folder) if entry.is_file()]
+
+    #OLD CODE - WORKS FINE BUT SHOULD BE SLOWER THAN SCANDIR
     from os import listdir
     from os.path import isfile, join
     onlyfiles = [f for f in listdir(folder) if isfile(join(folder, f))]
@@ -18507,19 +18538,37 @@ def folder_is_empty(folder: str = ".") -> bool:
 directory_is_empty=folder_is_empty
 
 def random_file(folder=None):
-    #Returns the path of a random file in that folder
-    #If the folder is None, returns the name of a random file in the current directory
+    """
+    Returns the paths of random files in that folder
+    If the folder is None, returns the name of a random file in the current directory
+    Returns a list of strings (file paths) whose length=quantity
+    """
+    return random_files(quantity=1,folder=folder)[0]
     
+
+def random_files(quantity:int,folder=None):
+    """
+    Returns the paths of random files in that folder
+    If the folder is None, returns the name of a random file in the current directory
+    Returns a list of strings (file paths) whose length=quantity
+    """
+    assert isinstance(folder,str) or folder is None
+    assert isinstance(quantity,int)
+    assert quantity>=0
+    
+    if quantity==0:
+        return []
     
     if folder is None:
         folder='.'
-        return get_file_name(random_file('.')) #Return something like '__main__.py'
+        return get_file_names(random_files(quantity,'.')) #Return something like '__main__.py'
     else:
         assert folder_exists(folder), 'rp.random_file: Folder does not exist: '+repr(folder)
         files=_os_listdir_files(folder)
         assert not len(files)==0, 'rp.random_file: There are no files in '+repr(folder)
-        output=random_element(_os_listdir_files(folder))
+        output=random_batch_with_replacement(files,quantity)
         return path_join(folder,output) #Return something like './__main__.py'
+
 #endregion
 
 
@@ -21137,7 +21186,7 @@ def get_unique_copy_path(path: str, *, suffix: str = "_copy%i") -> str:
     def apply_suffix_to_path(path, suffix, num_copies):
         folder = get_parent_folder(path)
         file = get_file_name(path)
-        name = strip_file_extension(path)
+        name = strip_file_extension(file)
         extension = get_file_extension(path)
         new_name = apply_suffix_to_name(name, suffix, num_copies)
         new_file = with_file_extension(new_name, extension)
@@ -25383,6 +25432,7 @@ def resize_image_to_hold(image, height: int = None, width: int = None, *, interp
     """
     assert rp.is_image(image)
     assert height is not None or width is not None
+    image = as_numpy_image(image)
 
     if allow_shrink:
         assert height or width, ('If allow_shrink is True, at least one dimension must be nonzero. '
@@ -25417,6 +25467,8 @@ def resize_image_to_fit(image, height:int=None, width:int=None, *, interp='bilin
     assert rp.is_image(image)
     image_height, image_width = rp.get_image_dimensions(image)
     scale = 1
+
+    image = as_numpy_image(image)
 
     # height and width are optional
     if height is None and width is None:
