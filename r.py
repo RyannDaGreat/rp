@@ -18253,6 +18253,14 @@ def with_file_name(path:str,name:str):
     file_name=with_file_extension(file_name,extension)
     return path_join(parent_folder,file_name)
 
+def with_folder_name(path:str, name:str):
+    #Like with_file_name, except it will always replace the extension (unlike with_file_name, where if name doesn't have an extension it preserves path's extension)
+    # >>> with_folder_name('Hello/world.jpg','power')
+    # ans = Hello/power
+    return path_join(get_parent_folder(path),name)
+    return with_file_name(path,name+'.temp')[:-len('.temp')] #Equivalent to the above
+
+
 def get_path_name(path,include_file_extension=True):
     #'/tmp/d/a.dat' --> 'a.dat'
     # For more, see: https://stackoverflow.com/questions/8384737/extract-file-name-from-path-no-matter-what-the-os-path-format
@@ -24194,9 +24202,23 @@ def make_zip_file_from_folder(src_folder:str=None, dst_zip_file:str=None)->str:
         
     return dst_zip_file
 
-def extract_zip_file(zip_file_path,folder_path=None):
-    #Extracts a zip file to a given folder
-    #If that folder doesn't exist, create it
+def extract_zip_file(zip_file_path,folder_path=None,*,treat_as=None):
+    """
+    Extracts a zip file to a specified folder. If the folder doesn't exist, it is created.
+
+    Parameters:
+        - zip_file_path (str): The path to the zip file to extract.
+        - folder_path (str, optional): The destination folder path for extracted contents. If not provided, 
+          extracts to a new folder next to the zip file, with the same name as the file.
+        - treat_as (str, optional): If specified as 'zip', treats the file at zip_file_path as a zip file,
+          useful for files like .pptx that are zip archives but have a different extension.
+
+    Returns:
+        The path to the folder where files were extracted.
+    """
+
+    assert treat_as in [None, 'zip'], 'Currently treat_as only supports .zip files' #TODO: Expand this functionality to .rar files etc with pyunpack
+
     if folder_path==None:
         #By default, extract path/to/thing.zip to a new folder called path/to/thing
         folder_path=strip_file_extension(zip_file_path)
@@ -24205,7 +24227,7 @@ def extract_zip_file(zip_file_path,folder_path=None):
     make_directory(folder_path)
     assert folder_exists(folder_path)
 
-    if get_file_extension(zip_file_path)=='zip':
+    if get_file_extension(zip_file_path)=='zip' or treat_as=='zip':
         #If we're just unpacking a zip file, we don't need pyunpack (a pypi package that's used for .rar files, .7z files etc)
         import zipfile
         with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
