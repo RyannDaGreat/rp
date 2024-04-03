@@ -82,7 +82,6 @@
 /Users/Ryan/PycharmProjects/QuickPython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/prompt_toolkit
 /Users/Ryan/Desktop/CleanCode/Sandbox
 /Users/Ryan/Documents
@@ -91,4 +90,5 @@
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /
 /Users/Ryan
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
