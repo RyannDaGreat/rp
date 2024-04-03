@@ -69,7 +69,6 @@
 /Users/Ryan/Desktop/Aydin
 /Users/Ryan/PycharmProjects/QuickPython/rp-0.1.676
 /Users/Ryan/PycharmProjects/QuickPython/rp-0.1.676/rp
-/
 /Users/Ryan/Desktop
 /Users/Ryan/Desktop/CleanCode
 /Users/Ryan/Desktop/CleanCode/LightWave
@@ -89,6 +88,7 @@
 /Users/Ryan/Documents
 /Users/Ryan/Documents/Adobe Scripts
 /Users
-/Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
+/
+/Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
