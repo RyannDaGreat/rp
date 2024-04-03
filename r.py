@@ -3152,8 +3152,10 @@ def save_images(images,paths:list=None,skip_overwrites=False,show_progress=False
     Parameters:
         - images (list): List of image objects to save.
         - paths (list, str, or None, optional): Determines the file paths for saving images.
-          * If None, each image is saved with a name derived from its hash value.
-          * If a string, treated as a format string (like 'image_%03i.png') to generate file paths.
+          * If None, each image is saved with a random name followed by an index (such as 'Aos8Bs32_00001.png', 'Aos8Bs32_00002.png' ...)
+          * If a string:
+            - If its a folder, uses same names as setting paths==None, except images are saved in that subfolder
+            - Treated as a format string (like 'image_%03i.png') to generate file paths.
           * If a list, each element should be a path corresponding to each image.
         - skip_overwrites (bool, optional): If True, does not overwrite existing files. Default is False.
         - show_progress (bool, optional): If True, shows progress and estimated time remaining. Default is False.
@@ -3166,8 +3168,12 @@ def save_images(images,paths:list=None,skip_overwrites=False,show_progress=False
 
     """
         
-    if paths is None:
-        paths=random_namespace_hash()+'_%05i.png'
+    if paths is None or isinstance(paths,str) and folder_exists(paths):
+        new_paths=random_namespace_hash()+'_%05i.png'
+        if folder_exists(paths):
+            new_paths=path_join(paths,new_paths)
+        paths=new_paths
+        
         # paths=[None]*len(images)
 
         #if show_progress:
@@ -13963,6 +13969,18 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     user_message="""ans=__import__("rp").load_yaml(%s)"""%repr(file_name)
                                 elif is_image_file(file_name):
                                     user_message='ans=__import__("rp").load_image(%s)'%repr(file_name)
+                                elif is_video_file(file_name):
+                                    user_message='ans=__import__("rp").load_video(%s)'%repr(file_name)
+                                elif (file_name.endswith('.pt') or file_name.endswith('.pth')) and module_exists('torch'):
+                                    user_message="""ans=__import__("torch").load(%s,map_location='cpu')"""%repr(file_name)
+                                elif is_sound_file(file_name):
+                                    user_message='ans=__import__("rp").load_sound_file(%s)'%repr(file_name)
+                                elif file_name.endswith('.npy') and module_exists('numpy'):
+                                    user_message="""ans=__import__("numpy").load(%s)"""%repr(file_name)
+                                elif file_name.endswith('.pkl'):
+                                    user_message="""ans=__import__("rp").load_pickled_value(%s)"""%repr(file_name)
+                                elif file_name.endswith('.parquet'):
+                                    user_message="""ans=__import__("rp").pip_import("pandas").read_parquet(%s)"""%repr(file_name)
                                 else: 
                                     text_len_threshold = 10000  # If it's longer than this we just put the load text command to make the history cleaner...
                                     text_set_command = repr(_load_text_from_file_or_url(file_name))
@@ -13970,21 +13988,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                         text_set_command = '__import__("rp").text_file_to_string(%s)'%repr(file_name)
                                     user_message='ans='+text_set_command
                             except UnicodeDecodeError:
-                                if is_video_file(file_name):
-                                    user_message='ans=__import__("rp").load_video(%s)'%repr(file_name)
-                                elif is_sound_file(file_name):
-                                    user_message='ans=__import__("rp").load_sound_file(%s)'%repr(file_name)
-                                elif (file_name.endswith('.pt') or file_name.endswith('.pth')) and module_exists('torch'):
-                                    user_message="""ans=__import__("torch").load(%s,map_location='cpu')"""%repr(file_name)
-                                elif file_name.endswith('.npy') and module_exists('numpy'):
-                                    user_message="""ans=__import__("numpy").load(%s)"""%repr(file_name)
-                                elif file_name.endswith('.pkl'):
-                                    user_message="""ans=__import__("rp").load_pickled_value(%s)"""%repr(file_name)
-                                elif file_name.endswith('.parquet'):
-                                    user_message="""ans=__import__("rp").pip_import("pandas").read_parquet(%s)"""%repr(file_name)
-                                else:
-                                    user_message='ans=__import__("rp").file_to_bytes(%s)'%repr(file_name)
-                                    # assert False,'Failed to read file '+repr(file_name)
+                                user_message='ans=__import__("rp").file_to_bytes(%s)'%repr(file_name)
+                                # assert False,'Failed to read file '+repr(file_name)
 
                         elif user_message == "IPYTHON":
                             fansi_print("WARNING: Use 'IPYTHON ON' or 'IPYTHON OFF' for now on, 'IPYTHON' is broken until further notice. Will try to do it anyway, though.",'red','bold')
@@ -20451,7 +20456,11 @@ class VideoWriterMP4:
     def write_frame(self, frame):
         import ffmpeg
 
-        assert is_image(frame)
+        assert is_image(frame) or isinstance(frame,str)
+        
+        if isinstance(frame,str):
+            frame = load_image(frame)
+
         assert not self.finished
 
         assert not is_a_folder(self.path)
@@ -20508,16 +20517,17 @@ class VideoWriterMP4:
         
 def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', height=None, width=None):
     """
-    # frames: a list of images as defined by rp.is_image(). Saves an .mp4 file at the path
-    # Note that frames can also be a generator, as opposed to a numpy array.
-    # This can let you save larger videos that would otherwise make your computer run out of memory.
-    #
-    #EXAMPLE BITRATES (used for the Sunkist soda example):
-    # 100000    : ( 345KB) is decent, and very compressed. It starts out a bit mushy though
-    # 1000000   : ( 3.3MB) I believe this is close to ffmpeg's default rate. It looks okay, but it does look a tiny bit mushy
-    # 10000000  : (32.7MB)
-    # 100000000 : (93.0MB)
-    # 1000000000: (93.0MB) It seems to be the maximum size
+    frames: a list of images as defined by rp.is_image(). Saves an .mp4 file at the path
+        - frames can also contain strings, if those strings are image file paths
+    Note that frames can also be a generator, as opposed to a numpy array.
+    This can let you save larger videos that would otherwise make your computer run out of memory.
+    
+    EXAMPLE BITRATES (used for the Sunkist soda example):
+     100000    : ( 345KB) is decent, and very compressed. It starts out a bit mushy though
+     1000000   : ( 3.3MB) I believe this is close to ffmpeg's default rate. It looks okay, but it does look a tiny bit mushy
+     10000000  : (32.7MB)
+     100000000 : (93.0MB)
+     1000000000: (93.0MB) It seems to be the maximum size
     """
     
     height = None if height is None else height
