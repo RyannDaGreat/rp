@@ -77,6 +77,11 @@
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 
+" Allow backspace to delete over everything in insert mode, solving the issue where
+" backspace only deletes characters typed in the current insert mode session on macOS
+set backspace=indent,eol,start
+
+
 set nocompatible              " be iMproved, required
 filetype off                  " required
 
