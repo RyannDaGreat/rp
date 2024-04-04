@@ -25594,7 +25594,7 @@ def _iterfzf(*args,**kwargs):
     from iterfzf import iterfzf
     return iterfzf(*args,**kwargs)
 
-def cv_inpaint_image(image, mask, radius=3, *, algorithm: str = "TELEA"):
+def cv_inpaint_image(image, mask=None, radius=3, *, algorithm: str = "TELEA", invert_mask=False):
     """
     Inpaint an image using OpenCV's inpainting methods.
     The inpainting will be super smooth, and does not use any machine learning
@@ -25602,6 +25602,8 @@ def cv_inpaint_image(image, mask, radius=3, *, algorithm: str = "TELEA"):
     Parameters:
         - image: The input image to be inpainted, expected to be in RGB format with byte values.
         - mask: A binary mask indicating the regions to inpaint. Must be the same size as `image`.
+                If left as None, the inverted alpha channel of image will be used (rounded to a binary mask)
+                Like OpenCV, where the mask is True, it will be inpainted. Where it is False, the original image is returned.
         - radius: The radius of a circular neighborhood of each point to inpaint. Defines how far the inpainting method 
           can reach for information while inpainting. Larger values consider more of the surrounding pixels. Default is 3.
         - algorithm: The inpainting method to use. Can be "TELEA" or "NS". Default is "TELEA".
@@ -25623,11 +25625,19 @@ def cv_inpaint_image(image, mask, radius=3, *, algorithm: str = "TELEA"):
     import cv2
     algorithms = dict(TELEA=cv2.INPAINT_TELEA, NS=cv2.INPAINT_NS)
 
+    if mask is None:
+        assert is_rgba_image(image), 'cv_inpaint_image: Warning: no mask was given, and the input image doesnt have transparency - which means nothing will be inpainted. If making this an error is an issue this might be downgraded to a warning or removed, but right now I assume youve likely made a mistake. Are you sure you didnt mean to pass in an RGBA image or give a mask?'
+        mask=image
+        mask=get_image_alpha(mask)
+        mask=as_binary_image(mask)
+        mask=inverted_image(mask)
+
     #Input assertions
     assert is_image(image) and is_image(mask)
     assert get_image_dimensions(mask) == get_image_dimensions(image), 'mask and image must have same height and width'
     assert isinstance(radius,int) and radius>=1
     assert algorithm in algorithms, repr(algorithm) + ' is not in '+repr(list(algorithms))
+
         
     #Input conversions
     image = as_byte_image(image)
