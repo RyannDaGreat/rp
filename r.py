@@ -11453,6 +11453,11 @@ def _view_markdown_in_terminal(file_or_string):
         delete_file(path)
 
 
+def _convert_powerpoint_file(path):
+    from rp.experimental import process_powerpoint_file
+    return process_powerpoint_file(path)
+
+
 
 _cd_history=[]
 def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseudo_terminal_style(),enable_ptpython=True,eval=eval,exec=exec,rprc=''):
@@ -12495,6 +12500,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         QPHP $r._input_select_multiple_history_multiline() #Query Prompt-Toolkit History Paragraphs (F3)
         QPH  $r._input_select_multiple_history() #Query Prompt-Toolkit History Lines (F3)
         QVH  $r._input_select_multiple_history($pterm_history_filename) #Query VHISTORY
+
+        PPTA $r._convert_powerpoint_file(ans)
+        PPT $r._convert_powerpoint_file($input_select_file(file_extension_filter='pptx'),message='Select a powerpoint file')
 
         TMD !tmux d
         TMA !tmux a
