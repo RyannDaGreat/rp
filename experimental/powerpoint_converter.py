@@ -21,6 +21,8 @@ To use this code:
 
 from rp import *
 
+__all__=['process_powerpoint_file']
+
 def _get_thumbnail_mapping(index_xml, slide_xml):    
     #https://chat.openai.com/share/35113188-1527-4309-ae6e-cbb0c4643218
     import xml.etree.ElementTree as ET
