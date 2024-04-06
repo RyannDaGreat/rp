@@ -11966,7 +11966,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         ?h (?/)
         ?e
         ?p
-        ?c ?+c ?c+
+        ?c ?+c ?c+ ?cp
         ?i
         ?r
         ?j
@@ -12637,8 +12637,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         split=user_message.split('/')
                         left=''.join(split[:-1])
                         right=split[-1]
-                        if right in 'p e s v t h c r i j c+ +c'.split():
-                            #/p --> ?p   /e --> ?e   /t --> ?t   /s ---> ?s    /v --> ?v     /h --> ?h     /c --> ?c     /r --> ?r    /i --> ?i
+                        if right in 'p e s v t h c r i j c+ +c cp'.split():
+                            #/p --> ?p   /e --> ?e   /t --> ?t   /s ---> ?s    /v --> ?v     /h --> ?h     /c --> ?c     /r --> ?r    /i --> ?i     /cp --> ?cp
                             if not right in scope():
                                 user_message=left+'?'+right
                                 fansi_print("Transformed input to "+repr(user_message)+' because variable '+repr(right)+' doesn\'t exist','magenta','bold')
@@ -13755,12 +13755,19 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             except TypeError:
                                 user_message=repr(type(get_source_code(get_ans())))
 
-                        elif ends_with_any(user_message,'?c','?+c','?c+') and not '\n' in user_message:
+                        elif user_message=='?cp':
+                            fansi_print("?cp --> Printing source code","blue",'bold')
+                            try:              _maybe_display_string_in_pager(printed(fansi_syntax_highlighting(     get_source_code(get_ans()) ,show_line_numbers=True,line_wrap_width=get_terminal_width())),with_line_numbers=False)
+                            except TypeError: _maybe_display_string_in_pager(printed(fansi_syntax_highlighting(type(get_source_code(get_ans())),show_line_numbers=True,line_wrap_width=get_terminal_width())),with_line_numbers=False)
+                            user_message=""
+
+                        elif ends_with_any(user_message,'?c','?+c','?c+','?cp') and not '\n' in user_message:
                             #You can do 
                             #     load_image?c+   ---   adds the source code of load_image to the top of the current str(ans)
                             #     load_image?+c   ---   adds the source code of load_image to the bottom of the current str(ans)
                             #     load_image,save_image?c   ---   loads the source code of both load_image and save_image, one on top of the other
 
+                            just_print=False
 
                             if user_message.endswith('?c'):
                                 user_message=user_message[:-2]
@@ -13774,6 +13781,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 user_message=user_message[:-3]
                                 start=[str(get_ans())]
                                 end=[]
+                            if user_message.endswith('?cp'):
+                                user_message=user_message[:-3]
+                                start=[]
+                                end=[]
+                                just_print=True
 
                             values=eval(user_message,scope())
 
@@ -13791,6 +13803,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     print_stack_trace()
 
                             user_message=repr(line_join(start+parts+end))
+
+                            if just_print:
+                                _maybe_display_string_in_pager(printed(fansi_syntax_highlighting(eval(user_message),show_line_numbers=True,line_wrap_width=get_terminal_width())),with_line_numbers=False)
+                                user_message=""
+                                
 
                         elif user_message=='?r':
                             fansi_print("?r --> rich.inspect(ans)","blue",'bold')
