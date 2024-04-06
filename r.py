@@ -11265,7 +11265,7 @@ def _ISM(ans):
         if isinstance(ans,str):
             ans=line_split(ans)
             ans=ans[::-1] #Let us see the string properly
-            return line_join(_ISM(ans)[::-1])
+            return line_join(_ISM(ans))
         return pip_import('iterfzf').iterfzf(ans,multi=True,exact=True)
 
 def _view_with_pyfx(data):
@@ -11417,7 +11417,7 @@ def _input_select_multiple_history(history_filename=history_filename):
     preview_width=get_terminal_width()//2-2
     lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | fold -w %i'%preview_width)
 
-    lines=[x[1:] for x in lines]
+    lines=[('#' if x.startswith('#') else '')+x[1:] for x in lines]
     out=line_join(lines)
 
     return out
@@ -12445,6 +12445,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         LJ LINE JOIN ANS
         AJ JSON ANS
         JA JSON ANS
+
+        SHA $get_sha256_hash(ans,show_progress=True)
 
         DCI $display_image_in_terminal_color(ans)
         
@@ -17933,6 +17935,62 @@ class CachedInstances:
             cls._instance_cache = HandyDict()
         return cls._instance_cache
 
+def get_sha256_hash(source, *, show_progress: bool = False) -> str:
+    """
+    Calculate the SHA-256 hash of the provided data or the contents of a file specified by its path.
+
+    :param source:
+        - bytes: The data to hash.
+        - str: The file path whose contents are to be hashed.
+    :param show_progress: Keyword-only argument that dictates whether to display a progress bar during the hash computation.
+    :return: The SHA-256 hash as a hexadecimal string.
+    
+    EXAMPLES:
+        >>> get_sha256_hash('/Users/ryan/Downloads/A dolphin reading.png')
+       ans = cd318d7a18c5ebf899c53d5a580d5bb659e99c1ca2961ac0507cb0d2946498f6
+        >>> get_sha256_hash(b'test bytestring')
+       ans = 79945b2e3369479b02fabcd95a6d124524a2939e40003c2dcba182c35cf6c10a
+        >>> get_sha256_hash(object_to_bytes([1,2,3,4,5]))
+       ans = ab10184fc37b8a4bf42feef31ada80b347d2096b0dc161921579753765565577
+    """
+    import hashlib
+    import os
+    import io
+
+    hash_obj = hashlib.sha256()
+
+    if isinstance(source, bytes):
+        byte_stream = io.BytesIO(source)
+        total_size = len(source)
+        progress_desc = "Hashing data"
+    elif isinstance(source, str) and os.path.isfile(source):
+        byte_stream = open(source, 'rb')
+        total_size = os.path.getsize(source)
+        progress_desc = "Hashing file"
+    else:
+        raise TypeError("rp.get_sha256_hash: Unsupported input type '" + type(source).__name__ + "'")
+
+    progress_bar = None
+    if show_progress:
+       #TODO: Make it unified with load_files, one unified tqdm/eta function - supporting the same argument formats
+        pip_import('tqdm')
+        from tqdm import tqdm
+        progress_bar = tqdm(total=total_size, desc=progress_desc, unit='B', unit_scale=True, unit_divisor=1024)
+
+    chunk_size = 4096 #A nice big chunk size
+    while True:
+        chunk = byte_stream.read(chunk_size)
+        if not chunk:
+            break
+        hash_obj.update(chunk)
+        if show_progress:
+            progress_bar.update(len(chunk))
+
+    if hasattr(byte_stream, 'close'):
+        byte_stream.close()
+
+    return hash_obj.hexdigest()
+
 
 def labeled_image(image,
                   text:str,
@@ -20740,6 +20798,43 @@ def move_path(from_path,to_path):
     return new_path
 
 move_file=move_directory=move_folder=move_path#Synonyms that might make more sense to read in their context than rename_path
+
+def swap_paths(path_a,path_b):
+    """
+    Moves path_a to path_b and vice versa
+    This is an atomic operation that will be undone upon erroring
+    (So if one of the paths has a permission error, don't worry - nothing should change!)
+    """
+
+    temp_suffix='_swap%i'
+    temp_path_a=get_unique_copy_path(path_a,suffix=temp_suffix)
+    temp_path_b=get_unique_copy_path(path_b,suffix=temp_suffix)
+    
+    import shutil
+    try:
+        shutil.move(path_a,temp_path_a)
+        shutil.move(path_b,temp_path_b)
+        #If there's a permission error, we would have hit it by now
+        #The next two moves should be ok
+        try:
+            shutil.move(temp_path_a,path_b)
+            shutil.move(temp_path_b,path_a)
+        except:
+            #Perhaps some race condition from another process changed permissions mid-swap?
+            print('rp.swap_paths: Something weird happened I didnt account for!')
+            raise
+    except:
+        #Try to put them both back - don't swap if there's an error!
+        #This operation is meant to be atomic.
+        try:
+            try:
+                shutil.move(temp_path_a,path_a)
+            finally:
+                shutil.move(temp_path_b,path_b)
+        except:
+            #Don't raise this permission error - raise the original
+            pass
+        raise
 
 def delete_file(path,*,permanent=True):
     """
