@@ -735,6 +735,16 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         " INDENTATION:
             " Disabled because it doesn't work very well - it made my vimrc use tabs, and rp have 2-spaces-indent.
             " Plugin 'tpope/vim-sleuth' "Auto-detects what indentation the file uses
+    "BUFFERS: Q gb gB \b
+        "CLOSING BUFFERS:
+            " Great for closing all unused buffers
+            Plugin 'Asheq/close-buffers.vim'
+            nnoremap <silent> Q :Bdelete menu<CR>
+        "BUFFERGATOR: \b (then ^n ^p ^t)     gB gb
+            " ^n ^p  preview next/prev buffers
+            " ^t opens buffer in new tab
+            " gb gB   goes to next/prev buffers
+            Plugin 'jeetsukumaran/vim-buffergator' " Using \b, will let you switch buffers. Use control+n and control+p to cycle through with previews. TODO: Fork it and remove unnessecary keyboard shortcuts
     "NAVIGATION
         "SEARCHING: * 
             " Allows us to search for text with * from visual mode
@@ -745,8 +755,6 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             Plugin 't9md/vim-choosewin'
             nmap  -  <Plug>(choosewin)
             let g:choosewin_overlay_enable = 1  " if you want to use overlay feature
-        "BUFFERGATOR: \b (then ^n ^p)
-            Plugin 'jeetsukumaran/vim-buffergator' " Using \b, will let you switch buffers. Use control+n and control+p to cycle through with previews. TODO: Fork it and remove unnessecary keyboard shortcuts
         "TAB KEY:
             nnoremap <Tab> <C-w>w
             nnoremap <S-Tab> <C-w>W
