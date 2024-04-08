@@ -741,9 +741,12 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             Plugin 'bronson/vim-visual-star-search' " How was this not already a thing? 
         "WINDOW PANE JUMPING: -
             " When you press -, letters appear on each pane - and you press the letter of the one you want to jump to
-            Plugin 'https://github.com/t9md/vim-choosewin'
+            " These letters are not always visible in default color scheme - try 'fh' !
+            Plugin 't9md/vim-choosewin'
             nmap  -  <Plug>(choosewin)
-            let g:choosewin_overlay_enable = 1
+            let g:choosewin_overlay_enable = 1  " if you want to use overlay feature
+        "BUFFERGATOR: \b (then ^n ^p)
+            Plugin 'jeetsukumaran/vim-buffergator' " Using \b, will let you switch buffers. Use control+n and control+p to cycle through with previews. TODO: Fork it and remove unnessecary keyboard shortcuts
         "TAB KEY:
             nnoremap <Tab> <C-w>w
             nnoremap <S-Tab> <C-w>W
@@ -753,6 +756,10 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             nnoremap <leader>p :MruRefresh<cr>:MRU<cr>
             " autocmd BufEnter * silent! MruRefresh " Always get rid of files that no longer exist from the MRU. Clean up the temp files that no longer exist...
         "SESSIONS: \ss \sl \sg
+            "\ss saves session in local dir and user dir (aka ~)
+            "\sl loads session from local dir
+            "\sg loags sessoin from user dir (aka ~)
+
             "Save Session (saves to both global and local)
             nnoremap <Leader>ss :mks! .session.vim<CR>:mks! ~/.session.vim<CR>
 
