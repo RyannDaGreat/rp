@@ -10175,6 +10175,7 @@ history_syntax_highlighting=False,
 history_number_of_lines=2500,
 min_bot_space=15,
 top_space=0,
+true_color=False,
 
 session_title='',
     )
@@ -10200,6 +10201,7 @@ def _load_pyin_settings_file():
     def _load_pyin_settings_from_dict(d):
         pyin.use_ui_colorscheme(d['_current_ui_style_name'])
         pyin.use_code_colorscheme(d['_current_code_style_name'])
+        pyin.true_color=d['true_color'] if 'true_color' in d else False
         for attr in _default_pyin_settings:
             if attr in d:
                 setattr(pyin,attr,d[attr])
