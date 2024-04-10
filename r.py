@@ -5335,6 +5335,320 @@ def destructure(d: dict) -> tuple:
     
     return values
 
+def gather_args(func, *args, frames_back=1, **kwargs):
+    """
+    Gathers the necessary positional arguments and keyword arguments to call the given function.
+
+    This function collects the required arguments and keyword arguments for the specified function
+    based on a priority ordering. It retrieves the values from the caller's scope, default values,
+    and overridden values provided through *args and **kwargs.
+
+    Priority ordering (highest to lowest):
+        1. Overridden keyword arguments (**kwargs)
+        2. Overridden positional arguments (*args)
+        3. Varargs and varkw:
+            Overridden keyword arguments' varkw variable's keyword arguments
+            Overridden keyword arguments' varargs variable's positional arguments
+        4. Gathered arguments and keyword arguments from the caller's scope
+        5. Varargs and varkw:
+            Gathered varkw variable's keyword arguments
+            Gathered varargs variable's positional arguments
+        6. Default arguments and keyword arguments from the function signature
+
+    Args:
+        func (callable): The function for which to gather arguments and keyword arguments.
+        *args: Positional arguments to override the gathered values.
+        frames_back (int, optional): The number of frames to go back in the caller's scope to gather variables. Defaults to 1.
+            NOTE: frames_back will not be inferred from the environment, it's the only special keyword argument here!
+        **kwargs: Keyword arguments to override the gathered values.
+
+    Returns:
+        tuple: A tuple containing the gathered positional arguments and keyword arguments.
+            - out_args (list): The gathered positional arguments.
+            - out_kwargs (dict): The gathered keyword arguments.
+
+    Raises:
+        TypeError: If the number of positional arguments provided exceeds the number of positional arguments
+                   in the function signature and the function does not have a *varargs parameter.
+        TypeError: If a required argument is missing from the gathered variables and is not provided
+                   through *args, **kwargs, or the function's default values.
+
+    EXAMPLE USE CASE:
+        # gather_args can be used to greatly simplify code where functions need a lot of each other's variables
+        
+        def f(a,b,c,d,e,f,g):
+            return a+b+c+d+e+f+g
+
+        #Without gather_args
+        def g(a,b,c,d,e,f,g):
+            print(f(a,b,c,d,e,f,g))
+
+        #With gather_args (equivalent)
+        def g(a,b,c,d,e,f,g):
+            args, kwargs = gather_args(f)
+            print(f(*args,**kwargs))
+
+        #With our sister function, gather_args_wrapper:
+        def g(a,b,c,d,e,f,g):
+            print(gather_args_wrapper(f)())
+
+        #With our other sister function, gather_args_call:
+        def g(a,b,c,d,e,f,g):
+            print(gather_args_call(f))
+
+    EXAMPLES:
+        def example_func(a, b=2, /, c=3, *d, e, f, g=1, h=2, i=3, **kw):
+            pass
+
+        # Gather arguments and keyword arguments
+        a = 10
+        e = 50
+        f = 60
+        kw = dict(z=123)
+        args, kwargs = gather_args(example_func, frames_back=1)
+        # args: [10, 2, 3]
+        # kwargs: {'e': 50, 'f': 60, 'g': 1, 'h': 2, 'i': 3, 'z': 123}
+
+        # Override arguments and keyword arguments
+        args, kwargs = gather_args(example_func, 100, e=500, f=600, j=1000, kw=dict(q=321), frames_back=1)
+        # args: [100, 2, 3]
+        # kwargs: {'e': 500, 'f': 600, 'g': 1, 'h': 2, 'i': 3, 'j': 1000, 'q': 321}
+
+    EXAMPLES:
+        # These examples are meant to cover many edge cases
+        >>> def no_kwargs_func(a,b,c,d):
+            pass
+        a=1
+        b=2
+        >>> gather_args(no_kwargs_func)
+        ERROR: AssertionError: Missing variables for function call: c, d
+        >>> gather_args(no_kwargs_func,c=3,d=4)
+        ans = ([1, 2, 3, 4], {})
+        >>> gather_args(no_kwargs_func,3,4)
+        ERROR: AssertionError: Missing variables for function call: c, d
+        >>> gather_args(no_kwargs_func,None,None,3,4)
+        ans = ([None, None, 3, 4], {})
+        >>> gather_args(no_kwargs_func,None,None,3,4,a=a,b=b) #Overriding the None's with kwargs, which have higher priority
+        ans = ([1, 2, 3, 4], {})
+        >>> gather_args(no_kwargs_func,c=3,d=4,e=5)
+        ERROR: AssertionError: Too many keyword arguments given to a function without **kwargs: e
+        >>> gather_args(no_kwargs_func,5,6,7,8)
+        ans = ([5, 6, 7, 8], {})
+        >>> gather_args(no_kwargs_func,5,6,7,8,9)
+        ERROR: AssertionError: Too many args specified for a function without varargs!
+
+    EXAMPLES:
+        # Showing how priority ordering affects *args for a func
+        >>> def varargs_func(a,b,*varargs):
+                pass
+            a=1
+            b=2
+        >>> gather_args(varargs_func)
+        ans = ([1, 2], {})
+        >>> gather_args(varargs_func,3,4,5)
+        ans = ([3, 4, 5], {})
+        >>> gather_args(varargs_func,varargs=[3,4,5])
+        ans = ([1, 2, 3, 4, 5], {})
+        >>> varargs=[6,7]
+        >>> gather_args(varargs_func)
+        ans = ([1, 2, 6, 7], {})
+        >>> gather_args(varargs_func,8,9)     #Varargs can be inferred from the scope
+        ans = ([8, 9, 6, 7], {})
+        >>> gather_args(varargs_func,8,9,10)  #If varargs are directly specified, they take precedent
+        ans = ([8, 9, 10], {})
+        >>> gather_args(varargs_func,8,9,varargs=[1,2])
+        ans = ([8, 9, 1, 2], {})
+        >>> gather_args(varargs_func,8,9,varargs=[1,2],b=None)
+        ans = ([8, None, 1, 2], {})
+
+        ### Continued: What if specified varargs isn't iterable? Answer: It will be ignored
+
+        >>> varargs=None #The variable exists but it no longer iterable, so it won't be used for varargs. Something else can override it.
+        >>> gather_args(varargs_func,8,9)
+        ans = ([8, 9], {})
+        >>> gather_args(varargs_func,8,9,varargs='ABC')
+        ans = ([8, 9, 'A', 'B', 'C'], {})
+        >>> args=[1,2,3]
+        >>> gather_args(varargs_func,8,9,args=None) #Similarily, if the manually specified args isn't iterable - that will also be ignored
+        ans = ([8, 9, 1, 2, 3], {})
+
+    FOR REFERENCE: EXAMPLE OF HOW WE GET ARGS AND KWARGS FROM FUNC:
+         >>> def f(a,b=2,/,c=3,*d,e,f,g=1,h=2,i=3,**kwargs):pass
+         >>> inspect.getfullargspec(f)
+         ans = FullArgSpec(
+                 args=['a', 'b', 'c'], 
+                 varargs='d',           #Or None
+                 varkw='kwargs',        #Or None
+                 defaults=(2, 3), 
+                 kwonlyargs=['e', 'f', 'g', 'h', 'i'], 
+                 kwonlydefaults={'g': 1, 'h': 2, 'i': 3}, 
+                 annotations={}
+             )
+         >>> inspect.getfullargspec(f)
+         >>> get_positional_only_arg_names(f)
+         ans = ['a', 'b']
+    """
+    assert frames_back>=1, 'gather_args is useless if we don\'t look at least one frame back'
+
+    import inspect
+
+    # Get the full argument specification of the function
+    fullargspec = inspect.getfullargspec(func)
+
+    func_arg_names = fullargspec.args
+    func_kwarg_names = fullargspec.kwonlyargs
+
+    #These are optional and might be none, but cannot be empty string
+    varkw = fullargspec.varkw
+    varargs = fullargspec.varargs
+
+    #Priority #6: Get default variables: the default values given in the function signature
+    pos_arg_defaults = fullargspec.defaults or []
+    num_pos_arg_defaults = len(pos_arg_defaults)
+    default_arg_vars = {name:value for name,value in zip(func_arg_names[-num_pos_arg_defaults:],pos_arg_defaults)} 
+    default_kwarg_vars = dict(fullargspec.kwonlydefaults or {})
+    assert not (set(default_arg_vars) & set(default_kwarg_vars)), 'This should be impossible - args and kwargs should not have a name conflict in a function signature'
+    default_vars = {**default_arg_vars, **default_kwarg_vars}
+    varargs_value = [] #There cant be default value for varargs
+
+    def maybe_add_varkw(variables:dict):
+        if varkw in variables:
+            varkw_variables = variables[varkw]
+            del variables[varkw] #Don't keep it - it cant be passed as a kwarg to the func directly, it has to be expanded
+            try:
+                #varkw gets lower priority than originals
+                varkw_variables = dict(varkw_variables) #If this line errors, skip it
+                return {**varkw_variables, **variables}
+            except Exception:
+                #The gathered varkw simply wasn't a valid set of kwargs
+                #Dont throw an error for this though - right?
+                pass
+        return variables
+
+
+    def maybe_replace_varargs(variables:dict):
+        nonlocal varargs_value
+        if varargs in variables:
+            try:
+                varargs_value = tuple(variables[varargs])
+            except Exception:
+                #The varargs_value wasn't iterable, its ok - ignore it
+                #Let something else take priority
+                pass
+            del variables[varargs]
+        return varargs_value
+
+    #Priority #4: Get gathered variables: the variables in the scope of the caller
+    gathered_vars = gather_vars(
+        func_arg_names,
+        func_kwarg_names,
+        [varargs] * bool(varargs),
+        [varkw] * bool(varkw),
+        skip_missing=True,
+        frames_back=frames_back+1,
+    )
+    gathered_vars = maybe_add_varkw(gathered_vars) #Priority #5
+    varargs_value = maybe_replace_varargs(gathered_vars)
+
+    ##Priority #1: Get variable overrides: the *args and **kwargs passed to this function
+    override_args = {name:value for name,value in zip(func_arg_names,args)} #Priority #1
+    override_kwargs = dict(kwargs) #Priority #2
+    override_vars = {**override_args, **override_kwargs}
+    override_vars = maybe_add_varkw(override_vars) #Priority #3
+    varargs_value = maybe_replace_varargs(override_vars)
+    if len(args)>len(func_arg_names):
+        assert varargs, 'Too many args specified for a function without varargs!' #TODO: This shouldn't be an assertion, should be an error
+        varargs_value = args[len(func_arg_names):]
+
+    #Compose the priorities together into available_vars - varags will be handles at the end after validation
+    available_vars = {}
+    available_vars.update(default_vars)
+    available_vars.update(gathered_vars)
+    available_vars.update(override_vars)
+
+    #Validation: Make sure we have enough args - TODO: this should be a custom exception not an assertion though
+    assert (set(func_arg_names) | set(func_kwarg_names)) <= set(available_vars), 'Missing variables for function call: '+', '.join(sorted((set(func_arg_names) | set(func_kwarg_names))-set(available_vars)))
+
+    out_args = []
+    out_kwargs = {}
+
+    for arg_name in func_arg_names:
+        out_args.append(available_vars[arg_name])
+        del available_vars[arg_name]
+    out_args += varargs_value
+
+    out_kwargs.update(available_vars)
+    if not varkw:
+        assert not len(out_kwargs) < len(func_kwarg_names), 'This should be impossible at this point'
+        assert len(out_kwargs) == len(func_kwarg_names), 'Too many keyword arguments given to a function without **kwargs: '+', '.join(sorted(set(out_kwargs)-set(func_kwarg_names)))
+
+    return out_args, out_kwargs
+
+
+
+def gather_args_call(func, *args, frames_back=1, **kwargs):
+    """
+    Calls the given function with arguments gathered from the current scope, using rp.gather_args
+    Please see the docstring of `rp.gather_args` for more info.
+
+    Args:
+        func (callable): The function to call with the gathered arguments.
+        *args: Positional arguments to override the gathered values.
+        frames_back (int, optional): The number of frames to go back in the caller's scope to gather variables. Defaults to 1.
+        **kwargs: Keyword arguments to override the gathered values.
+
+    Returns:
+        Any: The return value of the called function.
+
+    Example:
+        >>> def example_func(a, b, c):
+        ...     print(f"a={a}, b={b}, c={c}")
+        ...
+        >>> # In the caller's scope
+        >>> a = 1
+        >>> b = 2
+        >>> c = 3
+        >>>
+        >>> gather_args_call(example_func)
+        a=1, b=2, c=3
+    """
+    out_args, out_kwargs = gather_args(func, *args, frames_back=frames_back+1, **kwargs)
+    return func(*out_args, **out_kwargs)
+
+def gather_args_wrapper(func, *, frames_back=1):
+    """
+    Decorates the given function to use arguments gathered from the current scope, using rp.gather_args
+    The arguments will be gathered from the scope where the function is called, not where it is wrapped.
+    Please see the docstring of `rp.gather_args` for more info.
+
+    Args:
+        func (callable): The function to wrap and call with the gathered arguments.
+        frames_back (int, optional): The number of frames to go back in the caller's scope to gather variables. Defaults to 1.
+
+    Returns:
+        callable: The wrapped function that, when invoked, calls the original function with the gathered arguments.
+
+    TODO: Make this play nice with rp.memoized, right now they don't like each other
+
+    Example:
+        >>> @gather_args_wrapper
+        ... def example_func(a, b, c):
+        ...     print(f"a={a}, b={b}, c={c}")
+        ...
+        >>> # In the caller's scope
+        >>> a = 1
+        >>> b = 2
+        >>> c = 3
+        >>>
+        >>> example_func()
+        a=1, b=2, c=3
+    """
+    import functools
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return gather_args_call(func, *args, frames_back=frames_back+1, **kwargs)
+    return wrapper
+
 def _filter_dict_via_fzf(input_dict):
     """Uses fzf to select a subset of a dict and returns that dict."""
     #Refactored using GPT4 from a mess: https://chat.openai.com/share/66251028-75eb-4c55-960c-1e7477e34060
@@ -29276,6 +29590,10 @@ def killport(port: int):
         else:
             print("No process found on port "+str(port))
 
+
+#Let child processes use this rp instance. This is used in my vim config for \wp and \wc for instance
+#There can be many rp's installed on a system. Whatever vim was started from this rp will use this rp.
+os.environ['RP_SYS_EXECUTABLE'] = sys.executable
 
 del re
 
