@@ -120,12 +120,6 @@ Plugin 'machakann/vim-swap' "Allows us to swap the arguments of functions and de
 " Note: pip install notedown
 " Plugin 'szymonmaszke/vimpyter'
 
-"Adds indent guide lines
-Plugin 'Yggdroot/indentLine'
-"Disable by default...
-let g:indentLine_enabled = 0 
-nmap <F6> : IndentLinesToggle <CR>
-
 " What does this do? Does it work? TODO find out
 Plugin 'gmarik/sudo-gui.vim'
 
@@ -173,6 +167,7 @@ Plugin 'pangloss/vim-javascript'
 " let g:indentLine_color_gui = '#000000'
 " let g:indentLine_setColors = 0
 
+" I COULDN'T GET THIS TO WORK. I HAVE A NEW SOLUTION ON THE BOTTOM.
 " Plugin 'gsiano/vmux-clipboard' " Allows us to synchronize yanks between separate VIM processes (useful in TMUX for example)
 " let mapleader = ","
 " map <silent> <leader>y :WriteToVmuxClipboard<cr>
@@ -476,6 +471,10 @@ let g:jedi#documentation_command = "K"
 let g:jedi#usages_command = "<leader>u"
 let g:jedi#completions_command = "<C-Space>"
 let g:jedi#rename_command = "<leader>r"
+
+" This is can be laggy and can pop up unexpectedly. Fuck it - I don't need them. Just use rp.
+let g:jedi#completions_enabled = 0
+
 "I'm not sure what the next 3 do, so for now I'll comment them out...
 " let g:jedi#goto_stubs_command = "<leader>s"
 " let g:jedi#goto_command = "<leader>d"
@@ -717,7 +716,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
                 " " Errors to ignore: https://stackoverflow.com/questions/59241007/flake8-disable-all-formatting-rules
                 " let g:syntastic_python_flake8_args='--ignore=E101,E111,E112,E113,E114,E115,E116,E121,E122,E123,E124,E125,E126,E127,E128,E129,E131,E133,E201,E202,E203,E211,E221,E222,E223,E224,E225,E226,E227,E228,E231,E241,E242,E251,E261,E262,E265,E266,E271,E272,E273,E274,E301,E302,E303,E304,E401,E402,E501,E502,E701,E702,E703,E704,E711,E712,E713,E714,E721,E731,E901,E902,W191,W291,W292,W293,W391,W503,W601,W602,W603,W604' "This doesn't actually seem to help...
     "EDITING
-        "LINE WRAP: f7
+        "LINE WRAP: f7 \jw
             function ToggleWrap()
             if (&wrap == 1)
                 if (&linebreak == 1)
@@ -731,20 +730,29 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
                set linebreak
              endif
             endfunction
-            map <F7> :call ToggleWrap()<CR>
+            map <F7>       :call ToggleWrap()<CR>
+            map <leader>jw :call ToggleWrap()<CR>
         " INDENTATION:
             " Disabled because it doesn't work very well - it made my vimrc use tabs, and rp have 2-spaces-indent.
             " Plugin 'tpope/vim-sleuth' "Auto-detects what indentation the file uses
-    "BUFFERS: Q gb gB \b
-        "CLOSING BUFFERS:
-            " Great for closing all unused buffers
-            Plugin 'Asheq/close-buffers.vim'
-            nnoremap <silent> Q :Bdelete menu<CR>
-        "BUFFERGATOR: \b (then ^n ^p ^t)     gB gb
-            " ^n ^p  preview next/prev buffers
-            " ^t opens buffer in new tab
-            " gb gB   goes to next/prev buffers
-            Plugin 'jeetsukumaran/vim-buffergator' " Using \b, will let you switch buffers. Use control+n and control+p to cycle through with previews. TODO: Fork it and remove unnessecary keyboard shortcuts
+        " SYNTAX HIGHLIGHTING: fh \sss \ssv \ssp \ss...
+            " fh - changes color theme. Already accounted for elsewhere
+            nnoremap <leader>sss :set syntax=
+            nnoremap <leader>ssv :set syntax=vim<cr>
+            nnoremap <leader>ssj :set syntax=javascript<cr>
+            nnoremap <leader>ssp :set syntax=python<cr>
+            nnoremap <leader>ssc :set syntax=cpp<cr>
+            nnoremap <leader>ssm :set syntax=markdown<cr>
+            nnoremap <leader>ssl :set syntax=latex<cr>
+            nnoremap <leader>ssh :set syntax=html<cr>
+        " INDENT LINES: f6 \ji
+            "Adds indent guide lines
+            Plugin 'Yggdroot/indentLine'
+            "Disable by default...
+            let g:indentLine_enabled = 0 
+            nmap <F6>       :IndentLinesToggle <CR>
+            nmap <leader>ji :IndentLinesToggle <CR>
+
     "NAVIGATION
         "SEARCHING: * 
             " Allows us to search for text with * from visual mode
@@ -810,6 +818,24 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
 
         "NERDTREE VISUAL MODE
             Plugin 'PhilRunninger/nerdtree-visual-selection' " Lets us use visual selection mode in NERDTree, then do operations such as 'T' for loading tab on all files in that selection
+    "BUFFERS AND TABS: \bb \bt \bq \bf \xtn
+        "BUFFERS: 
+            "CLOSING BUFFERS: \bq
+                " Great for closing all unused buffers
+                Plugin 'Asheq/close-buffers.vim'
+                nnoremap <silent> <leader>bq :Bdelete menu<CR>
+            "BUFFERGATOR: \bb or \bt (then ^n ^p tt)     gB gb
+                " ^n ^p  preview next/prev buffers
+                " tt or ^t opens buffer in new tab
+                " gb gB   goes to next/prev buffers
+                let g:buffergator_suppress_keymaps = 1
+                Plugin 'jeetsukumaran/vim-buffergator' " Using \b, will let you switch buffers. Use control+n and control+p to cycle through with previews.
+                nnoremap <leader>bb :BuffergatorOpen<cr>
+                nnoremap <leader>bt :BuffergatorTabsOpen<cr>
+                nnoremap gb :BuffergatorMruCyclePrev<cr>
+                nnoremap gB :BuffergatorMruCycleNext<cr>
+            "NERDTREE FIND BUFFER: \bf
+                nnoremap <leader>bf :NERDTreeFind<cr>
         "TABLINE: \xtn
             " Plugin 'mg979/vim-xtabline' "Make the tabline prettier with separators etc. Supports renaming tabs, searching through tabs, saving bookmarks, custom themes and more. \x? will show you the help menu.
             Plugin 'RyannDaGreat/vim-xtabline' "I modified it because I don't like it adding annoying keyboard shortcuts I can't get rid of, like backspace in normal mode
@@ -954,6 +980,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
 
 
 
+    "CLIPBOARDS
         "Paste NoPaste: An alternative to 'set paste' and 'set nopaste' that preserves indent etc
             " Define global variables to store settings
             let g:original_tabstop = 0
@@ -981,7 +1008,48 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             " Define NoPaste command
             command NoPaste set nopaste | call RestoreSettings()
 
+        " TMUX COPY/PASTE: \tco \tpa
+            " In visual mode or normal mode, use \ty to copy to tmux clipboard
+            " In normal mode this results in copying a single line
+            " In normal mode, use \tp to paste from tmux
+            vnoremap <leader>tco y<cr>:call system("tmux load-buffer -", @0)<cr>gv
+            nnoremap <leader>tco :.y<cr>:call system("tmux load-buffer -", @0)<cr>
+
+            nnoremap <leader>tpa :let @0 = system("tmux save-buffer -")<cr>"0p<cr>g;
 
 
 
+        " RP CLIPBOARDS: \wco \wpa \lco \lpa
+            " Helper function to check RP_SYS_EXECUTABLE and execute the command
+            " Same rules as \tco \tpa (visual mode or normal for copy, normal for paste)
 
+
+            function! ExecuteRP(command)
+                if empty($RP_SYS_EXECUTABLE) || !executable($RP_SYS_EXECUTABLE)
+                    echohl ErrorMsg
+                    echo "ExecuteRP: Error: Please run Vim as a child of rp - $RP_SYS_EXECUTABLE environment var not set"
+                    echohl None
+                    call input("Press Enter to continue...") "TODO: Handle this error in a more elegant way; right now it still tries pressing <cr>gv
+                    return
+                endif
+                let cmd = $RP_SYS_EXECUTABLE . ' -m rp exec ' . shellescape(a:command, 1)
+                let output = system(cmd, @0)
+                if v:shell_error == 0
+                    let @0 = output
+                else
+                    echohl ErrorMsg
+                    echo "ExecuteRP: Error: Please run Vim as a child of rp - $RP_SYS_EXECUTABLE environment var not set"
+                    echohl None
+                    call input("Press Enter to continue...") "TODO: Handle this error in a more elegant way; right now it still tries pressing <cr>gv
+                endif
+            endfunction
+
+
+            vnoremap <leader>wco y<cr>:call ExecuteRP('web_copy(sys.stdin.read())')<cr>gv
+            nnoremap <leader>wco :.y<cr>:call ExecuteRP('web_copy(sys.stdin.read())')<cr>
+
+            vnoremap <leader>lco y<cr>:call ExecuteRP('local_copy(sys.stdin.read())')<cr>gv
+            nnoremap <leader>lco :.y<cr>:call ExecuteRP('local_copy(sys.stdin.read())')<cr>
+
+            nnoremap <leader>wpa :call ExecuteRP('print(web_paste())')<cr>"0p<cr>g;
+            nnoremap <leader>lpa :call ExecuteRP('print(local_paste())')<cr>"0p<cr>g;
