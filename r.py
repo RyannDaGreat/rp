@@ -23497,7 +23497,10 @@ def get_source_code(object):
     #     import inspect
     #     return inspect.getsource(object)
     import inspect
-    return inspect.getsource(object)
+    try:
+        return inspect.getsource(object)
+    except TypeError:
+        return inspect.getsource(type(object))
 
 
 def get_english_synonyms_via_nltk(word):
@@ -25021,6 +25024,63 @@ def get_image_file_dimensions(image_file_path:str):
     pip_import('imagesize')
     import imagesize
     return imagesize.get(image_file_path)[::-1]#Returns (height, width)
+
+
+
+_video_shape_cache = {}
+
+def get_video_file_shape(path, use_cache=True):
+    """
+    Returns the shape of the numpy tensor we would get with rp.load_video(path)
+
+    Args:
+        path (str): Path to the video file.
+        use_cache (bool): Whether to use cached results if available.
+
+    Returns:
+        tuple: (num_frames, height, width, num_channels)
+    
+    NOTE: 
+        If I ever find a video format best represented with num_channels==1,
+        such that load_video loads a bunch of grayscale images such that
+        the video shape would only have 3 dims (num_frames, height, width)
+        then in the future this function might just return a tuple with vals!
+    """
+    if use_cache and path in _video_shape_cache:
+        return _video_shape_cache[path]
+
+    pip_import('moviepy')
+    from moviepy.editor import VideoFileClip
+
+    with VideoFileClip(path) as video:
+        width, height = video.size
+        num_frames = int(video.fps * video.duration)
+        num_channels = 3  # Assuming RGB - I'm not aware of any other formats
+
+    shape = (num_frames, height, width, num_channels)
+    _video_shape_cache[path] = shape
+    return shape
+
+def get_video_file_num_frames(path, use_cache=True):
+    """
+    Returns the number of frames in the video.
+    """
+    shape = get_video_file_shape(path, use_cache)
+    return shape[0]
+
+def get_video_file_height(path, use_cache=True):
+    """
+    Returns the height of the video.
+    """
+    shape = get_video_file_shape(path, use_cache)
+    return shape[1]
+
+def get_video_file_width(path, use_cache=True):
+    """
+    Returns the width of the video.
+    """
+    shape = get_video_file_shape(path, use_cache)
+    return shape[2]
 
 
 _hsv_to_rgb_cache = None
