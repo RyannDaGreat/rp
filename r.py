@@ -3496,6 +3496,8 @@ def convert_image_files(
     assert is_iterable(input_files), "Input files should be a list of files or a string (a folder path), but got {}.".format(type(input_files))
     assert output_folder is None or isinstance(output_folder, str), "Output folder must be a string, but got {}.".format(type(output_folder))
     assert strict in {True, False, None}, 'The \'strict\' parameter must be set to either True, False, or None.'
+
+    import functools
     
     input_files = _get_files_from_paths(input_files, get_files=get_all_image_files)
 
@@ -3541,7 +3543,7 @@ def convert_image_files(
             show_time_remaining = eta(len(input_files), title='Converting Images')
             start_time = gtoc()
 
-        mapper = par_map if parallel else seq_map
+        mapper = functools.partial(par_map, buffer_limit=None) if parallel else seq_map
         output_files = mapper(_convert_image, input_files)
 
         if strict is False:
@@ -5611,6 +5613,34 @@ def gather_args_call(func, *args, frames_back=1, **kwargs):
         >>>
         >>> gather_args_call(example_func)
         a=1, b=2, c=3
+
+    Example:
+        def connect_to_database(db_host, db_port, db_name, db_user, db_password):
+            # Establish database connection
+            return db_connection
+
+        def load_data_from_api(api_url, api_key, timeout):
+            # Load data from API
+            return api_data
+
+        def process_data(db_connection, api_data, processing_params):
+            # Process the data
+            return processed_data
+
+        # Configuration
+        db_host = 'localhost'
+        db_port = 5432
+        db_name = 'my_database'
+        db_user = 'admin'
+        db_password = 'secret'
+        api_url = 'https://api.example.com'
+        api_key = 'abcdefgh12345'
+        timeout = 10
+        processing_params = {...}
+
+        db_connection = gather_args_call(connect_to_database)
+        api_data = gather_args_call(load_data_from_api)
+        processed_data = gather_args_call(process_data)
     """
     out_args, out_kwargs = gather_args(func, *args, frames_back=frames_back+1, **kwargs)
     return func(*out_args, **out_kwargs)
@@ -5648,6 +5678,189 @@ def gather_args_wrapper(func, *, frames_back=1):
     def wrapper(*args, **kwargs):
         return gather_args_call(func, *args, frames_back=frames_back+1, **kwargs)
     return wrapper
+
+def get_current_function(frames_back=1):
+    """
+    Retrieves the function object from the specified number of frames back in the call stack.
+
+    Args:
+        frames_back (int, optional): The number of frames to go back in the call stack. Defaults to 2.
+
+    Returns:
+        function: The function object from the specified frame.
+
+    Raises:
+        TypeError: If frames_back is not an integer.
+        ValueError: If frames_back is less than or equal to 1.
+        RuntimeError: If the specified frame does not correspond to a function.
+    
+    EXAMPLE:
+        >>> def z(): return get_current_function()
+            print(z)
+            print(z())
+        <function z at 0x127709900>
+        <function z at 0x127709900>
+    
+    EXAMPLE:
+        >>> def f(i): return get_current_function(i)
+            def g(i): return f(i)
+            def h(i): return g(i)
+            print(f)
+            print(g)
+            print(h)
+            print(h(1))
+            print(h(2))
+            print(h(3))
+            print(h(4))
+        <function f at 0x130c811b0>
+        <function g at 0x130c82050>
+        <function h at 0x130c80160>
+        <function f at 0x130c811b0>
+        <function g at 0x130c82050>
+        <function h at 0x130c80160>
+        ERROR: RuntimeError: The frame 4 levels back does not correspond to a function.
+    
+    """
+    import inspect
+
+    if not isinstance(frames_back, int):
+        raise TypeError("frames_back must be an integer.")
+    if frames_back < 1:
+        raise ValueError("frames_back must be greater than or equal to 1.")
+    
+    # Access the call stack
+    stack = inspect.stack()
+
+    # Ensure there are enough frames in the stack
+    if frames_back >= len(stack):
+        raise RuntimeError("No sufficient frames in the call stack.")
+
+    # The target frame is `frames_back` levels up the stack
+    target_frame = stack[frames_back].frame
+
+    # Get function name from the target frame
+    func_name = target_frame.f_code.co_name
+
+    # Iterate through the stack to find the function object
+    for frame_info in stack:
+        # Check function name and code object to ensure the correct function is found
+        if frame_info.function == func_name and frame_info.frame.f_code == target_frame.f_code:
+            output = frame_info.frame.f_globals.get(func_name)
+            if output is not None:
+                return output
+
+    raise RuntimeError("The frame %i levels back does not correspond to a function."%frames_back)
+
+def gather_args_recursive_call(*args, frames_back=1, **kwargs):
+    frames_back+=1
+    function=get_current_function(frames_back)
+    return gather_args_call(function,*args,frames_back=frames_back,**kwargs)
+
+def replace_if_none(value):
+    """
+    Used to replace default values in a concise way
+    Please read the examples - this function uses introspection
+    and the context where this function is called matters!
+
+    Parameters
+    ----------
+    value: any
+        A value that will be returned if the left-hand of assignment is None
+
+    Returns
+    -------
+    any
+        Returns either value, or the value of the left-hand of the assignment 
+        operation where this function is called
+
+    Examples
+    --------
+        a = None
+        b = 123
+        default = 'Hello'
+
+        # Plebian, redundant way to write code:
+        a = default if a is None else a
+        b = default if b is None else b
+
+        # Equivalent way to write it with this func
+        a = replace_if_none(default)
+        b = replace_if_none(default)
+
+        # Array assignment
+        arr = [None, 2, 3]
+        arr[0] = replace_if_none(42)
+        
+        # Use-case
+        >>> def f(x=None):
+                x=replace_if_none('default')
+                return x
+        >>> f()
+        ans = default
+        >>> f(123)
+        ans = 123
+
+    Pitfalls
+    --------
+        # The function must be used within an assignment operation.
+        >>> replace_if_none(default)
+        ValueError: 'replace_if_none must be used within an assignment operation.'
+
+        # Chained assignments are not supported
+        >>> a = b = replace_if_none(42)
+        ValueError: 'replace_if_none only supports single assignment targets.'
+
+        # Augmented assignments are not supported
+        >>> a += replace_if_none(42)
+        ValueError: 'replace_if_none only supports simple assignments.'
+
+        # Tuple unpacking assignments are not supported
+        >>> a, b = replace_if_none((1, 2))
+        ValueError: 'replace_if_none only supports single assignment targets.'
+       
+        # Assignment must be on one line, or this function will get confused
+        >>> a = \
+        replace_if_none(123)
+        ValueError: 'replace_if_none must be used within an assignment operation.'
+    """
+
+    import inspect
+    import ast
+
+    # Get the source code of the line that called this function
+    frame = inspect.currentframe().f_back
+    info = inspect.getframeinfo(frame)
+    code = info.code_context[0].strip()
+
+    # Use the ast module to parse the source code into a syntax tree
+    tree = ast.parse(code)
+
+    try:
+        # Find the Assign node (i.e., the assignment operation)
+        assign_node = next(node for node in ast.walk(tree) if isinstance(node, ast.Assign))
+        
+        # Check for chained assignments
+        if len(assign_node.targets) > 1:
+            raise ValueError("rp.replace_if_none only supports single assignment targets.")
+
+        # Check for augmented assignments
+        if isinstance(assign_node.targets[0], (ast.AugAssign, ast.AnnAssign)):
+            raise ValueError("rp.replace_if_none only supports simple assignments.")
+
+        # Extract the assignment target
+        target = ast.dump(assign_node.targets[0])
+        target = target.split("=")[0].strip().replace("\"", "")
+            
+        # Evaluate the assignment target in the caller's frame
+        target_value = eval(target, frame.f_locals)
+
+        # Return value if the target value is None, otherwise return the target value
+        return value if target_value is None else target_value
+
+    except StopIteration:
+        raise ValueError("rp.replace_if_none must be used within an assignment operation.")
+
+
 
 def _filter_dict_via_fzf(input_dict):
     """Uses fzf to select a subset of a dict and returns that dict."""
@@ -12277,7 +12490,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         ???
         ?.
         ?v
-        ?s
+        ?s ?lj
         ?t
         ?h (?/)
         ?e
@@ -12365,7 +12578,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         TREE DIR
         TREE ALL DIR
         FD
-        FDA
+        AFD (FDA)
         FDT
         FD SEL (FDS)
         LS SEL (LSS)
@@ -12953,7 +13166,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         split=user_message.split('/')
                         left=''.join(split[:-1])
                         right=split[-1]
-                        if right in 'p e s v t h c r i j c+ +c cp'.split():
+                        if right in 'p e s v t h c r i j c+ +c cp lj'.split():
                             #/p --> ?p   /e --> ?e   /t --> ?t   /s ---> ?s    /v --> ?v     /h --> ?h     /c --> ?c     /r --> ?r    /i --> ?i     /cp --> ?cp
                             if not right in scope():
                                 user_message=left+'?'+right
@@ -13706,11 +13919,23 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         string=str(get_ans())
                         print(string)
                         _maybe_display_string_in_pager(string)
+                    elif user_message=='?lj':
+                        fansi_print("?s --> line-joined string viewer --> shows line_join(map(str,ans))","blue",'bold')
+                        string=line_join(map(str,get_ans()))
+                        print(string)
+                        _maybe_display_string_in_pager(string)
                     elif user_message.endswith('?s') and not '\n' in user_message:
                         fansi_print("?s --> string viewer --> shows str(ans)","blue",'bold')
                         user_message=user_message[:-2]
                         value=eval(user_message,scope())
                         string=str(value)
+                        print(string)
+                        _maybe_display_string_in_pager(string)
+                    elif user_message.endswith('?lj') and not '\n' in user_message:
+                        fansi_print("?lj --> string viewer --> shows line_join(map(str,ans))","blue",'bold')
+                        user_message=user_message[:-2]
+                        value=eval(user_message,scope())
+                        string=line_join(map(str,value))
                         print(string)
                         _maybe_display_string_in_pager(string)
                     elif user_message=='?t' or user_message=='TABA':
@@ -21647,6 +21872,10 @@ def get_unique_copy_path(path: str, *, suffix: str = "_copy%i") -> str:
     str
         The new, non-conflicting file path.
 
+    Note
+    ----
+    The exact naming scheme of this function is subject to change. Don't rely on it too much - its only official goal is to give unique paths.
+
     Examples
     --------
     >>> get_unique_copy_path("/home/user/hello.txt")
@@ -21669,13 +21898,24 @@ def get_unique_copy_path(path: str, *, suffix: str = "_copy%i") -> str:
     "/home/user/hello_backup1.txt"
     """
 
-    assert suffix.count("%i") == 1
     assert isinstance(path, str)
+    assert isinstance(suffix, str)
+
+    # assert suffix.count("%i") == 1 #This error was written wrong in the case we do %03i etc - let the string formatter handle it
+    try:
+        suffix%0    
+    except:
+        raise ValueError("The suffix should be formattable with an int, such as '_copy%i'. But you gave "+repr(suffix))
+
 
     def apply_suffix_to_name(name, suffix, num_copies):
         assert num_copies >= 0
         if num_copies == 0:
-            new_suffix = suffix.replace("%i", "")
+            #THIS PART IS MESSY. ALL OF THIS IS SUBJECT TO CHANGE.
+            # new_suffix = suffix.replace("%i", "")   <--- This doesn't work for %05i, just %i
+            unguessable_int = random_int(10**30)
+            new_suffix = suffix%unguessable_int
+            new_suffix = new_suffix.replace(str(unguessable_int),'')
         else:
             new_suffix = suffix % num_copies
         return name + new_suffix
@@ -26208,7 +26448,248 @@ def cv_floodfill_mask(image, position: tuple, tolerance: int = 32, *, bridge_dia
 
     return mask
 
+
+def get_path_inode(path: str) -> int:
+    """
+    Returns the inode number of the file or directory at the given path.
+
+    Parameters:
+    path (str): The filesystem path of the file or directory.
+
+    Returns:
+    int: The inode number of the file or directory.
+
+    Raises:
+    FileNotFoundError: If the path does not exist.
+    PermissionError: If there is a permission error accessing the file.
+
+    Example:
+    >>> get_path_inode('/path/to/file')
+    1234567
+    """
+    # Use os.stat() to get file/directory statistics
+    try:
+        stats = os.stat(path)
+        return stats.st_ino
+    except FileNotFoundError:
+        raise FileNotFoundError("The path specified does not exist.")
+    except PermissionError:
+        raise PermissionError("Permission denied accessing the file.")
+
+class _PathInfo:
+    """
+    This class is made to be used by functions in rp for efficeintly processing files
+    without calling os.stat too many times.
+
+    NOTE: Its currently private, because the functionality and signatures of this are
+    subject to change - only rp functions should use this right now.
+
+    WARNINGS:
+        If it is instantiated with a relative-path string, and the current directory changes,
+        and then something like is_symlink is accessed - right now it will return the wrong answer
+        because its a relative path and the absolute path isnt recorded during __init__!
+
+        For reasons like this, it isn't safe to expose _PathInfo beyond rp yet - only functions
+        in rp that make use of it carefully should use it at the load_image_from_screenshot
+        
+    Questions:
+        Should we expose self.entry?
+        Should we call it 'entry'? Is that obvious enough?
+    Note: The current fields now use @property instead of memoized_property; I found it made it a tiny bit slower to use memoized_property for these fields        
+        
+    """
+    def __init__(self,entry):
+        self.entry=entry
+        if isinstance(entry, os.DirEntry):
+            self.inode=entry.inode
+            self.path=entry.path
+            self.is_symlink=entry.is_symlink()
+            self.is_folder=entry.is_dir()
+            self.name=entry.name
+        elif isinstance(entry,str):
+            self.inode=get_path_inode(entry)
+            self.path=entry
+            self.is_symlink=is_symlink(entry)
+            self.is_folder=is_a_folder(entry)
+            self.name=get_file_name(entry)
+        self.is_file=not self.is_folder
+        self.is_hidden=self.name.startswith('.')
+            
+        
+    # @property
+    # def path(self):
+    #     if isinstance(self.entry,str        ): return self.entry
+    #     if isinstance(self.entry,os.DirEntry): return self.entry.path
+    
+    # @property
+    # def inode(self):    
+    #     if isinstance(self.entry,str        ): return get_path_inode(self.path)
+    #     if isinstance(self.entry,os.DirEntry): return self.entry.inode()
+    
+    # @property
+    # def is_symlink(self):    
+    #     if isinstance(self.entry,str        ): return is_symlink(self.path)
+    #     if isinstance(self.entry,os.DirEntry): return self.entry.is_symlink()
+    
+    # @property
+    # def is_folder(self):    
+    #     if isinstance(self.entry,str        ): return is_a_folder(self.path)
+    #     if isinstance(self.entry,os.DirEntry): return self.entry.is_dir()
+
+    # @property
+    # def is_file(self):    
+    #     if isinstance(self.entry,str        ): return is_a_file(self.path)
+    #     if isinstance(self.entry,os.DirEntry): return not self.is_folder
+    
+    # @property
+    # def name(self):
+    #     if isinstance(self.entry,str        ): return get_path_name(self.path)
+    #     if isinstance(self.entry,os.DirEntry): return self.entry.name
+
+    # @property
+    # def is_hidden(self):
+    #     return self.name.startswith('.')
+
+    # @property
+    # def file_extension(self):
+    #     return get_file_extension(self.path)
+
+    def __repr__(self):
+        return self.path
+
+    def __hash__(self):
+        return hash(self.inode)
+    
+def get_all_paths_fast(
+    root_dir=".",
+    *,
+    lazy=False,
+    recursive=False,
+    include_files=True,
+    include_folders=True,
+    include_symlink_files=None,
+    include_symlink_folders=None,
+    explore_symlinks=True,
+    include_hidden=True,
+    ignore_permission_errors=False,
+    traversal = "breadth_first",
+):
+    """
+    TODO: Make this multi-threaded!!!!
+    Retrieves all paths in the given directory according to the specified parameters.
+    This function is designed to be faster than get_all_paths by reducing feature complexity.
+    TODO: Add PathInfo class - that can be initialized from dir_entry or string path, and exposes human-readable attributes that can be cached.
+    This func can then return them with an arg like return_path_info or something
+    TODO: Implement sorting function sort_paths() that 
+    TODO: Default args should never call .stat() on any files as that can cause major slowdowns - try to just use what os.scandir() does and don't query any of these things unless we have to
+        * To do this we need the custom caching class - right now we have variables like is_hidden etc that are calculated eagerly
+        * ***args always default to what is fastest if if they make a difference in speed***
+
+    Args:
+        root_dir (str): The root directory to start traversal from.
+        lazy (bool): If True, returns a generator; if False, returns a list.
+        recursive (bool): If True, traverses directories recursively.
+        include_folders (bool): If True, includes folders in the result.
+        include_files (bool): If True, includes files in the result.
+        include_hidden (bool): If True, includes hidden files and folders.
+        include_symlink_files (bool or None): If True, includes file symbolic links. If None, follows the value of include_files.
+        include_symlink_folders (bool or None): If True, includes folder symbolic links. If None, follows the value of include_folders.
+        explore_symlinks (bool): If True and recursive is True, explores directories pointed to by symlinks.
+        ignore_permission_errors (bool): If True, will silently skip over directories that give PermissionError's
+        traversal (str): Determines the traversal method; 'depth_first' or 'breadth_first'.
+
+    Returns:
+        A generator or list of paths depending on the lazy argument.
+
+    TODO Args:
+    """
+
+    from collections import deque
+
+    # When I come up with a more elegant way to specify this than a string with an underscore, it will become an argument
+    # traversal = "depth_first"
+    # traversal = "breadth_first"
+    assert traversal in ["depth_first", "breadth_first"]
+
+    include_symlink_files   = include_files   if include_symlink_files   is None else include_symlink_files   
+    include_symlink_folders = include_folders if include_symlink_folders is None else include_symlink_folders 
+
+    def should_include(x:_PathInfo):
+        return (include_hidden or not is_hidden) and (
+               include_folders         and x.is_folder and not x.is_symlink
+            or include_files           and x.is_file   and not x.is_symlink
+            or include_symlink_folders and x.is_folder and     x.is_symlink
+            or include_symlink_files   and x.is_file   and     x.is_symlink
+        )
+
+    def should_explore(x:_PathInfo):
+        return (
+            recursive
+            and x.is_folder
+            and (explore_symlinks or not x.is_symlink)
+            and x not in explored_paths
+        )
+
+    def explore(x:_PathInfo):
+        explored_paths.add(x) #Avoid symlink loops
+
+        try: dir_entries=os.scandir(x.path)
+        except PermissionError:
+            if not ignore_permission_errors: raise
+            return
+
+        for x in map(_PathInfo, dir_entries):
+            if should_explore(x): to_explore.append(x)
+            if should_include(x): yield x.path
+            
+    root_dir = _PathInfo(root_dir)
+    to_explore = deque([root_dir])
+    pop_dir = getattr(to_explore, "pop" if traversal == "depth_first" else "popleft")
+    explored_paths = set()
+    
+    #Sequential Version
+    def generator():
+        while to_explore:
+            yield from explore(pop_dir())
+
+    output=generator()
+    if not lazy:
+        output=list(output)
+    return output
+
+    ##Parallelizable Version (not significantly faster from my tests so far even on nfs?)
+    #exploring=set()
+    #def dir_iterator():
+    #    while to_explore or exploring:
+    #        while not to_explore and exploring:
+    #            #This will only be reached during multi-threading
+    #            #The yield here is better than pass, as it keeps
+    #            #a single thread from hanging up the GIL
+    #            yield None
+    #        try:
+    #            dir = pop_dir()
+    #        except IndexError:
+    #            #In multi-threading, two threads might have tried
+    #            #popping at the same time - and one did it after
+    #            #the list was already empty, throwing an error. 
+    #            #Back to the queue it goes!
+    #            continue
+    #        exploring.add(dir)
+    #        yield dir
+    #def par_explore(dir):
+    #    #print(len(exploring),len(to_explore),dir)
+    #    if dir is None:
+    #        return
+    #    yield from explore(dir)
+    #    exploring.remove(dir)
+    #import itertools
+    #output = lazy_par_map(par_explore,dir_iterator(),num_threads=10) #Like the map function but is multithreaded. This already exist.
+    ##output = map(par_explore,dir_iterator())
+    #output = itertools.chain.from_iterable(output)
+    #return output
+
 def breadth_first_path_iterator(root='.'):
+    yield from get_all_paths_fast(root_dir=root,recursive=True,traversal='breadth_first',lazy=True,ignore_permission_errors=True)
     #As opposed to a depth-first path iterator, this goes through every file and directory from the root in a breadth-first manner
     #It returns a generator instead of a list, which makes computations more efficient (especially for FZF)
     #TODO: Add a depth-first path iterator

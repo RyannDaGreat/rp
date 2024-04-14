@@ -2007,8 +2007,9 @@ def handle_character(buffer,char,event=None):
             shortcuts = {c:'!'+c for c in rp.r._get_cached_system_commands()}
 
             shortcuts.update({
-                'mv':'!mv',
-                'cp':'!cp',
+                'mv' :'!mv',
+                'cp' :'!cp -r',
+                'cpr':'!cp -r',
 
                 #Danger!
                 'rm':'!rm',
@@ -2051,11 +2052,6 @@ def handle_character(buffer,char,event=None):
 
                 'mm':'!micromamba',
                 'mmi':'!micromamba install',
-                'mmu':'!micromamba uninstall',
-                'mma':'!micromamba activate',
-                'mmc':'!yes | micromamba create --name',
-                'mml':'!micromamba env list',
-                'mmr':'!micromamba remove --name',
             })
 
             for item in 'import'.split():
