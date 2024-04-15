@@ -5758,6 +5758,8 @@ def gather_args_recursive_call(*args, frames_back=1, **kwargs):
 
 def replace_if_none(value):
     """
+    TODO: Make this work with older versions of python, using destructure's strategy
+
     Used to replace default values in a concise way
     Please read the examples - this function uses introspection
     and the context where this function is called matters!
@@ -5848,9 +5850,8 @@ def replace_if_none(value):
             raise ValueError("rp.replace_if_none only supports simple assignments.")
 
         # Extract the assignment target
-        target = ast.dump(assign_node.targets[0])
-        target = target.split("=")[0].strip().replace("\"", "")
-            
+        target = ast.unparse(assign_node.targets[0])
+
         # Evaluate the assignment target in the caller's frame
         target_value = eval(target, frame.f_locals)
 
@@ -13936,7 +13937,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         _maybe_display_string_in_pager(string)
                     elif user_message.endswith('?lj') and not '\n' in user_message:
                         fansi_print("?lj --> string viewer --> shows line_join(map(str,ans))","blue",'bold')
-                        user_message=user_message[:-2]
+                        user_message=user_message[:-3]
                         value=eval(user_message,scope())
                         string=line_join(map(str,value))
                         print(string)
@@ -26563,7 +26564,7 @@ class _PathInfo:
     def __hash__(self):
         return hash(self.inode)
     
-def get_all_paths_fast(
+def _get_all_paths_fast(
     root_dir=".",
     *,
     lazy=False,
@@ -26692,7 +26693,6 @@ def get_all_paths_fast(
     #return output
 
 def breadth_first_path_iterator(root='.'):
-    yield from get_all_paths_fast(root_dir=root,recursive=True,traversal='breadth_first',lazy=True,ignore_permission_errors=True)
     #As opposed to a depth-first path iterator, this goes through every file and directory from the root in a breadth-first manner
     #It returns a generator instead of a list, which makes computations more efficient (especially for FZF)
     #TODO: Add a depth-first path iterator
@@ -26700,37 +26700,41 @@ def breadth_first_path_iterator(root='.'):
     #EXAMPLE:
     #    for path in breadth_first_path_iterator():
     #        print(path)
-    import os
-    dirs = [root]
-    seen = set()
-    # while we has dirs to scan
-    while len(dirs) :
-        nextDirs = []
-        for parent in dirs :
-            # scan each dir
-            try:
-                for f in os.listdir( parent ) :
-                    # if there is a dir, then save for next ittr
-                    # if it  is a file then yield it (we'll return later)
-                    ff = os.path.join( parent, f )
-                    af = get_absolute_path(ff)
-                    if af in seen:
-                        #Don't let symlink loops make this function go on infinitely
-                        continue
-                    seen.add(af)
 
-                    if os.path.isdir( ff ) :
-                        yield ff
-                        nextDirs.append( ff )
-                    else :
-                        yield ff
-            except PermissionError:
-                #If we encounter an error such as a PermissionError, skip the directory
-                pass
-        # once we've done all the current dirs then
-        # we set up the next itter as the child dirs 
-        # from the current itter.
-        dirs = nextDirs
+    #The below function is over 10x as fast as the old implementation
+    yield from _get_all_paths_fast(root_dir=root,recursive=True,traversal='breadth_first',lazy=True,ignore_permission_errors=True)
+
+    #OLD IMPLEMENTATION WORKED FINE, BUT WAS OVER 10X SLOWER THAN THE CURRENT VERSION
+    #import os
+    #dirs = [root]
+    #seen = set()
+    ## while we has dirs to scan
+    #while len(dirs) :
+    #    nextDirs = []
+    #    for parent in dirs :
+    #        # scan each dir
+    #        try:
+    #            for f in os.listdir( parent ) :
+    #                # if there is a dir, then save for next ittr
+    #                # if it  is a file then yield it (we'll return later)
+    #                ff = os.path.join( parent, f )
+    #                af = get_absolute_path(ff)
+    #                if af in seen:
+    #                    #Don't let symlink loops make this function go on infinitely
+    #                    continue
+    #                seen.add(af)
+    #                if os.path.isdir( ff ) :
+    #                    yield ff
+    #                    nextDirs.append( ff )
+    #                else :
+    #                    yield ff
+    #        except PermissionError:
+    #            #If we encounter an error such as a PermissionError, skip the directory
+    #            pass
+    #    # once we've done all the current dirs then
+    #    # we set up the next itter as the child dirs 
+    #    # from the current itter.
+    #    dirs = nextDirs
 
 def gpt3(text:str):
     #Use GPT3 to write some text
@@ -27918,6 +27922,9 @@ def _fzf_multi_grep(print_instructions=True):
     import iterfzf
     
     def files_walk(root='.'):
+        yield from breadth_first_path_iterator(root)
+        return
+
         import os
         for folder,subfolders,files in os.walk(root):
             files=[path_join(folder,file) for file in files]

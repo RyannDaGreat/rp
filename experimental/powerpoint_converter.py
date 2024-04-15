@@ -71,7 +71,7 @@ def get_thumbnail_mappings(pptx_root='.'):
 
 def convert_mp4_to_gif(mp4_path,gif_path=None):
     if path_exists(gif_path):
-        return #Don't re-do work for no reason
+        return gif_path#Don't re-do work for no reason
     pip_import('moviepy')
     from moviepy.editor import VideoFileClip
     videoClip = VideoFileClip(mp4_path)
