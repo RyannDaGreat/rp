@@ -13038,6 +13038,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         TMD !tmux d
         TMA !tmux a
         TM  !tmux
+        TMUX !tmux
 
         ZG !lazygit
 
