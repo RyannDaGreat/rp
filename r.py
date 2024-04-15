@@ -26572,7 +26572,7 @@ def get_all_paths_fast(
     explore_symlinks=True,
     include_hidden=True,
     ignore_permission_errors=False,
-    traversal = "breadth_first",
+    traversal = "breadth_first"
 ):
     """
     TODO: Make this multi-threaded!!!!
