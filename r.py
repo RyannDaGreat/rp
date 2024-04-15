@@ -11982,7 +11982,9 @@ def _view_markdown_in_terminal(file_or_string):
         delete_file(path)
 
 
-def _convert_powerpoint_file(path):
+def _convert_powerpoint_file(path,message=None):
+    if message is not None:
+        fansi_print(message,'green','bold')
     from rp.experimental import process_powerpoint_file
     return process_powerpoint_file(path)
 
