@@ -9952,23 +9952,26 @@ default_python_input_eventloop = None  # Singleton for python_input
 #     # except BaseException as re:
 #     # print_stack_trace(re)
 #     # print("THE DEMON SCREAMS")
+
 def split_into_sublists(l,sublist_len:int,strict=False,keep_remainder=True):
-    # If strict: sublist_len MUST evenly divide len(l)
-    # It will return a list of tuples, unless l is a string, in which case it will return a list of strings
-    # keep_remainder is not applicable if strict
-    # if not keep_remainder and sublist_len DOES NOT evenly divide len(l), we can be sure that all tuples in the output are of len sublist_len, even though the total number of elements in the output is less than in l.
-    # EXAMPLES:
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,3 ,0)   -> [(1,2,3),(4,5,6),(7,8,9)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,0)   -> [(1,2,3,4),(5,6,7,8),(9,)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,5 ,0)   -> [(1,2,3,4,5),(6,7,8,9)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,6 ,0)   -> [(1,2,3,4,5,6),(7,8,9)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0)   -> [(1,2,3,4,5,6,7,8,9)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0,1) -> [(1,2,3,4,5,6,7,8,9)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0,0) -> []
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,5 ,0,0) -> [(1,2,3,4,5)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,0,0) -> [(1,2,3,4),(5,6,7,8)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,3 ,0,0) -> [(1,2,3),(4,5,6),(7,8,9)]
-    # ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,1,0) -> ERROR: ¬ 4 | 9
+    """
+    If strict: sublist_len MUST evenly divide len(l)
+    It will return a list of tuples, unless l is a string, in which case it will return a list of strings
+    keep_remainder is not applicable if strict
+    if not keep_remainder and sublist_len DOES NOT evenly divide len(l), we can be sure that all tuples in the output are of len sublist_len, even though the total number of elements in the output is less than in l.
+    EXAMPLES:
+    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,3 ,0)   -> [(1,2,3),(4,5,6),(7,8,9)]
+    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,0)   -> [(1,2,3,4),(5,6,7,8),(9,)]
+    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,5 ,0)   -> [(1,2,3,4,5),(6,7,8,9)]
+    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,6 ,0)   -> [(1,2,3,4,5,6),(7,8,9)]
+    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0)   -> [(1,2,3,4,5,6,7,8,9)]
+    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0,1) -> [(1,2,3,4,5,6,7,8,9)]
+    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0,0) -> []
+    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,5 ,0,0) -> [(1,2,3,4,5)]
+    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,0,0) -> [(1,2,3,4),(5,6,7,8)]
+    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,3 ,0,0) -> [(1,2,3),(4,5,6),(7,8,9)]
+    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,1,0) -> ERROR: ¬ 4 | 9
+    """
 
     assert is_number(sublist_len),'sublist_len should be an integer, but got type '+repr(type(sublist_len))
     if strict:
@@ -9981,6 +9984,45 @@ def split_into_sublists(l,sublist_len:int,strict=False,keep_remainder=True):
     if isinstance(l,str):
         output=[''.join(substring) for substring in output]
 
+    return output
+
+def join_with_separator(iterable, separator, *, lazy=False):
+    """
+    Intersperse a separator between elements of an iterable.
+
+    Args:
+        iterable (iterable): The iterable to intersperse.
+        separator: The separator to intersperse between elements.
+        lazy (bool, optional): If True, return a generator. If False, return a list. Defaults to False.
+
+    Returns:
+        list or generator: A list or generator with the separator interspersed between elements.
+
+    Examples:
+        >>> join_with_separator([], None)
+        []
+        >>> join_with_separator([1], None)
+        [1]
+        >>> join_with_separator([1, 2], None)
+        [1, None, 2]
+        >>> join_with_separator([1, 2, 3, 4, 5], None)
+        [1, None, 2, None, 3, None, 4, None, 5]
+        >>> gen = join_with_separator([1, 2, 3, 4, 5], None, lazy=True)
+        >>> list(gen)
+        [1, None, 2, None, 3, None, 4, None, 5]
+    """
+    
+    def generator():
+        for index, value in enumerate(iterable):
+            if index:
+                yield separator
+            yield value
+
+    output = generator()
+
+    if not lazy:
+        output = list(output)
+        
     return output
 
 def rotate_image(image,angle_in_degrees,interp='bilinear'):
@@ -10276,16 +10318,37 @@ def merged_dicts(*dicts, precedence='last', mutate=False):
 
 
 def keys_and_values_to_dict(keys,values):
-    #EXAMPLE:
-    # >>> keys_and_values_to_dict([1,2,3,4],['a','b','c','d'])
-    #ans = {1: 'a', 2: 'b', 3: 'c', 4: 'd'}
+    """
+    EXAMPLE:
+     >>> keys_and_values_to_dict([1,2,3,4],['a','b','c','d'])
+    ans = {1: 'a', 2: 'b', 3: 'c', 4: 'd'}
+     >>> {x:y for x,y in zip(keys,values)} #Equivalent
+    ans = {1: 'a', 2: 'b', 3: 'c', 4: 'd'}
+    """
     out={}
     for key,value in zip(keys,values):
         out[key]=value
     return out
 
+def get_source_code(object):
+    """
+    EXAMPLE:
+     >>> get_source_code(get_source_code)
+     ans = def get_source_code(object):
+         import inspect
+         return inspect.getsource(object)
+    """
+    import inspect
+    try:
+        return inspect.getsource(object)
+    except TypeError:
+        return inspect.getsource(type(object))
+
+
 def get_source_file(object):
-    # Might throw an exception
+    """
+    Might throw an exception
+    """
     getter=lambda x:inspect.getfile(inspect.getmodule(x))
     import inspect
     try:
@@ -10468,7 +10531,7 @@ _ipython_exeval=None
 def exeval(code:str, scope=None):
     """
     Performs either exec(code) or eval(code) and returns the result
-    The code will be patched into the linecache - so you can get stack traces from it!
+    The code will be patched into the linecache - so you can get informative stack traces from it!
     By default it uses the scope of the caller
     """
 
@@ -18242,11 +18305,14 @@ def args_hash(function,*args,**kwargs):
 #    return memoized_function
 
 def memoized(function):
-    #TODO: when trying to @memoize fibbonacci, and calling fibbonacci(4000), python crashes with SIGABRT. I have no idea why. This function really doesn't use any non-vanilla python code.
-    #Uses args_hash to hash function inputs...
-    #This is meant to be a permanent cache (as opposed to a LRU aka 'Least Recently Used' cache, which deletes cached values if they haven't been used in a while)
-    #If you wish to temporarily memoize a function (let's call if F), you can create a new function cached(F), and put it in a scope that will run out eventually so that there are no memory leaks.
-    #Some things can't be hashed by default, I.E. lists etc. But all lists can be converted to tuples, which CAN be hashed. This is where hashers come in. Hashers are meant to help you memoize functions that might have non-hashable arguments, such as numpy arrays.
+    """
+    TODO: Make this function smarter - use the same arg techniques as in gather_args, so even when we give overrides to default args it still caches properly. Same for cachedinstances
+    TODO: when trying to @memoize fibbonacci, and calling fibbonacci(4000), python crashes with SIGABRT. I have no idea why. This function really doesn't use any non-vanilla python code.
+    Uses args_hash to hash function inputs...
+    This is meant to be a permanent cache (as opposed to a LRU aka 'Least Recently Used' cache, which deletes cached values if they haven't been used in a while)
+    If you wish to temporarily memoize a function (let's call if F), you can create a new function cached(F), and put it in a scope that will run out eventually so that there are no memory leaks.
+    Some things can't be hashed by default, I.E. lists etc. But all lists can be converted to tuples, which CAN be hashed. This is where hashers come in. Hashers are meant to help you memoize functions that might have non-hashable arguments, such as numpy arrays.
+    """
     import functools
     cache = dict()
     assert callable(function), 'You can\'t memoize something that isn\'t a function (you tried to memoize '+repr(function)+', which isn\'t callable)'
@@ -18263,24 +18329,26 @@ def memoized(function):
     return memoized_function
 
 def memoized_property(method):
-    #This method is meant to be used as a substitute for @property
-    #Often, when using @property you'll see a method like this:
-    #
-    #   @property
-    #   def thing(self):
-    #       try:
-    #           return self._thing
-    #       except Exception:
-    #           self.thing=fancy_calculations()
-    #
-    #           return self._thing
-    #This function takes the hassle of creating a private variable away, and automatically creates the self._thing
-    #The completely equivalent function, using @memoized_property, is shown below
-    #    
-    #   @memoized_property
-    #   def thing(self):
-    #       return fancy_calculations()
-    #
+    """
+    This method is meant to be used as a substitute for @property
+    Often, when using @property you'll see a method like this:
+    
+       @property
+       def thing(self):
+           try:
+               return self._thing
+           except Exception:
+               self.thing=fancy_calculations()
+    
+               return self._thing
+    This function takes the hassle of creating a private variable away, and automatically creates the self._thing
+    The completely equivalent function, using @memoized_property, is shown below
+        
+       @memoized_property
+       def thing(self):
+           return fancy_calculations()
+    
+    """
     assert callable(method)
     property_name='_'+method.__name__
     def memoized_property(self):
@@ -18330,6 +18398,8 @@ class ClassProperty:
 
 class CachedInstances:
     """
+    TODO: Make this function smarter - use the same arg techniques as in gather_args, so even when we give overrides to default args it still caches properly. Same for memoized
+
     A base class that provides caching for instances of derived classes.
 
     The CachedInstances class is designed to cache and reuse instances of the classes
@@ -23744,19 +23814,6 @@ def fuzzy_string_match(string,target,*,case_sensitive=True):
     pattern='.*'.join(re.escape(char) for char in string)
     pattern='.*'+pattern+'.*'
     return bool(re.fullmatch(pattern,target))
-
-def get_source_code(object):
-    #EXAMPLE:
-    # >>> get_source_code(get_source_code)
-    # ans = def get_source_code(object):
-    #     import inspect
-    #     return inspect.getsource(object)
-    import inspect
-    try:
-        return inspect.getsource(object)
-    except TypeError:
-        return inspect.getsource(type(object))
-
 
 def get_english_synonyms_via_nltk(word):
     #This thing is really crappy...but also really funny xD
