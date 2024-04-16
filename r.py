@@ -5163,8 +5163,18 @@ def gather_vars(*var_names, frames_back=1, skip_missing=False):
     frame = inspect.currentframe()
     for _ in range(frames_back):
         frame = frame.f_back
-    local_vars = frame.f_locals
-
+    #local_vars = frame.f_locals  <-- Old version only looked for vars in one frame
+    
+    #Get variables from all frames equal to or behind frames_back
+    #QUESTION: Is this equivalent to f_globals? ANSWER: No, after testing - not all vars are in globals
+    frame_locals = []
+    needed_vars = set(flattened_var_names)
+    while frame is not None and needed_vars:
+        needed_vars -= set(frame.f_locals) # In deep stacks, avoid traversing if we already have what we need
+        frame_locals.append(frame.f_locals)
+        frame=frame.f_back
+    local_vars =merged_dicts(frame_locals,precedence='first')
+    
     result_dict = {}
     for name in flattened_var_names:
         if name in local_vars:
@@ -5173,6 +5183,7 @@ def gather_vars(*var_names, frames_back=1, skip_missing=False):
             raise KeyError("Can't find variable '%s'"%name)
 
     return EasyDict(result_dict)
+
 
 def bundle_vars(*args, **kwargs):
     """
