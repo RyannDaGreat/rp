@@ -13083,8 +13083,6 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         DCI $display_image_in_terminal_color(ans)
         
-        GP $get_parent_directory(ans)
-
         FCA $web_copy_path(ans)
         FCH print("FCH->FileCopyHere");$web_copy_path($get_absolute_path('.'))
         RMA $r._rma(ans)
@@ -13116,7 +13114,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         UU $unshorten_url(ans)
 
-        GP $print_gpu_summary()
+        GP  $print_gpu_summary()
+        NGP $print_notebook_gpu_summary()
+        
 
         CLS CLEAR
         VV !vim
@@ -29251,6 +29251,9 @@ class DictReader:
     def __repr__(self):
         return 'DictReader('+repr(self._data)+')'
 
+    def __getitem__(self, index):
+        return self._data[index]
+
 if __name__ == "__main__":
     print(end='\r')
     _pterm()
@@ -30010,6 +30013,207 @@ def print_gpu_summary(
         return output
     else:
         print(output)
+
+
+def print_notebook_gpu_summary():
+    """
+     >>> display_notebook_gpu_summary()
+        ┏━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+        ┃ PID    ┃ GPU0   ┃ GPU1   ┃ GPU2   ┃ GPU3 ┃ Notebook Name             ┃
+        ┡━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+        │ 699139 │ ·      │ ·      │ ·      │ ·    │ Untitled2.ipynb           │
+        │ 704428 │ ·      │ ·      │ ·      │ ·    │ hidden_characters_1.ipynb │
+        │ 504826 │ 718MB  │ ·      │ 18.4GB │ ·    │ hidden_characters_2.ipynb │
+        │ 503594 │ 718MB  │ 20.2GB │ ·      │ ·    │ hidden_characters_3.ipynb │
+        │ 503120 │ 20.2GB │ ·      │ ·      │ ·    │ hidden_characters_4.ipynb │
+        └────────┴────────┴────────┴────────┴──────┴───────────────────────────┘
+    """
+    pip_import("rich")
+
+    from rich import print
+    from rich.table import Table
+
+    sessions = _get_all_notebook_sessions_via_ipybname()
+    num_gpus = len(get_all_gpu_ids())  # Get the number of GPUs available
+    rows = []
+
+    for session in sessions:
+        try:
+            kernel_pid = session.kernel.pid
+
+            def ram_to_string(ram: int):
+                if ram > 0:
+                    return human_readable_file_size(ram)
+                else:
+                    return "·"  # If we don't use vram just return a small dot, less distracting
+
+            used_vram = get_used_vram(pid=kernel_pid)  # List of ints
+            total_used_vram = sum(used_vram)
+            used_vram_str = [ram_to_string(x) for x in used_vram]
+            rows.append(
+                
+                    {
+                        "pid": kernel_pid,
+                        "used_vram_str": used_vram_str,
+                        "total_used_vram": total_used_vram,
+                        "notebook_name": session.name,
+                        "state": session.kernel.execution_state,
+                    }
+               
+            )
+        except Exception:
+            pass
+            print("Exception occurred while processing session:", session.name)
+
+    # Create a rich table and add columns dynamically based on the number of GPUs
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("PID", style="dim")
+    # table.add_column("State", style="dim")
+    for i in range(num_gpus):
+        table.add_column("GPU%i"%i)
+    table.add_column("Notebook Name")
+
+    # There can be multiple servers, which sometimes results in duplicate kernels being listed here...
+    rows = unique(rows)
+    rows = sorted(rows, key=lambda row: (row["total_used_vram"] > 0, row["notebook_name"]))
+
+    # Add rows to the table
+    for row in rows:
+        # Fill in missing VRAM values with 'N/A' if fewer GPUs were used than available
+        padded_vram = row["used_vram_str"] + ["N/A"] * (
+            num_gpus - len(row["used_vram_str"])
+        )
+        table.add_row(
+            str(row["pid"]),
+            # row["state"], #Removed because it seemed to give the wrong results, saying things were idle that weren't and vice versa...
+            *padded_vram,
+            row["notebook_name"],
+            style=("white"),
+        )
+    # return table
+
+    # Display the table
+    print(table)
+
+
+
+def _get_kernel_to_pid_mapping():
+    #Takes about .1 seconds to run because of the get_all_pids_and_their_commands bottleneck
+    def get_all_pids_and_their_commands():
+        # Can probably optimize by only searching through the server's child processes
+        # Right now it's a little slow, can take up to .1 seconds
+        pip_import("psutil")
+        import psutil
+
+        pid_command_map = {}
+        # Directly iterate over all processes and access needed properties without filtering in process_iter
+        for process in psutil.process_iter():
+            try:
+                pid = process.pid
+                cmdline = process.cmdline()
+                cmdline = " ".join(cmdline) if cmdline else ""
+                pid_command_map[pid] = cmdline
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return pid_command_map
+
+    # There might be false positives, but shouldn't be any false negatives
+    # Get all PID and command mappings
+    pid_command_map = get_all_pids_and_their_commands()
+    kernel_to_pid_map = {}
+
+    # Pattern to find kernel json files in commands
+    for pid, command in pid_command_map.items():
+        try:
+            if "ipykernel_launcher" in command:
+                parts = command.split()
+                for i, part in enumerate(parts):
+                    if part.endswith(".json") and i > 0 and parts[i - 1] == "-f":
+                        # Extract kernel id from the JSON file path
+                        kernel_id = (
+                            part.split("/")[-1]
+                            .replace("kernel-", "")
+                            .replace(".json", "")
+                        )
+                        kernel_to_pid_map[kernel_id] = pid
+                        break
+        except Exception:
+            # Maybe a weird process name gave a false positive
+            pass
+    return kernel_to_pid_map
+
+
+def _get_all_notebook_sessions_via_ipybname():
+    """
+    Gets a ton of information about all running Jupyter notebook instances
+
+    Took about .02 seconds to execute on Rlab3
+
+    Warning: I'm not sure what will happen if the notebooks are password protected. If there's a token enironment variable,
+             I think ipynbname should handle it right? I havne't tested this though. Especially if we run it from outside Jupyter...
+
+    Output: List of DictReader objects (so we don't need to install EasyDict too)
+
+    EXAMPLE OUTPUT:
+        [
+            {
+                'server': {
+                    'base_url': '/',
+                    'hostname': '0.0.0.0',
+                    'password': False,
+                    'pid': 502157,
+                    'port': 15901,
+                    'root_dir': '/data/hdd2/ws1nfs/ryan/CleanCode/Projects/Peekaboo/Experiments/Github/Diffusion-Illusions',
+                    'secure': False,
+                    'sock': '',
+                    'token': '',
+                    'url': 'http://rlab-AS-5014A-TT-ws3:15901/',
+                    'version': '1.13.5'
+                },
+                'id': 'b6dfe4c1-96e2-40a0-bfca-ebba9bd7b532',
+                'path': 'hidden_characters_miku_siggrebut__April16_2024_hiddens_SIGG_Final__SIGG_REVISION_ABLATION_PROTO_3_PRIMES.ipynb',
+                'name': 'hidden_characters_miku_siggrebut__April16_2024_hiddens_SIGG_Final__SIGG_REVISION_ABLATION_PROTO_3_PRIMES.ipynb',
+                'type': 'notebook',
+                'kernel': {'pid': 12345, 'id': 'dc691eda-786e-4609-ac78-8d6f8dbc482b', 'name': 'diffilu', 'last_activity': '2024-04-18T01:14:55.458054Z', 'execution_state': 'idle', 'connections': 0},
+                'notebook': {
+                    'path': 'hidden_characters_miku_siggrebut__April16_2024_hiddens_SIGG_Final__SIGG_REVISION_ABLATION_PROTO_3_PRIMES.ipynb',
+                    'name': 'hidden_characters_miku_siggrebut__April16_2024_hiddens_SIGG_Final__SIGG_REVISION_ABLATION_PROTO_3_PRIMES.ipynb'
+                }
+            }
+            ...
+        ]
+    """
+    pip_import("ipynbname")
+
+    import ipynbname as ip
+
+    kernel_to_pid = _get_kernel_to_pid_mapping()
+
+    all_sessions = []
+    for srv in ip._list_maybe_running_servers():
+        try:
+            for session in ip._get_sessions(srv):
+                session["server"] = srv
+                kernel_id = session["kernel"]["id"]
+                # print(session)
+
+                if not kernel_id in kernel_to_pid:
+                    # If we can't get the PID for this, skip it for sanity's sake.
+                    # Perhaps in the future it will include it as None instead.
+                    # print('NOT FOUND',kernel_id)
+                    continue
+                kernel_pid = kernel_to_pid[kernel_id]
+                session["kernel"]["pid"] = kernel_pid
+
+                session = DictReader(session)
+                all_sessions.append(session)
+        except Exception as e:
+            # print(e)
+            pass
+    return all_sessions
+
+
+
 
 
 def type_string_with_keyboard(s, time_per_stroke=1/30):
