@@ -20364,6 +20364,35 @@ def running_in_ipython():
         return False#If we get an error when trying to import IPython...then..well, we're definately NOT running in iPython!
 running_in_jupyter_notebook=running_in_ipython
 
+def get_notebook_name(*,include_file_extension=False):
+    """
+    Assumes we're running in a Jupyter notebook
+    Returns the name of the notebook
+    By default, does not include the file extension
+    EXAMPLE:
+        get_notebook_path()                             -->  "/path/to/notebook.ipynb"
+        get_notebook_name()                             -->           "notebook"
+        get_notebook_name(include_file_extension=True)  -->           "notebook.ipynb"
+    """
+    assert running_in_jupyter_notebook(), "rp.get_notebook_name: called outside of a Jupyter notebook"
+    
+    path = get_notebook_path()
+    return get_file_name(path, include_file_extension=include_file_extension)
+
+def get_notebook_path():
+    """
+    Assumes we're running in a Jupyter notebook
+    Returns an absolute path of the notebook file
+    EXAMPLE:
+        get_notebook_path()  -->  "/path/to/notebook.ipynb"
+    """
+    assert running_in_jupyter_notebook(), "rp.get_notebook_path: called outside of a Jupyter notebook"
+    
+    #Solution from: https://stackoverflow.com/questions/62815318/get-current-jupyter-lab-notebook-name-for-jupyter-lab-version-2-1-and-3-0-1-and
+    pip_import("ipynbname")
+    import ipynbname
+    return str(ipynbname.path())
+
 #Commented this out because ipynbname returned the wrong answer! Idk why but it returned a path to a notebook that didn't exist...see the example; it got the class wrong somehow...
 #def get_current_notebook_path()->str:
 #    #Returns the path of the current jupyter notebook
