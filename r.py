@@ -28997,7 +28997,6 @@ def select_torch_device(n=0, *, silent=False, prefer_used=False):
         #                        └────────┴──────────────────┴────────────────┴────────┴────────┴──────┴──────┴────────────────────────────────────┘
         #We must correctly select the line number
         # headers[3+selected_gpu_id]=arrow_header <--- Old version, not good enough: see above example
-        print(lines)
         selected_line_number = min(i for i in range(len(lines)) if strip_ansi_escapes(lines[i]).strip().startswith("│   "+str(selected_gpu_id)))
         headers[selected_line_number]=arrow_header 
         
