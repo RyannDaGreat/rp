@@ -28984,7 +28984,23 @@ def select_torch_device(n=0, *, silent=False, prefer_used=False):
         empty_header=' '*len(arrow_header)
         arrow_header=fansi(arrow_header,style='bold')
         headers=[empty_header for _ in lines]
-        headers[3+selected_gpu_id]=arrow_header
+
+        #EXAMPLE OUTPUT WE DONT WANT:
+        #                        ┏━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+        #                        ┃ GPU ID ┃       Name       ┃      Used      ┃   Free ┃  Total ┃ Temp ┃ Util ┃ Processes                          ┃
+        #                        ┡━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+        #                        │   0    │ NVIDIA RTX A5000 │  21.4GB  89.2% │  2.6GB │ 24.0GB │ 84°C │ 100% │ ryan 21.1GB: 503120 20.2GB, 504826 │
+        #  Selecting cuda:1 –––> │        │                  │                │        │        │      │      │ 718MB, 741137 238MB                │
+        #                        │   1    │ NVIDIA RTX A5000 │ 319.9MB   1.3% │ 23.7GB │ 24.0GB │ 35°C │   0% │                                    │
+        #                        │   2    │ NVIDIA RTX A5000 │  18.7GB  77.9% │  5.3GB │ 24.0GB │ 78°C │  74% │ ryan 18.4GB: 504826 18.4GB         │
+        #                        │   3    │ NVIDIA RTX A5000 │ 319.9MB   1.3% │ 23.7GB │ 24.0GB │ 36°C │   0% │                                    │
+        #                        └────────┴──────────────────┴────────────────┴────────┴────────┴──────┴──────┴────────────────────────────────────┘
+        #We must correctly select the line number
+        # headers[3+selected_gpu_id]=arrow_header <--- Old version, not good enough: see above example
+        print(lines)
+        selected_line_number = min(i for i in range(len(lines)) if strip_ansi_escapes(lines[i]).strip().startswith("│   "+str(selected_gpu_id)))
+        headers[selected_line_number]=arrow_header 
+        
         lines=[header+line for header,line in zip(headers,lines)]
         if not silent:
             print(line_join(lines))
