@@ -5106,6 +5106,11 @@ def pop_gather(x,*indices):
 
 def gather_vars(*var_names, frames_back=1, skip_missing=False):
     """
+    TODO: Elaborate on frames_back = ... functionality for getting ALL frames back - we want a min_frames_back and max_frames_back
+    Better yet use slice objects, and gather_args_wrapper(func)[2:]() lets us specify the frames_back via slices
+    Also perhaps we would have [2,...,callable] or even [2,...,func_name,...func_name] -- or something likke that....its complicated :( 
+
+
     Collect the given variable names from the specified scope into an EasyDict.
 
     This function takes any number of variable names in different formats as arguments and
@@ -5149,7 +5154,8 @@ def gather_vars(*var_names, frames_back=1, skip_missing=False):
 
     Written partially with GPT4: https://shareg.pt/g9N1X3U
     """
-    assert frames_back>=1, 'gather_vars is useless if we don\'t look at least one frame back'
+    assert frames_back==... or frames_back>=1, 'gather_vars is useless if we don\'t look at least one frame back'
+    min_frames_back = 1 if frames_back==... else frames_back
 
     pip_import('easydict')
     
@@ -5160,19 +5166,33 @@ def gather_vars(*var_names, frames_back=1, skip_missing=False):
     flattened_var_names = list(itertools.chain.from_iterable(
         (arg.split() if isinstance(arg, str) else arg) for arg in var_names))
 
+
     frame = inspect.currentframe()
-    for _ in range(frames_back):
+    for _ in range(min_frames_back):
         frame = frame.f_back
     #local_vars = frame.f_locals  <-- Old version only looked for vars in one frame
     
+    def is_comprehension(frame):
+        #Check if a frame is in a list comprehension, or dict comprehension etc
+        #https://chat.openai.com/share/5cd8b897-402c-4e64-97c9-e8bf32e6f930
+        if frame is None: return False
+        name=frame.f_code.co_name
+        return name.startswith('<') and name.endswith('>') and 'comp' in name
+
     #Get variables from all frames equal to or behind frames_back
     #QUESTION: Is this equivalent to f_globals? ANSWER: No, after testing - not all vars are in globals
     frame_locals = []
     needed_vars = set(flattened_var_names)
     while frame is not None and needed_vars:
+        was_comprehension = is_comprehension(frame)
         needed_vars -= set(frame.f_locals) # In deep stacks, avoid traversing if we already have what we need
         frame_locals.append(frame.f_locals)
         frame=frame.f_back
+        if was_comprehension or frames_back==...:
+            #I can't think of an instance where I want the search to stop in the list comprehension - this seems confusing to read and debug - asking 'why does the scope stop here??'
+            continue
+        else:
+            break
     local_vars =merged_dicts(frame_locals,precedence='first')
     
     result_dict = {}
@@ -5704,6 +5724,8 @@ def get_current_function(frames_back=1):
         TypeError: If frames_back is not an integer.
         ValueError: If frames_back is less than or equal to 1.
         RuntimeError: If the specified frame does not correspond to a function.
+
+    TODO: Handle being inside list comprehensions etc - like gather_vars does. Also perhaps any other edge cases?
     
     EXAMPLE:
         >>> def z(): return get_current_function()
