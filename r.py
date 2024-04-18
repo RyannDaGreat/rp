@@ -30056,6 +30056,7 @@ def print_notebook_gpu_summary():
                         "pid": kernel_pid,
                         "used_vram_str": used_vram_str,
                         "total_used_vram": total_used_vram,
+                        "total_used_vram_str": ram_to_string(total_used_vram),
                         "notebook_name": session.name,
                         "state": session.kernel.execution_state,
                     }
@@ -30069,13 +30070,14 @@ def print_notebook_gpu_summary():
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("PID", style="dim")
     # table.add_column("State", style="dim")
+    # table.add_column("VRAM", style="green")
     for i in range(num_gpus):
         table.add_column("GPU%i"%i)
     table.add_column("Notebook Name")
 
     # There can be multiple servers, which sometimes results in duplicate kernels being listed here...
     rows = unique(rows)
-    rows = sorted(rows, key=lambda row: (row["total_used_vram"] > 0, row["notebook_name"]))
+    rows = sorted(rows, key=lambda row: (row["total_used_vram"], row["notebook_name"]))
 
     # Add rows to the table
     for row in rows:
@@ -30086,6 +30088,7 @@ def print_notebook_gpu_summary():
         table.add_row(
             str(row["pid"]),
             # row["state"], #Removed because it seemed to give the wrong results, saying things were idle that weren't and vice versa...
+            # row["total_used_vram_str"],
             *padded_vram,
             row["notebook_name"],
             style=("white"),
