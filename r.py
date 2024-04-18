@@ -13096,6 +13096,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         ZIH $make_zip_file_from_folder($get_absolute_path('.'))
         ZIA $make_zip_file_from_folder(ans)
 
+        RWC $web_copy($get_source_code($r))
+
         RST __import__('os').system('reset')
         RS  __import__('os').system('reset')
 
