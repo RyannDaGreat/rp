@@ -3562,6 +3562,10 @@ def load_python_bindings(python_input):
             if not data.startswith('!') and first_word in rp.r._get_cached_system_commands() and rp.is_valid_shell_syntax(data) and (not rp.is_valid_python_syntax(data) or not first_word in set(ric.globa)|set(python_keywords) ) and not before and not after:
                 #Assume we're pasting a shell command instead 
                 data='!'+data
+            elif before=='1' and not after and not data[0].isnumeric():
+                #Pasting after 1 --> !
+                buffer.delete_before_cursor()
+                buffer.insert_text('!')
 
         buffer.insert_text(data)
 
