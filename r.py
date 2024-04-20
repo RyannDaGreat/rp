@@ -3025,35 +3025,32 @@ def load_openexr_image(file_path,*,channels=None):
 
 _opencv_supported_image_formats='bmp dib exr hdr jp2 jpe jpeg jpg pbm pfm pgm pic png pnm ppm pxm ras sr tif tiff webp'.split()
 
-def encode_image_to_bytes(image,filetype:str='.png',quality:int=100):
-    #Returns the byte representation of an image file without actually saving it to your harddrive
-    #TODO: Add PIL support too, in case cv2 fails. PIL can also do this.
-    #TODO: Add image quality parameters for jpg 
-    #Reference: https://jdhao.github.io/2019/07/06/python_opencv_pil_image_to_bytes/
-    #
-    #EXAMPLE:
-    #    ans='https://upload.wikimedia.org/wikipedia/commons/6/6e/Golde33443.jpg'
-    #    ans=load_image(ans)
-    #    ans=encode_image_to_bytes(ans)
-    #    ans=decode_image_from_bytes(ans)
-    #    display_image(ans)
 
+def _encode_image_to_bytes(image,filetype:str,quality):
+    "Helper function for encode_image_to_bytes"
+
+    assert is_image(image)
+    assert isinstance(filetype,str)
+
+    pip_import('cv2')
+    import cv2
 
     filetype=filetype.lower() #Make filetype not case sensitive
     if not filetype.startswith('.'):
         #Allow filetype to be 'png' which gets turned into '.png'
         filetype='.'+filetype
+    assert filetype.startswith('.')
     
     assert filetype[1:] in _opencv_supported_image_formats, 'Unsupported image format: '+repr(filetype)+', please choose from [.'+', .'.join(_opencv_supported_image_formats)+']'
 
     image=as_byte_image(image)
-    image=as_rgb_image(image)
+    if filetype in '.png .tif .tiff .webp'.split(): #All filetypes that support transparency should go here
+        image=as_rgba_image(image)
+    else:
+        image=as_rgb_image(image)
     image=cv_rgb_bgr_swap(image)
     
-    pip_import('cv2')
-    import cv2
-    
-    if filetype in 'jpg jpeg'.split():
+    if filetype in '.jpg .jpeg .webp .jp2 .jpe'.split():
         encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
         success, encoded_image = cv2.imencode(filetype, image, encode_param)
     else:
@@ -3063,6 +3060,84 @@ def encode_image_to_bytes(image,filetype:str='.png',quality:int=100):
         raise IOError('Failed to encode image to '+filetype+' bytes')
 
     return encoded_image.tobytes()
+
+
+def encode_image_to_bytes(image,filetype=None,quality=100):
+    """
+    Encodes an image into a bytestring, without actually saving it to your harddrive
+    The bytes are the same as if you saved an image to a file with this filetype and quality
+
+    Args:
+        image (str or object): Image location, or an image as defined by rp.is_image
+        filetype (str, optional): The type of image file we encode it to. If not specified, automatically determined.
+            * Supported options: bmp, dib, exr, hdr, jp2, jpe, jpeg, jpg, pbm, pfm, pgm, pic, png, pnm, ppm, pxm, ras, sr, tif, tiff, webp
+        quality (int): If applicable, defines the image quality (useful when filetype=='jpg' for instance). Specified as a percentage.
+            * Supported filetypes: webp, jpeg, jpg, jpe, jp2
+            * NOTE: Even at quality=100, it is not currently lossless. TODO: Fix this
+        
+    Returns:
+        str: a byttestring that contains the encoded image file
+
+    EXAMPLE:
+        ans='https://upload.wikimedia.org/wikipedia/commons/6/6e/Golde33443.jpg'
+        ans=load_image(ans)
+        ans=encode_image_to_bytes(ans,'png')
+        ans=decode_image_from_bytes(ans)
+        display_image(ans)
+
+    TODO: Add PIL support too, in case cv2 fails. PIL can also do this.
+    TODO: Add image quality parameters for jpg 
+    Reference: https://jdhao.github.io/2019/07/06/python_opencv_pil_image_to_bytes/
+    """
+    assert is_image(image) or isinstance(image, str)
+
+    import base64
+    
+    if filetype is None:
+        if isinstance(image,str):
+            filetype=get_file_extension(image)
+        else:
+            if is_rgba_image(image):
+                #If we have alpha, use a png
+                filetype='png'
+            else:
+                #Otherwise, might as well save a bit of bandwidth
+                #Assumes we will encode losslessly when quality=100
+                #filetype='jpg'
+                #But actually, right now that assumption is false, so...
+                filetype='png'
+    
+    if isinstance(image,str) and get_file_extension(image)==filetype and quality==100:
+        #Save some time and just return the bytestring directly
+        return curl_bytes(image)
+
+    if isinstance(image, str):
+        image = load_image(image)
+    
+    byte_data = gather_args_call(_encode_image_to_bytes)
+
+    return byte_data
+
+
+
+def encode_image_to_base64(image,filetype=None,quality=100):
+    """
+    Encodes an image into a base64 string. Useful for HTTP requests, or displaying HTML images in jupyter.
+
+    Args:
+        image (str or object): Image location, or an image as defined by rp.is_image
+        filetype (str, optional): The type of image file we encode it to
+        quality (int): If applicable, defines the image quality (useful when filetype=='jpg' for instance)
+    Returns:
+        str: a base-64 string containing the image
+    """
+    import base64
+    
+    byte_data = encode_image_to_bytes(image, "jpg")
+
+    return base64.b64encode(byte_data).decode("utf-8")
+
+
 
 def decode_image_from_bytes(encoded_image:bytes):
     #Supports any filetype in r._opencv_supported_image_formats, including jpg, bmp, png, exr and tiff
@@ -26282,12 +26357,47 @@ def _launch_ranger():
     return out
 
 def curl(url:str)->str:
-    #Meant to imitate the 'curl' command in linux
-    #Sends a get request to the given URL and returns the result string
+    """
+    Meant to imitate the 'curl' command in linux
+    Sends a get request to the given URL and returns the result string
+    """
     pip_import('requests')
     import requests
     response=requests.request('GET',url)
     return response.text
+
+def curl_bytes(url):
+    """
+    Fetches a file from a specified URL and returns its bytes
+
+    Parameters:
+        url (str): The URL of the file to fetch.
+
+    Returns:
+        bytes: The bytestring of the file data.
+
+    Example:
+        display_image(decode_image_from_bytes(curl_bytes('https://fileinfo.com/img/ss/xl/jpg_44-2.jpg')))
+    """
+    pip_import('requests')
+
+    assert isinstance(url,str)
+
+    if path_exists(url):
+        #It's ok if the url is just a file path lol
+        #Makes other code simpler
+        return file_to_bytes(url)
+
+    import requests
+    from io import BytesIO
+
+    # Fetch the file from the URL
+    response = requests.get(url)
+    response.raise_for_status()  # Raises an HTTPError for bad responses if any
+
+    # Convert the file contents to a bytestring and return it
+    return BytesIO(response.content).getvalue()
+
 
 def get_computer_name():
     #Returns the name of the current computer
