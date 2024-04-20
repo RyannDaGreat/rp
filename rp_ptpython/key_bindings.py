@@ -415,6 +415,22 @@ def text_to_speech(words):
     except:pass#Who cares if this doesn't work, it's just for debugging anyway...
 
 
+def robust_hasattr(*args, **kwargs):
+    "If some custom class has a faulty __getattr__ that raises errors, don't break completions. Just return False."
+    """In response to the error:
+            File "/home/ryan/miniconda3/envs/diffilu/lib/python3.10/site-packages/rp/rp_ptpython/key_bindings.py", line 3617, in _
+            elif hasattr(ric.ans,'__getitem__'):#if we can do ans[0], ans[1] etc
+            File "/home/ryan/miniconda3/envs/diffilu/lib/python3.10/site-packages/rp/r.py", line 29117, in __getattr__
+            assert key in self._data, key
+            AssertionError: __getitem__
+       On one hand, this was DictReader's fault. But also, this code shouldn't have crashed because of DictReader's implementation.
+    """
+    try:
+        return hasattr(*args, **kwargs)
+    except Exception:
+        return False
+
+
 # alt_updown_speed=
 # def any_key_pressed_prefix(key,buffer):
 #     #This function should include only things that happen during every keystroke. 
@@ -852,13 +868,17 @@ def find_header(code:str,*line_starts:str)->str:
         if starts_with_any(e.lstrip(),*line_starts):
             return e
     return None
-def find_level(code:str,*line_starts:str)->int:
+def get_level_indent(code:str,*line_starts:str)->str:
     #return the unindents needed (assumed to be spaces) to reach block starting with any string from line_starts
     #returns None if not in such a block
     header=find_header(code,line_starts)
     if header is None:
         return None
-    return len(get_indent(header))
+    return get_indent(header)
+def find_level(code:str,*line_starts:str)->int:
+     indent=get_level_indent(code,*line_starts)
+     if indent is None:return None
+     return len(indent)
 def get_indent(line):
     #returns a string that just contains the line's indent
     return line[:len(line)-len(line.lstrip())]
@@ -1137,6 +1157,46 @@ def handle_character(buffer,char,event=None):
         buffer.insert_text(' ')#This should always work
         meta_pressed(clear=True)
         return True
+
+    if char=='\n' and before_line.lstrip().startswith('except ') and before_line.endswith(' as ') and after_line==':':
+        #except Exception as |:      < \n >      ---->    except Exception:\n    |
+        buffer.delete_before_cursor(len(' as '))
+        buffer.cursor_right(1)
+        buffer.insert_text('\n'+get_indent(before_line)+'    ')
+        return True
+
+        
+    if char=='\n' and before_line.lstrip().startswith('except ') and after_line==':':
+        #except |:      < \n >      ---->    except:\n    |
+        buffer.delete_before_cursor(len(' '))
+        buffer.cursor_right(1)
+        buffer.insert_text('\n'+get_indent(before_line)+'    ')
+        return True
+
+    if char in 'fe\n' and not before_line.strip() and not after_line.strip():
+        """  
+        try:\npass\n    |            <e>         try:\n    pass\n    except |:
+        try:\npass\n    |            <f>         try:\n    pass\n    finally:\n    |
+        except:\npass\n    |         <f>         except:\n    pass\n    finally:\n    |
+        try:\npass\n    |            <\n>        try:\n    pass\nexcept Exception:\n    |
+        """
+        try_level=get_level_indent(before+' ','try')
+        except_level=get_level_indent(before+' ','except')
+        current_level=get_indent(before_line)
+
+        if try_level == current_level:
+            # buffer.insert_text(repr(try_level))
+            # buffer.insert_text("ASOI")
+            if char=='f':buffer.insert_text('finally:')
+            if char=='e':buffer.insert_text('except :') ; buffer.cursor_left()
+            if char=='\n':
+                buffer.delete_before_cursor(len(current_level))
+                buffer.insert_text(try_level+'except Exception:\n'+try_level+'    ')
+            return True
+        elif except_level==current_level:
+            if char=='f':buffer.insert_text('finally:')
+            return True
+        
 
 
     if char=='X' and meta_pressed(clear=True):
@@ -3610,7 +3670,7 @@ def load_python_bindings(python_input):
                 buffer.insert_text('ans()')
                 buffer.cursor_left()
                 function_comma_flag=True
-            elif hasattr(ric.ans,'__getitem__'):#if we can do ans[0], ans[1] etc
+            elif robust_hasattr(ric.ans,'__getitem__'):#if we can do ans[0], ans[1] etc
                 buffer.insert_text('ans[]')#we cant call it...might want to iterate through it though!
                 buffer.cursor_left()
                 function_comma_flag=True
@@ -3831,7 +3891,7 @@ def load_python_bindings(python_input):
                 import rp.r_iterm_comm as ric
                 for candidate in ric.current_candidates:#Don't autocomplete if our current word to complete allready exists. For example, don't complete 'in' into 'inverse', etc.
                     try:
-                        if hasattr(candidate,'text') and candidate.text==name_of_interest or candidate==name_of_interest:
+                        if robust_hasattr(candidate,'text') and candidate.text==name_of_interest or candidate==name_of_interest:
                             return False
                     except:pass
                 # ring_terminal_bell()
@@ -4033,8 +4093,10 @@ def load_python_bindings(python_input):
             # elif is_autocompletable_prefix('except :',[':','']):autocomplete_prefix('except :',left=1,remove_suffix=True)
             # elif is_autocompletable_prefix('except  as :',[':','']):autocomplete_prefix('except  as :',left=5,remove_suffix=True)
             elif before_line.lstrip()=='except ' and after_line.rstrip()==':':
-                buffer.delete_before_cursor()
-                buffer.cursor_right()
+                #except |: --> except Exception as |:
+                buffer.insert_text('Exception as ')
+                # buffer.delete_before_cursor()
+                # buffer.cursor_right()
                 return
             # elif before_line.endswith(' is '):
                 #"x is |" --> "x is not |"
@@ -5339,6 +5401,12 @@ def load_python_bindings(python_input):
             'elif':{'if'},#cant add elif for buggy reasons (it sees itself when trying to unindent and thus doesnt unindent)
             }
     def try_to_autounindent(buffer):
+        """
+        On space:
+        try:              try:
+            pass    -->       pass
+            ex|           except |:
+        """
         b=buffer
         current_line = b.document.current_line
         after_line = b.document.current_line_after_cursor
@@ -5470,7 +5538,7 @@ def load_python_bindings(python_input):
                     exl=level('except')
                     ell=level('else')
                     if ell is None and exl is not None or exl is not None and exl>ell:
-                        text_to_speech('q')
+                        # text_to_speech('q')
                         replacement='except:'
                 if '_' in replacement:
                     if single_line:

@@ -8,6 +8,7 @@ pseudo_terminal_level=0
 rp_evaluator=lambda x:None# Returns strings!! UNLESS the second argument is True
 current_input_text=""
 rp_pt_VARS=""
+rp_pt_user_created_var_names=[]
 python_input_buffers={}# str ⟶ str
 rp_evaluator_mem=None
 parenthesized_line=""

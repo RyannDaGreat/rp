@@ -12358,7 +12358,13 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                 _maybe_display_string_in_pager(output,with_line_numbers=False)
 
         def show_error(E):
-            error_stack.do_if_new(E)
+            try:
+                error_stack.do_if_new(E)
+            except AttributeError:
+                # File "/apps/bdi-venv-37-0.1.0-h96.d6e899e~bionic/lib/python3.7/site-packages/pynvml/nvml.py", line 797, in __eq__
+                #     return self.value == other.value
+                # AttributeError: 'AttributeError' object has no attribute 'value'
+                pass
             nonlocal error,display_help_message_on_error,error_message_that_caused_exception
             if display_help_message_on_error:
                 display_help_message_on_error=False
@@ -13161,6 +13167,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         # BB set_current_directory(r._get_cd_history()[-2]);fansi_print('BB-->CDH1-->'+get_current_directory(),'blue','bold')#Use_BB_instead_of_CDH_<enter>_1_<enter>_to_save_time_when_starting_rp
         #Note: \x20 is the space character
         command_shortcuts=line_split(command_shortcuts_string)
+
         
         command_shortcuts=list(map(str.strip,command_shortcuts))
         command_shortcuts=[x for x in command_shortcuts if not x.startswith('#')]
@@ -13180,6 +13187,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
             import rp.r_iterm_comm
             rp.r_iterm_comm.globa=scope()#prime it and get it ready to go (before I had to enter some valid command like '1' etc to get autocomplete working at 100%)
             while True:
+                rp.r_iterm_comm.rp_pt_user_created_var_names[:]=list(user_created_var_names)
                 try:
                     # region Get user_message, xor exit with second keyboard interrupt
                     try:
@@ -13606,7 +13614,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                     elif user_message == "HMORE":
                         #HMORE is like MORE but with syntax highlighting. It's a tiny difference.
                         fansi_print("The last command that caused an error is shown below in magenta:",'red','bold')
-                        fansi_print(error_message_that_caused_exception,'magenta')
+                        # fansi_print(error_message_that_caused_exception,'magenta')
                         if error is None:# full_exception_with_traceback is None --> Last command did not cause an error
                             fansi_print( "(The last command did not cause an error)",'red')
                         else:
@@ -13738,6 +13746,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             #         return shell_command('echo $SSH_CLIENT').split()[0]
                             #     ip=_get_ssh_client_ip_address()
                             #     name=fansi('(SSH from %s) '%ip,'green',)+name
+                        if running_in_docker():
+                            name=fansi('(Docker) ','green',)+name
                         if running_in_google_colab():
                             fansi_print("Google Colab",'yellow','bold')
                         elif running_in_jupyter_notebook():
@@ -13804,7 +13814,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         if env_info.nvidia_gpu_models or env_info.cuda_runtime_version or env_info.cuda_runtime_version:
                             print('GPU Details:')
                         if env_info.nvidia_gpu_models:
-                            print(bullet+'NVIDIA GPU Models: '+cyan(env_info.nvidia_gpu_models))
+                            gpu_header=(bullet+'NVIDIA GPU Models: ')
+                            gpu_lines=env_info.nvidia_gpu_models
+                            if len(gpu_lines)>1:
+                                gpu_lines[1:]=[' '*len(gpu_header)+x for x in gpu_lines[1:]]
+                            print(gpu_header+cyan(gpu_lines))
 
                         cuda_info = ''
                         if env_info.cuda_runtime_version:
@@ -16268,18 +16282,24 @@ def ncr(n, r):
     denom = reduce(op.mul, xrange(1, r+1), 1)
     return numer//denom
 
-def get_process_memory():
-    import os
+def get_process_memory(pid:int=None)->int:
+    "Returns the process memory usage in bytes."
+    if pid is None: pid=get_process_id()
+
     pip_import('psutil')
     import psutil
-    process = psutil.Process(os.getpid())
+
+    process = psutil.Process(pid)
     return process.memory_info().rss#Get this process's total memory in bytes
 
-def get_username_from_process_id(pid: int) -> str:
+def get_process_username(pid: int=None) -> str:
     """
     Returns the username associated with the given process ID (pid).
     Made by ChatGPT: https://sharegpt.com/c/Tvzy0Rt
+    OLD NAME: get_username_from_process_id
     """
+    if pid is None: return get_username() #Much faster, see get_username's code comment
+
     pip_import('psutil')
     import psutil
 
@@ -16289,22 +16309,72 @@ def get_username_from_process_id(pid: int) -> str:
         return username
     except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
         raise Exception("The process with PID {} does not exist or could not be accessed.".format(pid))
+get_username_from_process_id = get_process_username
 
 def get_username():
-    #Get the username of the current python process
+    """
+    Get the username of the current python process
+    """
+    #Implementation was chosen based on speed:
+    #     >>> for _ in range(100000): getpass.getuser()
+    #    TICTOC: 0.06527    seconds
+    #     >>> for _ in range(100000): get_process_username(get_process_id())
+    #    TICTOC: 1.53992    seconds
+
     import getpass
     return getpass.getuser()
-    return get_username_from_process_id(get_process_id()) #This should work too
+    return get_process_username() # Much slower but equivalent
+
 
 def get_process_id():
     #Get the current process id, aka pid
     import os
     return os.getpid()
 
-def process_exists(pid: int) -> bool:
+def get_process_exists(pid: int) -> bool:
+    "Returns True if the pid exists, False otherwise"
+
+    if pid==os.getpid(): 
+        #Obviously, the current process is running. Speed things up a lot.
+        #     >>> for _ in range(100000):get_process_exists(0)
+        #    TICTOC: 7.85240    seconds
+        #     >>> for _ in range(100000):get_process_exists(get_process_id())
+        #    TICTOC: 0.03110    seconds
+        #
+        #This check is fast enough that it's worth it
+        #     >>> pid = os.getpid()
+        #     >>> for _ in range(100000): get_process_exists(pid)
+        #    TICTOC: 0.14078    seconds
+        #     >>> for _ in range(100000): os.getpid()
+        #    TICTOC: 0.00949    seconds
+        return True
+
     pip_import('psutil')
     import psutil
     return psutil.pid_exists(pid)
+process_exists=get_process_exists
+
+def get_process_start_date(pid=None):
+    if pid is None: pid=get_process_id()
+
+    try:
+        pip_import('psutil')
+        import psutil
+        import datetime
+
+        # Get the process using psutil
+        process = psutil.Process(pid)
+        
+        # Get the start time of the process
+        start_timestamp = process.create_time()
+        
+        return datetime.datetime.fromtimestamp(start_timestamp)
+
+    except psutil.NoSuchProcess:
+        return "No process found with PID: {}".format(pid)
+    except Exception as e:
+        return "An error occurred: {}".format(e)
+
 
 def regex_match(string,regex)->bool:
     #returns true if the regex describes the whole string
@@ -16361,35 +16431,40 @@ def set_cursor_to_underscore(blinking=True):
         print(end="\033[4 q")
 
 def line_number():
-    #Return the line number of the caller
+    """
+    Return the line number of the caller
+    """
     import inspect
     return inspect.currentframe().f_back.f_lineno
 
 def is_number(x):
-    #returns true if x is a number
-    #Verified to work with numpy values as well as vanilla Python values
-    #Also works with torch tensors
-    #Examples:
-    #   is_number(float)              ==True
-    #   is_number(np.uint8)           ==True
-    #   is_number(123)                ==True
-    #   is_number(5.6)                ==True
-    #   is_number(np.int32(123))      ==True
-    #   is_number("Hello")            ==False
-    #   is_number("123")              ==False
-    #   is_number(np.asarray([1,2,3]))==False
+    """
+    returns true if x is a number
+    Verified to work with numpy values as well as vanilla Python values
+    Also works with torch tensors
+    Examples:
+       is_number(float)              ==True
+       is_number(np.uint8)           ==True
+       is_number(123)                ==True
+       is_number(5.6)                ==True
+       is_number(np.int32(123))      ==True
+       is_number("Hello")            ==False
+       is_number("123")              ==False
+       is_number(np.asarray([1,2,3]))==False
+    """
     from numbers import Number
     if isinstance(x,Number) or isinstance(x,type) and issubclass(x,Number):
         return True
-    #Does NOT work with torch tensors. I don't know if I should include that or not, so for now it returns false on torch tensors but the code is commented out and be uncommented.
-    # try:
-    #     #The above check fails for torch tensors. Here's a modification:
-    #     if x.__class__.__name__=='Tensor' or x.__name__=='Tensor':#Try to avoid importing torch, as that takes a while...
-    #         import torch#...we might not even have torch, which is why this is in a try-catch block
-    #         if isinstance(x,torch.Tensor) or isinstance(x,type) and issubclass(x,torch.Tensor):
-    #             return True
-    # except Exception:pass#Maybe we don't have torch.
     return False
+
+    #Does NOT work with torch tensors. I don't know if I should include that or not, so for now it returns false on torch tensors but the code is commented out and be uncommented.
+    #try:
+    #    #The above check fails for torch tensors. Here's a modification:
+    #    if x.__class__.__name__=='Tensor' or x.__name__=='Tensor':#Try to avoid importing torch, as that takes a while...
+    #        import torch#...we might not even have torch, which is why this is in a try-catch block
+    #        if isinstance(x,torch.Tensor) or isinstance(x,type) and issubclass(x,torch.Tensor):
+    #            return True
+    #except Exception:pass#Maybe we don't have torch.
 
 def _refresh_autocomplete_module_list():
     from rp.rp_ptpython.completer import get_all_importable_module_names
@@ -20464,6 +20539,13 @@ def get_venv_name():
         raise KeyError("r.get_conda_env_name: Can't get the name of the current python virtual environment (venv) - VIRTUAL_ENV is not set. Are you sure this python process is running in a python virtual environment?")
     return get_folder_name(env[key])
 
+
+def running_in_docker():
+    """Returns True if we're in docker, False otherwise"""
+    #https://stackoverflow.com/questions/43878953/how-does-one-detect-if-one-is-running-within-a-docker-container-within-python
+    from pathlib import Path
+    cgroup = Path('/proc/self/cgroup')
+    return Path('/.dockerenv').is_file() or cgroup.is_file() and 'docker' in cgroup.read_text()
 
 def split_tensor_into_regions(tensor,*counts,flat=True,strict=False):
     #Return the tensor into multiple rectangular regions specified by th number of cuts we make on each dimension.
@@ -26626,7 +26708,7 @@ class _PathInfo:
     def __init__(self,entry):
         self.entry=entry
         if isinstance(entry, os.DirEntry):
-            self.inode=entry.inode
+            self.inode=entry.inode()
             self.path=entry.path
             self.is_symlink=entry.is_symlink()
             self.is_folder=entry.is_dir()
@@ -26684,6 +26766,10 @@ class _PathInfo:
 
     def __hash__(self):
         return hash(self.inode)
+    
+    def __eq__(self,x):
+        if not hasattr(x,'inode'):return False
+        return self.inode == x.inode
     
 def _get_all_paths_fast(
     root_dir=".",
@@ -29647,6 +29733,30 @@ def _get_gpu_handle(gpu_id):
 
     return nvmlDeviceGetHandleByIndex(gpu_id)
 
+def get_gpu_uuid(gpu_id=None):
+    """
+    Returns the UUID of a GPU given its ID.
+    If gpu_id is None, returns a list of UUIDs for all GPUs.
+    This value is hardware-specific and is unique for every GPU.
+    It is persistent upon rebooting as well.
+
+    Args:
+        gpu_id (int, optional): The ID of the GPU. Default is None.
+
+    Example:
+    >>> get_gpu_uuids(0)
+    'GPU-f81d4fae-7dec-11d0-a765-00a0c91e6bf6'
+    >>> get_gpu_uuids()
+    ['GPU-f81d4fae-7dec-11d0-a765-00a0c91e6bf6', 'GPU-5eabcfeb-672e-4f2c-8f5c-45747a087704']
+    """
+    if gpu_id is None:
+        return [get_gpu_uuid(gpu_id=i) for i in get_all_gpu_ids()]
+
+    _init_nvml()
+    from py3nvml.py3nvml import nvmlDeviceGetUUID
+    handle = _get_gpu_handle(gpu_id)
+    uuid = nvmlDeviceGetUUID(handle)
+    return uuid
 
 def get_gpu_count():
     """
@@ -29676,12 +29786,20 @@ def get_gpu_ids_used_by_process(pid=None):
     return used_gpu_ids
 
 
-def get_gpu_pids(gpu_id=None):
+def get_gpu_pids(gpu_id=None, *, existing_only=True):
     """
     Returns a list of process IDs running on the given GPU.
 
     Args:
         gpu_id (int): The ID of the GPU.
+        existing_only (bool): If True, only return processes that exist on the current machine
+                              If False, return all processes seen by the GPU driver.
+                              Explanation: If you run this command when running_in_docker(), and --pid=host wasnt set,
+                              NVIDIA's drivers will return process ID's that aren't in the current PID namespace,
+                              and so it will appear to this machine as if they don't exist. (Similarly, running nvidia-smi
+                              from within such a docker instance will show no processes, even if vram-hungry processes
+                              are already running in said instance). Since GPU's are on a hardware-level, they don't know
+                              what PID from within docker is running.
 
     Example:
     >>> get_gpu_pids(0)
@@ -29701,11 +29819,17 @@ def get_gpu_pids(gpu_id=None):
 
     # Make sure all the processes exist! Sometimes, without this check it will return processes that aren't real.
     # I have no idea why. This only ever happened at Adobe on Sensei. It might be a bug in the py3nvml library?
+
+    def filter_pids_exist(pids):
+        if existing_only:
+            return [x for x in pids if process_exists(x)]
+        return pids
+    
     if gpu_id is None:
-        out = [[x for x in y if process_exists(x)] for y in out]
+        out = [filter_pids_exist(y) for y in out]
     else:
         assert isinstance(gpu_id,int)
-        out = [x for x in out if process_exists(x)]
+        out = filter_pids_exist(out)
 
     return out
 
@@ -29987,11 +30111,15 @@ def print_gpu_summary(
             utilization = "{}%".format(get_gpu_utilization(gpu_id)).rjust(4)
 
         if include_processes:
-            processes = get_gpu_pids(gpu_id)
+            processes = get_gpu_pids(gpu_id, existing_only=False)
             user_process_vram = defaultdict(list)
             for pid in processes:
                 pid_vram = get_used_vram(gpu_id, pid=pid)
-                username = get_username_from_process_id(pid)
+                if process_exists(pid):
+                    username = get_process_username(pid)
+                else:
+                    #Commonly happens if running_in_docker()
+                    username = "???"
                 user_process_vram[username].append((pid, pid_vram))
 
             process_text = []

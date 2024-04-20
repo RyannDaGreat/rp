@@ -503,15 +503,48 @@ class PythonCompleter(Completer):
         # if '.' in origin:
             # ric.current_candidates==ric.current_candidates[::-1]
 
-        for x in ric.current_candidates:
-            if not x.startswith('_') and not x.startswith('.'):#Make sure things starting with '_' come last...
-                yield Completion(text=x,start_position=-len(post_period_origin),display=x)
-        for x in ric.current_candidates:
-            if     x.startswith('_'):
-                yield Completion(text=x,start_position=-len(post_period_origin),display=x)
-        for x in ric.current_candidates:
-            if     x.startswith('.'): #Private files, such as .backup_.py should be displayed last
-                yield Completion(text=x,start_position=-len(post_period_origin),display=x)
+        user_created_var_names = set(ric.rp_pt_user_created_var_names)
+
+        
+        def sorting_key(x):
+            # Assigns a sort key based on prefix rules:
+            # 1. Items starting with '.' come last.
+            # 2. Items starting with '_' come next.
+            # 3. Other items come first.
+            if x.startswith('.'):
+                output = 2  # Highest sort value for items starting with '.'
+            elif x.startswith('_'):
+                if origin.startswith('_'):
+                    #If explicitly looking for privates, put it first
+                    output = -1
+                else:
+                    #If not explicitly looking for privates, put it last
+                    output = 1
+            else:
+                output = 0  # Lowest sort value for other items
+
+            #Put user-made vars first - that means not putting rp things first
+            user_created_priority = 0 if x in user_created_var_names else 1
+
+            output = (output, user_created_priority)
+
+            return output
+        # Single loop processing all candidates, sorted by the custom key
+        for x in sorted(ric.current_candidates, key=sorting_key):
+            yield Completion(text=x, start_position=-len(post_period_origin), display=x)
+
+
+        #OLD VERSION BEFORE SORTING_KEY
+        # for x in ric.current_candidates:
+        #     if not x.startswith('_') and not x.startswith('.'):#Make sure things starting with '_' come last...
+        #         yield Completion(text=x,start_position=-len(post_period_origin),display=x)
+        # for x in ric.current_candidates:
+        #     if     x.startswith('_'):
+        #         yield Completion(text=x,start_position=-len(post_period_origin),display=x)
+        # for x in ric.current_candidates:
+        #     if     x.startswith('.'): #Private files, such as .backup_.py should be displayed last
+        #         yield Completion(text=x,start_position=-len(post_period_origin),display=x)
+
         # print("TIME2:",end='')
         # ptoc()
         # print()
