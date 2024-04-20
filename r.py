@@ -15381,7 +15381,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 split_pwd=path_split(pwd)
 
                                 if not up_folder_name in split_pwd:
-                                    fansi_print("CDU: Please choose a valid parent folder name (i.e. CDU home)",'blue','bold')
+                                    fansi_print("CDU: Please choose a valid parent folder name (i.e. CDU %s)"%random_element(split_pwd),'blue','bold')
                                 else:
                                     for _ in range(split_pwd[::-1].index(up_folder_name)):
                                         pwd=get_parent_directory(pwd)
