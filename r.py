@@ -9480,7 +9480,7 @@ def shorten_github_url(url,title=None):
 #    return res_json['url']
 
 def save_gist(content:str,*,
-              shorten_url=True,
+              shorten_url=False,
               description:str='',
               filename:str='',
               token:str=None):
@@ -12882,6 +12882,25 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         VPLC $local_copy($printed($vim_paste()))
         LCVP $local_copy($printed($vim_paste()))
 
+        UU $set_current_directory('../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUU $set_current_directory('../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUU $set_current_directory('../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUUU $set_current_directory('../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUUUU $set_current_directory('../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUUUUU $set_current_directory('../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUUUUUU $set_current_directory('../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUUUUUUU $set_current_directory('../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUUUUUUUU $set_current_directory('../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUUUUUUUUU $set_current_directory('../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUUUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUUUUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        UUUUUUUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+
         A ACATA
         AA ACATA
         ACA ACATA
@@ -12912,8 +12931,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         NN NEXT
         PP PREV
 
-        B CDB
-        U CDU
+        B  CDB
+        U  CDU
+        DU CDU
 
         CDC cdhclean
         CCL cdhclean
@@ -12979,11 +12999,6 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RX  ryanxonshrc
         RRY  RYAN RPRC YES
         RVY  RYAN VIMRC YES
-
-        UU $set_current_directory('../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUU $set_current_directory('../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUU $set_current_directory('../../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUUU $set_current_directory('../../../../..');$fansi_print($get_current_directory(),'blue','bold')
 
         VIMPROF $r._profile_vim_startup_plugins()
 
@@ -13173,7 +13188,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         ST   settitle
         STIT settitle
 
-        UU $unshorten_url(ans)
+        UR   $unshorten_url(ans)
+        UUR  $unshorten_url(ans)
+        UURL $unshorten_url(ans)
 
         GP  $print_gpu_summary()
         NGP $print_notebook_gpu_summary()
