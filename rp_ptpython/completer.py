@@ -185,7 +185,12 @@ class PythonCompleter(Completer):
                 # print(c,p)
                 yield completion
         import rp.r_iterm_comm as ric
+        current_line=document.current_line
         before_line=document.current_line_before_cursor
+        after_line=document.current_line_after_cursor
+        after=document.text_after_cursor
+        before=document.text_before_cursor
+
 
         import re
         from rp import ring_terminal_bell
@@ -527,6 +532,26 @@ class PythonCompleter(Completer):
         # document=buffer.document
 
         before_line=document.current_line_before_cursor
+        current_line=document.current_line
+        after_line=document.current_line_after_cursor
+        after=document.text_after_cursor
+        before=document.text_before_cursor
+
+        if not after_line and set(before_line)==set('u'):#not after and not '\n' in before and re.fullmatch(before_line):
+            #Complete uuuuuu --> CDU that dir   (lets us see where we're going in the completions! No need to count)
+            import os
+            import rp
+
+            cwd=rp.get_current_directory()
+            for _ in range(len(before_line)):
+                cwd=rp.get_parent_directory(cwd)
+
+            # updir='CDU '+rp.get_folder_name(cwd)
+            updir='CD '+cwd
+
+                
+            yield Completion(text=updir, start_position=-10000, display='^'+rp.get_folder_name(cwd))
+
         if not before_line.strip() and not force:
            return
 
