@@ -7,12 +7,7 @@
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5
-/Library/Frameworks/Python.framework/Versions/3.5/lib
-/Library/Frameworks/Python.framework/Versions/3.5
-/Library/Frameworks/Python.framework/Versions
-/Library/Frameworks/Python.framework
 /Library/Frameworks
-/Library
 /usr
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot
 /Users/Ryan/Desktop/CleanCode/SBU/Research
@@ -90,5 +85,10 @@
 /
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
 /Users/Ryan
+/Library/Frameworks/Python.framework/Versions
+/Library
+/Library/Frameworks/Python.framework/Versions/3.5
+/Library/Frameworks/Python.framework/Versions/3.5/lib
+/Library/Frameworks/Python.framework
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
