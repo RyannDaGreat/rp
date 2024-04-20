@@ -3533,6 +3533,38 @@ def load_python_bindings(python_input):
     #     document=buffer.document
     #     current_line=document.current_line
 
+
+    @handle(Keys.BracketedPaste)
+    def _(event):
+        " Pasting from clipboard. "
+        data = event.data
+
+        # Be sure to use \n as line ending.
+        # Some terminals (Like iTerm2) seem to paste \r\n line endings in a
+        # bracketed paste. See: https://github.com/ipython/ipython/issues/9737
+        data = data.replace('\r\n', '\n')
+        data = data.replace('\r', '\n')
+
+        buffer=event.cli.current_buffer
+        document=buffer.document
+        before=document.text_before_cursor
+        after= document.text_after_cursor
+
+        import rp
+        if not data.startswith(' ') and data:
+            first_word=data.split()[0]
+            import rp.r_iterm_comm as ric
+            import keyword
+
+            # Get the list of all Python keywords
+            python_keywords = keyword.kwlist
+
+            if not data.startswith('!') and first_word in rp.r._get_cached_system_commands() and rp.is_valid_shell_syntax(data) and (not rp.is_valid_python_syntax(data) or not first_word in set(ric.globa)|set(python_keywords) ) and not before and not after:
+                #Assume we're pasting a shell command instead 
+                data='!'+data
+
+        buffer.insert_text(data)
+
     @handle(Keys.ControlD)# Duplicate current line Only applies when there's text, else it will trigger the exit
     def _(event):
         buffer=event.cli.current_buffer

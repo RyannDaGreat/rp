@@ -8267,10 +8267,12 @@ sync_sort=sync_sorted#For backwards compatiability
 
 def starts_with_any(string,*prefixes):
     prefixes=detuple(prefixes)
+    if isinstance(prefixes,str): prefixes=[prefixes]
     return any(string.startswith(x) for x in prefixes)
 
 def ends_with_any(string,*suffixes):
     suffixes=detuple(suffixes)
+    if isinstance(suffixes,str): suffixes=[suffixes]
     return any(string.endswith(x) for x in suffixes)
 
     
@@ -10532,6 +10534,58 @@ def is_valid_python_syntax(code,mode='exec'):
         valid = False
     return valid
 
+
+def is_valid_shell_syntax(code,*, silent=True, command=None):
+    """
+    Returns True if the code is valid shell syntax for your default shell. If command is specified (such as '/bin/zsh' or rp.get_default_shell()), checks that shell instead.
+
+    EXAMPLE:
+        >>> is_valid_shell_syntax('asoidj')
+        ans = True
+        >>> is_valid_shell_syntax('asoidj("')
+        ans = False
+    """
+    import subprocess
+    
+    if command is None:
+        command=get_default_shell()
+    else:
+        assert isinstance(command,str)
+
+    try:
+        # Running the shell code with 'sh -n' which checks for syntax without execution
+        process = subprocess.run(
+            [command, "-n"], input=code, text=True, stderr=subprocess.PIPE, check=True
+        )
+        # If the shell command succeeds without error, the syntax is valid
+        return True
+    except subprocess.CalledProcessError as e:
+        # If there's a syntax error, print the error and return False
+        if not silent:
+            print("Syntax error:", e.stderr)
+        return False
+
+def is_valid_sh_syntax(code, *,silent=True, command="sh"):
+    """Returns True if the code is valid bash syntax, False otherwise. If silent=False, will print out more information."""
+    return is_valid_shell_syntax(code, silent=silent, command=command)
+
+def is_valid_bash_syntax(code, *,silent=True, command="bash"):
+    """Returns True if the code is valid bash syntax, False otherwise. If silent=False, will print out more information."""
+    return is_valid_shell_syntax(code, silent=silent, command=command)
+
+
+def is_valid_zsh_syntax(code, *,silent=True, command="zsh"):
+    """Returns True if the code is valid bash syntax, False otherwise. If silent=False, will print out more information."""
+    return is_valid_shell_syntax(code, silent=silent, command=command)
+
+
+def get_default_shell():
+    """Returns the path to the user's default shell."""
+    return os.environ.get('SHELL', '/bin/sh')  # Fallback to '/bin/sh' if SHELL is not set
+
+
+
+
 def _ipython_exeval_maker(scope={}):
     pip_import('IPython','ipython')#Make sure we have ipython
     from IPython.terminal.embed import InteractiveShellEmbed as Shell
@@ -12368,7 +12422,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
             nonlocal error,display_help_message_on_error,error_message_that_caused_exception
             if display_help_message_on_error:
                 display_help_message_on_error=False
-                fansi_print("""Sorry, but that command caused an error that pseudo_terminal couldn't fix! Command aborted.
+                if False: #Nah, don't need this anymore lol
+                    fansi_print("""Sorry, but that command caused an error that pseudo_terminal couldn't fix! Command aborted.
             Type 'HELP' for instructions on how to use pseudo_terminal in general.
             To see the full traceback of any error, type either 'MORE' or 'MMORE' (or alt+m as a shortcut).
             NOTE: This will be the last time you see this message, unless you enter 'HELP' without quotes.""",'red','bold')
