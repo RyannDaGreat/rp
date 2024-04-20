@@ -36,6 +36,10 @@ def get_all_importable_module_names():
 from threading import Thread
 Thread(target=get_all_importable_module_names).start()
 Thread(target=lambda: __import__('rp').r._get_cached_system_commands).start()
+
+
+MAX_SORTING_PRIORITY=999999999
+sorting_priorities={}
     
 
 _get_apt_completions_cache=None
@@ -161,6 +165,7 @@ class PythonCompleter(Completer):
             char_before_cursor.isalnum() or char_before_cursor in '_.')
 
     def _get_completions(self, document, complete_event,force=False):# When force is true it acts like the original ptpython autocomplete
+      sorting_priorities.clear()
       import warnings
       with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -168,9 +173,14 @@ class PythonCompleter(Completer):
         global old_origin,candidates
         origin=document.get_word_before_cursor()
 
-        def yield_from_candidates(candidates:list):
-            for c in candidates:
-                yield Completion(text=c,start_position=-len(origin),display=c);
+        def yield_from_candidates(candidates:list,priority=None):
+            if priority is None:
+                priority=[MAX_SORTING_PRIORITY]*len(candidates)
+            for c,p in zip(candidates,priority):
+                completion=Completion(text=c,start_position=-len(origin),display=c);
+                sorting_priorities[c]=p
+                # print(c,p)
+                yield completion
         import rp.r_iterm_comm as ric
         before_line=document.current_line_before_cursor
 
@@ -247,10 +257,71 @@ class PythonCompleter(Completer):
         #     return#Don't autocomplete function paramater names
 
         from rp import starts_with_any
-        if starts_with_any(before_line,'CD ','TAKE ','MKDIR ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
+
+        def pathmod(entry):
+            if isinstance(entry,str):
+                if path_before_cursor is not None:
+                    #For completing CD and TAKE etc
+                    entry=entry[len(path_before_cursor):]
+                elif entry.startswith('./'): 
+                    #For completing in strings primarily
+                    #This is just bloat
+                    entry =entry[len('./'):]
+                return entry
+            out = entry.path
+            if entry.is_dir():
+                out+='/'
+            assert isinstance(out,str)
+            return pathmod(out)
+
+        def pathsmod(entries,priority=lambda x:MAX_SORTING_PRIORITY):
+            mods=[]
+            pris=[]
+            for x in entries:
+                mods.append(pathmod(x))
+                pris.append(priority(x))
+            return mods,pris
+
+        path_before_cursor=None
+        def get_path_before_cursor():
+            nonlocal path_before_cursor #Cache this
+
+            #Assume we're like 'TAKE /path'  or  'CAT ./path' etc - we have a space after the first word
+            assert ' ' in before_line
+            first_word=before_line.split()[0]
+            line=before_line
+            line=line[len(first_word):]
+            line=line.lstrip()
+            if not line:
+                path= '.'
+            elif line.endswith('/'):
+                path= line
+            elif '/' in line:
+                path= '/'.join(line.split('/')[:-1])
+            else:
+                path= line
+
+            import rp
+            if rp.path_exists(path):
+                path_before_cursor = path
+            else:
+                #Don't crash, hack here. No reason to return '.', really, other than that. Cant pass bad path to scandir.
+                path_before_cursor = '.'
+
+            return path_before_cursor
+
+
+                
+        if starts_with_any(before_line,'CD ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
+            import rp
             import os
             from rp import is_a_directory
-            yield from yield_from_candidates([x for x in os.listdir() if is_a_directory(x)])
+            yield from yield_from_candidates(*pathsmod(x for x in os.scandir(get_path_before_cursor()) if x.is_dir()))
+            return 
+        if starts_with_any(before_line,'TAKE ','MKDIR ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
+            import os
+            from rp import is_a_directory
+            yield from yield_from_candidates(*pathsmod(os.scandir(get_path_before_cursor()), priority= lambda x:not x.is_dir()))
             return 
         if starts_with_any(before_line,'PYM ','APYM ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             def get_module_names():
@@ -261,12 +332,13 @@ class PythonCompleter(Completer):
             return 
         if starts_with_any(before_line,'RN ','RM ','VIM ','OPEN ','FD ','WANS ','MV ','PIP ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
-            yield from yield_from_candidates(os.listdir())
+            yield from yield_from_candidates(*pathsmod(os.scandir(get_path_before_cursor())))
             return 
         if re.fullmatch(r'(CAT |NCAT |CCAT |OPEN |ACAT |TAB |RUN |PY |APY |PYM |APYM ).*',before) and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
             from rp import is_a_file
-            yield from yield_from_candidates([x for x in os.listdir() if is_a_file(x)])
+            import rp
+            yield from yield_from_candidates(*pathsmod(os.scandir(get_path_before_cursor()), priority= lambda x: x.is_dir())) #Put directories last but do include them
             return 
         if re.fullmatch(r'.*\`\w*',before_line)\
             or (before_line.startswith('RUN ') and not ('\n' in before) and not after):#not after and not '\n' in before and re.fullmatch(before_line):
@@ -334,7 +406,20 @@ class PythonCompleter(Completer):
 
             # Do Jedi Python completions.
             if complete_event.completion_requested or self._complete_python_while_typing(document):
-                doc=Document(document.text,document.cursor_position-(origin[::-1].find('.') if '.' in origin else len(origin)),document.selection)
+                
+                cursor_position=document.cursor_position
+
+                if not '/' in origin:
+                    #If we're completing a path, don't modify this.
+                    #Otherwise, please grab as many completions as we can so we can efficiently backtrack through them
+                    cursor_position-=(origin[::-1].find(".") if "." in origin else len(origin))   #NOT SURE WHAT THIS WAS FOR (april 19 2024) --- Disabling it seems to do nothing?? OH wait...I think I know what this is for...its to make sure we get ALL the completions so our code can handle getting subsets faster. Re-enabling.
+
+                doc = Document(
+                    document.text,
+                    cursor_position,
+                    document.selection,
+                )
+
                 script = get_jedi_script_from_document(doc, self.get_locals(), self.get_globals())
                 # print(script)
                 pos=document.cursor_position-len(origin)+1
@@ -511,14 +596,20 @@ class PythonCompleter(Completer):
             # 1. Items starting with '.' come last.
             # 2. Items starting with '_' come next.
             # 3. Other items come first.
+            orig = x
             if x.startswith('.'):
-                output = 2  # Highest sort value for items starting with '.'
+                if origin.startswith('.'):
+                    #If explicitly looking for hidden file paths, put it first
+                    output = -1
+                else:
+                    #If not explicitly looking for that, put it last
+                    output = 1
             elif x.startswith('_'):
                 if origin.startswith('_'):
                     #If explicitly looking for privates, put it first
                     output = -1
                 else:
-                    #If not explicitly looking for privates, put it last
+                    #If not explicitly looking for that, put it last
                     output = 1
             else:
                 output = 0  # Lowest sort value for other items
@@ -527,12 +618,55 @@ class PythonCompleter(Completer):
             user_created_priority = 0 if x in user_created_var_names else 1
 
             output = (output, user_created_priority)
+            output = (output, sorting_priorities.get(orig,MAX_SORTING_PRIORITY))
 
             return output
+
+        out_completions=[]
+
+        # print(sorting_priorities)
+
         # Single loop processing all candidates, sorted by the custom key
         for x in sorted(ric.current_candidates, key=sorting_key):
-            yield Completion(text=x, start_position=-len(post_period_origin), display=x)
+            if x.endswith("'") or x.endswith('"'): x=x[:-1] #Autocompleted paths in strings are a bit buggy right now
 
+            #When completing 'System/|' origin is just '/'
+
+            def unhidden_path(x):
+                o=x
+                x=x.strip()
+                while x[0] in '/':
+                    x=x[1:]
+                if x.startswith('.'):
+                    return x[1:]
+                return o
+
+            #TODO: THis was edited on MACX to give path completion for CD etc on April 19 2024. It's very sloppy and full of bugs and really ugly, done in los angeles. TODO: Undo this commit and make it prettier! 
+            if x.startswith('/') and (not '/' in before_line or before_line.endswith('/')):
+                x=x[1:]
+                
+            text=x
+            display=x
+
+            if x.strip().endswith('/'):
+                #Its annoying when folders are completed with /'s because then when we type tab it goes away
+                #But if we type / we get folder// instead.
+                #Let the user type the /
+                text=text.strip()[:-1]
+                if '/' in origin:
+                    #Make sure dividers are right
+                    text = "/" + text
+
+            if '.' in x and before_line.endswith('.'):
+                #Don't complete .g to ..git   or   'rp/.' to 'rp/..git' make it 'rp/.git' instead
+                text=unhidden_path(text)
+
+            # display=origin #For debugging
+
+
+            out_completions.append(Completion(text=text, start_position=-len(post_period_origin), display=display))
+
+        yield from out_completions
 
         #OLD VERSION BEFORE SORTING_KEY
         # for x in ric.current_candidates:
