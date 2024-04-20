@@ -1167,6 +1167,13 @@ def fansi_syntax_highlighting(code: str,
         raise
         return code  # Failed to highlight code, presumably because of an import error.
 
+
+def _fansi_highlight_path(path,color='cyan'):
+    path=strip_ansi_escapes(path)
+    path=path.split('/')
+    return fansi('/','blue','bold').join(fansi(x,color) for x in path)
+    return fansi('/',color,'bold').join(fansi(x,color) for x in path)
+
 # endregion
 # region  Copy/Paste: ［string_to_clipboard，string_from_clipboard］
 import os
@@ -12882,24 +12889,47 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         VPLC $local_copy($printed($vim_paste()))
         LCVP $local_copy($printed($vim_paste()))
 
-        UU $set_current_directory('../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUU $set_current_directory('../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUU $set_current_directory('../../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUUU $set_current_directory('../../../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUUUU $set_current_directory('../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUUUUU $set_current_directory('../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUUUUUU $set_current_directory('../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUUUUUUU $set_current_directory('../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUUUUUUUU $set_current_directory('../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUUUUUUUUU $set_current_directory('../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUUUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUUUUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
-        UUUUUUUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../../../../../../..');$fansi_print($get_current_directory(),'blue','bold')
+        U CDU
+        UU $set_current_directory('../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUU $set_current_directory('../../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUUU $set_current_directory('../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUUUU $set_current_directory('../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUUUUU $set_current_directory('../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUUUUUU $set_current_directory('../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUUUUUUU $set_current_directory('../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUUUUUUUU $set_current_directory('../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUUUUUUUUU $set_current_directory('../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUUUUUUUUUU $set_current_directory('../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUUUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUUUUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUUUUUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        UUUUUUUUUUUUUUUUUUU $set_current_directory('../../../../../../../../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+
+         1U CDU
+         2U $set_current_directory('../..');print($r._fansi_highlight_path($get_current_directory()))
+         3U $set_current_directory('../../..');print($r._fansi_highlight_path($get_current_directory()))
+         4U $set_current_directory('../../../..');print($r._fansi_highlight_path($get_current_directory()))
+         5U $set_current_directory('../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+         6U $set_current_directory('../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+         7U $set_current_directory('../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+         8U $set_current_directory('../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+         9U $set_current_directory('../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        10U $set_current_directory('../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        11U $set_current_directory('../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        12U $set_current_directory('../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        13U $set_current_directory('../../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        14U $set_current_directory('../../../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        15U $set_current_directory('../../../../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        16U $set_current_directory('../../../../../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        17U $set_current_directory('../../../../../../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        18U $set_current_directory('../../../../../../../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        19U $set_current_directory('../../../../../../../../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+        20U $set_current_directory('../../../../../../../../../../../../../../../../../../../..');print($r._fansi_highlight_path($get_current_directory()))
+
 
         A ACATA
         AA ACATA
@@ -13310,7 +13340,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         if get_current_directory()=='.':
                             fansi_print("WARNING: Current directory was deleted; moving to a new location",'yellow','bold')
                             set_current_directory('/')
-                            fansi_print("PWD: "+get_current_directory(),"blue",'bold')
+                            fansi_print("PWD: "+_fansi_highlight_path(get_current_directory()),"blue",'bold')
 
                         user_message=get_user_input(lambda:scope(),header=_get_prompt_style(),enable_ptpython=enable_ptpython)
                         try:set_numpy_print_options(linewidth=max(0,get_terminal_width()-len('ans = ')))#Make for prettier numpy printing, by dynamically adjusting the linewidth each time we enter a command
@@ -14226,9 +14256,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         rinsp(eval(user_message[:-1],scope()))
 
                     elif user_message=='PWD':
-                        fansi_print("PWD: "+get_current_directory(),"blue",'bold')
+                        fansi_print("PWD: "+_fansi_highlight_path(get_current_directory()),"blue",'bold')
                     elif user_message=='CPWD':
-                        fansi_print("CPWD: Copied current directory to clipboard: "+get_current_directory(),"blue",'bold')
+                        fansi_print("CPWD: Copied current directory to clipboard: "+_fansi_highlight_path(get_current_directory()),"blue",'bold')
                         string_to_clipboard(get_current_directory())
                     elif user_message.startswith('CAT ') or user_message.startswith('NCAT ') or user_message in ['CAT','NCAT','CATA','NCATA']:
 
@@ -14768,7 +14798,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 user_message='ans = '+repr(xonshrc_path)
 
                         elif user_message=='APWD':
-                            fansi_print("APWD: Set ans to current directory: "+get_current_directory(),"blue",'bold')
+                            fansi_print("APWD: Set ans to current directory: "+_fansi_highlight_path(get_current_directory()),"blue",'bold')
                             user_message=repr(get_current_directory())
 
 
@@ -15007,7 +15037,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         
                         elif user_message=='FDT':
                             fansi_print("FDT aka FinD Text --> Grep with FZF",'blue','bold')
-                            fansi_print("    (Reminder) PWD: "+get_current_directory(),"blue",'bold')
+                            fansi_print("    (Reminder) PWD: "+_fansi_highlight_path(get_current_directory()),"blue",'bold')
                             result=rp.r._fzf_multi_grep()
                             result=repr(result)
                             user_message=result
@@ -15270,7 +15300,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     user_message='import sys,os;os.chdir('+repr(new_dir)+');sys.path.append(os.getcwd())# '+user_message
                                 else:
                                     user_message='import sys,os;os.mkdir('+repr(new_dir)+');os.chdir('+repr(new_dir)+');sys.path.append(os.getcwd())# '+user_message
-                                fansi_print("TAKE --> Current directory = "+get_absolute_path(new_dir),'blue')
+                                fansi_print("TAKE --> Current directory = "+_fansi_highlight_path(get_absolute_path(new_dir)),'blue')
                             elif make:
                                 fansi_print("MKDIR --> Created new directory: "+new_dir,'blue')
                                 # user_message="__import__('os').mkdir(%s)"%repr(new_dir)
@@ -15418,7 +15448,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     if new_dir.startswith('~'):
                                         new_dir=get_absolute_path(new_dir)
                                     set_current_directory(new_dir)
-                                    fansi_print("CD --> Current directory = "+(get_current_directory()),'blue','bold')
+                                    fansi_print("CD --> Current directory = "+(_fansi_highlight_path(get_current_directory())),'blue','bold')
                                     set_current_directory(_pwd)
                                     if user_message!='CDB':
                                         if get_absolute_path(new_dir)!=get_absolute_path(get_current_directory()):

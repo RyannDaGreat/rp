@@ -1713,7 +1713,8 @@ def handle_character(buffer,char,event=None):
             return True
         if char in 'qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM_':
             if not after:
-                if before=='5':
+                if before=='5' and char!='u':
+                    #Don't do 5u, because thats a shortcut for UUUUU aka uuuuu
                     #`5edit` --->  `%edit` #For ipython magics, turn 5 into % if at the beginning of a line
                     buffer.delete_before_cursor()
                     buffer.insert_text('%')
@@ -2456,20 +2457,21 @@ def load_python_bindings(python_input):
                     # print(token,repr(name),found)
                     if (found and name in ('9','9j','9J') or name=='') and endswithany(before_line,'j','J','9'):
                         if not (before_line.endswith('9') and char in 'jJ'):#9j is a legit imaginary literal. That's an edge case...
-                            #Tokens can't start with a digit and end with a letter. 
-                            #So, because of that, we can start a () region by using the 9 key without holding shift
-                            #(Later we'd want to extend this to quotes, or any other breaking syntax)
-                            #(on press x, for ex)    [9|]  --->   [(x|)]
-                            buffer.delete_before_cursor()
-                            if before_line.lower().endswith('j'):
+                            if not before=='9' and char=='u' and not after: #Let 9u be uuuuuuuuu aka UUUUUUUUU
+                                #Tokens can't start with a digit and end with a letter. 
+                                #So, because of that, we can start a () region by using the 9 key without holding shift
+                                #(Later we'd want to extend this to quotes, or any other breaking syntax)
+                                #(on press x, for ex)    [9|]  --->   [(x|)]
                                 buffer.delete_before_cursor()
-                            buffer.insert_text('(')
-                            if before_line.lower().endswith('j'):
-                                buffer.insert_text(before_line[-1])
-                            buffer.insert_text(char)
-                            buffer.insert_text(')')
-                            buffer.cursor_left()
-                            return
+                                if before_line.lower().endswith('j'):
+                                    buffer.delete_before_cursor()
+                                buffer.insert_text('(')
+                                if before_line.lower().endswith('j'):
+                                    buffer.insert_text(before_line[-1])
+                                buffer.insert_text(char)
+                                buffer.insert_text(')')
+                                buffer.cursor_left()
+                                return
                     def writing_namespace_breaks_syntax(before_line):
                         return endswithany(before_line,' ',#This is like [x |for] (space to the left of |)
                             ')',']','}',*'1234567890','"',"'")#All of these are breaking syntax...
