@@ -3566,6 +3566,11 @@ def load_python_bindings(python_input):
                 #Pasting after 1 --> !
                 buffer.delete_before_cursor()
                 buffer.insert_text('!')
+            elif before=='11' and not after and not data[0].isnumeric():
+                #Pasting after 11 --> !!
+                buffer.delete_before_cursor()
+                buffer.delete_before_cursor()
+                buffer.insert_text('!!')
 
         buffer.insert_text(data)
 
