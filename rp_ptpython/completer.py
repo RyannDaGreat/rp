@@ -173,11 +173,14 @@ class PythonCompleter(Completer):
         global old_origin,candidates
         origin=document.get_word_before_cursor()
 
-        def yield_from_candidates(candidates:list,priority=None):
+        def yield_from_candidates(candidates:list,priority=None,displays=None):
             if priority is None:
                 priority=[MAX_SORTING_PRIORITY]*len(candidates)
-            for c,p in zip(candidates,priority):
-                completion=Completion(text=c,start_position=-len(origin),display=c);
+            if displays is None:
+                displays=candidates
+            for c,p,d in zip(candidates,priority,displays):
+                #TODO: RIGHT NOW displays IS IGNORED BY get_completions WHICH USES THIS FUNCTION. ANNOYING!
+                completion=Completion(text=c,start_position=-len(origin),display=d);
                 sorting_priorities[c]=p
                 # print(c,p)
                 yield completion
@@ -329,6 +332,25 @@ class PythonCompleter(Completer):
                 for _, module_name, _ in pkgutil.iter_modules():
                     yield module_name
             yield from yield_from_candidates(get_module_names())
+            return 
+        if starts_with_any(before_line,'CDU ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
+            import os
+            import rp
+
+            pwd=rp.get_current_directory()
+            cwd=pwd
+            displays=[]
+            updirs=[]
+            priorities=[]
+            for _ in range(len(rp.path_split(pwd))):
+                cwd=rp.get_parent_directory(cwd)
+                if rp.get_folder_name(cwd):
+                    priorities.append(len(cwd))
+                    displays.append(rp.get_folder_name(cwd))
+                    updirs.append('/'+cwd)
+
+                
+            yield from yield_from_candidates(updirs,displays=displays,priority=priorities)
             return 
         if starts_with_any(before_line,'RN ','RM ','VIM ','OPEN ','FD ','WANS ','MV ','PIP ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os

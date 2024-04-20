@@ -15371,10 +15371,12 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 _clean_cd_history()
                             user_message=''
 
-                        elif not '\n' in user_message and (user_message=='CD' or user_message.startswith('CD ') or user_message=='CDP') or user_message=='CDB' or user_message=='CDU' or user_message=='CDA' or user_message in 'CDZ' or user_message=='CDQ':
+                        elif not '\n' in user_message and (user_message=='CD' or user_message.startswith('CD ') or user_message.startswith('CDU') or user_message=='CDP') or user_message=='CDB' or user_message=='CDU' or user_message=='CDA' or user_message in 'CDZ' or user_message=='CDQ':
                             if user_message=='CDU':
                                 fansi_print("CDU (aka CD Up) is an alias for 'CD ..'",'blue')
                                 user_message='CD ..'
+                            if user_message.startswith('CDU '):
+                                user_message='CD '+user_message[len('CDU '):]
                             if user_message=='CDA':
                                 new_dir=str(get_ans())
                                 new_dir=get_absolute_path(new_dir)
