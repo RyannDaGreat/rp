@@ -345,9 +345,11 @@ class PythonCompleter(Completer):
             for _ in range(len(rp.path_split(pwd))):
                 cwd=rp.get_parent_directory(cwd)
                 if rp.get_folder_name(cwd):
-                    priorities.append(len(cwd))
-                    displays.append(rp.get_folder_name(cwd))
-                    updirs.append('/'+cwd)
+                    priorities.append(-len(cwd))
+                    upname=rp.get_folder_name(cwd)
+                    displays.append(upname)
+                    updirs.append(upname)
+                    # updirs.append('/'+cwd)
 
                 
             yield from yield_from_candidates(updirs,displays=displays,priority=priorities)

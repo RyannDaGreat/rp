@@ -15376,7 +15376,19 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 fansi_print("CDU (aka CD Up) is an alias for 'CD ..'",'blue')
                                 user_message='CD ..'
                             if user_message.startswith('CDU '):
-                                user_message='CD '+user_message[len('CDU '):]
+                                up_folder_name=user_message[len('CDU '):]
+                                pwd=get_current_directory()
+                                split_pwd=path_split(pwd)
+
+                                if not up_folder_name in split_pwd:
+                                    fansi_print("CDU: Please choose a valid parent folder name (i.e. CDU home)",'blue','bold')
+                                else:
+                                    for _ in range(split_pwd[::-1].index(up_folder_name)):
+                                        pwd=get_parent_directory(pwd)
+                                    _pterm_cd(pwd)
+                                continue 
+                                    
+                                    
                             if user_message=='CDA':
                                 new_dir=str(get_ans())
                                 new_dir=get_absolute_path(new_dir)
