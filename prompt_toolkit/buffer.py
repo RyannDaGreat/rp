@@ -940,7 +940,8 @@ class Buffer(object):
         (when we don't have history search, it's also True.)
         """
         return (self.history_search_text is None or
-                self._working_lines[i].startswith(self.history_search_text))
+                self._working_lines[i].startswith(self.history_search_text) or
+                self._working_lines[i].startswith('!') and self._working_lines[i][1:].startswith(self.history_search_text))
 
     def history_forward(self, count=1):
         """
