@@ -1019,7 +1019,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
 
 
 
-        " RP CLIPBOARDS: \wco \wpa \lco \lpa
+        " RP CLIPBOARDS: \wco \wpa \lco \lpa \CO \PA
             " Helper function to check RP_SYS_EXECUTABLE and execute the command
             " Same rules as \tco \tpa (visual mode or normal for copy, normal for paste)
 
@@ -1045,6 +1045,9 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             endfunction
 
 
+            vnoremap <leader>CO y<cr>:call ExecuteRP('string_to_clipboard(sys.stdin.read())')<cr>gv
+            nnoremap <leader>CO:call ExecuteRP('string_to_clipboard(sys.stdin.read())')<cr>
+
             vnoremap <leader>wco y<cr>:call ExecuteRP('web_copy(sys.stdin.read())')<cr>gv
             nnoremap <leader>wco :.y<cr>:call ExecuteRP('web_copy(sys.stdin.read())')<cr>
 
@@ -1053,3 +1056,4 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
 
             nnoremap <leader>wpa :call ExecuteRP('print(web_paste())')<cr>"0p<cr>g;
             nnoremap <leader>lpa :call ExecuteRP('print(local_paste())')<cr>"0p<cr>g;
+            nnoremap <leader>PA :call ExecuteRP('print(clipboard_to_string())')<cr>"0p<cr>g;
