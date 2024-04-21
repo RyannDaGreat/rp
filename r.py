@@ -3133,7 +3133,7 @@ def encode_image_to_base64(image,filetype=None,quality=100):
     """
     import base64
     
-    byte_data = encode_image_to_bytes(image, "jpg")
+    byte_data = encode_image_to_bytes(image, filetype)
 
     return base64.b64encode(byte_data).decode("utf-8")
 
@@ -5488,6 +5488,9 @@ def gather_args(func, *args, frames_back=1, **kwargs):
         TypeError: If a required argument is missing from the gathered variables and is not provided
                    through *args, **kwargs, or the function's default values.
 
+    TODO: Use inspect.signature instead of inspect.getfullargspec, because getfullargspec is old - and functools.wrap doesn't change those signatures
+        If we want to use this with memoized or stack this on other decorators, it has to read these arguments more robustly
+
     EXAMPLE USE CASE:
         # gather_args can be used to greatly simplify code where functions need a lot of each other's variables
         
@@ -5812,6 +5815,9 @@ def gather_args_bind(func, *args, frames_back=1, **kwargs):
     Like gather_args_wrapper, but binds the values in the namespace upon creation.
     Here's an example to show the difference:
 
+    TODO: Use inspect.signature instead of inspect.getfullargspec, because getfullargspec is old - and functools.wrap doesn't change those signatures
+        If we want to use this with memoized or stack this on other decorators, it has to read these arguments more robustly
+
     EXAMPLE:
         >>> def f(x,y):
                 print(x,y)
@@ -5902,19 +5908,16 @@ def gather_args_bind(func, *args, frames_back=1, **kwargs):
         new_kwargs = dict(saved_kwargs)
         new_kwargs.update(kwargs)
 
-        if len(args) > len(saved_args):
-            new_args = args
-        else:
-            new_args = list(saved_args)
-            new_args[:len(args)] = list(args)
+        new_args = list(saved_args)
+        new_args[:len(args)] = args
 
         for name in set(new_kwargs) & set(func_arg_names):
             #Turn any kwargs in to args
             new_args[func_arg_names.index(name)] = new_kwargs.pop(name)
 
         #Check for placeholder values that haven't been replaced - indicating we didn't fill enough function arguments
-        missing_arg_indices  = [i for i,a in enumerate(new_args) if a==placeholder]
-        missing_kwarg_names  = [n for n,k in new_kwargs.items()  if k==placeholder]
+        missing_arg_indices  = [i for i,a in enumerate(new_args) if a is placeholder]
+        missing_kwarg_names  = [n for n,k in new_kwargs.items()  if k is placeholder]
         missing_arg_names    = gather(func_arg_names, missing_arg_indices)
         missing_names = missing_arg_names + missing_kwarg_names
         if missing_names:
@@ -13406,9 +13409,12 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         TMDA $os.system('tmux list-sessions -F "#{session_name}" | xargs -I % tmux detach -s %') #Detach all users from all tmux sessions
     
-        RF    $random_element($get_all_files())
-        RD    $random_element($get_all_directories())
+        RF    $random_element([x for x in $os.scandir() if not x.is_dir()])
+        RD    $random_element([x for x in $os.scandir() if x.is_dir()])
         RE    $random_element(ans)
+
+        RDA   $r._pterm_cd($random_element([x for x in $os.scandir() if x.is_dir()]))   # RD then DA
+        CDR   $r._pterm_cd($random_element([x for x in $os.scandir() if x.is_dir()]))
 
         LJ LINE JOIN ANS
         AJ JSON ANS
@@ -15602,6 +15608,13 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 pwd=get_current_directory()
                                 split_pwd=path_split(pwd)
 
+                                if up_folder_name not in split_pwd:
+                                    #Fuzzy search it, give it a best shot
+                                    for up_candidate in split_pwd[::-1][1:]:
+                                        if fuzzy_string_match(up_folder_name,up_candidate,case_sensitive=False):
+                                            up_folder_name=up_candidate
+                                            break
+
                                 if not up_folder_name in split_pwd:
                                     fansi_print("CDU: Please choose a valid parent folder name (i.e. CDU %s)"%random_element(split_pwd),'blue','bold')
                                 else:
@@ -16180,26 +16193,28 @@ def total_disc_bytes(path):
         assert False,'r.get_disc_space ERROR: '+path+' is neither a folder nor a file!'
 
 def human_readable_file_size(file_size:int):
-    #Given a file size in bytes, return a string that represents how large it is in megabytes, gigabytes etc - whatever's easiest to interperet
-    #EXAMPLES:
-    #     >>> human_readable_file_size(0)
-    #    ans = 0B
-    #     >>> human_readable_file_size(100)
-    #    ans = 100B
-    #     >>> human_readable_file_size(1023)
-    #    ans = 1023B
-    #     >>> human_readable_file_size(1024)
-    #    ans = 1KB
-    #     >>> human_readable_file_size(1025)
-    #    ans = 1.0KB
-    #     >>> human_readable_file_size(1000000)
-    #    ans = 976.6KB
-    #     >>> human_readable_file_size(10000000)
-    #    ans = 9.5MB
-    #     >>> human_readable_file_size(1000000000)
-    #    ans = 953.7MB
-    #     >>> human_readable_file_size(10000000000)
-    #    ans = 9.3GB
+    """
+    Given a file size in bytes, return a string that represents how large it is in megabytes, gigabytes etc - whatever's easiest to interperet
+    EXAMPLES:
+         >>> human_readable_file_size(0)
+        ans = 0B
+         >>> human_readable_file_size(100)
+        ans = 100B
+         >>> human_readable_file_size(1023)
+        ans = 1023B
+         >>> human_readable_file_size(1024)
+        ans = 1KB
+         >>> human_readable_file_size(1025)
+        ans = 1.0KB
+         >>> human_readable_file_size(1000000)
+        ans = 976.6KB
+         >>> human_readable_file_size(10000000)
+        ans = 9.5MB
+         >>> human_readable_file_size(1000000000)
+        ans = 953.7MB
+         >>> human_readable_file_size(10000000000)
+        ans = 9.3GB
+    """
     
     for count in 'B KB MB GB TB PB EB ZB YB BB GB'.split():
         #Bytes Kilobytes Megabytes Gigabytes Terrabytes Petabytes Exobytes Zettabytes Yottabytes Brontobytes Geopbytes
@@ -16210,11 +16225,145 @@ def human_readable_file_size(file_size:int):
                 return "%3.1f%s" % (file_size, count)
         file_size /= 1024.0
 
+def string_to_file_size(size_str: str) -> int:
+    """
+    Converts a human-readable file size string back to the number of bytes,
+    handling various units and their common abbreviations (case-insensitive).
+    This function also handles numeric words like 'one', 'two', etc.
+    
+    Inverse of rp.human_readable_file_size
+
+    Parameters:
+        size_str (str): The human-readable file size string (e.g., "9.3GB", "one megabyte").
+
+    Returns:
+        int: The equivalent file size in bytes as an integer.
+
+    Raises:
+        ValueError: If the format of the input string is invalid or if the unit is unknown.
+
+    Examples:
+        >>> string_to_file_size("byte")               -->   1
+        >>> string_to_file_size("1 byte")             -->   1
+        >>> string_to_file_size("1b")                 -->   1
+        >>> string_to_file_size("1024 bytes")         -->   1024
+        >>> string_to_file_size("1 kilobyte")         -->   1024
+        >>> string_to_file_size("1 KB")               -->   1024
+        >>> string_to_file_size("1kb")                -->   1024
+        >>> string_to_file_size("1kib")               -->   1024
+        >>> string_to_file_size("1 KiB")              -->   1024
+        >>> string_to_file_size("one kilobyte")       -->   1024
+        >>> string_to_file_size("ten kilobytes")      -->   10240
+        >>> string_to_file_size("1 MB")               -->   1048576
+        >>> string_to_file_size("1mb")                -->   1048576
+        >>> string_to_file_size("1 mib")              -->   1048576
+        >>> string_to_file_size("1.5 MB")             -->   1572864
+        >>> string_to_file_size("one megabyte")       -->   1048576
+        >>> string_to_file_size("5 gigabytes")        -->   5368709120
+        >>> string_to_file_size("2.5 GB")             -->   2684354560
+        >>> string_to_file_size("1 terabyte")         -->   1099511627776
+        >>> string_to_file_size("1 TB")               -->   1099511627776
+        >>> string_to_file_size("1000 tb")            -->   1099511627776000
+        >>> string_to_file_size("500 petabytes")      -->   562949953421312000
+        >>> string_to_file_size("1 exabyte")          -->   1152921504606846976
+        >>> string_to_file_size("1.2 yottabytes")     -->   1407374883553280000
+        >>> string_to_file_size("three zettabytes")   -->   3298534883328000000
+        >>> string_to_file_size("1kb 500b")           -->   ValueError: Invalid size format
+        >>> string_to_file_size("1024 mbsss")         -->   ValueError: Unknown or invalid unit: 'mbsss'
+
+    https://chat.openai.com/share/4b7dc44a-26eb-4520-9ed6-3a7f6f9aaece
+    """
+
+    assert isinstance(size_str,str)
+    assert len(size_str)>0
+
+    import re
+
+    _condensed_filesize_units = {
+        'b                      byte': 1024**0,
+        'k kb kib kilobyte  kibibyte': 1024**1,
+        'm mb mib megabyte  mebibyte': 1024**2,
+        'g gb gib gigabyte  gibibyte': 1024**3,
+        't tb tib terabyte  tebibyte': 1024**4,
+        'p pb pib petabyte  pebibyte': 1024**5,
+        'e eb eib exabyte   exbibyte': 1024**6,
+        'z zb zib zettabyte zebibyte': 1024**7,
+        'y yb yib yottabyte yobibyte': 1024**8,
+    }
+
+    def postprocess(units_dict):
+        """ Expands the condensed dictionary of file size units. """
+        expanded_units = {}
+        for key, value in units_dict.items():
+            units = key.split()
+            for unit in units:
+                expanded_units[unit] = value
+        return expanded_units
+
+    _filesize_units = postprocess(_condensed_filesize_units)
+    _filesize_units[''] = 1
+
+    def normalize_unit(unit: str) -> str:
+        """
+        Normalize the unit string to ensure consistency in dictionary lookup.
+        Converts to lowercase and checks for valid units, accepting only valid singular or simple plural forms.
+        """
+        normalized_unit = unit.lower().rstrip('s')
+        if normalized_unit not in _filesize_units:
+            raise ValueError(f"Unknown or invalid unit: '{unit}'")
+        return normalized_unit
+
+    if ' ' in size_str:
+        size_str=size_str.split()
+        unit=size_str[-1]
+        number=' '.join(size_str[:-1])
+        number=words_to_number(number)
+    else:
+        def split_numbers_and_letters(input_str: str):
+            """
+            Splits a string into a number and letter part.
+
+            Parameters:
+                input_str (str): Input string containing numbers followed by letters.
+
+            Returns:
+                tuple: (float, str) of the number and letter parts.
+                
+            Examples:
+                >>> split_numbers_and_letters("234.234aa")
+                (234.234, 'aa')
+                >>> split_numbers_and_letters("1000xyz")
+                (1000.0, 'xyz')
+            """
+            if not input_str[0].isnumeric():
+                number_part=1
+                letter_part=input_str
+            else:
+                match = re.match(r'^(\d+(\.\d+)?)([a-zA-Z]+)$', input_str)
+                if not match:
+                    raise ValueError("Input must start with numbers followed by letters.")
+                number_part = float(match.group(1))
+                letter_part = match.group(3)
+            
+            return (number_part, letter_part)
+        number,unit=split_numbers_and_letters(size_str)
+        
+    unit=normalize_unit(unit)
+    
+    if unit in _filesize_units:
+        return int(number * _filesize_units[unit])
+    else:
+        raise ValueError("Unknown unit: " + unit)
+
+
+
 def get_file_size(path:str, human_readable:bool=False):
-    #Gets the filesize of the given path
-    #Can also get the size of folders
-    #If human_readable is True, it will return a string.
-    #If human_readable is False, it will return an int specifying the number of bytes.
+    """
+    Gets the filesize of the given path
+    Can also get the size of folders
+    If human_readable is True, it will return a string.
+    If human_readable is False, it will return an int specifying the number of bytes.
+    """
     
     assert path_exists(path),'The path you gave doesnt exist: '+repr(path)
 
@@ -16467,44 +16616,48 @@ def qterm():
     app.quit()  # NOT nessecary but PERHAPS its nicer than having a crashy window...make this optional though!!!
 
 def UCB1(w,n,N,c=2**.5):
-    #w ÷ n + c √(㏑(N) ÷ n)
-    #From wikipedia.org/wiki/Monte_Carlo_tree_search:
-    #   · w﹦number of wins for the node
-    #   · n﹦number of simulations for the node
-    #   · N﹦total number of simulations among all nodes
-    #   · c﹦the exploration parameter—theoretically equal to √2; in practice usually chosen empirically
+    """
+    w ÷ n + c √(㏑(N) ÷ n)
+    From wikipedia.org/wiki/Monte_Carlo_tree_search:
+       · w﹦number of wins for the node
+       · n﹦number of simulations for the node
+       · N﹦total number of simulations among all nodes
+       · c﹦the exploration parameter—theoretically equal to √2; in practice usually chosen empirically
+    """
     from math import log as ln
     return w/n+c*(ln(N)/n)**.5
 
 def all_rolls(vector,axis=None):
-    #TODO: See if this is the same thing as a toeplitz matrix
-    #TODO: There might be a faster way of doing this, but until then this implementation works. It can be swapped out later.
-    #Return all circshifts of a vector
-    #EXAMPLE:
-    #    CODE: print(all_rolls([1,2,3,4,5]))
-    #    Output:
-    #       [[1 2 3 4 5]
-    #        [5 1 2 3 4]
-    #        [4 5 1 2 3]
-    #        [3 4 5 1 2]
-    #        [2 3 4 5 1]]
-    #EXAMPLE:
-    #    THIS
-    #        [[7 8 9]
-    #         [1 2 3]
-    #         [4 5 6]]
-    #    BECOMES
-    #       [[[7 8 9]
-    #         [1 2 3]
-    #         [4 5 6]]
-    #
-    #        [[4 5 6]
-    #         [7 8 9]
-    #         [1 2 3]]
-    #
-    #        [[1 2 3]
-    #         [4 5 6]
-    #         [7 8 9]]]
+    """
+    TODO: See if this is the same thing as a toeplitz matrix
+    TODO: There might be a faster way of doing this, but until then this implementation works. It can be swapped out later.
+    Return all circshifts of a vector
+    EXAMPLE:
+        CODE: print(all_rolls([1,2,3,4,5]))
+        Output:
+           [[1 2 3 4 5]
+            [5 1 2 3 4]
+            [4 5 1 2 3]
+            [3 4 5 1 2]
+            [2 3 4 5 1]]
+    EXAMPLE:
+        THIS
+            [[7 8 9]
+             [1 2 3]
+             [4 5 6]]
+        BECOMES
+           [[[7 8 9]
+             [1 2 3]
+             [4 5 6]]
+    
+            [[4 5 6]
+             [7 8 9]
+             [1 2 3]]
+    
+            [[1 2 3]
+             [4 5 6]
+             [7 8 9]]]
+    """
     vector=np.asarray(vector)#If this breaks, it's the fault of the user of this function
     out=[]
     for _ in range(len(vector)):
@@ -23279,168 +23432,184 @@ def _get_inflect_engine():
     return _inflect_engine
 
 def is_plural_noun(noun):
-    #Return True if the given noun is in plural form, and False otherwise
+    """ Return True if the given noun is in plural form, and False otherwise """
     return not is_singular_noun(noun)
 
 def is_singular_noun(noun):
-    #Return True if the given noun is in singular form, and False otherwise
+    """ Return True if the given noun is in singular form, and False otherwise """
     return not bool(_get_inflect_engine().singular_noun(noun))#When a noun is singular already, and we pass it into the inflect library's singular_noun function, it returns False
 
 def is_singular_noun_of(singular_word,plural_word):
-    #Returns true if singular_word is the signular-form of plural_word
+    """ Returns true if singular_word is the signular-form of plural_word """
     return _get_inflect_engine().compare_nouns(singular_word,plural_word) and is_singular_noun(singular_word)
 
 def is_plural_noun_of(plural_word,singular_word):
-    #Returns true if plural_word is the plural-form of singular_word
-    #
+    """ Returns true if plural_word is the plural-form of singular_word """
     return _get_inflect_engine().compare_nouns(plural_word,singular_word) and is_plural_noun(plural_word)
 
 def plural_noun(noun,force=False):
-    #Returns the plural form of a singular word
-    #If force is true, it will not check to see if this noun is allready plural.
-    #If force is true, we guarentee that the result is different from the  orignal
-    #Right now this function uses a library called 'inflect'. "pip install inflect"
-    #EXAMPLE:
-    #    plural_noun("house")              -> "houses"
-    #    plural_noun("houses",force=False) -> "houses"
-    #    plural_noun("houses",force=True)  -> "housess"
-    #    plural_noun("mouse")              -> "mice"
-    #    plural_noun("die")                -> "dice"
-    #    plural_noun("goose")              -> "geese"
-    #    plural_noun("sheep")              -> "sheep"
-    #    plural_noun("doggy")              -> "doggies"
-    #    plural_noun("qwerty")             -> "qwerties" #Even works for made-up words
-    #    plural_noun("spinach")            -> "spinaches"
-    #    plural_noun("person")             -> "people"
-    #    plural_noun("the_thing")          -> "the_things"
-    #    plural_noun('wrq_qijjz_puppy')    -> "wrq_qijjz_puppies" #it's robust enough to handle conjoined variable names with multiple words in them'
-    #    plural_noun("index")              -> "indices" #Actually, indices and indexes are both gramattically correct. This is controlled by the line with '.classical()' in _get_inflect_engine
-    #    plural_noun("octopus")            -> "octopuses"  #lol not "octoputties", which is the TECHNICALLY CORRECT name...
-    #
-    #
-    #EXAMPLE:
-    #    #The 'force' option defaults to False to prevent this from happening:
-    #    plural_noun("houses",force=True)  -> "housess"
-    #    #If force is True, it can keep growing the word indefinately if we keep applying this function to it
+    """
+    Returns the plural form of a singular word
+    If force is true, it will not check to see if this noun is allready plural.
+    If force is true, we guarentee that the result is different from the  orignal
+    Right now this function uses a library called 'inflect'. "pip install inflect"
+    EXAMPLE:
+        plural_noun("house")              -> "houses"
+        plural_noun("houses",force=False) -> "houses"
+        plural_noun("houses",force=True)  -> "housess"
+        plural_noun("mouse")              -> "mice"
+        plural_noun("die")                -> "dice"
+        plural_noun("goose")              -> "geese"
+        plural_noun("sheep")              -> "sheep"
+        plural_noun("doggy")              -> "doggies"
+        plural_noun("qwerty")             -> "qwerties" #Even works for made-up words
+        plural_noun("spinach")            -> "spinaches"
+        plural_noun("person")             -> "people"
+        plural_noun("the_thing")          -> "the_things"
+        plural_noun('wrq_qijjz_puppy')    -> "wrq_qijjz_puppies" #it's robust enough to handle conjoined variable names with multiple words in them'
+        plural_noun("index")              -> "indices" #Actually, indices and indexes are both gramattically correct. This is controlled by the line with '.classical()' in _get_inflect_engine
+        plural_noun("octopus")            -> "octopuses"  #lol not "octoputties", which is the TECHNICALLY CORRECT name...
+    
+    
+    EXAMPLE:
+        #The 'force' option defaults to False to prevent this from happening:
+        plural_noun("houses",force=True)  -> "housess"
+        #If force is True, it can keep growing the word indefinately if we keep applying this function to it
+    """
     if not force and is_plural_noun(noun):
         return noun
     return _get_inflect_engine().plural_noun(noun)
 
 def singular_noun(noun):
-    #Returns the singular form of a plural word
-    #EXAMPLE:
-    #    singular_noun('houses')            -> 'house'
-    #    singular_noun('mice')              -> 'mouse'
-    #    singular_noun('sheep')             -> 'sheep'
-    #    singular_noun('dice')              -> 'die'
-    #    singular_noun('doggies')           -> 'doggy'
-    #    singular_noun('qwerties')          -> 'qwerty'
-    #    singular_noun('spinaches')         -> 'spinach'
-    #    singular_noun('the_things')        -> 'the_thing'
-    #    singular_noun('wrq_qijjz_puppies') -> 'wrq_qijjz_puppy'
-    #    singular_noun('indexes')           -> 'index'
-    #    singular_noun('octopuses')         -> 'octopus'
-    #    singular_noun('houseses')          -> 'housese'
-    #    singular_noun('geese')             -> 'goose'
-    #    singular_noun('people')            -> 'person'
+    """
+    Returns the singular form of a plural word
+    EXAMPLE:
+        singular_noun('houses')            -> 'house'
+        singular_noun('mice')              -> 'mouse'
+        singular_noun('sheep')             -> 'sheep'
+        singular_noun('dice')              -> 'die'
+        singular_noun('doggies')           -> 'doggy'
+        singular_noun('qwerties')          -> 'qwerty'
+        singular_noun('spinaches')         -> 'spinach'
+        singular_noun('the_things')        -> 'the_thing'
+        singular_noun('wrq_qijjz_puppies') -> 'wrq_qijjz_puppy'
+        singular_noun('indexes')           -> 'index'
+        singular_noun('octopuses')         -> 'octopus'
+        singular_noun('houseses')          -> 'housese'
+        singular_noun('geese')             -> 'goose'
+        singular_noun('people')            -> 'person'
+    """
     return _get_inflect_engine().singular_noun(noun) or noun#If the noun is allready singular; leave it alone. If noun is allready singular, inflect will return "False" because it fails to turn your noun into singular form, causing this function to return the orignal word instead.
 
 def number_to_words(number):
-    #Returns the english representation of a number (can be an integer, negative, or even floating point. But can NOT be a complex number right now, because it will mess that up)
-    #    number_to_words(0)           -> 'zero'
-    #    number_to_words(1)           -> 'one'
-    #    number_to_words(2)           -> 'two'
-    #    number_to_words(3)           -> 'three'
-    #    number_to_words(4)           -> 'four'
-    #    number_to_words(5)           -> 'five'
-    #    number_to_words(10)          -> 'ten'
-    #    number_to_words(15)          -> 'fifteen'
-    #    number_to_words(20)          -> 'twenty'
-    #    number_to_words(25)          -> 'twenty-five'
-    #    number_to_words(50)          -> 'fifty'
-    #    number_to_words(78)          -> 'seventy-eight'
-    #    number_to_words(92)          -> 'ninety-two'
-    #    number_to_words(101)         -> 'one hundred and one'
-    #    number_to_words(1000)        -> 'one thousand'
-    #    number_to_words(1238)        -> 'one thousand, two hundred and thirty-eight'
-    #    number_to_words(3498)        -> 'three thousand, four hundred and ninety-eight'
-    #    number_to_words(12398)       -> 'twelve thousand, three hundred and ninety-eight'
-    #    number_to_words(12938123)    -> 'twelve million, nine hundred and thirty-eight thousand, one hundred and twenty-three'
-    #    number_to_words(-1)          -> 'negative one'
-    #    number_to_words(-2)          -> 'negative two'
-    #    number_to_words(-3)          -> 'negative three'
-    #    number_to_words(-4)          -> 'negative four'
-    #    number_to_words(-5)          -> 'negative five'
-    #    number_to_words(-123)        -> 'negative one hundred and twenty-three'
-    #    number_to_words(-123.4)      -> 'negative one hundred and twenty-three point four'
-    #    number_to_words(1.1)         -> 'one point one'
-    #    number_to_words(0.2)         -> 'zero point two'
-    #    number_to_words(0.333333333) -> 'zero point three three three three three three three three three'
-    #    number_to_words(0.25)        -> 'zero point two five'
+    """
+    Returns the english representation of a number (can be an integer, negative, or even floating point. But can NOT be a complex number right now, because it will mess that up)
+        number_to_words(0)           -> 'zero'
+        number_to_words(1)           -> 'one'
+        number_to_words(2)           -> 'two'
+        number_to_words(3)           -> 'three'
+        number_to_words(4)           -> 'four'
+        number_to_words(5)           -> 'five'
+        number_to_words(10)          -> 'ten'
+        number_to_words(15)          -> 'fifteen'
+        number_to_words(20)          -> 'twenty'
+        number_to_words(25)          -> 'twenty-five'
+        number_to_words(50)          -> 'fifty'
+        number_to_words(78)          -> 'seventy-eight'
+        number_to_words(92)          -> 'ninety-two'
+        number_to_words(101)         -> 'one hundred and one'
+        number_to_words(1000)        -> 'one thousand'
+        number_to_words(1238)        -> 'one thousand, two hundred and thirty-eight'
+        number_to_words(3498)        -> 'three thousand, four hundred and ninety-eight'
+        number_to_words(12398)       -> 'twelve thousand, three hundred and ninety-eight'
+        number_to_words(12938123)    -> 'twelve million, nine hundred and thirty-eight thousand, one hundred and twenty-three'
+        number_to_words(-1)          -> 'negative one'
+        number_to_words(-2)          -> 'negative two'
+        number_to_words(-3)          -> 'negative three'
+        number_to_words(-4)          -> 'negative four'
+        number_to_words(-5)          -> 'negative five'
+        number_to_words(-123)        -> 'negative one hundred and twenty-three'
+        number_to_words(-123.4)      -> 'negative one hundred and twenty-three point four'
+        number_to_words(1.1)         -> 'one point one'
+        number_to_words(0.2)         -> 'zero point two'
+        number_to_words(0.333333333) -> 'zero point three three three three three three three three three'
+        number_to_words(0.25)        -> 'zero point two five'
+    """
     return _get_inflect_engine().number_to_words(number).replace('minus','negative')
 
 def words_to_number(string):
-    #I did my best to make this the inverse of number_to_words, and it works for most cases
-    #Returns either an int or a float, depending on the context
-    #Can handle decimal points and negative numbers, but NOT complex numbers
-    #EXAMPLES:
-    #    words_to_number("sixty-five"                                     ) = 65
-    #    words_to_number("negative twenty-one"                            ) = -21
-    #    words_to_number("thirty-eight"                                   ) = 38
-    #    words_to_number("negative thirty-five"                           ) = -35
-    #    words_to_number("five hundred and ninety-three"                  ) = 593
-    #    words_to_number("negative thirty-six"                            ) = -36
-    #    words_to_number("twenty-nine"                                    ) = 29
-    #    words_to_number("six hundred and five"                           ) = 605
-    #    words_to_number("two hundred and thirty-four"                    ) = 234
-    #    words_to_number("negative twenty-six"                            ) = -26
-    #    words_to_number("thirty"                                         ) = 30
-    #    words_to_number("one thousand and seven"                         ) = 1007
-    #    words_to_number("one thousand, two hundred and six"              ) = 1206
-    #    words_to_number("one thousand, seven hundred and twenty-seven"   ) = 1727
-    #    words_to_number("ninety-eight"                                   ) = 98
-    #    words_to_number("zero point six one"                             ) = 0.61
-    #    words_to_number("point 5"                                        ) = 0.5
-    #    words_to_number("zero point five"                                ) = 0.5
-    #    words_to_number("one over 2"                                     ) = 0.5
-    #    words_to_number("one out of 2"                                   ) = 0.5
-    #    words_to_number("one of two"                                     ) = 0.5
-    #    words_to_number("1 / 2"                                          ) = 0.5
-    #    words_to_number("zero point zero five"                           ) = 0.5
-    #    words_to_number("zero point five one"                            ) = 0.51
-    #    words_to_number("five point 4"                                   ) = 5.4
-    #    words_to_number("five point six three"                           ) = 5.63
-    #    words_to_number("0.6"                                            ) = 0.6
-    #    words_to_number("0.6234"                                         ) = 0.6234
-    #    words_to_number("five point six two"                             ) = 5.62
-    #    words_to_number("negative 4"                                     ) = -4
-    #    words_to_number("negative 4 point 4"                             ) = -4.4
-    #    words_to_number("negative zero point 4"                          ) = -0.4
-    #    words_to_number("negative zero point 4 five 6"                   ) = -0.456
-    #    words_to_number("one . 2 3 4 5"                                  ) = 1.2345
-    #    words_to_number("negative one . 2 3 4 five"                      ) = -1.2345
-    #    words_to_number("negative 2 one . 2 3 4 five"                    ) = -1.2345
-    #    words_to_number("negative 2 four one . 2 3 4 five"               ) = -5.2345
-    #    words_to_number("negative four one  . 2 3 4 five"                ) = -5.2345
-    #    words_to_number("negative four one one . 2 3 4 five"             ) = -5.2345
-    #    words_to_number("negative twelve . 2 3 4 five"                   ) = -12.2345
-    #    words_to_number("negative          2     one   . 2 34   five    ") = -1.2345
-    #    words_to_number("negative 2 one . 2 3 4 five"                    ) = -1.2345
-    #    words_to_number("543 point 2 2 2"                                ) = 543.222
-    #    words_to_number("  minus 543 point 2 2 2"                        ) = -543.222
-    #    words_to_number(" minus point 5"                                 ) = -0.5
-    #    words_to_number("   minus     zero out      of 10   "            ) = 0
-    #    words_to_number("   negative  zero out      of 10   "            ) = 0
-    #    words_to_number("      -      zero out      of 10   "            ) = 0
-    #    words_to_number("324.234"                                        ) = 324.234
-    #    words_to_number("-23.234"                                        ) = -23.234
-    #    words_to_number("235"                                            ) = 235
-    #    words_to_number("-1"                                             ) = -1
-    #    words_to_number("-.0"                                            ) = -0.0
-    #    words_to_number("-0.1"                                           ) = -0.1
+    """
+    I did my best to make this the inverse of number_to_words, and it works for most cases
+    Returns either an int or a float, depending on the context
+    Can handle decimal points and negative numbers, but NOT complex numbers
+    EXAMPLES:
+        words_to_number("sixty-five"                                     ) = 65
+        words_to_number("negative twenty-one"                            ) = -21
+        words_to_number("thirty-eight"                                   ) = 38
+        words_to_number("negative thirty-five"                           ) = -35
+        words_to_number("five hundred and ninety-three"                  ) = 593
+        words_to_number("negative thirty-six"                            ) = -36
+        words_to_number("twenty-nine"                                    ) = 29
+        words_to_number("six hundred and five"                           ) = 605
+        words_to_number("two hundred and thirty-four"                    ) = 234
+        words_to_number("negative twenty-six"                            ) = -26
+        words_to_number("thirty"                                         ) = 30
+        words_to_number("one thousand and seven"                         ) = 1007
+        words_to_number("one thousand, two hundred and six"              ) = 1206
+        words_to_number("one thousand, seven hundred and twenty-seven"   ) = 1727
+        words_to_number("ninety-eight"                                   ) = 98
+        words_to_number("zero point six one"                             ) = 0.61
+        words_to_number("point 5"                                        ) = 0.5
+        words_to_number("zero point five"                                ) = 0.5
+        words_to_number("one over 2"                                     ) = 0.5
+        words_to_number("one out of 2"                                   ) = 0.5
+        words_to_number("one of two"                                     ) = 0.5
+        words_to_number("1 / 2"                                          ) = 0.5
+        words_to_number("zero point zero five"                           ) = 0.5
+        words_to_number("zero point five one"                            ) = 0.51
+        words_to_number("five point 4"                                   ) = 5.4
+        words_to_number("five point six three"                           ) = 5.63
+        words_to_number("0.6"                                            ) = 0.6
+        words_to_number("0.6234"                                         ) = 0.6234
+        words_to_number("five point six two"                             ) = 5.62
+        words_to_number("negative 4"                                     ) = -4
+        words_to_number("negative 4 point 4"                             ) = -4.4
+        words_to_number("negative zero point 4"                          ) = -0.4
+        words_to_number("negative zero point 4 five 6"                   ) = -0.456
+        words_to_number("one . 2 3 4 5"                                  ) = 1.2345
+        words_to_number("negative one . 2 3 4 five"                      ) = -1.2345
+        words_to_number("negative 2 one . 2 3 4 five"                    ) = -1.2345
+        words_to_number("negative 2 four one . 2 3 4 five"               ) = -5.2345
+        words_to_number("negative four one  . 2 3 4 five"                ) = -5.2345
+        words_to_number("negative four one one . 2 3 4 five"             ) = -5.2345
+        words_to_number("negative twelve . 2 3 4 five"                   ) = -12.2345
+        words_to_number("negative          2     one   . 2 34   five    ") = -1.2345
+        words_to_number("negative 2 one . 2 3 4 five"                    ) = -1.2345
+        words_to_number("543 point 2 2 2"                                ) = 543.222
+        words_to_number("  minus 543 point 2 2 2"                        ) = -543.222
+        words_to_number(" minus point 5"                                 ) = -0.5
+        words_to_number("   minus     zero out      of 10   "            ) = 0
+        words_to_number("   negative  zero out      of 10   "            ) = 0
+        words_to_number("      -      zero out      of 10   "            ) = 0
+        words_to_number("324.234"                                        ) = 324.234
+        words_to_number("-23.234"                                        ) = -23.234
+        words_to_number("235"                                            ) = 235
+        words_to_number("-1"                                             ) = -1
+        words_to_number("-.0"                                            ) = -0.0
+        words_to_number("-0.1"                                           ) = -0.1
+    """
+    assert isinstance(string,str),'word2number error: please input a string. You gave me a '+repr(type(string))
+
+    try:
+        #Try the fast way first
+        return float(string)
+    except Exception:
+        #oh well lol at least we tried
+        pass
+
+    pip_import('word2number')
     from word2number import w2n #pip install word2number
 
-    assert isinstance(string,str),'word2number error: please input a string. You gave me a '+repr(type(string))
 
     negative=False
     string=string.strip()
@@ -23480,21 +23649,23 @@ def words_to_number(string):
 #endregion
 
 def _get_parts_of_speech_via_nltk(word):
-    #Given a word, return the parts of speech (adjectives, nouns, verbs etc) that this word belongs to.
-    #Code from: https://stackoverflow.com/questions/35462747/how-to-check-a-word-if-it-is-adjective-or-verb-using-python-nltk
-    #EXAMPLES:
-    #     >>> _get_parts_of_speech_via_nltk('dog')
-    #    ans = {'n'}
-    #     >>> _get_parts_of_speech_via_nltk('tail')
-    #    ans = {'v', 'n'}
-    #     >>> _get_parts_of_speech_via_nltk('run')
-    #    ans = {'v', 'n'}
-    #     >>> _get_parts_of_speech_via_nltk('pretty')
-    #    ans = {'s'}
-    #     >>> _get_parts_of_speech_via_nltk('the')
-    #    ans = set()
-    #     >>> _get_parts_of_speech_via_nltk('aosidfj')
-    #    ans = set()
+    """
+    Given a word, return the parts of speech (adjectives, nouns, verbs etc) that this word belongs to.
+    Code from: https://stackoverflow.com/questions/35462747/how-to-check-a-word-if-it-is-adjective-or-verb-using-python-nltk
+    EXAMPLES:
+         >>> _get_parts_of_speech_via_nltk('dog')
+        ans = {'n'}
+         >>> _get_parts_of_speech_via_nltk('tail')
+        ans = {'v', 'n'}
+         >>> _get_parts_of_speech_via_nltk('run')
+        ans = {'v', 'n'}
+         >>> _get_parts_of_speech_via_nltk('pretty')
+        ans = {'s'}
+         >>> _get_parts_of_speech_via_nltk('the')
+        ans = set()
+         >>> _get_parts_of_speech_via_nltk('aosidfj')
+        ans = set()
+    """
 
     pip_import('nltk')
     _make_sure_nltk_has_wordnet_installed()
@@ -23532,16 +23703,20 @@ def is_an_adjective(word:str)->bool:
     return 's' in _get_parts_of_speech_via_nltk(word)
 
 def is_a_noun(word:str)->bool:
-    #Returns true if the given word is an english noun, false otherwise
-    #Please note that this function is far from fool-proof. is_a_noun('poop')==False, for example (which is wrong), even though is_an_english_word('poop')==True
-    #However, for most english words, this will work properly.
+    """
+    Returns true if the given word is an english noun, false otherwise
+    Please note that this function is far from fool-proof. is_a_noun('poop')==False, for example (which is wrong), even though is_an_english_word('poop')==True
+    However, for most english words, this will work properly.
+    """
     return 'n' in _get_parts_of_speech_via_nltk(word)
 
 @memoized
 def get_all_english_words():
-    #Apparently, both Linux and Mac have a file that contains every english word! 
-    #See https://stackoverflow.com/questions/3788870/how-to-check-if-a-word-is-an-english-word-with-python/3789057
-    #TODO: Possibly might make all of these words lower case, haven't decided yet...
+    """
+    Apparently, both Linux and Mac have a file that contains every english word! 
+    See https://stackoverflow.com/questions/3788870/how-to-check-if-a-word-is-an-english-word-with-python/3789057
+    TODO: Possibly might make all of these words lower case, haven't decided yet...
+    """
     if currently_running_unix():
         return set(line_split(text_file_to_string("/usr/share/dict/words")))
     else:
@@ -23552,7 +23727,7 @@ def _get_all_english_words_lowercase():
     return line_join(get_all_english_words()).lower()
 
 def is_an_english_word(word):
-    #This function is not case sensitive
+    "This function is not case sensitive"
     return word.lower() in _get_all_english_words_lowercase()
 
 def split_sentences(text, language='english'):
@@ -23675,8 +23850,10 @@ def _get_punkt_languages():
     return output
 
 def connected_to_internet():
-    #Return True if we're online, else False
-    #Code from: https://stackoverflow.com/questions/20913411/test-if-an-internet-connection-is-present-in-python/21460844
+    """
+    Return True if we're online, else False
+    Code from: https://stackoverflow.com/questions/20913411/test-if-an-internet-connection-is-present-in-python/21460844
+    """
     import socket
     try:
         # connect to the host -- tells us if the host is actually
@@ -23688,7 +23865,7 @@ def connected_to_internet():
     return False
 
 def _string_pager_via_pypager(string):
-    #Uses prompt-toolkit. But this can break if you have the wrong prompt toolkit version.
+    """ Uses prompt-toolkit. But this can break if you have the wrong prompt toolkit version.  """
     pip_import('pypager')
     string=str(string)
     from pypager.source import StringSource
@@ -23702,9 +23879,11 @@ def _string_pager_via_click(string):
     click.echo_via_pager(string)
 
 def string_pager(string):
-    #Uses a python-based pager, similar to the program 'less', where you can scroll and search through things
-    #What is a pager? See: https://en.wikipedia.org/wiki/Terminal_pager
-    #Useful for displaying gigantic outputs without printing the whole thing
+    """
+    Uses a python-based pager, similar to the program 'less', where you can scroll and search through things
+    What is a pager? See: https://en.wikipedia.org/wiki/Terminal_pager
+    Useful for displaying gigantic outputs without printing the whole thing
+    """
     string=str(string)
     _string_pager_via_click(string)
     # _string_pager_via_pypager(string)#We're not using this one right now, because it uses prompt toolkit and might break if we have the wrong version installed
@@ -23723,18 +23902,22 @@ def _get_pynput_mouse_controller():
     return _pynput_mouse_controller
 
 def get_mouse_position():
-    #Return (x,y) coordinates representing the position of the mouse cursor. (0,0) is the top left corner of the screen.
-    #x is horizontal movement, y is vertical movement. More y is further down, more x is further right.
-    #EXAMPLE: while True:print(get_mouse_position()) #Move your mouse around and watch the numbers change
+    """
+    Return (x,y) coordinates representing the position of the mouse cursor. (0,0) is the top left corner of the screen.
+    x is horizontal movement, y is vertical movement. More y is further down, more x is further right.
+    EXAMPLE: while True:print(get_mouse_position()) #Move your mouse around and watch the numbers change
+    """
     return _get_pynput_mouse_controller().position
 
 def set_mouse_position(*position):
-    #EXAMPLES:
-    #    set_mouse_position( 23,40 ) #you can specify the coordinates as separate x,y arguments
-    #    set_mouse_position(*get_mouse_position())
-    #
-    #    set_mouse_position((23,40)) #you can also specify the coordinates as a single tuple
-    #    set_mouse_position( get_mouse_position())
+    """
+    EXAMPLES:
+        set_mouse_position( 23,40 ) #you can specify the coordinates as separate x,y arguments
+        set_mouse_position(*get_mouse_position())
+    
+        set_mouse_position((23,40)) #you can also specify the coordinates as a single tuple
+        set_mouse_position( get_mouse_position())
+    """
     position=detuple(position)
     assert len(position)==2 and all(map(is_number,position)),'Invalid input: expected (x,y) pair but got position='+repr(position)
     x,y=position#I'm being explicit here for readability
@@ -23848,47 +24031,47 @@ def mouse_middle_release():
 
 def unicode_loading_bar(n,chars='▏▎▍▌▋▊▉█'):
     """
-    #EXAMPLE 1: for _ in range(200):print(end='\r'+unicode_loading_bar(_));sleep(.05)
-    #EXAMPLE 2:
-    #    for _ in range(1500):
-    #        sleep(1/30)#30fps
-    #        x=_/1000#_ is between 0 and 1
-    #        x**=2#Frequency increases over time
-    #        x*=tau
-    #        x*=10
-    #        x=np.sin(x)
-    #        x+=1#Make it all positive
-    #        x*=20
-    #        x*=8
-    #        print(unicode_loading_bar(x))
-    #THE ABOVE EXAMPLE PRINTS SOMETHING LIKE THIS:
-    # ▊
-    # █▊
-    # ███▏
-    # ████▌
-    # ██████▏
-    # ███████▊
-    # █████████▍
-    # ██████████▋
-    # ███████████▋
-    # ████████████▎
-    # ████████████▌
-    # ████████████▍
-    # ███████████▊
-    # ██████████▊
-    # █████████▍
-    # ███████▉
-    # ██████▏
-    # ████▋
-    # ███
-    # █▊
-    # ▊
-    # ▎
-    # ▏
-    # ▍
-    # █
-    # ██
-    # ███▎
+    EXAMPLE 1: for _ in range(200):print(end='\r'+unicode_loading_bar(_));sleep(.05)
+    EXAMPLE 2:
+        for _ in range(1500):
+            sleep(1/30)#30fps
+            x=_/1000#_ is between 0 and 1
+            x**=2#Frequency increases over time
+            x*=tau
+            x*=10
+            x=np.sin(x)
+            x+=1#Make it all positive
+            x*=20
+            x*=8
+            print(unicode_loading_bar(x))
+    THE ABOVE EXAMPLE PRINTS SOMETHING LIKE THIS:
+     ▊
+     █▊
+     ███▏
+     ████▌
+     ██████▏
+     ███████▊
+     █████████▍
+     ██████████▋
+     ███████████▋
+     ████████████▎
+     ████████████▌
+     ████████████▍
+     ███████████▊
+     ██████████▊
+     █████████▍
+     ███████▉
+     ██████▏
+     ████▋
+     ███
+     █▊
+     ▊
+     ▎
+     ▏
+     ▍
+     █
+     ██
+     ███▎
     """
 
     assert is_number(n),'Input assumption'
@@ -23904,24 +24087,24 @@ def unicode_loading_bar(n,chars='▏▎▍▌▋▊▉█'):
 
 def get_scope(level=0,scope='locals'):
     """
-    #Get the scope of n levels up from the current stack frame
-    #Useful as a substitute for using globals(), locals() etc: you can specify exactly how many functions up you want to go
-    #This function lets you do pretty crazy things that seem totally illegal to python scoping rules...
-    #EXAMPLE:
-    #   | --> hello='bonjour'
-    #   |   2 def f():
-    #   |   3     hello='hola'
-    #   |   4     def g():
-    #   |   5         hello='world'
-    #   |   6         print(get_scope(0)['hello'])
-    #   |   7         print(get_scope(1)['hello'])
-    #   |   8         print(get_scope(2)['hello'])
-    #   |   9     g()
-    #   |  10 f()
-    #   |world
-    #   |hola
-    #   |bonjour
-    #A useful application of this function is for letting pseudo_terminal infer the locals() and globals() when embedding it without having to pass them manually through arguments. I got this idea from iPython's embed implementation, and thought it was pretty genius.
+    Get the scope of n levels up from the current stack frame
+    Useful as a substitute for using globals(), locals() etc: you can specify exactly how many functions up you want to go
+    This function lets you do pretty crazy things that seem totally illegal to python scoping rules...
+    EXAMPLE:
+       | --> hello='bonjour'
+       |   2 def f():
+       |   3     hello='hola'
+       |   4     def g():
+       |   5         hello='world'
+       |   6         print(get_scope(0)['hello'])
+       |   7         print(get_scope(1)['hello'])
+       |   8         print(get_scope(2)['hello'])
+       |   9     g()
+       |  10 f()
+       |world
+       |hola
+       |bonjour
+    A useful application of this function is for letting pseudo_terminal infer the locals() and globals() when embedding it without having to pass them manually through arguments. I got this idea from iPython's embed implementation, and thought it was pretty genius.
     """
     assert level>=0,'level cannot be negative'
     assert isinstance(level,int),'level must be an integer (fractions dont make any sense; you cant go up a fractional number of frames)'
@@ -23948,17 +24131,19 @@ def get_all_importable_module_names(use_cache=True):
     return _all_module_names
 
 def get_module_path_from_name(module_name):
-    #Gets the file path of a module without importing it, given the module's name
-    #EXAMPLES:
-    #    ⮤ get_module_path_from_name('rp')
-    #   ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/__init__.py
-    #    ⮤ get_module_path_from_name('prompt_toolkit')
-    #   ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/prompt_toolkit/__init__.py
-    #    ⮤ get_module_path_from_name('numpy')
-    #   ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/numpy/__init__.py
-    #    ⮤ get_module_path_from_name('six')
-    #   ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/six.py
-    #FROM: https://stackoverflow.com/questions/4693608/find-path-of-module-without-importing-in-python
+    """
+    Gets the file path of a module without importing it, given the module's name
+    EXAMPLES:
+        ⮤ get_module_path_from_name('rp')
+       ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/__init__.py
+        ⮤ get_module_path_from_name('prompt_toolkit')
+       ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/prompt_toolkit/__init__.py
+        ⮤ get_module_path_from_name('numpy')
+       ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/numpy/__init__.py
+        ⮤ get_module_path_from_name('six')
+       ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/six.py
+    FROM: https://stackoverflow.com/questions/4693608/find-path-of-module-without-importing-in-python
+    """
     import importlib
     try:
         return importlib.util.find_spec(module_name).origin
@@ -24096,10 +24281,12 @@ def median(*x):
     return median(x)
 
 def norm_cdf(x,mean=0,std=1):
-    #normal cumulative distribution function
-    #Given a value x, calculate the z-score and return the cumulative normal distribution of that z score
-    #Note: this function can also take numpy vector inputs and return vector outputs!
-    #EXAMPLE: bar_graph(norm_pdf(np.linspace(-3,3)))
+    """
+    normal cumulative distribution function
+    Given a value x, calculate the z-score and return the cumulative normal distribution of that z score
+    Note: this function can also take numpy vector inputs and return vector outputs!
+    EXAMPLE: bar_graph(norm_pdf(np.linspace(-3,3)))
+    """
     z=(x-mean)/std#Calculate the z-score
     pip_import('scipy')
     from scipy.stats import norm
@@ -24107,20 +24294,24 @@ def norm_cdf(x,mean=0,std=1):
         
 
 def norm_pdf(x,mean=0,std=1):
-    #normal probability density function
-    #Given a value x, calculate the z-score and return the normal distribution density of that z score
-    #Note: this function can also take numpy vector inputs and return vector outputs!
-    #EXAMPLE: bar_graph(norm_pdf(np.linspace(-3,3)))
+    """
+    normal probability density function
+    Given a value x, calculate the z-score and return the normal distribution density of that z score
+    Note: this function can also take numpy vector inputs and return vector outputs!
+    EXAMPLE: bar_graph(norm_pdf(np.linspace(-3,3)))
+    """
     z=(x-mean)/std#Calculate the z-score
     pip_import('scipy')
     from scipy.stats import norm
     return norm.pdf(z)
 
 def inverse_norm_cdf(p,mean=0,std=1):
-    #inverse normal cumulative distribution function
-    #The inverse of the norm_pdf function (given a probability, find the x-value that made it)
-    #Note: this function can also take numpy vector inputs and return vector outputs!
-    #EXAMPLE: bar_graph(inverse_norm_cdf(np.linspace(0,1,1000)))
+    """
+    inverse normal cumulative distribution function
+    The inverse of the norm_pdf function (given a probability, find the x-value that made it)
+    Note: this function can also take numpy vector inputs and return vector outputs!
+    EXAMPLE: bar_graph(inverse_norm_cdf(np.linspace(0,1,1000)))
+    """
     pip_import('scipy')
     from scipy.stats import norm
     z=norm.ppf(p)#The z-score. https://bytes.com/topic/python/answers/478142-scipy-numpy-inverse-cumulative-normal
@@ -24200,9 +24391,11 @@ def download_urls(
     )
 
 def debug(level=0):
-    #Launch a debugger at 'level' frames up from the frame where you call this function.
-    #Try to launch rp_ptpdb, but if we can't for whatever reason fallback to regular ol' pdb.
-    #This doesn't use pudb, because pudb doesn't work on windows. Meanwhile, ptpdb runs on anything that can run prompt toolkit...making it a clear winner here.
+    """
+    Launch a debugger at 'level' frames up from the frame where you call this function.
+    Try to launch rp_ptpdb, but if we can't for whatever reason fallback to regular ol' pdb.
+    This doesn't use pudb, because pudb doesn't work on windows. Meanwhile, ptpdb runs on anything that can run prompt toolkit...making it a clear winner here.
+    """
     try:
         from rp.rp_ptpdb import set_trace_shallow
         # text_to_speech("CHUGGA CHUGGA MUGGA WUGGA")
@@ -24232,19 +24425,21 @@ def square_matrix_size(matrix):
 
 _prime_factors_cache={}
 def prime_factors(number):
-    #EXAMPLES:
-    #     >>> prime_factors(23)
-    #    ans = [23]
-    #     >>> prime_factors(24)
-    #    ans = [2, 2, 2, 3]
-    #     >>> prime_factors(12)
-    #    ans = [2, 2, 3]
-    #     >>> prime_factors(720)
-    #    ans = [2, 2, 2, 2, 3, 3, 5]
-    #     >>> prime_factors(10)
-    #    ans = [2, 5]
-    #     >>> prime_factors(11)
-    #    ans = [11]
+    """
+    EXAMPLES:
+         >>> prime_factors(23)
+        ans = [23]
+         >>> prime_factors(24)
+        ans = [2, 2, 2, 3]
+         >>> prime_factors(12)
+        ans = [2, 2, 3]
+         >>> prime_factors(720)
+        ans = [2, 2, 2, 2, 3, 3, 5]
+         >>> prime_factors(10)
+        ans = [2, 5]
+         >>> prime_factors(11)
+        ans = [11]
+    """
     assert number>=1,'number must be a positive integer'
     assert int(number)==number,'number must be a positive integer'
     if number in _prime_factors_cache:
@@ -24266,7 +24461,7 @@ def prime_factors(number):
             return out
 
 def set_os_volume(percent):
-    #Set your operating system's volume
+    """ Set your operating system's volume """
     assert is_number(percent),'Volume percent should be a number, but got type '+repr(type(percent))
     assert 0<=percent<=100,'Volume percent should be between 0 and 100, but got volume = '+repr(percent)
     if currently_running_mac():
@@ -24275,18 +24470,20 @@ def set_os_volume(percent):
         assert False,'Sorry, currently only MacOS is supported for setting the volume. This might change in the future.'
 
 def fuzzy_string_match(string,target,*,case_sensitive=True):
-    # >>> fuzzy_string_match('apha','alpha')
-    #ans = True
-    # >>> fuzzy_string_match('alpha','alpha')
-    #ans = True
-    # >>> fuzzy_string_match('aa','alpha')
-    #ans = True
-    # >>> fuzzy_string_match('aqa','alpha')
-    #ans = False
-    # >>> fuzzy_string_match('e','alpha')
-    #ans = False
-    # >>> fuzzy_string_match('h','alpha')
-    #ans = False
+    """
+     >>> fuzzy_string_match('apha','alpha')
+    ans = True
+     >>> fuzzy_string_match('alpha','alpha')
+    ans = True
+     >>> fuzzy_string_match('aa','alpha')
+    ans = True
+     >>> fuzzy_string_match('aqa','alpha')
+    ans = False
+     >>> fuzzy_string_match('e','alpha')
+    ans = False
+     >>> fuzzy_string_match('h','alpha')
+    ans = False
+    """
     if not case_sensitive:
         string=string.lower()
         target=target.lower()
@@ -24297,12 +24494,14 @@ def fuzzy_string_match(string,target,*,case_sensitive=True):
     return bool(re.fullmatch(pattern,target))
 
 def get_english_synonyms_via_nltk(word):
-    #This thing is really crappy...but also really funny xD
-    #This thing belongs in death of the mind honestly...
-    #Try get_bad_english_synonyms('spade') and it won't list shovel...
-    #Try get_bad_english_synonyms('cat') and it lists 'vomit', 'spew'...
-    #Try get_bad_english_synonyms('cheese') and it lists 'vomit', {'cheeseflower', 'Malva_sylvestris', 'cheese', 'tall_mallow', 'high_mallow'}
-    #https://www.geeksforgeeks.org/get-synonymsantonyms-nltk-wordnet-python/
+    """
+    This thing is really crappy...but also really funny xD
+    This thing belongs in death of the mind honestly...
+    Try get_bad_english_synonyms('spade') and it won't list shovel...
+    Try get_bad_english_synonyms('cat') and it lists 'vomit', 'spew'...
+    Try get_bad_english_synonyms('cheese') and it lists 'vomit', {'cheeseflower', 'Malva_sylvestris', 'cheese', 'tall_mallow', 'high_mallow'}
+    https://www.geeksforgeeks.org/get-synonymsantonyms-nltk-wordnet-python/
+    """
     pip_import('nltk')
     from nltk.corpus import wordnet 
     synsets = wordnet.synsets(word)
@@ -24315,7 +24514,7 @@ def get_english_synonyms_via_nltk(word):
 
 @memoized
 def _datamuse_words_request(query,word):
-    #Uses https://www.datamuse.com/api/
+    """ Uses https://www.datamuse.com/api/ """
     pip_import('requests')
     import requests,json
     response=requests.get('https://api.datamuse.com/words?'+query+'='+word)
@@ -24325,23 +24524,31 @@ def _datamuse_words_request(query,word):
 
 
 def get_english_synonyms_via_datamuse(word):
-    #EXAMPLE: get_english_synonyms_via_datamuse('food')
-    #Uses https://www.datamuse.com/api/
+    """
+    EXAMPLE: get_english_synonyms_via_datamuse('food')
+    Uses https://www.datamuse.com/api/
+    """
     return _datamuse_words_request('rel_syn',word)
 
 def get_english_related_words_via_datamuse(word):
-    #EXAMPLE: get_english_synonyms_via_datamuse('food')
-    #Uses https://www.datamuse.com/api/
+    """
+    EXAMPLE: get_english_synonyms_via_datamuse('food')
+    Uses https://www.datamuse.com/api/
+    """
     return _datamuse_words_request('ml',word)
 
 def get_english_antonyms_via_datamuse(word):
-    #EXAMPLE: get_english_synonyms_via_datamuse('good')
-    #Uses https://www.datamuse.com/api/
+    """
+    EXAMPLE: get_english_synonyms_via_datamuse('good')
+    Uses https://www.datamuse.com/api/
+    """
     return _datamuse_words_request('rel_ant',word)
 
 def get_english_rhymes_via_datamuse(word):
-    #EXAMPLE: get_english_synonyms_via_datamuse('breath')#poppy: what rhymes with breath?
-    #Uses https://www.datamuse.com/api/
+    """
+    EXAMPLE: get_english_synonyms_via_datamuse('breath')#poppy: what rhymes with breath?
+    Uses https://www.datamuse.com/api/
+    """
     return _datamuse_words_request('rel_rhy',word)
 
 def get_english_synonyms(word):
@@ -24372,20 +24579,24 @@ def fibonacci(n):
 
 @memoized
 def inverse_fibonacci(n):
-    #Runs in constant time
-    #inverse_fibonacci(fibonacci(3415))==3415
-    #inverse_fibonacci(fibonacci(1234))==1234
-    #inverse_fibonacci(fibonacci(9471))==9471
-    #inverse_fibonacci(fibonacci(  x ))==x for all non-negative integer x
-    #https://stackoverflow.com/questions/5162780/an-inverse-fibonacci-algorithm
-    #TODO: Make accurate past n=70, similar to how def fibonacci(n) was made (split into two cases)
+    """
+    Runs in constant time
+    inverse_fibonacci(fibonacci(3415))==3415
+    inverse_fibonacci(fibonacci(1234))==1234
+    inverse_fibonacci(fibonacci(9471))==9471
+    inverse_fibonacci(fibonacci(  x ))==x for all non-negative integer x
+    https://stackoverflow.com/questions/5162780/an-inverse-fibonacci-algorithm
+    TODO: Make accurate past n=70, similar to how def fibonacci(n) was made (split into two cases)
+    """
     φ=.5+.5*5**.5#The golden ratio
     from math import log as ln
     return int(ln(n*5**.5+.5)/ln(φ))
 
 def graham_scan(path):
-    #This function is intentionally unoptimized to match my personal intuition of the algorithm most closely
-    #(Might change in the future if this is a bottleneck)
+    """
+    This function is intentionally unoptimized to match my personal intuition of the algorithm most closely
+    (Might change in the future if this is a bottleneck)
+    """
 
     #Complex numbers make math nicer
     points=as_complex_vector(path)
@@ -24445,7 +24656,7 @@ def convex_hull(points):
     return graham_scan(points)
 
 def _point_on_edge(point,edge):
-    #Return true if a point is on an edge, including the edge's endpoints
+    """ Return true if a point is on an edge, including the edge's endpoints """
     point,=as_complex_vector([point])
     a,b=edge
     return loop_direction_2d([point,*edge])==0 and point.real==median([point.real,a.real,b.real]) and \
@@ -24480,9 +24691,10 @@ def _edges_intersect(edge_a,edge_b):
     #    plot_update()
 
 def paths_intersect(path_a,path_b)->bool:
-
-    #Does NOT assume the paths are loops
-    #O(n^2) naive algorithm. Should be full-proof.
+    """
+    Does NOT assume the paths are loops
+    O(n^2) naive algorithm. Should be full-proof.
+    """
 
     #Make sure we have valid paths
     path_a=as_complex_vector(path_a)
@@ -24509,7 +24721,7 @@ def paths_intersect(path_a,path_b)->bool:
     return False
 
 def _edge_intersection_positions(edge_a,edge_b):
-    #Will return a list of either 0, 1 or 2 points (2 points is a special edge case where one line shares part of its segment with another line collinearly)
+    """ Will return a list of either 0, 1 or 2 points (2 points is a special edge case where one line shares part of its segment with another line collinearly) """
     a0,a1=edge_a=as_complex_vector(edge_a)
     b0,b1=edge_b=as_complex_vector(edge_b)
 
@@ -24541,8 +24753,10 @@ def _edge_intersection_positions(edge_a,edge_b):
     #   plot_update()
 
 def path_intersections(path_a,path_b):
-    #TODO: Let this function take varargs paths and return all intersections
-    #Returns a list of points where the two paths intersect, including edge cases (the paths intersect tangentially at a vertex, or overlap etc - it handles all of those correctly)
+    """
+    TODO: Let this function take varargs paths and return all intersections
+    Returns a list of points where the two paths intersect, including edge cases (the paths intersect tangentially at a vertex, or overlap etc - it handles all of those correctly)
+    """
     path_a=as_points_array(path_a)
     path_b=as_points_array(path_b)
     output=[]
@@ -24559,19 +24773,21 @@ def path_intersects_point(path,point)->bool:
     return paths_intersect([point],path)
 
 def longest_common_prefix(a,b):
-    #Written by Ryan Burgert, 2020. Written for efficiency's sake.
-    #Works for strings, lists and tuples (and possibly other datatypes, but not numpy arrays)
-    #This implementation is two orders of magnitude faster than anything I could find on the web/stack overflow/etc, especially for strings
-    #It has complexity O(len(output of this function)), and a very good time constant (because it doesn't directly iterate through every element in a python loop)
-    #On my computer, this function was able to compare two strings of length 1,000,000 in 0.00454 second. Here's the test I used: string='a'*10**7;tic();longest_common_prefix(string,string);ptoc() [[[tic() starts a timer, ptoc() prints out the elapsed time]]]
-    #
-    #EXAMPLES:
-    #   longest_common_prefix('abcderty','abcdefoaisjd')                --> abcde
-    #   longest_common_prefix('abcderty','abcsdefoa')                   --> abc
-    #   longest_common_prefix('abcderty','asbcsdefoa')                  --> a
-    #   longest_common_prefix('abcderty','aasbcsdefoa')                 --> a
-    #   longest_common_prefix('aaaabdcderty','aasbcsdefoa')             --> aa
-    #   longest_common_prefix(list('aaaabdcderty'),list('aasbcsdefoa')) --> ['a', 'a']
+    """
+    Written by Ryan Burgert, 2020. Written for efficiency's sake.
+    Works for strings, lists and tuples (and possibly other datatypes, but not numpy arrays)
+    This implementation is two orders of magnitude faster than anything I could find on the web/stack overflow/etc, especially for strings
+    It has complexity O(len(output of this function)), and a very good time constant (because it doesn't directly iterate through every element in a python loop)
+    On my computer, this function was able to compare two strings of length 1,000,000 in 0.00454 second. Here's the test I used: string='a'*10**7;tic();longest_common_prefix(string,string);ptoc() [[[tic() starts a timer, ptoc() prints out the elapsed time]]]
+    
+    EXAMPLES:
+       longest_common_prefix('abcderty','abcdefoaisjd')                --> abcde
+       longest_common_prefix('abcderty','abcsdefoa')                   --> abc
+       longest_common_prefix('abcderty','asbcsdefoa')                  --> a
+       longest_common_prefix('abcderty','aasbcsdefoa')                 --> a
+       longest_common_prefix('aaaabdcderty','aasbcsdefoa')             --> aa
+       longest_common_prefix(list('aaaabdcderty'),list('aasbcsdefoa')) --> ['a', 'a']
+    """
     
     len_a=len(a)
     len_b=len(b)
@@ -24590,13 +24806,15 @@ def longest_common_prefix(a,b):
 
 
 def longest_common_suffix(a,b):
-    #This funcion is analagous to longest_common_prefix. See it for more documentation.
-    #EXAMPLES:
-    #   longest_common_suffix('12345abcd','876323abcd')        --> abcd
-    #   longest_common_suffix('adofoieabcd','29348psaabcd')    --> abcd
-    #   longest_common_suffix('adofoieabcd','29348psaabqcd')   --> cd
-    #   longest_common_suffix([1,2,3,4,5],[7,6,3,4,5])         --> [3, 4, 5]
-    #   longest_common_suffix([1,2,3,4,5],[7,3,3,4,3,6,3,4,5]) --> [3, 4, 5]
+    """
+    This funcion is analagous to longest_common_prefix. See it for more documentation.
+    EXAMPLES:
+       longest_common_suffix('12345abcd','876323abcd')        --> abcd
+       longest_common_suffix('adofoieabcd','29348psaabcd')    --> abcd
+       longest_common_suffix('adofoieabcd','29348psaabqcd')   --> cd
+       longest_common_suffix([1,2,3,4,5],[7,6,3,4,5])         --> [3, 4, 5]
+       longest_common_suffix([1,2,3,4,5],[7,3,3,4,3,6,3,4,5]) --> [3, 4, 5]
+    """
 
     out=longest_common_prefix(a[::-1],b[::-1])[::-1]
     if isinstance(a,str) and not isinstance(b,str):
@@ -24604,29 +24822,33 @@ def longest_common_suffix(a,b):
     return out
 
 def longest_common_substring(a,b):
-    #https://pypi.org/project/pylcs/
-    #Doesn't seem to be super efficient...would be better if it just returned the first index; then I could use longest_common_prefix on it
-    #TODO: Add a pure-python fallback in-case pylcs fails (its implemented in C++)
+    """
+    https://pypi.org/project/pylcs/
+    Doesn't seem to be super efficient...would be better if it just returned the first index; then I could use longest_common_prefix on it
+    TODO: Add a pure-python fallback in-case pylcs fails (its implemented in C++)
+    """
     pip_import('pylcs')
     import pylcs
     res = pylcs.lcs_string_idx(a, b)
     return ''.join([b[i] for i in res if i != -1])
 
 def input_keypress(handle_keyboard_interrupt=True):#handle_keyboard_interrupt=False): <---- TODO: Implement handle_keyboard_interrupt correctly! right now it doesn't work...
-    #If handle_keyboard_interrupt is True, when you press control+c, it will return the control+c character instead of throwing a KeyboardInterrupt
-    #Blocks the code until you press some key on the keyboard
-    #Returns the characters sent to a terminal after you press that key
-    #Original code from https://stackoverflow.com/questions/983354/how-do-i-make-python-wait-for-a-pressed-key
-    #Note that when arrow keys are pressed, for example, more than one character might be sent - and it might vary depending on your terminal.
-    #EXAMPLE: for _ in range(10): print(repr(input_keypress()))
-    #EXAMPLE: Piano:
-    #    print("Press keys qwertyui to play music!")
-    #    major_scale=[0,2,4,5,7,9,11,12]
-    #    while True:
-    #        index='qwertyui'.index(input_keypress())#Intentionally, this will break the loop if we press a wrong key
-    #        print(index)
-    #        play_chord(major_scale[index],t=.25)
-    """Waits for a single keypress on stdin.
+    """
+    If handle_keyboard_interrupt is True, when you press control+c, it will return the control+c character instead of throwing a KeyboardInterrupt
+    Blocks the code until you press some key on the keyboard
+    Returns the characters sent to a terminal after you press that key
+    Original code from https://stackoverflow.com/questions/983354/how-do-i-make-python-wait-for-a-pressed-key
+    Note that when arrow keys are pressed, for example, more than one character might be sent - and it might vary depending on your terminal.
+    EXAMPLE: for _ in range(10): print(repr(input_keypress()))
+    EXAMPLE: Piano:
+        print("Press keys qwertyui to play music!")
+        major_scale=[0,2,4,5,7,9,11,12]
+        while True:
+            index='qwertyui'.index(input_keypress())#Intentionally, this will break the loop if we press a wrong key
+            print(index)
+            play_chord(major_scale[index],t=.25)
+
+    Waits for a single keypress on stdin.
 
     This is a silly function to call if you need to do it a lot because it has
     to store stdin's current setup, setup stdin for reading single keystrokes
@@ -24692,11 +24914,13 @@ def input_select_path(root=None,
                       include_folders=True,
                       include_files=True,
                       file_extension_filter:str=None)->str:
-    #Asks the user to select a file or folder
-    #If reverse. put option 0 on the bottom instead of the top (might make it easier to read)
-    #If include_files=True, allows the user to select a file
-    #If include_folders=True, allows the user to select a folder
-    #'message', if not None, will be displayed above the prompt
+    """
+    Asks the user to select a file or folder
+    If reverse. put option 0 on the bottom instead of the top (might make it easier to read)
+    If include_files=True, allows the user to select a file
+    If include_folders=True, allows the user to select a folder
+    'message', if not None, will be displayed above the prompt
+    """
     
     assert include_files or include_folders, 'Both include_files and include_folders are False, which means the user can\'t select anything!'
 
@@ -24838,11 +25062,13 @@ def input_select_file(root=None,sort_by='name',reverse=True,message=None,file_ex
 #    return selected
 
 def input_select_serial_device_id(*defaults)->str:
-    #I use this to select arduinos when I want to connect to one with a serial port
-    #After this, I generally use serial.Serial(device_id,baudrate=9600).read() etc
-    #EXAMPLES:
-    #    print(input_select_serial_device_id())
-    #    print(input_select_serial_device_id("/dev/cu.SLAB_USBtoUART")) #Won't prompt you if "/dev/cu.SLAB_USBtoUART" is a valid option
+    """
+    I use this to select arduinos when I want to connect to one with a serial port
+    After this, I generally use serial.Serial(device_id,baudrate=9600).read() etc
+    EXAMPLES:
+        print(input_select_serial_device_id())
+        print(input_select_serial_device_id("/dev/cu.SLAB_USBtoUART")) #Won't prompt you if "/dev/cu.SLAB_USBtoUART" is a valid option
+    """
 
     pip_import('serial')#Required dependency
     import serial.tools.list_ports
@@ -24875,9 +25101,11 @@ def input_select_serial_device_id(*defaults)->str:
         return selected_option.device
 
 def temporary_file_path(file_extension:str=''):
-    #Returns the path of a temporary, writeable file
-    #(No more pesky "don't have permission to write" errors)
-    #https://stackoverflow.com/questions/23212435/permission-denied-to-write-to-my-temporary-file
+    """
+    Returns the path of a temporary, writeable file
+    (No more pesky "don't have permission to write" errors)
+    https://stackoverflow.com/questions/23212435/permission-denied-to-write-to-my-temporary-file
+    """
     import tempfile
     f = tempfile.NamedTemporaryFile(mode='w') # open file
     temp = f.name  
@@ -24889,8 +25117,10 @@ def temporary_file_path(file_extension:str=''):
 
 @memoized
 def python_2_to_3(code:str)->str:
-    #Turns python2 code into python3 code
-    #EXAMPLE: python_2_to_3("print raw_input('>>>')") --> "print(input('>>>'))"
+    """
+    Turns python2 code into python3 code
+    EXAMPLE: python_2_to_3("print raw_input('>>>')") --> "print(input('>>>'))"
+    """
     pip_import('lib2to3','2to3')#Make sure this is installed
     assert isinstance(code,str),'code should be a string but got type '+repr(type(code))
     # from rp import r
@@ -24934,22 +25164,28 @@ def strip_python_docstrings(code: str) -> str:
     return astor.to_source(tree)
 
 def strip_python_comments(code:str):
-    #Takes a string, and returns a string
-    #Removes all python #comments from code with a scalpel (not touching anything else)
-    #Todo: Add an option to delete entire lines of comments (when a line is literally just a comment)
-    #Todo: Add option to delete multiline strings that just serve as comments
+    """
+    Takes a string, and returns a string
+    Removes all python #comments from code with a scalpel (not touching anything else)
+    Todo: Add an option to delete entire lines of comments (when a line is literally just a comment)
+    Todo: Add option to delete multiline strings that just serve as comments
+    """
     return ''.join(token for token in split_python_tokens(code) if not token.startswith('#'))
 
 def strip_trailing_whitespace(string):
-    #Takes a string, and returns a string
-    #Returns a new string, with all trailing whitespace removed from the end of every line. Doesn't change the number of lines.
-    #Useful for refactoring code to get rid of trailing whitespace.
+    """
+    Takes a string, and returns a string
+    Returns a new string, with all trailing whitespace removed from the end of every line. Doesn't change the number of lines.
+    Useful for refactoring code to get rid of trailing whitespace.
+    """
     return '\n'.join([line.rstrip() for line in string.splitlines()])
 
 def delete_empty_lines(string,strip_whitespace=False):
-    #Takes a string, and returns a string
-    #Removes all lines of length 0 from the string and returns the result
-    #If strip_whitespace is True, it will also delete lines that have nothing but whitespace
+    """
+    Takes a string, and returns a string
+    Removes all lines of length 0 from the string and returns the result
+    If strip_whitespace is True, it will also delete lines that have nothing but whitespace
+    """
     return '\n'.join([line for line in string.splitlines() if (line.strip() if strip_whitespace else line)])
 
 ____file=path_join(get_parent_directory(__file__),'.'+get_file_name(__file__))#/usr/local/lib/python3.7/site-packages/rp/.r.py
@@ -25153,16 +25389,20 @@ def _set_ryan_tmux_conf():
 
 
 def can_convert_object_to_bytes(x:object)->bool:
-    #Returns true if we can run object_to_bytes on x without getting an error
-    #See object_to_bytes for more documentation
+    """
+    Returns true if we can run object_to_bytes on x without getting an error
+    See object_to_bytes for more documentation
+    """
     dill=pip_import('dill')
     return dill.pickles(x)#https://stackoverflow.com/questions/17872056/how-to-check-if-an-object-is-pickleable
 
 def object_to_bytes(x:object)->bytes:
-    #Try to somehow turn x into a bytestring. 
-    #Right now, it supports numpy arrays, lambdas and functions, dicts lists and tuples and everything pickle can handle
-    #Should be able to serialize things like numpy arrays, and pickleable objects
-    #However it works is a black box, as long as it can be decoded by the bytes_to_object function
+    """
+    Try to somehow turn x into a bytestring. 
+    Right now, it supports numpy arrays, lambdas and functions, dicts lists and tuples and everything pickle can handle
+    Should be able to serialize things like numpy arrays, and pickleable objects
+    However it works is a black box, as long as it can be decoded by the bytes_to_object function
+    """
     # assert can_convert_object_to_bytes(x),'Sorry, but we cannot serialize this object to a bytestring'
     dill=pip_import('dill')
     return dill.dumps(x)
@@ -25177,7 +25417,7 @@ def bytes_to_object(x:bytes)->object:
 
 _web_clipboard_url = 'https://ryanpythonide.pythonanywhere.com'#By sqrtryan@gmail.com account
 def web_copy(data:object)->None:
-    #Send an object to RyanPython's server's clipboard
+    """ Send an object to RyanPython's server's clipboard """
     assert connected_to_internet(),"Can't connect to the internet"
     # assert can_convert_object_to_bytes(data),'rp.web_copy error: Cannot turn the given object into a bytestring! Maybe this type isnt supported? See can_convert_object_to_bytes for more help. The type of object you gave: '+repr(type(data))
     pip_import('requests')
@@ -25186,7 +25426,7 @@ def web_copy(data:object)->None:
     assert response.status_code==200,'Got bad status code that wasnt 200: '+str(response.status_code)
 
 def web_paste():
-    #Get an object from RyanPython's server's clipboard
+    """ Get an object from RyanPython's server's clipboard """
     assert connected_to_internet(),"Can't connect to the internet"
     pip_import('requests')
     import requests         
@@ -25195,7 +25435,7 @@ def web_paste():
     return bytes_to_object(response.content)
 
 def tmux_copy(string:str):
-    #Copies a string to tmux's clipboard, assuming tmux is running and installed
+    """ Copies a string to tmux's clipboard, assuming tmux is running and installed """
     assert isinstance(string,str),'You can only copy a string to the tmux clipboard'
     temp_file_path=temporary_file_path()
     try:
@@ -25205,28 +25445,32 @@ def tmux_copy(string:str):
         delete_file(temp_file_path)
 
 def tmux_paste():
-    #Returns the string from tmux's current clipboard, assuming tmux is running and installed
+    """ Returns the string from tmux's current clipboard, assuming tmux is running and installed """
     tmux_clipboard=shell_command('tmux show-buffer')
     return tmux_clipboard
 
 _local_dill_clipboard_string_path=__file__+'.rp_local_dill_clipboard'
 def local_copy(data:object):
-    #Works just like web_copy, but is local to one's computer
-    #This makes copying large python objects between processes practical
+    """
+    Works just like web_copy, but is local to one's computer
+    This makes copying large python objects between processes practical
+    """
     file=open(_local_dill_clipboard_string_path,'wb')
     file.write(object_to_bytes(data))
     file.close()
 
 def local_paste():
-    #Works just like web_paste, but is local to one's computer
-    #This makes copying large python objects between processes practical
+    """
+    Works just like web_paste, but is local to one's computer
+    This makes copying large python objects between processes practical
+    """
     file=open(_local_dill_clipboard_string_path,'rb')
     return bytes_to_object(file.read())
     
     
     
 def extract_code_from_ipynb(path:str=None):
-    #This function isnt meant to be used in any code. Its just a utility for running ipynb files in rp, by extracting their code into cells that can be run individually
+    """ This function isnt meant to be used in any code. Its just a utility for running ipynb files in rp, by extracting their code into cells that can be run individually """
     import json
     if path is None:
         path=input_select_file(file_extension_filter='ipynb')
@@ -25262,10 +25506,12 @@ def send_facebook_message(message:str=None,my_email:str=None,my_password:str=Non
     return me.sendMessage(m,user_id)
 
 def get_all_facebook_messages(my_email:str=None,my_password:str=None,my_name:str=None,max_number_of_messages:int=9999)->list:
-    #Returns a list of all messages between you and one of your contacts on facebook
-    #Uses a python package called 'fbchat' to do this
-    #I used this to download all messages between me and one of my friends for safekeeping (facebook makes this difficult)
-    #Todo: Let this import groupchat history and not just direct messages between you and someone else
+    """
+    Returns a list of all messages between you and one of your contacts on facebook
+    Uses a python package called 'fbchat' to do this
+    I used this to download all messages between me and one of my friends for safekeeping (facebook makes this difficult)
+    Todo: Let this import groupchat history and not just direct messages between you and someone else
+    """
     pip_import('fbchat')
     import fbchat as f
     e=my_email or input("Please enter your facebook account's email: ")
@@ -25293,18 +25539,20 @@ def get_all_facebook_messages(my_email:str=None,my_password:str=None,my_name:str
     return message_tuples
 
 def visualize_pytorch_model(model,*,input_shape=None, example_input=None, supress_warnings=True):
-    #TODO: integrate code better with _visualize_pytorch_model_via_torchviz: get rid of redundant code
-    #Show a graph depicting some pytorch-based neural network
-    # - model: should be some neural network model created in pytorch
-    # - input_shape: should be the shape of a single input. For example, if MNIST is the input, input_shape should be [28, 28].
-    #      We need input_shape in order to determine the size of each layer in the network.
-    # - example_input: an alternative to using input_shape (particularly useful for networks that don't take torch.Tensor in their forward model)
-    #See https://github.com/waleedka/hiddenlayer/blob/master/demos/pytorch_graph.ipynb for a demo
-    #
-    #EXAMPLE:
-    #    import torchvision.models
-    #    model = torchvision.models.vgg16()
-    #    visualize_pytorch_model(model,[3,224,224])
+    """
+    TODO: integrate code better with _visualize_pytorch_model_via_torchviz: get rid of redundant code
+    Show a graph depicting some pytorch-based neural network
+     - model: should be some neural network model created in pytorch
+     - input_shape: should be the shape of a single input. For example, if MNIST is the input, input_shape should be [28, 28].
+          We need input_shape in order to determine the size of each layer in the network.
+     - example_input: an alternative to using input_shape (particularly useful for networks that don't take torch.Tensor in their forward model)
+    See https://github.com/waleedka/hiddenlayer/blob/master/demos/pytorch_graph.ipynb for a demo
+    
+    EXAMPLE:
+        import torchvision.models
+        model = torchvision.models.vgg16()
+        visualize_pytorch_model(model,[3,224,224])
+    """
 
     import warnings
 
@@ -25385,7 +25633,7 @@ def inverted_color(color):
         raise TypeError('Unknown color format')
 
 def inverted_image(image,invert_alpha=False):
-    #Inverts the colors of an image. By default, it doesn't touch the alpha channel (if one exists)
+    """ Inverts the colors of an image. By default, it doesn't touch the alpha channel (if one exists) """
     assert is_image(image)
     image=image.copy()
     if is_rgba_image(image) and not invert_alpha:
@@ -25405,8 +25653,10 @@ def inverted_image(image,invert_alpha=False):
     return image
 
 def make_zip_file_from_folder(src_folder:str=None, dst_zip_file:str=None)->str:
-    #Creates a .zip file on your hard drive.
-    #Zip the contents of some src_folder and return the output zip file's path
+    """
+    Creates a .zip file on your hard drive.
+    Zip the contents of some src_folder and return the output zip file's path
+    """
     if src_folder is None:
         print("Please select a folder whose contents you'd like to zip:")
         src_folder=input_select_folder()
@@ -25625,12 +25875,14 @@ def _maybe_unbury_folder(folder):
     return False
 
 def get_normal_map(bump_map):
-    #Turn a bump map aka a height map, into a normal map
-    #This is used for 3d graphics, such as in video games
-    #EXAMPLE:
-    #    ans=load_image('https://www.filterforge.com/filters/6422-bump.jpg')
-    #    ans=get_normal_map(ans)
-    #    display_image(full_range(ans))
+    """
+    Turn a bump map aka a height map, into a normal map
+    This is used for 3d graphics, such as in video games
+    EXAMPLE:
+        ans=load_image('https://www.filterforge.com/filters/6422-bump.jpg')
+        ans=get_normal_map(ans)
+        display_image(full_range(ans))
+    """
     assert is_image(bump_map)
     pip_import('snowy')#A truly delightful little image processing library!
     import snowy
@@ -25640,13 +25892,15 @@ def get_normal_map(bump_map):
     return normal_map
 
 def sobel_edges(image):
-    #Calculates sobel edges for edge detection
-    #Computes it indivisually for each r,g,b channel
-    #   - Because of this feature, this function is approximately 3x faster on grayscale images
-    #EXAMPLE:
-    #    ans=load_image('https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSwzqzyaeWqxfQiCnOqpnd1V27Wr8MOaZtfGQ&usqp=CAU'))
-    #    ans=sobel_edges(ans)
-    #    display_image(ans)
+    """
+    Calculates sobel edges for edge detection
+    Computes it indivisually for each r,g,b channel
+       - Because of this feature, this function is approximately 3x faster on grayscale images
+    EXAMPLE:
+        ans=load_image('https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSwzqzyaeWqxfQiCnOqpnd1V27Wr8MOaZtfGQ&usqp=CAU'))
+        ans=sobel_edges(ans)
+        display_image(ans)
+    """
     assert is_image(image)
     pip_import('snowy')#A truly delightful little image processing library!
     import snowy
@@ -25669,8 +25923,10 @@ def sobel_edges(image):
     return output
 
 def currently_in_a_tty():
-    #Returns True if we're in a TTY (aka a terminal that can run Prompt-Toolkit)
-    #(As opposed to, for example, running inside a jupyter notebook)
+    """
+    Returns True if we're in a TTY (aka a terminal that can run Prompt-Toolkit)
+    (As opposed to, for example, running inside a jupyter notebook)
+    """
     try:
         return sys.stdout.isatty()
     except Exception:
@@ -25805,12 +26061,14 @@ def _fd(query,select=False,silent=False):
     #     string_pager(line_join(printed_lines))
 
 def get_image_file_dimensions(image_file_path:str):
-    #Takes the file path of an image, and returns the image's (height, width)
-    #It does this without loading the entire image, so while 
-    #   get_image_file_dimensions(image_file_path) == get_image_width,get_image_height (load_image(image_file_path))
-    #This method can be up to 4000 times faster.
-    #This method supports the following file types:
-    #    png jpg gif tiff svg jpeg jpeg2000
+    """
+    Takes the file path of an image, and returns the image's (height, width)
+    It does this without loading the entire image, so while 
+       get_image_file_dimensions(image_file_path) == get_image_width,get_image_height (load_image(image_file_path))
+    This method can be up to 4000 times faster.
+    This method supports the following file types:
+        png jpg gif tiff svg jpeg jpeg2000
+    """
     assert file_exists(image_file_path)
     if get_file_extension(image_file_path)=='exr':
         return _get_openexr_image_dimensions(image_file_path)
