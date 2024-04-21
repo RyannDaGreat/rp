@@ -16310,7 +16310,7 @@ def string_to_file_size(size_str: str) -> int:
         """
         normalized_unit = unit.lower().rstrip('s')
         if normalized_unit not in _filesize_units:
-            raise ValueError(f"Unknown or invalid unit: '{unit}'")
+            raise ValueError("Unknown or invalid unit: "+repr(unit))
         return normalized_unit
 
     if ' ' in size_str:
