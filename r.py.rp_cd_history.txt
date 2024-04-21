@@ -88,7 +88,7 @@
 /Library/Frameworks/Python.framework/Versions/3.5
 /Library/Frameworks/Python.framework/Versions/3.5/lib
 /Library/Frameworks/Python.framework
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Library/Frameworks
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
