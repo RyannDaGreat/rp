@@ -2119,7 +2119,7 @@ def handle_character(buffer,char,event=None):
                 'mmi':'!micromamba install',
             })
 
-            for item in 'import'.split():
+            for item in 'import w'.split():
                 #There are some programs we don't want to complete...yes, these are real programs you can enounter in bash...
                 if item in shortcuts:
                     del shortcuts[item]

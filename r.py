@@ -5626,6 +5626,11 @@ def gather_args(func, *args, frames_back=1, **kwargs):
     default_vars = {**default_arg_vars, **default_kwarg_vars}
     varargs_value = [] #There cant be default value for varargs
 
+    #Used by gather_args_bind to allow us to construct partial outputs
+    do_replace_missing=hasattr(func, 'gather_args_placeholder')
+    if do_replace_missing:
+        placeholder = func.gather_args_placeholder
+
     def maybe_add_varkw(variables:dict):
         if varkw in variables:
             varkw_variables = variables[varkw]
@@ -5681,8 +5686,17 @@ def gather_args(func, *args, frames_back=1, **kwargs):
     available_vars.update(gathered_vars)
     available_vars.update(override_vars)
 
+    #Get all variables we need but don't have yet
+    get_missing_names = lambda: (set(func_arg_names) | set(func_kwarg_names)) -  set(available_vars)
+
+    #Used by gather_args_bind
+    if do_replace_missing:
+        #Replace any missing values with the default value if applicable
+        for name in get_missing_names():
+            available_vars[name]=placeholder
+
     #Validation: Make sure we have enough args - TODO: this should be a custom exception not an assertion though
-    assert (set(func_arg_names) | set(func_kwarg_names)) <= set(available_vars), 'Missing variables for function call: '+', '.join(sorted((set(func_arg_names) | set(func_kwarg_names))-set(available_vars)))
+    assert not get_missing_names(), 'Missing variables for function call: '+', '.join(sorted(get_missing_names()))
 
     out_args = []
     out_kwargs = {}
@@ -5791,6 +5805,138 @@ def gather_args_wrapper(func, *, frames_back=1):
     def wrapper(*args, **kwargs):
         return gather_args_call(func, *args, frames_back=frames_back+1, **kwargs)
     return wrapper
+
+
+def gather_args_bind(func, *args, frames_back=1, **kwargs):
+    """
+    Like gather_args_wrapper, but binds the values in the namespace upon creation.
+    Here's an example to show the difference:
+
+    EXAMPLE:
+        >>> def f(x,y):
+                print(x,y)
+            x=1
+            y=2
+            b=gather_args_bind(f)
+            w=gather_args_wrapper(f)
+        >>> b()
+        1 2
+        >>> w()
+        1 2
+        >>> x=3
+        >>> b()
+        1 2
+        >>> w()
+        3 2
+
+    EXAMPLE:
+        >>> def f(x,y,z):
+                print(x,y,z)
+            y=123
+            g=gather_args_bind(f)
+        >>> g(1,z=99)
+        1 123 99
+        >>> g(1)
+        ERROR: TypeError: rp.gather_args_bind(f): 1 missing arguments:
+            Missing Positional Arguments:
+                #3: z
+        >>> g(z=99)
+        ERROR: TypeError: rp.gather_args_bind(f): 1 missing arguments:
+            Missing Positional Arguments:
+                #1: x
+        >>> y=999
+        >>> g(7,z=99)
+        7 123 99
+
+    EXAMPLE:
+        >>> def f(x,y,z,*,u,v):
+                print(x,y,z,u,v)
+           
+            y=123
+            u=444
+           
+            b=gather_args_bind(f)
+            w=gather_args_wrapper(f)
+        >>> w()
+        ERROR: AssertionError: Missing variables for function call: v, x, z
+        >>> b()
+        ERROR: TypeError: rp.gather_args_bind(f): 3 missing arguments:
+            Missing Positional Arguments:
+                #1: x
+                #3: z
+            Missing Keyword Arguments:
+                v
+        >>> x=y=z=u=v=9000
+        >>> w()
+        9000 9000 9000 9000 9000
+        >>> b()
+        ERROR: TypeError: rp.gather_args_bind(f): 3 missing arguments:
+            Missing Positional Arguments:
+                #1: x
+                #3: z
+            Missing Keyword Arguments:
+                v
+        >>> b(1)
+        ERROR: TypeError: rp.gather_args_bind(f): 2 missing arguments:
+            Missing Positional Arguments:
+                #3: z
+            Missing Keyword Arguments:
+                v
+        >>> b(1,z=2,v=3)
+        1 123 2 444 3
+    """
+    import functools
+    import inspect
+
+    fullargspec = inspect.getfullargspec(func)
+    func_arg_names = fullargspec.args
+    func_name = func.__name__
+
+    placeholder = object() #Will only be equal to itself
+    with TemporarilySetAttr(func, gather_args_placeholder = placeholder):
+        saved_args, saved_kwargs = gather_args(func, *args, **kwargs, frames_back=frames_back+1)
+
+    import functools
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        new_kwargs = dict(saved_kwargs)
+        new_kwargs.update(kwargs)
+
+        if len(args) > len(saved_args):
+            new_args = args
+        else:
+            new_args = list(saved_args)
+            new_args[:len(args)] = list(args)
+
+        for name in set(new_kwargs) & set(func_arg_names):
+            #Turn any kwargs in to args
+            new_args[func_arg_names.index(name)] = new_kwargs.pop(name)
+
+        #Check for placeholder values that haven't been replaced - indicating we didn't fill enough function arguments
+        missing_arg_indices  = [i for i,a in enumerate(new_args) if a==placeholder]
+        missing_kwarg_names  = [n for n,k in new_kwargs.items()  if k==placeholder]
+        missing_arg_names    = gather(func_arg_names, missing_arg_indices)
+        missing_names = missing_arg_names + missing_kwarg_names
+        if missing_names:
+            indent = "    "
+            error_message_lines = []
+            error_message_lines.append("rp.gather_args_bind(%s): %i missing arguments:"%(func_name,len(missing_names)))
+            if missing_arg_names:
+                error_message_lines.append(indent + "Missing Positional Arguments:")
+                for index,name in zip(missing_arg_indices, missing_arg_names):
+                    error_message_lines.append(2*indent + "#%i: %s"%(index+1,name))
+            if missing_kwarg_names:
+                error_message_lines.append(indent + "Missing Keyword Arguments:")
+                for name in missing_kwarg_names:
+                    error_message_lines.append(2*indent + name)
+            error_message = line_join(error_message_lines)
+            raise TypeError(error_message)
+
+        return func(*new_args, **new_kwargs)
+
+    return wrapper
+
+
 
 def get_current_function(frames_back=1):
     """
@@ -14747,18 +14893,19 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
                                     
                                     results=map(breakify,results)
-                                    result=_iterfzf(results,exact=True) #Exact to prevent fuzzy matching
+                                    result=_iterfzf(results,exact=True,multi=True) #Exact to prevent fuzzy matching
                                     if result is None:
                                         raise KeyboardInterrupt #This is how that happens:wq
-                                    result=result.replace('\u2060','')#Remove all no-space spaces
-                                    if result is not None:
-                                        result = split[0]+result
-                                        user_message=result
-                                        fansi_print("Transformed command into: " + fansi_syntax_highlighting(user_message),'magenta')
-                                        # set_ans(result)
-                                        # successful_command_history.append()
+                                    result=[x.replace('\u2060','') for x in result]#Remove all no-space spaces
+                                    result = [split[0]+x for x in result]
+                                    if len(result)==1:
+                                        result=result[0]
                                     else:
-                                        user_message=''
+                                        result=', '.join(result)
+                                    user_message=result
+                                    fansi_print("Transformed command into: " + fansi_syntax_highlighting(user_message),'magenta')
+                                    # set_ans(result)
+                                    # successful_command_history.append()
 
 
 
