@@ -732,9 +732,21 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             endfunction
             map <F7>       :call ToggleWrap()<CR>
             map <leader>jw :call ToggleWrap()<CR>
-        " INDENTATION:
+        " INDENTATION: \<tab><tab>   \<tab><space> \<tab>2  \<tab>4  \<tab>8
             " Disabled because it doesn't work very well - it made my vimrc use tabs, and rp have 2-spaces-indent.
             " Plugin 'tpope/vim-sleuth' "Auto-detects what indentation the file uses
+            
+            nnoremap <leader><tab><space> :set expandtab<cr>
+            nnoremap <leader><tab><tab> :set noexpandtab<cr>
+            nnoremap <leader><tab>1 :set expandtab<cr>:set tabstop=1<cr>:set shiftwidth=1<cr>
+            nnoremap <leader><tab>2 :set expandtab<cr>:set tabstop=2<cr>:set shiftwidth=2<cr>
+            nnoremap <leader><tab>3 :set expandtab<cr>:set tabstop=3<cr>:set shiftwidth=3<cr>
+            nnoremap <leader><tab>4 :set expandtab<cr>:set tabstop=4<cr>:set shiftwidth=4<cr>
+            nnoremap <leader><tab>5 :set expandtab<cr>:set tabstop=5<cr>:set shiftwidth=5<cr>
+            nnoremap <leader><tab>6 :set expandtab<cr>:set tabstop=6<cr>:set shiftwidth=6<cr>
+            nnoremap <leader><tab>7 :set expandtab<cr>:set tabstop=7<cr>:set shiftwidth=7<cr>
+            nnoremap <leader><tab>8 :set expandtab<cr>:set tabstop=8<cr>:set shiftwidth=8<cr>
+            nnoremap <leader><tab>9 :set expandtab<cr>:set tabstop=9<cr>:set shiftwidth=9<cr>
         " SYNTAX HIGHLIGHTING: fh \sss \ssv \ssp \ss...
             " fh - changes color theme. Already accounted for elsewhere
             nnoremap <leader>sss :set syntax=
@@ -1017,7 +1029,32 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
 
             nnoremap <leader>tpa :let @0 = system("tmux save-buffer -")<cr>"0p<cr>g;
 
+        " BRACKETED PASTE (use in normal mode)
+            " Plugin 'ConradIrwin/vim-bracketed-paste'
+            " The above plugin extracted below and modified
+            " It should work in insert mode I think, but it doesn't
+            " It does work in normal mode though!
+            
+            "NOTE This needs to be fixed, it never actually toggles paste mode properly...it never leaves it...
+            "And it never brings us out of insert mode either. When we paste from normal mode I expect to go back to normal mode...
+            "Tried getting claude and gpt4 to fix it but it didnt work yet...
 
+            " let &t_ti .= "\<Esc>[?2004h"
+            " let &t_te = "\e[?2004l" . &t_te
+            "
+            " function! XTermPasteBegin(ret)
+            "   set pastetoggle=<f29>
+            "   set paste
+            "   return a:ret
+            " endfunction
+            "
+            " execute "set <f28>=\<Esc>[200~"
+            " execute "set <f29>=\<Esc>[201~"
+            " map <expr> <f28> XTermPasteBegin("i")
+            " imap <expr> <f28> XTermPasteBegin("")
+            " vmap <expr> <f28> XTermPasteBegin("c")
+            " cmap <f28> <nop>
+            " cmap <f29> <nop>
 
         " RP CLIPBOARDS: \wco \wpa \lco \lpa \CO \PA
             " Helper function to check RP_SYS_EXECUTABLE and execute the command
