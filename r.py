@@ -1374,7 +1374,7 @@ def get_min_image_dimensions(*images):
     widths =[get_image_width (x) for x in images]
     return min(heights),min(widths)
 
-def uniform_float_color_image(height:int,width:int,color:tuple):
+def uniform_float_color_image(height:int,width:int,color:tuple=(0,0,0,0)):
     #Returns an image with the given height and width, where all pixels are the given color
     #If the given color is a number, it returns a grayscale image
     #Otherwise, the given color must be either an RGB or RGBA float color (a tuple with 3 or 4 floats between 0 and 1)
@@ -13409,8 +13409,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         TMDA $os.system('tmux list-sessions -F "#{session_name}" | xargs -I % tmux detach -s %') #Detach all users from all tmux sessions
     
-        RF    $random_element([x for x in $os.scandir() if not x.is_dir()])
-        RD    $random_element([x for x in $os.scandir() if x.is_dir()])
+        RF    $random_element([x for x in $os.scandir() if not x.is_dir()]).name
+        RD    $random_element([x for x in $os.scandir() if x.is_dir()]).name
         RE    $random_element(ans)
 
         RDA   $r._pterm_cd($random_element([x for x in $os.scandir() if x.is_dir()]))   # RD then DA
@@ -13460,6 +13460,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         GP  $print_gpu_summary()
         NGP $print_notebook_gpu_summary()
         
+        LEA  [eval(str(x)) for x in ans]
+        EVLA [eval(str(x)) for x in ans]
 
         CLS CLEAR
         VV !vim
@@ -14153,8 +14155,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         if env_info.nvidia_gpu_models:
                             gpu_header=(bullet+'NVIDIA GPU Models: ')
                             gpu_lines=env_info.nvidia_gpu_models
+                            gpu_lines=line_split(gpu_lines)
                             if len(gpu_lines)>1:
                                 gpu_lines[1:]=[' '*len(gpu_header)+x for x in gpu_lines[1:]]
+                            gpu_lines=line_join(gpu_lines)
                             print(gpu_header+cyan(gpu_lines))
 
                         cuda_info = ''
@@ -16243,6 +16247,7 @@ def string_to_file_size(size_str: str) -> int:
         ValueError: If the format of the input string is invalid or if the unit is unknown.
 
     Examples:
+        >>> string_to_file_size("123")                -->   123
         >>> string_to_file_size("byte")               -->   1
         >>> string_to_file_size("1 byte")             -->   1
         >>> string_to_file_size("1b")                 -->   1
@@ -16276,6 +16281,12 @@ def string_to_file_size(size_str: str) -> int:
 
     assert isinstance(size_str,str)
     assert len(size_str)>0
+
+    try:
+        #If given no units, just take it as bytes...
+        return int(size_str)
+    except Exception:
+        pass
 
     import re
 
@@ -20908,9 +20919,26 @@ def get_color_brightness(color):
     return hue
 
 def get_image_dimensions(image):
-    #Return (height,width) of an image
+    """ Return (height,width) of an image """
     assert is_image(image)
     return get_image_height(image),get_image_width(image)
+
+#def get_images_dimensions(*images):
+#    """ Return [(height,width), ...] for all given images """
+#    #SCRAPPED THIS FUNCTION
+#    #BECUASE ITS AMBIGUOUS IF WE GIVE SINGLE RGB IMAGE IN
+#    #AND THEN IT RETURNS LIKE [(1920, 3), (1920, 3), (1920, 3), (1920, 3), (1920, 3) ...]
+#    #BECAUSE WE DONT KNOW IF THE IMAGES ARE ALL GRAYSCALE OR NOT
+#    images=detuple(images)
+#
+#    if _is_numpy_array(images):
+#        #Shortcut - make things faster if we're given a tensor of images!
+#        num_images=len(images)
+#        assert is_image(images[0]), 'All inputs must be images'
+#        assert images.ndim>=3, 'Internal assertion' #(B, H, W) or (B, H, W, C)
+#        return [images.shape[1:3]]*num_images
+#
+#    return [get_image_dimensions(x) for x in images]
 
 def get_image_height(image):
     #Return the image's height measured in pixels
