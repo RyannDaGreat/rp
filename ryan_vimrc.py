@@ -1063,7 +1063,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             " cmap <f28> <nop>
             " cmap <f29> <nop>
 
-        " RP CLIPBOARDS: \wco \wpa \lco \lpa \CO \PA \rrms
+        " RP CLIPBOARDS: \wco \wpa \lco \lpa \rco \rpa \rrms \rsim \rbla
             " Helper function to check RP_SYS_EXECUTABLE and execute the command
             " Same rules as \tco \tpa (visual mode or normal for copy, normal for paste)
 
@@ -1089,8 +1089,8 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             endfunction
 
 
-            vnoremap <leader>CO :%y<cr>:call ExecuteRP('string_to_clipboard(sys.stdin.read())')<cr>gv
-            nnoremap <leader>CO:call ExecuteRP('string_to_clipboard(sys.stdin.read())')<cr>
+            vnoremap <leader>rco :%y<cr>:call ExecuteRP('string_to_clipboard(sys.stdin.read())')<cr>gv
+            nnoremap <leader>rco :call ExecuteRP('string_to_clipboard(sys.stdin.read())')<cr>
 
             vnoremap <leader>wco y<cr>:call ExecuteRP('web_copy(sys.stdin.read())')<cr>gv
             nnoremap <leader>wco :%y<cr>:call ExecuteRP('web_copy(sys.stdin.read())')<cr>
@@ -1100,10 +1100,11 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
 
             nnoremap <leader>wpa :call ExecuteRP('print(web_paste())')<cr>"0p<cr>g;
             nnoremap <leader>lpa :call ExecuteRP('print(local_paste())')<cr>"0p<cr>g;
-            nnoremap <leader>PA :call ExecuteRP('print(clipboard_to_string())')<cr>"0p<cr>g;
+            nnoremap <leader>rpa :call ExecuteRP('print(clipboard_to_string())')<cr>"0p<cr>g;
 
             "TODO: Return the cursor to the original position + difference in number of lines
             nnoremap <leader>rrms :%y<cr>:call ExecuteRP('print(r._removestar(sys.stdin.read(),max_line_length=1000000,quiet=True))')<cr>ggVGp
             nnoremap <leader>rsim :%y<cr>:call ExecuteRP('print(r._sort_imports_via_isort(sys.stdin.read()))')<cr>ggVGp
+            nnoremap <leader>rbla :%y<cr>:call ExecuteRP('print(r._autoformat_python_code_via_black(sys.stdin.read()))')<cr>ggVGp
 
 
