@@ -26583,7 +26583,7 @@ def _hsv_to_rgb_via_numpy(hsv_image):
     h, s, v = hsv_image[:, :, 0], hsv_image[:, :, 1], hsv_image[:, :, 2]
     h%=1
 
-    i = (h * 6).astype(np.int)
+    i = (h * 6).astype(int)
     f = h * 6 - i
     p = v * (1 - s)
     one_minus_f = 1 - f
