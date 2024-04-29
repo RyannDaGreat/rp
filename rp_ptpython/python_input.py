@@ -800,9 +800,9 @@ class PythonInput(object):
                            (name,partial(self.use_ui_colorscheme,name)) for name in self.ui_styles)
                        ),
                 simple_option(title='True color (24 bit)',
-                        is_visible=lambda:getattr(self,'show_all_options',True),
+                        # is_visible=lambda:getattr(self,'show_all_options',True),
 
-                              description='Use 24 bit colors instead of 265 colors\nThis is only supported on some terminal apps\nSome known to support it: Ubuntu\'s default terminal, MacOS iTerm',
+                              description='Use 24 bit colors instead of 256 colors\nThis is only supported on some terminal apps\nSome known to support it: Ubuntu\'s default terminal, MacOS iTerm',
                               field_name='true_color'),
             ]),
             OptionCategory('This Menu',[

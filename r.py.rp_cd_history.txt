@@ -90,5 +90,5 @@
 /Library/Frameworks/Python.framework
 /Library/Frameworks
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython

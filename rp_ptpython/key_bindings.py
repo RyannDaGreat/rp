@@ -3577,6 +3577,9 @@ def load_python_bindings(python_input):
                 buffer.delete_before_cursor()
                 buffer.delete_before_cursor()
                 buffer.insert_text('!!')
+            elif before=='PIP install ' and data.startswith('pip install '):
+                #I commonly accidently do 'PIP install ' paste 'pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2' etc
+                data=data[len('pip install '):]
 
         buffer.insert_text(data)
 
@@ -5637,6 +5640,7 @@ def load_python_bindings(python_input):
             return text == '' or (text.isspace() and not '\n' in text)
         if single_line:#single-line commands are entered immediately.
             if not current_line.rstrip().endswith(':') \
+            and not (not before and after) \
             and not     endswithany(current_line.lstrip(),'@',"'''",'"""') \
             and not starts_with_any(current_line.lstrip(),'@',"'''",'"""'):
                 b.accept_action.validate_and_handle(event.cli, b)

@@ -696,18 +696,22 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             endif
         "LINTING: \jl, ]l, [l
             "ALE:
-                "Python linting! Toggle with F3
+                "Python linting! Toggle with \jl
                 "NOTE: To be useful, I need to dig into this and disable stupid errors...
                 Plugin 'dense-analysis/ale'
                 let g:ale_enabled=0 "Disable ale by default
                 let g:ale_linters={'python':['pyflakes']} " I coudn't care less about the other linters...flake8 has pep8 in it, so screw it...just use pyflakes which is a subset of flake8
                 autocmd VimEnter * nnoremap ]l :ALENextWrap<cr>
                 autocmd VimEnter * nnoremap [l :ALEPreviousWrap<cr>
-                "]l and [l stand for next lint and prev lint
+                " ]l and [l stand for next lint and prev lint
                 let g:ale_set_highlights = 0 "Ale's in-text highlights are really bad; they're always at the beginning or end of a line and don't indicate anything important that the gutter doesn't
-                highlight clear ALEErrorSign
-                hi  ALEErrorSign ctermfg=Red
-                let g:ale_python_pyflakes_executable = 'pyflakes3' "https://vi.stackexchange.com/questions/20508/switch-pyflakes-linter-from-python2-to-python3-in-ale
+                " highlight clear ALEErrorSign
+                " hi  ALEErrorSign ctermfg=Red
+                " let g:ale_python_pyflakes_executable = 'pyflakes3' "https://vi.stackexchange.com/questions/20508/switch-pyflakes-linter-from-python2-to-python3-in-ale
+
+                "One of the next two commands did the trick, where it used to put text next to the errors on the screen (which was confusing as its the same color as my code comments):
+                let g:LanguageClient_useVirtualText = 0
+                let g:ale_virtualtext_cursor=0
             "FLAKE8:
                 " "This one isn't as good yet...might delete from my vimrc...I've had more luck with ALE: despite it's horrible defaults, it's actually pretty nice once configured
                 " Plugin 'nvie/vim-flake8' "Let us analyze our python code...
@@ -757,6 +761,8 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             nnoremap <leader>ssm :set syntax=markdown<cr>
             nnoremap <leader>ssl :set syntax=latex<cr>
             nnoremap <leader>ssh :set syntax=html<cr>
+            nnoremap <leader>ssz :set syntax=zsh<cr>
+            nnoremap <leader>ssb :set syntax=bash<cr>
         " INDENT LINES: f6 \ji
             "Adds indent guide lines
             Plugin 'Yggdroot/indentLine'
@@ -836,9 +842,10 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
                 " Great for closing all unused buffers
                 Plugin 'Asheq/close-buffers.vim'
                 nnoremap <silent> <leader>bq :Bdelete menu<CR>
-            "BUFFERGATOR: \bb or \bt (then ^n ^p tt)     gB gb
+            "BUFFERGATOR: \bb or \bt (then ^n ^p tt d)     gB gb
                 " ^n ^p  preview next/prev buffers
                 " tt or ^t opens buffer in new tab
+                " d   to close buffer
                 " gb gB   goes to next/prev buffers
                 let g:buffergator_suppress_keymaps = 1
                 Plugin 'jeetsukumaran/vim-buffergator' " Using \b, will let you switch buffers. Use control+n and control+p to cycle through with previews.
@@ -1082,14 +1089,14 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             endfunction
 
 
-            vnoremap <leader>CO y<cr>:call ExecuteRP('string_to_clipboard(sys.stdin.read())')<cr>gv
+            vnoremap <leader>CO :%y<cr>:call ExecuteRP('string_to_clipboard(sys.stdin.read())')<cr>gv
             nnoremap <leader>CO:call ExecuteRP('string_to_clipboard(sys.stdin.read())')<cr>
 
             vnoremap <leader>wco y<cr>:call ExecuteRP('web_copy(sys.stdin.read())')<cr>gv
-            nnoremap <leader>wco :.y<cr>:call ExecuteRP('web_copy(sys.stdin.read())')<cr>
+            nnoremap <leader>wco :%y<cr>:call ExecuteRP('web_copy(sys.stdin.read())')<cr>
 
             vnoremap <leader>lco y<cr>:call ExecuteRP('local_copy(sys.stdin.read())')<cr>gv
-            nnoremap <leader>lco :.y<cr>:call ExecuteRP('local_copy(sys.stdin.read())')<cr>
+            nnoremap <leader>lco :%y<cr>:call ExecuteRP('local_copy(sys.stdin.read())')<cr>
 
             nnoremap <leader>wpa :call ExecuteRP('print(web_paste())')<cr>"0p<cr>g;
             nnoremap <leader>lpa :call ExecuteRP('print(local_paste())')<cr>"0p<cr>g;

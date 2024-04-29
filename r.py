@@ -1197,6 +1197,10 @@ def string_to_clipboard(string):
     #If that doesn't work, it falls back to reading/writing to a global variable called _local_clipboard_string. This string is lost if rp is closed.
     #I decided not to label this function 'copy' because 'copy' could refer to copying objects such as lists etc, like [1,2,3].copy()
     global _local_clipboard_string
+    
+    
+    _copy_text_over_terminal(string) #Experimental
+
     _set_local_clipboard_string(string)
     try:
         try:
@@ -1209,6 +1213,39 @@ def string_to_clipboard(string):
     except Exception:
         return
         fansi_print("string_to_clipboard: error: failed to copy a string to the clipboard",'red')
+
+def _copy_text_over_terminal(string):
+    """
+    Encodes a given string in base64 and sends it to the terminal to be copied to the clipboard via OSC 52 ANSI escape codes.
+    
+    Args:
+    string (str): The string to be copied to the clipboard.
+    
+    Raises:
+    TypeError: If the input is not a string.
+    
+    Note:
+    This function relies on the terminal's ability to interpret OSC 52 escape sequences.
+    """
+    if not isinstance(string, str):
+        raise TypeError("Input must be a string")
+    
+    # Import necessary modules
+    import sys
+    import base64
+    
+    # Base64 encode the string
+    encoded_string = base64.b64encode(string.encode()).decode()
+    
+    # Create the OSC 52 ANSI escape sequence
+    escape_sequence = "\033]52;c;{}\a".format(encoded_string)
+    
+    # Write the escape sequence to stdout directly
+    sys.stdout.write(escape_sequence)
+    sys.stdout.flush()
+
+
+
 
 def string_from_clipboard():
     #Pastes the string from the clipboard and returns that value
@@ -2629,6 +2666,7 @@ def load_animated_gif(location,*,use_cache=True):
     #       for frame in load_animated_gif(url,use_cache=True):
     #           display_image(frame)
     #           sleep(1/20)
+    location = get_absolute_path(location) #Important for caching
     if use_cache and location in _load_animated_gif_cache:
         return _load_animated_gif_cache[location]
 
@@ -3045,7 +3083,8 @@ def _encode_image_to_bytes(image,filetype:str,quality):
 
     image=as_byte_image(image)
     if filetype in '.png .tif .tiff .webp'.split(): #All filetypes that support transparency should go here
-        image=as_rgba_image(image)
+        if not is_rgb_image(image): #But don't add transparency unless we have to
+            image=as_rgba_image(image)
     else:
         image=as_rgb_image(image)
     image=cv_rgb_bgr_swap(image)
@@ -5322,6 +5361,7 @@ def bundle_vars(*args, **kwargs):
     #TODO: This currently only works when the arguments are put *ON THE SAME LINE*. It also can't handle when two bundle_vars are on the same line.
     #TODO: Look into the implementation of icecream to figure out how. Icecream has some nice classes like Source, that when you use pudb for an icecream.ic call, you'll see
     pip_import('easydict')
+    pip_import('astor')
 
     import ast
     import inspect
@@ -5941,7 +5981,7 @@ def gather_args_bind(func, *args, frames_back=1, **kwargs):
 
 
 
-def get_current_function(frames_back=1):
+def get_current_function(frames_back=0):
     """
     Retrieves the function object from the specified number of frames back in the call stack.
 
@@ -6125,6 +6165,95 @@ def replace_if_none(value):
     except StopIteration:
         raise ValueError("rp.replace_if_none must be used within an assignment operation.")
 
+# Should probably use current_module = __import__(__name__) instead where this is used
+# def get_current_module():
+#     """
+#     Traverse up the call stack and return the first module found.
+#     """
+#     import inspect
+#    
+#     frame = inspect.currentframe()
+#     while frame is not None:
+#         frame = frame.f_back
+#         output = inspect.getmodule(frame)
+#         if output is not None:
+#             return output
+#     raise Exception('get_current_module(): failed to get the current module') 
+
+
+def rebind_globals_to_module(module, *, monkey_patch=False):
+    """
+    Decorator to change the global environment of functions and classes to another module's namespace.
+    If monkey_patch is True, the function or class is also added to the module.
+
+    The result: the decorated function is as good as if it were created in that module's source code,
+    allowing it to both read and write from that module's globals. As a consequence, it can no longer 
+    read or write from the module where this decorator is called.
+    
+
+    Args:
+        module: The target module to bind the globals to.
+        monkey_patch: If True, adds the object to the module.
+
+    Returns:
+        An object with its globals rebound to the target module's namespace.
+
+    EXAMPLE:
+        import rp.r as r
+        @rebind_globals_to_module(r)
+        def f():
+            #returns r._BundledPath
+            return _BundledPath
+
+        some_var=123
+        @rebind_globals_to_module(r)
+        def g():
+            #This crashes as it can no longer see names from the current module.
+            return some_var
+    """
+
+    assert is_a_module(module), 'rebind_globals_to_module is a decorator'
+
+    import types
+    import functools
+
+    def decorator(obj):
+        original_module = obj.__module__
+
+        if isinstance(obj, types.FunctionType):
+            if hasattr(obj, "__module__") and obj.__module__ == original_module:
+                bound_func = types.FunctionType(
+                    obj.__code__,
+                    module.__dict__,
+                    obj.__name__,
+                    obj.__defaults__,
+                    obj.__closure__,
+                )
+                return bound_func
+            return obj
+
+        elif isinstance(obj, type):  # It's a class
+            raise NotImplementedError("rebind_globals_to_module has not been tested/verified on classes yet")
+
+            # Create a new class with all attributes copied over
+            new_class_dict = {}
+            for attr_name, attr_value in obj.__dict__.items():
+                try:
+                    new_attr_value = decorator(attr_value)
+                except TypeError:
+                    new_attr_value = attr_value
+
+                new_class_dict[attr_name] = attr_value
+
+            # Construct the new class type in the module's namespace
+            new_class = type(obj.__name__, obj.__bases__, new_class_dict)
+            return new_class
+
+        else:
+            raise TypeError("rebind_globals_to_module can only be applied to functions or classes.")
+
+
+    return decorator
 
 
 def _filter_dict_via_fzf(input_dict):
@@ -6523,6 +6652,7 @@ def format_date(date):
         >>> format_date(ans)
         ans = Tue Aug 22, 2023 at 2:06:01PM
 
+    TODO: Allow user to specify timezone as string arg - will auto-convert it. Also if timezone='auto', will be auto-inferred.
     TODO: In the future, only if I want to, I'll add another argument to let you customize the date string. But I really like this format lol
     Made cross-platform (works on windows now) via GPT4: https://chat.openai.com/share/1af19e07-f63b-42df-ac9b-d2fa58b15715
     """
@@ -6550,6 +6680,7 @@ def format_date(date):
 
 
 def format_current_date():
+    #TODO: See format_date todo
     return format_date(get_current_date())
     
 
@@ -6714,6 +6845,9 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
             neednewline=True
             if hasattr(object,'dtype'):
                 print(col(tab + "DTYPE: ")+repr(object.dtype),flush=False,end='')
+            if hasattr(object,'device'):
+                try: print(col(tab + "DEVICE: ")+str(object.device),flush=False,end='')
+                except Exception: pass
             if hasattr(object,'min') and callable(object.min):
                 try: print(col(tab + "min:")+" %.6f"%(object.min()),flush=False,end='')
                 except Exception: pass
@@ -7459,6 +7593,7 @@ def append_line_to_file(line:str,file_path:str):
             file.write('\n'+line)
         finally:
             file.close()
+    return file_path
 
 def load_json(path, *, use_cache=False):
     pip_import('easydict') #I might make this a pip requirement of rp...its so useful!
@@ -7482,18 +7617,28 @@ def load_jsons(*paths, use_cache=False, strict=True, num_threads=None, show_prog
     if show_progress in ['eta',True]: show_progress='eta:Loading JSON files'
     return load_files(load_file, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
 
-def save_json(data,path,*,pretty=False):
+def save_json(data,path,*,pretty=False,default=None):
     import json
+
+    kwargs = dict(default=default)
     if pretty:
-        text = json.dumps(data, indent="\t", separators=(",", ": "))
-    else:
-        text=json.dumps(data)
+        kwargs.update(
+            dict(
+                indent='\t',
+                separators=(",", ": "),
+            )
+        )
+
+    text=json.dumps(data,**kwargs)
+
     return string_to_text_file(path,text)
 
 def load_yaml_file(path, use_cache=False):
-    #EXAMPLE:
-    #    >>> load_yaml_file('alphablock_without_ssim_256.yaml')
-    #    ans = {'max_iter': 300000, 'batch_size': 5, 'image_save_iter': 250, ...(etc)... }
+    """
+    EXAMPLE:
+        >>> load_yaml_file('alphablock_without_ssim_256.yaml')
+        ans = {'max_iter': 300000, 'batch_size': 5, 'image_save_iter': 250, ...(etc)... }
+    """
     pip_import('yaml')
     import yaml
     assert file_exists(path)
@@ -10571,6 +10716,41 @@ def merged_dicts(*dicts, precedence='last', mutate=False):
 
     return result
 
+def merged_prefixed_dicts(**kwargs):
+    """
+    Useful for destructuring from multiple dicts
+    EXAMPLE:
+        >>> first_output = dict(a=1,b=2,c=3)
+        >>> second_output = dict(a=4,b=5,c=6)
+        >>> merged_prefixed_dicts(first_=first_output,second_=second_output)
+        ans = {'first_a': 1, 'first_b': 2, 'first_c': 3, 'second_a': 4, 'second_b': 5, 'second_c': 6}
+        >>> first_a, second_a = destructure(merged_prefixed_dicts(first_=first_output,second_=second_output))
+    """
+    out_dict={}
+    for prefix in kwargs:
+        dict=kwargs[prefix]
+        for key,value in dict.items():
+            new_key=str(prefix)+str(key)
+            out_dict[new_key]=value
+    return out_dict
+    
+def merged_suffixed_dicts(**kwargs):
+    """
+    Useful for destructuring from multiple dicts by using suffixed keys from each dictionary.
+    EXAMPLE:
+        >>> first_output = dict(a=1, b=2, c=3)
+        >>> second_output = dict(a=4, b=5, c=6)
+        >>> merged_suffixed_dicts(first_=first_output, second_=second_output)
+        ans = {'a_first': 1, 'b_first': 2, 'c_first': 3, 'a_second': 4, 'b_second': 5, 'c_second': 6}
+    """
+    out_dict={}
+    for prefix in kwargs:
+        dict=kwargs[prefix]
+        for key, value in dict.items():
+            new_key=str(key)+'_'+str(prefix)
+            out_dict[new_key]=value
+    return out_dict
+
 
 def keys_and_values_to_dict(keys,values):
     """
@@ -12340,12 +12520,121 @@ _need_module_refresh=False #Set to true if we do something with pip. Used by pte
 #    pseudo_terminal(_globals,_locals)
 
 
+def _pterm_fuzzy_cd(query_path, do_cd=False):
+    def is_a_match(query_path, real_path, case_sensitive):
+        query_name = get_path_name(query_path)
+        real_name  = get_path_name(real_path )
+        
+        if query_name in ['','.','..','/']:
+            #Special names
+            return True
+        # print(query_name, real_name)
+
+        return fuzzy_string_match(query_name, real_name, case_sensitive=case_sensitive)
+
+    if query_path.startswith('/'):
+        #Doesn't work for windows. Who cares lol
+        root='/'
+    else:
+        root='.'
+
+    new_pwd = root
+    failed=False
+
+
+    def joined_names(names):
+        names=sorted(names)
+        max_len=5
+        if len(names)>max_len:
+            return joined_names(
+                random_batch(names, max_len, retain_order=True)
+            ) + "     ... %i more not shown ... " % (len(names) - max_len)
+        return '   '.join(map(shlex.quote, names))
+   
+    for query_name in path_split(query_path):
+        subfolders = _get_all_paths_fast(new_pwd, include_files=False)
+        query_pwd = path_join(new_pwd, query_name)
+        
+        # from icecream import ic
+        # ic(query_name,query_pwd,new_pwd)
+
+        #If there's a direct match, don't try fuzzy searching
+        if query_name in get_path_names(subfolders):
+            new_pwd = path_join(new_pwd, query_name)
+            continue
+
+        #Do fuzzy matching
+        case_sensitive_matches   = sorted(x for x in subfolders if is_a_match(query_pwd, x, True ))
+        case_insensitive_matches = sorted(x for x in subfolders if is_a_match(query_pwd, x, False))
+
+        #If we get multiple fuzzy matches with case-insensitive, try case sensitive
+        if len(case_sensitive_matches)==1:
+            matches = case_sensitive_matches
+        else:
+            matches = case_insensitive_matches
+
+        #Handle each case
+        if len(matches)==1:
+            new_pwd = matches[0]
+            continue
+        elif len(matches)==0:
+            import shlex
+            print(
+                fansi("Can't find any fuzzy matches for ", "red")
+                + fansi(query_name, "cyan", "bold")
+                + fansi(" in ", 'red')
+                +_fansi_highlight_path(new_pwd)
+                + "\n    "
+                + fansi("Subfolders: ", "red")
+                + fansi(
+                    joined_names(get_folder_names(subfolders)),
+                    "yellow",
+                )
+            )
+            failed = True
+            break
+        elif len(matches)>1:
+            import shlex
+            print(
+                fansi("Multiple fuzzy matches for ", "red")
+                + fansi(query_name, "cyan", "bold")
+                + fansi(" in ", 'red')
+                +_fansi_highlight_path(new_pwd)
+                + "\n    "
+                + fansi("Matches: ", "red")
+                + fansi(
+                    joined_names(matches),
+                    "yellow",
+                )
+            )
+            failed = True
+            break
+        else:
+            assert False,'impossible'
+    
+    #Return the path and maybe cd into it
+    if failed:
+        return query_path
+    else:
+        if do_cd:
+            _pterm_cd(new_pwd)
+        return new_pwd
+
+
+
+            
+
+
+
+        
+
 def _pterm_cd(dir,repeat=1):
     pwd=get_current_directory()
     if _cd_history and _cd_history[-1]!=pwd:
         _cd_history.append(pwd)
     for _ in range(repeat):
         set_current_directory(dir)
+    sys.path.append(get_absolute_path(get_current_directory()))
     print(_fansi_highlight_path(get_current_directory()))
 
 def _profile_vim_startup_plugins():
@@ -12952,6 +13241,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         CDB
         CDU
         CDH
+        CDH FAST
         CDZ
         CDQ
         CAT
@@ -13162,6 +13452,22 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         19U $r._pterm_cd('../../../../../../../../../../../../../../../../../../..')
         20U $r._pterm_cd('../../../../../../../../../../../../../../../../../../../..')
 
+        WCIJ1  web_copy(encode_image_to_bytes(ans,'jpeg',quality=10))
+        WCIJ2  web_copy(encode_image_to_bytes(ans,'jpeg',quality=20))
+        WCIJ3  web_copy(encode_image_to_bytes(ans,'jpeg',quality=30))
+        WCIJ4  web_copy(encode_image_to_bytes(ans,'jpeg',quality=40))
+        WCIJ5  web_copy(encode_image_to_bytes(ans,'jpeg',quality=50))
+        WCIJ6  web_copy(encode_image_to_bytes(ans,'jpeg',quality=60))
+        WCIJ7  web_copy(encode_image_to_bytes(ans,'jpeg',quality=70))
+        WCIJ8  web_copy(encode_image_to_bytes(ans,'jpeg',quality=80))
+        WCIJ9  web_copy(encode_image_to_bytes(ans,'jpeg',quality=90))
+        WCIJ95 web_copy(encode_image_to_bytes(ans,'jpeg',quality=95))
+
+        WCIJ   web_copy(encode_image_to_bytes(ans,'jpeg',quality=100))
+        WCIP   web_copy(encode_image_to_bytes(ans,'png'))
+
+        WPI    decode_image_from_bytes(web_paste())
+
 
         A ACATA
         AA ACATA
@@ -13261,6 +13567,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RX  ryanxonshrc
         RRY  RYAN RPRC YES
         RVY  RYAN VIMRC YES
+
+        RZG  $r._load_ryan_lazygit_config()
 
         VIMPROF $r._profile_vim_startup_plugins()
 
@@ -15604,6 +15912,12 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             user_message=''
 
                         elif not '\n' in user_message and (user_message=='CD' or user_message.startswith('CD ') or user_message.startswith('CDU') or user_message=='CDP') or user_message=='CDB' or user_message=='CDU' or user_message=='CDA' or user_message in 'CDZ' or user_message=='CDQ':
+                            if user_message.startswith('CD '):
+                                #Do fuzzy searching
+                                old_cd_path = user_message[len('CD '):]
+                                new_cd_path = _pterm_fuzzy_cd(old_cd_path)
+                                user_message = 'CD '+new_cd_path
+                                
                             if user_message=='CDU':
                                 fansi_print("CDU (aka CD Up) is an alias for 'CD ..'",'blue')
                                 user_message='CD ..'
@@ -19911,20 +20225,23 @@ def folder_is_empty(folder: str = ".") -> bool:
 
 directory_is_empty=folder_is_empty
 
-def random_file(folder=None):
+def get_random_file(folder=None):
     """
     Returns the paths of random files in that folder
     If the folder is None, returns the name of a random file in the current directory
     Returns a list of strings (file paths) whose length=quantity
+    OLD NAME: random_file
     """
     return random_files(quantity=1,folder=folder)[0]
+
     
 
-def random_files(quantity:int,folder=None):
+def get_random_files(quantity:int,folder=None):
     """
     Returns the paths of random files in that folder
     If the folder is None, returns the name of a random file in the current directory
     Returns a list of strings (file paths) whose length=quantity
+    OLD NAME: random_files
     """
     assert isinstance(folder,str) or folder is None
     assert isinstance(quantity,int)
@@ -19942,6 +20259,19 @@ def random_files(quantity:int,folder=None):
         assert not len(files)==0, 'rp.random_file: There are no files in '+repr(folder)
         output=random_batch_with_replacement(files,quantity)
         return path_join(folder,output) #Return something like './__main__.py'
+
+def get_random_folders(quantity:int, root_dir='.', *, include_symlinks=True, include_hidden=True):
+    folders = gather_args_call(_get_all_paths_fast, root_dir, include_folders=True, include_files=False, include_symlink_folders = include_symlinks)
+    output=random_batch_with_replacement(folders,quantity)
+    return output
+    
+# get_random_subfolders=get_random_folders
+
+def get_random_folder(root_dir='.', *, include_symlinks=True, include_hidden=True):
+    return gather_args_call(get_random_folders,1)[0]
+
+# get_random_subfolder=get_random_folder
+get_random_directory=get_random_folder
 
 #endregion
 
@@ -21728,6 +22058,7 @@ def _get_video_file_duration_via_moviepy(path):
 _get_video_file_duration_cache={}
 def get_video_file_duration(path,use_cache=True):
     #Returns a float, representing the total video length in seconds
+    path=get_absolute_path(path) #This is important for caching. 
     if use_cache and path in _get_video_file_duration_cache:
         return _get_video_file_duration_cache[path]
     out=_get_video_file_duration_via_moviepy(path)
@@ -21756,6 +22087,8 @@ def load_video(path,*,show_progress=True,use_cache=False):
     #This function does not take into account framerates or audio. It just returns a numpy array full of images.
     #It's slower than load_video_stream, but it can be cached using use_cache (which would actually make it faster, if applicable)
     progress_prefix="\rload_video: path="+repr(path)+": "
+    if path_exists(path):
+        path=get_absolute_path(path) #This is important for caching. 
     if use_cache and path in _load_video_cache:
         return _load_video_cache[path]
     stream=load_video_stream(path)
@@ -22568,6 +22901,8 @@ def path_join(*paths):
         paths=paths[0]
         paths=tuple(paths)
 
+    assert sum(is_non_str_iterable(x) for x in paths)<=1, 'rp.path_join: TODO: Decide how this function handles multiple iterables. Cartesian product or broadcasting?'
+
     if any(is_non_str_iterable(p) for p in paths):
         iterables = [p for p in paths if is_non_str_iterable(p)]
         iterables = [list(i) for i in iterables] #Make sure they have len
@@ -22708,6 +23043,7 @@ def get_cutscene_frame_numbers(video_path,*,use_cache=False):
     pip_import('cv2')#Needed for scenedetect
     pip_import('scenedetect')
 
+    video_path=get_absolute_path(video_path) #This is important for caching. 
     if video_path in _get_cutscene_frame_numbers_cache:
         return _get_cutscene_frame_numbers_cache[video_path]
 
@@ -23390,7 +23726,7 @@ def edit_image_in_terminal(image):
     if isinstance(image,str):
         assert is_image_file(image)
         image=load_image(image)
-        os.system('textual-paint '+repr(path))
+        os.system('textual-paint '+repr(video_path))
         edited=load_image(path)
         return edited
     else:
@@ -24113,7 +24449,7 @@ def unicode_loading_bar(n,chars='▏▎▍▌▋▊▉█'):
     output+=chars[n%size]
     return output
 
-def get_scope(level=0,scope='locals'):
+def get_scope(frames_back=0):
     """
     Get the scope of n levels up from the current stack frame
     Useful as a substitute for using globals(), locals() etc: you can specify exactly how many functions up you want to go
@@ -24134,14 +24470,20 @@ def get_scope(level=0,scope='locals'):
        |bonjour
     A useful application of this function is for letting pseudo_terminal infer the locals() and globals() when embedding it without having to pass them manually through arguments. I got this idea from iPython's embed implementation, and thought it was pretty genius.
     """
-    assert level>=0,'level cannot be negative'
-    assert isinstance(level,int),'level must be an integer (fractions dont make any sense; you cant go up a fractional number of frames)'
+    scope='locals' #Until I find a reason to make this variable, this won't be exposed as an argument.
+
+    assert isinstance(frames_back,int),'frames_back must be an integer (fractions dont make any sense; you cant go up a fractional number of frames)'
+    assert frames_back>=0,'frames_back cannot be negative'
     assert scope in {'locals','globals'},"scope must be either 'locals' or 'globals', but you gave scope="+repr(scope)
+
     import inspect
+
     frame=inspect.currentframe()
     frame=frame.f_back#Don't ever return the scope for this function; that's totally useless
-    for _ in range(level):
+    for _ in range(frames_back):
+
         frame=frame.f_back
+
     return {'locals':frame.f_locals, 'globals':frame.f_globals}[scope]
 
 _all_module_names=set()
@@ -24860,7 +25202,7 @@ def longest_common_substring(a,b):
     res = pylcs.lcs_string_idx(a, b)
     return ''.join([b[i] for i in res if i != -1])
 
-def input_keypress(handle_keyboard_interrupt=True):#handle_keyboard_interrupt=False): <---- TODO: Implement handle_keyboard_interrupt correctly! right now it doesn't work...
+def input_keypress(handle_keyboard_interrupt=False):#handle_keyboard_interrupt=False): <---- TODO: Implement handle_keyboard_interrupt correctly! right now it doesn't work...
     """
     If handle_keyboard_interrupt is True, when you press control+c, it will return the control+c character instead of throwing a KeyboardInterrupt
     Blocks the code until you press some key on the keyboard
@@ -25264,6 +25606,9 @@ def _set_ryan_vimrc():
     except Exception:print("Skipped pip install isort...")
     try:pip_import('macchiato','black-macchiato',auto_yes=True)
     except Exception:print("Skipped pip install black-macchiato...")
+    try:pip_import('pyflakes',auto_yes=True)
+    except Exception:print("Skipped pip install pyflakes...")
+
     vimrc=text_file_to_string(get_module_path_from_name('rp.ryan_vimrc'))
     string_to_text_file(get_absolute_path('~/.vimrc'),vimrc)
     shell_command('git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim')
@@ -25414,6 +25759,64 @@ def _set_ryan_tmux_conf():
         os.system('tmux source-file ~/.tmux.conf') #Refresh tmux conf if possible
     except Exception:
         pass
+
+def _load_ryan_lazygit_config():
+    _install_lazygit()
+
+    #Get the path depending on the platform
+    #https://github.com/jesseduffield/lazygit/blob/master/docs/Config.md
+    if currently_running_mac():
+        path='~/Library/Application Support/lazygit/config.yml'
+    elif currently_running_unix():
+        path='~/.config/lazygit/config.yml'
+    else:
+        path='%LOCALAPPDATA%\lazygit\config.yml'
+    
+    path=get_absolute_path(path)
+    make_directory(get_path_parent(path))
+    
+    config_lines="""
+        
+# < RP Lazygit Config Start >
+#DEFAULTS: https://github.com/jesseduffield/lazygit/blob/master/docs/Config.md
+keybinding:
+  universal:
+    quit: '<c-d>'
+    quit-alt1: '<c-d>' # alternative/alias of quit
+    # return: 'q' # return to previous menu, will quit if there's nowhere to return
+    return: '<c-c>' # return to previous menu, will quit if there's nowhere to return
+    scrollDownMain-alt2: null #NOT <c-d>
+refresher:
+  refreshInterval: 60 # Save battery life...
+  # fetchInterval: 60 # re-fetch interval in seconds
+# < RP Lazygit Config End >
+
+"""
+    
+    return append_line_to_file(config_lines,path)
+
+def _install_lazygit(force=False):
+    #https://github.com/jesseduffield/lazygit/tree/master?tab=readme-ov-file#installation
+    
+    if 'lazygit' in get_system_commands() and not force:
+        print('lazygit is already installed. Not installing because force==False.')
+        return
+    
+    if currently_running_mac():
+        os.system('brew install jesseduffield/lazygit/lazygit')
+    elif currently_running_linux():
+        os.system("""LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
+curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz"
+tar xf lazygit.tar.gz lazygit
+sudo install lazygit /usr/local/bin""")
+    elif currently_running_windows():
+        #Untested
+        os.system("""winget install -e --id=JesseDuffield.lazygit""")
+        
+    
+    
+
+
 
 
 def can_convert_object_to_bytes(x:object)->bool:
@@ -26125,6 +26528,7 @@ def get_video_file_shape(path, use_cache=True):
         the video shape would only have 3 dims (num_frames, height, width)
         then in the future this function might just return a tuple with vals!
     """
+    path = get_absolute_path(path) #Important for caching
     if use_cache and path in _video_shape_cache:
         return _video_shape_cache[path]
 
@@ -27508,6 +27912,12 @@ def _get_all_paths_fast(
             and x not in explored_paths
         )
 
+    def postprocess_path(x:_PathInfo):
+        x=x.path
+        if x.startswith('./'):
+            x=x[2:]
+        return x
+
     def explore(x:_PathInfo):
         explored_paths.add(x) #Avoid symlink loops
 
@@ -27518,7 +27928,7 @@ def _get_all_paths_fast(
 
         for x in map(_PathInfo, dir_entries):
             if should_explore(x): to_explore.append(x)
-            if should_include(x): yield x.path
+            if should_include(x): yield postprocess_path(x)
             
     root_dir = _PathInfo(root_dir)
     to_explore = deque([root_dir])
@@ -29367,6 +29777,17 @@ def get_current_git_hash(folder='.'):
         sha = repo.head.object.hexsha
         return sha
 
+def get_git_commit_message(folder='.'):
+    assert folder_exists(folder)
+    assert is_a_git_repo(folder), 'Not in a git repo'
+    pip_import('git')
+    import git
+    with SetCurrentDirectoryTemporarily(folder): 
+        #https://stackoverflow.com/questions/6806266/git-python-get-commit-feed-from-a-repository
+        repo = git.Repo(search_parent_directories=True)
+        master = repo.head.reference
+        return master.commit.message
+
 def is_a_git_repo(folder='.'):
     if not is_a_folder(folder):
         return False
@@ -29878,7 +30299,7 @@ def set_cuda_visible_devices(*devices):
 
 
         
-def _removestar(code:str):
+def _removestar(code:str,max_line_length=100):
     #Takes something like:
     #    from numpy import *
     #    from rp import *
@@ -29892,7 +30313,7 @@ def _removestar(code:str):
     #It removes the stars
     pip_import('removestar')
     from removestar.removestar import fix_code
-    return fix_code(code,file='filename is irrelevant')
+    return fix_code(code,file='filename is irrelevant',max_line_length=max_line_length)
         
 #def file_line_iterator(file_name):
 #    #Opens a file and iterates through its lines
@@ -31062,8 +31483,8 @@ def delaunay_interpolation_weights(key_points, query_points):
         tuple: A tuple containing two arrays, one with the indices of the vertices
                for each simplex and another with the corresponding weights for
                interpolation. 
-               
     Note:
+
         For repeated calls with the same key points, it's more efficient to reuse 
         a Delaunay object than to recreate it each time due to the costly nature 
         of Delaunay triangulation. If that is your use case, modify this function.
