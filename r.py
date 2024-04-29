@@ -25608,6 +25608,8 @@ def _set_ryan_vimrc():
     except Exception:print("Skipped pip install black-macchiato...")
     try:pip_import('pyflakes',auto_yes=True)
     except Exception:print("Skipped pip install pyflakes...")
+    try:pip_import('removestar',auto_yes=True)
+    except Exception:print("Skipped pip install removestar...")
 
     vimrc=text_file_to_string(get_module_path_from_name('rp.ryan_vimrc'))
     string_to_text_file(get_absolute_path('~/.vimrc'),vimrc)
@@ -25626,6 +25628,11 @@ $CASE_SENSITIVE_COMPLETIONS = False
 '''
     string_to_text_file(xonshrc_path,xonfig+ryan_xonfig)
     print("Your ~/.xonshrc file has been modified. Use the SHELL command to try it out!")
+
+def _sort_imports_via_isort(code):
+    pip_import('isort')
+    import isort
+    return isort.code(code)
 
 def _set_ryan_tmux_conf():
     conf='''

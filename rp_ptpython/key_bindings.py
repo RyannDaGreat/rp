@@ -3033,14 +3033,12 @@ def load_python_bindings(python_input):
                                         text=black.format_str(text,mode=black.Mode())
                                         buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
                                     except BaseException as e:
-                                        buffer.insert_text('#sort_imports: Error: '+str(e).replace('\n',' ; '))
+                                        buffer.insert_text('#black: Error: '+str(e).replace('\n',' ; '))
                                 if header=='sort_imports':
-                                    from rp import pip_import
+                                    import rp
                                     try:
-                                        pip_import('isort')
-                                        import isort
                                         text=buffer.document.text
-                                        text=isort.code(text)
+                                        text=rp.r._sort_imports_via_isort(text)
                                         buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
                                     except BaseException as e:
                                         buffer.insert_text('#sort_imports: Error: '+str(e).replace('\n',' ; '))

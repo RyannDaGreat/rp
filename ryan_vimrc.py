@@ -1102,6 +1102,8 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             nnoremap <leader>lpa :call ExecuteRP('print(local_paste())')<cr>"0p<cr>g;
             nnoremap <leader>PA :call ExecuteRP('print(clipboard_to_string())')<cr>"0p<cr>g;
 
-            nnoremap <leader>rrms :%y<cr>:call ExecuteRP('print(r._removestar(sys.stdin.read(),max_line_length=1000000,quiet=True))')<cr>ggVGp<c-o><c-o>
+            "TODO: Return the cursor to the original position + difference in number of lines
+            nnoremap <leader>rrms :%y<cr>:call ExecuteRP('print(r._removestar(sys.stdin.read(),max_line_length=1000000,quiet=True))')<cr>ggVGp
+            nnoremap <leader>rsim :%y<cr>:call ExecuteRP('print(r._sort_imports_via_isort(sys.stdin.read()))')<cr>ggVGp
 
 
