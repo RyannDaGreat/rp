@@ -6290,7 +6290,7 @@ def _filter_dict_via_fzf(input_dict):
     display_lines = display_str.splitlines()
 
     # Use fzf to select lines
-    selected_lines = iterfzf.iterfzf(display_lines, multi=True, exact=True)
+    selected_lines = _iterfzf(display_lines, multi=True, exact=True)
     selected_indices = [display_lines.index(line) for line in selected_lines]
 
     if selected_indices is None:
@@ -12357,7 +12357,7 @@ def _ISM(ans):
             ans=line_split(ans)
             ans=ans[::-1] #Let us see the string properly
             return line_join(_ISM(ans))
-        return pip_import('iterfzf').iterfzf(ans,multi=True,exact=True)
+        return _iterfzf(ans,multi=True,exact=True)
 
 def _view_with_pyfx(data):
     from rp.libs.pyfx.app import PyfxApp
@@ -12451,19 +12451,19 @@ def _input_select_multiple_history_multiline(history_filename=history_filename,o
     # lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | nl -b a -v 0 -s\\|\ \  | fold -w %i'%preview_width) #
     if old_code is None:
         if fansi_is_enabled():
-            lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | %s %s %i '%(
+            lines=_iterfzf(lines,multi=True,exact=True,preview='echo {} | %s %s %i '%(
                 json.dumps(sys.executable),
                 json.dumps(get_module_path("rp.experimental.stdin_python_highlighter")),
                 preview_width),
             ) #
         else:
-            lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | nl -b a -v 0 -s\\|\ \  | fold -w %i'%preview_width) #
+            lines=_iterfzf(lines,multi=True,exact=True,preview='echo {} | nl -b a -v 0 -s\\|\ \  | fold -w %i'%preview_width) #
         # lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | nl -v 0 | fold -w %i'%preview_width) #Have line numbers Start from 0
     else:
         assert old_code is not None
         #We're gonna do diffs and merge them
         #No support for fansi_disabled right now
-        lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | %s %s %i %s %s'%(
+        lines=_iterfzf(lines,multi=True,exact=True,preview='echo {} | %s %s %i %s %s'%(
                 json.dumps(sys.executable),
                 json.dumps(get_module_path("rp.experimental.stdin_python_highlighter")),
                 preview_width,
@@ -12506,7 +12506,7 @@ def _input_select_multiple_history(history_filename=history_filename):
     lines=history.splitlines()
 
     preview_width=get_terminal_width()//2-2
-    lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | fold -w %i'%preview_width)
+    lines=_iterfzf(lines,multi=True,exact=True,preview='echo {} | fold -w %i'%preview_width)
 
     lines=[('#' if x.startswith('#') else '')+x[1:] for x in lines]
     out=line_join(lines)
@@ -13674,7 +13674,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         LSAG  $get_all_paths  (relative=False,sort_by='name') #LSA Global
         LSAFG $get_all_files  (relative=False,sort_by='name') #LSA Files Global
         LSADG $get_all_folders(relative=False,sort_by='name') #LSA Directories Global
-        LSM   $pip_import('iterfzf').iterfzf($get_all_paths('.',relative=False,sort_by='name'),multi=True,exact=True)
+        LSM   $r._iterfzf($get_all_paths('.',relative=False,sort_by='name'),multi=True,exact=True)
         LSAI  $get_all_image_files()
 
         IASM $import_all_submodules(ans,verbose=True);
@@ -13752,7 +13752,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         DISC $display_image_slideshow('.',display=$display_image_in_terminal_color)
 
-        FZM $pip_import('iterfzf').iterfzf(ans,multi=True)
+        FZM $r._iterfzf(ans,multi=True)
 
         NLS $fansi_print(len($os.listdir()),"blue","bold")
         DUSH !du -sh
@@ -27603,10 +27603,17 @@ def resize_images_to_min_size(*images, interp="bilinear"):
     #    display_image_slideshow(resize_images_to_min(ans))
     return resize_images(*images, size=get_min_image_dimensions(*images), interp=interp)
 
-def _iterfzf(*args,**kwargs):
+def _iterfzf(iterable, *args,**kwargs):
     pip_import('iterfzf')
     from iterfzf import iterfzf
-    return iterfzf(*args,**kwargs)
+
+    def sanitize_string(string):
+        #TODO: This might modify the outputs they expect...add some converter here to make sure it outputs the string they think it will
+        return string.replace('\r','\\r').replace('\n','\\n') #Don't glitch out iterfzf I think it has a bug this can fuck up the terminal and forc e you to reset it
+
+    iterable=map(sanitize_string,iterable)
+
+    return iterfzf(iterable, *args,**kwargs)
 
 def cv_inpaint_image(image, mask=None, radius=3, *, algorithm: str = "TELEA", invert_mask=False):
     """
@@ -29253,13 +29260,13 @@ def _fzf_multi_grep(print_instructions=True):
         #CODE DUPLICATED FROM QPHP
         preview_width=get_terminal_width()//2-2-2
 
-        output=iterfzf.iterfzf(text_lines_walk(),multi=True,exact=True,preview='echo {} | %s %s %i FDT '%(
+        output=_iterfzf(text_lines_walk(),multi=True,exact=True,preview='echo {} | %s %s %i FDT '%(
             json.dumps(sys.executable),
             json.dumps(get_module_path("rp.experimental.stdin_python_highlighter")),
             preview_width),
         ) #
     else:
-        output=iterfzf.iterfzf(text_lines_walk(),case_sensitive=False,exact=True,multi=True)
+        output=_iterfzf(text_lines_walk(),case_sensitive=False,exact=True,multi=True)
 
 
     if output is not None:
