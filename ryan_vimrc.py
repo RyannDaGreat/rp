@@ -1063,7 +1063,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             " cmap <f28> <nop>
             " cmap <f29> <nop>
 
-        " RP CLIPBOARDS: \wco \wpa \lco \lpa \CO \PA
+        " RP CLIPBOARDS: \wco \wpa \lco \lpa \CO \PA \rrms
             " Helper function to check RP_SYS_EXECUTABLE and execute the command
             " Same rules as \tco \tpa (visual mode or normal for copy, normal for paste)
 
@@ -1082,7 +1082,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
                     let @0 = output
                 else
                     echohl ErrorMsg
-                    echo "ExecuteRP: Error: Please run Vim as a child of rp - $RP_SYS_EXECUTABLE environment var not set"
+                    echo "ExecuteRP: Error: Runtime error. Perhaps this is why? Please run Vim as a child of rp - $RP_SYS_EXECUTABLE environment var not set"
                     echohl None
                     call input("Press Enter to continue...") "TODO: Handle this error in a more elegant way; right now it still tries pressing <cr>gv
                 endif
@@ -1101,3 +1101,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             nnoremap <leader>wpa :call ExecuteRP('print(web_paste())')<cr>"0p<cr>g;
             nnoremap <leader>lpa :call ExecuteRP('print(local_paste())')<cr>"0p<cr>g;
             nnoremap <leader>PA :call ExecuteRP('print(clipboard_to_string())')<cr>"0p<cr>g;
+
+            nnoremap <leader>rrms :%y<cr>:call ExecuteRP('print(r._removestar(sys.stdin.read(),max_line_length=1000000,quiet=True))')<cr>ggVGp<c-o><c-o>
+
+

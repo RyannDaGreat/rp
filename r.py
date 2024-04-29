@@ -30306,7 +30306,7 @@ def set_cuda_visible_devices(*devices):
 
 
         
-def _removestar(code:str,max_line_length=100):
+def _removestar(code:str,max_line_length=100,quiet=False):
     #Takes something like:
     #    from numpy import *
     #    from rp import *
@@ -30320,7 +30320,7 @@ def _removestar(code:str,max_line_length=100):
     #It removes the stars
     pip_import('removestar')
     from removestar.removestar import fix_code
-    return fix_code(code,file='filename is irrelevant',max_line_length=max_line_length)
+    return fix_code(code,file='filename is irrelevant',max_line_length=max_line_length,quiet=True)
         
 #def file_line_iterator(file_name):
 #    #Opens a file and iterates through its lines
