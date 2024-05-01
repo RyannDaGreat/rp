@@ -123,7 +123,7 @@ def run_server(server_port:int=None,scope:dict=None):
 
     if scope is None:
         #If scope is not specified, use the scope of the caller.
-        scope=rp.get_scope(level=1)
+        scope=rp.get_scope(frames_back=1)
 
     host_name = "0.0.0.0"
     webServer = HTTPServer((host_name, server_port), _HandlerMaker(scope))

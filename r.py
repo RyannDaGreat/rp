@@ -1191,11 +1191,13 @@ def _set_local_clipboard_string(string):
     _local_clipboard_string=string
     string_to_text_file(_local_clipboard_string_path,string)
 def string_to_clipboard(string):
-    #Copies a string to the clipboard so you can paste it later
-    #First tries to copy the string to the system clipboard.
-    #If that doesn't work, it falls back to writing your string to a local file called '.rp_local_clipboard', and uses that to copy/paste along with the string_from_clipboard function. This is useful over SSH where pyperclip fails on linux systems. Because it uses a file, it's synced across rp processes and is persistent even after we close and reopen rp, even while over ssh on a system whose clipboard we can't modify for some reason.
-    #If that doesn't work, it falls back to reading/writing to a global variable called _local_clipboard_string. This string is lost if rp is closed.
-    #I decided not to label this function 'copy' because 'copy' could refer to copying objects such as lists etc, like [1,2,3].copy()
+    """
+    Copies a string to the clipboard so you can paste it later
+    First tries to copy the string to the system clipboard.
+    If that doesn't work, it falls back to writing your string to a local file called '.rp_local_clipboard', and uses that to copy/paste along with the string_from_clipboard function. This is useful over SSH where pyperclip fails on linux systems. Because it uses a file, it's synced across rp processes and is persistent even after we close and reopen rp, even while over ssh on a system whose clipboard we can't modify for some reason.
+    If that doesn't work, it falls back to reading/writing to a global variable called _local_clipboard_string. This string is lost if rp is closed.
+    I decided not to label this function 'copy' because 'copy' could refer to copying objects such as lists etc, like [1,2,3].copy()
+    """
     global _local_clipboard_string
     
     
@@ -1248,10 +1250,12 @@ def _copy_text_over_terminal(string):
 
 
 def string_from_clipboard():
-    #Pastes the string from the clipboard and returns that value
-    #First tries to paste the string from the system clipboard.
-    #If that doesn't work, it falls back to reading your string from a local file called '.rp_local_clipboard'
-    #If that doesn't work, it falls back to writing to a global variable called _local_clipboard_string
+    """
+    Pastes the string from the clipboard and returns that value
+    First tries to paste the string from the system clipboard.
+    If that doesn't work, it falls back to reading your string from a local file called '.rp_local_clipboard'
+    If that doesn't work, it falls back to writing to a global variable called _local_clipboard_string
+    """
     try:
         from rp.Pyperclip import paste,copy
         assert not running_in_ssh() #This is a patch for Ryan Burgert's desktop computer, which doesn't like using the clipboard over ssh for some reason. 
@@ -1398,34 +1402,36 @@ def gaussian_kernel(size=21, sigma=3,dim=2):
     return _gaussian_circle_kernel_cache[args]
 
 def get_max_image_dimensions(*images):
-    #Given a set of images, return the maximum height and width seen across all of them
+    """ Given a set of images, return the maximum height and width seen across all of them """
     if len(images)==1: images=images[0]
     heights=[get_image_height(x) for x in images]
     widths =[get_image_width (x) for x in images]
     return max(heights),max(widths)
 
 def get_min_image_dimensions(*images):
-    #Given a set of images, return the minimum height and width seen across all of them
+    """ Given a set of images, return the minimum height and width seen across all of them """
     if len(images)==1: images=images[0]
     heights=[get_image_height(x) for x in images]
     widths =[get_image_width (x) for x in images]
     return min(heights),min(widths)
 
 def uniform_float_color_image(height:int,width:int,color:tuple=(0,0,0,0)):
-    #Returns an image with the given height and width, where all pixels are the given color
-    #If the given color is a number, it returns a grayscale image
-    #Otherwise, the given color must be either an RGB or RGBA float color (a tuple with 3 or 4 floats between 0 and 1)
-    #
-    #EXAMPLE:
-    #    for _ in range(16):
-    #        height=randint(10,30)
-    #        width=randint(10,30)
-    #        color=random_rgb_float_color() #Color is like (.1235, .5742, .8652)
-    #        tile=uniform_float_color_image(height,width,color)
-    #        random_color_tiles.append(tile)
-    #    image=tiled_images(random_color_tiles,border_thickness=0)
-    #    display_image(image) #The result will look like https://i.imgur.com/COlmGRT.png 
-    #
+    """
+    Returns an image with the given height and width, where all pixels are the given color
+    If the given color is a number, it returns a grayscale image
+    Otherwise, the given color must be either an RGB or RGBA float color (a tuple with 3 or 4 floats between 0 and 1)
+    
+    EXAMPLE:
+        for _ in range(16):
+            height=randint(10,30)
+            width=randint(10,30)
+            color=random_rgb_float_color() #Color is like (.1235, .5742, .8652)
+            tile=uniform_float_color_image(height,width,color)
+            random_color_tiles.append(tile)
+        image=tiled_images(random_color_tiles,border_thickness=0)
+        display_image(image) #The result will look like https://i.imgur.com/COlmGRT.png 
+    """
+    
     assert height>=0 and width>=0
     assert is_number(color) or is_color(color) and len(color) in {3,4}, 'Color should be a number, an RGB float color, or an RGBA float color'
     
@@ -1439,58 +1445,60 @@ def uniform_float_color_image(height:int,width:int,color:tuple=(0,0,0,0)):
         return output
 
 def blend_images(bot,top,alpha=1):
-    #bot and top can be either images, floats, or colors. 
-    #If it is an image, we blend using that image.
-    #If it is a color, it should be an RGB or RGBA float color (a tuple with three or four values between 0 and 1)
-    #If it is a float, it's treated as an RGB color with R=G=B=that value
-    #
-    #Alpha can either be an image or a number
-    #If alpha is an image, it will be first converted to grayscale
-    #Where alpha is closer to 1, top will be more opaque. When alpha is closer to 0, top will be more transparent and bot will show more.
-    #
-    #This function is meant to blend images like in photoshop
-    #Blending images is different from a simple blend function, as the alpha channels are not blended as well
-    #
-    #EXAMPLE:
-    #   dice     ='https://bellard.org/bpg/3.png'
-    #   penguin  ='https://www.gstatic.com/webp/gallery3/2_webp_a.png'
-    #   mountains='https://cdn.britannica.com/67/19367-050-885866B4/Valley-Taurus-Mountains-Turkey.jpg'
-    #   checkerboard='https://static8.depositphotos.com/1176848/894/i/450/depositphotos_8945283-stock-photo-checkerboard-chess-background.jpg'
-    #   dice     =load_image(dice     ) #Has alpha channel
-    #   penguin  =load_image(penguin  ) #Has alpha channel
-    #   mountains=load_image(mountains) #Has no alpha channel
-    #   checkerboard=load_image(checkerboard) #Has no alpha channel
-    #   composite=blend_images(mountains,penguin,.5) #Penguin is slightly transparent
-    #   composite=blend_images(composite,dice,alpha=checkerboard) #Mix the dice on with a checkerboard mask
-    #   display_image(composite) #Result should look like https://i.imgur.com/lF8Sxuc.jpeg
-    #
-    #EXAMPLE:
-    #   dice = 'https://bellard.org/bpg/3.png'
-    #   dice = load_image(dice)  #Has alpha channel
-    #   display_image(blend_images((0,1,0),dice))               #Should look like https://i.imgur.com/iu6Z8bk.png
-    #   display_image(blend_images((0,1,0),(1,0,1),alpha=dice)) #Should look like https://i.imgur.com/gxaauuD.png
-    #   display_image(blend_images(1,1/2,alpha=dice))           #Should look like https://i.imgur.com/f0sKWY5.png
-    #
-    #EXAMPLE:    
-    #    >>> blend_images(0,.5,.5)
-    #   ans = [[[0.25 0.25 0.25 1.  ]]]
-    #    >>> blend_images(0,(0,1,0),.5)
-    #   ans = [[[0.  0.5 0.  1. ]]]
-    #    >>> blend_images(1,(0,1,0),.5)
-    #   ans = [[[0.5 1.  0.5 1. ]]]
-    #    >>> blend_images(1,(0,1,0,.5),.5)
-    #   ans = [[[0.75 1.   0.75 1.  ]]]
-    #
-    #EXAMPLE:
-    #   dog=load_image('https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg.jpg')
-    #   nebula=load_image('https://spaceplace.nasa.gov/nebula/en/nebula1.en.jpg')
-    #   nebula,dog=crop_images_to_min_size(nebula,dog)
-    #   text=cv_text_to_image("OUTER\nSPACE\nDOGGO!!",scale=4,thickness=20)
-    #   composite=blend_images(dog,nebula,alpha=text)
-    #   display_image(composite) #Should look like https://i.imgur.com/wEc1t8e.png
-    #   composite=blend_images(dog,nebula,alpha=cv_gauss_blur(text,sigma=15))#Should look like https://i.imgur.com/YtPtR1p.png
-    #
-    #Most of the code here is to handle the different types of inputs (top and bot can be floats, images or colors etc)
+    """
+    bot and top can be either images, floats, or colors. 
+    If it is an image, we blend using that image.
+    If it is a color, it should be an RGB or RGBA float color (a tuple with three or four values between 0 and 1)
+    If it is a float, it's treated as an RGB color with R=G=B=that value
+    
+    Alpha can either be an image or a number
+    If alpha is an image, it will be first converted to grayscale
+    Where alpha is closer to 1, top will be more opaque. When alpha is closer to 0, top will be more transparent and bot will show more.
+    
+    This function is meant to blend images like in photoshop
+    Blending images is different from a simple blend function, as the alpha channels are not blended as well
+    
+    EXAMPLE:
+       dice     ='https://bellard.org/bpg/3.png'
+       penguin  ='https://www.gstatic.com/webp/gallery3/2_webp_a.png'
+       mountains='https://cdn.britannica.com/67/19367-050-885866B4/Valley-Taurus-Mountains-Turkey.jpg'
+       checkerboard='https://static8.depositphotos.com/1176848/894/i/450/depositphotos_8945283-stock-photo-checkerboard-chess-background.jpg'
+       dice     =load_image(dice     ) #Has alpha channel
+       penguin  =load_image(penguin  ) #Has alpha channel
+       mountains=load_image(mountains) #Has no alpha channel
+       checkerboard=load_image(checkerboard) #Has no alpha channel
+       composite=blend_images(mountains,penguin,.5) #Penguin is slightly transparent
+       composite=blend_images(composite,dice,alpha=checkerboard) #Mix the dice on with a checkerboard mask
+       display_image(composite) #Result should look like https://i.imgur.com/lF8Sxuc.jpeg
+    
+    EXAMPLE:
+       dice = 'https://bellard.org/bpg/3.png'
+       dice = load_image(dice)  #Has alpha channel
+       display_image(blend_images((0,1,0),dice))               #Should look like https://i.imgur.com/iu6Z8bk.png
+       display_image(blend_images((0,1,0),(1,0,1),alpha=dice)) #Should look like https://i.imgur.com/gxaauuD.png
+       display_image(blend_images(1,1/2,alpha=dice))           #Should look like https://i.imgur.com/f0sKWY5.png
+    
+    EXAMPLE:    
+        >>> blend_images(0,.5,.5)
+       ans = [[[0.25 0.25 0.25 1.  ]]]
+        >>> blend_images(0,(0,1,0),.5)
+       ans = [[[0.  0.5 0.  1. ]]]
+        >>> blend_images(1,(0,1,0),.5)
+       ans = [[[0.5 1.  0.5 1. ]]]
+        >>> blend_images(1,(0,1,0,.5),.5)
+       ans = [[[0.75 1.   0.75 1.  ]]]
+    
+    EXAMPLE:
+       dog=load_image('https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg.jpg')
+       nebula=load_image('https://spaceplace.nasa.gov/nebula/en/nebula1.en.jpg')
+       nebula,dog=crop_images_to_min_size(nebula,dog)
+       text=cv_text_to_image("OUTER\nSPACE\nDOGGO!!",scale=4,thickness=20)
+       composite=blend_images(dog,nebula,alpha=text)
+       display_image(composite) #Should look like https://i.imgur.com/wEc1t8e.png
+       composite=blend_images(dog,nebula,alpha=cv_gauss_blur(text,sigma=15))#Should look like https://i.imgur.com/YtPtR1p.png
+    
+    Most of the code here is to handle the different types of inputs (top and bot can be floats, images or colors etc)
+    """
     
     #Input validation
     assert is_image(top) or is_color(top) and len(top) in {3,4} or is_number(top)
@@ -1541,8 +1549,10 @@ def blend_images(bot,top,alpha=1):
     return output
 
 def overlay_images(*images):
-    #Blends all the given images on top of one another; the last one being on top
-    #It takes into consideration any alpha channels, if the images are RGBA
+    """
+    Blends all the given images on top of one another; the last one being on top
+    It takes into consideration any alpha channels, if the images are RGBA
+    """
     if len(images)==1:
         images=images[0]
     if is_image(images):
@@ -1655,6 +1665,56 @@ def with_drop_shadow(
 def with_drop_shadows(images,**kwargs):
     return [with_drop_shadow(image,**kwargs) for image in images]
     
+def with_corner_radius(image, radius, *, antialias=True):
+    """
+    Applies an alpha mask to round off the corners of an image
+    Radius is, of course, measured in pixels
+
+    EXAMPLE:
+        image = load_image(
+            "https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png"
+        )
+        for radius in resize_list(range(max(get_image_dimensions(image)) // 2), 30):
+            display_alpha_image(
+                with_drop_shadow(
+                    crop_image(
+                        with_rounded_corners(image, radius),
+                        get_image_height(image) + 200,
+                        get_image_width(image) + 200,
+                        origin="center",
+                    ),
+                    opacity=0.8,
+                    blur=100,
+                    x=50,
+                    y=50,
+                )
+            )
+    """
+    from PIL import Image, ImageDraw
+
+    radius = round(radius)
+    assert radius>=0
+
+    mask_size = tuple(get_image_dimensions(image)[::-1])  # PIL uses (width, height)
+
+    if antialias:
+        antialias_upsampling_factor = 2
+        radius *= antialias_upsampling_factor
+        original_mask_size = mask_size
+        mask_size = tuple(x * antialias_upsampling_factor for x in mask_size)
+
+    mask = Image.new("L", mask_size, 0)
+    draw = ImageDraw.Draw(mask)
+
+    draw.rounded_rectangle([(0, 0), mask_size], radius, fill=255)
+
+    if antialias:
+        mask = mask.resize(original_mask_size)
+
+    alpha = as_float_image(get_image_alpha(image)) * as_float_image(mask)
+    return with_image_alpha(image, alpha)
+
+    
 def _crop_images_to_max_or_min_size(*images,origin='top left',criterion=max):
     
     images=detuple(images)
@@ -1672,27 +1732,31 @@ def _crop_images_to_max_or_min_size(*images,origin='top left',criterion=max):
     return images
 
 def crop_images_to_max_size(*images,origin='top left'):
-    #Makes sure all images have the same height and width
-    #Does this by adding additional black space around images if needed
-    #EXAMPLE:
-    #    ans='https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg&auto=webp https://s3.amazonaws.com/cdn-origin-etr.akc.org/wp-content/uploads/2017/11/13002248/GettyImages-187066830.jpg https://hips.hearstapps.com/hmg-prod.s3.amazonaws.com/images/best-small-dog-breeds-cavalier-king-charles-spaniel-1598992577.jpg?crop=0.468xw:1.00xh;0.259xw,0&resize=480:*'.split()
-    #    ans=load_images(ans)
-    #    display_image_slideshow(ans)
-    #    print("DI")
-    #    display_image_slideshow(crop_images_to_max_size(ans))
-    #    display_image_slideshow(crop_images_to_max_size(ans,origin='center'))
+    """
+    Makes sure all images have the same height and width
+    Does this by adding additional black space around images if needed
+    EXAMPLE:
+        ans='https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg&auto=webp https://s3.amazonaws.com/cdn-origin-etr.akc.org/wp-content/uploads/2017/11/13002248/GettyImages-187066830.jpg https://hips.hearstapps.com/hmg-prod.s3.amazonaws.com/images/best-small-dog-breeds-cavalier-king-charles-spaniel-1598992577.jpg?crop=0.468xw:1.00xh;0.259xw,0&resize=480:*'.split()
+        ans=load_images(ans)
+        display_image_slideshow(ans)
+        print("DI")
+        display_image_slideshow(crop_images_to_max_size(ans))
+        display_image_slideshow(crop_images_to_max_size(ans,origin='center'))
+    """
     return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=max)
 
 def crop_images_to_min_size(*images,origin='top left'):
-    #Makes sure all images have the same height and width
-    #Does this by cropping out the edges of the images if needed
-    #EXAMPLE:
-    #    ans='https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg&auto=webp https://s3.amazonaws.com/cdn-origin-etr.akc.org/wp-content/uploads/2017/11/13002248/GettyImages-187066830.jpg https://hips.hearstapps.com/hmg-prod.s3.amazonaws.com/images/best-small-dog-breeds-cavalier-king-charles-spaniel-1598992577.jpg?crop=0.468xw:1.00xh;0.259xw,0&resize=480:*'.split()
-    #    ans=load_images(ans)
-    #    display_image_slideshow(ans)
-    #    print("DI")
-    #    display_image_slideshow(crop_images_to_min_size(ans))
-    #    display_image_slideshow(crop_images_to_min_size(ans,origin='center'))
+    """
+    Makes sure all images have the same height and width
+    Does this by cropping out the edges of the images if needed
+    EXAMPLE:
+        ans='https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg&auto=webp https://s3.amazonaws.com/cdn-origin-etr.akc.org/wp-content/uploads/2017/11/13002248/GettyImages-187066830.jpg https://hips.hearstapps.com/hmg-prod.s3.amazonaws.com/images/best-small-dog-breeds-cavalier-king-charles-spaniel-1598992577.jpg?crop=0.468xw:1.00xh;0.259xw,0&resize=480:*'.split()
+        ans=load_images(ans)
+        display_image_slideshow(ans)
+        print("DI")
+        display_image_slideshow(crop_images_to_min_size(ans))
+        display_image_slideshow(crop_images_to_min_size(ans,origin='center'))
+    """
     return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=min)
 
 def crop_image_to_square(image, *, origin="center", grow=False):
@@ -2657,15 +2721,17 @@ def _load_files(
 
 _load_animated_gif_cache={}
 def load_animated_gif(location,*,use_cache=True):
-    #Location should be a url or a file path pointing to a GIF file
-    #Loads an array of frames of an RGB animated GIF
-    #Can load from a file or from a URL
-    #EXAMPLE:
-    #    while True:
-    #       url = 'https://i.pinimg.com/originals/80/26/71/80267166501067a9da5e6b9412bdd9df.gif'
-    #       for frame in load_animated_gif(url,use_cache=True):
-    #           display_image(frame)
-    #           sleep(1/20)
+    """
+    Location should be a url or a file path pointing to a GIF file
+    Loads an array of frames of an RGB animated GIF
+    Can load from a file or from a URL
+    EXAMPLE:
+        while True:
+           url = 'https://i.pinimg.com/originals/80/26/71/80267166501067a9da5e6b9412bdd9df.gif'
+           for frame in load_animated_gif(url,use_cache=True):
+               display_image(frame)
+               sleep(1/20)
+    """
     location = get_absolute_path(location) #Important for caching
     if use_cache and location in _load_animated_gif_cache:
         return _load_animated_gif_cache[location]
@@ -2703,7 +2769,7 @@ _load_image_cache={}#TODO Test this and make sure it works. This is currently un
 
 
 def load_image_from_clipboard():
-    #Grab an image copied from your clipboard
+    """ #Grab an image copied from your clipboard """
     pip_import('PIL')
     from PIL import ImageGrab
     assert currently_running_windows() or currently_running_mac(),'load_image_from_clipboard() only works on Mac and Windows right now; sorry. This is because of PIL.'
@@ -2717,7 +2783,7 @@ def load_image_from_clipboard():
 
 
 def load_image(location,*,use_cache=False):
-    #Automatically detect if location is a URL or a file path and try to smartly choose the appropriate function to load the image
+    """ Automatically detect if location is a URL or a file path and try to smartly choose the appropriate function to load the image """
     assert isinstance(location,str),'load_image error: location should be a string representing a URL or file path. However, location is not a string. type(location)=='+repr(type(location))+' and location=='+repr(location)
     if path_exists(location):
         location=get_absolute_path(location) #This is important for caching. ./image.jpg might mean different things when we're running in different directories.
@@ -2733,8 +2799,10 @@ def load_image(location,*,use_cache=False):
     return out
 
 def load_rgb_image(location,*,use_cache=False):
-    #Like load_image, but makes sure there's no alpha channel
-    #This function is really only here to save you from having to write it out every time
+    """
+    Like load_image, but makes sure there's no alpha channel
+    This function is really only here to save you from having to write it out every time
+    """
     return as_rgb_image(load_image(location,use_cache=use_cache))
 
 class LazyLoadedImages:
@@ -2749,18 +2817,20 @@ class LazyLoadedImages:
         return len(self.image_paths)
 
 def load_images(*locations,use_cache=False,show_progress=False,num_threads=None,strict=True):
-    #Simply the plural form of load_image
-    #This is much faster than using load_image sequentially because it's multithreaded. I've had performance boosts of up to 8x speed
-    #This function will throw an error if any one of the images fails to load
-    #If given a folder as the input path, will load all image files from that folder
-    #The locations parameter:
-    #    Can be a list    of images: load_images(['img1.png','img2.jpg','img3.bmp'])
-    #    Can be a varargs of images: load_images( 'img1.png','img2.jpg','img3.bmp' )
-    #    Can be a folder  of images: load_images( 'path/to/image/folder' )
-    #The strict parameter controls what this function should do when an image fails to load. This is useful when loading a folder full of images, some of which might be corrupted.
-    #    If strict==True, this function will throw an error if any one of the images fails to load
-    #    If strict==False, this function will skip any images that fail to load (so you might not have as many images in the output as you did paths in the input)
-    #    If strict==None, this function will replace any images that failed to load with 'None' instead of a numpy array. So the output might look like [image0. image1, image2, None, image4] where image1, image0 etc are numpy arrays
+    """
+    Simply the plural form of load_image
+    This is much faster than using load_image sequentially because it's multithreaded. I've had performance boosts of up to 8x speed
+    This function will throw an error if any one of the images fails to load
+    If given a folder as the input path, will load all image files from that folder
+    The locations parameter:
+        Can be a list    of images: load_images(['img1.png','img2.jpg','img3.bmp'])
+        Can be a varargs of images: load_images( 'img1.png','img2.jpg','img3.bmp' )
+        Can be a folder  of images: load_images( 'path/to/image/folder' )
+    The strict parameter controls what this function should do when an image fails to load. This is useful when loading a folder full of images, some of which might be corrupted.
+        If strict==True, this function will throw an error if any one of the images fails to load
+        If strict==False, this function will skip any images that fail to load (so you might not have as many images in the output as you did paths in the input)
+        If strict==None, this function will replace any images that failed to load with 'None' instead of a numpy array. So the output might look like [image0. image1, image2, None, image4] where image1, image0 etc are numpy arrays
+    """
 
     assert strict in {True, False, None}, 'load_images: The \'strict\' parameter must be set to either True, False, or None. See the documentation for this function to see what that means.'
 
@@ -2852,7 +2922,7 @@ def load_images(*locations,use_cache=False,show_progress=False,num_threads=None,
 #    show_time_remaining=eta(len(locations))
 
 def load_image_from_file(file_name):
-    #Can try opencv as a fallback if this ever breaks
+    """ Can try opencv as a fallback if this ever breaks """
     assert file_exists(file_name),'No such image file exists: '+repr(file_name)
 
     if get_file_extension(file_name)=='exr':
@@ -2900,8 +2970,10 @@ def _load_image_from_file_via_opencv(file_name):
 
 
 def load_image_from_url(url: str):
-    #Url should either be like http://website.com/image.png or like data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...
-    #Returns a numpy image
+    """
+    Url should either be like http://website.com/image.png or like data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...
+    Returns a numpy image
+    """
     assert url.startswith('data:image') or is_valid_url(url),'load_image_from_url error: invalid url: '+repr(url)
     pip_import('PIL')
     from PIL import Image
@@ -2911,11 +2983,13 @@ def load_image_from_url(url: str):
     return np.add(Image.open(BytesIO(response.content)),0)  # Converts it to a numpy array by adding 0 to it.
 
 def load_image_from_matplotlib(*,dpi:int=None,fig=None):
-    #Return matplotlib's current display as an image
-    #You can increase the DPI to get a higher resolution. Set it to something like 360 or higher.
-    #Example:
-    #    line_graph(random_ints(10))
-    #    cv_imshow(load_image_from_matplotlib())
+    """
+    Return matplotlib's current display as an image
+    You can increase the DPI to get a higher resolution. Set it to something like 360 or higher.
+    Example:
+        line_graph(random_ints(10))
+        cv_imshow(load_image_from_matplotlib())
+    """
     import io
     import cv2
     import numpy as np
@@ -2979,17 +3053,21 @@ def _get_openexr_image_dimensions(file_path)->set:
     return height, width
     
 def is_valid_openexr_file(file_path):    
-    #Returns True iff the 
+    """
+    Returns True iff the file path points to an exr file 
+    """
     pip_import('OpenEXR')
     import OpenEXR
     return OpenEXR.isOpenExrFile(file_path)
 
 def get_openexr_channels(file_path)->set:
-    #Gets a set of strings indicating what channels are in a given .exr file
-    #Note that .exr files are floating point images that can contain arbitrary numbers of named channels
-    #EXAMPLE:
-    #     >>> get_openexr_channels('Image0032.exr')
-    #    ans = {'A', 'G', 'R', 'B'}
+    """
+    Gets a set of strings indicating what channels are in a given .exr file
+    Note that .exr files are floating point images that can contain arbitrary numbers of named channels
+    EXAMPLE:
+         >>> get_openexr_channels('Image0032.exr')
+        ans = {'A', 'G', 'R', 'B'}
+    """
     
     pip_import('OpenEXR')
     import OpenEXR
@@ -3004,30 +3082,32 @@ def get_openexr_channels(file_path)->set:
     return set(input_file.header()['channels'])
 
 def load_openexr_image(file_path,*,channels=None):
-    #Will load a floating point openexr image as a numpy array
-    #The 'channels' argument is used to specify the channel names that are loaded
-    #By default this works only with RGB or RGBA floating point .exr images, but note that .exr files are interesting: they can have arbitrarily many *named* channels, and blender can exploit this.
-    #    For example, if you look at the readme on https://github.com/cheind/py-minexr (a library that loads .exr files), they have a demo showing blender outputting both normals, depth, and color in a single exr file
-    #    To access these channels, or if you have alpha etc, simply list those channels' names in the 'channels' argument
-    #    If you're not sure what channels an openexr image has (maybe it's RGB maybe it's RGBA? Maybe it has depth? Etc) then call get_openexr_channels(file_path)
-    #
-    #EXAMPLES:
-    #     >>> load_openexr_image('Image0032.exr',channels=None).shape #It happens to be the case that Image0032.exr is RGBA. This was detected automatically because channels=None
-    #    ans = (716, 862, 4)
-    #     >>> load_openexr_image('Image0032.exr',channels=('R','G','B','A')).shape  #You can specify the channels in any order you want manually
-    #    ans = (716, 862, 4)
-    #     >>> load_openexr_image('Image0032.exr',channels=('R','G','B')).shape      #If you want, you can even exclude certain channels
-    #    ans = (716, 862, 3)
-    #     >>> load_openexr_image('Image0032.exr',channels=('R','G','B','B','B','B')).shape  #...or even use some channels more than once, just to prove my point...
-    #    ans = (716, 862, 6)
-    #     >>> load_openexr_image('Image0032.exr',channels=('R','G','B','asdf')).shape   #It will throw errors if the channels you give aren't in the exr file
-    #    ERROR: AssertionError: load_openexr_image: OpenEXR file is missing the following channels: {'asdf'}
-    #     >>> get_openexr_channels('Image0032.exr')  #If you're not sure what channels are contained in an OpenEXR image, use this function
-    #    ans = {'A', 'G', 'R', 'B'}
-    #
-    #This code was originally from https://www.programcreek.com/python/example/124985/OpenEXR.InputFile
-    #Imageio used to do this well...but for some reason, as of April 27 2022, it suddenly stopped working correctly and gave wrong values along the blue channel
-    #This function has been checked to make sure the resulting floating point numbers are correct
+    """
+    Will load a floating point openexr image as a numpy array
+    The 'channels' argument is used to specify the channel names that are loaded
+    By default this works only with RGB or RGBA floating point .exr images, but note that .exr files are interesting: they can have arbitrarily many *named* channels, and blender can exploit this.
+        For example, if you look at the readme on https://github.com/cheind/py-minexr (a library that loads .exr files), they have a demo showing blender outputting both normals, depth, and color in a single exr file
+        To access these channels, or if you have alpha etc, simply list those channels' names in the 'channels' argument
+        If you're not sure what channels an openexr image has (maybe it's RGB maybe it's RGBA? Maybe it has depth? Etc) then call get_openexr_channels(file_path)
+    
+    EXAMPLES:
+         >>> load_openexr_image('Image0032.exr',channels=None).shape #It happens to be the case that Image0032.exr is RGBA. This was detected automatically because channels=None
+        ans = (716, 862, 4)
+         >>> load_openexr_image('Image0032.exr',channels=('R','G','B','A')).shape  #You can specify the channels in any order you want manually
+        ans = (716, 862, 4)
+         >>> load_openexr_image('Image0032.exr',channels=('R','G','B')).shape      #If you want, you can even exclude certain channels
+        ans = (716, 862, 3)
+         >>> load_openexr_image('Image0032.exr',channels=('R','G','B','B','B','B')).shape  #...or even use some channels more than once, just to prove my point...
+        ans = (716, 862, 6)
+         >>> load_openexr_image('Image0032.exr',channels=('R','G','B','asdf')).shape   #It will throw errors if the channels you give aren't in the exr file
+        ERROR: AssertionError: load_openexr_image: OpenEXR file is missing the following channels: {'asdf'}
+         >>> get_openexr_channels('Image0032.exr')  #If you're not sure what channels are contained in an OpenEXR image, use this function
+        ans = {'A', 'G', 'R', 'B'}
+    
+    This code was originally from https://www.programcreek.com/python/example/124985/OpenEXR.InputFile
+    Imageio used to do this well...but for some reason, as of April 27 2022, it suddenly stopped working correctly and gave wrong values along the blue channel
+    This function has been checked to make sure the resulting floating point numbers are correct
+    """
 
     pip_import('OpenEXR')
     pip_import('Imath')
@@ -3179,15 +3259,17 @@ def encode_image_to_base64(image,filetype=None,quality=100):
 
 
 def decode_image_from_bytes(encoded_image:bytes):
-    #Supports any filetype in r._opencv_supported_image_formats, including jpg, bmp, png, exr and tiff
-    #TODO: Fix support for opencv, I suspect it will be faster.
-    #
-    #EXAMPLE:
-    #    ans='https://upload.wikimedia.org/wikipedia/commons/6/6e/Golde33443.jpg'
-    #    ans=load_image(ans)
-    #    ans=encode_image_to_bytes(ans)
-    #    ans=decode_image_from_bytes(ans)
-    #    display_image(ans)
+    """
+    Supports any filetype in r._opencv_supported_image_formats, including jpg, bmp, png, exr and tiff
+    TODO: Fix support for opencv, I suspect it will be faster.
+    
+    EXAMPLE:
+        ans='https://upload.wikimedia.org/wikipedia/commons/6/6e/Golde33443.jpg'
+        ans=load_image(ans)
+        ans=encode_image_to_bytes(ans)
+        ans=decode_image_from_bytes(ans)
+        display_image(ans)
+    """
 
     pip_import('PIL')
 
@@ -3205,10 +3287,12 @@ def decode_image_from_bytes(encoded_image:bytes):
     #return decoded_image
 
 def save_image(image,file_name=None,add_png_extension: bool = True):
-    #Todo: Add support for imageio, which can also write images
-    #Simply save a numpy image to a file.
-    #The add_png_extension is annoying legacy stuff...sorry...it would break some of my other scripts to change that right now.
-    #Provide several fallbacks to saving an image file
+    """
+    Todo: Add support for imageio, which can also write images
+    Simply save a numpy image to a file.
+    The add_png_extension is annoying legacy stuff...sorry...it would break some of my other scripts to change that right now.
+    Provide several fallbacks to saving an image file
+    """
     if file_name==None:
         file_name=temporary_file_path('png')
 
@@ -3361,18 +3445,22 @@ def save_images(images,paths:list=None,skip_overwrites=False,show_progress=False
     return saved_paths
 
 def temp_saved_image(image):
-    #Return the path of an image, and return the path we saved it to
-    #Originally used for google colab to display images nicely:
-    #   from IPython.display import Image
-    #   Image(temp_saved_image(‹some numpy image›,retina=True)) #<-- Displays image at FULL resolution, optimized for a retina monitor. 'retina=True' is totally optional, it  just looks really nice on my macbook.
+    """
+    Return the path of an image, and return the path we saved it to
+    Originally used for google colab to display images nicely:
+       from IPython.display import Image
+       Image(temp_saved_image(‹some numpy image›,retina=True)) #<-- Displays image at FULL resolution, optimized for a retina monitor. 'retina=True' is totally optional, it  just looks really nice on my macbook.
+    """
     image_name="rp_temp_saved_image_"+random_namespace_hash(10)
     save_image(as_byte_image(as_rgba_image(as_float_image(image))),image_name)
     return image_name+'.png'
 
 def save_image_to_imgur(image):
-    #Takes an image, or an image path
-    #Returns the url of the saved image
-    #Note: This function can sometimes take up to 10 seconds, depending on the size of the input image
+    """
+    Takes an image, or an image path
+    Returns the url of the saved image
+    Note: This function can sometimes take up to 10 seconds, depending on the size of the input image
+    """
     assert is_image_file(image) or is_image(image),'The input image must either be a path to an image, or a numpy array representing an image'
     if isinstance(image,str):
         assert file_exists(image),'Cannot find a file at path '+repr(image)
@@ -3394,7 +3482,9 @@ def save_image_to_imgur(image):
                 delete_file(temp_image_path)
                 
 def save_image_jpg(image,path,*,quality=100,add_extension=True):
-    #If add_extension is True, will add a '.jpg' or '.jpeg' extension to path IFF it doesn't allready end with such an extension (AKA 'a/b/c.jpg' -> 'a/b/c.jpg' BUT 'a/b/c.png' -> 'a/b/c.png.jpg')
+    """
+    If add_extension is True, will add a '.jpg' or '.jpeg' extension to path IFF it doesn't allready end with such an extension (AKA 'a/b/c.jpg' -> 'a/b/c.jpg' BUT 'a/b/c.png' -> 'a/b/c.png.jpg')
+    """
     make_directory(get_parent_folder(path)) #Make sure the directory exists
     image=np.asarray(image)
     image=as_rgb_image(image)
@@ -3416,9 +3506,11 @@ def save_image_jpg(image,path,*,quality=100,add_extension=True):
     return path
 
 def save_openexr_image(image, file_path):
-    #Counterpart to load_openexr_image
-    #TODO: Add support for custom channels
-    #This code is based on https://stackoverflow.com/questions/65605761/write-pil-image-to-exr-using-openexr-in-python
+    """
+    Counterpart to load_openexr_image
+    TODO: Add support for custom channels
+    This code is based on https://stackoverflow.com/questions/65605761/write-pil-image-to-exr-using-openexr-in-python
+    """
 
     pip_import('OpenEXR')
     pip_import('Imath')
@@ -3957,14 +4049,18 @@ def text_to_speech_via_google(text: str,voice='en',*,play_sound: bool = True,run
 text_to_speech_voices_all=text_to_speech_voices_for_apple + text_to_speech_voices_for_google
 text_to_speech_voices_favorites=['da','en-au','zh-yue','hi','sk','zh','en','it','Samantha','Alex','Moira','Tessa','Fiona','Fred']
 def text_to_speech_voices_comparison(text="Hello world",time_per_voice=2,voices=text_to_speech_voices_favorites + shuffled(text_to_speech_voices_all)):
-    # Will cycle through different voices so you can choose which one you like best. I selected my favorite voices to be the beginning, and it will cycle through all available voices by the end.
+    """
+    Will cycle through different voices so you can choose which one you like best. I selected my favorite voices to be the beginning, and it will cycle through all available voices by the end.
+    """
     for voice in voices:
         print("Voice: " + voice)
         text_to_speech(text=text,voice=voice,run_as_thread=True)
         sleep(time_per_voice)
 def text_to_speech(text: str,voice: str = None,run_as_thread=True):
-    # An abstract combination of the other two text-to-speech methods that automatically selects the right one depending on platform compatiability/whether you specified a compatiable voice etc.
-    # Feel free to add more methods into this one: This is what makes the r module so generalizable.
+    """
+    An abstract combination of the other two text-to-speech methods that automatically selects the right one depending on platform compatiability/whether you specified a compatiable voice etc.
+    Feel free to add more methods into this one: This is what makes the r module so generalizable.
+    """
     if run_as_thread:
         run_as_new_thread(text_to_speech,text=text,voice=voice,run_as_thread=False)
     else:
@@ -4003,14 +4099,16 @@ def _fig():
     return fig
 
 def set_numpy_print_options(**kwargs):
-    #np.set_printoptions is used to format the printed output of arrays. It makes the terminal output much easier to read depending on your context.
-    #However, it has a flaw: you can't set a single option without resetting all the other options to the default values.
-    #In other words, when you use np.set_printoptions, such as...
-    #       np.set_printoptions(precision=3,suppress=True,edgeitems=123,linewidth=get_terminal_width()),
-    #...only every parameter you didn't specify will be reset to the default value. This isn't as useful as it could be.
-    #Introducing set_numpy_print_options: This function takes the same arguments that np.set_printoptions does, except it sets only the arguments you give it.
-    #See np.set_printoptions?/ for more documentation on what these arguments do.
-    #EXAMPLE: set_numpy_print_options(precision=8) #Prints floating points with up to 8 decimals of precision
+    """
+    np.set_printoptions is used to format the printed output of arrays. It makes the terminal output much easier to read depending on your context.
+    However, it has a flaw: you can't set a single option without resetting all the other options to the default values.
+    In other words, when you use np.set_printoptions, such as...
+           np.set_printoptions(precision=3,suppress=True,edgeitems=123,linewidth=get_terminal_width()),
+    ...only every parameter you didn't specify will be reset to the default value. This isn't as useful as it could be.
+    Introducing set_numpy_print_options: This function takes the same arguments that np.set_printoptions does, except it sets only the arguments you give it.
+    See np.set_printoptions?/ for more documentation on what these arguments do.
+    EXAMPLE: set_numpy_print_options(precision=8) #Prints floating points with up to 8 decimals of precision
+    """
     import numpy as np
     for kwarg in kwargs:
         #Make sure we feed only valid parameters to np.set_printoptions
@@ -4020,8 +4118,10 @@ def set_numpy_print_options(**kwargs):
 _module_loader()# run_as_new_thread(_module_loader) <--- This caused problems when I tried to show images, so the bootup speed increase (like .1 seconds) is definately not worth it
 
 def load_mp3_file(path):
-    #Takes an mp3 file path, and returns a bunch of samples as a numpy array
-    #Returns floating-point samples in the range [-1.0 , 1.0]
+    """
+    Takes an mp3 file path, and returns a bunch of samples as a numpy array
+    Returns floating-point samples in the range [-1.0 , 1.0]
+    """
     pip_import('pydub')
     import pydub
     
@@ -4042,8 +4142,10 @@ def load_mp3_file(path):
     return samples,samplerate
 
 def load_wav_file(path):
-    #Takes a wav file path, and returns a bunch of samples as a numpy array
-    #Returns floating-point samples in the range [-1.0 , 1.0]
+    """
+    Takes a wav file path, and returns a bunch of samples as a numpy array
+    Returns floating-point samples in the range [-1.0 , 1.0]
+    """
     pip_import('scipy')
     import scipy.io.wavfile as wav
     samplerate,samples=wav.read(path)
@@ -4054,7 +4156,9 @@ def load_wav_file(path):
     return samples,samplerate
 
 def adjust_samplerate(samples,original_samplerate:int,new_samplerate:int):
-    #Used to change the samplerate of an audio clip (for example, from 9600hz to 44100hz)
+    """
+    Used to change the samplerate of an audio clip (for example, from 9600hz to 44100hz)
+    """
     pip_install('scipy') 
 
     from scipy.signal import resample
@@ -4063,9 +4167,11 @@ def adjust_samplerate(samples,original_samplerate:int,new_samplerate:int):
     return resample(samples,num=new_number_of_samples)
 
 def load_sound_file(file_path:str, samplerate:int=None):
-    #Returns the contents of a sound file at file_path as a numpy array of floats in the range [-1, 1]
-    #samplerate: either True, None or an int. If True, returns (samples, samplerate). If None, returns (samples at original samplerate). If int, returns (samples converted to samplerate).
-    #TODO: Add conversion functions between stereo and mono, and add parameters to this function that use them
+    """
+    Returns the contents of a sound file at file_path as a numpy array of floats in the range [-1, 1]
+    samplerate: either True, None or an int. If True, returns (samples, samplerate). If None, returns (samples at original samplerate). If int, returns (samples converted to samplerate).
+    TODO: Add conversion functions between stereo and mono, and add parameters to this function that use them
+    """
 
     #Make sure we support the requested file type
     assert isinstance(file_path,str),'r.load_sound_file: file_path must be a string, but you gave it a %s'%str(type(file_path))
@@ -4135,11 +4241,13 @@ def save_wav(samples,path,samplerate=None) -> None:  # Usually samples should be
 
 default_samplerate=44100  # In (Hz ⨯ Sample). Used for all audio methods in the 'r' class.
 def play_sound_from_samples(samples,samplerate=None,blocking=False,loop=False,**kwargs):
-    # For stereo, use a np matrix
-    # Example: psfs((x%100)/100 for x in range(100000))
-    # Each sample should ∈ [-1,1] or else it will be clipped (if it wasn't clipped it would use modular arithmeti
-    # c on the int16, which would be total garbage for sound)
-    # Just like matlab'_s 'sound' method, except this one doesn't let you play sounds on top of one-another.
+    """
+    For stereo, use a np matrix
+    Example: psfs((x%100)/100 for x in range(100000))
+    Each sample should ∈ [-1,1] or else it will be clipped (if it wasn't clipped it would use modular arithmeti
+    c on the int16, which would be total garbage for sound)
+    Just like matlab'_s 'sound' method, except this one doesn't let you play sounds on top of one-another.
+    """
     try:
         pip_import('sounddevice')
     except OSError as error:
@@ -4178,13 +4286,15 @@ def play_sound_file(path):
         play_sound_file_via_pygame(path)
 
 def play_sound_file_via_afplay(absolute_file_path_and_name: str,volume: float = None,rate: float = None,rate_quality: float = None,parallel: bool = True,debug: bool = True):
-    # Use stop_sound to stop it.
-    # If parallel==False, the code will pause until the song is finished playing.
-    # If parallel==True the sound is run in a new process, and returns this process so you can .terminate() it later. It lets things continue as usual (no delay before the next line of code)
-    # This seems to be a higher quality playback. On the other hand, I can't figure out any way to stop it.
-    # This version doesn't require any dependencies BUT doesn't work on windows and doesn't let us play .mp3 files. The new version uses pygame and DOES allow us to.
-    # Only tested on my MacBook. Uses a terminal command called 'afplay' to play a sound file.
-    # Might not work with windows or linux.
+    """
+    Use stop_sound to stop it.
+    If parallel==False, the code will pause until the song is finished playing.
+    If parallel==True the sound is run in a new process, and returns this process so you can .terminate() it later. It lets things continue as usual (no delay before the next line of code)
+    This seems to be a higher quality playback. On the other hand, I can't figure out any way to stop it.
+    This version doesn't require any dependencies BUT doesn't work on windows and doesn't let us play .mp3 files. The new version uses pygame and DOES allow us to.
+    Only tested on my MacBook. Uses a terminal command called 'afplay' to play a sound file.
+    Might not work with windows or linux.
+    """
     command="afplay '" + absolute_file_path_and_name + "'"
     if rate is not None:
         assert rate > 0,"r.play_sound_file_via_afplay: Playback rate cannot rate=" + str(rate)
@@ -4198,9 +4308,11 @@ def play_sound_file_via_afplay(absolute_file_path_and_name: str,volume: float = 
     return (run_as_new_thread if parallel else run_func)(shell_command,command)  # If parallel==True, returns the process so we can terminate it later.
 
 def play_sound_file_via_pygame(file_name: str,return_simple_stopping_function=True):
-    # Old because it uses the pygame.mixer.sound instead of pygame.mixer.music, which accepts more file types and has more controls than this one does.
-    # Though, audio and file things are weird. I'm keeping this in case the other two fail for some reason. Other than being a backup like that, this method serves no purpose.
-    # noinspection PyUnresolvedReferences
+    """
+    Old because it uses the pygame.mixer.sound instead of pygame.mixer.music, which accepts more file types and has more controls than this one does.
+    Though, audio and file things are weird. I'm keeping this in case the other two fail for some reason. Other than being a backup like that, this method serves no purpose.
+    noinspection PyUnresolvedReferences
+    """
     pip_import('pygame')
     import pygame
     pygame.init()
@@ -4213,8 +4325,10 @@ def play_sound_file_via_pygame(file_name: str,return_simple_stopping_function=Tr
     return sound  # This version gives us a little more control; it gives us the 'play' method too. That'_s the only difference. but python doesn't tell us the method names! This gives us options to, perhaps, stop the sound later on via sound.stop()
 
 def stop_sound():
-    # Stop sounds from all sources I know of that the 'r' module can make.
-    # So far I have been unsuccessful in stopping
+    """
+    Stop sounds from all sources I know of that the 'r' module can make.
+    So far I have been unsuccessful in stopping
+    """
     try:
         shell_command("killall afplay")  # Used with 'play_sound_file_via_afplay' on macs.
     except Exception:
@@ -4234,10 +4348,12 @@ def stop_sound():
 
 _default_wav_output_path='r.mp3_to_wav_temp.wav'  # Expect this file to be routinely overwritten.
 def mp3_to_wav(mp3_file_path: str,wav_output_path: str = _default_wav_output_path,samplerate=None) -> str:
-    # This is a audio file converter that converts mp3 files to wav files.
-    # You must install 'lame' to use this function.
-    # Saves a new wav file derived from the mp3 file you gave it.
-    # shell_command('lame --decode '+mp3_file_path+" "+wav_output_path)# From https://gist.github.com/kscottz/5898352
+    """
+    This is a audio file converter that converts mp3 files to wav files.
+    You must install 'lame' to use this function.
+    Saves a new wav file derived from the mp3 file you gave it.
+    shell_command('lame --decode '+mp3_file_path+" "+wav_output_path)# From https://gist.github.com/kscottz/5898352
+    """
     shell_command('lame ' + str(samplerate or default_samplerate) + ' -V 0 -h --decode ' + mp3_file_path + " " + wav_output_path)  # From https://gist.github.com/kscottz/5898352
     return wav_output_path
 # endregionx
@@ -4305,7 +4421,9 @@ def add_ipython_kernel(kernel_name: str = None, display_name: str = None):
 
 
 def display_video(video,framerate=30):
-    #Video can either be a string, or a video (aka a 4d tensor or iterable of images)
+    """
+    Video can either be a string, or a video (aka a 4d tensor or iterable of images)
+    """
     if running_in_jupyter_notebook():
         display_video_in_notebook(video,framerate)
     else:
@@ -4327,8 +4445,10 @@ def display_video(video,framerate=30):
             sleep(max(0, time_per_frame - (time_after_display - time_before_display)))
 
 def display_video_in_notebook(video,framerate=30):
-    #Video can be either a string pointing to the path of a video, or the video itself. If it is the video itself, it will be embedded as a gif and displayed that way. 
-    #This function can also display gif's and other video URL's we find on the web
+    """
+    Video can be either a string pointing to the path of a video, or the video itself. If it is the video itself, it will be embedded as a gif and displayed that way. 
+    This function can also display gif's and other video URL's we find on the web
+    """
     if isinstance(video,str):
         if file_exists(video) or is_valid_url(video):
             filetype=get_file_extension(video)
@@ -4357,9 +4477,11 @@ def display_video_in_notebook(video,framerate=30):
         display_embedded_video_in_notebook(video)
 
 def display_embedded_video_in_notebook(video,framerate:int=30,filetype:str='gif'):
-    #This will embed a video into the jupyter notebook you're using
-    #Warning: This function is still experimental, and sometimes the videos are messed up a bit
-    #Warning: This can make your notebooks very large, so please be careful to only use small videos with this function
+    """
+    This will embed a video into the jupyter notebook you're using
+    Warning: This function is still experimental, and sometimes the videos are messed up a bit
+    Warning: This can make your notebooks very large, so please be careful to only use small videos with this function
+    """
     assert running_in_jupyter_notebook(),'display_embedded_video_in_notebook: This function only works in a jupyter notebook, such as Google Colab or Jupyter Lab'
     
     video_filetypes='webm mp4 ogg'.split() #These are the only video filetypes officially supported by the HTML standard (see https://www.w3schools.com/html/html_media.asp)
@@ -4393,7 +4515,7 @@ def _display_downloadable_image_in_notebook_via_ipython(image, file_name:str):
     display(HTML(html))
 
 def display_image_in_notebook(image, file_name:str=None):
-    #Display an image at full resolution in a jupyter notebook
+    """ Display an image at full resolution in a jupyter notebook """
 
     if file_name is not None:
         assert isinstance(file_name,str), 'The given file name must be a string, but got type %s'%type(file_name)
@@ -4422,11 +4544,13 @@ def display_image_in_notebook(image, file_name:str=None):
 _disable_display_image=False #Set rp.r._disable_display_image=True to disable the display_image function. Right now this is undocumented functionality, might make it documented later on via helper functions like enable_display_image() and disable_display_image()
 
 def display_image(image,block=False):
-    #Very simple to understand: this function displays an image.
-    #At first, it tries to use matplotlib and if that errors it falls back to opencv's imshow function.
-    #By default this function will not halt your code, but if you set block=True, it will.
-    #This function works in Jupyter Notebooks such as google colab, and will automatically scale the DPI of the output such that the full-resolution image is shown (don't take this for granted)
-    #You can pass this function binary, rgb, rgba, grayscale matrices -- most types of images (see rp.is_image() for more information)
+    """
+    Very simple to understand: this function displays an image.
+    At first, it tries to use matplotlib and if that errors it falls back to opencv's imshow function.
+    By default this function will not halt your code, but if you set block=True, it will.
+    This function works in Jupyter Notebooks such as google colab, and will automatically scale the DPI of the output such that the full-resolution image is shown (don't take this for granted)
+    You can pass this function binary, rgb, rgba, grayscale matrices -- most types of images (see rp.is_image() for more information)
+    """
 
     if _disable_display_image:
         fansi_print("rp.display_image: Currently disabled; no image displayed",'yellow')
@@ -4500,7 +4624,7 @@ def display_image(image,block=False):
             image=np.asarray(image)
             #The above seems not to work anymore, so the next thing to try is opencv's image display (in the event that it fails)...
             ndim=len(image.shape)
-            assert ndim in {2,3},'Image tensor must have either two or three dimensions (either a grayscale image or '
+            assert ndim in {2,3},'Image tensor must have either two or three dimensions (either a grayscale image or RGB or RGBA image)'
             if ndim==2:
                 image=grayscale_to_rgb(image)
             if image.dtype==bool:
@@ -4526,9 +4650,11 @@ def display_alpha_image(image, block=False, tile_size=8, first_color=1.0, second
     display_image(alpha_checkerboard_image, block=block)
 
 def _display_image_slideshow_animated(images):
-    #This works best on Jupyter notebooks right now
-    #It technically works without a jupyter notebook...but at that rate you might as well use display_video...
-    #    ...this is because jupyter notebooks display nice controls for the video, while default matplotlib doesn't
+    """
+    This works best on Jupyter notebooks right now
+    It technically works without a jupyter notebook...but at that rate you might as well use display_video...
+        ...this is because jupyter notebooks display nice controls for the video, while default matplotlib doesn't
+    """
     
     if not running_in_jupyter_notebook():
         display_video(images) #This is objectively better at the moment
@@ -4580,12 +4706,14 @@ def _display_image_slideshow_animated(images):
         matplotlib.rcParams['figure.dpi'],matplotlib.rcParams['figure.figsize']=old_dpi,old_figsize
 
 def display_qr_code_in_terminal(text):
-    #EXAMPLE:
-    #    #Done in Alacritty or the default Mac Terminal
-    #    display_qr_code_in_terminal('https://google.com')
-    #EXAMPLE:
-    #    #This one is really annoying (funny prank): it will cover the entire camera of the iPhone that sees it for a brief moment
-    #    display_qr_code_in_terminal('a'*2300)
+    """
+    EXAMPLE:
+        #Done in Alacritty or the default Mac Terminal
+        display_qr_code_in_terminal('https://google.com')
+    EXAMPLE:
+        #This one is really annoying (funny prank): it will cover the entire camera of the iPhone that sees it for a brief moment
+        display_qr_code_in_terminal('a'*2300)
+    """
     pip_import('qrcode')
     import qrcode
     
@@ -4606,29 +4734,31 @@ def display_website_in_terminal(url):
     rp.r._rich_print(output)
 
 def display_image_slideshow(images='.',display=None,use_cache=True):
-    #Enters an interactive image slideshow
-    #Useful for exploring large folders/lists of images
-    #images:
-    #    images can be a path to a folder containing images
-    #    images can be a list of images as defined by r.is_image()
-    #    images can be a list of image file paths
-    #display:
-    #    if you set display=display_image_in_terminal, you can view the slideshow entirely over SSH
-    #
-    #EXAMPLE:
-    #    display_image_slideshow(list(map(cv_text_to_image,'abcdefghijklmnopqrstuvwxyz')),display=display_image_in_terminal)
-    #
-    #EXAMPLE:
-    #    images=line_split('''https://upload.wikimedia.org/wikipedia/commons/4/41/Left_side_of_Flying_Pigeon.jpg
-    #    https://d17fnq9dkz9hgj.cloudfront.net/uploads/2020/04/shelter-dog-cropped-1.jpg
-    #    https://i.pinimg.com/736x/4d/8e/cc/4d8ecc6967b4a3d475be5c4d881c4d9c.jpg
-    #    https://www.dictionary.com/e/wp-content/uploads/2018/03/doge-300x300.jpg
-    #    https://i.pinimg.com/originals/cb/e9/b4/cbe9b4280f390636e4d9432a02159528.jpg
-    #    https://i.insider.com/5989fc4eefe3df1f008b48b9?width=1100&format=jpeg&auto=webp
-    #    https://pyxis.nymag.com/v1/imgs/cd8/804/e0f612fa12d17e68e3d68ccf55f93cac4f-06-rick-morty.rsquare.w700.jpg
-    #    https://assets.bwbx.io/images/users/iqjWHBFdfxIU/iXusLDq1QUac/v1/1000x-1.jpg
-    #    https://i0.wp.com/huskerchalktalk.com/wp-content/uploads/2016/09/chessboard.jpg?fit=698%2C400&ssl=1https://www.colorado.edu/mcdb/sites/default/files/styles/medium/public/article-image/logo-blm.png?itok=sbQ6vxqb''')
-    #    display_image_slideshow(images,display_image_in_terminal)
+    """
+    Enters an interactive image slideshow
+    Useful for exploring large folders/lists of images
+    images:
+        images can be a path to a folder containing images
+        images can be a list of images as defined by r.is_image()
+        images can be a list of image file paths
+    display:
+        if you set display=display_image_in_terminal, you can view the slideshow entirely over SSH
+    
+    EXAMPLE:
+        display_image_slideshow(list(map(cv_text_to_image,'abcdefghijklmnopqrstuvwxyz')),display=display_image_in_terminal)
+    
+    EXAMPLE:
+        images=line_split('''https://upload.wikimedia.org/wikipedia/commons/4/41/Left_side_of_Flying_Pigeon.jpg
+        https://d17fnq9dkz9hgj.cloudfront.net/uploads/2020/04/shelter-dog-cropped-1.jpg
+        https://i.pinimg.com/736x/4d/8e/cc/4d8ecc6967b4a3d475be5c4d881c4d9c.jpg
+        https://www.dictionary.com/e/wp-content/uploads/2018/03/doge-300x300.jpg
+        https://i.pinimg.com/originals/cb/e9/b4/cbe9b4280f390636e4d9432a02159528.jpg
+        https://i.insider.com/5989fc4eefe3df1f008b48b9?width=1100&format=jpeg&auto=webp
+        https://pyxis.nymag.com/v1/imgs/cd8/804/e0f612fa12d17e68e3d68ccf55f93cac4f-06-rick-morty.rsquare.w700.jpg
+        https://assets.bwbx.io/images/users/iqjWHBFdfxIU/iXusLDq1QUac/v1/1000x-1.jpg
+        https://i0.wp.com/huskerchalktalk.com/wp-content/uploads/2016/09/chessboard.jpg?fit=698%2C400&ssl=1https://www.colorado.edu/mcdb/sites/default/files/styles/medium/public/article-image/logo-blm.png?itok=sbQ6vxqb''')
+        display_image_slideshow(images,display_image_in_terminal)
+    """
 
     if display is None:
         if running_in_jupyter_notebook():
@@ -4791,8 +4921,8 @@ def brutish_display_image(image):
     display_image(image)
     plt.show(block=True)
 def display_color_255(*color: list):
+    """ Example: display_color_255(255,0,0)# ⟵ Displays Red """
     # noinspection PyUnresolvedReferences
-    # Example: display_color_255(255,0,0)# ⟵ Displays Red
     display_image([(np.matrix(detuple(color)) / 256).tolist()])
 def display_grayscale_image(matrix,pixel_interpolation_method_name: str = 'bicubic',refresh=True):
     pixel_interpolation_method_name=str(pixel_interpolation_method_name).lower()  # Note that None⟶'none'
@@ -4806,12 +4936,14 @@ def display_grayscale_image(matrix,pixel_interpolation_method_name: str = 'bicub
         plt.pause(0.0001)  # This is nessecary, keep it here or it will crash. I don't know WHY its necessary, but empirically speaking it seems to be.
 
 def bar_graph(values,*,width=.9,align='center',block=False,xlabel=None,ylabel=None,title=None,label_bars=False,**kwargs):
-    #Create a bar graph with the given y-values
-    #The 'values'     parameter is a list of bar heights. They should all be real numbers.
-    #The 'width'      parameter sets the width of each bar
-    #The 'align'      parameter sets whether the bars are to the center, right or left of each index
-    #The 'label_bars' parameter, if true, will display numbers above each bar displaying their quantity. NOTE: This works best with integers, as opposed to floats!
-    #EXAMPLE: bar_graph(randints(10))
+    """
+    Create a bar graph with the given y-values
+    The 'values'     parameter is a list of bar heights. They should all be real numbers.
+    The 'width'      parameter sets the width of each bar
+    The 'align'      parameter sets whether the bars are to the center, right or left of each index
+    The 'label_bars' parameter, if true, will display numbers above each bar displaying their quantity. NOTE: This works best with integers, as opposed to floats!
+    EXAMPLE: bar_graph(randints(10))
+    """
     pip_import('matplotlib')
     plt=get_plt()
 
@@ -4839,10 +4971,12 @@ def bar_graph(values,*,width=.9,align='center',block=False,xlabel=None,ylabel=No
             plt.text(x=i,y=values[i]+1,s=str(values[i]),size=10,ha='center')
 
 def histogram_in_terminal(values,sideways=False):
-    #Right now this function is very simple (it doesnt let you specify the number of bins, for example)
-    #In the future I might add more functionality like that, or use unicode_loading_bar to make better sideways plots
-    #This is really meant to be used interactively...please don't use this in serious code...
-    #The 'sideways' argument might be renamed to 'dirction='horizontal'' etc...
+    """
+    Right now this function is very simple (it doesnt let you specify the number of bins, for example)
+    In the future I might add more functionality like that, or use unicode_loading_bar to make better sideways plots
+    This is really meant to be used interactively...please don't use this in serious code...
+    The 'sideways' argument might be renamed to 'dirction='horizontal'' etc...
+    """
     pip_import('plotille')
     import plotille
 
@@ -4871,9 +5005,11 @@ def line_graph(*y_values,
                 background_image        = None,
                 logx:float              = None,
                 logy:float              = None) -> None:
-    # This is mainly here as a simple reference for how to create a line-graph with matplotlib.pyplot.
-    # There are plenty of options you can configure for it, such as the color of the line, label of the
-    # axes etc. For more information on this, see http://matplotlib.org/users/pyplot_tutorial.html
+    """
+    This is mainly here as a simple reference for how to create a line-graph with matplotlib.pyplot.
+    There are plenty of options you can configure for it, such as the color of the line, label of the
+    axes etc. For more information on this, see http://matplotlib.org/users/pyplot_tutorial.html
+    """
     pip_import('matplotlib')
     global plt
     plt=get_plt()
@@ -4931,20 +5067,22 @@ def display_polygon(path,*,
                     clear     =False,
                     block     =False,
                     alpha     =1):
-    #Uses matplotlib
-    #Parameters:
-        #line_width: The width of the border around the polygon (set to 0 for no border)
-        #line_style: Please see https://matplotlib.org/3.1.0/gallery/lines_bars_and_markers/linestyles.html
-        #line_color: The color of the outline aka border of the polygon (like (1,0,0) for red, etc)
-        #
-        #filled    : boolean whether we should fill the object or just use an outline
-        #fill_color: The color of the area of the polygon (like (1,0,0) for red, etc)
-        #
-        #alpha     : The transparency value (1 is opaque, 0 is completely transparent)
-        #
-        #clear     : Whether we should clear the plot before drawing this polygon
-        #block     : True for an interactive plot that blocks the current python code; False to display immediately and continue python code; None to just plot it and skip the displaying step (which is faster and useful if you want to plot a lot of polygons at once)
-    #EXAMPLE: display_polygon(random_floats_complex(5),alpha=.5)
+    """
+    Uses matplotlib
+    Parameters:
+        line_width: The width of the border around the polygon (set to 0 for no border)
+        line_style: Please see https://matplotlib.org/3.1.0/gallery/lines_bars_and_markers/linestyles.html
+        line_color: The color of the outline aka border of the polygon (like (1,0,0) for red, etc)
+        
+        filled    : boolean whether we should fill the object or just use an outline
+        fill_color: The color of the area of the polygon (like (1,0,0) for red, etc)
+        
+        alpha     : The transparency value (1 is opaque, 0 is completely transparent)
+        
+        clear     : Whether we should clear the plot before drawing this polygon
+        block     : True for an interactive plot that blocks the current python code; False to display immediately and continue python code; None to just plot it and skip the displaying step (which is faster and useful if you want to plot a lot of polygons at once)
+    EXAMPLE: display_polygon(random_floats_complex(5),alpha=.5)
+    """
     pip_import('matplotlib')
     from matplotlib.patches import Polygon
     from matplotlib import pyplot as plt
@@ -5031,8 +5169,10 @@ def block(on_click=None,on_unclick=None):
     plt.show(True)
 
 def display_update(block=False,time=.01):
-    #This should be preferred over the older block() function shown above
-    #Note: If time is too low, you can try setting it to a higher value
+    """
+    This should be preferred over the older block() function shown above
+    Note: If time is too low, you can try setting it to a higher value
+    """
     pip_import('matplotlib')
     if block is None:
         return#A convention that if block is "None" for some display function, it means we don't actually want to display it right away (for speed purposes, mostly)
@@ -5065,22 +5205,26 @@ def _minmax_indices(l,f=None,key=None)->list:
         return matching_indices(f(l,key=key),l,key=key)
 
 def min_valued_indices(l,key=None)->list:
-    # Returns the indices with the minimum-valued elements
-    #TODO: Make this work properly with dicts, like max_valued_index does
+    """
+     Returns the indices with the minimum-valued elements
+    TODO: Make this work properly with dicts, like max_valued_index does
+    """
     return _minmax_indices(l,min,key=key)
 def max_valued_indices(l,key=None)->list:
-    # Returns the indices with the maximum-valued elements
-    #TODO: Make this work properly with dicts, like min_valued_index does
-    #EXAMPLE:
-    #     >>> max_valued_indices({'a':123,'b':23424})
-    #    ans = ['b']
+    """
+     Returns the indices with the maximum-valued elements
+    TODO: Make this work properly with dicts, like min_valued_index does
+    EXAMPLE:
+         >>> max_valued_indices({'a':123,'b':23424})
+        ans = ['b']
+    """
     return _minmax_indices(l,max,key=key)
 
 def min_valued_elements(l,key=None):
-    # Returns the elements with the smallest values
+    """ Returns the elements with the smallest values """
     return gather(l,min_valued_indices(l,key=key))
 def max_valued_elements(l,key=None):
-    # Returns the elements with the largest values
+    """ Returns the elements with the largest values """
     return gather(l,max_valued_indices(l,key=key))
 
 def max_valued_index(l,key=None):
@@ -5109,33 +5253,35 @@ def interp(x,x0,x1,y0,y1):  # 2 point interpolation
     return (x - x0) / (x1 - x0) * (y1 - y0) + y0  # https://www.desmos.com/calculator/bqpv7tfvpy
 
 def linterp(values:list,index:float,*,cyclic=False,blend_func=blend):# Where l is a list or vector etc
-    #Linearly inerpolation between different values with fractional indices
-    #This is written in pure python, so any values that implement addition, subtraction and multiplication will work
-    #   (This includes floats, vectors, and even images)
-    #Note that linterp(values,some_integer) == values[some_integer] for any valid integer some_integer
-    #EXAMPLE: INTERPOLATING VECTORS
-    #     ➤ as_numpy_array([ linterp( as_numpy_array([[0,1], [0,0], [1,0]]), index)   for   index   in   [0, .5, 1, 1.5, 2] ])
-    #     ans = [[0.  1. ]
-    #            [0.  0.5]
-    #            [0.  0. ]
-    #            [0.5 0. ]
-    #            [1.  0. ]]
-    #
-    #EXAMPLE: INTERPOLATING IMAGES
-    #    mountain=load_image('https://cdn.britannica.com/67/19367-050-885866B4/Valley-Taurus-Mountains-Turkey.jpg')
-    #    chicago=load_image('https://pbs.twimg.com/media/EeqFCjvWkAI-rv_.jpg')
-    #    doggy=load_image('https://s3-prod.dogtopia.com/wp-content/uploads/sites/142/2016/05/small-dog-at-doggy-daycare-birmingham-570x380.jpg')
-    #    images=[resize_image(image,(256,256)) for image in [mountain,chicago,doggy]]
-    #With cyclic=True, it will loop through the images
-    #    for index in np.linspace(0,10,num=100):
-    #        frame=linterp(images,index,cyclic=True)
-    #        display_image(frame)
-    #        sleep(1/30)
-    #With cyclic=False, it will play the animation only once
-    #    for index in np.linspace(0,2,num=100):
-    #        frame=linterp(images,index,cyclic=False)
-    #        display_image(frame)
-    #        sleep(1/30)
+    """
+    Linearly inerpolation between different values with fractional indices
+    This is written in pure python, so any values that implement addition, subtraction and multiplication will work
+       (This includes floats, vectors, and even images)
+    Note that linterp(values,some_integer) == values[some_integer] for any valid integer some_integer
+    EXAMPLE: INTERPOLATING VECTORS
+         ➤ as_numpy_array([ linterp( as_numpy_array([[0,1], [0,0], [1,0]]), index)   for   index   in   [0, .5, 1, 1.5, 2] ])
+         ans = [[0.  1. ]
+                [0.  0.5]
+                [0.  0. ]
+                [0.5 0. ]
+                [1.  0. ]]
+    
+    EXAMPLE: INTERPOLATING IMAGES
+        mountain=load_image('https://cdn.britannica.com/67/19367-050-885866B4/Valley-Taurus-Mountains-Turkey.jpg')
+        chicago=load_image('https://pbs.twimg.com/media/EeqFCjvWkAI-rv_.jpg')
+        doggy=load_image('https://s3-prod.dogtopia.com/wp-content/uploads/sites/142/2016/05/small-dog-at-doggy-daycare-birmingham-570x380.jpg')
+        images=[resize_image(image,(256,256)) for image in [mountain,chicago,doggy]]
+    With cyclic=True, it will loop through the images
+        for index in np.linspace(0,10,num=100):
+            frame=linterp(images,index,cyclic=True)
+            display_image(frame)
+            sleep(1/30)
+    With cyclic=False, it will play the animation only once
+        for index in np.linspace(0,2,num=100):
+            frame=linterp(images,index,cyclic=False)
+            display_image(frame)
+            sleep(1/30)
+    """
 
     assert is_number(index),'The \'index\' parameter should be a single number (which can be a float, but doesnt have to be), but got type '+str(type(index))
     assert is_iterable(values),'The \'values\' parameter should be a list of values you\'d like to interpolate between, but type '+str(type(index))+' is not iterable and does not have numerical indices'
@@ -5163,9 +5309,11 @@ def linterp(values:list,index:float,*,cyclic=False,blend_func=blend):# Where l i
 # endregion
 # region  Gathering/Matching: ［matching_indices，gather，pop_gather］
 def matching_keys(x,d:dict,check=lambda x,y:x==y,key=None)->list:
-    # Retuns a list [x0,x1,...] such that for all xi, d[xi]=x
-    #EXAMPLE:
-    #   matching_keys('a',{3:'c','q':'a',():'a'}) ==== ['q',()]
+    """
+     Retuns a list [x0,x1,...] such that for all xi, d[xi]=x
+    EXAMPLE:
+       matching_keys('a',{3:'c','q':'a',():'a'}) ==== ['q',()]
+    """
     assert isinstance(d,dict)
     if key is None:key=identity
     out=[]
@@ -5175,12 +5323,14 @@ def matching_keys(x,d:dict,check=lambda x,y:x==y,key=None)->list:
     return out
     
 def matching_indices(x,l,check=lambda x,y:x == y,key=None)->list:
-    # Retuns a list [x0,x1,...] such that for all xi, l[xi]=x
-    #EXAMPLE:
-    #   matching_indices('a',['a','b','c','a','t']) ==== [0,4]
-    #   matching_indices('a','abcat') ==== [0,4]
-    #   matching_indices('a',{3:'c','q':'a',():'a'}) ==== ['q',()]
-    # Returns the matching indices of element 'x' in list 'l'
+    """
+     Retuns a list [x0,x1,...] such that for all xi, l[xi]=x
+    EXAMPLE:
+       matching_indices('a',['a','b','c','a','t']) ==== [0,4]
+       matching_indices('a','abcat') ==== [0,4]
+       matching_indices('a',{3:'c','q':'a',():'a'}) ==== ['q',()]
+     Returns the matching indices of element 'x' in list 'l'
+    """
 
     if key is None:key=identity
 
@@ -5209,16 +5359,18 @@ def gather(iterable,*indices,as_dict=False):
         return {i:iterable[i] for i in indices}
 
 def pop_gather(x,*indices):
-    # Uses CSE214 definition of 'pop', in the context of popping stacks.
-    # It is difficult to simultaneously delete multiple indices in a list.
-    # My algorithm goes through the indices chronologically, compensating for
-    # the change in indices by subtracting incrementally larger values from them
-    # Example:
-    #  ⮤ ⵁ = ['0', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
-    #  ⮤ pop_gather(ⵁ,1,3,5,7,9)
-    # ans = ['a', 'c', 'e', 'g', 'i']
-    #  ⮤ g
-    # ans = ['0', 'b', 'd', 'f', 'h']
+    """
+    Uses CSE214 definition of 'pop', in the context of popping stacks.
+    It is difficult to simultaneously delete multiple indices in a list.
+    My algorithm goes through the indices chronologically, compensating for
+    the change in indices by subtracting incrementally larger values from them
+    Example:
+     ⮤ ⵁ = ['0', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
+     ⮤ pop_gather(ⵁ,1,3,5,7,9)
+    ans = ['a', 'c', 'e', 'g', 'i']
+     ⮤ g
+    ans = ['0', 'b', 'd', 'f', 'h']
+    """
     indices=detuple(indices)
     out=gather(x,indices)
     for a,b in enumerate(sorted(set(indices))):
@@ -6322,21 +6474,23 @@ def invert_dict(d: dict,bijection=True) -> dict:
                 out[v]=k,
         return out
 def invert_list_to_dict(l: list) -> dict:
-    # ['a','b','c'] ⟶ {'c': 2, 'a': 0, 'b': 1}
+    """ ['a','b','c'] ⟶ {'c': 2, 'a': 0, 'b': 1} """
     assert len(set(l)) == len(l),'r.dict_of_values_to_indices: l contains duplicate values, so we cannot return a 1-to-1 function; and thus ∄ a unique dict that converts values to indices for this list!'
     return invert_dict(list_to_index_dict(l))
 def dict_to_list(d: dict) -> list:
-    # Assumes keys should be in ascending order
+    """ Assumes keys should be in ascending order """
     return gather(d,sorted(d.keys()))
 def list_set(x):
-    # Similar to performing list(set(x)), except that it preserves the original order of the items.
-    # You could also think of it as list_set≣remove_duplicates
-    # Demo:
-    #       ⮤ l=[5,4,4,3,3,2,1,1,1]
-    #       ⮤ list(set(l))
-    #       ans=[1,2,3,4,5]
-    #       ⮤ list_set(l)  ⟵ This method
-    #       ans=[5,4,3,2,1]
+    """
+    Similar to performing list(set(x)), except that it preserves the original order of the items.
+    You could also think of it as list_set≣remove_duplicates
+    Demo:
+          ⮤ l=[5,4,4,3,3,2,1,1,1]
+          ⮤ list(set(l))
+          ans=[1,2,3,4,5]
+          ⮤ list_set(l)  ⟵ This method
+          ans=[5,4,3,2,1]
+    """
     from  more_itertools import unique_everseen  # http://stackoverflow.com/questions/480214/how-do-you-remove-duplicates-from-a-list-in-whilst-preserving-order
     return list(unique_everseen(x))
 # ――――――――――――――――――――――
@@ -6378,18 +6532,20 @@ def display_list(l: list,
 
 default_rip_music_output_filename="rip_music_temp"
 def rip_music(URL: str,output_filename: str = default_rip_music_output_filename,desired_output_extension: str = 'wav',quiet=False):
-    # Ryan Burgert Jan 15 2017
-    # Rips a music file off of streaming sites and downloads it to the default directory…
-    # URL: Can take URL's from youtube, Vimeo, SoundCloud...apparently youtube_dl supports over 400 sites!!
-    # output_filename: Shouldn't include an extension, though IDK if it would hurt. By default the output file is saved to the default directory.
-    # desired_output_extension: Could be 'wav', or 'mp3', or 'ogg' etc. You have the freedom to choose the type of file you want to download regardless of the type of the original online file; it will be converted automatically (because youtube is a huge mess of file types)
-    #   NOTE: ‘brew install ffmpeg’ (run command in terminal) is necessary for some desired_output_extension types.
-    # This method returns the name of the file it created.
-    # Dependency: youtube_dl  ﹙See: https://rg3.github.io/youtube-dl/﹚
-    # Quiet: If this is true, then nothing will display on the console as this method downloads and converts the file.
-    # NOTE: youtube_dl has MANY more cool capabilities such as extracting the title/author/cover picture of the songs…
-    #   …as well as breing able to download entire play-lists at once! youtube_dl can also rip videos; which could be very useful in another context!
-    # EXAMPLE: play_sound_file_via_afplay(rip_music('https://www.youtube.com/watch?v=HcgEHrwdSO4'))
+    """
+    Ryan Burgert Jan 15 2017
+    Rips a music file off of streaming sites and downloads it to the default directory…
+    URL: Can take URL's from youtube, Vimeo, SoundCloud...apparently youtube_dl supports over 400 sites!!
+    output_filename: Shouldn't include an extension, though IDK if it would hurt. By default the output file is saved to the default directory.
+    desired_output_extension: Could be 'wav', or 'mp3', or 'ogg' etc. You have the freedom to choose the type of file you want to download regardless of the type of the original online file; it will be converted automatically (because youtube is a huge mess of file types)
+      NOTE: ‘brew install ffmpeg’ (run command in terminal) is necessary for some desired_output_extension types.
+    This method returns the name of the file it created.
+    Dependency: youtube_dl  ﹙See: https://rg3.github.io/youtube-dl/﹚
+    Quiet: If this is true, then nothing will display on the console as this method downloads and converts the file.
+    NOTE: youtube_dl has MANY more cool capabilities such as extracting the title/author/cover picture of the songs…
+      …as well as breing able to download entire play-lists at once! youtube_dl can also rip videos; which could be very useful in another context!
+    EXAMPLE: play_sound_file_via_afplay(rip_music('https://www.youtube.com/watch?v=HcgEHrwdSO4'))
+    """
     pip_import('youtube_dl')
     import youtube_dl
     ydl_opts= \
@@ -6409,15 +6565,17 @@ def rip_music(URL: str,output_filename: str = default_rip_music_output_filename,
         ydl.download([URL])
     return output_filename + "." + desired_output_extension
 def rip_info(URL: str):
-    # A companion method for rip_music, this will give you all the meta-data of each youtube video or vimeo or soundcloud etc.
-    # It will give you this information in the form of a dictionary.
-    # Known keys:
-    # ［abr，acodec，age_limit，alt_title，annotations，automatic_captions，average_rating，…
-    # … categories，creator，description，dislike_count，display_id，duration，end_time，ext，…
-    # … extractor，extractor_key，format，format_id，formats，fps，height，id，is_live，license，…
-    # … like_count，playlist，playlist_index，requested_formats，requested_subtitles，resolution，…
-    # … start_time，stretched_ratio，subtitles，tags，thumbnail，thumbnails，title，upload_date，…
-    # … uploader，uploader_id，uploader_url，vbr，vcodec，view_count，webpage_url，webpage_url_basename，width］
+    """
+    A companion method for rip_music, this will give you all the meta-data of each youtube video or vimeo or soundcloud etc.
+    It will give you this information in the form of a dictionary.
+    Known keys:
+    ［abr，acodec，age_limit，alt_title，annotations，automatic_captions，average_rating，…
+    … categories，creator，description，dislike_count，display_id，duration，end_time，ext，…
+    … extractor，extractor_key，format，format_id，formats，fps，height，id，is_live，license，…
+    … like_count，playlist，playlist_index，requested_formats，requested_subtitles，resolution，…
+    … start_time，stretched_ratio，subtitles，tags，thumbnail，thumbnails，title，upload_date，…
+    … uploader，uploader_id，uploader_url，vbr，vcodec，view_count，webpage_url，webpage_url_basename，width］
+    """
     pip_import('youtube_dl')
     from youtube_dl import YoutubeDL
     return YoutubeDL().extract_info(URL,download=False)
@@ -7136,14 +7294,16 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
 # endregion
 # region Arduino: ［arduino，read_line］
 def arduino(baudrate: int = 115200,port_description_keywords:list=['arduino','USB2.0-Serial'],timeout: float = .1,manually_chosen_port: str = None,shutup: bool = False,return_serial_instead_of_read_write=False,marco_polo_timeout=0) -> (callable,callable):# 'USB2.0-Serial' is for a cheap knock-off arduino I got
-    #NOTE: This function uses a library called 'serial', got from 'pip install pyserial'.
-    #BUT THERE'S A SECOND LIBRARY: 'pip install serial' will give errors, as it's module is also called 'serial'. If you get this error, uninstall 'pip uninstall serial' then 'pip install pyserial'
-    # Finds an arduino, connects to it, and returns the read/write methods you use to communicate with it.
-    # Example: read,write=arduino()
-    # read() ⟵ Returns a single byte (of length 1)
-    # write(x:bytes) ⟵ Writes bytes to the arduino, which reads them as individual characters (the 'char' primitive)
-    # If you don't want this method to automatically locate an arduino, set manually_chosen_port to the port name you wish to connect to.
-    # marco_polo_timeout is optional: It's used for a situation where the arduino responds marco-polo style with the python code
+    """
+    NOTE: This function uses a library called 'serial', got from 'pip install pyserial'.
+    BUT THERE'S A SECOND LIBRARY: 'pip install serial' will give errors, as it's module is also called 'serial'. If you get this error, uninstall 'pip uninstall serial' then 'pip install pyserial'
+     Finds an arduino, connects to it, and returns the read/write methods you use to communicate with it.
+     Example: read,write=arduino()
+     read() ⟵ Returns a single byte (of length 1)
+     write(x:bytes) ⟵ Writes bytes to the arduino, which reads them as individual characters (the 'char' primitive)
+     If you don't want this method to automatically locate an arduino, set manually_chosen_port to the port name you wish to connect to.
+     marco_polo_timeout is optional: It's used for a situation where the arduino responds marco-polo style with the python code
+    """
     '''
     //Simple example code for the arduino to go along with this method: It simply parrots back the bytes you write to it.
     void setup()
@@ -7322,9 +7482,11 @@ def load_image_from_webcam(webcam_index: int = 0,
     return img
 
 def load_image_from_screenshot():
-    #Take a screeshot, and return the result as a numpy-array-style image
-    #EXAMPLE: display_image(load_image_from_screenshot())
-    #TODO: Make this faster. the 'mss' package from pypi got much better performance, so if you need higher FPS try using that for the inner workings of this function.
+    """
+    Take a screeshot, and return the result as a numpy-array-style image
+    EXAMPLE: display_image(load_image_from_screenshot())
+    TODO: Make this faster. the 'mss' package from pypi got much better performance, so if you need higher FPS try using that for the inner workings of this function.
+    """
     pyscreenshot=pip_import('pyscreenshot')
     im = pyscreenshot.grab(childprocess=False)
     return np.asarray(im)
@@ -7370,9 +7532,11 @@ def _load_image_from_webcam_in_jupyter_notebook():
 default_audio_stream_chunk_size=1024  # chunk_size determines the resolution of time_in_seconds as the samplerate. Look in the code for more explanation idk how to describe it.
 default_audio_mono_input_stream=None  # Initialized in the record_mono_audio function
 def record_mono_audio(time_in_seconds,samplerate=default_samplerate,stream=None,chunk_size=default_audio_stream_chunk_size) :
-    # You can count on this method having a delay (between when you call the method and when it actually starts recording) on the order of magnitude of 10⁻⁵ seconds
-    # PLEASE NOTE: time_in_seconds is not interpreted precisely
-    # EXAMPLE: play_sound_from_samples(record_mono_audio(2))
+    """
+    You can count on this method having a delay (between when you call the method and when it actually starts recording) on the order of magnitude of 10⁻⁵ seconds
+    PLEASE NOTE: time_in_seconds is not interpreted precisely
+    EXAMPLE: play_sound_from_samples(record_mono_audio(2))
+    """
     pip_import('pyaudio')
     if stream is None:  # then use default_audio_mono_input_stream instead
         global default_audio_mono_input_stream
@@ -7485,13 +7649,15 @@ def MIDI_input(ƒ_callback: callable = print) -> callable:
 # endregion
 # region  Comparators: ［cmp_to_key，sign］
 def cmp_to_key(mycmp):
-    # From: http://code.activestate.com/recipes/576653-convert-a-cmp-function-to-a-key-function/
-    # Must use for custom comparators in the 'sorted' builtin function!
-    # Instead of using sorted(ⵁ,cmp=x) which gives syntax error, use…
-    # …sorted(ⵁ,key=cmp_to_key(x))
-    # I.E., in rCode:
-    #       sorted(ⵁ,cmp=x) ⭆ sorted(ⵁ,key=cmp_to_key(x))   ≣   cmp=x ⭆ key=cmp_to_key(x)
+    """
+    From: http://code.activestate.com/recipes/576653-convert-a-cmp-function-to-a-key-function/
+    Must use for custom comparators in the 'sorted' builtin function!
+    Instead of using sorted(ⵁ,cmp=x) which gives syntax error, use…
+    …sorted(ⵁ,key=cmp_to_key(x))
+    I.E., in rCode:
+          sorted(ⵁ,cmp=x) ⭆ sorted(ⵁ,key=cmp_to_key(x))   ≣   cmp=x ⭆ key=cmp_to_key(x)
     'Convert a cmp= function into a key= function'
+    """
     class K(object):
         def __init__(self,obj,*args): self.obj=obj
         def __lt__(self,other): return mycmp(self.obj,other.obj) < 0
@@ -7660,13 +7826,15 @@ def load_yaml_files(*paths, use_cache=False, strict=True, num_threads=None, show
     return load_files(load_file, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
 
 def parse_dyaml(code:str)->dict:
-    #This is like DJSON, except for YAML
-    #TODO: Migrate this function into its own module.
-    #Look at the test_parse_dyaml_junctions() function to see how this language works, it's pretty simple
-    #The only differences between this and YAML:
-    #   - When a key has multiple colons in it, like a:b:c:, it's equivalent to multiple lines of keys
-    #   - When a key has commas in it, its value is duplicated
-    #This was used in the TRITON codebase's config files!
+    """
+    This is like DJSON, except for YAML
+    TODO: Migrate this function into its own module.
+    Look at the test_parse_dyaml_junctions() function to see how this language works, it's pretty simple
+    The only differences between this and YAML:
+       - When a key has multiple colons in it, like a:b:c:, it's equivalent to multiple lines of keys
+       - When a key has commas in it, its value is duplicated
+    This was used in the TRITON codebase's config files!
+    """
 
     assert isinstance(code,str)
 
@@ -7872,15 +8040,17 @@ def load_dyaml_file(path:str)->dict:
 # endregion
 # region MATLAB Integration: ［matlab_session，matlab，matlab_pseudo_terminal］
 def matlab_session(matlabroot: str = '/Applications/MATLAB_R2016a.app/bin/matlab',print_matlab_stdout: bool = True):  # PLEASE NOTE: this 'matlabroot' was created on my Macbook Pro, and is unlikely to work on your computer unless you specify your own matlab path!
-    # This method is used as an easy-to-use wrapper for creating MATLAB sessions using the pymatbridge module
-    # Worth noting: There's a legit purpose for creating a new matlab session before using it:
-    #   Each session you create will be separate and will have a separate namespace!
-    #   In other words, you can run them simultaneously/separately. For example:
-    #         ⮤ sess1=matlab_session();sess2=matlab_session();
-    #         ⮤ sess1.run_code("x=1");sess2.run_code("x=1");
-    #         ⮤ sess1.get_variable("x"),sess2.get_variable("x")
-    #         ans=(1,2)
-    # Also worth noting: You can use whatever functions you normally use in MATLAB, including .m files that you wrote and kept in your default matlab function/script saving directory.
+    """
+    This method is used as an easy-to-use wrapper for creating MATLAB sessions using the pymatbridge module
+    Worth noting: There's a legit purpose for creating a new matlab session before using it:
+      Each session you create will be separate and will have a separate namespace!
+      In other words, you can run them simultaneously/separately. For example:
+            ⮤ sess1=matlab_session();sess2=matlab_session();
+            ⮤ sess1.run_code("x=1");sess2.run_code("x=1");
+            ⮤ sess1.get_variable("x"),sess2.get_variable("x")
+            ans=(1,2)
+    Also worth noting: You can use whatever functions you normally use in MATLAB, including .m files that you wrote and kept in your default matlab function/script saving directory.
+    """
     fansi_print("(A message from Ryan): About to try connecting to MATLAB. Please be a patient, this can take a few seconds! (There is a timeout though, so you won't be kept waiting forever if it fails). Another message will be printed when it's done loading.",None,'bold')
     pip_import('pymatbridge')
     import pymatbridge  # pip3 install pymatbridge     (see https://arokem.github.io/python-matlab-bridge/ )
@@ -8777,10 +8947,12 @@ def contains_sort(array, *, key=lambda x: x, contains=lambda x, y: y in x, rever
 contains_sorted=contains_sort
 
 def sync_shuffled(*lists):
-    #Shuffles lists in sync with one another
-    #EXAMPLE:
-    # >>> sync_shuffled([1,2,3,4,5],'abcde')
-    #ans = [(1, 3, 5, 2, 4), ('a', 'c', 'e', 'b', 'd')]
+    """
+    Shuffles lists in sync with one another
+    EXAMPLE:
+     >>> sync_shuffled([1,2,3,4,5],'abcde')
+    ans = [(1, 3, 5, 2, 4), ('a', 'c', 'e', 'b', 'd')]
+    """
     lists=detuple(lists)
     return list(zip(*shuffled(list(zip(*lists)))))
     
@@ -9285,23 +9457,23 @@ def get_current_exception():
 
 def pop_exception_traceback(exception,n=1):
     """
-    #Takes an exception, mutates it, then returns it
-    #Often when writing my repl, tracebacks will contain an annoying level of function calls (including the 'exec' that ran the code)
-    #This function pops 'n' levels off of the stack trace generated by exception
-    #For example, if print_stack_trace(exception) originally printed:
-    #   Traceback (most recent call last):
-    #   File "<string>", line 2, in <module>
-    #   File "<string>", line 2, in f
-    #   File "<string>", line 2, in g
-    #   File "<string>", line 2, in h
-    #   File "<string>", line 2, in j
-    #   File "<string>", line 2, in k
-    #Then print_stack_trace(pop_exception_traceback(exception),3) would print:
-    #   File "<string>", line 2, in <module>
-    #   File "<string>", line 2, in j
-    #   File "<string>", line 2, in k
-    #(It popped the first 3 levels, aka f g and h off the traceback)
-    #Edge case: If we start with let's say only 4 levels, but n=1000, only pop 4 levels (trying to more would result in an error)
+    Takes an exception, mutates it, then returns it
+    Often when writing my repl, tracebacks will contain an annoying level of function calls (including the 'exec' that ran the code)
+    This function pops 'n' levels off of the stack trace generated by exception
+    For example, if print_stack_trace(exception) originally printed:
+       Traceback (most recent call last):
+       File "<string>", line 2, in <module>
+       File "<string>", line 2, in f
+       File "<string>", line 2, in g
+       File "<string>", line 2, in h
+       File "<string>", line 2, in j
+       File "<string>", line 2, in k
+    Then print_stack_trace(pop_exception_traceback(exception),3) would print:
+       File "<string>", line 2, in <module>
+       File "<string>", line 2, in j
+       File "<string>", line 2, in k
+    (It popped the first 3 levels, aka f g and h off the traceback)
+    Edge case: If we start with let's say only 4 levels, but n=1000, only pop 4 levels (trying to more would result in an error)
     """
     for _ in range(n):
         if exception.__traceback__ is None:
@@ -9391,11 +9563,13 @@ def complex_to_polar(complex,ϴ_unit=τ)->tuple:
     return np.abs(complex),np.angle(complex)# np.abs is calculated per number, not vector etc
 default_left_to_right_sum_ratio=0# By default, take a left hand sum
 def riemann_sum(f,x0,x1,N,left_to_right_sum_ratio=None):# Verified ✔
-    # Desmos: https://www.desmos.com/calculator/tgyr42ezjq
-    # left_to_right_sum_ratio﹦0  --> left hand sum
-    # left_to_right_sum_ratio﹦.5 --> midpoint hand sum
-    # left_to_right_sum_ratio﹦1  --> right hand sum
-    # The x1 bound MUST be exclusive as per definition of a left riemann sum
+    """
+    Desmos: https://www.desmos.com/calculator/tgyr42ezjq
+    left_to_right_sum_ratio﹦0  --> left hand sum
+    left_to_right_sum_ratio﹦.5 --> midpoint hand sum
+    left_to_right_sum_ratio﹦1  --> right hand sum
+    The x1 bound MUST be exclusive as per definition of a left riemann sum
+    """
     c=left_to_right_sum_ratio or default_left_to_right_sum_ratio
     w=(x1-x0)/N# Width of the bars
     return sum(f(x0+w*(i+c))*w for i in range(N))
@@ -9548,20 +9722,21 @@ def chunk_by_key(iterable, key=lambda x: x, compare=lambda x, y: x == y):
             yield chunk
 
 def cluster_filter(vec,filter=identity):  # This has a terrible name...I'm not sure what to rename it so if you think of something, go for it!
-    # EXAMPLE: cluster_filter([2,3,5,9,4,6,1,2,3,4],lambda x:x%2==1) --> [[3, 5, 9], [1], [3]]  <---- It separated all chunks of odd numbers
-    # region Unoptimized, much slower version (that I kept because it might help explain what this function does):
-    # def mask_clusters(vec,filter=identity):
-    #  out=[]
-    #  temp=[]
-    #  for val in vec:
-    #    if filter(val):
-    #      temp.append(val)
-    #    elif temp:
-    #      out.append(temp)
-    #      temp=[]
-    #  return out
-    # endregion
-
+    """
+    EXAMPLE: cluster_filter([2,3,5,9,4,6,1,2,3,4],lambda x:x%2==1) --> [[3, 5, 9], [1], [3]]  <---- It separated all chunks of odd numbers
+    region Unoptimized, much slower version (that I kept because it might help explain what this function does):
+    def mask_clusters(vec,filter=identity):
+     out=[]
+     temp=[]
+     for val in vec:
+       if filter(val):
+         temp.append(val)
+       elif temp:
+         out.append(temp)
+         temp=[]
+     return out
+    endregion
+    """
     out=[]
     s=None  # start
     for i,val in enumerate(vec):
@@ -9601,11 +9776,13 @@ def digits_to_proportion(digits,base=256):  # Intended for values between 0 and 
 #    return out
 
 def encode_float_matrix_to_rgba_byte_image(float_matrix):
-    #Can encode a 32-bit float into the 4 channels of an RGBA image
-    #The values should be between 0 and 1
-    #This output can be saved as a .png file
-    #Formerly called 'rgb_encoded_matrix'
-    #It's useful for reading and storing floating-point matrices in .png files
+    """
+    Can encode a 32-bit float into the 4 channels of an RGBA image
+    The values should be between 0 and 1
+    This output can be saved as a .png file
+    Formerly called 'rgb_encoded_matrix'
+    It's useful for reading and storing floating-point matrices in .png files
+    """
     m=float_matrix
     m=np.matrix(m)
     assert is_grayscale_image(m)
@@ -9619,10 +9796,12 @@ def encode_float_matrix_to_rgba_byte_image(float_matrix):
     return out
 
 def decode_float_matrix_from_rgba_byte_image(image):
-    #This function is the inverse of encode_float_matrix_to_rgba_image
-    #Takes an rgba byte-image (that was created with encode_float_matrix_to_rgba_image) and turns it back into a float image
-    #It's useful for reading and storing floating-point matrices in .png files
-    #Formerly called 'matrix_decoded_rgb'
+    """
+    This function is the inverse of encode_float_matrix_to_rgba_image
+    Takes an rgba byte-image (that was created with encode_float_matrix_to_rgba_image) and turns it back into a float image
+    It's useful for reading and storing floating-point matrices in .png files
+    Formerly called 'matrix_decoded_rgb'
+    """
 
     assert is_rgba_image(image)
     assert is_byte_image(image)
@@ -9750,9 +9929,11 @@ def shorten_url(url:str)->str:
 # sgist=lambda *x:seq([gist,printed,open_url,shorten_url],*x)# Open the url of a gist and print it
 
 def unshorten_url(shortened_url):
-    #Takes a shortened URL and returns the long one
-    #EXAMPLE: unshorten_url('bit.ly/labinacube')  -->  'https://oneoverzero.pythonanywhere.com/'
-    #https://stackoverflow.com/questions/3556266/how-can-i-get-the-final-redirect-url-when-using-urllib2-urlopen/3556287
+    """
+    Takes a shortened URL and returns the long one
+    EXAMPLE: unshorten_url('bit.ly/labinacube')  -->  'https://oneoverzero.pythonanywhere.com/'
+    https://stackoverflow.com/questions/3556266/how-can-i-get-the-final-redirect-url-when-using-urllib2-urlopen/3556287
+    """
 
     if not is_valid_url(shortened_url):
         shortened_url='https://'+shortened_url
@@ -9762,12 +9943,14 @@ def unshorten_url(shortened_url):
     return urlopen(shortened_url).url
 
 def load_gist(gist_url:str):
-    #Takes the URL of a gist, or the shortened url of a gist (by something like bit.ly), and returns the content inside that gist as a string
-    #EXAMPLE:
-    #     >>> save_gist('AOISJDIO')
-    #    ans = https://git.io/JI2Ez
-    #     >>> load_gist(ans)
-    #     ans = AOISJDIO
+    """
+    Takes the URL of a gist, or the shortened url of a gist (by something like bit.ly), and returns the content inside that gist as a string
+    EXAMPLE:
+         >>> save_gist('AOISJDIO')
+        ans = https://git.io/JI2Ez
+         >>> load_gist(ans)
+         ans = AOISJDIO
+    """
 
     gist_url=unshorten_url(gist_url) #If we shortened the url, unshorten it first. Otherwise, this function will leave it alone.
 
@@ -9860,20 +10043,22 @@ def save_gist(content:str,*,
               description:str='',
               filename:str='',
               token:str=None):
-    #This function takes an input string, posts it as a gist on Github, then returns the URL of the new gist
-    #I've included a token that anybody using this library is allowed to use. Have fun, but please don't abuse it!
-    #
-    #EXAMPLE:
-    #     >>> save_gist('AOISJDIO')
-    #    ans = https://git.io/JI2Ez
-    #     >>> load_gist(ans)
-    #     ans = AOISJDIO
-    #
-    #You can't post the api_token in a gist on github. If you do, github will disable that api_token.
-    #To make sure that github doesn't revoke the api_token, we have to make sure it's not in the content string.
-    #NOTE: if you get a SSL Error that looks like
-    #       URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1123)>
-    #   Then try running rp.r._fix_CERTIFICATE_VERIFY_FAILED_errors()
+    """
+    This function takes an input string, posts it as a gist on Github, then returns the URL of the new gist
+    I've included a token that anybody using this library is allowed to use. Have fun, but please don't abuse it!
+    
+    EXAMPLE:
+         >>> save_gist('AOISJDIO')
+        ans = https://git.io/JI2Ez
+         >>> load_gist(ans)
+         ans = AOISJDIO
+    
+    You can't post the api_token in a gist on github. If you do, github will disable that api_token.
+    To make sure that github doesn't revoke the api_token, we have to make sure it's not in the content string.
+    NOTE: if you get a SSL Error that looks like
+           URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1123)>
+       Then try running rp.r._fix_CERTIFICATE_VERIFY_FAILED_errors()
+    """
 
     if token is None:
         #Token can't be in this code or github will revoke it
@@ -9995,26 +10180,28 @@ def latex_image(equation: str):
     return load_image('temp.png')
 
 def display_image_in_terminal(image,dither=True,auto_resize=True,bordered=False):
-    #Uses unicode, and is black-and-white
-    #EXAMPLE: while True: display_image_in_terminal(load_image_from_webcam())
-    #
-    #EXAMPLE: Starfield
-    #     def stars(density=.001,size=256):
-    #         return as_float_image(np.random.rand(size,size)<density)
-    #     def zoom(image,factor):
-    #         return (crop_image(cv_resize_image(image,factor),*get_image_dimensions(image),origin='center'))
-    #     image=stars()
-    #     for _ in range(10000):
-    #         image=image+stars()
-    #         image=zoom(image,1.05)
-    #         image*=.99
-    #         scene=image
-    #         scene=as_binary_image(image,dither=True)
-    #         scene=bordered_image_solid_color(scene)
-    #         scene=as_binary_image(scene)
-    #         display_image_in_terminal(image**1,bordered=True)
-    #         display_image(image)
-    #
+    """
+    Uses unicode, and is black-and-white
+    EXAMPLE: while True: display_image_in_terminal(load_image_from_webcam())
+    
+    EXAMPLE: Starfield
+         def stars(density=.001,size=256):
+             return as_float_image(np.random.rand(size,size)<density)
+         def zoom(image,factor):
+             return (crop_image(cv_resize_image(image,factor),*get_image_dimensions(image),origin='center'))
+         image=stars()
+         for _ in range(10000):
+             image=image+stars()
+             image=zoom(image,1.05)
+             image*=.99
+             scene=image
+             scene=as_binary_image(image,dither=True)
+             scene=bordered_image_solid_color(scene)
+             scene=as_binary_image(scene)
+             display_image_in_terminal(image**1,bordered=True)
+             display_image(image)
+    
+    """
     if isinstance(image,str):
         image=load_image(image)
     image=as_numpy_image(image)
@@ -10045,10 +10232,12 @@ def display_image_in_terminal(image,dither=True,auto_resize=True,bordered=False)
     print(c.frame())
 
 def display_image_in_terminal_color(image):
-    #Will attempt to draw a color image in the terminal
-    #This is slower than display_image_in_terminal, and relies on both unicode and terminal colors
-    #EXAMPLE:
-    #    display_image_in_terminal_color(load_image('https://i.guim.co.uk/img/media/faf20d1b2a98cbca9f5eb2946254566527394e15/78_689_3334_1999/master/3334.jpg?width=1200&height=900&quality=85&auto=format&fit=crop&s=69707184a1b38f36fc077f7cafba1130'))#Display Kim Petras in the terminal
+    """
+    Will attempt to draw a color image in the terminal
+    This is slower than display_image_in_terminal, and relies on both unicode and terminal colors
+    EXAMPLE:
+        display_image_in_terminal_color(load_image('https://i.guim.co.uk/img/media/faf20d1b2a98cbca9f5eb2946254566527394e15/78_689_3334_1999/master/3334.jpg?width=1200&height=900&quality=85&auto=format&fit=crop&s=69707184a1b38f36fc077f7cafba1130'))#Display Kim Petras in the terminal
+    """
     USE_OPENCV=True
     pip_import('timg')
     if file_exists(image) or is_valid_url(image):
@@ -10136,22 +10325,24 @@ def _cv_skeletonize(img):
 
 # noinspection PyTypeChecker
 def print_latex_image(latex: str):
-    # ⮤ print_latex_image("\sum_{n=3}^7x^2")
-    # ⠀⠀⠀⠀⠠⠟⢉⠟
-    # ⠀⠀⠀⠀⠀⠀⡏
-    # ⠀⠀⠀⠀⠀⠀⠃
-    # ⢀⢀⣀⣀⣀⣀⣀⣀⣀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⡀
-    # ⠀⠙⠄⠀⠀⠀⠀⠀⠀⠈⠉⢦⠀⠀⠀⠀⠀⠀⠀⠛⠀⡸
-    # ⠀⠀⠈⢢⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⡞⣡
-    # ⠀⠀⠀⠀⠑⡀⠀⠀⠀⠀⠀⠀⠀⠀⠰⠋⣹⠉⠃⠈⠉⠉
-    # ⠀⠀⠀⢀⡔⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣠⣏⣠⠆
-    # ⠀⠀⡠⠊⠀⠀⠀⠀⠀⠀⠀⣠
-    # ⢀⢼⣤⣤⣤⣤⣤⡤⠤⠤⠴⠁
-    #
-    # ⢀⠀⣀⠀⠀⠀⠀⠀⠀⠐⠏⢹
-    # ⢣⠏⢨⠃⢘⣛⣛⣛⣋⢀⠈⠙⡄
-    # ⠘⠀⠘⠊⠀⠀⠀⠀⠀⠘⠒⠚
-    # Prints it in the console
+    """
+     ⮤ print_latex_image("\sum_{n=3}^7x^2")
+     ⠀⠀⠀⠀⠠⠟⢉⠟
+     ⠀⠀⠀⠀⠀⠀⡏
+     ⠀⠀⠀⠀⠀⠀⠃
+     ⢀⢀⣀⣀⣀⣀⣀⣀⣀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⡀
+     ⠀⠙⠄⠀⠀⠀⠀⠀⠀⠈⠉⢦⠀⠀⠀⠀⠀⠀⠀⠛⠀⡸
+     ⠀⠀⠈⢢⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⡞⣡
+     ⠀⠀⠀⠀⠑⡀⠀⠀⠀⠀⠀⠀⠀⠀⠰⠋⣹⠉⠃⠈⠉⠉
+     ⠀⠀⠀⢀⡔⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣠⣏⣠⠆
+     ⠀⠀⡠⠊⠀⠀⠀⠀⠀⠀⠀⣠
+     ⢀⢼⣤⣤⣤⣤⣤⡤⠤⠤⠴⠁
+    
+     ⢀⠀⣀⠀⠀⠀⠀⠀⠀⠐⠏⢹
+     ⢣⠏⢨⠃⢘⣛⣛⣛⣋⢀⠈⠙⡄
+     ⠘⠀⠘⠊⠀⠀⠀⠀⠀⠘⠒⠚
+     Prints it in the console
+    """
     # @formatter:off
     image=latex_image(latex)
     image=inverted_image(image)
@@ -10897,14 +11088,16 @@ def xo(file_or_object):
 # endregion
 
 def graph_resistance_distance(n, d, x, y):
-    # Originally from Fodor's CSE307 HW 2, Spring 2018
-    # d is dictionary to contain graph edges
-    # n is number of nodes
-    # x is entry node
-    # y is exit node
-    # Reference: wikipedia.org/wiki/Resistance_distance
-    # Example from acmgnyr.org/year2017/problems/G-SocialDist.pdf
-    #     graph_resistance_distance(6,{2:(0,1,3),3:(1,4,5),4:(1,5)},1,0) ⟶ 34/21
+    """
+    Originally from Fodor's CSE307 HW 2, Spring 2018
+    d is dictionary to contain graph edges
+    n is number of nodes
+    x is entry node
+    y is exit node
+    Reference: wikipedia.org/wiki/Resistance_distance
+    Example from acmgnyr.org/year2017/problems/G-SocialDist.pdf
+        graph_resistance_distance(6,{2:(0,1,3),3:(1,4,5),4:(1,5)},1,0) ⟶ 34/21
+    """
     e=[[] for _ in range(n)]
     for k in d:
         for i in d[k]:
@@ -11606,12 +11799,14 @@ def number_of_lines_in_terminal(string):
     return out
 
 def number_of_lines_in_file(filename):
-    #Quickly count the nubmer of lines in a given file.
-    #It's 5-10x faster than text_file_to_string(filename).count('\n')
-    #It also appears to take constant memory; my memory usage didn't flinch even when I threw a 2gb file at it.
-    #Note that it doesn't care if it's a text file or not; it just counts the number of \n bytes in the file!
-    #   For example, number_of_lines_in_file('picture.jpg')==280 is a possibility.
-    #https://stackoverflow.com/questions/845058/how-to-get-line-count-of-a-large-file-cheaply-in-python
+    """
+    Quickly count the nubmer of lines in a given file.
+    It's 5-10x faster than text_file_to_string(filename).count('\n')
+    It also appears to take constant memory; my memory usage didn't flinch even when I threw a 2gb file at it.
+    Note that it doesn't care if it's a text file or not; it just counts the number of \n bytes in the file!
+       For example, number_of_lines_in_file('picture.jpg')==280 is a possibility.
+    https://stackoverflow.com/questions/845058/how-to-get-line-count-of-a-large-file-cheaply-in-python
+    """
     from itertools import (takewhile,repeat)
     f = open(filename, 'rb')
     bufgen = takewhile(lambda x: x, (f.raw.read(1024*1024) for _ in repeat(None)))
@@ -13717,12 +13912,12 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         TMDA $os.system('tmux list-sessions -F "#{session_name}" | xargs -I % tmux detach -s %') #Detach all users from all tmux sessions
     
-        RF    $random_element([x for x in $os.scandir() if not x.is_dir()]).name
-        RD    $random_element([x for x in $os.scandir() if x.is_dir()]).name
+        RF    $random_element([x for x in $os.scandir() if not x.is_dir(follow_symlinks=False)]).name
+        RD    $random_element([x for x in $os.scandir() if x.is_dir(follow_symlinks=False)]).name
         RE    $random_element(ans)
 
-        RDA   $r._pterm_cd($random_element([x for x in $os.scandir() if x.is_dir()]))   # RD then DA
-        CDR   $r._pterm_cd($random_element([x for x in $os.scandir() if x.is_dir()]))
+        RDA   $r._pterm_cd($random_element([x for x in $os.scandir() if x.is_dir(follow_symlinks=False)]))   # RD then DA
+        CDR   $r._pterm_cd($random_element([x for x in $os.scandir() if x.is_dir(follow_symlinks=False)]))
 
         LJ LINE JOIN ANS
         AJ JSON ANS
@@ -14395,6 +14590,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             #     name=fansi('(SSH from %s) '%ip,'green',)+name
                         if running_in_docker():
                             name=fansi('(Docker) ','green',)+name
+                        if running_in_tmux():
+                            name=fansi('(tmux) ','green',)+name
                         if running_in_google_colab():
                             fansi_print("Google Colab",'yellow','bold')
                         elif running_in_jupyter_notebook():
@@ -21396,6 +21593,9 @@ def get_venv_name():
         raise KeyError("r.get_conda_env_name: Can't get the name of the current python virtual environment (venv) - VIRTUAL_ENV is not set. Are you sure this python process is running in a python virtual environment?")
     return get_folder_name(env[key])
 
+def running_in_tmux():
+    """Checks if the current process is running inside a tmux session."""
+    return 'TMUX' in os.environ
 
 def running_in_docker():
     """Returns True if we're in docker, False otherwise"""
@@ -25905,7 +26105,44 @@ def local_paste():
     file=open(_local_dill_clipboard_string_path,'rb')
     return bytes_to_object(file.read())
     
-    
+def _run_tmux_command(command):
+    """Utility function to run a tmux command."""
+    import subprocess
+    result = subprocess.run(command, text=True, capture_output=True)
+    return result.stdout.strip()
+
+def _get_current_tmux_window():
+    """Returns the index of the current tmux window."""
+    return int(_run_tmux_command(['tmux', 'display-message', '-p', '#{window_index}']))
+
+def _get_all_tmux_windows():
+    """Returns a list of all window indexes in the current tmux session."""
+    window_indexes = _run_tmux_command(['tmux', 'list-windows', '-F', '#{window_index}']).split()
+    return list(map(int, window_indexes))
+
+def _tmux_close_windows(filter_condition):
+    """Closes tmux windows based on a filtering condition function, private to this module."""
+    current_window = _get_current_tmux_window()
+    all_windows = _get_all_tmux_windows()
+    windows_to_close = [w for w in all_windows if filter_condition(w, current_window)]
+
+    # Close each window, sorted by index to avoid issues with changing indices
+    for window in sorted(windows_to_close, reverse=True):
+        _run_tmux_command(['tmux', 'kill-window', '-t', str(window)])
+
+def tmux_close_windows_to_left():
+    """Closes all tmux windows to the left of the current window."""
+    _tmux_close_windows(lambda w, current: w < current)
+
+def tmux_close_windows_to_right():
+    """Closes all tmux windows to the right of the current window."""
+    _tmux_close_windows(lambda w, current: w > current)
+
+def tmux_close_other_windows():
+    """Closes all tmux windows except the current one."""
+    _tmux_close_windows(lambda w, current: w != current)
+
+
     
 def extract_code_from_ipynb(path:str=None):
     """ This function isnt meant to be used in any code. Its just a utility for running ipynb files in rp, by extracting their code into cells that can be run individually """
@@ -27796,8 +28033,14 @@ class _PathInfo:
             self.inode=entry.inode()
             self.path=entry.path
             self.is_symlink=entry.is_symlink()
-            self.is_folder=entry.is_dir()
             self.name=entry.name
+
+            try:
+                self.is_folder=entry.is_dir(follow_symlinks=True) #This can, stupidly, recurse infinitely...
+            except OSError:
+                # ERROR: OSError: [Errno 40] Too many levels of symbolic links: './root'
+                self.is_folder=is_a_folder(self.path) #Slower
+
         elif isinstance(entry,str):
             self.inode=get_path_inode(entry)
             self.path=entry
