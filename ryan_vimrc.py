@@ -423,6 +423,7 @@ function! Fansi()
     highlight GitGutterAdd    guifg=#009900 ctermfg=green cterm=bold ctermbg=234
     highlight GitGutterChange guifg=#bbbb00 ctermfg=yellow cterm=bold ctermbg=234
     highlight GitGutterChangeDelete ctermfg=4
+    highlight GutterMarks     guifg=#007fff ctermfg=cyan cterm=bold ctermbg=234
 
     highlight ALEErrorSign ctermfg=199 cterm=bold
 
@@ -470,7 +471,7 @@ let g:jedi#goto_assignments_command = "<leader>g"
 let g:jedi#documentation_command = "K"
 let g:jedi#usages_command = "<leader>u"
 let g:jedi#completions_command = "<C-Space>"
-let g:jedi#rename_command = "<leader>r"
+let g:jedi#rename_command = "<leader>rn"
 
 " This is can be laggy and can pop up unexpectedly. Fuck it - I don't need them. Just use rp.
 let g:jedi#completions_enabled = 0
@@ -651,8 +652,6 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
                             \ 'Unknown'   :'?',
                             \ }
         "GIT GUTTER: [h, ]h
-            Plugin 'airblade/vim-gitgutter'
-            silent! call gitgutter#disable() " Disable it by default
             set updatetime=100 " This is the recommended update interval from airblade/gitgutter's github page. By default, it's 4 seconds.
             nmap ]h <Plug>(GitGutterNextHunk)
             nmap [h <Plug>(GitGutterPrevHunk)
@@ -664,15 +663,17 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             " Git Gutter"
             set updatetime=250
             let g:gitgutter_max_signs = 500
-            " No mapping
-            let g:gitgutter_map_keys = 0
-            " Colors
-            let g:gitgutter_override_sign_column_highlight = 0
+            let g:gitgutter_map_keys = 0 " No mapping
+            let g:gitgutter_override_sign_column_highlight = 0 " Colors
+            let g:gitgutter_sign_allow_clobber = 0 " Let other plugins take priority over gutter
+            let g:gitgutter_sign_priority = -10
             highlight clear SignColumn
             highlight GitGutterDelete guifg=#ff2222 ctermfg=1
             highlight GitGutterAdd    guifg=#009900 ctermfg=2
             highlight GitGutterChange guifg=#bbbb00 ctermfg=3
             highlight GitGutterChangeDelete ctermfg=4
+            Plugin 'airblade/vim-gitgutter'
+            silent! call gitgutter#disable() " Disable it by default
         "GITIGNORE SYTAX HIGHLIGHTING
             Plugin 'gisphm/vim-gitignore' " Highlight .gitignore files
     "PYTHON STUFF
@@ -784,11 +785,91 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         "TAB KEY:
             nnoremap <Tab> <C-w>w
             nnoremap <S-Tab> <C-w>W
-        "FILE HISTORY: \p
+        "FILE HISTORY: \ptq
             let MRU_Max_Menu_Entries=10000 "They said it would get slow if this is a large number. Let's find out...
             Plugin 'yegappan/mru' "Let us have more than vim's default 10 recent files
             nnoremap <leader>p :MruRefresh<cr>:MRU<cr>
             " autocmd BufEnter * silent! MruRefresh " Always get rid of files that no longer exist from the MRU. Clean up the temp files that no longer exist...
+        "FOLDS: \jf ]f [f zR zM zo zc zd zf zj zk
+            "SHORTCUTS:
+            " \jf  toggle fold gutter
+            " zR   open all folds 
+            " zM   close all folds
+            " zo   open fold
+            " zc   close fold
+            " zd   delete fold
+            " zf   create new fold
+            " zj or ]f   jump to next fold
+            " zk or [f   jump to prev fold
+
+            "PERSISTENT FOLDS:
+                "Make sure folds stay when opening a file again
+                "https://www.vim.org/scripts/script.php?script_id=4021
+                Plugin 'vim-scripts/restore_view.vim'
+
+            "FOLD COLUMN:  \jf
+                " Disable foldcolumn by default
+                set foldcolumn=0
+
+                " Set custom fold characters and vertical line
+                set fillchars=foldopen:▽,foldclose:△,vert:│
+
+                " Map <leader>jf to toggle foldcolumn
+                nnoremap <leader>jf :if &foldcolumn == '0' \| set foldcolumn=2 \| else \| set foldcolumn=0 \| endif<CR>
+
+                " Set the background color of the foldcolumn to black
+                highlight FoldColumn guibg=black ctermbg=0
+
+                " Map ]f to jump to the next fold
+                nnoremap ]f zj
+
+                " Map [f to jump to the previous fold
+                nnoremap [f zk
+
+
+        "MARKS:   m.   m-   ]`   [`   m/     m<space>     m<bs>
+            "This plugin places marks in the gutter, maing them easy to use
+            "Potential Key Mappings:
+            "       mx           Toggle mark 'x' and display it in the leftmost column
+            "       dmx          Remove mark 'x' where x is a-zA-Z
+            "     
+            "       m,           Place the next available mark
+            "       m.           If no mark on line, place the next available mark. Otherwise, remove (first) existing mark.
+            "       m-           Delete all marks from the current line
+            "       m<Space>     Delete all marks from the current buffer
+            "       ]`           Jump to next mark
+            "       [`           Jump to prev mark
+            "       ]'           Jump to start of next line containing a mark
+            "       ['           Jump to start of prev line containing a mark
+            "       `]           Jump by alphabetical order to next mark
+            "       `[           Jump by alphabetical order to prev mark
+            "       ']           Jump by alphabetical order to start of next line having a mark
+            "       '[           Jump by alphabetical order to start of prev line having a mark
+            "       m/           Open location list and display marks from current buffer
+            "     
+            "       m[0-9]       Toggle the corresponding marker !@#$%^&*()
+            "       m<S-[0-9]>   Remove all markers of the same type
+            "       ]-           Jump to next line having a marker of the same type
+            "       [-           Jump to prev line having a marker of the same type
+            "       ]=           Jump to next line having a marker of any type
+            "       [=           Jump to prev line having a marker of any type
+            "       m?           Open location list and display markers from current buffer
+            "       m<BS>        Remove all markers
+            let g:SignatureMap = {
+              \ 'ToggleMarkAtLine'   :  "m.",       
+              \ 'PurgeMarksAtLine'   :  "m-",       
+              \ 'GotoNextSpotByPos'  :  "]`",       
+              \ 'GotoPrevSpotByPos'  :  "[`",       
+              \ 'ListBufferMarks'    :  "m/",       
+              \ 'PurgeMarks'         :  "m<Space>", 
+              \ 'PurgeMarkers'       :  "m<BS>",    
+              \ }
+            " let g:SignatureMarkTextHLDynamic = 1
+            let g:SignaturePrioritizeMarks = 1
+            let g:SignatureMarkTextHL = 'GutterMarks'
+            Plugin 'kshenoy/vim-signature'
+            " Plugin 'RyannDaGreat/vim-signature' "This takes a non-trivial time to start (not bad, but not super fast either). I don't really use marks - this plugin's purpose is to preview where marks are in the gutter.
+            
         "SESSIONS: \ss \sl \sg
             "\ss saves session in local dir and user dir (aka ~)
             "\sl loads session from local dir
@@ -905,7 +986,6 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         "You can toggle fullscreen mode by pressing spacebar.
         Plugin 'junegunn/vim-peekaboo'
 
-        " Plugin 'RyannDaGreat/vim-signature' "This takes a non-trivial time to start (not bad, but not super fast either). I don't really use marks - this plugin's purpose is to preview where marks are in the gutter.
 
         ""WHICHKEY - Try pressing \<space>l then wait for a second - a menu should appear. This is experimental and I'll use it to make my config easier to use!
         "    Plugin 'liuchengxu/vim-which-key'
