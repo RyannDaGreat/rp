@@ -5924,6 +5924,9 @@ def gather_args_call(func, *args, frames_back=1, **kwargs):
     Returns:
         Any: The return value of the called function.
 
+    Note: gather_args_call will not grab from globals - if you want to do that, you should call gather_args_call on the module-level function that calls gather_args_call
+          This design choice is to encourage you to use this function cleanly
+
     Example:
         >>> def example_func(a, b, c):
         ...     print(f"a={a}, b={b}, c={c}")
@@ -6179,6 +6182,8 @@ def get_current_function(frames_back=0):
     """
     import inspect
 
+    frames_back+=1
+
     if not isinstance(frames_back, int):
         raise TypeError("frames_back must be an integer.")
     if frames_back < 1:
@@ -6206,6 +6211,9 @@ def get_current_function(frames_back=0):
                 return output
 
     raise RuntimeError("The frame %i levels back does not correspond to a function."%frames_back)
+
+def get_current_function_name(frames_back=0):
+    return get_current_function(frames_back+1).__name__
 
 def gather_args_recursive_call(*args, frames_back=1, **kwargs):
     frames_back+=1
@@ -21824,6 +21832,7 @@ def get_principle_components(tensors,number_of_components=None):
 def cv_box_blur(image,diameter=3,width=None,height=None):
     cv2=pip_import('cv2')
     image=np.asarray(image)
+    image=_prepare_cv_image(image)
     width =diameter if width  is None else width
     height=diameter if height is None else height
     assert width>=0 and height>=0
@@ -22345,6 +22354,9 @@ class VideoWriterMP4:
         if not has_file_extension(path) or get_file_extension(path).lower()!='mp4': path+='.mp4'
 
         rp.pip_import('ffmpeg', 'ffmpeg-python')
+        
+        if not 'ffmpeg' in get_system_commands():
+            print('WARNING: Please make sure ffmpeg is installed!')
 
         if isinstance(video_bitrate,str) and video_bitrate in 'low medium high max':
             video_bitrate = {'low':100000,'medium':1000000,'high':10000000,'max':10000000000}[video_bitrate]
@@ -27501,6 +27513,7 @@ def cv_image_filter(image,kernel):
     #Please note: I don't know if we have to ensure that the kernel 
     assert is_image(image ),'Input must be an image as defined by rp.is_image'
     assert is_image(kernel),'The kernel must also be an image as defined by rp.is_image'
+    image=_prepare_cv_image(image)
 
     kernel=as_grayscale_image(kernel)
     kernel=as_float_image(kernel)
@@ -27659,14 +27672,28 @@ def _write_to_pterm_hist(entry):
         _pterm_hist_file.write('\n############################################################')
     _pterm_hist_file.write('\n'+entry)
     
+def _prepare_cv_image(image):
+    #OpenCV is a bit finicky sometimes
+    #Apart from just as_float_image, there are some other requirements
+    assert is_image(image)
+
+    if is_pil_image(image):
+        image = as_numpy_image(image)
+    elif is_float_image(image):
+        #Float16 is no good
+        image = image.astype(float)
+
+    return image
     
 def cv_resize_image(image,size,interp='bilinear'):
-    #This function is similar to r.resize_image (which uses scipy), except this uses OpenCV and is much faster
-    #Valid sizes:
-    #    - A single number: Will scale the entire image by that size
-    #    - A tuple with integers in it: Will scale the image to those dimensions (height, width)
-    #    - A tuple with None in it: A dimension with None will default to the image's dimension
-    #Unlike r.resize_image, this function will not always return a floating point image. If given a byte image, the result will also be a byte image
+    """
+    This function is similar to r.resize_image (which uses scipy), except this uses OpenCV and is much faster
+    Valid sizes:
+        - A single number: Will scale the entire image by that size
+        - A tuple with integers in it: Will scale the image to those dimensions (height, width)
+        - A tuple with None in it: A dimension with None will default to the image's dimension
+    Unlike r.resize_image, this function will not always return a floating point image. If given a byte image, the result will also be a byte image
+    """
     
     pip_import('cv2')
     import cv2  
@@ -27681,6 +27708,8 @@ def cv_resize_image(image,size,interp='bilinear'):
     if is_binary_image(image):
         #OpenCV's resize function doesn't support boolean images
         image=as_byte_image(image)
+    else:
+        image=_prepare_cv_image(image)
 
     if is_number(size):
         assert size>=0, 'Cannot resize an image by a negative factor' #Technically, I suppose this would mean flipping the image...maybe I'll implement that some other day
@@ -27707,10 +27736,12 @@ def cv_resize_images(*images, size, interp='bilinear'):
 resize_images = cv_resize_images  # For now, they will be the same thing
     
 def torch_resize_image(image,size,interp='bilinear'):
-    #Valid sizes:
-    #    - A single number: Will scale the entire image by that size
-    #    - A tuple with integers in it: Will scale the image to those dimensions (height, width)
-    #    - A tuple with None in it: A dimension with None will default to the image's dimension
+    """
+    Valid sizes:
+        - A single number: Will scale the entire image by that size
+        - A tuple with integers in it: Will scale the image to those dimensions (height, width)
+        - A tuple with None in it: A dimension with None will default to the image's dimension
+    """
 
     pip_import('torch')
     import torch
@@ -27733,6 +27764,7 @@ def torch_resize_image(image,size,interp='bilinear'):
     return out.squeeze(0)
 
 def resize_images_to_hold(*images, height: int = None, width: int = None, interp='bilinear', allow_shrink=True):
+    """ Plural of resize_image_to_hold """
     images=detuple(images)
     return [resize_image_to_hold(x,height,width,interp=interp,allow_shrink=allow_shrink) for x in images]
 
