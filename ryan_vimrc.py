@@ -195,7 +195,6 @@ Plugin 'nathanaelkane/vim-indent-guides'
 
 " Plugin 'christoomey/vim-system-copy' "This doesn't seem to work...
 
-" Plugin 'tpope/vim-fugitive' 
 
 Plugin 'scrooloose/nerdtree' "File explorer. Get it by pressing F5
 Plugin 'jistr/vim-nerdtree-tabs' "Make NERDTree persist across different tabs
@@ -509,9 +508,6 @@ noremap <MiddleDrag> <LeftDrag>
 " https://vi.stackexchange.com/questions/2920/how-to-further-increase-cmdline-history-size
 set viminfo=!,'10000,<50,s10,h,:10000
 
-" Allows for shortcuts that let you select in functions, classes, etc
-" https://github.com/jeetsukumaran/vim-pythonsense
-Plugin 'jeetsukumaran/vim-pythonsense'
 
 " https://github.com/mduan/python.vim
 " This is complementary to vim-pythonsense
@@ -520,8 +516,6 @@ Plugin 'jeetsukumaran/vim-pythonsense'
 Plugin 'RyannDaGreat/python.vim' "I removed all ] shortcuts from it as they interfere with my own shortcuts
 
 
-" Allows us to select entire python blocks, with vai (visualselect all indent) etc and vii (visual select in indent)
-Plugin 'michaeljsmith/vim-indent-object'
 
 " Graveyard of failed attempts at fuzzy autocompletion
 "      Plugin 'ycm-core/YouCompleteMe' 
@@ -635,8 +629,8 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
 
 
 "Added Nov1 2023
-    "GIT STUFF
-        "NERDTREE
+    "GIT STUFF:
+        "NERDTREE:
             " A plugin that lets us see which files are modified in NERDTree
             Plugin 'Xuyuanp/nerdtree-git-plugin'
             let g:NERDTreeGitStatusIndicatorMapCustom = {
@@ -674,9 +668,9 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             highlight GitGutterChangeDelete ctermfg=4
             Plugin 'airblade/vim-gitgutter'
             silent! call gitgutter#disable() " Disable it by default
-        "GITIGNORE SYTAX HIGHLIGHTING
+        "GITIGNORE SYTAX HIGHLIGHTING:
             Plugin 'gisphm/vim-gitignore' " Highlight .gitignore files
-    "PYTHON STUFF
+    "PYTHON STUFF:
         "IMPORT SORT: ^i
             "DISABLED Because it slowed down startup (only a tiny bit - like .04 seconds)
             " if has('python3')
@@ -686,9 +680,9 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             Plugin 'smbl64/vim-black-macchiato' "Autformat specific sections of python code using   pip install black-macchiato
             autocmd FileType python xmap <buffer> <Esc>l <plug>(BlackMacchiatoSelection)
             autocmd FileType python nmap <buffer> <Esc>l <plug>(BlackMacchiatoCurrentLine)
-        "RPY FILES
+        "RPY FILES:
             autocmd BufRead,BufNewFile *.rpy set filetype=python "Treat .rpy files as python files
-        "OUTLINER
+        "OUTLINER:
             Plugin 'vim-voom/VOoM' " Add an outliner for python so we can quickly jump between functions and classes
             nnoremap <F9> :Voom python<cr>:set syntax=python<cr>
         "JEDI: \g, K, \u, ^[space], \r
@@ -720,7 +714,22 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
                 " autocmd FileType python nmap <buffer> <esc><F3> :call flake8#Flake8()<CR>
                 " " Errors to ignore: https://stackoverflow.com/questions/59241007/flake8-disable-all-formatting-rules
                 " let g:syntastic_python_flake8_args='--ignore=E101,E111,E112,E113,E114,E115,E116,E121,E122,E123,E124,E125,E126,E127,E128,E129,E131,E133,E201,E202,E203,E211,E221,E222,E223,E224,E225,E226,E227,E228,E231,E241,E242,E251,E261,E262,E265,E266,E271,E272,E273,E274,E301,E302,E303,E304,E401,E402,E501,E502,E701,E702,E703,E704,E711,E712,E713,E714,E721,E731,E901,E902,W191,W291,W292,W293,W391,W503,W601,W602,W603,W604' "This doesn't actually seem to help...
-    "EDITING
+        "ROPE REFACTORING:   
+            if has('python3') "On Macs, this doesn't work. Don't spam errors.
+                Plugin 'python-rope/ropevim'
+            endif
+            "CALL THESE WITH YOUR CURSOR OVER THE APPROPRIATE PLACE:
+            " :RopeExtractMethod   
+            " :RopeExtractVariable   
+            " :RopeInline    
+            " :RopeRename    
+            " :RopeChangeSignature
+            "There are many others too, :Rope*
+            " :RopeMethodObject  (makes a function into a __call__able class
+        
+
+
+    "EDITING:
         "LINE WRAP: f7 \jw
             function ToggleWrap()
             if (&wrap == 1)
@@ -772,7 +781,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             nmap <F6>       :IndentLinesToggle <CR>
             nmap <leader>ji :IndentLinesToggle <CR>
 
-    "NAVIGATION
+    "NAVIGATION:
         "SEARCHING: * 
             " Allows us to search for text with * from visual mode
             Plugin 'bronson/vim-visual-star-search' " How was this not already a thing? 
@@ -785,6 +794,28 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         "TAB KEY:
             nnoremap <Tab> <C-w>w
             nnoremap <S-Tab> <C-w>W
+        "MOTIONS: af if ac ic ]m [m 
+            " Allows for shortcuts that let you select in functions, classes, etc
+            " https://github.com/jeetsukumaran/vim-pythonsense
+            Plugin 'jeetsukumaran/vim-pythonsense'
+
+            " Allows us to select entire python blocks, with vai (visualselect all indent) etc and vii (visual select in indent)
+            Plugin 'michaeljsmith/vim-indent-object'
+
+            "Vim motions specific to python:
+            "  * Allows for viM (select entire def) etc
+            "  * https://github.com/jeetsukumaran/vim-pythonsense
+            "     vaf selects a python function
+            "     vif selects a python function's body
+            "     vac selects a python class
+            "     vic selects a python class's body
+            "     vad selects a python docstring
+            "     vid selects a python docstring's contents
+            "     ]m  [m   moves to function signatures
+            "     ]M  [M   moves to function endings
+            "  * https://github.com/michaeljsmith/vim-indent-object
+            "     vii selects the inner body of the current code block (vim in indent)
+            "     vai selects the entire code block
         "FILE HISTORY: \ptq
             let MRU_Max_Menu_Entries=10000 "They said it would get slow if this is a large number. Let's find out...
             Plugin 'yegappan/mru' "Let us have more than vim's default 10 recent files
@@ -915,8 +946,13 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             nnoremap <Leader>sl :call LoadSession()<CR>
             nnoremap <Leader>sg :call source ~/.session.vim<CR>
 
-        "NERDTREE VISUAL MODE
+        "NERDTREE VISUAL MODE:
             Plugin 'PhilRunninger/nerdtree-visual-selection' " Lets us use visual selection mode in NERDTree, then do operations such as 'T' for loading tab on all files in that selection
+
+        "QUICKFIX: q
+            " Map 'q' to quit the quickfix window when it is focused
+            autocmd FileType qf nnoremap <buffer> q :close<CR>
+
     "BUFFERS AND TABS: \bb \bt \bq \bf \xtn
         "BUFFERS: 
             "CLOSING BUFFERS: \bq
@@ -981,11 +1017,20 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             "This is how to run a function AFTER all plugins have been loaded:
             au VimEnter * call SetDefaultTabbarTheme()
 
-    "EXPERIMENTAL
+    "GIT: \gb    \gB --> p
+        " Small shortcut to print blame info for current line
+        Plugin 'zivyangll/git-blame.vim'
+        nnoremap <Leader>gb :<C-u>call gitblame#echo()<CR>
+
+        Plugin 'tpope/vim-fugitive' 
+        nnoremap <Leader>gB :Git blame<CR>
+        " In this mode, press 'p' to preview (don't use <CR>)
+
+
+    "EXPERIMENTAL:
         "Peekaboo will show you the contents of the registers on the sidebar when you hit " or @ in normal mode or <CTRL-R> in insert mode. The sidebar is automatically closed on subsequent key strokes.
         "You can toggle fullscreen mode by pressing spacebar.
         Plugin 'junegunn/vim-peekaboo'
-
 
         ""WHICHKEY - Try pressing \<space>l then wait for a second - a menu should appear. This is experimental and I'll use it to make my config easier to use!
         "    Plugin 'liuchengxu/vim-which-key'
@@ -1079,7 +1124,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
 
 
 
-    "CLIPBOARDS
+    "CLIPBOARDS:
         "Paste NoPaste: An alternative to 'set paste' and 'set nopaste' that preserves indent etc
             " Define global variables to store settings
             let g:original_tabstop = 0

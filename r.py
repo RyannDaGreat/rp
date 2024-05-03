@@ -25814,6 +25814,20 @@ def _set_ryan_rprc():
     
 
 def _set_ryan_vimrc():
+    """
+    ON MAC, Ropevim Is annoying to install:
+        :py3 import os; print(os.__file__)
+
+        Prints something like
+
+        /opt/homebrew/Cellar/python@3.12/3.12.2_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/os.py
+
+        You need to do
+
+        /opt/homebrew/Cellar/python@3.12/3.12.2_1/Frameworks/Python.framework/Versions/3.12/bin/python3 -m pip install ropevim  --brea
+        k-system-packages
+    """
+
     try:pip_import('isort',auto_yes=True)
     except Exception:print("Skipped pip install isort...")
     try:pip_import('macchiato','black-macchiato',auto_yes=True)
@@ -25822,6 +25836,8 @@ def _set_ryan_vimrc():
     except Exception:print("Skipped pip install pyflakes...")
     try:pip_import('removestar',auto_yes=True)
     except Exception:print("Skipped pip install removestar...")
+    try:pip_import('ropevim',auto_yes=True)
+    except Exception:print("Skipped pip install ropevim...")
 
     vimrc=text_file_to_string(get_module_path_from_name('rp.ryan_vimrc'))
     string_to_text_file(get_absolute_path('~/.vimrc'),vimrc)
@@ -29812,6 +29828,7 @@ def _nbca(paths,auto_yes=False,parallel=False):
         par_map(do_path,paths)
 
 def _clear_jupyter_notebook_outputs(path:str=None, auto_yes=False):
+    #TODO: Look at https://pypi.org/project/nbstripout/ -- this removes metadata, and might allow us to git commit WITHOUT wiping??
     #This clears all outputs of a jupyter notebook file
     #This is useful when the file gets so large it crashes the web browser (storing too many images in it etc)
     #Source: https://stackoverflow.com/questions/28908319/how-to-clear-an-ipython-notebooks-output-in-all-cells-from-the-linux-terminal
@@ -30893,6 +30910,54 @@ def dict_transpose(dic):
             out[key] = temp
     return out
 
+def dict_walk(d):
+    """
+    Recursively yield paths and values from a dictionary, including paths to empty dictionaries.
+
+    This function iteratively explores a potentially nested dictionary. It yields a tuple for each 
+    terminal value or empty dictionary. The first element of the tuple is the path (a tuple of keys 
+    leading to the item), and the second element is the item itself (value or empty dictionary).
+
+    Args:
+        d (dict): The dictionary to traverse.
+
+    Yields:
+        tuple: A tuple (path, item), where 'path' is a tuple of keys and 'item' is the value or 
+        an empty dictionary at that path.
+
+    Example:
+        data = {
+            "a": 1,
+            "b": {
+                "c": 2,
+                "d": {
+                    "e": 3,
+                    "f": {}
+                }
+            }
+        }
+        
+        for path, value in dict_walk(data):
+            print(f"Path: {path}, Value: {value}")
+
+        # Output:
+        # Path: ('a',), Value: 1
+        # Path: ('b', 'c'), Value: 2
+        # Path: ('b', 'd', 'e'), Value: 3
+        # Path: ('b', 'd', 'f'), Value: {}
+    """
+    def walk(current_dict, current_path):
+        if not current_dict:  # Check if the dictionary is empty
+            yield (current_path, current_dict)
+
+        for key, value in current_dict.items():
+            new_path = current_path + (key,)
+            if isinstance(value, dict):
+                yield from walk(value, new_path)
+            else:
+                yield (new_path, value)
+
+    yield from walk(d, ())
 
 def monkey_patch(target, name=None):
     """
