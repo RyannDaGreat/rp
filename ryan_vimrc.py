@@ -280,11 +280,11 @@ set expandtab
     nmap <C-C> cp
 " NOTE: To see all available colors, use :help cterm-colors
     set fillchars+=vert:\|
+    set fillchars+=vert:▎
 "set fillchars+=vert:\
 " set fillchars+=vert:⁞
     hi VertSplit ctermbg=black ctermfg=darkgray
     hi VertSplit ctermbg=darkcyan ctermfg=black
-    set fillchars=vert:\|
     hi LineNr ctermfg=darkcyan
     hi LineNr ctermfg=gray
     hi LineNr ctermfg=darkgray
@@ -418,14 +418,32 @@ function! Fansi()
     highlight DiffDelete guifg=black guibg=gray45 gui=none
     let g:gitgutter_override_sign_column_highlight = 0
     highlight clear SignColumn
-    highlight GitGutterDelete guifg=#ff2222 ctermfg=red cterm=bold ctermbg=234
-    highlight GitGutterAdd    guifg=#009900 ctermfg=green cterm=bold ctermbg=234
-    highlight GitGutterChange guifg=#bbbb00 ctermfg=yellow cterm=bold ctermbg=234
+    highlight GitGutterDelete guifg=#ff2222 ctermfg=red cterm=bold ctermbg=232
+    highlight GitGutterAdd    guifg=#009900 ctermfg=green cterm=bold ctermbg=232
+    highlight GitGutterChange guifg=#bbbb00 ctermfg=yellow cterm=bold ctermbg=232
     highlight GitGutterChangeDelete ctermfg=4
-    highlight GutterMarks     guifg=#007fff ctermfg=cyan cterm=bold ctermbg=234
+    highlight GutterMarks     guifg=#007fff ctermfg=cyan cterm=bold ctermbg=232
+    highlight SignColumn ctermbg=232
 
-    highlight ALEErrorSign ctermfg=199 cterm=bold
 
+    highlight ALEErrorSign ctermfg=199 cterm=bold ctermbg=232
+
+    highlight FoldColumn ctermbg=232 ctermfg=103
+    highlight Folded     ctermbg=232 ctermfg=103
+    " highlight FoldColumn             ctermfg=60
+    " highlight Folded                 ctermfg=60
+
+    highlight Parenthesis ctermfg=176 guifg=#FF00FF
+    syntax match Parenthesis "[()]"
+
+    highlight Brackets ctermfg=176 guifg=#FF00FF
+    syntax match Brackets "[\[\]{}()]"
+
+    hi VertSplit ctermbg=232
+
+    " highlight Called ctermfg=228 guifg=#FF00FF
+    " " syntax match Called "\w*("
+    " syntax match Called "\w\+\ze("
 
     "Display the color
     echo g:colors_name
@@ -539,6 +557,51 @@ Plugin 'RyannDaGreat/python.vim' "I removed all ] shortcuts from it as they inte
 "          call fzf#vim#complete(fzf#wrap({ 'source': nl,'reducer': { lines -> split(lines[0], '\zs :')[0] },'sink':function('PInsert2')}))
 "      endfunction 
 "      imap <c-e> <CMD>:call CompleteInf()<CR>
+
+function! ExtractVariable() range
+    "Written by Ryan Burgert, May 3 2024. 
+    "This is for extracting a variable from the visual selection in python
+    "It doesn't need rope or any fancy library - its very simple!
+    "Written with aid of Claude Opus (and a LOT of manual intervention lol)
+    
+    " Get the new variable name from the user
+    let var_name = input("Enter the new variable name: ")
+
+    " Save the current register contents
+    let saved_reg = getreg('"')
+    let saved_regtype = getregtype('"')
+
+    " Yank the selected text
+    normal! gvy
+
+    " Delete the selected text and replace it with the variable name
+    execute "normal! gv\"_c" . var_name
+
+    " Create a mark at the current position
+    normal! m9
+
+    " Get the current indentation
+
+    " Insert line above while preserving indentation
+    " This is correct regardless of whether O preserves idents or not
+    let indent = matchstr(getline('.'), '^\s*')
+    normal! O
+    normal! d0
+    execute "normal! i" . indent . var_name . " = "
+
+    " Paste the yanked text at the end of the line
+    normal! p
+
+    " Move back to the mark then delete it
+    normal! `9
+    delmark 9
+
+    " Put cursor after variable name
+    normal! $F=la
+
+    " Restore the original register contents
+    call setreg('"', saved_reg, saved_regtype)
+endfunction
 
 " Zoom / Restore window.
 " FROM https://stackoverflow.com/questions/13194428/is-better-way-to-zoom-windows-in-vim-than-zoomwin
@@ -668,8 +731,18 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             highlight GitGutterChangeDelete ctermfg=4
             Plugin 'airblade/vim-gitgutter'
             silent! call gitgutter#disable() " Disable it by default
+
         "GITIGNORE SYTAX HIGHLIGHTING:
             Plugin 'gisphm/vim-gitignore' " Highlight .gitignore files
+
+        "GIT BLAME: \gb    \gB --> p
+            " Small shortcut to print blame info for current line
+            Plugin 'zivyangll/git-blame.vim'
+            nnoremap <Leader>gb :<C-u>call gitblame#echo()<CR>
+
+            Plugin 'tpope/vim-fugitive' 
+            nnoremap <Leader>gB :Git blame<CR>
+            " In this mode, press 'p' to preview (don't use <CR>)
     "PYTHON STUFF:
         "IMPORT SORT: ^i
             "DISABLED Because it slowed down startup (only a tiny bit - like .04 seconds)
@@ -682,7 +755,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             autocmd FileType python nmap <buffer> <Esc>l <plug>(BlackMacchiatoCurrentLine)
         "RPY FILES:
             autocmd BufRead,BufNewFile *.rpy set filetype=python "Treat .rpy files as python files
-        "OUTLINER:
+        "OUTLINER: \jo
             Plugin 'vim-voom/VOoM' " Add an outliner for python so we can quickly jump between functions and classes
             nnoremap <F9> :Voom python<cr>:set syntax=python<cr>
         "JEDI: \g, K, \u, ^[space], \r
@@ -714,7 +787,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
                 " autocmd FileType python nmap <buffer> <esc><F3> :call flake8#Flake8()<CR>
                 " " Errors to ignore: https://stackoverflow.com/questions/59241007/flake8-disable-all-formatting-rules
                 " let g:syntastic_python_flake8_args='--ignore=E101,E111,E112,E113,E114,E115,E116,E121,E122,E123,E124,E125,E126,E127,E128,E129,E131,E133,E201,E202,E203,E211,E221,E222,E223,E224,E225,E226,E227,E228,E231,E241,E242,E251,E261,E262,E265,E266,E271,E272,E273,E274,E301,E302,E303,E304,E401,E402,E501,E502,E701,E702,E703,E704,E711,E712,E713,E714,E721,E731,E901,E902,W191,W291,W292,W293,W391,W503,W601,W602,W603,W604' "This doesn't actually seem to help...
-        "ROPE REFACTORING:   
+        "ROPE REFACTORING:  (commands) 
             if has('python3') "On Macs, this doesn't work. Don't spam errors.
                 Plugin 'python-rope/ropevim'
             endif
@@ -726,8 +799,9 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             " :RopeChangeSignature
             "There are many others too, :Rope*
             " :RopeMethodObject  (makes a function into a __call__able class
-        
-
+        "MY REFACTORING: \ev 
+            " Extracts the visual selection to a variable 
+            vnoremap <leader>ev :call ExtractVariable()<CR>
 
     "EDITING:
         "LINE WRAP: f7 \jw
@@ -762,17 +836,21 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             nnoremap <leader><tab>8 :set expandtab<cr>:set tabstop=8<cr>:set shiftwidth=8<cr>
             nnoremap <leader><tab>9 :set expandtab<cr>:set tabstop=9<cr>:set shiftwidth=9<cr>
         " SYNTAX HIGHLIGHTING: fh \sss \ssv \ssp \ss...
-            " fh - changes color theme. Already accounted for elsewhere
-            nnoremap <leader>sss :set syntax=
-            nnoremap <leader>ssv :set syntax=vim<cr>
-            nnoremap <leader>ssj :set syntax=javascript<cr>
-            nnoremap <leader>ssp :set syntax=python<cr>
-            nnoremap <leader>ssc :set syntax=cpp<cr>
-            nnoremap <leader>ssm :set syntax=markdown<cr>
-            nnoremap <leader>ssl :set syntax=latex<cr>
-            nnoremap <leader>ssh :set syntax=html<cr>
-            nnoremap <leader>ssz :set syntax=zsh<cr>
-            nnoremap <leader>ssb :set syntax=bash<cr>
+            " PYTHON SYNTAX:
+               " A bit more nuance for python syntax highlighting
+               Plugin 'vim-python/python-syntax'
+            " LANGUAGE SWITCHING:
+                " fh - changes color theme. Already accounted for elsewhere
+                nnoremap <leader>sss :set syntax=
+                nnoremap <leader>ssv :set syntax=vim<cr>
+                nnoremap <leader>ssj :set syntax=javascript<cr>
+                nnoremap <leader>ssp :set syntax=python<cr>
+                nnoremap <leader>ssc :set syntax=cpp<cr>
+                nnoremap <leader>ssm :set syntax=markdown<cr>
+                nnoremap <leader>ssl :set syntax=latex<cr>
+                nnoremap <leader>ssh :set syntax=html<cr>
+                nnoremap <leader>ssz :set syntax=zsh<cr>
+                nnoremap <leader>ssb :set syntax=bash<cr>
         " INDENT LINES: f6 \ji
             "Adds indent guide lines
             Plugin 'Yggdroot/indentLine'
@@ -824,38 +902,98 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         "FOLDS: \jf ]f [f zR zM zo zc zd zf zj zk
             "SHORTCUTS:
             " \jf  toggle fold gutter
+            " zf   create new fold
             " zR   open all folds 
             " zM   close all folds
             " zo   open fold
             " zc   close fold
             " zd   delete fold
-            " zf   create new fold
+            " zE   delete all folds
             " zj or ]f   jump to next fold
             " zk or [f   jump to prev fold
+
+            " Set custom fold characters and vertical line
+            set fillchars=foldopen:▽,foldclose:△,foldsep:┇
+            set fillchars=foldopen:▽,foldclose:△,foldsep:┆,fold:═
+            set fillchars=foldopen:▽,foldclose:△,foldsep:┆,fold:\ 
+            " set fillchars=foldopen:▽,foldclose:△,foldsep:┃
+            " set fillchars=foldopen:▽,foldclose:△
+            " set fillchars=foldopen:▿,foldclose:▵,foldsep:│
 
             "PERSISTENT FOLDS:
                 "Make sure folds stay when opening a file again
                 "https://www.vim.org/scripts/script.php?script_id=4021
                 Plugin 'vim-scripts/restore_view.vim'
 
-            "FOLD COLUMN:  \jf
+            "FOLD COLUMN:  \jf [f ]f
                 " Disable foldcolumn by default
                 set foldcolumn=0
 
-                " Set custom fold characters and vertical line
-                set fillchars=foldopen:▽,foldclose:△,vert:│
-
-                " Map <leader>jf to toggle foldcolumn
-                nnoremap <leader>jf :if &foldcolumn == '0' \| set foldcolumn=2 \| else \| set foldcolumn=0 \| endif<CR>
-
                 " Set the background color of the foldcolumn to black
-                highlight FoldColumn guibg=black ctermbg=0
+                highlight FoldColumn guibg=black ctermbg=black
+
 
                 " Map ]f to jump to the next fold
                 nnoremap ]f zj
 
                 " Map [f to jump to the previous fold
                 nnoremap [f zk
+
+                " Map <leader>jf to toggle foldcolumn
+                nnoremap <leader>jf :if &foldcolumn == '0' \| set foldcolumn=2 \| else \| set foldcolumn=0 \| endif<CR>
+
+            "AUTO FOLD COLUMN:
+                "Removes the need for \jf 
+                "Automatically displays the fold column when we have folds
+                Plugin 'benknoble/vim-auto-origami'
+                "Width of fold column: (
+                let g:auto_origami_foldcolumn = 2
+                augroup autofoldcolumn
+                  au!
+                  au CursorHold,BufWinEnter,WinEnter * AutoOrigamiFoldColumn
+                augroup END
+            
+            "FOLD TEXT:
+                function! NeatFoldText()
+                  "https://dhruvasagar.dev/2013/03/28/vim-better-foldtext/
+                  let line = ' ' . substitute(getline(v:foldstart), '^\s*"\?\s*|\s*"\?\s*{' . '{\d*\s*', '', 'g') . ' '
+                  let lines_count = v:foldend - v:foldstart + 1
+                  let lines_count_text = '| ' . printf("%10s", lines_count . ' lines') . ' |'
+                  let foldchar = matchstr(&fillchars, 'fold:\zs.')
+                  let foldtextstart = strpart('›››››' . repeat(foldchar, v:foldlevel*2) . line, 0, (winwidth(0)*2)/3)
+                  let foldtextend = lines_count_text . repeat(foldchar, 3)
+                  let foldtextlength = strlen(substitute(foldtextstart . foldtextend, '.', 'x', 'g')) + &foldcolumn
+                  let remaining_width = winwidth(0) - foldtextlength - strlen('‹‹‹‹‹')+5
+                  let padding = repeat(foldchar, remaining_width)
+                  return foldtextstart . padding . foldtextend . '‹‹‹‹‹'
+                endfunction
+
+
+                " Apply custom fold text setting after Vim has finished loading everything
+                autocmd VimEnter * setlocal foldtext=NeatFoldText()
+
+
+            "FOLD BY SYNTAX: \zs
+            "    This works. But, manual folding is better.
+            "    "We need this plugin to fold python syntax
+            "    " Plugin 'vim-scripts/Python-Syntax-Folding'
+            "    Plugin 'tmhedberg/SimpylFold'
+            "    set foldmethod=manual
+            "
+            "    " Create all folds by syntax *once*
+            "    function! CreateStaticSyntaxFolds()
+            "        " Temporarily set fold method to syntax to generate folds
+            "        setlocal foldmethod=syntax
+            "        " Close all folds
+            "        normal! zM
+            "        " Open all folds in the current view to ensure they are created
+            "        normal! zR
+            "        " Switch to manual fold method to keep the folds
+            "        setlocal foldmethod=manual
+            "    endfunction
+
+                " Create a command zs that calls the function
+                nnoremap zs :call CreateStaticSyntaxFolds()<cr>
 
 
         "MARKS:   m.   m-   ]`   [`   m/     m<space>     m<bs>
@@ -1017,20 +1155,19 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             "This is how to run a function AFTER all plugins have been loaded:
             au VimEnter * call SetDefaultTabbarTheme()
 
-    "GIT: \gb    \gB --> p
-        " Small shortcut to print blame info for current line
-        Plugin 'zivyangll/git-blame.vim'
-        nnoremap <Leader>gb :<C-u>call gitblame#echo()<CR>
-
-        Plugin 'tpope/vim-fugitive' 
-        nnoremap <Leader>gB :Git blame<CR>
-        " In this mode, press 'p' to preview (don't use <CR>)
-
 
     "EXPERIMENTAL:
         "Peekaboo will show you the contents of the registers on the sidebar when you hit " or @ in normal mode or <CTRL-R> in insert mode. The sidebar is automatically closed on subsequent key strokes.
         "You can toggle fullscreen mode by pressing spacebar.
         Plugin 'junegunn/vim-peekaboo'
+
+        " augroup GlobalSpecialCharHighlight
+        "     autocmd!
+        "     " Apply custom highlight settings every time a file is opened or a buffer is entered
+        "     autocmd VimEnter,BufWinEnter * highlight SpecialChar ctermfg=219 guifg=#FF00FF
+        "     autocmd VimEnter,BufWinEnter * syntax match SpecialChar "[().=]"
+        " augroup END
+        " " Plugin 'NLKNguyen/papercolor-theme'
 
         ""WHICHKEY - Try pressing \<space>l then wait for a second - a menu should appear. This is experimental and I'll use it to make my config easier to use!
         "    Plugin 'liuchengxu/vim-which-key'
@@ -1232,4 +1369,8 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             nnoremap <leader>rsim :%y<cr>:call ExecuteRP('print(r._sort_imports_via_isort(sys.stdin.read()))')<cr>ggVGp
             nnoremap <leader>rbla :%y<cr>:call ExecuteRP('print(r._autoformat_python_code_via_black(sys.stdin.read()))')<cr>ggVGp
 
-
+    "FIXES:
+        "Idk what caused these to change. One day I'll debug properly.
+        nnoremap <c-i> <c-i> 
+        set fillchars+=vert:▎
+        " set fillchars+=vert:▍
