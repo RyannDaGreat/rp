@@ -21487,6 +21487,12 @@ def get_image_width(image):
     if is_pil_image(image):return image.width
     return image.shape[1]
 
+def get_video_height(video):
+    return max(map(get_image_height, video))
+
+def get_video_width(video):
+    return max(map(get_image_width, video))
+
 #TODO: Finish color conversions
 
 #endregion
