@@ -1307,6 +1307,10 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         "You can toggle fullscreen mode by pressing spacebar.
         Plugin 'junegunn/vim-peekaboo'
 
+        "Adds a scrollbar in the statusbar
+        Plugin 'gcavallanti/vim-noscrollbar'
+        set statusline+=\ %{noscrollbar#statusline(15,'■','◫',['◧'],['◨'])}%{'\ '}
+
         "DO NOT USE LIGHTLINE. It works, but other plugins have allergic reactions to it - I can't remove it once installed!
         "And a bunch of chaotic shit happens, like some plugin sets :nowrap when lightline is installed
         " Plugin 'itchyny/lightline.vim'
