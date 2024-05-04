@@ -19,6 +19,14 @@ from builtins import *#For autocompletion with pseudo_terminal
 from time import sleep
 sys.path.append(__file__[:-len("r.py")])
 import rp
+import os
+import posix
+import time
+import glob,sys
+import random
+import warnings
+import pickle
+
 
 # Places I want to access no matter where I launch r.py
 # sys.path.append('/Users/Ryan/PycharmProjects/RyanBStandards_Python3.5')
@@ -334,7 +342,6 @@ def unique(iterable, key=identity):
 # endregion
 # endregion
 # region  Time:［gtoc，tic‚ toc‚ ptoc‚ ptoctic‚ millis，micros，nanos］
-import time
 _global_tic=time.time()
 gtoc=time.time  # global toc
 def tic() -> callable:
@@ -374,7 +381,6 @@ def nanos(seconds=gtoc) -> int:
 
 # endregion
 # region  Files and such: ［get_current_directory‚ get_all_file_names］
-import glob,sys
 def get_current_directory():
     # Get the result of 'cd' in a shell. This is the current folder where save or load things by default.
     # SUMMARY: get_current_directory() ≣ sys.path[0] ﹦ ﹙default folder_path﹚ ﹦ ﹙current directory﹚ ﹦ /Users/Ryan/PycharmProjects/RyanBStandards_Python3.5
@@ -1176,7 +1182,6 @@ def _fansi_highlight_path(path,color='cyan'):
 
 # endregion
 # region  Copy/Paste: ［string_to_clipboard，string_from_clipboard］
-import os
 _local_clipboard_string=''#if we can't access a system OS clipboard, try and fake it with a local clipboard istead. Of course, you need to use the string_to_clipboard and clipboard_to_string functions to make this work, but that's ok
 _local_clipboard_string_path=__file__+'.rp_local_clipboard'
 def _get_local_clipboard_string():
@@ -2155,7 +2160,6 @@ def image_to_all_normalized_xy_rgb_training_pairs(image):
 # endregion
 # region Randomness:［random_index，random_element，random_permutation，randint，random_float，random_chance，random_batch，shuffled，random_parallel_batch］
 
-import random
 def random_index(array_length_or_array_itself):
     if isinstance(array_length_or_array_itself, dict):
         return random_element(list(array_length_or_array_itself))
@@ -6767,7 +6771,6 @@ def force_restore_console_output():
     global _console_output_level
     _console_output_level=1
     sys.stdout.write=_original_stdout_write
-import warnings
 def force_suppress_warnings():
     warnings.filterwarnings("ignore")
 def force_restore_warnings():
@@ -7687,7 +7690,6 @@ def sign(x,zero=0):
     return zero
 # endregion
 # region  Pickling:［load_pickled_value，save_pickled_value］
-import pickle
 # Pickling is just a weird name the python devs came up with to descript putting the values of variables into files, essentially 'pickling' them for later use
 def load_pickled_value(file_name: str):
     # Filenames are relative to the current file path
@@ -28235,6 +28237,10 @@ def get_path_inode(path: str) -> int:
     except PermissionError:
         raise PermissionError("Permission denied accessing the file.")
 
+def _is_dir_entry(x):
+    #On python3.5, os.DirEntry doesn't exist, and even though scandir() returns posix.DirEntry instances, not hasattr(__import__('posix'), "DirEntry")
+    return type(x).__name__=='DirEntry'
+
 class _PathInfo:
     """
     This class is made to be used by functions in rp for efficeintly processing files
@@ -28259,7 +28265,7 @@ class _PathInfo:
     """
     def __init__(self,entry):
         self.entry=entry
-        if isinstance(entry, os.DirEntry):
+        if _is_dir_entry(self.entry):
             self.inode=entry.inode()
             self.path=entry.path
             self.is_symlink=entry.is_symlink()
@@ -28283,33 +28289,33 @@ class _PathInfo:
         
     # @property
     # def path(self):
-    #     if isinstance(self.entry,str        ): return self.entry
-    #     if isinstance(self.entry,os.DirEntry): return self.entry.path
+    #     if isinstance  (self.entry,str): return self.entry
+    #     if is_dir_entry(self.entry    ): return self.entry.path
     
     # @property
     # def inode(self):    
-    #     if isinstance(self.entry,str        ): return get_path_inode(self.path)
-    #     if isinstance(self.entry,os.DirEntry): return self.entry.inode()
+    #     if isinstance  (self.entry,str): return get_path_inode(self.path)
+    #     if is_dir_entry(self.entry    ): return self.entry.inode()
     
     # @property
     # def is_symlink(self):    
-    #     if isinstance(self.entry,str        ): return is_symlink(self.path)
-    #     if isinstance(self.entry,os.DirEntry): return self.entry.is_symlink()
+    #     if isinstance  (self.entry,str): return is_symlink(self.path)
+    #     if is_dir_entry(self.entry    ): return self.entry.is_symlink()
     
     # @property
     # def is_folder(self):    
-    #     if isinstance(self.entry,str        ): return is_a_folder(self.path)
-    #     if isinstance(self.entry,os.DirEntry): return self.entry.is_dir()
+    #     if isinstance  (self.entry,str): return is_a_folder(self.path)
+    #     if is_dir_entry(self.entry    ): return self.entry.is_dir()
 
     # @property
     # def is_file(self):    
-    #     if isinstance(self.entry,str        ): return is_a_file(self.path)
-    #     if isinstance(self.entry,os.DirEntry): return not self.is_folder
+    #     if isinstance  (self.entry,str): return is_a_file(self.path)
+    #     if is_dir_entry(self.entry    ): return not self.is_folder
     
     # @property
     # def name(self):
-    #     if isinstance(self.entry,str        ): return get_path_name(self.path)
-    #     if isinstance(self.entry,os.DirEntry): return self.entry.name
+    #     if isinstance  (self.entry,str): return get_path_name(self.path)
+    #     if is_dir_entry(self.entry    ): return self.entry.name
 
     # @property
     # def is_hidden(self):
