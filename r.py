@@ -25776,6 +25776,140 @@ def delete_empty_lines(string,strip_whitespace=False):
     """
     return '\n'.join([line for line in string.splitlines() if (line.strip() if strip_whitespace else line)])
 
+def propagate_whitespace(string):
+    """
+    Best used when you pass it a string whose trailing whitespace are stripped, but you can pass it any string and it will be fine.
+    Used to put helpful whitespace back in code in appropriate places for indents etc.
+
+    EXAMPLE:
+        s='def f():\n    x\n \n    yield\n    def f():  \n    \n        pass\n  \n   \nprint(x)   '
+
+        print('First, not stripping whitespace')
+        q=s
+        print(q.replace(' ','·'))
+        print('\n–––––––––––––\n')
+        #q=strip_trailing_whitespace(s)
+        print(q.replace(' ','·'))
+        print('\n–––––––––––––\n')
+        q=propagate_whitespace(q)
+        print(q.replace(' ','·')   )
+
+        print()
+        print()
+        print(   )
+
+        print('Next, with stripping whitespace')
+        q=s
+        print(q.replace(' ','·'))
+        print('\n–––––––––––––\n')
+        q=strip_trailing_whitespace(s)
+        print(q.replace(' ','·'))
+        print('\n–––––––––––––\n')
+        q=propagate_whitespace(q)
+        print(q.replace(' ','·')   )
+       
+        OUTPUT:
+            First, not stripping whitespace
+            def·f():
+            ····x
+            ·
+            ····yield
+            ····def·f():··
+            ····
+            ········pass
+            ··
+            ···
+            print(x)
+
+            –––––––––––––
+
+            def·f():
+            ····x
+            ·
+            ····yield
+            ····def·f():··
+            ····
+            ········pass
+            ··
+            ···
+            print(x)
+
+            –––––––––––––
+
+            def·f():
+            ····x
+            ····
+            ····yield
+            ····def·f():··
+            ········
+            ········pass
+            ···
+            ···
+            print(x)
+
+
+
+            Next, with stripping whitespace
+            def·f():
+            ····x
+            ·
+            ····yield
+            ····def·f():··
+            ····
+            ········pass
+            ··
+            ···
+            print(x)
+
+            –––––––––––––
+
+            def·f():
+            ····x
+
+            ····yield
+            ····def·f():
+
+            ········pass
+
+
+            print(x)
+
+            –––––––––––––
+
+            def·f():
+            ····x
+            ····
+            ····yield
+            ····def·f():
+            ········
+            ········pass
+    """
+
+
+    lines = string.splitlines()
+    # Reverse the list to start from the bottom
+    reversed_lines = lines[::-1]
+
+    # Initialize the amount of whitespace to propagate
+    whitespace_to_propagate = ""
+
+    for i in range(len(reversed_lines)):
+        line = reversed_lines[i]
+        # Strip the line to check if it's empty
+        stripped_line = line.lstrip()
+        do_propgate = whitespace_to_propagate.startswith(line)
+        if not do_propgate:
+            # Update the whitespace to propagate if the line has characters
+            whitespace_to_propagate = line[:len(line) - len(stripped_line)]
+        else:
+            # Apply the saved whitespace to propagate if the line is empty
+            reversed_lines[i] = whitespace_to_propagate
+
+    # Reverse the lines back to the original order and join them into a single string
+    return "\n".join(reversed_lines[::-1])
+
+
+
 ____file=path_join(get_parent_directory(__file__),'.'+get_file_name(__file__))#/usr/local/lib/python3.7/site-packages/rp/.r.py
 rprc_file_path=strip_file_extension(____file)+'.rprc.py'
 rprc_file_path=path_join(get_parent_directory(__file__),'.rprc')
@@ -25819,6 +25953,43 @@ def _set_ryan_rprc():
     print("Your rprc file has been modified.")
     
 
+def get_vim_python_executable():
+    """
+    Vim depends on a python executable somewhere on your computer. 
+    This function returns the path to that python executable.
+    """
+    import subprocess
+
+    python_code = 'import os;print(os.__file__)' # This works as expected on both Mac and Linux
+    #python_code = 'import sys;print(sys.executable)' # This is the most intuitive one to use, but doesn't work correctly on Mac
+
+    # Run Vim in headless mode without loading vimrc files and capture the output
+    output = subprocess.check_output(['vim', '-T', 'dumb', '--not-a-term', '-n', '-i', 'NONE', '-u', 'NONE', '-N', '-c', 'py3 '+python_code, '-c', 'quit'], stderr=subprocess.STDOUT)
+    
+
+    # Decode the output from bytes to string
+    output = output.decode('utf-8').strip()
+    
+    #It prints a bunch of invisible junk before the actual path
+    output = output[output.find('/'):] 
+    
+    #Output is like /opt/homebrew/Cellar/python@3.12/3.12.2_1/Frameworks/Python.framework/Versions/3.12/lib/python3.12/os.py
+    output=get_path_parent(output)
+    output=get_path_parent(output)
+    output=get_path_parent(output)
+    output=path_join(output,'bin','python3')
+    
+    if not file_exists(output):
+        raise RuntimeError("Faild to find vim's python executable!")
+
+    # Return the path to the Python executable
+    return output
+
+def _vim_pip_install(package):
+    """ Package can be like package=='ropevim' """
+    command = get_vim_python_executable()+' -m pip install %s --break-system-packages' % package
+    os.system(command)
+
 def _set_ryan_vimrc():
     """
     ON MAC, Ropevim Is annoying to install:
@@ -25834,19 +26005,24 @@ def _set_ryan_vimrc():
         k-system-packages
     """
 
-    try:pip_import('isort',auto_yes=True)
-    except Exception:print("Skipped pip install isort...")
-    try:pip_import('macchiato','black-macchiato',auto_yes=True)
-    except Exception:print("Skipped pip install black-macchiato...")
-    try:pip_import('pyflakes',auto_yes=True)
-    except Exception:print("Skipped pip install pyflakes...")
-    try:pip_import('removestar',auto_yes=True)
-    except Exception:print("Skipped pip install removestar...")
-    try:pip_import('ropevim',auto_yes=True)
-    except Exception:print("Skipped pip install ropevim...")
+    packages = 'isort black-macchiato pyflakes removestar ropevim'.split()
+
+    for package in packages:
+        try:
+            _vim_pip_install(package)
+            if package == 'black-macchiato':
+                pip_import('macchiato', package, auto_yes=True)
+            else:
+                pip_import(package, auto_yes=True)
+        except Exception:
+            print("Skipped pip install ..."+str(package))
+
+    vimrc_path=get_absolute_path('~/.vimrc')
+    if file_exists(vimrc_path):
+        copy_file(vimrc_path, vimrc_path+'___rp_auto_backup___'+format_current_date()) #Create a backup of the current vimrc
 
     vimrc=text_file_to_string(get_module_path_from_name('rp.ryan_vimrc'))
-    string_to_text_file(get_absolute_path('~/.vimrc'),vimrc)
+    string_to_text_file(vimrc_path,vimrc)
     shell_command('git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim')
     import os
     os.system('vim +PluginInstall +qall')

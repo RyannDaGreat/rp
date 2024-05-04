@@ -20,7 +20,7 @@
 " F4 toggles the minimap
 " F5 toggles NERDTree " F6 toggles indent guidelines " F7 toggles line wrapping
 " F8 toggles a global vim session (saves the layout like tabs and splits etc)
-" F8F8 just saves the current vim session globally, instead of loading 
+" F8F8 just saves the current vim session globally, instead of loading
 " \ff triggers a search for text inside files, like sublime's ctrl+shift+f
 " \[space], while in Quickfix, previews a result
 " gs  is an interactive alternative to g< and g>. When in interactive argument swap mode try moving arguments with hjkl, g, G, r, s
@@ -69,7 +69,7 @@
 " :tab split      Duplicates a tab
 " \c   when added to the end of a search query in vim, makes the query case-insensitive
 " o    when in visual mode, this will swap which side of the selection your cursor is on
-" gv   reselects your last visual-mode selection. Useful for repeating > and < from visual mode 
+" gv   reselects your last visual-mode selection. Useful for repeating > and < from visual mode
 " ^x^f when in insert mode, will autocomplete file paths (^x is for selecting a type of autocompletion, ^f is for files)
 " ^v   starts visual block mode. Then, use I to insert text.
 
@@ -128,7 +128,7 @@ Plugin 'gmarik/sudo-gui.vim'
 vmap < <gv
 vmap > >gv
 
-"Below is a lighter-weight alternative to csv.vim, that activates when opening a file that has .csv or .tsv syntax, but not the .csv or .tsv file extension 
+"Below is a lighter-weight alternative to csv.vim, that activates when opening a file that has .csv or .tsv syntax, but not the .csv or .tsv file extension
 " NOTE: While csv.vim is installed, rainbow_csv will be invisible.
 Plugin 'mechatroner/rainbow_csv' " Syntax highlighting for .csv and .tsv files. When displaying .tsv or .csv files, highlight each column in a different color
 
@@ -307,10 +307,33 @@ set expandtab
     set list "Initially, we're not in list mode, so we <F3
     nmap <F9> : set list! <CR> : hi ryan_tabs ctermfg=DarkGray <CR> : match ryan_tabs /\t/ <CR>
 " Let us see tabs and spaces when we're NOT in paste mode...
-    set showbreak=↪\ 
-    set listchars=tab:▸\ 
+    set showbreak=↪\
+    set listchars=tab:▸\
     hi ryan_tabs ctermfg=DarkGray
     match ryan_tabs /\t/
+
+    hi ryan_spaces ctermfg=DarkGray
+
+" Function to toggle space visualization in listchars
+" https://chat.openai.com/share/f125f059-9cf1-4f42-a076-bbc69d4ba988
+function! ToggleSpaceVisualization()
+    if &list && match(&listchars, 'space:·') >= 0
+        "Make it match nothing
+        match ryan_spaces /a^/
+
+        " If list is active and space is currently set to '·', reset it to default (or remove it)
+        let &listchars = substitute(&listchars, ',space:·', '', '')
+        set nolist
+    else
+        match ryan_spaces /\ /
+        " Enable list and set 'space' to '·', preserving other settings
+        let l:other_listchars = substitute(&listchars, 'space:[^,]*', '', '')
+        let &listchars = l:other_listchars . (l:other_listchars[-1:] == ',' ? '' : ',') . 'space:·'
+        set list
+    endif
+endfunction
+
+
 " Toggle relative line number
     nmap <F3> : set invrelativenumber <CR>
 
@@ -407,10 +430,18 @@ function! Fansi()
 
         colorscheme        wombat256mod
     endif
-    
+
     "SET BACKGROUND BRIGHTNESS:
     " highlight Normal ctermbg=233
     highlight Normal ctermbg=234
+
+    "highlight ryan_tabs   ctermfg=236 ctermbg=234
+    "highlight ryan_spaces ctermfg=236 ctermbg=234
+    highlight ryan_tabs   ctermfg=235
+    highlight ryan_spaces ctermfg=235
+
+    let g:indentLine_color_term = 239
+    " let g:indentLine_bgcolor_term = 202
 
     "UPDATE GITGUTTER COLORS: https://github.com/airblade/vim-gitgutter/issues/614
     highlight DiffAdd guifg=black guibg=wheat1
@@ -513,7 +544,7 @@ set wildmenu
 
 " This plugin allows us to visually drag text selections up and down in visual mode
 " https://github.com/matze/vim-move
-Plugin 'matze/vim-move' 
+Plugin 'matze/vim-move'
 let g:move_key_modifier = 'C'
 
 " Let the middle mouse button do box selections, like in sublime
@@ -529,14 +560,14 @@ set viminfo=!,'10000,<50,s10,h,:10000
 
 " https://github.com/mduan/python.vim
 " This is complementary to vim-pythonsense
-" Adds shortcuts for jumping between python blocks etc  
+" Adds shortcuts for jumping between python blocks etc
 " Plugin 'mduan/python.vim'
 Plugin 'RyannDaGreat/python.vim' "I removed all ] shortcuts from it as they interfere with my own shortcuts
 
 
 
 " Graveyard of failed attempts at fuzzy autocompletion
-"      Plugin 'ycm-core/YouCompleteMe' 
+"      Plugin 'ycm-core/YouCompleteMe'
 "      Plugin 'maralla/completor.vim'
 "      https://github.com/junegunn/fzf.vim
 "      Plugin 'junegunn/fzf', { 'do': { -> fzf#install() } }
@@ -553,55 +584,126 @@ Plugin 'RyannDaGreat/python.vim' "I removed all ] shortcuts from it as they inte
 "          let l=complete_info()
 "          for k in l['items']
 "          call add(nl, k['word']. ' : ' .k['info'] . ' '. k['menu'] )
-"          endfor 
+"          endfor
 "          call fzf#vim#complete(fzf#wrap({ 'source': nl,'reducer': { lines -> split(lines[0], '\zs :')[0] },'sink':function('PInsert2')}))
-"      endfunction 
+"      endfunction
 "      imap <c-e> <CMD>:call CompleteInf()<CR>
 
-function! ExtractVariable() range
-    "Written by Ryan Burgert, May 3 2024. 
-    "This is for extracting a variable from the visual selection in python
-    "It doesn't need rope or any fancy library - its very simple!
-    "Written with aid of Claude Opus (and a LOT of manual intervention lol)
-    
-    " Get the new variable name from the user
-    let var_name = input("Enter the new variable name: ")
+"MY FUNCTIONS:
+    function! ExtractVariable() range
+        "Written by Ryan Burgert, May 3 2024.
+        "This is for extracting a variable from the visual selection in python
+        "It doesn't need rope or any fancy library - its very simple!
+        "Written with aid of Claude Opus (and a LOT of manual intervention lol)
 
-    " Save the current register contents
-    let saved_reg = getreg('"')
-    let saved_regtype = getregtype('"')
+        " Get the new variable name from the user
+        let var_name = input("Enter the new variable name: ")
 
-    " Yank the selected text
-    normal! gvy
+        " Save the current register contents
+        let saved_reg = getreg('"')
+        let saved_regtype = getregtype('"')
 
-    " Delete the selected text and replace it with the variable name
-    execute "normal! gv\"_c" . var_name
+        " Yank the selected text
+        normal! gvy
 
-    " Create a mark at the current position
-    normal! m9
+        " Delete the selected text and replace it with the variable name
+        execute "normal! gv\"_c" . var_name
 
-    " Get the current indentation
+        " Create a mark at the current position
+        normal! m9
 
-    " Insert line above while preserving indentation
-    " This is correct regardless of whether O preserves idents or not
-    let indent = matchstr(getline('.'), '^\s*')
-    normal! O
-    normal! d0
-    execute "normal! i" . indent . var_name . " = "
+        " Get the current indentation
 
-    " Paste the yanked text at the end of the line
-    normal! p
+        " Insert line above while preserving indentation
+        " This is correct regardless of whether O preserves idents or not
+        let indent = matchstr(getline('.'), '^\s*')
+        normal! O
+        normal! d0
+        execute "normal! i" . indent . var_name . " = "
 
-    " Move back to the mark then delete it
-    normal! `9
-    delmark 9
+        " Paste the yanked text at the end of the line
+        normal! p
 
-    " Put cursor after variable name
-    normal! $F=la
+        " Move back to the mark then delete it
+        normal! `9
+        delmark 9
 
-    " Restore the original register contents
-    call setreg('"', saved_reg, saved_regtype)
-endfunction
+        " Put cursor after variable name
+        normal! $F=la
+
+        " Restore the original register contents
+        call setreg('"', saved_reg, saved_regtype)
+    endfunction
+
+
+    function! PropagateWhitespace()
+        " Ryan May 3 2024
+        " Great for when using indent guides!
+        " Modifies whole buffer right now
+        " https://chat.openai.com/share/f125f059-9cf1-4f42-a076-bbc69d4ba988
+
+        " Get the current position
+        let l:save_pos = getpos(".")
+
+        " Start from the bottom of the file or current visual selection
+        let l:start_line = line("v")
+        let l:end_line = line(".")
+        if l:start_line == l:end_line
+            let l:start_line = 1
+            let l:end_line = line("$")
+        endif
+
+        " Variable to keep the last non-empty line's indentation
+        let l:last_indent = ''
+
+        " Iterate over each line from bottom to top
+        for l:num in range(l:end_line, l:start_line, -1)
+            let l:line = getline(l:num)
+            if l:line =~ '^\s*$'
+                " Line is empty, replace its whitespace
+                call setline(l:num, l:last_indent)
+            else
+                " Line is not empty, update the last non-empty line's indentation
+                let l:last_indent = matchstr(l:line, '^\s*')
+            endif
+        endfor
+
+        " Restore the cursor position
+        call setpos('.', l:save_pos)
+    endfunction
+
+    function! StripWhitespace()
+        " Ryan May 3 2024
+        " Modifies whole buffer right now
+        " https://chat.openai.com/share/f125f059-9cf1-4f42-a076-bbc69d4ba988
+
+        " Save current cursor position
+        let l:save_pos = getpos(".")
+
+        " Determine if there is a visual selection
+        let l:type = visualmode()
+        if l:type != ""
+            " If in visual mode, get the start and end lines of the selection
+            let l:start_line = line("'<")
+            let l:end_line = line("'>")
+        else
+            " If not in visual mode, apply to the entire file
+            let l:start_line = 1
+            let l:end_line = line("$")
+        endif
+
+        " Strip trailing whitespace for the range
+        for l:num in range(l:start_line, l:end_line)
+            let l:line = getline(l:num)
+            let l:new_line = substitute(l:line, '\s\+$', '', '')
+            call setline(l:num, l:new_line)
+        endfor
+
+        " Restore cursor position
+        call setpos('.', l:save_pos)
+    endfunction
+
+
 
 " Zoom / Restore window.
 " FROM https://stackoverflow.com/questions/13194428/is-better-way-to-zoom-windows-in-vim-than-zoomwin
@@ -676,10 +778,10 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
 
         " Outliner
         nnoremap <F4>o :Voom python<cr>:set syntax=python<cr>
-        nnoremap <leader>jo :Voom python<cr>:set syntax=python<cr>
-
+        nnoremap <leader>jo :Voom python<cr>:set syntax=python<cr>:set nonu<cr>
         "Doesn't work - idk why
         " " NerdTree
+
         " nnoremap <F4>b : NERDTreeTabsToggle <CR>
         " nnoremap <leader>jb : NERDTreeTabsToggle <CR>
 
@@ -740,7 +842,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             Plugin 'zivyangll/git-blame.vim'
             nnoremap <Leader>gb :<C-u>call gitblame#echo()<CR>
 
-            Plugin 'tpope/vim-fugitive' 
+            Plugin 'tpope/vim-fugitive'
             nnoremap <Leader>gB :Git blame<CR>
             " In this mode, press 'p' to preview (don't use <CR>)
     "PYTHON STUFF:
@@ -787,23 +889,31 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
                 " autocmd FileType python nmap <buffer> <esc><F3> :call flake8#Flake8()<CR>
                 " " Errors to ignore: https://stackoverflow.com/questions/59241007/flake8-disable-all-formatting-rules
                 " let g:syntastic_python_flake8_args='--ignore=E101,E111,E112,E113,E114,E115,E116,E121,E122,E123,E124,E125,E126,E127,E128,E129,E131,E133,E201,E202,E203,E211,E221,E222,E223,E224,E225,E226,E227,E228,E231,E241,E242,E251,E261,E262,E265,E266,E271,E272,E273,E274,E301,E302,E303,E304,E401,E402,E501,E502,E701,E702,E703,E704,E711,E712,E713,E714,E721,E731,E901,E902,W191,W291,W292,W293,W391,W503,W601,W602,W603,W604' "This doesn't actually seem to help...
-        "ROPE REFACTORING:  (commands) 
+        "ROPE REFACTORING:  (commands)
             if has('python3') "On Macs, this doesn't work. Don't spam errors.
                 Plugin 'python-rope/ropevim'
             endif
             "CALL THESE WITH YOUR CURSOR OVER THE APPROPRIATE PLACE:
-            " :RopeExtractMethod   
-            " :RopeExtractVariable   
-            " :RopeInline    
-            " :RopeRename    
+            " :RopeExtractMethod
+            " :RopeExtractVariable
+            " :RopeInline
+            " :RopeRename
             " :RopeChangeSignature
             "There are many others too, :Rope*
             " :RopeMethodObject  (makes a function into a __call__able class
-        "MY REFACTORING: \ev 
-            " Extracts the visual selection to a variable 
+        "MY REFACTORING: \ev
+            " Extracts the visual selection to a variable
             vnoremap <leader>ev :call ExtractVariable()<CR>
 
     "EDITING:
+        "SEE SPACES: \jW
+            "Will show spaces as ·
+            nnoremap \jW :call ToggleSpaceVisualization()<CR>
+
+        "STRIP AND PROPOGATE WHITSPACE:
+            command! StripWhitespace call StripWhitespace()
+            command! PropagateWhitespace call PropagateWhitespace()
+
         "LINE WRAP: f7 \jw
             function ToggleWrap()
             if (&wrap == 1)
@@ -823,7 +933,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         " INDENTATION: \<tab><tab>   \<tab><space> \<tab>2  \<tab>4  \<tab>8
             " Disabled because it doesn't work very well - it made my vimrc use tabs, and rp have 2-spaces-indent.
             " Plugin 'tpope/vim-sleuth' "Auto-detects what indentation the file uses
-            
+
             nnoremap <leader><tab><space> :set expandtab<cr>
             nnoremap <leader><tab><tab> :set noexpandtab<cr>
             nnoremap <leader><tab>1 :set expandtab<cr>:set tabstop=1<cr>:set shiftwidth=1<cr>
@@ -855,14 +965,17 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             "Adds indent guide lines
             Plugin 'Yggdroot/indentLine'
             "Disable by default...
-            let g:indentLine_enabled = 0 
+            let g:indentLine_enabled = 0
+            let g:indentLine_char_list = ['|', '¦', '┆', '┊']
+            let g:indentLine_char_list = ['▏']
+
             nmap <F6>       :IndentLinesToggle <CR>
             nmap <leader>ji :IndentLinesToggle <CR>
 
     "NAVIGATION:
-        "SEARCHING: * 
+        "SEARCHING: *
             " Allows us to search for text with * from visual mode
-            Plugin 'bronson/vim-visual-star-search' " How was this not already a thing? 
+            Plugin 'bronson/vim-visual-star-search' " How was this not already a thing?
         "WINDOW PANE JUMPING: -
             " When you press -, letters appear on each pane - and you press the letter of the one you want to jump to
             " These letters are not always visible in default color scheme - try 'fh' !
@@ -872,7 +985,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         "TAB KEY:
             nnoremap <Tab> <C-w>w
             nnoremap <S-Tab> <C-w>W
-        "MOTIONS: af if ac ic ]m [m 
+        "MOTIONS: af if ac ic ]m [m
             " Allows for shortcuts that let you select in functions, classes, etc
             " https://github.com/jeetsukumaran/vim-pythonsense
             Plugin 'jeetsukumaran/vim-pythonsense'
@@ -897,111 +1010,15 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         "FILE HISTORY: \ptq
             let MRU_Max_Menu_Entries=10000 "They said it would get slow if this is a large number. Let's find out...
             Plugin 'yegappan/mru' "Let us have more than vim's default 10 recent files
-            nnoremap <leader>p :MruRefresh<cr>:MRU<cr>
+            nnoremap <leader>p :MruRefresh<cr>:enew<cr>:MRU<cr>
             " autocmd BufEnter * silent! MruRefresh " Always get rid of files that no longer exist from the MRU. Clean up the temp files that no longer exist...
-        "FOLDS: \jf ]f [f zR zM zo zc zd zf zj zk
-            "SHORTCUTS:
-            " \jf  toggle fold gutter
-            " zf   create new fold
-            " zR   open all folds 
-            " zM   close all folds
-            " zo   open fold
-            " zc   close fold
-            " zd   delete fold
-            " zE   delete all folds
-            " zj or ]f   jump to next fold
-            " zk or [f   jump to prev fold
-
-            " Set custom fold characters and vertical line
-            set fillchars=foldopen:▽,foldclose:△,foldsep:┇
-            set fillchars=foldopen:▽,foldclose:△,foldsep:┆,fold:═
-            set fillchars=foldopen:▽,foldclose:△,foldsep:┆,fold:\ 
-            " set fillchars=foldopen:▽,foldclose:△,foldsep:┃
-            " set fillchars=foldopen:▽,foldclose:△
-            " set fillchars=foldopen:▿,foldclose:▵,foldsep:│
-
-            "PERSISTENT FOLDS:
-                "Make sure folds stay when opening a file again
-                "https://www.vim.org/scripts/script.php?script_id=4021
-                Plugin 'vim-scripts/restore_view.vim'
-
-            "FOLD COLUMN:  \jf [f ]f
-                " Disable foldcolumn by default
-                set foldcolumn=0
-
-                " Set the background color of the foldcolumn to black
-                highlight FoldColumn guibg=black ctermbg=black
-
-
-                " Map ]f to jump to the next fold
-                nnoremap ]f zj
-
-                " Map [f to jump to the previous fold
-                nnoremap [f zk
-
-                " Map <leader>jf to toggle foldcolumn
-                nnoremap <leader>jf :if &foldcolumn == '0' \| set foldcolumn=2 \| else \| set foldcolumn=0 \| endif<CR>
-
-            "AUTO FOLD COLUMN:
-                "Removes the need for \jf 
-                "Automatically displays the fold column when we have folds
-                Plugin 'benknoble/vim-auto-origami'
-                "Width of fold column: (
-                let g:auto_origami_foldcolumn = 2
-                augroup autofoldcolumn
-                  au!
-                  au CursorHold,BufWinEnter,WinEnter * AutoOrigamiFoldColumn
-                augroup END
-            
-            "FOLD TEXT:
-                function! NeatFoldText()
-                  "https://dhruvasagar.dev/2013/03/28/vim-better-foldtext/
-                  let line = ' ' . substitute(getline(v:foldstart), '^\s*"\?\s*|\s*"\?\s*{' . '{\d*\s*', '', 'g') . ' '
-                  let lines_count = v:foldend - v:foldstart + 1
-                  let lines_count_text = '| ' . printf("%10s", lines_count . ' lines') . ' |'
-                  let foldchar = matchstr(&fillchars, 'fold:\zs.')
-                  let foldtextstart = strpart('›››››' . repeat(foldchar, v:foldlevel*2) . line, 0, (winwidth(0)*2)/3)
-                  let foldtextend = lines_count_text . repeat(foldchar, 3)
-                  let foldtextlength = strlen(substitute(foldtextstart . foldtextend, '.', 'x', 'g')) + &foldcolumn
-                  let remaining_width = winwidth(0) - foldtextlength - strlen('‹‹‹‹‹')+5
-                  let padding = repeat(foldchar, remaining_width)
-                  return foldtextstart . padding . foldtextend . '‹‹‹‹‹'
-                endfunction
-
-
-                " Apply custom fold text setting after Vim has finished loading everything
-                autocmd VimEnter * setlocal foldtext=NeatFoldText()
-
-
-            "FOLD BY SYNTAX: \zs
-            "    This works. But, manual folding is better.
-            "    "We need this plugin to fold python syntax
-            "    " Plugin 'vim-scripts/Python-Syntax-Folding'
-            "    Plugin 'tmhedberg/SimpylFold'
-            "    set foldmethod=manual
-            "
-            "    " Create all folds by syntax *once*
-            "    function! CreateStaticSyntaxFolds()
-            "        " Temporarily set fold method to syntax to generate folds
-            "        setlocal foldmethod=syntax
-            "        " Close all folds
-            "        normal! zM
-            "        " Open all folds in the current view to ensure they are created
-            "        normal! zR
-            "        " Switch to manual fold method to keep the folds
-            "        setlocal foldmethod=manual
-            "    endfunction
-
-                " Create a command zs that calls the function
-                nnoremap zs :call CreateStaticSyntaxFolds()<cr>
-
 
         "MARKS:   m.   m-   ]`   [`   m/     m<space>     m<bs>
             "This plugin places marks in the gutter, maing them easy to use
             "Potential Key Mappings:
             "       mx           Toggle mark 'x' and display it in the leftmost column
             "       dmx          Remove mark 'x' where x is a-zA-Z
-            "     
+            "
             "       m,           Place the next available mark
             "       m.           If no mark on line, place the next available mark. Otherwise, remove (first) existing mark.
             "       m-           Delete all marks from the current line
@@ -1015,7 +1032,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             "       ']           Jump by alphabetical order to start of next line having a mark
             "       '[           Jump by alphabetical order to start of prev line having a mark
             "       m/           Open location list and display marks from current buffer
-            "     
+            "
             "       m[0-9]       Toggle the corresponding marker !@#$%^&*()
             "       m<S-[0-9]>   Remove all markers of the same type
             "       ]-           Jump to next line having a marker of the same type
@@ -1025,20 +1042,20 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             "       m?           Open location list and display markers from current buffer
             "       m<BS>        Remove all markers
             let g:SignatureMap = {
-              \ 'ToggleMarkAtLine'   :  "m.",       
-              \ 'PurgeMarksAtLine'   :  "m-",       
-              \ 'GotoNextSpotByPos'  :  "]`",       
-              \ 'GotoPrevSpotByPos'  :  "[`",       
-              \ 'ListBufferMarks'    :  "m/",       
-              \ 'PurgeMarks'         :  "m<Space>", 
-              \ 'PurgeMarkers'       :  "m<BS>",    
+              \ 'ToggleMarkAtLine'   :  "m.",
+              \ 'PurgeMarksAtLine'   :  "m-",
+              \ 'GotoNextSpotByPos'  :  "]`",
+              \ 'GotoPrevSpotByPos'  :  "[`",
+              \ 'ListBufferMarks'    :  "m/",
+              \ 'PurgeMarks'         :  "m<Space>",
+              \ 'PurgeMarkers'       :  "m<BS>",
               \ }
             " let g:SignatureMarkTextHLDynamic = 1
             let g:SignaturePrioritizeMarks = 1
             let g:SignatureMarkTextHL = 'GutterMarks'
             Plugin 'kshenoy/vim-signature'
             " Plugin 'RyannDaGreat/vim-signature' "This takes a non-trivial time to start (not bad, but not super fast either). I don't really use marks - this plugin's purpose is to preview where marks are in the gutter.
-            
+
         "SESSIONS: \ss \sl \sg
             "\ss saves session in local dir and user dir (aka ~)
             "\sl loads session from local dir
@@ -1091,8 +1108,127 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             " Map 'q' to quit the quickfix window when it is focused
             autocmd FileType qf nnoremap <buffer> q :close<CR>
 
+
+    "FOLDS: \jf \jF ]f [f zR zM zo zc zd zf zj zk
+        "SHORTCUTS:
+        " \jf  toggle fold gutter
+        " zf   create new fold
+        " zR   open all folds
+        " zM   close all folds
+        " zo   open fold
+        " zc   close fold
+        " zd   delete fold
+        " zE   delete all folds
+        " zE   delete all folds
+        " zi   temporarily toggle all folds
+        " zj or ]f   jump to next fold
+        " zk or [f   jump to prev fold
+
+        "PERSISTENT FOLDS:
+            "Make sure folds stay when opening a file again
+            "https://www.vim.org/scripts/script.php?script_id=4021
+            Plugin 'vim-scripts/restore_view.vim'
+
+        "STYLING:
+            "FOLD COLUMN STYLE:
+                " Set custom fold characters and vertical line
+                set fillchars=foldopen:▽,foldclose:△,foldsep:┇
+                set fillchars=foldopen:▽,foldclose:△,fold:\ ,foldsep:┆
+                set fillchars=foldopen:▽,foldclose:△,fold:\ ,foldsep:┆
+                " set fillchars=foldopen:▽,foldclose:△,foldsep:┃
+                " set fillchars=foldopen:▽,foldclose:△
+                " set fillchars=foldopen:▿,foldclose:▵,foldsep:│
+
+            "FOLD TEXT STYLE:
+                function! NeatFoldText()
+                  "https://dhruvasagar.dev/2013/03/28/vim-better-foldtext/
+                  let line = ' ' . substitute(getline(v:foldstart), '^\s*"\?\s*|\s*"\?\s*{' . '{\d*\s*', '', 'g') . ' '
+                  let lines_count = v:foldend - v:foldstart + 1
+                  let lines_count_text = '| ' . printf("%10s", lines_count . ' lines') . ' |'
+                  let foldchar = matchstr(&fillchars, 'fold:\zs.')
+                  let foldtextstart = strpart('›››››' . repeat(foldchar, v:foldlevel*2) . line, 0, (winwidth(0)*2)/3)
+                  let foldtextend = lines_count_text . repeat(foldchar, 3)
+                  let foldtextlength = strlen(substitute(foldtextstart . foldtextend, '.', 'x', 'g')) + &foldcolumn
+                  let remaining_width = winwidth(0) - foldtextlength - strlen('‹‹‹‹‹')+5
+                  let padding = repeat(foldchar, remaining_width)
+                  return foldtextstart . padding . foldtextend . '‹‹‹‹‹'
+                endfunction
+
+                " Apply custom fold text setting after Vim has finished loading everything
+                autocmd VimEnter * setlocal foldtext=NeatFoldText()
+
+        "FOLD COLUMN:  \jf [f ]f
+            " Disable foldcolumn by default
+            set foldcolumn=0
+
+            " Set the background color of the foldcolumn to black
+            highlight FoldColumn guibg=black ctermbg=black
+
+
+            " Map ]f to jump to the next fold
+            nnoremap ]f zj
+
+            " Map [f to jump to the previous fold
+            nnoremap [f zk
+
+
+            " \jf \jF : Useful when there are nested folds or we want to keep foldcolumn invisible
+            function! IncreaseFoldColumn()
+                let g:auto_origami_foldcolumn += 1
+                echo "Foldcolumn set to " . g:auto_origami_foldcolumn
+            endfunction
+            function! DecreaseFoldColumn()
+                if g:auto_origami_foldcolumn > 0
+                    let g:auto_origami_foldcolumn -= 1
+                endif
+                echo "Foldcolumn set to " . g:auto_origami_foldcolumn
+            endfunction
+            nnoremap <leader>jf :call IncreaseFoldColumn()<CR>
+            nnoremap <leader>jF :call DecreaseFoldColumn()<CR>
+
+            " OLDER - before vim-auto-origami
+            " Map <leader>jf to toggle foldcolumn
+            " nnoremap <leader>jf :if &foldcolumn == '0' \| set foldcolumn=2 \| else \| set foldcolumn=0 \| endif<CR>
+
+        "AUTO FOLD COLUMN:
+            "Removes the need for \jf
+            "Automatically displays the fold column when we have folds
+            Plugin 'benknoble/vim-auto-origami'
+            "Width of fold column: (
+            let g:auto_origami_foldcolumn = 2
+            augroup autofoldcolumn
+              au!
+              " Apply AutoOrigamiFoldColumn only if the current buffer's filename does not contain 'VOOM'
+              au CursorHold,BufWinEnter,WinEnter * if expand('%:t') !~ 'VOOM' | exec 'AutoOrigamiFoldColumn' | endif
+            augroup END
+
+
+
+        "FOLD BY SYNTAX: \zs
+        "    This works. But, manual folding is better.
+        "    "We need this plugin to fold python syntax
+        "    " Plugin 'vim-scripts/Python-Syntax-Folding'
+        "    Plugin 'tmhedberg/SimpylFold'
+        "    set foldmethod=manual
+        "
+        "    " Create all folds by syntax *once*
+        "    function! CreateStaticSyntaxFolds()
+        "        " Temporarily set fold method to syntax to generate folds
+        "        setlocal foldmethod=syntax
+        "        " Close all folds
+        "        normal! zM
+        "        " Open all folds in the current view to ensure they are created
+        "        normal! zR
+        "        " Switch to manual fold method to keep the folds
+        "        setlocal foldmethod=manual
+        "    endfunction
+        "
+        "    " Create a command zs that calls the function
+        "    nnoremap zs :call CreateStaticSyntaxFolds()<cr>
+
+
     "BUFFERS AND TABS: \bb \bt \bq \bf \xtn
-        "BUFFERS: 
+        "BUFFERS:
             "CLOSING BUFFERS: \bq
                 " Great for closing all unused buffers
                 Plugin 'Asheq/close-buffers.vim'
@@ -1156,10 +1292,16 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             au VimEnter * call SetDefaultTabbarTheme()
 
 
-    "EXPERIMENTAL:
+
+    " EXPERIMENTAL:
         "Peekaboo will show you the contents of the registers on the sidebar when you hit " or @ in normal mode or <CTRL-R> in insert mode. The sidebar is automatically closed on subsequent key strokes.
         "You can toggle fullscreen mode by pressing spacebar.
         Plugin 'junegunn/vim-peekaboo'
+
+        "DO NOT USE LIGHTLINE. It works, but other plugins have allergic reactions to it - I can't remove it once installed!
+        "And a bunch of chaotic shit happens, like some plugin sets :nowrap when lightline is installed
+        " Plugin 'itchyny/lightline.vim'
+
 
         " augroup GlobalSpecialCharHighlight
         "     autocmd!
@@ -1303,7 +1445,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             " The above plugin extracted below and modified
             " It should work in insert mode I think, but it doesn't
             " It does work in normal mode though!
-            
+
             "NOTE This needs to be fixed, it never actually toggles paste mode properly...it never leaves it...
             "And it never brings us out of insert mode either. When we paste from normal mode I expect to go back to normal mode...
             "Tried getting claude and gpt4 to fix it but it didnt work yet...
@@ -1371,6 +1513,9 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
 
     "FIXES:
         "Idk what caused these to change. One day I'll debug properly.
-        nnoremap <c-i> <c-i> 
+        nnoremap <c-i> <c-i>
         set fillchars+=vert:▎
-        " set fillchars+=vert:▍
+        "TAB KEY:
+            nnoremap <Tab> <C-w>w
+            nnoremap <S-Tab> <C-w>W
+        set nopaste "Liteline says we start in paste?
