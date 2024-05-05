@@ -2,12 +2,12 @@ import socket
 import json
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import argparse
 
 import rp
 
 rp.pip_import('requests')
 import requests
-
 
 DEFAULT_SERVER_PORT = 43234 #This is an arbitrary port I chose because its easy to remember and didn't conflict with any known services I could find on https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
 
@@ -46,9 +46,6 @@ class Evaluation:
         self.is_eval=False
         self.is_exec=False
         self.errored=False
-
-        exec=eval=rp.exeval #Use rp.exeval instead of exec or eval, because this produces better stack traces
-
         try:
             if rp.is_valid_python_syntax(self.code,mode='eval'):
                 self.is_eval=True
@@ -61,7 +58,6 @@ class Evaluation:
         except BaseException as error:
             self.error=error
             self.errored=True
-            rp.print_stack_trace(error)
 
         return self
 
@@ -137,7 +133,7 @@ def run_server(server_port:int=None,scope:dict=None):
     print("Server stopped.")
 
 class Client:
-    def __init__(self,server_name:str,server_port:int=None):
+    def __init__(self,server_name:str="localhost",server_port:int=None):
         #server_name is like "127.0.1.33" or like "glass.local"
         if server_port is None:
             server_port = DEFAULT_SERVER_PORT
@@ -207,13 +203,67 @@ class Client:
             result=[Evaluation.from_dict(x) for x in result]
         return result
 
-if __name__=='__main__':
+
+def interactive_mode():
     if rp.input_yes_no("Is this the server? No means this is the client."):
         print("Running the server.")
         run_server()
     else:
         print("Running the client.")
         import readline
-        client=Client(input("Enter the server's IP: "))
+        client = Client(input("Enter the server's IP: "))
         while True:
             print(client.evaluate(input(" >>> ")))
+
+if __name__ == '__main__':
+    try:
+        parser = argparse.ArgumentParser(prog='web_evaluator.py', description='Web Evaluator: Remote Python code execution server and client',
+                                         formatter_class=argparse.RawTextHelpFormatter)
+        parser.add_argument('-p', '--port', type=int, default=DEFAULT_SERVER_PORT, help='Server port (default: 43234)')
+
+        subparsers = parser.add_subparsers(dest='mode', title='Modes', metavar='{server,s,client,c}', help='Select "server" or "client" mode')
+
+        # Server mode arguments
+        server_parser = subparsers.add_parser('server', aliases=['s'], help='Run the script as a server')
+
+        # Client mode arguments
+        client_parser = subparsers.add_parser('client', aliases=['c'], help='Run the script as a client')
+        client_parser.add_argument('server_ip', type=str, help='Server IP address (e.g., 192.168.1.10)')
+
+        parser.epilog = '''Examples:
+      Run the script interactively (no arguments):
+        python3 script_name.py
+
+      Run as a server with the default port:
+        python3 script_name.py server
+
+      Run as a server with a custom port:
+        python3 script_name.py server -p 12345
+
+      Run as a client connecting to a server IP and default port:
+        python3 script_name.py client 192.168.1.10
+
+      Run as a client connecting to a server IP and custom port:
+        python3 script_name.py client 192.168.1.10 -p 12345
+        '''
+
+        args, unknown = parser.parse_known_args()
+
+        if unknown:
+            print("Unknown arguments provided. Switching to interactive mode.")
+            interactive_mode()
+        elif args.mode in ('server', 's'):
+            print("Running the server.")
+            run_server(server_port=args.port)
+        elif args.mode in ('client', 'c'):
+            print("Running the client.")
+            client = Client(args.server_ip, server_port=args.port)
+            import readline
+            while True:
+                print(client.evaluate(input(" >>> ")))
+        else:
+            interactive_mode()
+
+    except KeyboardInterrupt:
+        print("Received KeyboardInterrupt. Exiting.")
+
