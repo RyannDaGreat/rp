@@ -53,6 +53,9 @@ def draw_minimap(hscale: int, vscale: float, padding: int, code:str):
                 canvas.set(x, y)
 
     output = canvas.frame()
+    output = output.splitlines()
+    output = [x.ljust(MAX_WIDTH) for x in output]
+    output = '\n'.join(output)
 
     print(output)
     # print(make_string_rectangular(output).replace(" ", fansi("·", "green")))
