@@ -26,6 +26,7 @@ import glob,sys
 import random
 import warnings
 import pickle
+import contextlib
 
 
 # Places I want to access no matter where I launch r.py
@@ -2158,8 +2159,48 @@ def image_to_all_normalized_xy_rgb_training_pairs(image):
     #  ⁠⁠⁠⁠ ⎩                                                                      ⎭
     # endregion
 # endregion
+
+def _is_instance_of_module_class(x, module_name: str, class_name: str) -> bool:
+    """
+    Determines if 'x' (object) is an instance of a class (specified by 'class_name') 
+    in a module (specified by 'module_name') efficiently, without importing the module. 
+    Ideal for environments where importing large libraries like numpy or torch is costly. 
+    Safely returns False, avoiding import errors if the library is not installed.
+
+    Example Usage:
+    _is_instance_of_module_class(x,     'numpy',     'ndarray'  ) # Checks if x is a numpy array
+    _is_instance_of_module_class(x,     'torch',     'Tensor'   ) # Checks if x is a torch Tensor
+    _is_instance_of_module_class(x,     'pandas',    'DataFrame') # Checks if x is a pandas DataFrame
+    _is_instance_of_module_class(image, 'PIL.Image', 'Image'    ) # Checks if x is a PIL Image
+    """
+    if module_name in sys.modules:
+        module = sys.modules[module_name]
+        class_ = getattr(module, class_name, None)
+        return isinstance(x, class_) if class_ is not None else False
+    else:
+        return False
+
+
+def _is_numpy_array(x):
+    return _is_instance_of_module_class(x, 'numpy', 'ndarray')
+
+def _is_torch_tensor(x):
+    return _is_instance_of_module_class(x, 'torch', 'Tensor')
+
+def _is_pandas_dataframe(x) -> bool:
+    return _is_instance_of_module_class(x, 'pandas', 'DataFrame')
+
+def _is_pandas_series(x) -> bool:
+    return _is_instance_of_module_class(x, 'pandas', 'Series')
+
+def _is_pandas_iloc_iterable(x) -> bool:
+    return _is_pandas_series(x) or _is_pandas_dataframe(x)
+
+def is_pil_image(image) -> bool:
+    return _is_instance_of_module_class(image, 'PIL.Image', 'Image')
 # region Randomness:［random_index，random_element，random_permutation，randint，random_float，random_chance，random_batch，shuffled，random_parallel_batch］
 
+import random
 def random_index(array_length_or_array_itself):
     if isinstance(array_length_or_array_itself, dict):
         return random_element(list(array_length_or_array_itself))
@@ -2370,6 +2411,14 @@ def random_batch(full_list,batch_size: int = None,*,retain_order: bool = False):
 
         return full_list.iloc[random_indices]
 
+    if _is_torch_tensor(full_list) or _is_numpy_array(full_list):
+        random_indices = random_batch(
+            range(len(full_list)),
+            batch_size,
+            retain_order=retain_order,
+        )
+        return full_list[random_indices]
+
     from collections.abc import Mapping, Set, Iterable
     if isinstance(full_list, Mapping):
         #Make it work with dicts too
@@ -2527,6 +2576,93 @@ def random_parallel_batch(*full_lists,batch_size: int = None,retain_order: bool 
     #     for j in range(len(out)):
     #         out[j].append(full_lists[j][i])
     # return out
+
+
+
+@contextlib.contextmanager
+def temporary_random_seed(seed=None):
+    """
+    A context manager that sets the random seed for the duration of the context block
+    using the standard library's random module. If no seed is provided, it does not change
+    the random state.
+
+    Parameters:
+        seed (int, optional): The seed value to use for generating random numbers.
+                              If None, the random state is not altered.
+
+    Example:
+        >>> import random
+        >>> random.seed(42)
+        >>> print("First random number:", random.random())
+        >>> with temporary_random_seed(seed=99):
+        ...     print("Random number in context:", random.random())
+        >>> print("Second random number:", random.random())
+        
+        # Note how the above acts the same as if there was no context...
+        >>> random.seed(42)
+        >>> print("First random number:", random.random())
+        >>> print("Second random number:", random.random())
+        
+        OUTPUT:
+            First random number: 0.6394267984578837
+            Random number in context: 0.40397807494366633
+            Second random number: 0.025010755222666936
+            First random number: 0.6394267984578837
+            Second random number: 0.025010755222666936
+    """
+    import random
+    old_state = random.getstate()
+    
+    try:
+        if seed is not None:
+            random.seed(seed)
+        yield
+    finally:
+        random.setstate(old_state)
+
+@contextlib.contextmanager
+def temporary_numpy_random_seed(seed=None):
+    """
+    A context manager that sets the random seed for the duration of the context block
+    using NumPy's random module. If no seed is provided, it does not change the random state.
+
+    Parameters:
+        seed (int, optional): The seed value to use for generating random numbers.
+                              If None, the random state is not altered.
+
+    Example:
+        >>> import numpy as np
+        >>> np.random.seed(42)
+        >>> print("First random number:", np.random.rand())
+        >>> with temporary_numpy_random_seed(seed=99):
+        ...     print("Random number in context:", np.random.rand())
+        >>> print("Second random number:", np.random.rand())
+        
+        # Note how the above acts the same as if there was no context...
+        >>> np.random.seed(42)
+        >>> print("First random number:", np.random.rand())
+        >>> print("Second random number:", np.random.rand())
+        
+        OUTPUT:
+            First random number: 0.3745401188473625
+            Random number in context: 0.6722785586307918
+            Second random number: 0.9507143064099162
+            First random number: 0.3745401188473625
+            Second random number: 0.9507143064099162
+    """
+    pip_import('numpy')
+    
+    import numpy as np
+    old_state = np.random.get_state()
+    
+    try:
+        if seed is not None:
+            np.random.seed(seed)
+        yield
+    finally:
+        np.random.set_state(old_state)
+
+
 # endregion
 # region rant/ranp: ［run_as_new_thread，run_as_new_process］
 def run_as_new_thread(funcᆢvoid,*args,**kwargs):  # ⟵ THIS IS DUBIOUS. I DON'T KNOW IF IT DOES WHAT ITS SUPPOSED TO....
@@ -30393,45 +30529,6 @@ def _autoformat_python_code_via_black(code:str):
     import black
     return black.format_str(code,mode=black.Mode())
 
-
-def _is_instance_of_module_class(x, module_name: str, class_name: str) -> bool:
-    """
-    Determines if 'x' (object) is an instance of a class (specified by 'class_name') 
-    in a module (specified by 'module_name') efficiently, without importing the module. 
-    Ideal for environments where importing large libraries like numpy or torch is costly. 
-    Safely returns False, avoiding import errors if the library is not installed.
-
-    Example Usage:
-    _is_instance_of_module_class(x,     'numpy',     'ndarray'  ) # Checks if x is a numpy array
-    _is_instance_of_module_class(x,     'torch',     'Tensor'   ) # Checks if x is a torch Tensor
-    _is_instance_of_module_class(x,     'pandas',    'DataFrame') # Checks if x is a pandas DataFrame
-    _is_instance_of_module_class(image, 'PIL.Image', 'Image'    ) # Checks if x is a PIL Image
-    """
-    if module_name in sys.modules:
-        module = sys.modules[module_name]
-        class_ = getattr(module, class_name, None)
-        return isinstance(x, class_) if class_ is not None else False
-    else:
-        return False
-
-
-def _is_numpy_array(x):
-    return _is_instance_of_module_class(x, 'numpy', 'ndarray')
-
-def _is_torch_tensor(x):
-    return _is_instance_of_module_class(x, 'torch', 'Tensor')
-
-def _is_pandas_dataframe(x) -> bool:
-    return _is_instance_of_module_class(x, 'pandas', 'DataFrame')
-
-def _is_pandas_series(x) -> bool:
-    return _is_instance_of_module_class(x, 'pandas', 'Series')
-
-def _is_pandas_iloc_iterable(x) -> bool:
-    return _is_pandas_series(x) or _is_pandas_dataframe(x)
-
-def is_pil_image(image) -> bool:
-    return _is_instance_of_module_class(image, 'PIL.Image', 'Image')
 
 
 def as_numpy_images(images):

@@ -1,6 +1,3 @@
-"Ryan Burgert's Default ~/.vimrc (Designed for use with Python)
-
-" Goals:
 "   - vim should boot super duper fast
 "   - vim should run super duper fast
 "   - should have many convenience shortcuts
@@ -95,16 +92,14 @@ call vundle#begin()
 Plugin 'VundleVim/Vundle.vim' " This is the program that downloads all of our plugins...
 
 Plugin 'tpope/vim-obsession' " Automatically saves vim sessions, such as the pane and tab layouts etc before closing vim so you can restore your layouts
-nmap <F8>     :source ~/.Session.vim<CR>:Obsession ~/.Session.vim<CR>
-nmap <F8><F8> :Obsession ~/.Session.vim<CR>
+nnoremap <F8>     :source ~/.Session.vim<CR>:Obsession ~/.Session.vim<CR>
+nnoremap <F8><F8> :Obsession ~/.Session.vim<CR>
 
-nmap td :tab split<cr>
-nmap tn :tabnew<cr>
-nmap ts :tab split<cr>
-nmap tc :tab close<cr>
-nmap tq :quit<cr>
-nmap \co gg"+yG<c-o>zz
-nmap <esc>q tq
+nnoremap td :tab split<cr>
+nnoremap tn :tabnew<cr>
+nnoremap ts :tab split<cr>
+nnoremap tc :tab close<cr>
+nnoremap \co gg"+yG<c-o>zz
 nnoremap <esc>w <c-w>
 
 Plugin 'machakann/vim-swap' "Allows us to swap the arguments of functions and definitions with g< and g> and gs. See https://github.com/machakann/vim-swap
@@ -125,8 +120,8 @@ Plugin 'gmarik/sudo-gui.vim'
 
 
 " In visual mode, allow < and > to indent multiple times without having to manually reselect the text
-vmap < <gv
-vmap > >gv
+vnoremap < <gv
+vnoremap > >gv
 
 "Below is a lighter-weight alternative to csv.vim, that activates when opening a file that has .csv or .tsv syntax, but not the .csv or .tsv file extension
 " NOTE: While csv.vim is installed, rainbow_csv will be invisible.
@@ -142,8 +137,9 @@ Plugin 'mg979/vim-visual-multi' "Multiple cursors
 ""ctrl+p will search for files
 Plugin 'kien/ctrlp.vim'
 let g:ctrlp_show_hidden = 1
-"Fuzzy search recent files
-nmap <leader><C-p> :CtrlPMRU<CR>
+
+"Fuzzy search recent files - lol its freaking useless, it doesnt sort based on match
+"nnoremap <leader><C-p> :CtrlPMRU<CR>
 
 
 
@@ -177,7 +173,16 @@ Plugin 'pangloss/vim-javascript'
 
 Plugin 'ronakg/quickr-preview.vim' " When in a Quickfix window (aka the search result preview window, like you'd see if using \u or \ff), let us use \[space] to preview a result in multiple lines
 
-Plugin 'severin-lemaignan/vim-minimap' " Adds a minimap to vim. Can be seen by pressing 'F4'
+"Plugin 'severin-lemaignan/vim-minimap' " Adds a minimap to vim. Can be seen by pressing 'F4'
+" Plugin 'wfxr/code-minimap'
+" Plugin 'wfxr/minimap.vim'
+
+"My own version of wfxr/minimap.vim - only needs RP to run
+Plugin 'RyannDaGreat/minimap.vim'
+:hi minimapRange ctermbg=black
+:hi minimapCursor ctermbg=blue ctermfg=cyan
+
+
 
 " The following are examples of different formats supported.
 " Keep Plugin commands between vundle#begin/end.
@@ -220,7 +225,8 @@ Plugin 'rstacruz/sparkup', {'rtp': 'vim/'}
 
 " https://github.com/mgedmin/taghelper.vim
 Plugin 'mgedmin/taghelper.vim'
-set statusline=%<%f\ %h%m%r\ %1*%{taghelper#curtag()}%*%=%-14.(%l,%c%V%)\ %P
+" set statusline=%<%f\ %h%m%r\ %1*%{taghelper#curtag()}%*%=%-14.(%l,%c%V%)\ %P
+set statusline=%<%f\ %h%m%r\ %{taghelper#curtag()}%*%=%-14.(%l,%c%V%)\ %P
 
 " All of your Plugins must be added before the following line
 call vundle#end()            " required
@@ -307,29 +313,30 @@ set expandtab
     set list "Initially, we're not in list mode, so we <F3
     nmap <F9> : set list! <CR> : hi ryan_tabs ctermfg=DarkGray <CR> : match ryan_tabs /\t/ <CR>
 " Let us see tabs and spaces when we're NOT in paste mode...
-    set showbreak=↪\
-    set listchars=tab:▸\
-    hi ryan_tabs ctermfg=DarkGray
-    match ryan_tabs /\t/
+    " The | at the end is so if this vimrc is formatted with stripping whitespace off all strings we still have spaces at the end of them. | in vim is like ; in python, making multiline commands in one line
+    let &showbreak='↪ '
+    let &listchars='tab:▸ '
 
-    hi ryan_spaces ctermfg=DarkGray
+    "Initial highlighting for the ▸ and · displayed over whitespace
+    hi clear SpecialKey
+    hi SpecialKey ctermfg=darkgray
+    hi ryan_tabs ctermfg=darkgray
+    :match ryan_tabs /\t/
+
+
 
 " Function to toggle space visualization in listchars
 " https://chat.openai.com/share/f125f059-9cf1-4f42-a076-bbc69d4ba988
 function! ToggleSpaceVisualization()
     if &list && match(&listchars, 'space:·') >= 0
-        "Make it match nothing
-        match ryan_spaces /a^/
-
-        " If list is active and space is currently set to '·', reset it to default (or remove it)
-        let &listchars = substitute(&listchars, ',space:·', '', '')
-        set nolist
+        "Delete 'space:·' from listchars
+        :let &listchars = substitute(&listchars, ',space:·', '', '')
+        " Basically does this - :let &listchars = 'tab:▸ '
     else
-        match ryan_spaces /\ /
-        " Enable list and set 'space' to '·', preserving other settings
-        let l:other_listchars = substitute(&listchars, 'space:[^,]*', '', '')
-        let &listchars = l:other_listchars . (l:other_listchars[-1:] == ',' ? '' : ',') . 'space:·'
-        set list
+        "Add 'space:·' to listchars
+        " Basically does this - :let &listchars = 'space:·,tab:▸ '
+        :let l:other_listchars = substitute(&listchars, 'space:[^,]*', '', '')
+        :let &listchars = l:other_listchars . (l:other_listchars[-1:] == ',' ? '' : ',') . 'space:·'
     endif
 endfunction
 
@@ -360,25 +367,15 @@ function! Fansi()
 
     " highlight Normal ctermfg=grey ctermbg=240
 
+    set t_Co=256 "Enable 256 colors in vim
+
     if !exists("g:colors_name")
-         colorscheme wombat256mod
-         set t_Co=256 "Enable 256 colors in vim
+
+        colorscheme wombat256mod
     elseif g:colors_name=='wombat256mod'
 
         colorscheme        wombat256mod_grb
     elseif g:colors_name=='wombat256mod_grb'
-
-        " colorscheme        wombat256mod_rbg
-    " elseif g:colors_name=='wombat256mod_rbg'
-
-        " colorscheme        wombat256mod_brg
-    " elseif g:colors_name=='wombat256mod_brg'
-
-        colorscheme        wombat256mod_bgr
-    elseif g:colors_name=='wombat256mod_bgr'
-
-        " colorscheme        wombat256mod_gbr
-    " elseif g:colors_name=='wombat256mod_gbr'
 
         " colorscheme        distinguished
     " elseif g:colors_name=='distinguished'
@@ -386,100 +383,176 @@ function! Fansi()
     "     colorscheme        hybrid
     " elseif g:colors_name=='hybrid'
 
-        colorscheme        jellybeans
-    elseif g:colors_name=='jellybeans'
+    "     colorscheme        jellybeans
+    " elseif g:colors_name=='jellybeans'
 
-        colorscheme        darcula
-    elseif g:colors_name=='Darcula'
+    "     colorscheme        darcula
+    " elseif g:colors_name=='Darcula'
 
-        colorscheme        miramare
-    elseif g:colors_name=='miramare'
+    "     colorscheme        miramare
+    " elseif g:colors_name=='miramare'
 
         colorscheme        monokai
     elseif g:colors_name=='monokai'
 
-        colorscheme        tokyonight
-    elseif g:colors_name=='tokyonight'
+    "     colorscheme        tokyonight
+    " elseif g:colors_name=='tokyonight'
 
-        colorscheme        flattown
-    elseif g:colors_name=='flattown'
+    "     colorscheme        flattown
+    " elseif g:colors_name=='flattown'
 
-        colorscheme        apprentice
-    elseif g:colors_name=='apprentice'
+    "     colorscheme        apprentice
+    " elseif g:colors_name=='apprentice'
 
-        colorscheme        badwolf
-    elseif g:colors_name=='badwolf'
+    "     colorscheme        badwolf
+    " elseif g:colors_name=='badwolf'
 
-        colorscheme        molokai
-    elseif g:colors_name=='molokai'
+    "     colorscheme        molokai
+    " elseif g:colors_name=='molokai'
 
-        colorscheme        vilight
-    elseif g:colors_name=='vilight'
+    "     colorscheme        vilight
+    " elseif g:colors_name=='vilight'
 
-        colorscheme        babymate256
-    elseif g:colors_name=='babymate256'
+    "     colorscheme        babymate256
+    " elseif g:colors_name=='babymate256'
 
-        colorscheme        codeschool
-    elseif g:colors_name=='codeschool'
+    "     colorscheme        codeschool
+    " elseif g:colors_name=='codeschool'
 
         colorscheme        dracula
     elseif g:colors_name=='dracula'
 
-        colorscheme        default
-    elseif g:colors_name=='default'
+        colorscheme        wombat256mod_rbg
+    elseif g:colors_name=='wombat256mod_rbg'
+
+        colorscheme        wombat256mod_brg
+    elseif g:colors_name=='wombat256mod_brg'
+
+        colorscheme        wombat256mod_bgr
+    elseif g:colors_name=='wombat256mod_bgr'
+
+        colorscheme        wombat256mod_gbr
+    elseif g:colors_name=='wombat256mod_gbr'
+
+    "    colorscheme        default
+    "elseif g:colors_name=='default'
 
         colorscheme        wombat256mod
     endif
 
+
+    call RyanHighlightDefaults()
+
+    "Display the color
+    echo g:colors_name
+
+
+endfunction
+
+function RyanHighlightDefaults()
+    " call SetDefaultTabbarTheme()
+    :hi TabLineFill ctermfg=255 ctermbg=238 cterm=NONE guifg=#eeeeee guibg=#444444
+    :hi XTFill      ctermbg=233 cterm=bold guibg=#121212
+    :hi XTFill      ctermbg=235
+
     "SET BACKGROUND BRIGHTNESS:
     " highlight Normal ctermbg=233
-    highlight Normal ctermbg=234
+    :highlight Normal ctermbg=234 guibg=#1c1c1c
+
+    :highlight Identifier     ctermfg=170 guifg=#d75fd7
+    " highlight Structure     ctermfg=221  "Like map, set, but not print
+
+
+    " Indentline ▏characters are in the Conceal group
+    :hi clear Conceal
+    :hi Conceal ctermfg=239
+
+    "Highlighting for the ▸ and · displayed over whitespace
+    :hi clear SpecialKey
+    :hi SpecialKey ctermfg=darkgray
+    :hi SpecialKey ctermfg=236
 
     "highlight ryan_tabs   ctermfg=236 ctermbg=234
     "highlight ryan_spaces ctermfg=236 ctermbg=234
-    highlight ryan_tabs   ctermfg=235
-    highlight ryan_spaces ctermfg=235
-
-    let g:indentLine_color_term = 239
-    " let g:indentLine_bgcolor_term = 202
+    :highlight ryan_tabs   ctermfg=238 guifg=#262626 ctermbg=none
+    :highlight ryan_spaces ctermfg=235 guifg=#262626 ctermbg=none
 
     "UPDATE GITGUTTER COLORS: https://github.com/airblade/vim-gitgutter/issues/614
-    highlight DiffAdd guifg=black guibg=wheat1
-    highlight DiffChange guifg=black guibg=skyblue1
-    highlight DiffDelete guifg=black guibg=gray45 gui=none
+    :highlight DiffAdd guifg=#000000 guibg=#f5deb3 ctermfg=16 ctermbg=223
+    :highlight DiffChange guifg=#000000 guibg=#87cefa ctermfg=16 ctermbg=117
+    :highlight DiffDelete guifg=#000000 guibg=#8a8a8a ctermfg=16 ctermbg=245
     let g:gitgutter_override_sign_column_highlight = 0
-    highlight clear SignColumn
-    highlight GitGutterDelete guifg=#ff2222 ctermfg=red cterm=bold ctermbg=232
-    highlight GitGutterAdd    guifg=#009900 ctermfg=green cterm=bold ctermbg=232
-    highlight GitGutterChange guifg=#bbbb00 ctermfg=yellow cterm=bold ctermbg=232
-    highlight GitGutterChangeDelete ctermfg=4
-    highlight GutterMarks     guifg=#007fff ctermfg=cyan cterm=bold ctermbg=232
-    highlight SignColumn ctermbg=232
+    :highlight GitGutterDelete guifg=#ff2222 ctermfg=9 cterm=bold ctermbg=232 guibg=#080808
+    :highlight GitGutterAdd    guifg=#009900 ctermfg=2 cterm=bold ctermbg=232 guibg=#080808
+    :highlight GitGutterChange guifg=#bbbb00 ctermfg=3 cterm=bold ctermbg=232 guibg=#080808
+    :highlight GitGutterChangeDelete ctermfg=4 guifg=#0000ff
+    :highlight GutterMarks     guifg=#007fff ctermfg=6 cterm=bold ctermbg=232 guibg=#080808
 
+    call RyanGitGutterHighlights()
+    :highlight ALEErrorSign ctermfg=199 cterm=bold ctermbg=232 guifg=#ff0087 guibg=#080808
 
-    highlight ALEErrorSign ctermfg=199 cterm=bold ctermbg=232
-
-    highlight FoldColumn ctermbg=232 ctermfg=103
-    highlight Folded     ctermbg=232 ctermfg=103
+    :highlight clear SignColumn
+    :highlight SignColumn ctermbg=232 guibg=#080808
+    :highlight LineNr     ctermbg=232 ctermfg=240 guibg=#080808 guifg=#585858
+    " :highlight CursorLineNr ctermbg = 240
+    :highlight cursorline ctermbg=236 guibg=#303030
+    :highlight FoldColumn ctermbg=232 ctermfg=103 guibg=#080808 guifg=#8787af
+    :highlight Folded     ctermbg=232 ctermfg=103 guibg=#080808 guifg=#8787af
     " highlight FoldColumn             ctermfg=60
     " highlight Folded                 ctermfg=60
 
-    highlight Parenthesis ctermfg=176 guifg=#FF00FF
-    syntax match Parenthesis "[()]"
+    :highlight Parenthesis ctermfg=176 guifg=#FF00FF
+    :syntax match Parenthesis "[()]"
 
-    highlight Brackets ctermfg=176 guifg=#FF00FF
-    syntax match Brackets "[\[\]{}()]"
+    :highlight Brackets ctermfg=176 guifg=#FF00FF
+    :syntax match Brackets "[\[\]{}()]"
 
-    hi VertSplit ctermbg=232
+    :highlight StatusLine term=bold,reverse ctermfg=230 ctermbg=238 gui=italic guifg=#ffffd7 guibg=#444444
+    :highlight StatusLineNC   term=reverse ctermfg=241 ctermbg=238 guifg=#626262 guibg=#444444
+    :highlight StatusLineNC   ctermbg=236 ctermfg=239 guibg=#303030 guifg=#4e4e4e cterm=underline
+
+    :hi VertSplit ctermbg=232  ctermfg=238  cterm=none guibg=#080808 guifg=#444444
+
+    "For ↪
+    :hi clear NonText
+    :hi NonText ctermfg=240
+
+    :hi minimapRange ctermbg=237
+    :hi minimapCursor ctermbg=61 ctermfg=228
 
     " highlight Called ctermfg=228 guifg=#FF00FF
     " " syntax match Called "\w*("
     " syntax match Called "\w\+\ze("
 
-    "Display the color
-    echo g:colors_name
+    "FORMAT OPTIONS:
+    " cterm=bold
+    " cterm=underline
+    " cterm=italic
+    " cterm=reverse
+    " cterm=none
+
+    :highlight SignColumn ctermbg=232 guibg=#080808
+
+
+    "For 'blueyed/vim-diminactive'
+    :hi ColorColumn ctermbg=233 guibg=#121212
+    let g:diminactive_use_colorcolumn = 1
+    let g:diminactive_use_syntax = 1
+    let g:diminactive_filetype_blacklist = ['startify']
+    let g:diminactive_buftype_blacklist = ['nofile', 'nowrite', 'acwrite', 'quickfix', 'help']
+    let g:diminactive_buftype_blacklist = []
+    let g:diminactive_filetype_blacklist = []
+
+    :silent! DimInactive
+    :silent! DimInactiveSyntaxOff
+
+    "Below the text, at the ~ ~ ~ ~'s
+    :hi EndOfBuffer ctermbg=0
+    :hi EndOfBuffer ctermbg=16
 
 endfunction
+
+" fh = Fansi Highlight
 nmap fh :call<space>Fansi()<cr>
 
 
@@ -675,32 +748,11 @@ Plugin 'RyannDaGreat/python.vim' "I removed all ] shortcuts from it as they inte
     function! StripWhitespace()
         " Ryan May 3 2024
         " Modifies whole buffer right now
-        " https://chat.openai.com/share/f125f059-9cf1-4f42-a076-bbc69d4ba988
+        " https://vi.stackexchange.com/questions/454/whats-the-simplest-way-to-strip-trailing-whitespace-from-all-lines-in-a-file
 
-        " Save current cursor position
-        let l:save_pos = getpos(".")
-
-        " Determine if there is a visual selection
-        let l:type = visualmode()
-        if l:type != ""
-            " If in visual mode, get the start and end lines of the selection
-            let l:start_line = line("'<")
-            let l:end_line = line("'>")
-        else
-            " If not in visual mode, apply to the entire file
-            let l:start_line = 1
-            let l:end_line = line("$")
-        endif
-
-        " Strip trailing whitespace for the range
-        for l:num in range(l:start_line, l:end_line)
-            let l:line = getline(l:num)
-            let l:new_line = substitute(l:line, '\s\+$', '', '')
-            call setline(l:num, l:new_line)
-        endfor
-
-        " Restore cursor position
-        call setpos('.', l:save_pos)
+        let l:save = winsaveview()
+        keeppatterns %s/\s\+$//e
+        call winrestview(l:save)
     endfunction
 
 
@@ -719,7 +771,8 @@ function! s:ZoomToggle() abort
     endif
 endfunction
 command! ZoomToggle call s:ZoomToggle()
-nnoremap <silent> <C-W>z :ZoomToggle<CR>
+nnoremap <silent> <C-W>z  :ZoomToggle<CR>
+nnoremap <silent> <esc>wz :ZoomToggle<CR>
 
 syntax on
 
@@ -769,8 +822,8 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         nnoremap <leader>js :if &laststatus == 2<CR>:set laststatus=1<CR>:else<CR>:set laststatus=2<CR>:endif<CR><CR>
 
         " Toggle Minimap
-        nmap <F4><F4> : MinimapToggle <CR>
-        nmap <leader>j<leader>j : MinimapToggle <CR>
+        nmap <F4> : MinimapToggle <CR>
+        nmap <leader>jm : MinimapToggle <CR>
 
         " Toggle Gitgutter
         nmap <F4>g : GitGutterToggle <CR>
@@ -826,11 +879,21 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             let g:gitgutter_override_sign_column_highlight = 0 " Colors
             let g:gitgutter_sign_allow_clobber = 0 " Let other plugins take priority over gutter
             let g:gitgutter_sign_priority = -10
-            highlight clear SignColumn
-            highlight GitGutterDelete guifg=#ff2222 ctermfg=1
-            highlight GitGutterAdd    guifg=#009900 ctermfg=2
-            highlight GitGutterChange guifg=#bbbb00 ctermfg=3
-            highlight GitGutterChangeDelete ctermfg=4
+            function RyanGitGutterHighlights()
+                highlight GitGutterDelete guifg=#ff2222 ctermfg=1
+                highlight GitGutterAdd    guifg=#009900 ctermfg=2
+                highlight GitGutterChange guifg=#bbbb00 ctermfg=3
+                highlight GitGutterChangeDelete ctermfg=4
+            endfunction
+
+            " Initial theme: make background black to match gutter
+            highlight SignColumn            ctermbg=black
+            highlight GitGutterDelete       ctermbg=black
+            highlight GitGutterAdd          ctermbg=black
+            highlight GitGutterChange       ctermbg=black
+            highlight GitGutterChangeDelete ctermbg=black
+
+            call RyanGitGutterHighlights()
             Plugin 'airblade/vim-gitgutter'
             silent! call gitgutter#disable() " Disable it by default
 
@@ -858,7 +921,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         "RPY FILES:
             autocmd BufRead,BufNewFile *.rpy set filetype=python "Treat .rpy files as python files
         "OUTLINER: \jo
-            Plugin 'vim-voom/VOoM' " Add an outliner for python so we can quickly jump between functions and classes
+            "Plugin 'vim-voom/VOoM' " Add an outliner for python so we can quickly jump between functions and classes
             nnoremap <F9> :Voom python<cr>:set syntax=python<cr>
         "JEDI: \g, K, \u, ^[space], \r
             if has('python3') "On Macs, this doesn't work. Don't spam errors.
@@ -951,6 +1014,25 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         " SYNTAX HIGHLIGHTING: fh \sss \ssv \ssp \ss...
             " PYTHON SYNTAX:
                " A bit more nuance for python syntax highlighting
+               let g:python_version_2=0                          "Python 2 mode
+               let b:python_version_2=0                          "Python 2 mode (buffer local)
+               let g:python_highlight_builtins=1                 "Highlight builtin objects, types, and functions
+               let g:python_highlight_builtin_objs=0             "Highlight builtin objects only
+               let g:python_highlight_builtin_types=0            "Highlight builtin types only
+               let g:python_highlight_builtin_funcs=0            "Highlight builtin functions only
+               let g:python_highlight_builtin_funcs_kwarg=1      "Highlight builtin functions when used as kwarg
+               let g:python_highlight_exceptions=1               "Highlight standard exceptions
+               let g:python_highlight_string_formatting=1        "Highlight % string formatting
+               let g:python_highlight_string_format=1            "Highlight syntax of str.format syntax
+               let g:python_highlight_string_templates=1         "Highlight syntax of string.Template
+               let g:python_highlight_indent_errors=1            "Highlight indentation errors
+               let g:python_highlight_space_errors=0             "Highlight trailing spaces
+               let g:python_highlight_doctests=0                 "Highlight doc-tests
+               let g:python_highlight_func_calls=0               "Highlight functions calls
+               let g:python_highlight_class_vars=1               "Highlight class variables self, cls, and mcs
+               let g:python_highlight_operators=1                "Highlight all operators
+               let g:python_highlight_all=0                      "Enable all highlight options above, except for previously set.
+               let g:python_highlight_file_headers_as_comments=0 "Highlight shebang and coding headers as comments
                Plugin 'vim-python/python-syntax'
             " LANGUAGE SWITCHING:
                 " fh - changes color theme. Already accounted for elsewhere
@@ -965,15 +1047,54 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
                 nnoremap <leader>ssz :set syntax=zsh<cr>
                 nnoremap <leader>ssb :set syntax=bash<cr>
         " INDENT LINES: f6 \ji
-            "Adds indent guide lines
-            Plugin 'Yggdroot/indentLine'
             "Disable by default...
             let g:indentLine_enabled = 0
             let g:indentLine_char_list = ['|', '¦', '┆', '┊']
             let g:indentLine_char_list = ['▏']
 
-            nmap <F6>       :IndentLinesToggle <CR>
-            nmap <leader>ji :IndentLinesToggle <CR>
+            "NEAR-IMPOSSIBLE TO SOLVE BUG: This interacts with
+            "blueyed/vim-diminactive poorly when unfocused.
+            "You can get around this by :hi conceal ctermfg=none
+            "But this makes it white. You can then do :hi normal ctermfg=red
+            "But that affects some text in the file...
+            "By default it uses the Conceal group, but the background colors
+            "aren't handled properly by blueyed/vim-diminactive so I used this
+            "group instead
+            "let g:indentLine_defaultGroup = 'SpecialKey'
+            " Don't have them overwrite my Conceal syntax higlighting group
+            " because we're not going to use it...
+            " let g:indentLine_setColors = 0
+
+            "Adds indent guide lines
+            Plugin 'Yggdroot/indentLine'
+
+            "Note: Indentline does not play nicely with DimInactive, so I disabled it
+            "nmap <F6>       :windo IndentLinesToggle <CR>:silent! DimInactiveToggle<cr>
+            "nmap <leader>ji :windo IndentLinesToggle <CR>:silent! DimInactiveToggle<cr>
+
+            " Define a global variable to keep track of the toggle state
+            let g:ToggleState = 0
+
+            function! ToggleIndentDim()
+              " Check the current state of the toggle
+              if g:ToggleState == 0
+                " If it's 0, enable indent lines and dim inactive
+                :windo IndentLinesEnable
+                :DimInactiveOff
+                " Update the toggle state to 1
+                :let g:ToggleState = 1
+              else
+                " If it's 1, disable indent lines and dim inactive
+                :windo IndentLinesDisable
+                :DimInactiveOn
+                " Update the toggle state to 0
+                :let g:ToggleState = 0
+              endif
+            endfunction
+
+        " Map the toggle function to a key combination
+        nmap <leader>ji :call ToggleIndentDim()<CR>
+        nmap <f6> :call ToggleIndentDim()<CR>
 
     "NAVIGATION:
         "SEARCHING: *
@@ -1016,7 +1137,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             "  * https://github.com/michaeljsmith/vim-indent-object
             "     vii selects the inner body of the current code block (vim in indent)
             "     vai selects the entire code block
-        "FILE HISTORY: \ptq
+        "FILE HISTORY: \p
             let MRU_Max_Menu_Entries=10000 "They said it would get slow if this is a large number. Let's find out...
             Plugin 'yegappan/mru' "Let us have more than vim's default 10 recent files
             nnoremap <leader>p :MruRefresh<cr>:enew<cr>:MRU<cr>
@@ -1062,6 +1183,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             " let g:SignatureMarkTextHLDynamic = 1
             let g:SignaturePrioritizeMarks = 1
             let g:SignatureMarkTextHL = 'GutterMarks'
+            :highlight GutterMarks  ctermfg=6 cterm=bold ctermbg=black
             Plugin 'kshenoy/vim-signature'
             " Plugin 'RyannDaGreat/vim-signature' "This takes a non-trivial time to start (not bad, but not super fast either). I don't really use marks - this plugin's purpose is to preview where marks are in the gutter.
 
@@ -1117,6 +1239,15 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             " Map 'q' to quit the quickfix window when it is focused
             autocmd FileType qf nnoremap <buffer> q :close<CR>
 
+        "HORIZONAL SCROLLING: <shift>ScrollWheel
+            nnoremap <S-ScrollWheelUp> <ScrollWheelLeft>
+            nnoremap <S-2-ScrollWheelUp> <2-ScrollWheelLeft>
+            nnoremap <S-3-ScrollWheelUp> <3-ScrollWheelLeft>
+            nnoremap <S-4-ScrollWheelUp> <4-ScrollWheelLeft>
+            nnoremap <S-ScrollWheelDown> <ScrollWheelRight>
+            nnoremap <S-2-ScrollWheelDown> <2-ScrollWheelRight>
+            nnoremap <S-3-ScrollWheelDown> <3-ScrollWheelRight>
+            nnoremap <S-4-ScrollWheelDown> <4-ScrollWheelRight>
 
     "FOLDS: \jf \jF ]f [f zR zM zo zc zd zf zj zk
         "SHORTCUTS:
@@ -1261,18 +1392,19 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
 
             "FIX THE DEFAULT TAB HIGHLIGHTING: (this plugin makes it really hard to see the highlighted tab in the default color scheme)
             function! SetDefaultTabbarTheme()
-                hi TabLine     ctermfg=255 ctermbg=238 cterm=NONE "an  inactive tab
-                hi TabLineSel  ctermfg=17  ctermbg=190 cterm=NONE "the selected tab
-                hi TabLineFill ctermfg=255 ctermbg=238 cterm=NONE "the unused   portion of the tab line (not enough tabs)
-                hi XTFill      ctermbg=black cterm=bold "the background of the tab bar
-                hi XTSelect    ctermbg=blue ctermfg=black
-                hi XTSelectMod ctermbg=blue ctermfg=yellow cterm=bold
-                hi XTNum cterm=bold
-                hi XTNumSel cterm=bold ctermbg=blue ctermfg=black
+                silent! call xtabline#hi#generate('custom_theme', CustomTheme())
+                :hi TabLine     ctermfg=255 ctermbg=238 cterm=NONE "an  inactive tab
+                :hi TabLineSel  ctermfg=17  ctermbg=190 cterm=NONE "the selected tab
+                :hi TabLineFill ctermfg=255 ctermbg=238 cterm=NONE "the unused   portion of the tab line (not enough tabs)
+                :hi XTFill      ctermbg=233 cterm=bold "the background of the tab bar
+                :hi XTSelect    ctermbg=blue ctermfg=black
+                :hi XTSelectMod ctermbg=blue ctermfg=yellow cterm=bold
+                :hi XTNum cterm=bold
+                :hi XTNumSel cterm=bold ctermbg=blue ctermfg=black
 
-                hi Folded ctermbg=black cterm=italic
-                hi StatusLine ctermfg=white "selected status line
-                hi StatusLineNC ctermfg=blue  "unselected status line
+                :hi Folded ctermbg=black cterm=italic
+                :hi StatusLine ctermfg=white "selected status line
+                :hi StatusLineNC ctermfg=blue  "unselected status line
             endfunction
 
             " This is the solution suggested to me by the author: https://github.com/mg979/vim-xtabline/issues/34
@@ -1307,9 +1439,19 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         "You can toggle fullscreen mode by pressing spacebar.
         Plugin 'junegunn/vim-peekaboo'
 
+        " Dim inactive windows
+        " It works fine, but meh lol - its cool but I can live without it
+        let g:diminactive_enable_focus = 1
+        Plugin 'blueyed/vim-diminactive'
+        "Setting ColorColumn ctermbg=none effectively disables it until we trigger fh and style changes
+        :hi ColorColumn ctermbg=none
+
+
+
+        "VERDICT: This is cool but it randomly doesn't show up on some files, so because its inconsistent I won't use it.
         "Adds a scrollbar in the statusbar
-        Plugin 'gcavallanti/vim-noscrollbar'
-        set statusline+=\ %{noscrollbar#statusline(15,'■','◫',['◧'],['◨'])}%{'\ '}
+        "Plugin 'gcavallanti/vim-noscrollbar'
+        "set statusline+=\ %{noscrollbar#statusline(15,'■','◫',['◧'],['◨'])}%{'\ '}
 
         "DO NOT USE LIGHTLINE. It works, but other plugins have allergic reactions to it - I can't remove it once installed!
         "And a bunch of chaotic shit happens, like some plugin sets :nowrap when lightline is installed
@@ -1502,7 +1644,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
                     echo "ExecuteRP: Error: Runtime error. Perhaps this is why? Please run Vim as a child of rp - $RP_SYS_EXECUTABLE environment var not set"
                     echohl None
                     call input("Press Enter to continue...") "TODO: Handle this error in a more elegant way; right now it still tries pressing <cr>gv
-                endif
+                endi
             endfunction
 
 
@@ -1523,12 +1665,45 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             nnoremap <leader>rrms :%y<cr>:call ExecuteRP('print(r._removestar(sys.stdin.read(),max_line_length=1000000,quiet=True))')<cr>ggVGp
             nnoremap <leader>rsim :%y<cr>:call ExecuteRP('print(r._sort_imports_via_isort(sys.stdin.read()))')<cr>ggVGp
             nnoremap <leader>rbla :%y<cr>:call ExecuteRP('print(r._autoformat_python_code_via_black(sys.stdin.read()))')<cr>ggVGp
+            nnoremap <leader>tts :retab<cr>
+            nnoremap <leader>sw :StripWhitespace<cr>
 
     "FIXES:
-        "Idk what caused these to change. One day I'll debug properly.
-        nnoremap <c-i> <c-i>
-        set fillchars+=vert:▎
-        "TAB KEY:
-            nnoremap <Tab> <C-w>w
-            nnoremap <S-Tab> <C-w>W
-        set nopaste "Liteline says we start in paste?
+        "CLOSING WINDOWS:
+            fun! CloseWindow()
+                if exists("t:NERDTreeBufName") && winnr("$") == 2
+                    "This seemingly simple functionality of, uh, closing a window can go awry when using NerdTreeTabs when closing the last open window when NERDTree exists
+                    "This is a workaround
+                    "TODO: Fix NerdTreeTabs's source code, maybe it will fix when we open a new tab with nerdtree open, then close it?
+
+                    :NERDTreeTabsToggle
+                    :quit
+                    " :NERDTreeTabsToggle
+                    call timer_start(1, {-> execute('NERDTreeTabsToggle') }) " Wait a second before doing this or NERDTree won't come back again lol
+                    "call timer_start(250, {-> execute('NERDTreeFocusToggle') }) " Put the cursor back
+                else
+                    :quit
+                endif
+            endfun
+
+            nnoremap tq :call CloseWindow()<cr>
+            nnoremap <esc>q :call CloseWindow()<cr>
+
+        "MESSED UP SETTINGS:
+            "Idk what caused these to change. One day I'll debug properly.
+            :setlocal foldtext=NeatFoldText()
+            :set fillchars+=vert:▎
+            :nnoremap <Tab> <C-w>w
+            :nnoremap <S-Tab> <C-w>W
+            :set nopaste "Liteline says we start in paste?
+            
+            "The following command is a bit jank but pretty smart. It will make <c-o> map <c-i> back to <c-i>. Idk what plugin maps <c-i> to tab, but its annoying.
+            "For some reason I couldn't get autocommands to fix it so I'll do this instead. And simply doing :nnoremap <c-i> <c-i> unfortunately didn't work. But this does.
+            :nnoremap <c-o> :nnoremap <c-i <left>> <c-i <left>><cr><c-o>
+
+
+
+
+
+
+
