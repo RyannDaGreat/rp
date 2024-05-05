@@ -26143,7 +26143,7 @@ def _set_ryan_vimrc():
         k-system-packages
     """
 
-    packages = 'isort black-macchiato pyflakes removestar ropevim'.split()
+    packages = 'isort black-macchiato pyflakes removestar ropevim drawille'.split()
 
     for package in packages:
         try:
