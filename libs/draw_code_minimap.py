@@ -139,9 +139,6 @@ def main():
         usage()
         sys.exit(1)
 
-    print('\n'.join(sys.argv))
-    return
-
     hscale = float(sys.argv[1])
     vscale = float(sys.argv[2])
     padding = int(sys.argv[3])
