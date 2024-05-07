@@ -174,6 +174,7 @@ class PythonCompleter(Completer):
         origin=document.get_word_before_cursor()
 
         def yield_from_candidates(candidates:list,priority=None,displays=None):
+            candidates=list(candidates)
             if priority is None:
                 priority=[MAX_SORTING_PRIORITY]*len(candidates)
             if displays is None:

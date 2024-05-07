@@ -22,6 +22,7 @@ import rp
 import os
 import posix
 import time
+import shlex
 import glob,sys
 import random
 import warnings
@@ -1225,6 +1226,10 @@ def string_to_clipboard(string):
 def _copy_text_over_terminal(string):
     """
     Encodes a given string in base64 and sends it to the terminal to be copied to the clipboard via OSC 52 ANSI escape codes.
+    Does this via "OSC52" (you can google that)
+
+    Doesn't work in all terminals - for example TMUX blocks it with default settings, and it doesn't work in Jupyter's terminals.
+    However, it does work when TMUX is configured with "set -g set-clipboard on", and works in Alacritty
     
     Args:
     string (str): The string to be copied to the clipboard.
@@ -10410,6 +10415,42 @@ def display_image_in_terminal_color(image):
         if file_exists(temp_file):
             delete_file(temp_file)
 
+def display_image_in_terminal_imgcat(image):
+    """
+    Can display images in some terminals as actual images
+    
+    Works in:
+        iterm2
+        wezterm
+        tmux (if configured properly)
+        hyper (with plugin: https://github.com/Rasukarusan/hyper-imgcat)
+    Does not work in:
+        alacritty
+        kitty
+        terminal.app
+        
+    EXAMPLE:
+        while True:
+            display_image_in_terminal_imgcat(cv_resize_image(load_image_from_webcam(), 0.1))
+             
+    """
+    pip_import("imgcat")
+    import imgcat
+
+    if isinstance(image, str):
+        image = open(image)
+    else:
+        assert is_image(image)
+        
+        image = as_rgb_image(image)
+        image = as_byte_image(image)
+        
+        #I don't know the maximum size, but I'm sure this will do just fine
+        image = resize_image_to_fit(image, width=1024, height=1024, allow_growth=False)
+        
+        image = as_pil_image(image)
+
+    imgcat.imgcat(image)
         
 def auto_canny(image,sigma=0.33,lower=None,upper=None):
     pip_import('cv2')
@@ -11661,6 +11702,7 @@ def _get_session_title():
         current_title=pyin.session_title
     else:
         current_title=""
+    os.environ['RP_SESSION_TITLE']=current_title
     return current_title
 
 def _get_default_session_title():
@@ -13512,6 +13554,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RYAN VIMRC
         RYAN TMUXRC
         RYAN XONSHRC
+        RYAN RANGERRC
 
         <Inspection>
         ?
@@ -13867,6 +13910,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RA     RUNA
         EA     RUNA
 
+        #PYA and PUA are similar to EA except they run in separate process
+        PYA $os.system($sys.executable+' '+$shlex.quote(ans));
+        PUA $os.system($sys.executable+' -m pudb '+$shlex.quote(ans));
+        PDA $os.system($sys.executable+' -m pudb '+$shlex.quote(ans));
+
         V VIM
         VI VIM
         AV AVIMA
@@ -13908,6 +13956,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RX  ryanxonshrc
         RRY  RYAN RPRC YES
         RVY  RYAN VIMRC YES
+        RRNG  RYAN RANGERRC
 
         RZG  $r._load_ryan_lazygit_config()
 
@@ -14092,6 +14141,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         DAPI __import__('rp.pypi_inspection').pypi_inspection.display_all_pypi_info()
 
         DISC $display_image_slideshow('.',display=$display_image_in_terminal_color)
+        DISI $display_image_slideshow('.',display=lambda image:$display_image_in_terminal_imgcat($with_alpha_checkerboard(image)))
 
         FZM $r._iterfzf(ans,multi=True)
 
@@ -15735,6 +15785,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             if 'YES' in user_message or input_yes_no('Would you like to add Ryan Burgert\'s vim settings to your ~/.vimrc?'):
                                 _set_ryan_vimrc()
                                 user_message='ans = '+repr(get_absolute_path('~/.vimrc'))
+
+                        elif user_message=='RYAN RANGERRC':
+                            ranger_config_path=_set_ryan_ranger_config()
+                            user_message='ans = '+repr(ranger_config_path)
                             
                         elif user_message == 'XONSHRC':
                             fansi_print("XONSHRC --> editing your ~/.xonshrc file","blue",'bold')
@@ -26128,6 +26182,17 @@ def _vim_pip_install(package):
     command = get_vim_python_executable()+' -m pip install %s --break-system-packages' % package
     os.system(command)
 
+def _set_ryan_ranger_config():
+    config = """
+#<RP CONFIG START>
+set preview_images true
+set preview_images_method iterm2
+#<RP CONFIG END>
+"""
+    folder = get_absolute_path("~/.config/ranger")
+    make_folder(folder)
+    return append_line_to_file(config, path_join(folder, "rc.conf"))
+
 def _set_ryan_vimrc():
     """
     ON MAC, Ropevim Is annoying to install:
@@ -26143,7 +26208,7 @@ def _set_ryan_vimrc():
         k-system-packages
     """
 
-    packages = 'isort black-macchiato pyflakes removestar ropevim drawille'.split()
+    packages = 'isort black-macchiato pyflakes removestar ropevim drawille pudb'.split()
 
     for package in packages:
         try:
@@ -26285,6 +26350,10 @@ def _set_ryan_tmux_conf():
         #To get 24 bit color support in mosh you have to build it yourself! I PROMISE IT'S NOT THAT BAD (it's really quick)! https://github.com/mobile-shell/mosh/wiki/Build-Instructions
         #I was referred there by https://github.com/mobile-shell/mosh/issues/649
         set-option -sa terminal-overrides ",xterm*:Tc" #This somehow enables Truecolor...idk why but it works on Macx! From https://herrbischoff.com/2020/08/how-to-enable-italics-in-tmux/
+    #IMAGES:
+        #Allow images to be displayed through tmux
+        #https://github.com/wookayin/python-imgcat/issues/4
+        set -gq allow-passthrough on
     #THEME:
         #STATUSBAR:
             #COLOR:
@@ -26304,6 +26373,11 @@ def _set_ryan_tmux_conf():
                 #set -ag status-right "#[fg=cyan]#(uptime | cut -f 4-5 -d ' ' | cut -f 1 -d ',') "
                 ## set -ag status-right "#[fg=cyan]%A, %d %b %Y %I:%M %p"
                 #set -ag status-right "#[fg=cyan]: %b %d %I:%M %p"
+        #CLIPBOARD:
+           #Let tmux copy to the system clipboard. "external" is more restrictive than "on" - "on lets any program copy to terminal via OSC52. This is what we want.
+           #https://github.com/tmux/tmux/wiki/Clipboard#terminal-support---tmux-inside-tmux
+           # set -g set-clipboard external
+           set -g set-clipboard on
     '''
     conf_path=get_absolute_path("~/.tmux.conf")
     if not file_exists(conf_path) or input_yes_no("You already have a tmux config file ~/.tmux.conf, would you like to overwrite it?"):
@@ -32343,6 +32417,8 @@ def killport(port: int):
 #Let child processes use this rp instance. This is used in my vim config for \wp and \wc for instance
 #There can be many rp's installed on a system. Whatever vim was started from this rp will use this rp.
 os.environ['RP_SYS_EXECUTABLE'] = sys.executable
+os.environ['RP_PUDB_SYS_VERSION_INFO']=repr(list(sys.version_info)) #For PUDB editing in vim
+os.environ['RP_SITE_PACKAGES']=get_path_parent(get_path_parent(__file__))#For PUDB editing in vim
 
 del re
 

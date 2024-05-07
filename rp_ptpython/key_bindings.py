@@ -3555,8 +3555,8 @@ def load_python_bindings(python_input):
         after= document.text_after_cursor
 
         import rp
-        if not data.startswith(' ') and data:
-            first_word=data.split()[0]
+        if not data.startswith(' ') and data.split():
+            first_word=data.split()[0] if data else ''
             import rp.r_iterm_comm as ric
             import keyword
 
