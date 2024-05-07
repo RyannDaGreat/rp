@@ -13559,18 +13559,16 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         <Inspection>
         ?
         ??
-        ???
+        ??? ?r
         ?.
         ?v
         ?s ?lj
-        ?t
+        ?t ?j
         ?h (?/)
         ?e
         ?p
         ?c ?+c ?c+ ?cp
         ?i
-        ?r
-        ?j
 
         <Others>
         RETURN  (RET)
