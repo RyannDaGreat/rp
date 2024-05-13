@@ -188,13 +188,7 @@ Plugin 'RyannDaGreat/minimap.vim'
 " Keep Plugin commands between vundle#begin/end.
 " plugin on GitHub repo
 
-""" I love incsearch, but it was slow when editing rp
-" Plugin 'haya14busa/incsearch.vim'
-" map /  <Plug>(incsearch-forward)
-" map ?  <Plug>(incsearch-backward)
-" map g/ <Plug>(incsearch-stay)
 
-Plugin 'eugen0329/vim-esearch' " The vim-easysearch plugin. This plugin adds the ability to search for text in files with the \ff command
 
 Plugin 'nathanaelkane/vim-indent-guides'
 
@@ -226,7 +220,11 @@ Plugin 'mhinz/vim-startify' "Shows the startup menu
 " https://github.com/mgedmin/taghelper.vim
 Plugin 'mgedmin/taghelper.vim'
 " set statusline=%<%f\ %h%m%r\ %1*%{taghelper#curtag()}%*%=%-14.(%l,%c%V%)\ %P
-set statusline=%<%f\ %h%m%r\ %{taghelper#curtag()}%*%=%-14.(%l,%c%V%)\ %P
+"
+" set statusline=%<%f\ %h%m%r\ %{taghelper#curtag()}%*%=%-14.(%l,%c%V%)\ %P
+" Only file NAME, not path:
+set statusline=%<%t\ %h%m%r\ %{taghelper#curtag()}%*%=%-14.(%l,%c%V%)\ %P
+
 
 "Shows the number of lines we're selecting in visual mode on the bottom right of the screen
 "If we're selecting from a single row, shows the num charactes
@@ -481,10 +479,6 @@ function RyanHighlightDefaults()
     :highlight Identifier     ctermfg=170 guifg=#d75fd7
     " highlight Structure     ctermfg=221  "Like map, set, but not print
     
-    " Indentline ▏characters are in the Conceal group
-    :hi clear Conceal
-    :hi Conceal ctermfg=239
-    
     "Highlighting for the ▸ and · displayed over whitespace
     :hi clear SpecialKey
     :hi SpecialKey ctermfg=darkgray
@@ -578,6 +572,10 @@ function RyanHighlightDefaults()
         let l:s = synID(line('.'), col('.'), 1)
         echo synIDattr(l:s, 'name') . ' -> ' . synIDattr(synIDtrans(l:s), 'name')
     endfun
+
+    " Indentline ▏characters are in the Conceal group
+    :hi clear Conceal
+    :hi Conceal ctermfg=237
 
 endfunction
 
@@ -869,7 +867,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
                             \ 'Clean'     :'✔︎',
                             \ 'Unknown'   :'?',
                             \ }
-        "GIT GUTTER: \jg, zg, [h, ]h, \hu
+        "GIT GUTTER: \jg, zg, [h, ]h, \hu, \hp
             set updatetime=100 " This is the recommended update interval from airblade/gitgutter's github page. By default, it's 4 seconds.
             nmap ]h <Plug>(GitGutterNextHunk)
             nmap [h <Plug>(GitGutterPrevHunk)
@@ -878,6 +876,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             xmap ih <Plug>(GitGutterTextObjectInnerVisual)
             xmap ah <Plug>(GitGutterTextObjectOuterVisual)
             nmap <leader>hu <Plug>(GitGutterUndoHunk)
+            nmap <leader>hp <Plug>(GitGutterPreviewHunk)
             " Git Gutter"
             set updatetime=250
             let g:gitgutter_max_signs = 500
@@ -1084,7 +1083,14 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             filetype plugin indent on
             autocmd FileType python setlocal shiftwidth=4 tabstop=4 expandtab nopaste
             autocmd FileType vim    setlocal shiftwidth=4 tabstop=4 expandtab nopaste
-        
+
+            " " Make backspace more powerful in python. Perhaps add other languages too in the future. Backspace through indents.
+            " " Disabled simply out of preference.
+            " autocmd FileType python setlocal backspace=indent,eol,start
+
+            " I want >> to indent comments that begin at the beginning of a line. After setting this, I can. Multiline strings are indented either way.
+            autocmd FileType python setlocal nosmartindent
+
         " SYNTAX HIGHLIGHTING: fh \sss \ssv \ssp \ss...
            
             " " Warning: Disabled because it was slow and didn't offer enough new functionality to justify slow scrolling!
@@ -1192,27 +1198,77 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             nnoremap <leader>ju :UndotreeToggle<CR>
     
     "NAVIGATION:
-        "SEARCHING: *
+        "SEARCHING: * / \ff \fr
+            " TIP:  add \c at the end of a search to make it case-insensitive.   /ryan\c   matches   Ryan
+            
             " Allows us to search for text with * from visual mode
             Plugin 'bronson/vim-visual-star-search' " How was this not already a thing?
+
+            "This is responsible for automatically jumping to /search results as you type them! 
+            "It's cool but I find it kinda irritating
+            " set incsearch
+
+            "Eh doesn't work so great anymore idk
+            " Plugin 'eugen0329/vim-esearch' " The vim-easysearch plugin. This plugin adds the ability to search for text in files with the \ff command
+
+            "Find and replace
+            " :Farr    -->  Just find text
+            " :Far     -->  Find and replace text
+            "
+            "     In search box:
+            "         <c-c>  exits without searching
+            "         <tab>  completes with previous searches
+            "
+            "     In search results box:
+            "         q      exits searching mode
+            "         <cr>   goes to that code
+            "
+            "         F      toggles all lines for replacement
+            "         t      toggles whether to replace that line
+            "         i x    on/off line for replacement respectively
+            "
+            "         s      does the replacement
+            "         u      undoes the replacement
+            "
+            "         Folds-per-file:
+            "             zc zo
+            "
+            nnoremap <leader>ff :Farf<cr>
+            nnoremap <leader>fr :Farr<cr>
+            let g:far#enable_undo=1
+            let g:far#limit=10000   "Default = 1000
+            let g:far#prompt_mapping = {
+                        \ 'quit'           : { 'key' : '<c-c>', 'prompt' : '^C'  },
+                        \ 'regex'          : { 'key' : '<c-x>', 'prompt' : '^X'  },
+                        \ 'case_sensitive' : { 'key' : '<c-a>', 'prompt' : '^A'  },
+                        \ 'word'           : { 'key' : '<c-w>', 'prompt' : "^W"  },
+                        \ 'substitute'     : { 'key' : '<c-f>', 'prompt' : '^F'  },
+                        \ }
+            Plugin 'brooth/far.vim'
+
         "WINDOW PANE JUMPING: -
             " When you press -, letters appear on each pane - and you press the letter of the one you want to jump to
             " These letters are not always visible in default color scheme - try 'fh' !
             Plugin 't9md/vim-choosewin'
             nmap  -  <Plug>(choosewin)
             let g:choosewin_overlay_enable = 1  " if you want to use overlay feature
+
         "TAB KEY:
             nnoremap <Tab> <C-w>w
             nnoremap <S-Tab> <C-w>W
+
         "EXITING INSERT MODE:
             "Don't trigger autoformatting
             inoremap <esc>l <c-c>ll
             
             "We already go to the left when exiting insert
             inoremap <esc>h <c-c>
-        "MOTIONS: af if ac ic ]m [m
+
+        "MOTIONS: af if ac ic ]m [m g:
             " Allows for shortcuts that let you select in functions, classes, etc
             " https://github.com/jeetsukumaran/vim-pythonsense
+            "
+            " g:  shows you classname --> funcname --> funcname  of where you are 
             Plugin 'jeetsukumaran/vim-pythonsense'
             
             " Allows us to select entire python blocks, with vai (visualselect all indent) etc and vii (visual select in indent)

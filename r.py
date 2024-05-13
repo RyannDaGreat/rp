@@ -1840,15 +1840,153 @@ def crop_image_at_random_position(image, height, width, include_position=False):
 
     return cropped_image
 
+def get_random_crop_bounds(image_dimensions, crop_dimensions):
+    """
+    Generate random bounds for cropping an image or any n-dimensional array.
+    
+    Parameters:
+        image_dimensions : tuple of int
+            The dimensions of the original image or array.
+            Can be any number of dimensions (e.g., height, width, time, etc.).
+        crop_dimensions : tuple of int
+            The dimensions of the crop area.
+            Must have the same number of dimensions as image_dimensions.
+    
+    Returns:
+        tuple of tuples
+            A tuple of tuples representing the bounds of the crop area.
+            Each inner tuple contains (start, end) indices for the corresponding dimension.
+    
+    Example:
+        >>> # 2D image
+        >>> height, width = 100, 200
+        >>> image = np.random.rand(height, width, 3)  # Dummy image
+        >>> crop_dimensions = crop_height, crop_width = 50, 80
+        >>> (top, bottom), (left, right) = get_random_crop_bounds((height, width), crop_dimensions)
+        >>> # Possible ranges:
+        >>> #   top: 0 to 50 (inclusive)
+        >>> #   bottom: top + 50, i.e., 50 to 100 (inclusive)
+        >>> #   left: 0 to 120 (inclusive)
+        >>> #   right: left + 80, i.e., 80 to 200 (inclusive)
+        >>> cropped_image = image[top:bottom, left:right]
+        
+        >>> # 3D image (e.g., video)
+        >>> height, width, time = 200, 300, 100
+        >>> video = np.random.rand(height, width, time)  # Dummy video
+        >>> crop_dimensions = crop_height, crop_width, crop_time = 120, 200, 50
+        >>> (top, bottom), (left, right), (start_time, end_time) = get_random_crop_bounds((height, width, time), crop_dimensions)
+        >>> # Possible ranges:
+        >>> #   top: 0 to 80 (inclusive)
+        >>> #   bottom: top + 120, i.e., 120 to 200 (inclusive)
+        >>> #   left: 0 to 100 (inclusive)
+        >>> #   right: left + 200, i.e., 200 to 300 (inclusive)
+        >>> #   start_time: 0 to 50 (inclusive)
+        >>> #   end_time: start_time + 50, i.e., 50 to 100 (inclusive)
+        >>> cropped_video = video[top:bottom, left:right, start_time:end_time]
+    """
+    from random import randint
+
+    if len(image_dimensions) != len(crop_dimensions):
+        raise ValueError("The number of dimensions in image_dimensions and crop_dimensions must be the same.")
+
+    if any(crop_dim > img_dim for crop_dim, img_dim in zip(crop_dimensions, image_dimensions)):
+        raise ValueError("Crop dimensions must be smaller than or equal to the original image dimensions.")
+
+    bounds = []
+    for img_dim, crop_dim in zip(image_dimensions, crop_dimensions):
+        start = randint(0, img_dim - crop_dim)
+        end = start + crop_dim
+        bounds.append((start, end))
+
+    return tuple(bounds)
+
+def get_center_crop_bounds(image_dimensions, crop_dimensions):
+    """
+    Generate bounds for center cropping an image or any n-dimensional array.
+    
+    Parameters:
+        image_dimensions : tuple of int
+            The dimensions of the original image or array.
+            Can be any number of dimensions (e.g., height, width, time, etc.).
+        crop_dimensions : tuple of int
+            The dimensions of the crop area.
+            Must have the same number of dimensions as image_dimensions.
+    
+    Returns:
+        tuple of tuples
+            A tuple of tuples representing the bounds of the crop area.
+            Each inner tuple contains (start, end) indices for the corresponding dimension.
+    
+    Example:
+        >>> while True:
+        >>>     image = load_image_from_webcam()
+        >>>     crop_size = 100, 100
+
+        >>>     (top, bot), (left, right) = get_center_crop_bounds(
+        >>>         get_image_dimensions(image),
+        >>>         crop_size,
+        >>>     )
+
+        >>>     display_image(
+        >>>         # These two images should be exactly the same
+        >>>         horizontally_concatenated_images(
+        >>>             image[top:bot, left:right],
+        >>>             crop_image(image, *crop_size, origin="center"),
+        >>>         ),
+        >>>     )
+
+    Example:
+        >>> # 2D image
+        >>> height, width = 100, 200
+        >>> image = np.random.rand(height, width, 3)  # Dummy image
+        >>> crop_dimensions = crop_height, crop_width = 50, 80
+        >>> (top, bottom), (left, right) = get_center_crop_bounds((height, width), crop_dimensions)
+        >>> # Expected bounds:
+        >>> #   top: 25
+        >>> #   bottom: 75
+        >>> #   left: 60
+        >>> #   right: 140
+        >>> cropped_image = image[top:bottom, left:right]
+        
+        >>> # 3D image (e.g., video)
+        >>> height, width, time = 200, 300, 100
+        >>> video = np.random.rand(height, width, time)  # Dummy video
+        >>> crop_dimensions = crop_height, crop_width, crop_time = 120, 200, 50
+        >>> (top, bottom), (left, right), (start_time, end_time) = get_center_crop_bounds((height, width, time), crop_dimensions)
+        >>> # Expected bounds:
+        >>> #   top: 40
+        >>> #   bottom: 160
+        >>> #   left: 50
+        >>> #   right: 250
+        >>> #   start_time: 25
+        >>> #   end_time: 75
+        >>> cropped_video = video[top:bottom, left:right, start_time:end_time]
+    """
+    if len(image_dimensions) != len(crop_dimensions):
+        raise ValueError("The number of dimensions in image_dimensions and crop_dimensions must be the same.")
+
+    if any(crop_dim > img_dim for crop_dim, img_dim in zip(crop_dimensions, image_dimensions)):
+        raise ValueError("Crop dimensions must be smaller than or equal to the original image dimensions.")
+
+    bounds = []
+    for img_dim, crop_dim in zip(image_dimensions, crop_dimensions):
+        start = (img_dim - crop_dim) // 2
+        end = start + crop_dim
+        bounds.append((start, end))
+
+    return tuple(bounds)
+
 def trim_video(video,length:int):
-    #This function takes a video and a length, and returns a video with that length
-    #If the desired length is longer than the video, additional blank frames will be added to the end
-    #TODO: This function has NOT been tested yet! There are no examples!
-    #TODO: Add examples
-    #TODO: Test this function for all use cases, including:
-    #    -Decreasing video length
-    #    -Increasing video length for lists of images
-    #    -Increasing video length for numpy-array videos
+    """
+    This function takes a video and a length, and returns a video with that length
+    If the desired length is longer than the video, additional blank frames will be added to the end
+    TODO: This function has NOT been tested yet! There are no examples!
+    TODO: Add examples
+    TODO: Test this function for all use cases, including:
+        -Decreasing video length
+        -Increasing video length for lists of images
+        -Increasing video length for numpy-array videos
+    """
     assert length>=0,'Cannot trim a video to a negative length'
     
     if len(video)>=length:
@@ -1881,6 +2019,7 @@ def _make_videos_same_length(*videos):
 
 def _concatenated_videos(image_method,videos):
     videos=detuple(videos)
+    videos=[video for video in videos if len(video)] #Exclude videos with no frames
     videos=[crop_images_to_max_size(video) for video in videos]
     videos=_make_videos_same_length(videos)
     output=[image_method(*frames) for frames in zip(*videos)]
@@ -13051,6 +13190,9 @@ def _convert_powerpoint_file(path,message=None):
     return process_powerpoint_file(path)
 
 
+def _get_pterm_verbose():
+    return False
+    return True
 
 _cd_history=[]
 def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseudo_terminal_style(),enable_ptpython=True,eval=eval,exec=exec,rprc=''):
@@ -13518,6 +13660,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         PYM
         APY
         APYM
+        PU
         PIP
         RUN
         RUNA
@@ -14181,7 +14324,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         TM  !tmux
         TMUX !tmux
 
+        FB $r._run_filebrowser()
+
         ZG !lazygit
+        UNCOMMIT !git reset --soft HEAD^
 
         # ZGA $os.system('cd '+ans'+' && lazygit') #NOT Ready yet - CDA's logic is more complex and can handle funcs and modules, this could only handle strings...
 
@@ -14326,13 +14472,13 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                     if user_message in command_shortcuts and user_message not in scope():
                         original_user_message=user_message
                         user_message=command_shortcuts[user_message]
-                        fansi_print("Transformed input to "+repr(user_message.replace(rp_import,''))+' because variable '+repr(original_user_message)+' doesn\'t exist but is a shortcut in SHORTCUTS','magenta','bold')
+                        if _get_pterm_verbose(): fansi_print("Transformed input to "+repr(user_message.replace(rp_import,''))+' because variable '+repr(original_user_message)+' doesn\'t exist but is a shortcut in SHORTCUTS','magenta','bold')
 
                     if user_message.strip().isalpha() and user_message.strip() and user_message.islower() and not user_message.strip() in scope() and user_message.upper().strip() in help_commands_no_spaces_to_spaces:
                         original_user_message=user_message
                         user_message=user_message.upper().strip()
                         user_message=help_commands_no_spaces_to_spaces[user_message]#Allow 'ptoff' --> 'PT OFF'
-                        fansi_print("Transformed input to "+repr(user_message)+' because variable '+repr(original_user_message)+' doesn\'t exist but '+user_message+' is a command','magenta','bold')
+                        if _get_pterm_verbose(): fansi_print("Transformed input to "+repr(user_message)+' because variable '+repr(original_user_message)+' doesn\'t exist but '+user_message+' is a command','magenta','bold')
 
                     if user_message == 'RETURN' or user_message =='RET':
                         try:
@@ -14640,7 +14786,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         string_to_clipboard('\n'.join(successful_command_history))
 
                     elif user_message == "MORE":
-                        fansi_print("The last command that caused an error is shown below in magenta:",'red','bold')
+                        if _get_pterm_verbose(): fansi_print("The last command that caused an error is shown below in magenta:",'red','bold')
                         fansi_print(error_message_that_caused_exception,'magenta')
                         if error is None:# full_exception_with_traceback is None --> Last command did not cause an error
                             fansi_print( "(The last command did not cause an error)",'red')
@@ -14649,7 +14795,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
                     elif user_message == "HMORE":
                         #HMORE is like MORE but with syntax highlighting. It's a tiny difference.
-                        fansi_print("The last command that caused an error is shown below in magenta:",'red','bold')
+                        if _get_pterm_verbose(): fansi_print("The last command that caused an error is shown below in magenta:",'red','bold')
                         # fansi_print(error_message_that_caused_exception,'magenta')
                         if error is None:# full_exception_with_traceback is None --> Last command did not cause an error
                             fansi_print( "(The last command did not cause an error)",'red')
@@ -14661,7 +14807,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 print_stack_trace(error,True,'')
 
                     elif user_message == "MMORE":
-                        fansi_print("The last command that caused an error is shown below in magenta:",'red','bold')
+                        if _get_pterm_verbose(): fansi_print("The last command that caused an error is shown below in magenta:",'red','bold')
 
                         fansi_print(error_message_that_caused_exception,'magenta')
                         fansi_print("A detailed stack trace is shown below:",'red','bold')
@@ -14675,7 +14821,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         else:
                             print_rich_stack_trace(error)
                     elif user_message == "AMORE":
-                        fansi_print("AMORE --> 'ans MORE' --> Setting 'ans' to the error",'red','bold')
+                        if _get_pterm_verbose(): fansi_print("AMORE --> 'ans MORE' --> Setting 'ans' to the error",'red','bold')
                         set_ans(error)
                         # if error is None:# full_exception_with_traceback is None --> Last command did not cause an error
                             # fansi_print( "(The last command did not cause an error)",'red')
@@ -14683,7 +14829,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             # print_verbose_stack_trace(error)
 
                     elif user_message == 'DMORE':
-                        fansi_print("DMORE --> Entering a post-mortem debugger","blue")
+                        if _get_pterm_verbose(): fansi_print("DMORE --> Entering a post-mortem debugger","blue")
                         tb=error.__traceback__
                         if currently_in_a_tty() and not currently_running_windows():
                             try:
@@ -14898,8 +15044,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         copy(str(get_ans()))
 
                     elif user_message == "VARS":
-                        fansi_print("VARS --> ans = user_created_variables (AKA all the names you created in this pseudo_terminal session):","blue")
-                        fansi_print("  • NOTE: ∃ delete_vars(ans) and globalize_vars(ans)","blue")
+                        if _get_pterm_verbose(): fansi_print("VARS --> ans = user_created_variables (AKA all the names you created in this pseudo_terminal session):","blue")
+                        if _get_pterm_verbose(): fansi_print("  • NOTE: ∃ delete_vars(ans) and globalize_vars(ans)","blue")
                         set_ans(user_created_var_names,save_history=True)
 
                     elif user_message == "WCOPY":
@@ -15053,10 +15199,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                     elif user_message=='?v' or user_message=='VIMA':
                         if not is_image(get_ans()):
                             if user_message=='VIMA':
-                                fansi_print("VIMA (VIM ans) is an alias for ?v","blue",'bold',)
-                            fansi_print("?v --> Running rp.vim(ans)...","blue",'bold',new_line=False)
+                                if _get_pterm_verbose(): fansi_print("VIMA (VIM ans) is an alias for ?v","blue",'bold',)
+                            if _get_pterm_verbose(): fansi_print("?v --> Running rp.vim(ans)...","blue",'bold',new_line=False)
                             vim(get_ans())
-                            fansi_print("done!","blue",'bold')
+                            if _get_pterm_verbose(): fansi_print("done!","blue",'bold')
                         else:
                             fansi_print("?v --> Viewing image in terminal interactively","blue",'bold',new_line=False)
                             _view_image_via_textual_imageview(get_ans())
@@ -15064,31 +15210,31 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         user_message=user_message[:-2]
                         value=eval(user_message,scope())
                         if not is_image(value):
-                            fansi_print("?v --> Running rp.vim(%s)..."%user_message,"blue",'bold',new_line=False)
-                            fansi_print("done!","blue",'bold')
+                            if _get_pterm_verbose(): fansi_print("?v --> Running rp.vim(%s)..."%user_message,"blue",'bold',new_line=False)
+                            if _get_pterm_verbose(): fansi_print("done!","blue",'bold')
                             vim(value)
                         else:
-                            fansi_print("?v --> Viewing image in terminal interactively","blue",'bold',new_line=False)
+                            if _get_pterm_verbose(): fansi_print("?v --> Viewing image in terminal interactively","blue",'bold',new_line=False)
                             _view_image_via_textual_imageview(value)
                     elif user_message=='?s':
-                        fansi_print("?s --> string viewer --> shows str(ans)","blue",'bold')
+                        if _get_pterm_verbose(): fansi_print("?s --> string viewer --> shows str(ans)","blue",'bold')
                         string=str(get_ans())
                         print(string)
                         _maybe_display_string_in_pager(string)
                     elif user_message=='?lj':
-                        fansi_print("?s --> line-joined string viewer --> shows line_join(map(str,ans))","blue",'bold')
+                        if _get_pterm_verbose(): fansi_print("?s --> line-joined string viewer --> shows line_join(map(str,ans))","blue",'bold')
                         string=line_join(map(str,get_ans()))
                         print(string)
                         _maybe_display_string_in_pager(string)
                     elif user_message.endswith('?s') and not '\n' in user_message:
-                        fansi_print("?s --> string viewer --> shows str(ans)","blue",'bold')
+                        if _get_pterm_verbose(): fansi_print("?s --> string viewer --> shows str(ans)","blue",'bold')
                         user_message=user_message[:-2]
                         value=eval(user_message,scope())
                         string=str(value)
                         print(string)
                         _maybe_display_string_in_pager(string)
                     elif user_message.endswith('?lj') and not '\n' in user_message:
-                        fansi_print("?lj --> string viewer --> shows line_join(map(str,ans))","blue",'bold')
+                        if _get_pterm_verbose(): fansi_print("?lj --> string viewer --> shows line_join(map(str,ans))","blue",'bold')
                         user_message=user_message[:-3]
                         value=eval(user_message,scope())
                         string=line_join(map(str,value))
@@ -15096,29 +15242,29 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         _maybe_display_string_in_pager(string)
                     elif user_message=='?t' or user_message=='TABA':
                         if user_message=='TABA':
-                            fansi_print("TABA (TAB ans) is an alias for ?t","blue",'bold',)
-                        fansi_print("?t --> Table Viewer --> Running view_table(ans):","blue",'bold')
+                            if _get_pterm_verbose(): fansi_print("TABA (TAB ans) is an alias for ?t","blue",'bold',)
+                        if _get_pterm_verbose(): fansi_print("?t --> Table Viewer --> Running view_table(ans):","blue",'bold')
                         view_table(get_ans())
                     elif user_message.endswith('?t') and not '\n' in user_message:
                         user_message=user_message[:-2]
-                        fansi_print("t --> Table Viewer --> Running view_table(%s):"%user_message,"blue",'bold')
+                        if _get_pterm_verbose(): fansi_print("t --> Table Viewer --> Running view_table(%s):"%user_message,"blue",'bold')
                         value=eval(user_message,scope())
                         view_table(value)
                     elif user_message=='?p':
-                        fansi_print("?p --> Pretty Print --> Running pretty_print(ans,with_lines=False):","blue",'bold')
+                        if _get_pterm_verbose(): fansi_print("?p --> Pretty Print --> Running pretty_print(ans,with_lines=False):","blue",'bold')
                         pterm_pretty_print(get_ans(),with_lines=False)
                     elif user_message.endswith('?p') and not '\n' in user_message:
                         user_message=user_message[:-2]
-                        fansi_print("?p --> Pretty Print --> Running pretty_print(%s,with_lines=False):"%user_message,"blue",'bold')
+                        if _get_pterm_verbose(): fansi_print("?p --> Pretty Print --> Running pretty_print(%s,with_lines=False):"%user_message,"blue",'bold')
                         value=eval(user_message,scope())
                         pterm_pretty_print(value,with_lines=False)
                         #pip_import('rich').print(value)
                     elif user_message=='?j':
-                        fansi_print("?j --> JSON Viewer --> Interactively displaying ans with collapsible menus with r._view_interactive_json(ans)","blue",'bold')
+                        if _get_pterm_verbose(): fansi_print("?j --> JSON Viewer --> Interactively displaying ans with collapsible menus with r._view_interactive_json(ans)","blue",'bold')
                         _view_interactive_json(get_ans())
                     elif user_message.endswith('?j') and not '\n' in user_message:
                         user_message=user_message[:-2]
-                        fansi_print("?j --> JSON Viewer --> Interactively displaying ans with collapsible menus with r._view_interactive_json","blue",'bold')
+                        if _get_pterm_verbose(): fansi_print("?j --> JSON Viewer --> Interactively displaying ans with collapsible menus with r._view_interactive_json","blue",'bold')
                         value=eval(user_message,scope())
                         _view_interactive_json(value)
                     elif user_message=='?i':
@@ -15145,15 +15291,15 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                         value=eval(user_message,scope())
                         peep(value)
                     elif user_message == "?":
-                        fansi_print("? --> rinsp(ans)","blue")
+                        if _get_pterm_verbose(): fansi_print("? --> rinsp(ans)","blue")
                         rinsp(get_ans())
                     elif user_message == "??":
-                        fansi_print("?? --> rinsp(ans,1,1)","blue")
+                        if _get_pterm_verbose(): fansi_print("?? --> rinsp(ans,1,1)","blue")
                         rinsp(get_ans(),1,1)
                         # fansi_print("?? --> rinsp(ans,1)","blue")
                         # rinsp(get_ans(),1)
                     elif user_message == "???":
-                        fansi_print("??? --> rinsp(ans,1,0,1)","blue")
+                        if _get_pterm_verbose(): fansi_print("??? --> rinsp(ans,1,0,1)","blue")
                         rinsp(get_ans(),1,0,1)
                         # fansi_print("??? --> rinsp(ans,1,1)","blue")
                         # rinsp(get_ans(),1,1)
@@ -15167,11 +15313,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                     #     fansi_print("????? --> rinsp(ans,1,1,1)","blue")
                     #     rinsp(get_ans(),1,1,1)
                     elif user_message == "?/" or user_message=='?h':
-                        fansi_print("?h --> help(ans)","blue")
+                        if _get_pterm_verbose(): fansi_print("?h --> help(ans)","blue")
                         # fansi_print("?/ --> help(ans)","blue")
                         help(get_ans())
                     elif user_message.endswith("?/") or user_message.endswith('?h'):
-                        fansi_print("◊?h --> help(◊)","blue")
+                        if _get_pterm_verbose(): fansi_print("◊?h --> help(◊)","blue")
                         help(eval(user_message[:-2],scope()))
                     # elif user_message.endswith("?????"):
                     #     fansi_print("◊????? --> rinsp(◊,1,1,1)","blue")
@@ -15180,17 +15326,17 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                     #     fansi_print("◊???? --> rinsp(◊,1,0,1)","blue")
                     #     rinsp(eval(user_message[:-4],scope()),1,0,1)
                     elif user_message.endswith("???"):
-                        fansi_print("◊??? --> rinsp(◊,1,0,1)","blue")
+                        if _get_pterm_verbose(): fansi_print("◊??? --> rinsp(◊,1,0,1)","blue")
                         rinsp(eval(user_message[:-3],scope()),1,0,1)
                         # fansi_print("◊??? --> rinsp(◊,1,1)","blue")
                         # rinsp(eval(user_message[:-3],scope()),1,1)
                     elif user_message.endswith("??"):
-                        fansi_print("◊?? --> rinsp(◊,1,1)","blue")
+                        if _get_pterm_verbose(): fansi_print("◊?? --> rinsp(◊,1,1)","blue")
                         rinsp(eval(user_message[:-2],scope()),1,1)
                         # fansi_print("◊?? --> rinsp(◊,1)","blue")
                         # rinsp(eval(user_message[:-2],scope()),1)
                     elif user_message.endswith("?"):
-                        fansi_print("◊? --> rinsp(◊)","blue")
+                        if _get_pterm_verbose(): fansi_print("◊? --> rinsp(◊)","blue")
                         rinsp(eval(user_message[:-1],scope()))
 
                     elif user_message=='PWD':
@@ -15216,14 +15362,14 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
                         if line_numbers:
                             if highlight:
-                                fansi_print("NCAT: Printing (with line numbers and python syntax highlighting) the contents of "+repr(file_name),"blue")
+                                if _get_pterm_verbose(): fansi_print("NCAT: Printing (with line numbers and python syntax highlighting) the contents of "+repr(file_name),"blue")
                             else:
-                                fansi_print("NCAT: Printing (with line numbers) the contents of "+repr(file_name),"blue")
+                                if _get_pterm_verbose(): fansi_print("NCAT: Printing (with line numbers) the contents of "+repr(file_name),"blue")
                         else:
                             if highlight:
-                                fansi_print("CAT: Printing (with python syntax highlighting) the contents of "+repr(file_name),"blue")
+                                if _get_pterm_verbose(): fansi_print("CAT: Printing (with python syntax highlighting) the contents of "+repr(file_name),"blue")
                             else:
-                                fansi_print("CAT: Printing the contents of "+repr(file_name),"blue")
+                                if _get_pterm_verbose(): fansi_print("CAT: Printing the contents of "+repr(file_name),"blue")
 
                         contents=_load_text_from_file_or_url(file_name)
 
@@ -15254,14 +15400,14 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
                     elif user_message.startswith('CCAT ') or user_message=='CCAT' or user_message=='CCATA':
                         if user_message=='CCATA':
-                            fansi_print('CCAT -->text_file_to_string Copy CAT ans --> Copies the contents of the file or url at \'ans\' to your clipboard','blue','bold')
+                            if _get_pterm_verbose(): fansi_print('CCAT -->text_file_to_string Copy CAT ans --> Copies the contents of the file or url at \'ans\' to your clipboard','blue','bold')
                             user_message='CCAT '+str(get_ans())
                         elif user_message=='CCAT':
-                            fansi_print('CCAT --> Copy CAT --> Copies a files contents to your clipboard --> Please select a file!','blue','bold')
+                            if _get_pterm_verbose(): fansi_print('CCAT --> Copy CAT --> Copies a files contents to your clipboard --> Please select a file!','blue','bold')
                             user_message='CCAT '+input_select_file()
 
                         file_name=user_message[user_message.find(' '):].strip()
-                        fansi_print("CCAT: Copying to your clipboard the contents of "+repr(file_name),"blue")
+                        if _get_pterm_verbose(): fansi_print("CCAT: Copying to your clipboard the contents of "+repr(file_name),"blue")
                         string_to_clipboard(_load_text_from_file_or_url(file_name))
 
                     elif user_message=='LS' or user_message=='LST' or user_message=='LSN' or user_message=='LSD':
@@ -16171,7 +16317,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 _need_module_refresh=True
                             fansi_print("Transformed command into: " + user_message,'magenta')
 
-                        elif starts_with_any(user_message, 'PY ', 'APY ', 'PYM ', 'APYM') or user_message.startswith("APY ") or user_message in 'PY APY PYM APYM'.split():
+                        elif starts_with_any(user_message, 'PY ', 'APY ', 'PYM ', 'APYM ', 'PU ') or user_message in 'PY APY PYM APYM'.split():
+                            if user_message.startswith('PU '):
+                                fansi_print("PU --> Pudb debugger",'blue','bold')
+                                user_message='PYM pudb '+user_message[len('PU '):]
 
                             #Extract the arguments
                             if user_message.startswith('PYM'):
@@ -16386,7 +16535,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             #This was disabled because I was too lazy to finish it properly. But it would be nice to implement this in the future
                             elif user_message=='CDB':
                                 #Means CD Back
-                                fansi_print("CDB --> CD Back (CD to the previous directory in your history)",'blue',)
+                                if _get_pterm_verbose(): fansi_print("CDB --> CD Back (CD to the previous directory in your history)",'blue',)
                                 #fansi_print("    Old Directory: "+get_current_directory(),'blue')
                                 # if _cd_history:
                                 #     _cd_history.pop()
@@ -16395,7 +16544,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     new_dir=_cd_history[-1]
                                     _cd_history.pop()
                                 elif len(cdh)>=2:
-                                    fansi_print("    (Empty CD history for this session; going to previous CDH directory)",'blue')
+                                    if _get_pterm_verbose():     fansi_print("    (Empty CD history for this session; going to previous CDH directory)",'blue')
                                     new_dir=cdh[-2]
                                 else:
                                     fansi_print("    (Cannot CDB because the CD history is empty)",'red')
@@ -17386,20 +17535,26 @@ def all_rolls(vector,axis=None):
     return np.asarray(out)
 
 def circular_diff(array,axis=0):
-    #Returns the diff of an array along the axis, taking into account looping unlike numpy's implementation (aka np.diff)
-    #Example: circular_diff([1,2,3,4,5])  ->  [ 1  1  1  1 -4]   VS   np.diff([1,2,3,4,5])  ->  [1 1 1 1]
+    """
+    Returns the diff of an array along the axis, taking into account looping unlike numpy's implementation (aka np.diff)
+    Example: circular_diff([1,2,3,4,5])  ->  [ 1  1  1  1 -4]   VS   np.diff([1,2,3,4,5])  ->  [1 1 1 1]
+    """
     return np.roll(array,shift=-1,axis=axis)-array
 circ_diff=circular_diff#For convenience's sake
 def circular_quotient(array,axis=0):
-    # ⮤ circular_quotient([1,2,4,8])
-    # ans = [2.    2.    2.    0.125]
+    """
+    ⮤ circular_quotient([1,2,4,8])
+    ans = [2.    2.    2.    0.125]
+    """
     return np.roll(array,shift=-1,axis=axis)/array
 circ_quot=circular_quotient#For convenience's sake
 def circular_convolve(a,b):
-    #Convolve vector a with vector b with wrapping on the boundaries
-    #Works with any numpy dtype, and returns the same kind of dtype inputted
-    #Examples: circular_convolve([1,0,0,0,0],[1,2,3,4,5]) --> [1 2 3 4 5]
-    #Examples: circular_convolve([0,1,0,0,0],[1,2,3,4,5]) --> [5 1 2 3 4] #Notice how it wrapped around
+    """
+    Convolve vector a with vector b with wrapping on the boundaries
+    Works with any numpy dtype, and returns the same kind of dtype inputted
+    Examples: circular_convolve([1,0,0,0,0],[1,2,3,4,5]) --> [1 2 3 4 5]
+    Examples: circular_convolve([0,1,0,0,0],[1,2,3,4,5]) --> [5 1 2 3 4] #Notice how it wrapped around
+    """
     a=np.asarray(a)
     b=np.asarray(b)
     assert len(a.shape)==len(b.shape)==1,'Right now, circ_conv requires that both inputs are vectors. This may be generalized in the future to n-d convolutions.'
@@ -17415,16 +17570,18 @@ def circular_convolve(a,b):
         return i(f(a)*f(b)).astype(output_type)
 circ_conv=circular_convolve#For convenience's sake
 def circular_cross_correlate(a,b):
-    #TODO let varargs input (because circular_cross_correlate is associative)
-    #Let a★b = circular_cross_correlate(a,b)
-    #Cross correltation is convolution where the kernel is flipped.
-    #Cross correlation contains the element dot(a,b) whereas convolution does NOT (cross correlation can compare similarities)
-    #Properties:
-    #FOR ALL INT 'n':   (a★b)[n] = np.dot(a,np.roll(b,n))
-    #AND THEREFORE...   (a★b)[0] = np.dot(a,b)
-    #UNLIKE Convolution, a★b ≠ b★a
-    #UNLIKE Convolution, a★b ≠ ifft(fft(a)*fft(b))
-    #UNLIKE Convolution, a★b = ifft(fft(a)*fft(b).conj)
+    """
+    TODO let varargs input (because circular_cross_correlate is associative)
+    Let a★b = circular_cross_correlate(a,b)
+    Cross correltation is convolution where the kernel is flipped.
+    Cross correlation contains the element dot(a,b) whereas convolution does NOT (cross correlation can compare similarities)
+    Properties:
+    FOR ALL INT 'n':   (a★b)[n] = np.dot(a,np.roll(b,n))
+    AND THEREFORE...   (a★b)[0] = np.dot(a,b)
+    UNLIKE Convolution, a★b ≠ b★a
+    UNLIKE Convolution, a★b ≠ ifft(fft(a)*fft(b))
+    UNLIKE Convolution, a★b = ifft(fft(a)*fft(b).conj)
+    """
     def reverse(x):
         #NOT the same as x[::-1], due to the way FFT works...
         #Same as ifft(fft(x).conj()), but faster...
@@ -17454,19 +17611,21 @@ def circular_gaussian_blur(vector,sigma=1):
     return circular_convolve(vector,kernel)
 circ_gauss_blur=circular_gaussian_blur
 def circular_extrema_indices(x):
-    #Return the indices of all local extrema, treating the input as cyclic (TODO: perhaps add a non-cyclic version later)
-    #If there is a continuous area where the derivative is 0, return the indices of the whole area (example: circular_extrema_indices([1,2,2,2,3]))
-    #The order of the extremas returned is the relative order they originally appear in the input (as opposed to being sorted by value etc)
-    #EXAMPLE: circular_extrema_indices([1,2,3,4])      -> [0 3]     #In this and the next three examples, notice how the shift affects the indices
-    #EXAMPLE: circular_extrema_indices([4,1,2,3])      -> [0 1]     #Note how because this function treats the input as cyclic, and therefore the 3 at the end is not an extrema
-    #EXAMPLE: circular_extrema_indices([3,4,1,2])      -> [1 2]
-    #EXAMPLE: circular_extrema_indices([2,3,4,1])      -> [2 3]
-    #EXAMPLE: circular_extrema_indices([0,1,2,3,2,1])  -> [0 3]     #Captures both local minima AND local maxima, aka the 0 and the 3
-    #EXAMPLE: circular_extrema_indices([0,0,0,1,2,3])  -> [0 1 2 5] #Notice how areas with a derivative of 0 are all treated as extrema (aka the first three 0's)
-    #EXAMPLE: circular_extrema_indices([])             -> []        #No elements in the input means no elements in the output
-    #EXAMPLE: circular_extrema_indices([])             -> []        #No elements in the input means no elements in the output
-    #EXAMPLE: circular_extrema_indices([A])            -> [A]       #True for all numeric values A. If we only have one point, it is technically an extrema.
-    #EXAMPLE: circular_extrema_indices([A,B])          -> [A B]     #True for all numeric values A and B. If we only have two points, both are technically extremas.
+    """
+    Return the indices of all local extrema, treating the input as cyclic (TODO: perhaps add a non-cyclic version later)
+    If there is a continuous area where the derivative is 0, return the indices of the whole area (example: circular_extrema_indices([1,2,2,2,3]))
+    The order of the extremas returned is the relative order they originally appear in the input (as opposed to being sorted by value etc)
+    EXAMPLE: circular_extrema_indices([1,2,3,4])      -> [0 3]     #In this and the next three examples, notice how the shift affects the indices
+    EXAMPLE: circular_extrema_indices([4,1,2,3])      -> [0 1]     #Note how because this function treats the input as cyclic, and therefore the 3 at the end is not an extrema
+    EXAMPLE: circular_extrema_indices([3,4,1,2])      -> [1 2]
+    EXAMPLE: circular_extrema_indices([2,3,4,1])      -> [2 3]
+    EXAMPLE: circular_extrema_indices([0,1,2,3,2,1])  -> [0 3]     #Captures both local minima AND local maxima, aka the 0 and the 3
+    EXAMPLE: circular_extrema_indices([0,0,0,1,2,3])  -> [0 1 2 5] #Notice how areas with a derivative of 0 are all treated as extrema (aka the first three 0's)
+    EXAMPLE: circular_extrema_indices([])             -> []        #No elements in the input means no elements in the output
+    EXAMPLE: circular_extrema_indices([])             -> []        #No elements in the input means no elements in the output
+    EXAMPLE: circular_extrema_indices([A])            -> [A]       #True for all numeric values A. If we only have one point, it is technically an extrema.
+    EXAMPLE: circular_extrema_indices([A,B])          -> [A B]     #True for all numeric values A and B. If we only have two points, both are technically extremas.
+    """
     x=np.asarray(x)
     assert len(x.shape)==1,'Currently, only vectors are supported. This may change in the future.'
     r=np.roll(x, 1)#Right
@@ -17493,7 +17652,7 @@ def product(*i):#redefined from earlier in r.py, but it does the same thing. It'
 
 from math import factorial
 def ncr(n, r):
-    #choose r objects from n
+    """ choose r objects from n """
     from functools import reduce
     import operator as op
     r = min(r, n-r)
@@ -17546,7 +17705,7 @@ def get_username():
 
 
 def get_process_id():
-    #Get the current process id, aka pid
+    """ Get the current process id, aka pid """
     import os
     return os.getpid()
 
@@ -17596,16 +17755,16 @@ def get_process_start_date(pid=None):
 
 
 def regex_match(string,regex)->bool:
-    #returns true if the regex describes the whole string
+    """ returns true if the regex describes the whole string """
     import re
     return bool(re.fullmatch(regex,string))
 def regex_replace(string,regex,replacement):
-    #Regex replacement. Example: regex_replace('from abc import def','from .* import (.*)',r'\1') == 'def'
+    """ Regex replacement. Example: regex_replace('from abc import def','from .* import (.*)',r'\1') == 'def' """
     import re
     return re.sub(regex,replacement,string)
 
 def ring_terminal_bell():
-    #Lets the terminal make a little noise. You've probably heard this sound at least once before on your OS...
+    """ Lets the terminal make a little noise. You've probably heard this sound at least once before on your OS...  """
     print(end=chr(7),flush=True)#This character should ring the TTY's bell, if that's possible.
 
 
@@ -17619,31 +17778,37 @@ def _pterm():
             _pterm_hist_file.close()
 
 def clear_terminal_screen():
-    #Will clear the screen of a tty
+    """ Will clear the screen of a tty """
     print(end="\033[0;0H\033[2J")#https://www.csie.ntu.edu.tw/~r92094/c++/VT100.html
 
 def set_cursor_to_bar(blinking=False):
-    #Modify the shape of the cursor in a vt100 terminal emulator
-    #I'm not sure what the escape codes are for different terminals; tmux for example is a mystery.
-    #To see what these do, I reccomend just running them in a unix terminal.
+    """
+    Modify the shape of the cursor in a vt100 terminal emulator
+    I'm not sure what the escape codes are for different terminals; tmux for example is a mystery.
+    To see what these do, I reccomend just running them in a unix terminal.
+    """
     if blinking:
         print(end="\033[5 q")
     else:
         print(end="\033[6 q")
 
 def set_cursor_to_box(blinking=True):
-    #Modify the shape of the cursor in a vt100 terminal emulator
-    #I'm not sure what the escape codes are for different terminals; tmux for example is a mystery.
-    #To see what these do, I reccomend just running them in a unix terminal.
+    """
+    Modify the shape of the cursor in a vt100 terminal emulator
+    I'm not sure what the escape codes are for different terminals; tmux for example is a mystery.
+    To see what these do, I reccomend just running them in a unix terminal.
+    """
     if blinking:
         print(end="\033[1 q")
     else:
         print(end="\033[2 q")
 
 def set_cursor_to_underscore(blinking=True):
-    #Modify the shape of the cursor in a vt100 terminal emulator
-    #I'm not sure what the escape codes are for different terminals; tmux for example is a mystery.
-    #To see what these do, I reccomend just running them in a unix terminal.
+    """
+    Modify the shape of the cursor in a vt100 terminal emulator
+    I'm not sure what the escape codes are for different terminals; tmux for example is a mystery.
+    To see what these do, I reccomend just running them in a unix terminal.
+    """
     if blinking:
         print(end="\033[3 q")
     else:
@@ -18263,14 +18428,16 @@ try:
 except Exception:
     pass
 def cv_find_contours(image,*,include_every_pixel=False):
+    """
+    Contours are represented in the form [[x,y],[x,y],[x,y]].
+    If you want to get rid of the extra, useless dimension, don't forget to use .squeeze()
+    NOTE: This doesn't return normal numpy arrays: The output arrays subclass numpy.ndarray and have these attributes:
+       parent, children, descendants, is_inner, is_outer, is_solid_white, is_solid_black
+    This is really useful, because it's like hierarchy but much easier to use. The parent of a contour is the contour immediately and completely surrounding it (None if no such contour exists.) This is calculated from the hierarchy.
+     'contour.is_inner' is always the same as 'not contour.is_outer'. It returns whether it is an inner or an outer contour
+    If include_every_pixel is true, we include every single coordinate in our contour, using CHAIN_APPROX_NONE. Otherwise, opencv will simplify vertical and horizontal segments of pixels into a single edge (which is almost lossless)
+    """
     cv2=pip_import('cv2')
-    #Contours are represented in the form [[x,y],[x,y],[x,y]].
-    #If you want to get rid of the extra, useless dimension, don't forget to use .squeeze()
-    #NOTE: This doesn't return normal numpy arrays: The output arrays subclass numpy.ndarray and have these attributes:
-    #   parent, children, descendants, is_inner, is_outer, is_solid_white, is_solid_black
-    #This is really useful, because it's like hierarchy but much easier to use. The parent of a contour is the contour immediately and completely surrounding it (None if no such contour exists.) This is calculated from the hierarchy.
-    # 'contour.is_inner' is always the same as 'not contour.is_outer'. It returns whether it is an inner or an outer contour
-    #If include_every_pixel is true, we include every single coordinate in our contour, using CHAIN_APPROX_NONE. Otherwise, opencv will simplify vertical and horizontal segments of pixels into a single edge (which is almost lossless)
     image=as_grayscale_image(image)
     image=as_byte_image(image)
     raw_contours, hierarchy = cv2.findContours(image,cv2.RETR_CCOMP,cv2.CHAIN_APPROX_NONE if include_every_pixel else cv2.CHAIN_APPROX_SIMPLE)[-2:]
@@ -18411,9 +18578,11 @@ def cv_draw_circle(image,x,y,radius=5,color=(255,255,255),*,antialias=True,copy=
     return image
 
 def cv_apply_affine_to_image(image,affine,output_resolution=None):
-    #Warps an image to the affine matrix provided (of shape 2,3)
-    #output_resolution is to speed things up when we don't want the full resolution of the original image. It can be specified as None to get the default (original) image resolution, or some tuple with 2 ints to represent resolution
-    #EXAMPLE: display_image(cv_apply_affine_to_image(pup,rotation_affine_2d(60/360*tau)))
+    """
+    Warps an image to the affine matrix provided (of shape 2,3)
+    output_resolution is to speed things up when we don't want the full resolution of the original image. It can be specified as None to get the default (original) image resolution, or some tuple with 2 ints to represent resolution
+    EXAMPLE: display_image(cv_apply_affine_to_image(pup,rotation_affine_2d(60/360*tau)))
+    """
     cv2=pip_import('cv2')
     image=np.asarray(image)
     affine=np.asarray(affine)
@@ -18427,13 +18596,15 @@ def cv_apply_affine_to_image(image,affine,output_resolution=None):
 
 
 def cv_manually_selected_contours(contours,image=None):
-    #Let the user manually pick out a set of contours by clicking them, then hitting the enter key to confirm their selection
-    #It shows you an image with contours. Click to toggle the contours on and off.
-    #Optionally, you can specify a background image to be shown during this selection. This is particularly useful if the contours originally came from that image. I personally like to divide that image by 2 to make it darker, letting the contours pop out more apparently.
-    #Special keys: press "b" to toggle a black background with your image, to help see the contours better
-    #Special keys: press "a" to select all contours
-    #Special keys: press "d" to deselect all contours
-    #Special keys: press "\n" confirm your selection
+    """
+    Let the user manually pick out a set of contours by clicking them, then hitting the enter key to confirm their selection
+    It shows you an image with contours. Click to toggle the contours on and off.
+    Optionally, you can specify a background image to be shown during this selection. This is particularly useful if the contours originally came from that image. I personally like to divide that image by 2 to make it darker, letting the contours pop out more apparently.
+    Special keys: press "b" to toggle a black background with your image, to help see the contours better
+    Special keys: press "a" to select all contours
+    Special keys: press "d" to deselect all contours
+    Special keys: press "\n" confirm your selection
+    """
 
     assert not running_in_google_colab(),'Sorry, cv_manually_selected_contours uses OpenCVs gui and cannot be used inside a Jupyter notebook'
     assert len(contours)!=0,'manually_selected_contours: error: There are no contours to pick from because len(contours)==0'
@@ -18518,12 +18689,14 @@ def cv_manually_selected_contours(contours,image=None):
 
 
 def cv_manually_selected_contour(contours,image=None):
-    #TODO Merge cv_manually_selected_contours with cv_manually_selected_contour to eliminate redundancy
-    #Let the user manually pick out a contour by clicking it, then hitting the enter key to confirm your selection
-    #It shows you an image with contours. Click to toggle the contours on and off.
-    #Optionally, you can specify a background image to be shown during this selection. This is particularly useful if the contours originally came from that image. I personally like to divide that image by 2 to make it darker, letting the contours pop out more apparently.
-    #Special keys: press "b" to toggle a black background with your image, to help see the contours better
-    #Special keys: press "\n" confirm your selection
+    """
+    TODO Merge cv_manually_selected_contours with cv_manually_selected_contour to eliminate redundancy
+    Let the user manually pick out a contour by clicking it, then hitting the enter key to confirm your selection
+    It shows you an image with contours. Click to toggle the contours on and off.
+    Optionally, you can specify a background image to be shown during this selection. This is particularly useful if the contours originally came from that image. I personally like to divide that image by 2 to make it darker, letting the contours pop out more apparently.
+    Special keys: press "b" to toggle a black background with your image, to help see the contours better
+    Special keys: press "\n" confirm your selection
+    """
 
     assert not running_in_google_colab(),'Sorry, cv_manually_selected_contours uses OpenCVs gui and cannot be used inside a Jupyter notebook'
     assert len(contours)!=0,'manually_selected_contours: error: There are no contours to pick from because len(contours)==0'
@@ -18779,17 +18952,19 @@ def cv_gauss_blur(image,sigma=1):
 #endregion
 
 def rotation_matrix(angle,out_of=tau):
-    #Set out_of to 360 to use degrees instead of radians
+    """ Set out_of to 360 to use degrees instead of radians """
     theta = angle/out_of*tau#Convert to radians
     c, s = np.cos(theta), np.sin(theta)
     R = np.array(((c,-s), (s, c)))
     return R
 
 def loop_direction_2d(loop):
-    #loop is like [(x,y),(x,y)...]
-    #Given a list of 2d points, return a negative number if they're clockwise else a positive number if theyre conuter-clockwise
-    #https://stackoverflow.com/questions/1165647/how-to-determine-if-a-list-of-polygon-points-are-in-clockwise-order
-    #Of course, if a loop has 0, or 1 points, then it's neither counter clockwise nor clockwise so it returns 0
+    """
+    loop is like [(x,y),(x,y)...]
+    Given a list of 2d points, return a negative number if they're clockwise else a positive number if theyre conuter-clockwise
+    https://stackoverflow.com/questions/1165647/how-to-determine-if-a-list-of-polygon-points-are-in-clockwise-order
+    Of course, if a loop has 0, or 1 points, then it's neither counter clockwise nor clockwise so it returns 0
+    """
     loop=as_points_array(loop)
     if len(loop)<=2:return 0#If we have 2 or less points in this loop, it doesn't make sense to say that it's clockwise or counter-clockwise
     assert loop.shape[1]==2,'loop_direction_2d is for 2d loops only'
@@ -18808,18 +18983,20 @@ def cv_make_clockwise(contour):
 
 
 def scatter_plot(x,y=None,*,block=False,clear=True,color=None,dot_size=1,ylabel=None,xlabel=None,title=None):
-    #Parameters:
-    #   x and y:
-    #       There are three ways to give this function points:
-    #          - One is by specifying x and y as lists of numbers, where x and y are the same length, like x==[x0,x1,x2...] and y==[y0,y1,y2...]
-    #          - Another is by leaving y None, and x is a list of points like [(x0,y0),(x1,y1),(x2,y2)...] or the numpy equivalent
-    #          - Another is to specify x as a complex vector and leave y blank
-    #   clear: if this is true, wipe the plot clean before drawing (if it's false, this plot will be drawn over whatever happens to exist there allready)
-    #   block: whether to pause the python program and make the plot interactive until closed (blocks the main thread I think)
-    #   dot_size: how big/thick should the points on the plot be?
-    #EXAMPLE: scatter_plot(randints_complex(100))
-    #EXAMPLE: x=np.linspace(0,tau);scatter_plot(np.cos(x),np.sin(x))
-    #EXAMPLE: scatter_plot((.9+.2j)**np.linspace(0,10*tau))#A spiral
+    """
+    Parameters:
+       x and y:
+           There are three ways to give this function points:
+              - One is by specifying x and y as lists of numbers, where x and y are the same length, like x==[x0,x1,x2...] and y==[y0,y1,y2...]
+              - Another is by leaving y None, and x is a list of points like [(x0,y0),(x1,y1),(x2,y2)...] or the numpy equivalent
+              - Another is to specify x as a complex vector and leave y blank
+       clear: if this is true, wipe the plot clean before drawing (if it's false, this plot will be drawn over whatever happens to exist there allready)
+       block: whether to pause the python program and make the plot interactive until closed (blocks the main thread I think)
+       dot_size: how big/thick should the points on the plot be?
+    EXAMPLE: scatter_plot(randints_complex(100))
+    EXAMPLE: x=np.linspace(0,tau);scatter_plot(np.cos(x),np.sin(x))
+    EXAMPLE: scatter_plot((.9+.2j)**np.linspace(0,10*tau))#A spiral
+    """
     if is_complex_vector(x):
         assert y is None,'scatter_plot: x is a complex vector but y is not None. This is an invalid input combination as the imaginary part of x ARE the y-values'
         x=as_points_array(x)
@@ -18849,84 +19026,110 @@ def scatter_plot(x,y=None,*,block=False,clear=True,color=None,dot_size=1,ylabel=
     display_update(block=block)
 
 def line_split(string):
-    #I find myself often wishing this function exists for a few seconds before remembering String.splitlines exists
-    #EXAMPLE: line_split('hello\nworld')==['hello','world']
+    """
+    I find myself often wishing this function exists for a few seconds before remembering String.splitlines exists
+    EXAMPLE: line_split('hello\nworld')==['hello','world']
+    """
     return string.splitlines()
 def line_join(lines):
-    #EXAMPLE: line_join(['hello','world'])=='hello\nworld'
+    """ EXAMPLE: line_join(['hello','world'])=='hello\nworld' """
     lines=[str(line) for line in lines]#Make sure all lines are strings. This lets line_join([1,2,3,4,5]) not crash
     return '\n'.join(lines)
 
 #region numpy utilities
 def append_uniform_row(matrix,scalar=0):
-    #Adds a row to the bottom of a matrix with a constant value equal to scalar
-    #Example: append_uniform_row([[1,2,3],[4,5,6],[7,8,9]],0)   ====   [[1,2,3,0],[4,5,6,0],[7,8,9,0]]
-    #Meant for use with numpy, and returns a numpy array.
-    #Does NOT mutate matrix. It makes a copy.
+    """
+    Adds a row to the bottom of a matrix with a constant value equal to scalar
+    Example: append_uniform_row([[1,2,3],[4,5,6],[7,8,9]],0)   ====   [[1,2,3,0],[4,5,6,0],[7,8,9,0]]
+    Meant for use with numpy, and returns a numpy array.
+    Does NOT mutate matrix. It makes a copy.
+    """
     matrix=np.asarray(matrix)#If this line cause errors, then it's up to the user of this function to figure out why.
     return np.row_stack((matrix,scalar*np.ones((1,matrix.shape[1]))))
 def append_zeros_row(matrix):
-    #Adds a row of zeros to the bottom of a matrix
-    #Example: append_zeros_row([[1,2,3],[4,5,6],[7,8,9]])   ====   [[1,2,3,0],[4,5,6,0],[7,8,9,0]]
-    #Meant for use with numpy, and returns a numpy array.
-    #Does NOT mutate matrix. It makes a copy.
+    """
+    Adds a row of zeros to the bottom of a matrix
+    Example: append_zeros_row([[1,2,3],[4,5,6],[7,8,9]])   ====   [[1,2,3,0],[4,5,6,0],[7,8,9,0]]
+    Meant for use with numpy, and returns a numpy array.
+    Does NOT mutate matrix. It makes a copy.
+    """
     return append_uniform_row(matrix,0)
 def append_ones_row(matrix):
-    #Adds a row of ones to the bottom of a matrix
-    #Example: append_zeros_row([[1,2,3],[4,5,6],[7,8,9]])   ====   [[1,2,3,1],[4,5,6,1],[7,8,9,1]]
-    #Meant for use with numpy, and returns a numpy array.
-    #Does NOT mutate matrix. It makes a copy.
+    """
+    Adds a row of ones to the bottom of a matrix
+    Example: append_zeros_row([[1,2,3],[4,5,6],[7,8,9]])   ====   [[1,2,3,1],[4,5,6,1],[7,8,9,1]]
+    Meant for use with numpy, and returns a numpy array.
+    Does NOT mutate matrix. It makes a copy.
+    """
     return append_uniform_row(matrix,1)
 
 def append_uniform_column(matrix,scalar=0):
-    #Adds a column to the bottom of a matrix with a constant value equal to scalar
-    #Example: append_uniform_column([[1,2,3],[4,5,6],[7,8,9]],0)   ====   [[1,2,3],[4,5,6],[7,8,9],[0,0,0]]
-    #Meant for use with numpy, and returns a numpy array.
-    #Does NOT mutate matrix. It makes a copy.
+    """
+    Adds a column to the bottom of a matrix with a constant value equal to scalar
+    Example: append_uniform_column([[1,2,3],[4,5,6],[7,8,9]],0)   ====   [[1,2,3],[4,5,6],[7,8,9],[0,0,0]]
+    Meant for use with numpy, and returns a numpy array.
+    Does NOT mutate matrix. It makes a copy.
+    """
     matrix=np.asarray(matrix)#If this line cause errors, then it's up to the user of this function to figure out why.
     return np.column_stack((matrix,scalar*np.ones((matrix.shape[0],1))))
 def append_zeros_column(matrix):
-    #Adds a column of zeros to the bottom of a matrix
-    #Example: append_zeros_column([[1,2,3],[4,5,6],[7,8,9]])   ====   [[1,2,3],[4,5,6],[7,8,9],[0,0,0]]
-    #Meant for use with numpy, and returns a numpy array.
-    #Does NOT mutate matrix. It makes a copy.
+    """
+    Adds a column of zeros to the bottom of a matrix
+    Example: append_zeros_column([[1,2,3],[4,5,6],[7,8,9]])   ====   [[1,2,3],[4,5,6],[7,8,9],[0,0,0]]
+    Meant for use with numpy, and returns a numpy array.
+    Does NOT mutate matrix. It makes a copy.
+    """
     return append_uniform_column(matrix,0)
 def append_ones_column(matrix):
+    """
     #Adds a column of ones to the bottom of a matrix
     #Example: append_zeros_column([[1,2,3],[4,5,6],[7,8,9]])   ====   [[1,2,3],[4,5,6],[7,8,9],[1,1,1]]
     #Meant for use with numpy, and returns a numpy array.
     #Does NOT mutate matrix. It makes a copy.
+    """
     return append_uniform_column(matrix,1)
 #endregion
 
 #region some more math stuff
 def squared_euclidean_distance(from_point,to_point):
-    #This function exists so you don't have to use euclidean_distance then square it (which is both inefficient and can lead to floating point errors)
-    #from_point and to_point are like (x0,y0,...) or [x0,y0,z0,...], or some numpy equivalent
-    #Example:   euclidean_distance([0,0,0],[1,1,0]) ==== 2
-    ###NOTE we use float64 because float128 can cause problems with some libraries and is annoying to deal with...
-    ###Note: We convert to np.complex256 for maximum accuracy across all datatypes
+    """
+    This function exists so you don't have to use euclidean_distance then square it (which is both inefficient and can lead to floating point errors)
+    from_point and to_point are like (x0,y0,...) or [x0,y0,z0,...], or some numpy equivalent
+    Example:   euclidean_distance([0,0,0],[1,1,0]) ==== 2
+    ##NOTE we use float64 because float128 can cause problems with some libraries and is annoying to deal with...
+    ##Note: We convert to np.complex256 for maximum accuracy across all datatypes
+    """
     return float(np.sum(np.abs(as_numpy_array(to_point)-as_numpy_array(from_point))**2))
     return float(np.sum(np.abs((np.asarray(to_point,dtype=np.complex256)-np.asarray(from_point,dtype=np.complex256)))**2)) #This breaks on my M1 mac - cant handle that datatype
 
 def euclidean_distance(from_point,to_point):
-    #from_point and to_point are like (x0,y0,...) or [x0,y0,z0,...], or some numpy equivalent
-    #Example:   euclidean_distance([0,0,0],[1,1,0]) ==== sqrt(2)
+    """
+    from_point and to_point are like (x0,y0,...) or [x0,y0,z0,...], or some numpy equivalent
+    Example:   euclidean_distance([0,0,0],[1,1,0]) ==== sqrt(2)
+    """
     return squared_euclidean_distance(from_point,to_point)**.5
 
-def cumulative_euclidean_distances(points,*,include_zero=False,loop=False):
-    #If loop is true, as also add the distance from the last point to the first point at the end (one extra element in the output)
-    #'points' represents a list of points
-    #Returns an array of the cumulative distances from each point to each next point
-    #Examples:
-    #    cumulative_euclidean_distances([[0,1],[0,0],[1,0]],include_zero=False)  ->     [1. 2.]
-    #    cumulative_euclidean_distances([[0,1],[0,0],[1,0]],include_zero= True)  ->  [0. 1. 2.]
+def differential_euclidean_distances(points,*,include_zero=False,loop=False):
+    """
+    Sequential distances between points, like np.diff except returns a single vector and has options like include_zero and loop. 
+    TODO: Make better doc by looking at cumulative_euclidean_distances
+    """
     points=np.asarray(points)
     if loop:points=np.asarray([*points,points[0]])
     deltas=np.diff(points,axis=0)
-    dists =np.sum(deltas**2,axis=1)**.5
-    cumsum=np.cumsum(dists)
-    return np.asarray([0,*cumsum]) if include_zero else cumsum
+    dists =np.sum(deltas**2,axis=tuple(range(1,deltas.ndim)))**.5
+    return np.asarray([0,*dists]) if include_zero else dists
+
+def cumulative_euclidean_distances(points,*,include_zero=False,loop=False):
+    """
+    If loop is true, as also add the distance from the last point to the first point at the end (one extra element in the output)
+    'points' represents a list of points
+    Returns an array of the cumulative distances from each point to each next point
+    Examples:
+        cumulative_euclidean_distances([[0,1],[0,0],[1,0]],include_zero=False)  ->     [1. 2.]
+        cumulative_euclidean_distances([[0,1],[0,0],[1,0]],include_zero= True)  ->  [0. 1. 2.]
+    """
+    return np.cumsum(differential_euclidean_distances(points, include_zero=include_zero,loop=loop))
 
 def evenly_split_path(path,number_of_pieces=100,*,loop=False):
     #Path is a list of points. Can be any number of dimensions.
@@ -26339,10 +26542,12 @@ def _set_ryan_tmux_conf():
         bind C new-window -c "#{pane_current_path}"  #Use capital C to create new window with same directory as current pane
     #COLORS:
         #Let tmux use 256 colors, instead of being limited to plain boring ascii colors
-        set -g default-terminal "screen-256color"
-        # set -g default-terminal "tmux-256color"
-        # set -g default-terminal "xterm"
-
+        # set -g default-terminal "tmux-256color" #Glitchy, can't reset. Breaks lazygit. Don't use.
+        # set -g default-terminal "screen-256color"  # Supports: Pudb 256 colors, No mouse dragging in vim
+        # set -g default-terminal "xterm"  #Supports: Truecolor, mouse dragging, Pudb 256 colors does NOT work, 
+        set -g default-terminal "${TERM}" #Automatically choose: https://www.reddit.com/r/neovim/comments/11usepy/how_to_properly_set_tmux_truecolor_capability/
+        #The above made mouse, truecolor, 256 color, pudb 256 color, and mouse drag work in both local AND nested tmux. WHY isn't this the default?
+k>
         #TRUECOLOR SUPPORT!!!
         #NOTE: If you're using MOSH, you won't get 24 bit color support (aka truecolor support). The code exists in the mosh github repo, but the last release was in 2015...(as of 2022 writing this, it was 7 years ago...)
         #To get 24 bit color support in mosh you have to build it yourself! I PROMISE IT'S NOT THAT BAD (it's really quick)! https://github.com/mobile-shell/mosh/wiki/Build-Instructions
@@ -26356,7 +26561,7 @@ def _set_ryan_tmux_conf():
         #STATUSBAR:
             #COLOR:
                 #Pro tip: To see all 256 colors, use rp.print_fansi_reference_table()
-                # set -g status-style bg=colour97 #Set the color of the status bar
+                # set -g status-style bg=colour97 #Set the color of the status bak
                 # set -g pane-active-border-style bg=default,fg=colour97 #The border colors between panes
                 # set -g mode-style bg=colour213,fg=black #Set the color of text selection
             #TEXT: 
@@ -26442,7 +26647,73 @@ sudo install lazygit /usr/local/bin""")
         
     
     
+def _install_filebrowser():
+    """https://filebrowser.org/installation"""
 
+    system_commands = get_system_commands()
+
+    if "filebrowser" in system_commands:
+        print("r._install_filebrowser: filebrowser already installed")
+        return
+    if "brew" in system_commands:
+        command = "brew tap filebrowser/tap && brew install filebrowser"
+    elif currently_running_windows():
+        command = "iwr -useb https://raw.githubusercontent.com/filebrowser/get/master/get.ps1 | iex"
+    elif currently_running_unix():
+        command = "curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh"
+    else:
+        assert False, "Unsupported OS"
+
+    os.system(command)
+
+
+def _configure_filebrowser():
+    #https://filebrowser.org/configuration/authentication-method
+    os.system('filebrowser config set --auth.method=noauth')
+    
+def _run_filebrowser(port=8080, root='.'):
+    _install_filebrowser()
+    _configure_filebrowser()
+
+    port=get_next_free_port(port)
+    command = 'filebrowser -r '+shlex.quote(root)+' -p '+str(port)
+    print('r._run_filebrowser: Running '+repr(command))
+
+    os.system(command)
+
+
+def port_is_taken(port: int) -> bool:
+    """
+    Check if a port is already in use.
+
+    Args:
+    port (int): The port number to check.
+
+    Returns:
+    bool: True if the port is in use, False otherwise.
+    """
+    assert isinstance(port, int)
+
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            # Try to bind to the port on all available interfaces
+            s.bind(("", port))
+            return False  # If bind is successful, port is free
+        except socket.error:
+            return True  # If bind fails, port is likely in use
+
+def get_next_free_port(port):
+    """
+    Find the next free port starting from a given port.
+    For example, if port=8080 and port 8080 is taken, it tries port 8081.
+    And if that's taken, tries port 8082 until it finds some free, unused port.
+    """
+
+    assert isinstance(port, int)
+    while port_is_taken(port):
+        port+=1
+    return port
 
 
 
@@ -28160,8 +28431,8 @@ def torch_resize_image(image,size,interp='bilinear'):
 
     if is_number(size):
         assert size>=0, 'Cannot resize an image by a negative factor'
-        height=torch.round(image.shape[0]*size)
-        width =torch.round(image.shape[1]*size)
+        height=round(image.shape[0]*size)
+        width =round(image.shape[1]*size)
     else:
         height,width=size
         height=image.shape[0] if height is None else height
