@@ -85,7 +85,6 @@
 /Library/Frameworks/Python.framework/Versions/3.5/lib
 /Library/Frameworks/Python.framework
 /Library/Frameworks
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Users/Ryan/.vim/bundle/minimap.vim/plugin
@@ -93,8 +92,9 @@
 /Users/Ryan/.vim/bundle/minimap.vim/bin
 /Users/Ryan/PycharmProjects/QuickPython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
+/Users/Ryan/.vim/bundle/vim-xtabline
+/Users/Ryan/.vim
+/Users/Ryan/.vim/bundle
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
 /Users/Ryan
-/Users/Ryan/.vim/bundle/vim-xtabline
-/Users/Ryan/.vim/bundle
-/Users/Ryan/.vim
