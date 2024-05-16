@@ -223,7 +223,10 @@ Plugin 'mgedmin/taghelper.vim'
 "
 " set statusline=%<%f\ %h%m%r\ %{taghelper#curtag()}%*%=%-14.(%l,%c%V%)\ %P
 " Only file NAME, not path:
-set statusline=%<%t\ %h%m%r\ %{taghelper#curtag()}%*%=%-14.(%l,%c%V%)\ %P
+" set statusline=%<%t\ %h%m%r\ %{taghelper#curtag()}%*%=%-14.(%l,%c%V%)\ %P
+" Attempt to center the taghelper
+set statusline=%<%t\ %h%m%r%=\ %{taghelper#curtag()}\ %=%-14.(%l,%c%V%)\ %P
+
 
 
 "Shows the number of lines we're selecting in visual mode on the bottom right of the screen
@@ -1035,7 +1038,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             "Will show spaces as ·
             nnoremap \jW :call ToggleSpaceVisualization()<CR>
         
-        "STRIP AND PROPOGATE WHITSPACE:
+        "STRIP AND PROPOGATE WHITESPACE:
             command! StripWhitespace call StripWhitespace()
             command! PropagateWhitespace call PropagateWhitespace()
         
@@ -1046,6 +1049,11 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             " Example: ysiw(
             " Example: S(
             Plugin 'tpope/vim-surround'
+
+            " Multiline strings with d and D  (d for docstring)
+            " https://github.com/tpope/vim-surround/issues/213
+            let b:surround_{char2nr('d')} = "'''\r'''"
+            let b:surround_{char2nr('D')} = "\"\"\"\r\"\"\""
         
         "LINE WRAP: f7 \jw
             function ToggleWrap()
@@ -1063,6 +1071,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             endfunction
             map <F7>       :call ToggleWrap()<CR>
             map <leader>jw :call ToggleWrap()<CR>
+
         " INDENTATION: \<tab><tab>   \<tab><space> \<tab>2  \<tab>4  \<tab>8
             " Disabled because it doesn't work very well - it made my vimrc use tabs, and rp have 2-spaces-indent.
             " Plugin 'tpope/vim-sleuth' "Auto-detects what indentation the file uses
@@ -1090,6 +1099,9 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
 
             " I want >> to indent comments that begin at the beginning of a line. After setting this, I can. Multiline strings are indented either way.
             autocmd FileType python setlocal nosmartindent
+
+            "Make shift-tab unindent in insert mode
+            inoremap <s-tab> <Esc><<gi
 
         " SYNTAX HIGHLIGHTING: fh \sss \ssv \ssp \ss...
            
@@ -1129,6 +1141,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
                 nnoremap <leader>ssh :set filetype=html<cr>
                 nnoremap <leader>ssz :set filetype=zsh<cr>
                 nnoremap <leader>ssb :set filetype=bash<cr>
+
         " INDENT LINES: f6 \ji
             "Disable by default...
             let g:indentLine_enabled = 0
@@ -1196,10 +1209,22 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             " Displays an entire tree for undo/redo's
             Plugin 'mbbill/undotree'
             nnoremap <leader>ju :UndotreeToggle<CR>
+
+        "VISUAL SELECTION:
+            "SELECTION HISTORY:  [v ]v
+                "Currently a bit annoying - it tracks too much history
+                "I raised an issue on github for it
+                let g:visual_history_create_mappings = 0
+                vmap <silent> [v <Plug>(SelectPrevious)
+                vmap <silent> ]v <Plug>(SelectNext)
+                nmap <silent> [v <Plug>(SelectPrevious)
+                nmap <silent> ]v <Plug>(SelectNext)
+                Plugin 'Matt-A-Bennett/vim-visual-history'
     
     "NAVIGATION:
         "SEARCHING: * / \ff \fr
             " TIP:  add \c at the end of a search to make it case-insensitive.   /ryan\c   matches   Ryan
+            " TIP:  gn  is a motion to select the current search result!    So,  cgnHello replaces the next search result with Hello
             
             " Allows us to search for text with * from visual mode
             Plugin 'bronson/vim-visual-star-search' " How was this not already a thing?
@@ -1235,6 +1260,8 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             "
             nnoremap <leader>ff :Farf<cr>
             nnoremap <leader>fr :Farr<cr>
+            vnoremap <leader>ff :Farf<cr>
+            vnoremap <leader>fr :Farr<cr>
             let g:far#enable_undo=1
             let g:far#limit=10000   "Default = 1000
             let g:far#prompt_mapping = {

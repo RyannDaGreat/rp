@@ -3068,6 +3068,10 @@ def load_image_from_clipboard():
 
 def load_image(location,*,use_cache=False):
     """ Automatically detect if location is a URL or a file path and try to smartly choose the appropriate function to load the image """
+
+    from rp.experimental.debug_comment import debug_comment
+    debug_comment(location)# ----> Error: name 'EOIJSIODF' is not defined
+
     assert isinstance(location,str),'load_image error: location should be a string representing a URL or file path. However, location is not a string. type(location)=='+repr(type(location))+' and location=='+repr(location)
     if path_exists(location):
         location=get_absolute_path(location) #This is important for caching. ./image.jpg might mean different things when we're running in different directories.
@@ -25429,6 +25433,7 @@ def debug(level=0):
         # text_to_speech("OK AND THE OLD ONE")
         return set_trace()
 
+from rp.experimental.debug_comment import debug_comment
 
 def is_a_matrix(matrix):
     matrix=as_numpy_array(matrix)
