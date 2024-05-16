@@ -1,6 +1,7 @@
 import inspect
 import atexit
 import re
+import rp
 
 #TODO: Integrate this into RP's repl too somehow
 #      when repl command finishes, we should also trigger it - not just atexit
@@ -20,6 +21,9 @@ def is_zero_arg_callable(func):
 _debug_eval_results = []
 
 def debug_comment(value):
+    # TODO: allow args and kwargs here too, nicely formatted of course
+
+
     # Get caller's frame
     frame = inspect.currentframe().f_back
     filename = frame.f_globals['__file__']
@@ -47,6 +51,10 @@ def debug_comment(value):
     _debug_eval_results.append((filename, lineno, result))
     
     # Return result to allow inline usage if desired
+
+    if '\n' in result: 
+        result=repr(result) #No multiline allowed! Has to fit in a single comment string
+
     return result
 
 def format_debug_comment(result):
@@ -82,9 +90,10 @@ def _perform_debug_eval_substitutions():
     for filename, lines in file_changes.items():
         with open(filename, 'w') as file:
             try:
+                rp.fansi_print("rp.debug_comment: writing to "+filename, 'green', 'underlined')
                 file.writelines(lines)
             except Exception:
-                print("debug_comment: Failed to modify "+filename)
+                rp.fansi_print("rp.debug_comment: Failed to modify "+filename, 'green', 'underlined')
 
 # Example usage within the same file
 if __name__ == "__main__":
