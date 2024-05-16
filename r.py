@@ -21000,13 +21000,15 @@ def rp_glob(*args,**kwargs):
 
 
 def fractional_integral_in_frequency_domain(coefficients,n=1):
-    #WARNING: Make sure to use the right kind of fft (np.fft.rfft vs np.fft.fft)
-    #This function integrates or differentiates signals using just their fourier coefficients, and returns a new set coefficients
-    #n is the number of times we integrate this function. n can be negative, which would imply a derivative. The 0'th coefficient (the average value of the respective time domain) is preserved with this function; even when taking the derivative. This is because of a division by zero error that would occur otherwise and must therefore be handled somehow.
-    #Some properties:
-    #  Let f=fractional_integral_in_frequency_domain
-    #  For all c: f(c,0) = c
-    #  For all n, m and c: f(f(c,n),m) = f(c,n+m)
+    """
+    WARNING: Make sure to use the right kind of fft (np.fft.rfft vs np.fft.fft)
+    This function integrates or differentiates signals using just their fourier coefficients, and returns a new set coefficients
+    n is the number of times we integrate this function. n can be negative, which would imply a derivative. The 0'th coefficient (the average value of the respective time domain) is preserved with this function; even when taking the derivative. This is because of a division by zero error that would occur otherwise and must therefore be handled somehow.
+    Some properties:
+      Let f=fractional_integral_in_frequency_domain
+      For all c: f(c,0) = c
+      For all n, m and c: f(f(c,n),m) = f(c,n+m)
+    """
     coefficients=np.asarray(coefficients,np.complex128)
     assert is_complex_vector(coefficients),'coefficients should be a complex vector'
     coefficients[1:]*=(1j/np.arange(len(coefficients))[1:])**n
@@ -21014,40 +21016,42 @@ def fractional_integral_in_frequency_domain(coefficients,n=1):
 
 
 class FlannDict:
-    #TODO: Finish bundling PyFlann's binaries into rp.
-    #FLANN is an algorithm that calculates the (approximate) nearest neigbours of a point very, very quickly. Originally called nearest_neighbor_dict, but this is ambiguous in the case that we wish to use other algorithms.
-    #in addition to real keys, FlannDict supports complex keys of any numpy shape. But, just try to be consistent else it will throw errors (by design).
-    #This is abstraction above FLANN that lets you use nearest neighbor search with the interface of a dictionary; automatically rebuilding the index as needed (for a huge performance boost).
-    #This interface can be replaced by a brute force search...but why do that?
-    #FlannDict caches any queries you make, so if you query the same point twice it will just reuse those calculations. This cache is automatically reset upon rebuilding the FLANN tree.
-    #Uses nearest-neighbor to match keys. Currently uses FLANN.
-    #Use splicing to get k nearest neighbours like this: d[point:k] (will return a list with k nearest neighbours.) K must be >=0.
-    #nn stands for nearest neighbor, and knn stands for 'k nearest neighbours'
-    #Example:
-    # >>> n=FlannDict()
-    # >>> n[[0,0,0,0]]='Hello!'
-    # >>> n[[1,0,0,0]]='First!'
-    # >>> n[[0,1,0,0]]='Second!'
-    # >>> n[[0,0,1,0]]='Third!'
-    # >>> n[[0,0,0,1]]='Fourth!'
-    #
-    # >>> n[[0,0,799,75]]
-    # ans = Third!
-    #
-    # >>> n[[0,0,0]]
-    # ERROR: AssertionError: Wrong key shape! key.shape==(3,) but self._key_shape==(4,)
-    #
-    # >>> n[[0,0,7,75]]
-    # ans = Fourth!
-    #
-    #ANOTHER EXAMPLE:
-    #  d=FlannDict()
-    #  d[1,2,3]=3
-    #  d[1,2,3.1]=1
-    #  d[1,2,3.2]=2
-    #  d[1,2,3.3]=3
-    #  d[1,2,3.4]=4
-    #  ans=d[1,2,3.2:3] #Returns ans=[2, 3, 1]
+    """
+    TODO: Finish bundling PyFlann's binaries into rp.
+    FLANN is an algorithm that calculates the (approximate) nearest neigbours of a point very, very quickly. Originally called nearest_neighbor_dict, but this is ambiguous in the case that we wish to use other algorithms.
+    in addition to real keys, FlannDict supports complex keys of any numpy shape. But, just try to be consistent else it will throw errors (by design).
+    This is abstraction above FLANN that lets you use nearest neighbor search with the interface of a dictionary; automatically rebuilding the index as needed (for a huge performance boost).
+    This interface can be replaced by a brute force search...but why do that?
+    FlannDict caches any queries you make, so if you query the same point twice it will just reuse those calculations. This cache is automatically reset upon rebuilding the FLANN tree.
+    Uses nearest-neighbor to match keys. Currently uses FLANN.
+    Use splicing to get k nearest neighbours like this: d[point:k] (will return a list with k nearest neighbours.) K must be >=0.
+    nn stands for nearest neighbor, and knn stands for 'k nearest neighbours'
+    Example:
+     >>> n=FlannDict()
+     >>> n[[0,0,0,0]]='Hello!'
+     >>> n[[1,0,0,0]]='First!'
+     >>> n[[0,1,0,0]]='Second!'
+     >>> n[[0,0,1,0]]='Third!'
+     >>> n[[0,0,0,1]]='Fourth!'
+    
+     >>> n[[0,0,799,75]]
+     ans = Third!
+    
+     >>> n[[0,0,0]]
+     ERROR: AssertionError: Wrong key shape! key.shape==(3,) but self._key_shape==(4,)
+    
+     >>> n[[0,0,7,75]]
+     ans = Fourth!
+    
+    ANOTHER EXAMPLE:
+      d=FlannDict()
+      d[1,2,3]=3
+      d[1,2,3.1]=1
+      d[1,2,3.2]=2
+      d[1,2,3.3]=3
+      d[1,2,3.4]=4
+      ans=d[1,2,3.2:3] #Returns ans=[2, 3, 1]
+    """
 
     def __init__(self,*,branching=32,iterations=7,checks=160,complex_keys=False,include_dists=False):
         # pip_import('pyflann')#I would use this library, but it's broken for python3 and has to be fixed with 2to3 before using it (even the one on pypi)
@@ -21135,27 +21139,29 @@ class FlannDict:
         return key.tolist()
 
 def best_flann_dict_matches(queries,flann_dict,n:int=None,query_to_vector=lambda x:x):
-    #Match multiple vectors to points in a FlannDict and return the results in sorted order of distance as tuples [(query,flann_result,distance)...]
-    #Return the top n matches for each query, all sorted by flann's distance metric
-    #HINT: If this function is too slow, try set
-    #EXAMPLE:
-    #    f=FlannDict()
-    #    for c in [4+6j,2+9j,1+1j,0+0j]:
-    #        f[c]=c
-    #    class test:
-    #        def __init__(self,x):self.x=x
-    #        def __repr__(self):return 'test('+str(self.x)+')'
-    #    print(closest_flann_matches([test(3+1j),test(3+6j),test(7+301j)],flann_dict=f,n=3,query_to_vector=lambda _:_.x))
-    #PRINTS:
-    # [((4+6j), test((3+6j  )), 1.0000),
-    #  ((1+1j), test((3+1j  )), 2.0000),
-    #  ((0+0j), test((3+1j  )), 3.1622),
-    #  ((2+9j), test((3+6j  )), 3.1622),
-    #  ((4+6j), test((3+1j  )), 5.0990),
-    #  ((1+1j), test((3+6j  )), 5.3851),
-    #  ((2+9j), test((7+301j)), 292.04),
-    #  ((4+6j), test((7+301j)), 295.01),
-    #  ((1+1j), test((7+301j)), 300.05)]
+    """
+    Match multiple vectors to points in a FlannDict and return the results in sorted order of distance as tuples [(query,flann_result,distance)...]
+    Return the top n matches for each query, all sorted by flann's distance metric
+    HINT: If this function is too slow, try set
+    EXAMPLE:
+        f=FlannDict()
+        for c in [4+6j,2+9j,1+1j,0+0j]:
+            f[c]=c
+        class test:
+            def __init__(self,x):self.x=x
+            def __repr__(self):return 'test('+str(self.x)+')'
+        print(closest_flann_matches([test(3+1j),test(3+6j),test(7+301j)],flann_dict=f,n=3,query_to_vector=lambda _:_.x))
+    PRINTS:
+     [((4+6j), test((3+6j  )), 1.0000),
+      ((1+1j), test((3+1j  )), 2.0000),
+      ((0+0j), test((3+1j  )), 3.1622),
+      ((2+9j), test((3+6j  )), 3.1622),
+      ((4+6j), test((3+1j  )), 5.0990),
+      ((1+1j), test((3+6j  )), 5.3851),
+      ((2+9j), test((7+301j)), 292.04),
+      ((4+6j), test((7+301j)), 295.01),
+      ((1+1j), test((7+301j)), 300.05)]
+    """
 
     assert isinstance(flann_dict,FlannDict)
     assert callable(query_to_vector)
@@ -21177,25 +21183,27 @@ def best_flann_dict_matches(queries,flann_dict,n:int=None,query_to_vector=lambda
     return matches
 
 def knn_clusters(vectors,k=5,spatial_dict=FlannDict):
-    #Given a list of vectors, return a list of sets of vectors belonging to each cluster resulting from the k-nearest neighbor clustering algorithm
-    #Requires MUTUAL neighbors to make an edge (aka given two vertices a and b, a must be within b's first closest k neighbours AND b must be within a's closest k neighbours to form an edge. This condition is both sufficient and necessary to form an edge.)
-    #EXAMPLE WITH VISUALIZATION: (Try changing n and k)
-    #     def test(n=40,k=3):
-    #         r=10#Resolution multiplier
-    #         image=np.zeros((r*100,r*100,3))
-    #         ans=randints_complex(n)
-    #         ans=as_points_array(ans)
-    #         p= ans
-    #         ans=knn_clusters(p,k)
-    #         for s in ans:
-    #             for c in s:
-    #                 for C in s:
-    #                     image=cv_draw_contour(image,np.asarray([c,C])*r,color=(0,255,255))
+    """
+    Given a list of vectors, return a list of sets of vectors belonging to each cluster resulting from the k-nearest neighbor clustering algorithm
+    Requires MUTUAL neighbors to make an edge (aka given two vertices a and b, a must be within b's first closest k neighbours AND b must be within a's closest k neighbours to form an edge. This condition is both sufficient and necessary to form an edge.)
+    EXAMPLE WITH VISUALIZATION: (Try changing n and k)
+         def test(n=40,k=3):
+             r=10#Resolution multiplier
+             image=np.zeros((r*100,r*100,3))
+             ans=randints_complex(n)
+             ans=as_points_array(ans)
+             p= ans
+             ans=knn_clusters(p,k)
+             for s in ans:
+                 for c in s:
+                     for C in s:
+                         image=cv_draw_contour(image,np.asarray([c,C])*r,color=(0,255,255))
 
-    #         for pp in p:
-    #             image=cv_draw_circle(image,*(pp*r).astype(int),radius=3)
-    #         display_image(image,False)
-    #     test()
+             for pp in p:
+                 image=cv_draw_circle(image,*(pp*r).astype(int),radius=3)
+             display_image(image,False)
+         test()
+    """
 
     spatial_dict=spatial_dict()#If you want to override the default FlannDict paramers, pass a lambda through this function's spatial_dict parameter
     #Note: This method is logically clean-ish but is probably much less efficient than it could be. If it matters, there's probably many better ways to implement this function.
@@ -21272,49 +21280,49 @@ def vertically_concatenated_images(*image_list):
 
 def grid_concatenated_images(image_grid):  
     """
-    #Given a list of lists of images, like [[image1, image2],[image3,image4]], join them all together into one big image
-    #If you want to skip an image in the grid, you can use None to represent a 1x1 transparent pixel
-    #Often, when given a list of images you want to put into a grid, 
-    #   split_into_sublists(images, number_of_images_per_row) will be a good companion function!
-    #   See the example functions...
-    #It's a combination of vertically_concatenated_images and horizontally_concatenated_images simultaneously that maintains a gridlike structure
-    #EXAMPLE:
-    #    doggy=load_image('https://nationaltoday.com/wp-content/uploads/2020/02/doggy-date-night.jpg')
-    #    imagechunks=[]
-    #    imagechunks+=list(split_tensor_into_regions(doggy,4,2))
-    #    imagechunks+=list(split_tensor_into_regions(doggy,2,4))
-    #    imagechunks=[bordered_image_solid_color(image,thickness=5,color=(0,1,0,1)) for image in imagechunks]
-    #    imagechunks=shuffled(imagechunks)
-    #    ans=split_into_sublists(imagechunks,4)
-    #    display_image(grid_concatenated_images(ans))
-    #EXAMPLE:
-    #    dog=load_image('https://nationaltoday.com/wp-content/uploads/2020/02/doggy-date-night.jpg')
-    #    dog=resize_image(dog,.25)
-    #    regions=split_tensor_into_regions(dog,3,5,flat=False)
-    #    regions=grid2d_map(regions, lambda image: bordered_image_solid_color(image,color=(1,0,0,1),thickness=5))
-    #    for angle in list(range(360)):
-    #        display_image(grid_concatenated_images(grid2d_map(regions, lambda image: rotate_image(image,angle))))
-    #EXAMPLE:
-    #    ans='https://pbs.twimg.com/profile_images/945393898649665536/Ea5FkV5q.jpg'
-    #    ans=load_image(ans)
-    #    ans=split_tensor_into_regions(ans,10,10)
-    #    ans=[bordered_image_solid_color(x,color=random_rgba_float_color(),thickness=5) for x in ans]
-    #    ans=split_into_sublists(ans,10)
-    #    ans=grid_concatenated_images(ans)
-    #    display_image(ans)
-    #EXAMPLE:
-    #    ans='https://pbs.twimg.com/profile_images/945393898649665536/Ea5FkV5q.jpg'
-    #    ans=load_image(ans)
-    #    tiles=split_tensor_into_regions(ans,10,10)
-    #    ans=[horizontally_concatenated_images(tile,resize_image(cv_text_to_image(str(i)),.25)) for i,tile in enumerate(tiles)]
-    #    ans=[bordered_image_solid_color(an,color=(0,.5,1,1)) for an in ans]
-    #    ans=split_into_sublists(ans,10)
-    #    ans=grid_concatenated_images(ans)
-    #    display_image(ans)
-    #EXAMPLE:
-    #    i='https://hips.hearstapps.com/hmg-prod/images/dog-puppy-on-garden-royalty-free-image-1586966191.jpg?crop=0.752xw:1.00xh;0.175xw,0&resize=1200:*'
-    #    i=cv_resize_image(load_image(i),(256,256))
-    #    display_image(grid_concatenated_images([[None,i,None],[i,None,i],[None,i,None]]))
+    Given a list of lists of images, like [[image1, image2],[image3,image4]], join them all together into one big image
+    If you want to skip an image in the grid, you can use None to represent a 1x1 transparent pixel
+    Often, when given a list of images you want to put into a grid, 
+       split_into_sublists(images, number_of_images_per_row) will be a good companion function!
+       See the example functions...
+    It's a combination of vertically_concatenated_images and horizontally_concatenated_images simultaneously that maintains a gridlike structure
+    EXAMPLE:
+        doggy=load_image('https://nationaltoday.com/wp-content/uploads/2020/02/doggy-date-night.jpg')
+        imagechunks=[]
+        imagechunks+=list(split_tensor_into_regions(doggy,4,2))
+        imagechunks+=list(split_tensor_into_regions(doggy,2,4))
+        imagechunks=[bordered_image_solid_color(image,thickness=5,color=(0,1,0,1)) for image in imagechunks]
+        imagechunks=shuffled(imagechunks)
+        ans=split_into_sublists(imagechunks,4)
+        display_image(grid_concatenated_images(ans))
+    EXAMPLE:
+        dog=load_image('https://nationaltoday.com/wp-content/uploads/2020/02/doggy-date-night.jpg')
+        dog=resize_image(dog,.25)
+        regions=split_tensor_into_regions(dog,3,5,flat=False)
+        regions=grid2d_map(regions, lambda image: bordered_image_solid_color(image,color=(1,0,0,1),thickness=5))
+        for angle in list(range(360)):
+            display_image(grid_concatenated_images(grid2d_map(regions, lambda image: rotate_image(image,angle))))
+    EXAMPLE:
+        ans='https://pbs.twimg.com/profile_images/945393898649665536/Ea5FkV5q.jpg'
+        ans=load_image(ans)
+        ans=split_tensor_into_regions(ans,10,10)
+        ans=[bordered_image_solid_color(x,color=random_rgba_float_color(),thickness=5) for x in ans]
+        ans=split_into_sublists(ans,10)
+        ans=grid_concatenated_images(ans)
+        display_image(ans)
+    EXAMPLE:
+        ans='https://pbs.twimg.com/profile_images/945393898649665536/Ea5FkV5q.jpg'
+        ans=load_image(ans)
+        tiles=split_tensor_into_regions(ans,10,10)
+        ans=[horizontally_concatenated_images(tile,resize_image(cv_text_to_image(str(i)),.25)) for i,tile in enumerate(tiles)]
+        ans=[bordered_image_solid_color(an,color=(0,.5,1,1)) for an in ans]
+        ans=split_into_sublists(ans,10)
+        ans=grid_concatenated_images(ans)
+        display_image(ans)
+    EXAMPLE:
+        i='https://hips.hearstapps.com/hmg-prod/images/dog-puppy-on-garden-royalty-free-image-1586966191.jpg?crop=0.752xw:1.00xh;0.175xw,0&resize=1200:*'
+        i=cv_resize_image(load_image(i),(256,256))
+        display_image(grid_concatenated_images([[None,i,None],[i,None,i],[None,i,None]]))
     """
 
     image_grid=list(image_grid)
@@ -21340,11 +21348,13 @@ def grid_concatenated_images(image_grid):
     return output_image
 
 def tiled_images(images,length=None,border_color=(.5,.5,.5,1),border_thickness=1,transpose=False):
-    #EXAMPLE:
-    #   display_image_in_terminal_color(tiled_images([load_image('https://i.pinimg.com/236x/36/69/39/36693999b6e24b1d06d0ee21c9ae320d--caged-nicolas-cage.jpg')]*25))
-    #Sugar for what I often do with grid_concatenated_images
-    #length can be None, an int, or a float specifying aspect ratio
-    #WARNING: Using length as an aspect ratio is NOT to be used in any code that will last; that functionality is subject to change! Please don't be afraid to make it better (right now the aspect ratio implicitly assumes all the given images are the same size and square...which they're not) 
+    """
+    EXAMPLE:
+       display_image_in_terminal_color(tiled_images([load_image('https://i.pinimg.com/236x/36/69/39/36693999b6e24b1d06d0ee21c9ae320d--caged-nicolas-cage.jpg')]*25))
+    Sugar for what I often do with grid_concatenated_images
+    length can be None, an int, or a float specifying aspect ratio
+    WARNING: Using length as an aspect ratio is NOT to be used in any code that will last; that functionality is subject to change! Please don't be afraid to make it better (right now the aspect ratio implicitly assumes all the given images are the same size and square...which they're not) 
+    """
 
     if transpose:
         #Tile the images from top to bottom instead of left to right. Length is now vertical
@@ -21693,6 +21703,14 @@ def as_binary_image(image,dither=False):
     if is_binary_image(image):return _binary_image_to_binary_image(image)
     assert False,_channel_conversion_error_message
 
+#TODO: Make these faster in special cases, such as where images is a numpy array - and in this case also return a numpy array
+def as_float_images    (images): return [as_float_image    (x) for x in images]
+def as_byte_images     (images): return [as_byte_image     (x) for x in images]
+def as_binary_images   (images): return [as_binary_image   (x) for x in images]
+def as_rgb_images      (images): return [as_rgb_image      (x) for x in images]
+def as_rgba_images     (images): return [as_rgba_image     (x) for x in images]
+def as_grayscale_images(images): return [as_grayscale_image(x) for x in images]
+
 def random_rgb_byte_color():
     return (randint(255),randint(255),randint(255))
 def random_rgba_byte_color():
@@ -21727,9 +21745,11 @@ def is_float_color(color):
     return is_iterable(color) and all(is_number(x) for x in color) and all(np.issubdtype(x.dtype,np.floating) for x in as_numpy_array(color))
 
 def hex_color_to_byte_color(hex_color:str):
-    #EXAMPLE:
-    #     >>> hex_color_to_byte_color('#007FFF')
-    #    ans = (0, 127, 255)
+    """
+    EXAMPLE:
+         >>> hex_color_to_byte_color('#007FFF')
+        ans = (0, 127, 255)
+    """
     if len(hex_color)==len('#ABCDEF'):
         hex_color=hex_color[1:]
     assert len(hex_color)==len('ABCDEF'), 'Hex colors must be RGB'
@@ -22012,29 +22032,31 @@ def running_in_docker():
     return Path('/.dockerenv').is_file() or cgroup.is_file() and 'docker' in cgroup.read_text()
 
 def split_tensor_into_regions(tensor,*counts,flat=True,strict=False):
-    #Return the tensor into multiple rectangular regions specified by th number of cuts we make on each dimension.
-    #Uses: Splitting pictures that contain multiple entried of the mnist dataset into usable chunks of data
-    # Let ‹a,b,c...› represent some numpy tensor with shape (a,b,c...)
-    # If strict==True, then all of tensor.shape's dimensions must evenly divide counts. Otherwise, if strict==False, tensor will be automatically cropped to accomodate the given *counts
-    # EXAMPLES:
-    #     split_tensor_into_regions(‹a,b,c›, x, y, flat=False)  ->  ‹x, y, a//x, b//y, c›  #Think of c as 3, and a and b the width of some RGB image
-    #     split_tensor_into_regions(‹a,b,c›, x, y, flat=True )  ->  ‹x*y , a//x, b//y, c›  #Instead of addresing the regions by coordinates, we get a flat list of regions
-    #     split_tensor_into_regions(‹a,b,c›, x, y, z, flat=True )  ->  ‹x*y*z  , a//x, b//y, c//z›
-    #     split_tensor_into_regions(‹a,b,c›, x, y, z, flat=False)  ->  ‹x, y, z, a//x, b//y, c//z›
-    #     split_tensor_into_regions(‹a,b,c,d›, x, y, z, flat=False)  ->  ‹x, y, z, a//x, b//y, c//z, d›
-    #     split_tensor_into_regions(‹a,b,c,d›, x, flat=False)  ->  ‹x, a//x, b, c, d›
-    #     split_tensor_into_regions(‹a,b,c,d›, x, flat=True )  ->  ‹x, a//x, b, c, d›      #Flattening doesnt make a difference when we only split on one dimension
-    #     split_tensor_into_regions(‹a,b,c,d›)  ->  ‹a, b, c, d›      #Passing no arguments to 'counts' just returns the value of the original tensor. Of course, the flat argument doesnt make a difference here as there are no splitting dimensions to flat.
-    #EXAMPLE APPLICATION:
-    #   http://www.cs.unc.edu/~lazebnik/research/spring08/faces.jpg
-    #   Look at that picture. You'll see an array of 10*10 faces. We need to pre-process this image to extract the individual faces.
-    #   output=split_tensor_into_regions(‹that image›,10,10,flat=False)  (it doesn't matter if the image is RGB or not, it can handle either case)
-    #   Then, output[0,0] is the upper left face, and output[0,1] is one-to-the-right of the top left image
-    #   Also, output[1,:] is a list of all the faces on the second row ([face1,face2,face3...])
-    #   But maybe we want to do PCA on all these images. We don't want to address these faces by coordinate anymore; we want to get rid of that information.
-    #   We just want one big flattened list of faces. To do this, we would instead use
-    #   output=split_tensor_into_regions(‹that image›,10,10,flat=True)
-    #   This would give us a list of numpy arrays containing every face in the image, such that output[35] would exist (and, because it's a 10x10 faces image, give us the 5th face on the third row (taking into account starting at the 0th index))
+    """
+    Return the tensor into multiple rectangular regions specified by th number of cuts we make on each dimension.
+    Uses: Splitting pictures that contain multiple entried of the mnist dataset into usable chunks of data
+     Let ‹a,b,c...› represent some numpy tensor with shape (a,b,c...)
+     If strict==True, then all of tensor.shape's dimensions must evenly divide counts. Otherwise, if strict==False, tensor will be automatically cropped to accomodate the given *counts
+     EXAMPLES:
+         split_tensor_into_regions(‹a,b,c›, x, y, flat=False)  ->  ‹x, y, a//x, b//y, c›  #Think of c as 3, and a and b the width of some RGB image
+         split_tensor_into_regions(‹a,b,c›, x, y, flat=True )  ->  ‹x*y , a//x, b//y, c›  #Instead of addresing the regions by coordinates, we get a flat list of regions
+         split_tensor_into_regions(‹a,b,c›, x, y, z, flat=True )  ->  ‹x*y*z  , a//x, b//y, c//z›
+         split_tensor_into_regions(‹a,b,c›, x, y, z, flat=False)  ->  ‹x, y, z, a//x, b//y, c//z›
+         split_tensor_into_regions(‹a,b,c,d›, x, y, z, flat=False)  ->  ‹x, y, z, a//x, b//y, c//z, d›
+         split_tensor_into_regions(‹a,b,c,d›, x, flat=False)  ->  ‹x, a//x, b, c, d›
+         split_tensor_into_regions(‹a,b,c,d›, x, flat=True )  ->  ‹x, a//x, b, c, d›      #Flattening doesnt make a difference when we only split on one dimension
+         split_tensor_into_regions(‹a,b,c,d›)  ->  ‹a, b, c, d›      #Passing no arguments to 'counts' just returns the value of the original tensor. Of course, the flat argument doesnt make a difference here as there are no splitting dimensions to flat.
+    EXAMPLE APPLICATION:
+       http://www.cs.unc.edu/~lazebnik/research/spring08/faces.jpg
+       Look at that picture. You'll see an array of 10*10 faces. We need to pre-process this image to extract the individual faces.
+       output=split_tensor_into_regions(‹that image›,10,10,flat=False)  (it doesn't matter if the image is RGB or not, it can handle either case)
+       Then, output[0,0] is the upper left face, and output[0,1] is one-to-the-right of the top left image
+       Also, output[1,:] is a list of all the faces on the second row ([face1,face2,face3...])
+       But maybe we want to do PCA on all these images. We don't want to address these faces by coordinate anymore; we want to get rid of that information.
+       We just want one big flattened list of faces. To do this, we would instead use
+       output=split_tensor_into_regions(‹that image›,10,10,flat=True)
+       This would give us a list of numpy arrays containing every face in the image, such that output[35] would exist (and, because it's a 10x10 faces image, give us the 5th face on the third row (taking into account starting at the 0th index))
+    """
 
     tensor=np.asarray(tensor)
 
@@ -22140,11 +22162,13 @@ def apply_tensor_mapping(indices_tensor, mapping_tensor):
     return output
 
 def bordered_image_solid_color(image,color=(1.,1.,1.,1.),thickness=1,width=None,height=None,top=None,bottom=None,left=None,right=None):
-    #Add a pixel border of color around the image with a solid color
-    #Currently converts the input image into floating-point rgba
-    #You can specify the border by thickness (controls top,bottom,left and right all at once)
-    #You can override that thickness by setting width or height to some values (height overrides top and bottom if they're None and width overrides left and right if they're None)
-    #You can override top, bottom, left and right manually (if these are set, they override anything set by width or height etc)
+    """
+    Add a pixel border of color around the image with a solid color
+    Currently converts the input image into floating-point rgba
+    You can specify the border by thickness (controls top,bottom,left and right all at once)
+    You can override that thickness by setting width or height to some values (height overrides top and bottom if they're None and width overrides left and right if they're None)
+    You can override top, bottom, left and right manually (if these are set, they override anything set by width or height etc)
+    """
     assert len(color)==4,'Color must be rgba floats'
 
     #Inheritance options (better than having to specify top, bottom, left and right all manually if that would be redundant)
@@ -22183,34 +22207,37 @@ def bordered_image_solid_color(image,color=(1.,1.,1.,1.),thickness=1,width=None,
     return image
 
 def bordered_images_solid_color(*images,color=(1.,1.,1.,1.),thickness=1,width=None,height=None,top=None,bottom=None,left=None,right=None):
+    """ Plural of rp.bordered_image_solid_color """
     images=detuple(images)
     return [bordered_image_solid_color(x, color, thickness, width, height, top, bottom, left, right) for x in images]
 
 def get_principle_components(tensors,number_of_components=None):
-    #Returns orthogonal, normalized, sorted-by-eigenvalue-in-descending-order principle components (retaining the shape of the original tensors, to make eigenfaces easy to extract for example)
-    #For example, if we feed get_principle_components a list of images, we expect to return a list of images (not a list of vectors, like most PCA implementations require). This is for the sake of convenience.
-    #NOTE: This function also works on RGB images just like it does grayscale images (like in the demo)
-    #EXAMPLE:
-    #   def demo(image_path,rows,cols):
-    #       image=load_image(image_path,use_cache=True)
-    #       faces=split_tensor_into_regions(image,rows,cols,flat=True)
-    #       eigenfaces=get_principle_components(faces,number_of_components=20)
-    #       print('Displaying principle components...')
-    #       for face in eigenfaces:#Note how they get progressively more noisy the further down the components we go
-    #           display_image(full_range(face))
-    #           sleep(.5)
-    #       print('Showing a few reconstructions...')
-    #       for face in shuffled(faces)[:20]:
-    #           face=face-face.mean()
-    #           face=normalized(face)
-    #           coeffs=(face*eigenfaces).sum(1).sum(1)
-    #           reconstructed_face=np.sum(eigenfaces*np.expand_dims(np.expand_dims(coeffs,1),1),0)
-    #           display_image(horizontally_concatenated_images(full_range(face),full_range(reconstructed_face)))
-    #           sleep(.5)
-    #   print("Eigenfaces demo:")
-    #   demo("http://www.cs.unc.edu/~lazebnik/research/spring08/faces.jpg",10,10)
-    #   print("Fashion MNIST demo:")
-    #   demo("https://github.com/zalandoresearch/fashion-mnist/raw/master/doc/img/fashion-mnist-sprite.png",30,30)
+    """
+    Returns orthogonal, normalized, sorted-by-eigenvalue-in-descending-order principle components (retaining the shape of the original tensors, to make eigenfaces easy to extract for example)
+    For example, if we feed get_principle_components a list of images, we expect to return a list of images (not a list of vectors, like most PCA implementations require). This is for the sake of convenience.
+    NOTE: This function also works on RGB images just like it does grayscale images (like in the demo)
+    EXAMPLE:
+       def demo(image_path,rows,cols):
+           image=load_image(image_path,use_cache=True)
+           faces=split_tensor_into_regions(image,rows,cols,flat=True)
+           eigenfaces=get_principle_components(faces,number_of_components=20)
+           print('Displaying principle components...')
+           for face in eigenfaces:#Note how they get progressively more noisy the further down the components we go
+               display_image(full_range(face))
+               sleep(.5)
+           print('Showing a few reconstructions...')
+           for face in shuffled(faces)[:20]:
+               face=face-face.mean()
+               face=normalized(face)
+               coeffs=(face*eigenfaces).sum(1).sum(1)
+               reconstructed_face=np.sum(eigenfaces*np.expand_dims(np.expand_dims(coeffs,1),1),0)
+               display_image(horizontally_concatenated_images(full_range(face),full_range(reconstructed_face)))
+               sleep(.5)
+       print("Eigenfaces demo:")
+       demo("http://www.cs.unc.edu/~lazebnik/research/spring08/faces.jpg",10,10)
+       print("Fashion MNIST demo:")
+       demo("https://github.com/zalandoresearch/fashion-mnist/raw/master/doc/img/fashion-mnist-sprite.png",30,30)
+    """
     cv2=pip_import('cv2')
 
     tensors=np.asarray(tensors)
@@ -22240,8 +22267,10 @@ def cv_box_blur(image,diameter=3,width=None,height=None):
     return cv2.blur(image,(width,height))
 
 def _highlighted_query_results(string,query):
-    #Case insensitive fansi-highlighting of a query in a string
-    #Example: print(_highlighted_query_results('Hello, world wORld hello woRld!','world'))#All the 'world','wORld', etc's are printed green and bold
+    """
+    Case insensitive fansi-highlighting of a query in a string
+    Example: print(_highlighted_query_results('Hello, world wORld hello woRld!','world'))#All the 'world','wORld', etc's are printed green and bold
+    """
     i=string.lower().find(query.lower())
     if i==-1:return string#No matches -> no highlighting.
     s =string[:i]
@@ -22287,12 +22316,14 @@ def _rinsp_search_helper(root,query,depth=10):
     return helper()
 
 def rinsp_search(root,query,depth=10):
-    #THIS IS A WORK IN PROGRESS
-    #example: trying to find the conv function in torch? Maybe it's nested in some modules...wouldn't it be nice to automatically search the whole tree of a, a.b, a.c, a.d, b, b.a, b.a.c, etc... this does that
-    #example:
-    #TODO: Allow searching the docs etc more than just searching the name
-    #TODO: Allow fuzzy search, better queries (fuzzy find for example with nice printed outputs)
-    #TODO: Make this breadth-first instead of depth first
+    """
+    THIS IS A WORK IN PROGRESS
+    example: trying to find the conv function in torch? Maybe it's nested in some modules...wouldn't it be nice to automatically search the whole tree of a, a.b, a.c, a.d, b, b.a, b.a.c, etc... this does that
+    example:
+    TODO: Allow searching the docs etc more than just searching the name
+    TODO: Allow fuzzy search, better queries (fuzzy find for example with nice printed outputs)
+    TODO: Make this breadth-first instead of depth first
+    """
 
     import warnings
     with warnings.catch_warnings():
@@ -22451,10 +22482,12 @@ def input_integer(minimum=None,maximum=None):
     else: assert False, 'This should be an unreachable line'
 
 def input_default(prompt='', default=''):
-    #Like input(), but it has a default value that you can edit
-    #From https://stackoverflow.com/questions/2533120/show-default-value-for-editing-on-python-input-possible
-    #Note: A library called PyInquirer and inquirerpy do similar things with prompt toolkit, and they're fancy shmancy!
-    #TODO: Add windows support
+    """
+    Like input(), but it has a default value that you can edit
+    From https://stackoverflow.com/questions/2533120/show-default-value-for-editing-on-python-input-possible
+    Note: A library called PyInquirer and inquirerpy do similar things with prompt toolkit, and they're fancy shmancy!
+    TODO: Add windows support
+    """
     if currently_running_windows():
         return input(prompt) #I don't know how to do this on windows yet. Don't crash it though.
     import readline
@@ -22465,10 +22498,13 @@ def input_default(prompt='', default=''):
         readline.set_startup_hook()
 
 def input_select(question='Please select an option:',options=[],stringify=repr,reverse=False):
-    #TODO: In order to make this truly customizable, such as adding multi-select options for fuzzy searching or fuzzy searching through paths etc, we need to make this a class that can be inherited from
-    #Allow the user to choose from a list of numbered options
-    #stringify is how we turn options into strings (options dont have to be strings)
-    #Example: Try running 'input_select_option(options=['Hello','Goodbye','Bonjour'])'
+    """
+    Example: Try running 'input_select_option(options=['Hello','Goodbye','Bonjour'])'
+
+    TODO: In order to make this truly customizable, such as adding multi-select options for fuzzy searching or fuzzy searching through paths etc, we need to make this a class that can be inherited from
+    Allow the user to choose from a list of numbered options
+    stringify is how we turn options into strings (options dont have to be strings)
+    """
 
     assert len(options),'input_select: Invalid input: Cannot select from 0 options.'
 
@@ -22531,8 +22567,8 @@ def input_select(question='Please select an option:',options=[],stringify=repr,r
 
     show_question=True
     while True:
-        user_input=input_conditional(show_question*(question+'\n')+'Please enter an integer between 0 and '+str(number_of_options-1)+' (inclusive), or \'?\' for more options.',condition)
         show_question=True
+        user_input=input_conditional(show_question*(question+'\n')+'Please enter an integer between 0 and '+str(number_of_options-1)+' (inclusive), or \'?\' for more options.',condition)
 
         if user_input=='c':
             print("(Entered 'c': cancelling selection with a KeyboardInterrupt)")
@@ -22575,8 +22611,10 @@ def input_select(question='Please select an option:',options=[],stringify=repr,r
             return options[int(user_input)]
 
 def input_select_multiple(question='Please select any number of options:',options=[],stringify=repr,reverse=True):
-    #EXAMPLE:
-    #   input_select_multiple("Please select some letters:",'abcdefg')
+    """
+    EXAMPLE:
+       input_select_multiple("Please select some letters:",'abcdefg')
+    """
     add_text=fansi('++ ','green','bold')
     sub_text=fansi('-- ','red'  ,'bold')
     done_text=fansi('(DONE)','yellow','bold')
@@ -22665,7 +22703,7 @@ def _get_video_file_duration_via_moviepy(path):
 
 _get_video_file_duration_cache={}
 def get_video_file_duration(path,use_cache=True):
-    #Returns a float, representing the total video length in seconds
+    """ Returns a float, representing the total video length in seconds """
     path=get_absolute_path(path) #This is important for caching. 
     if use_cache and path in _get_video_file_duration_cache:
         return _get_video_file_duration_cache[path]
@@ -22674,13 +22712,15 @@ def get_video_file_duration(path,use_cache=True):
     return out
 
 def load_video_stream(path):
-    #Much faster than load_video, which loads all the frames into a numpy array. This means load_video has to iterate through all the frames before you can even use the first frame.
-    #load_video_stream is a generator, meaning to get the next frame you use python's builtin 'next' function
-    #Returns a generator that iterates through the frame images
-    #EXAMPLE:
-    #    for frame in load_video_stream("/Users/Ryan/Desktop/media.io_Silicon Valley - Gavin - Animals Compilation copy.mp4"):display_image(frame)
-    #EXAMPLE:
-    #    for frame in load_video_stream(download_youtube_video('https://www.youtube.com/watch?v=cAy4zULKFDU')):display_image(frame)  #Monty python clip
+    """
+    Much faster than load_video, which loads all the frames into a numpy array. This means load_video has to iterate through all the frames before you can even use the first frame.
+    load_video_stream is a generator, meaning to get the next frame you use python's builtin 'next' function
+    Returns a generator that iterates through the frame images
+    EXAMPLE:
+        for frame in load_video_stream("/Users/Ryan/Desktop/media.io_Silicon Valley - Gavin - Animals Compilation copy.mp4"):display_image(frame)
+    EXAMPLE:
+        for frame in load_video_stream(download_youtube_video('https://www.youtube.com/watch?v=cAy4zULKFDU')):display_image(frame)  #Monty python clip
+    """
     cv2=pip_import('cv2')
     assert file_exists(path),'load_video error: path '+repr(path)+' does not point to a file that exists'#Opencv will silently fail if this breaks
     cv_stream=cv2.VideoCapture(path)
@@ -22692,8 +22732,10 @@ def load_video_stream(path):
 
 _load_video_cache={}
 def load_video(path,*,show_progress=True,use_cache=False):
-    #This function does not take into account framerates or audio. It just returns a numpy array full of images.
-    #It's slower than load_video_stream, but it can be cached using use_cache (which would actually make it faster, if applicable)
+    """
+    This function does not take into account framerates or audio. It just returns a numpy array full of images.
+    It's slower than load_video_stream, but it can be cached using use_cache (which would actually make it faster, if applicable)
+    """
     progress_prefix="\rload_video: path="+repr(path)+": "
     if path_exists(path):
         path=get_absolute_path(path) #This is important for caching. 
@@ -23023,10 +23065,10 @@ def path_exists(path):
 
 def rename_path(path,new_name):
     """
-    #EXAMPLE:
-    #   rename_path("apple/bananna/cherry.jpg","coconut.png")
-    #       is equivalent to (in bash)
-    #   mv .apple/bananna/cherry.jpg apple/bananna/coconut.png
+    EXAMPLE:
+       rename_path("apple/bananna/cherry.jpg","coconut.png")
+           is equivalent to (in bash)
+       mv .apple/bananna/cherry.jpg apple/bananna/coconut.png
     """
     new_path=os.path.join(get_path_parent(path),new_name)
     os.rename(path,new_path)
@@ -23038,9 +23080,9 @@ rename_directory=rename_path
 
 def move_path(from_path,to_path):
     """
-    #Like the 'mv' command
-    #Move a folder or file into a given directory if to_path is a directory,
-    #otherwise just rename the path
+    Like the 'mv' command
+    Move a folder or file into a given directory if to_path is a directory,
+    otherwise just rename the path
     """
     
     make_directory(get_parent_directory(to_path))#Make sure it has somewhere to go. If the destination folder doesn't already exist, create it.
@@ -23128,12 +23170,12 @@ def delete_file(path,*,permanent=True):
 
 def delete_folder(path,*,recursive=True,permanent=True):
     """
-    #Will recursively delete a folder and all of its contents
-    # permanent exists for safety reasons. It can be False in case you make a stupid mistake like deleting this file. When false, it will send your files to the trash bin on your system (Mac,Windows,Linux, etc)
-    # By default, though, permanent=True, becuase when it's not it can cause your hard-drive to fill up without you expecting it (you don't normally expect to keep files when calling a function called delete file, which doesn't actually free your hard-drive when permanent=False)
-    # http://stackoverflow.com/questions/3628517/how-can-i-move-file-into-recycle-bin-trash-on-different-platforms-using-pyqt4
-    # https://pypi.python.org/pypi/Send2Trash
-    # pip3 install Send2Trash
+    Will recursively delete a folder and all of its contents
+     permanent exists for safety reasons. It can be False in case you make a stupid mistake like deleting this file. When false, it will send your files to the trash bin on your system (Mac,Windows,Linux, etc)
+     By default, though, permanent=True, becuase when it's not it can cause your hard-drive to fill up without you expecting it (you don't normally expect to keep files when calling a function called delete file, which doesn't actually free your hard-drive when permanent=False)
+     http://stackoverflow.com/questions/3628517/how-can-i-move-file-into-recycle-bin-trash-on-different-platforms-using-pyqt4
+     https://pypi.python.org/pypi/Send2Trash
+     pip3 install Send2Trash
     """
     import shutil
     assert os.path.exists(path),"r.delete_folder: There is no folder to delete. The path you specified, '" + path + "', does not exist!"  
@@ -23150,11 +23192,11 @@ delete_directory=delete_folder
 
 def delete_path(path,*,permanent=True):
     """
-    # permanent exists for safety reasons. It can be False in case you make a stupid mistake like deleting this file. When false, it will send your files to the trash bin on your system (Mac,Windows,Linux, etc)
-    # By default, though, permanent=True, becuase when it's not it can cause your hard-drive to fill up without you expecting it (you don't normally expect to keep files when calling a function called delete file, which doesn't actually free your hard-drive when permanent=False)
-    # http://stackoverflow.com/questions/3628517/how-can-i-move-file-into-recycle-bin-trash-on-different-platforms-using-pyqt4
-    # https://pypi.python.org/pypi/Send2Trash
-    # pip3 install Send2Trash
+    permanent exists for safety reasons. It can be False in case you make a stupid mistake like deleting this file. When false, it will send your files to the trash bin on your system (Mac,Windows,Linux, etc)
+    By default, though, permanent=True, becuase when it's not it can cause your hard-drive to fill up without you expecting it (you don't normally expect to keep files when calling a function called delete file, which doesn't actually free your hard-drive when permanent=False)
+    http://stackoverflow.com/questions/3628517/how-can-i-move-file-into-recycle-bin-trash-on-different-platforms-using-pyqt4
+    https://pypi.python.org/pypi/Send2Trash
+    pip3 install Send2Trash
     """
     assert os.path.exists(path),"r.delete_path: There is no folder or file to delete. The path you specified, '" + path + "', does not exist!"  
     if is_a_file(path):
@@ -23166,9 +23208,9 @@ def delete_path(path,*,permanent=True):
 
 def _delete_paths_helper(*paths,permanent=True,delete_function=delete_path):
     """
-    #EXAMPLE:  delete_paths( 'a.jpg','b.jpg' )
-    #EXAMPLE:  delete_paths(['a.jpg','b.jpg'])
-    #EXAMPLE:  delete_paths(('a.jpg','b.jpg'))
+    EXAMPLE:  delete_paths( 'a.jpg','b.jpg' )
+    EXAMPLE:  delete_paths(['a.jpg','b.jpg'])
+    EXAMPLE:  delete_paths(('a.jpg','b.jpg'))
     """
     paths=detuple(paths)
     if isinstance(paths,str):
@@ -23205,10 +23247,10 @@ def copy_path(from_path,to_path,*,extract=False):
 
 def copy_to_folder(from_path,to_path):
     """
-    #Copy a file or directory to a folder, keeping the same file name
-    #For example, copy_to_folder('/docs/text.txt','some/folder/path') will create a new file whose path is 'some/folder/path/text.txt'
-    #This can be nicer than copy_path, because then we don't have to rewrite the file name twice.
-    #This function also works with folders, and copies them recursively.
+    Copy a file or directory to a folder, keeping the same file name
+    For example, copy_to_folder('/docs/text.txt','some/folder/path') will create a new file whose path is 'some/folder/path/text.txt'
+    This can be nicer than copy_path, because then we don't have to rewrite the file name twice.
+    This function also works with folders, and copies them recursively.
     """
     assert is_a_folder(to_path),'to_path must be a folder, but '+repr(to_path)+' either does not exist or is not a folder'
     dest=path_join(to_path,get_path_name(from_path))
@@ -23412,10 +23454,10 @@ def get_paths_parents(*paths_or_urls):
 
 def make_directory(path):
     """
-    #Will make a directory if it doesn't allready exist. If it does already exist, it won't throw an error.
-    #However, it will throw an error if the specified path is impossible to make without deleting some file.
-    #Can make nested paths that don't exist yet. You don't have to manually create every level.
-    #For example, let's say you don't have Jumble, Fizz, or Buzz on your computer. make_directory('Jumble/Fizz/Buzz') will create three directories nested inside of each other
+    Will make a directory if it doesn't allready exist. If it does already exist, it won't throw an error.
+    However, it will throw an error if the specified path is impossible to make without deleting some file.
+    Can make nested paths that don't exist yet. You don't have to manually create every level.
+    For example, let's say you don't have Jumble, Fizz, or Buzz on your computer. make_directory('Jumble/Fizz/Buzz') will create three directories nested inside of each other
     """
     try:
         if not directory_exists(path):
@@ -23637,19 +23679,19 @@ _old_gists_path=path_join(get_parent_folder(__file__),'old_gists.txt') #This has
 _get_cutscene_frame_numbers_cache={}
 def get_cutscene_frame_numbers(video_path,*,use_cache=False):
     """
-    #Returns a list of ints containing all the framenumers of the cutscenes in a video
-    #Confirmed to work with mp4 files
-    #Note: Right now this only supports reading from a video file, as opposed to reading from a numpy array containing
-    #pip install scenedetect
-    #Code from https://pyscenedetect-manual.readthedocs.io/en/latest/api/scene_manager.html#scenemanager-example
-    #EXAMPLE:
-    #    video_path=download_youtube_video('https://www.youtube.com/watch?v=K5qACexzwOI')
-    #    cutscene_frames_numbers=get_cutscene_frame_numbers(video_path)
-    #    for i,frame in enumerate(load_video_stream(video_path)):
-    #        if i in cutscene_frames_numbers:
-    #            input('Hit enter to continue')
-    #        cv_imshow(frame)
-    #        sleep(1/30)
+    Returns a list of ints containing all the framenumers of the cutscenes in a video
+    Confirmed to work with mp4 files
+    Note: Right now this only supports reading from a video file, as opposed to reading from a numpy array containing
+    pip install scenedetect
+    Code from https://pyscenedetect-manual.readthedocs.io/en/latest/api/scene_manager.html#scenemanager-example
+    EXAMPLE:
+        video_path=download_youtube_video('https://www.youtube.com/watch?v=K5qACexzwOI')
+        cutscene_frames_numbers=get_cutscene_frame_numbers(video_path)
+        for i,frame in enumerate(load_video_stream(video_path)):
+            if i in cutscene_frames_numbers:
+                input('Hit enter to continue')
+            cv_imshow(frame)
+            sleep(1/30)
     """
     pip_import('cv2')#Needed for scenedetect
     pip_import('scenedetect')
@@ -23705,12 +23747,12 @@ def get_cutscene_frame_numbers(video_path,*,use_cache=False):
 
 def send_text_message(message,number):
     """
-    #number is a phone number. Can be an int or a string
-    #Once this no longer works (which it eventually won't, because it's running on a free trial), replace the credentials with your own twilio trial account
-    #OR create a fallback that doesnt use twilio
-    #EXAMPLE:
-    #    send_text_message('Hello, World!',15436781234)
-    #CODE FROM: https://www.twilio.com/docs/sms/quickstart/python#install-python-and-the-twilio-helper-library
+    number is a phone number. Can be an int or a string
+    Once this no longer works (which it eventually won't, because it's running on a free trial), replace the credentials with your own twilio trial account
+    OR create a fallback that doesnt use twilio
+    EXAMPLE:
+        send_text_message('Hello, World!',15436781234)
+    CODE FROM: https://www.twilio.com/docs/sms/quickstart/python#install-python-and-the-twilio-helper-library
     """
     account_sid = 'AC35ef9db2c1104ea2764964cf0ddb7ebb'
     auth_token  = '0543decd5b2eb41e82393e8015c92f48'
@@ -23812,24 +23854,24 @@ def shift_image(image,x=0,y=0,*,allow_growth=True):
 
 def crop_image(image, height: int = None, width: int = None, origin='top left'):
     """
-    #Returns a cropped image to the specified width and height
-    #If either hieght or width aren't specified (and left as None), their size will be untouched
-    #    (This means you can crop an image only by height, for example, without having to manually specify its width)
-    #It crops the image, keeping the top left corner the same
-    #If the specified width or height are larger than the original image,
-    #this function will pad out the remainder with blank black pixels
-    #
-    #EXAMPLE:
-    #    puppy=load_image('https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSwzqzyaeWqxfQiCnOqpnd1V27Wr8MOaZtfGQ&usqp=CAU')
-    #    for _ in range(500):
-    #        cv_imshow(crop_image(puppy,_,_))    
-    #
-    #EXAMPLE:
-    #    ans=load_image('https://todaysveterinarypractice.com/wp-content/uploads/sites/4/2018/06/T1807F02Fig01.jpg')
-    #    for _ in range(3):
-    #        for theta in np.linspace(0,pi):
-    #            display_image(crop_image(ans,100+1000*np.cos(theta)**2,100+1000*np.sin(theta)**2,'center'))
-    #            sleep(1/60)
+    Returns a cropped image to the specified width and height
+    If either hieght or width aren't specified (and left as None), their size will be untouched
+        (This means you can crop an image only by height, for example, without having to manually specify its width)
+    It crops the image, keeping the top left corner the same
+    If the specified width or height are larger than the original image,
+    this function will pad out the remainder with blank black pixels
+    
+    EXAMPLE:
+        puppy=load_image('https://encrypted-tbn0.gstatic.com/images?q=tbn%3AANd9GcSwzqzyaeWqxfQiCnOqpnd1V27Wr8MOaZtfGQ&usqp=CAU')
+        for _ in range(500):
+            cv_imshow(crop_image(puppy,_,_))    
+    
+    EXAMPLE:
+        ans=load_image('https://todaysveterinarypractice.com/wp-content/uploads/sites/4/2018/06/T1807F02Fig01.jpg')
+        for _ in range(3):
+            for theta in np.linspace(0,pi):
+                display_image(crop_image(ans,100+1000*np.cos(theta)**2,100+1000*np.sin(theta)**2,'center'))
+                sleep(1/60)
     """
 
 
@@ -23886,8 +23928,8 @@ def crop_images(images, height:int = None, width:int=None, origin='top left'):
 
 def crop_image_zeros(image,*,output='image'):
     """
-    #Given some big image that is surrounded by black, or 0-alpha transparency, crop out that excess region
-    #TODO: Give examples
+    Given some big image that is surrounded by black, or 0-alpha transparency, crop out that excess region
+    TODO: Give examples
     """
     assert output in 'image bounds'.split(),'output is a string indicating what the output type is - it can be either image or bounds but you gave type '+str(type(output))+' '+str(output)
     assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
@@ -23911,14 +23953,14 @@ def crop_image_zeros(image,*,output='image'):
 
 def cv_contour_to_segment(contour):
     """
-    #TODO: provide a visual example
-    #The way OpenCV extracts single-pixel-wide non-looping contours is to treat those contours as loops, where the second half of the points are just the first-half of the points mirrored
-    #If we want to find the start/end points of a segment, we need to find the two points of symmetry (which are visually obvious, but its not a given that they exist such as if we have a T-junction)
-    #We do this by autocorrelating the contour with it's mirrored self (AKA the reverse of the contour) to find the shift of the reverse that best matches the original contour. This is equivalent to auto-convolving the contour with itself. We will get two minima, but we only need one. The second symmetry point should be exactly half-way down that contour.
-    #For example: a contour created by opencv's find contours might look like [[1,1],[[2,2]],[[3,3]],[[4,4]],[[3,3]],[[2,2]]] but obviously we just want [[[1,1]],[[2,2]],[[3,3]],[[4,4]]] and to discard the duplicates. That's what cv_contour_to_segment does.
-    #This function can be used to get the starting and end points of the segment, which is a bit of a tricky problem.
-    #The output of a contour given to this function should have half the original length.
-    #WARNING: This function doesn't check to see if the contour you gave it is actually a segment; be careful! You can usually check to see if a contour is a segment (if using cv_find_contours) by seeing if contour.is_solid_white is True (AKA if the contour doesn't enclose any non-white,area)
+    TODO: provide a visual example
+    The way OpenCV extracts single-pixel-wide non-looping contours is to treat those contours as loops, where the second half of the points are just the first-half of the points mirrored
+    If we want to find the start/end points of a segment, we need to find the two points of symmetry (which are visually obvious, but its not a given that they exist such as if we have a T-junction)
+    We do this by autocorrelating the contour with it's mirrored self (AKA the reverse of the contour) to find the shift of the reverse that best matches the original contour. This is equivalent to auto-convolving the contour with itself. We will get two minima, but we only need one. The second symmetry point should be exactly half-way down that contour.
+    For example: a contour created by opencv's find contours might look like [[1,1],[[2,2]],[[3,3]],[[4,4]],[[3,3]],[[2,2]]] but obviously we just want [[[1,1]],[[2,2]],[[3,3]],[[4,4]]] and to discard the duplicates. That's what cv_contour_to_segment does.
+    This function can be used to get the starting and end points of the segment, which is a bit of a tricky problem.
+    The output of a contour given to this function should have half the original length.
+    WARNING: This function doesn't check to see if the contour you gave it is actually a segment; be careful! You can usually check to see if a contour is a segment (if using cv_find_contours) by seeing if contour.is_solid_white is True (AKA if the contour doesn't enclose any non-white,area)
     """
     contour=as_complex_vector(contour)
     if len(contour)<=3:
@@ -23929,17 +23971,17 @@ def cv_contour_to_segment(contour):
 
 def whiten_points_covariance(points):
     """
-    #Whiten the covariance matrix of a list of n-dimensional points, and return a list of new points.
-    #Also works with 2d-contours represented as indicated by is_points_array, is_complex_vector, and is_cv_contour
-    #EXAMPLE CODE:
-    #    points=np.random.randn(1000,2)
-    #    points[:,0]*=10#Stretch the distribution along the y-axis
-    #    points=apply_affine(points,rotation_affine_2d(70))#Rotate the stretched distrubition
-    #    ans=input("Displaying points before whitening...(press enter to continue)")
-    #    scatter_plot(points)
-    #    whitened=whiten_points_covariance(points)
-    #    print('Displaying points after whitening (note how it looks like a unit normal distribution now)')
-    #    scatter_plot(whitened)
+    Whiten the covariance matrix of a list of n-dimensional points, and return a list of new points.
+    Also works with 2d-contours represented as indicated by is_points_array, is_complex_vector, and is_cv_contour
+    EXAMPLE CODE:
+        points=np.random.randn(1000,2)
+        points[:,0]*=10#Stretch the distribution along the y-axis
+        points=apply_affine(points,rotation_affine_2d(70))#Rotate the stretched distrubition
+        ans=input("Displaying points before whitening...(press enter to continue)")
+        scatter_plot(points)
+        whitened=whiten_points_covariance(points)
+        print('Displaying points after whitening (note how it looks like a unit normal distribution now)')
+        scatter_plot(whitened)
     """
     pip_import('sklearn')
     from sklearn.decomposition import PCA
@@ -23953,41 +23995,41 @@ def whiten_points_covariance(points):
 
 def visible_string_ljust(string,width,fillchar=' '):
     """
-    #Trying to be as much like str.ljust as possible, with a small tweak:
-    #str.ljust doesn't ignore ansi escape sequences, nor does it take into account unicode character widths.
-    #The small tweak is that this function does (as best as it can).
-    #This function works with fansi well, but str.ljust does not.
+    Trying to be as much like str.ljust as possible, with a small tweak:
+    str.ljust doesn't ignore ansi escape sequences, nor does it take into account unicode character widths.
+    The small tweak is that this function does (as best as it can).
+    This function works with fansi well, but str.ljust does not.
     """
     delta_width=max(0,width-visible_string_length(string))
     return string+fillchar*delta_width
 
 def visible_string_rjust(string,width,fillchar=' '):
     """
-    #Trying to be as much like str.rjust as possible, with a small tweak:
-    #str.rjust doesn't ignore ansi escape sequences, nor does it take into account unicode character widths.
-    #The small tweak is that this function does (as best as it can).
-    #This function works with fansi well, but str.rjust does not.
+    Trying to be as much like str.rjust as possible, with a small tweak:
+    str.rjust doesn't ignore ansi escape sequences, nor does it take into account unicode character widths.
+    The small tweak is that this function does (as best as it can).
+    This function works with fansi well, but str.rjust does not.
     """
     delta_width=max(0,width-visible_string_length(string))
     return fillchar*delta_width+string
 
 def visible_string_center(string,width,fillchar=' '):
     """
-    #Trying to be as much like str.center as possible, with a small tweak:
-    #str.center doesn't ignore ansi escape sequences, nor does it take into account unicode character widths.
-    #The small tweak is that this function does (as best as it can).
-    #This function works with fansi well, but str.center does not.
-    #NOTE (NOT an example): Justification for why I round torwards the left when centering:
-    #     ⮤ 'a'.center(1,'+')
-    #    ans = a
-    #     ⮤ 'a'.center(2,'+')
-    #    ans = a+
-    #     ⮤ 'a'.center(3,'+')
-    #    ans = +a+
-    #     ⮤ 'a'.center(4,'+')
-    #    ans = +a++
-    #     ⮤ 'a'.center(5,'+')
-    #    ans = ++a++
+    Trying to be as much like str.center as possible, with a small tweak:
+    str.center doesn't ignore ansi escape sequences, nor does it take into account unicode character widths.
+    The small tweak is that this function does (as best as it can).
+    This function works with fansi well, but str.center does not.
+    NOTE (NOT an example): Justification for why I round torwards the left when centering:
+         ⮤ 'a'.center(1,'+')
+        ans = a
+         ⮤ 'a'.center(2,'+')
+        ans = a+
+         ⮤ 'a'.center(3,'+')
+        ans = +a+
+         ⮤ 'a'.center(4,'+')
+        ans = +a++
+         ⮤ 'a'.center(5,'+')
+        ans = ++a++
     """
     delta_width=max(0,width-visible_string_length(string))
     delta_left =delta_width//2
@@ -23997,23 +24039,23 @@ def visible_string_center(string,width,fillchar=' '):
 
 def make_string_rectangular(string,align='left',fillchar=' '):
     """
-    #EXAMPLES:
-    # ⮤ s='The mathematician\nPlotting his past relations\n"ex" and "why" axis'
-    # ⮤ make_string_rectangular(s,'right',fillchar='-')
-    #   ...MAKES...
-    #     ----------The mathematician
-    #     Plotting his past relations
-    #     --------"ex" and "why" axis
-    # ⮤ make_string_rectangular(s,'left',fillchar='-')
-    #   ...MAKES...
-    #     The mathematician----------
-    #     Plotting his past relations
-    #     "ex" and "why" axis--------
-    # ⮤ make_string_rectangular(s,'center',fillchar='-')
-    #   ...MAKES...
-    #     ans = -----The mathematician-----
-    #     Plotting his past relations
-    #     ----"ex" and "why" axis----
+    EXAMPLES:
+     ⮤ s='The mathematician\nPlotting his past relations\n"ex" and "why" axis'
+     ⮤ make_string_rectangular(s,'right',fillchar='-')
+       ...MAKES...
+         ----------The mathematician
+         Plotting his past relations
+         --------"ex" and "why" axis
+     ⮤ make_string_rectangular(s,'left',fillchar='-')
+       ...MAKES...
+         The mathematician----------
+         Plotting his past relations
+         "ex" and "why" axis--------
+     ⮤ make_string_rectangular(s,'center',fillchar='-')
+       ...MAKES...
+         ans = -----The mathematician-----
+         Plotting his past relations
+         ----"ex" and "why" axis----
     """
     align_methods={'left':visible_string_ljust,
                   'right':visible_string_rjust,
@@ -24032,25 +24074,25 @@ def string_is_rectangular(string):
 
 def horizontally_concatenated_strings(*strings,rectangularize=False,fillchar=' '):
     """
-    #The fillchar parameter only matters if rectangularize is True
-    #EXAMPLE:
-    # ⮤ horizontally_concatenated_strings('Why\nHello\nThere!','My\nName\nIs\nBob','Pleased\nTo\nMeet\nYou!',rectangularize=False)
-    #   ...MAKES...
-    #      WhyMyPleased
-    #      HelloNameTo
-    #      There!IsMeet
-    #      BobYou!
-    #EXAMPLE:
-    # ⮤ print(horizontally_concatenated_strings('Why\nHello\nThere!','My\nName\nIs\nBob','Pleased\nTo\nMeet\nYou!',rectangularize=True))
-    # Why   My  Pleased
-    # Hello NameTo
-    # There!Is  Meet
-    # Bob       You!
-    #EXAMPLE:
-    # ⮤ print(horizontally_concatenated_strings('a','b\nb','c\nc\nc',rectangularize=True))
-    # abc
-    #  bc
-    #   c
+    The fillchar parameter only matters if rectangularize is True
+    EXAMPLE:
+     ⮤ horizontally_concatenated_strings('Why\nHello\nThere!','My\nName\nIs\nBob','Pleased\nTo\nMeet\nYou!',rectangularize=False)
+       ...MAKES...
+          WhyMyPleased
+          HelloNameTo
+          There!IsMeet
+          BobYou!
+    EXAMPLE:
+     ⮤ print(horizontally_concatenated_strings('Why\nHello\nThere!','My\nName\nIs\nBob','Pleased\nTo\nMeet\nYou!',rectangularize=True))
+     Why   My  Pleased
+     Hello NameTo
+     There!Is  Meet
+     Bob       You!
+    EXAMPLE:
+     ⮤ print(horizontally_concatenated_strings('a','b\nb','c\nc\nc',rectangularize=True))
+     abc
+      bc
+       c
     """
     strings=delist(detuple(strings))
     for string in strings:
@@ -24074,15 +24116,15 @@ def vertically_concatenated_strings(*strings):
 
 def wrap_string_to_width(string,width):
     """
-    #TODO: Make this work with visible_string_length so that unicode chars/ansi codes are supported
-    #EXAMPLE:
-    # ⮤ wrap_string_to_width('Hello\nWorld!',2)
-    #    ans = He
-    #    ll
-    #    o
-    #    Wo
-    #    rl
-    #    d!
+    TODO: Make this work with visible_string_length so that unicode chars/ansi codes are supported
+    EXAMPLE:
+     ⮤ wrap_string_to_width('Hello\nWorld!',2)
+        ans = He
+        ll
+        o
+        Wo
+        rl
+        d!
     """
     assert width>=0,'Cannot have negative width'
     lines=[]
@@ -24095,70 +24137,70 @@ def bordered_string(string,*,
                     fill=' ',width_fill=None,height_fill=None,left_fill=None,right_fill=None,bottom_fill=None,top_fill=None,
                     bottom_right_fill=None,bottom_left_fill=None,top_right_fill=None,top_left_fill=None):
     """
-    #NOTE: 99% of the time you should be using a rectangular string, as you can tell with string_is_rectangular
-    #These examples showcase the usage of a NON-rectangular string to show why, but the rest is hopefully intuitive
-    #EXAMPLES:
-    # ⮤ bordered_string('Hello\nWorld!',fill='-',weight=3)
-    #ans = -----------
-    #-----------
-    #-----------
-    #---Hello---
-    #---World!---
-    #------------
-    #------------
-    #------------
-    #⮤ bordered_string('Hello\nWorld!',fill='-',weight=3,top=0)
-    #ans = ---Hello---
-    #---World!---
-    #------------
-    #------------
-    #------------
-    #⮤ bordered_string('Hello\nWorld!',fill='-',weight=3,right=3)
-    #ans = -----------
-    #-----------
-    #-----------
-    #---Hello---
-    #---World!---
-    #------------
-    #------------
-    #------------
-    #⮤ bordered_string('Hello\nWorld!',fill='-',weight=3,right=1)
-    #ans = ---------
-    #---------
-    #---------
-    #---Hello-
-    #---World!-
-    #----------
-    #----------
-    #----------
-    #⮤ bordered_string('Hello\nWorld!',fill='-',bottom_fill='+',weight=3,right=1)
-    #ans = ---------
-    #---------
-    #---------
-    #---Hello-
-    #---World!-
-    #++++++++++
-    #++++++++++
-    #++++++++++
-    #⮤ bordered_string('Hello\nWorld!',fill='-',bottom_fill='+',weight=3,right=1,bottom_right_fill='O')
-    #ans = ---------
-    #---------
-    #---------
-    #---Hello-
-    #---World!-
-    #+++++++++O
-    #+++++++++O
-    #+++++++++O
-    #⮤ print(bordered_string('Hello\nWorld!',width_fill='│',height_fill='─',top_right_fill='┐',top_left_fill='┌',bottom_left_fill='└',bottom_right_fill='┘'))
-    #┌─────┐
-    #│Hello│
-    #│World!│
-    #└──────┘
-    #⮤ print(bordered_string(make_string_rectangular('Hello\nWorld!'),width_fill='│',height_fill='─',top_right_fill='┐',top_left_fill='┌',bottom_left_fill='└',bottom_right_fill='┘'))
-    #┌──────┐
-    #│Hello │
-    #│World!│
-    #└──────┘
+    NOTE: 99% of the time you should be using a rectangular string, as you can tell with string_is_rectangular
+    These examples showcase the usage of a NON-rectangular string to show why, but the rest is hopefully intuitive
+    EXAMPLES:
+     ⮤ bordered_string('Hello\nWorld!',fill='-',weight=3)
+    ans = -----------
+    -----------
+    -----------
+    ---Hello---
+    ---World!---
+    ------------
+    ------------
+    ------------
+    ⮤ bordered_string('Hello\nWorld!',fill='-',weight=3,top=0)
+    ans = ---Hello---
+    ---World!---
+    ------------
+    ------------
+    ------------
+    ⮤ bordered_string('Hello\nWorld!',fill='-',weight=3,right=3)
+    ans = -----------
+    -----------
+    -----------
+    ---Hello---
+    ---World!---
+    ------------
+    ------------
+    ------------
+    ⮤ bordered_string('Hello\nWorld!',fill='-',weight=3,right=1)
+    ans = ---------
+    ---------
+    ---------
+    ---Hello-
+    ---World!-
+    ----------
+    ----------
+    ----------
+    ⮤ bordered_string('Hello\nWorld!',fill='-',bottom_fill='+',weight=3,right=1)
+    ans = ---------
+    ---------
+    ---------
+    ---Hello-
+    ---World!-
+    ++++++++++
+    ++++++++++
+    ++++++++++
+    ⮤ bordered_string('Hello\nWorld!',fill='-',bottom_fill='+',weight=3,right=1,bottom_right_fill='O')
+    ans = ---------
+    ---------
+    ---------
+    ---Hello-
+    ---World!-
+    +++++++++O
+    +++++++++O
+    +++++++++O
+    ⮤ print(bordered_string('Hello\nWorld!',width_fill='│',height_fill='─',top_right_fill='┐',top_left_fill='┌',bottom_left_fill='└',bottom_right_fill='┘'))
+    ┌─────┐
+    │Hello│
+    │World!│
+    └──────┘
+    ⮤ print(bordered_string(make_string_rectangular('Hello\nWorld!'),width_fill='│',height_fill='─',top_right_fill='┐',top_left_fill='┌',bottom_left_fill='└',bottom_right_fill='┘'))
+    ┌──────┐
+    │Hello │
+    │World!│
+    └──────┘
     """
     width =weight if width  is None else width
     height=weight if height is None else height
@@ -24195,34 +24237,34 @@ def bordered_string(string,*,
 
 def simple_boxed_string(string,align='center',chars='│─┐┌└┘'):
     """
-    #EXAMPLE:
-    #    >>> s="I don't have any kids\n\nBut I like making dad jokes\n\nI am a faux pa"
-    #    >>> print(simple_boxed_string(s,'center'))
-    #    ┌───────────────────────────┐
-    #    │   I don't have any kids   │
-    #    │                           │
-    #    │But I like making dad jokes│
-    #    │                           │
-    #    │       I am a faux pa      │
-    #    └───────────────────────────┘
-    #EXAMPLE That demonstrates not only this function but several other console-string functions in rp at once:
-    #    def griddify(string_lists):
-    #        def uniform_boxify(strings,height,width):
-    #            strings=list(map(str                    ,strings))
-    #            strings=list(map(make_string_rectangular,strings))
-    #            strings=[pad_string_to_dims(string,height=height,width=width)for string in strings]
-    #            return strings
-    #        strings=list_flatten(string_lists)
-    #        widths =list(map(string_width ,strings))
-    #        heights=list(map(string_height,strings))
-    #        max_height=max(heights)
-    #        max_width =max(widths )
-    #        string_lists=[uniform_boxify(string_list,max_height,max_width) for string_list in string_lists]
-    #        rows=[horizontally_concatenated_strings(string_list)for string_list in string_lists]
-    #        grid=vertically_concatenated_strings(rows)
-    #        return grid
-    #    strings=[[fansi(wrap_string_to_width(random_namespace_hash(randint(10,30)),5),random_element(['green','blue','yellow','red','magenta','gray','cyan']),per_line=True)for _ in range(5)]for _ in range(10)]
-    #    print(simple_boxed_string(griddify(strings)))
+    EXAMPLE:
+        >>> s="I don't have any kids\n\nBut I like making dad jokes\n\nI am a faux pa"
+        >>> print(simple_boxed_string(s,'center'))
+        ┌───────────────────────────┐
+        │   I don't have any kids   │
+        │                           │
+        │But I like making dad jokes│
+        │                           │
+        │       I am a faux pa      │
+        └───────────────────────────┘
+    EXAMPLE That demonstrates not only this function but several other console-string functions in rp at once:
+        def griddify(string_lists):
+            def uniform_boxify(strings,height,width):
+                strings=list(map(str                    ,strings))
+                strings=list(map(make_string_rectangular,strings))
+                strings=[pad_string_to_dims(string,height=height,width=width)for string in strings]
+                return strings
+            strings=list_flatten(string_lists)
+            widths =list(map(string_width ,strings))
+            heights=list(map(string_height,strings))
+            max_height=max(heights)
+            max_width =max(widths )
+            string_lists=[uniform_boxify(string_list,max_height,max_width) for string_list in string_lists]
+            rows=[horizontally_concatenated_strings(string_list)for string_list in string_lists]
+            grid=vertically_concatenated_strings(rows)
+            return grid
+        strings=[[fansi(wrap_string_to_width(random_namespace_hash(randint(10,30)),5),random_element(['green','blue','yellow','red','magenta','gray','cyan']),per_line=True)for _ in range(5)]for _ in range(10)]
+        print(simple_boxed_string(griddify(strings)))
     """
     return bordered_string(make_string_rectangular(string,align=align),
         width_fill       =chars[0],
@@ -24923,69 +24965,69 @@ def playback_mouse_positions(positions,rate=60):
 
 def mouse_left_click():
     """
-    #Trigger the mouse's left click button
+    Trigger the mouse's left click button
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().click(pynput.mouse.Button.left)
 
 def mouse_right_click():
     """
-    #Trigger the mouse's right click button
+    Trigger the mouse's right click button
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().click(pynput.mouse.Button.right)
 
 def mouse_middle_click():
     """
-    #Trigger the mouse's middle click button
+    Trigger the mouse's middle click button
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().click(pynput.mouse.Button.middle)
 
 def mouse_left_press():
     """
-    #Press the mouse's left button
-    #EXAMPLE: mouse_left_press();sleep(1);mouse_left_release()
+    Press the mouse's left button
+    EXAMPLE: mouse_left_press();sleep(1);mouse_left_release()
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().press(pynput.mouse.Button.left)
 
 def mouse_right_press():
     """
-    #Press the mouse's right button
-    #EXAMPLE: mouse_right_press();sleep(1);mouse_right_release()
+    Press the mouse's right button
+    EXAMPLE: mouse_right_press();sleep(1);mouse_right_release()
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().press(pynput.mouse.Button.right)
 
 def mouse_middle_press():
     """
-    #Press the mouse's middle button
-    #EXAMPLE: mouse_middle_press();sleep(1);mouse_middle_release()
+    Press the mouse's middle button
+    EXAMPLE: mouse_middle_press();sleep(1);mouse_middle_release()
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().press(pynput.mouse.Button.middle)
 
 def mouse_left_release():
     """
-    #Release the mouse's left button
-    #EXAMPLE: mouse_left_release();sleep(1);mouse_left_release()
+    Release the mouse's left button
+    EXAMPLE: mouse_left_release();sleep(1);mouse_left_release()
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().release(pynput.mouse.Button.left)
 
 def mouse_right_release():
     """
-    #Release the mouse's right button
-    #EXAMPLE: mouse_right_release();sleep(1);mouse_right_release()
+    Release the mouse's right button
+    EXAMPLE: mouse_right_release();sleep(1);mouse_right_release()
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().release(pynput.mouse.Button.right)
 
 def mouse_middle_release():
     """
-    #Release the mouse's middle button
-    #EXAMPLE: mouse_middle_release();sleep(1);mouse_middle_release()
+    Release the mouse's middle button
+    EXAMPLE: mouse_middle_release();sleep(1);mouse_middle_release()
     """
     pynput=pip_import('pynput')
     _get_pynput_mouse_controller().release(pynput.mouse.Button.middle)
@@ -25100,7 +25142,7 @@ def get_scope(frames_back=0):
 _all_module_names=set()
 def get_all_importable_module_names(use_cache=True):
     """
-    #Returns a set of all names that you can use 'import <name>' on
+    Returns a set of all names that you can use 'import <name>' on
     """
     if use_cache and _all_module_names:
         return _all_module_names
@@ -25173,7 +25215,7 @@ def epoch_millis_to_date(epoch_millis: int) -> 'datetime':
 
 def get_current_date():
     """
-    #This is annoying to type...so I added this function as a bit of sugar.
+    This is annoying to type...so I added this function as a bit of sugar.
     """
     import datetime
     return datetime.datetime.now()
@@ -25209,10 +25251,10 @@ def string_to_date(string):
 
 def open_file_with_default_application(path):
     """
-    #Open a file or folder with the OS's default application
-    #EXAMPLE: open_file_with_default_application('.') #Should open up a file browser with the current directory
-    #Currently works on Mac, Windows, and Linux.
-    #https://stackoverflow.com/questions/434597/open-document-with-default-os-application-in-python-both-in-windows-and-mac-os
+    Open a file or folder with the OS's default application
+    EXAMPLE: open_file_with_default_application('.') #Should open up a file browser with the current directory
+    Currently works on Mac, Windows, and Linux.
+    https://stackoverflow.com/questions/434597/open-document-with-default-os-application-in-python-both-in-windows-and-mac-os
     """
     import subprocess, os, platform
     if platform.system() == 'Darwin':       # macOS
@@ -25230,14 +25272,14 @@ def open_file_with_default_application(path):
 
 def mean(*x):
     """
-    #EXAMPLES:
-    # ⮤ mean(1,2,3)
-    # ⮤ mean(1,2,3)
-    #ans = 2.0
-    # ⮤ mean(123)
-    #ans = 123.0
-    # ⮤ mean([1,5,2,4])
-    #ans = 3.0
+    EXAMPLES:
+     ⮤ mean(1,2,3)
+     ⮤ mean(1,2,3)
+    ans = 2.0
+     ⮤ mean(123)
+    ans = 123.0
+     ⮤ mean([1,5,2,4])
+    ans = 3.0
     """
     x=detuple(x)
     try:
@@ -25249,13 +25291,13 @@ def mean(*x):
 
 def median(*x):
     """
-    #EXAMPLES:
-    # ⮤ median(1,1,1,5,9,9,9)
-    #ans = 5
-    # ⮤ median([1,1,1,5,9,9,9])
-    #ans = 5
-    # ⮤ median(['a','b','c','d','e'])
-    #ans = c
+    EXAMPLES:
+     ⮤ median(1,1,1,5,9,9,9)
+    ans = 5
+     ⮤ median([1,1,1,5,9,9,9])
+    ans = 5
+     ⮤ median(['a','b','c','d','e'])
+    ans = c
     """
     x=detuple(x)
     from statistics import median
@@ -27952,13 +27994,15 @@ def get_rgb_byte_color_identity_mapping_image():
     return image
 
 def apply_colormap_to_image(image,colormap_name='viridis'):
-    # https://stackoverflow.com/questions/52498777/apply-matplotlib-or-custom-colormap-to-opencv-image/52626636
-    # EXAMPLE:
-    #    image=load_image('https://www.gaytimes.co.uk/wp-content/uploads/2018/05/Kim-Petras-Thom-Kerr-header.jpg')
-    #    styles='Accent Accent_r Blues Blues_r BrBG BrBG_r BuGn BuGn_r BuPu BuPu_r CMRmap CMRmap_r Dark2 Dark2_r GnBu GnBu_r Greens Greens_r Greys Greys_r OrRd OrRd_r Oranges Oranges_r PRGn PRGn_r Paired Paired_r Pastel1 Pastel1_r Pastel2 Pastel2_r PiYG PiYG_r PuBu PuBuGn PuBuGn_r PuBu_r PuOr PuOr_r PuRd PuRd_r Purples Purples_r RdBu RdBu_r RdGy RdGy_r RdPu RdPu_r RdYlBu RdYlBu_r RdYlGn RdYlGn_r Reds Reds_r Set1 Set1_r Set2 Set2_r Set3 Set3_r Spectral Spectral_r Wistia Wistia_r YlGn YlGnBu YlGnBu_r YlGn_r YlOrBr YlOrBr_r YlOrRd YlOrRd_r afmhot afmhot_r autumn autumn_r binary binary_r bone bone_r brg brg_r bwr bwr_r cividis cividis_r cool cool_r coolwarm coolwarm_r copper copper_r cubehelix cubehelix_r flag flag_r gist_earth gist_earth_r gist_gray gist_gray_r gist_heat gist_heat_r gist_ncar gist_ncar_r gist_rainbow gist_rainbow_r gist_stern gist_stern_r gist_yarg gist_yarg_r gnuplot gnuplot2 gnuplot2_r gnuplot_r gray gray_r hot hot_r hsv hsv_r inferno inferno_r jet jet_r magma magma_r nipy_spectral nipy_spectral_r ocean ocean_r pink pink_r plasma plasma_r prism prism_r rainbow rainbow_r seismic seismic_r spring spring_r summer summer_r tab10 tab10_r tab20 tab20_r tab20b tab20b_r tab20c tab20c_r terrain terrain_r twilight twilight_r twilight_shifted twilight_shifted_r viridis viridis_r winter winter_r'.split()
-    #    for style in styles:
-    #        display_image(apply_colormap_to_image(image,style))
-    #        input(style)
+    """
+        https://stackoverflow.com/questions/52498777/apply-matplotlib-or-custom-colormap-to-opencv-image/52626636
+        EXAMPLE:
+            image=load_image('https://www.gaytimes.co.uk/wp-content/uploads/2018/05/Kim-Petras-Thom-Kerr-header.jpg')
+           styles='Accent Accent_r Blues Blues_r BrBG BrBG_r BuGn BuGn_r BuPu BuPu_r CMRmap CMRmap_r Dark2 Dark2_r GnBu GnBu_r Greens Greens_r Greys Greys_r OrRd OrRd_r Oranges Oranges_r PRGn PRGn_r Paired Paired_r Pastel1 Pastel1_r Pastel2 Pastel2_r PiYG PiYG_r PuBu PuBuGn PuBuGn_r PuBu_r PuOr PuOr_r PuRd PuRd_r Purples Purples_r RdBu RdBu_r RdGy RdGy_r RdPu RdPu_r RdYlBu RdYlBu_r RdYlGn RdYlGn_r Reds Reds_r Set1 Set1_r Set2 Set2_r Set3 Set3_r Spectral Spectral_r Wistia Wistia_r YlGn YlGnBu YlGnBu_r YlGn_r YlOrBr YlOrBr_r YlOrRd YlOrRd_r afmhot afmhot_r autumn autumn_r binary binary_r bone bone_r brg brg_r bwr bwr_r cividis cividis_r cool cool_r coolwarm coolwarm_r copper copper_r cubehelix cubehelix_r flag flag_r gist_earth gist_earth_r gist_gray gist_gray_r gist_heat gist_heat_r gist_ncar gist_ncar_r gist_rainbow gist_rainbow_r gist_stern gist_stern_r gist_yarg gist_yarg_r gnuplot gnuplot2 gnuplot2_r gnuplot_r gray gray_r hot hot_r hsv hsv_r inferno inferno_r jet jet_r magma magma_r nipy_spectral nipy_spectral_r ocean ocean_r pink pink_r plasma plasma_r prism prism_r rainbow rainbow_r seismic seismic_r spring spring_r summer summer_r tab10 tab10_r tab20 tab20_r tab20b tab20b_r tab20c tab20c_r terrain terrain_r twilight twilight_r twilight_shifted twilight_shifted_r viridis viridis_r winter winter_r'.split()
+           for style in styles:
+               display_image(apply_colormap_to_image(image,style))
+               input(style)
+    """
     pip_import('cmapy')
     pip_import('cv2')
     import cv2
@@ -28172,24 +28216,28 @@ def curl_bytes(url):
 
 
 def get_computer_name():
-    #Returns the name of the current computer
-    #https://stackoverflow.com/questions/799767/getting-name-of-windows-computer-running-python-script
-    #There are apparently a few ways to do this (according to stackoverflow)
+    """
+    Returns the name of the current computer
+    https://stackoverflow.com/questions/799767/getting-name-of-windows-computer-running-python-script
+    There are apparently a few ways to do this (according to stackoverflow)
+    """
     import socket
     return socket.gethostname()
 
 def cv_image_filter(image,kernel):
-    #Convolves an image with a custom kernel matrix on a per-channel basis
-    #
-    #EXAMPLE:
-    #   img=load_image('https://mcusercontent.com/1f7db88dcefeafdd417098188/images/78188951-5329-4a51-8808-f68231d17609.png')
-    #   kernel=gaussian_kernel(40,40)
-    #   kernel=resize_image(kernel,(80,5))
-    #   kernel/=kernel.sum()
-    #   for theta in range(180):
-    #       display_image(cv_image_filter(img,rotate_image(kernel,theta)))
-    #
-    #Please note: I don't know if we have to ensure that the kernel 
+    """
+    Convolves an image with a custom kernel matrix on a per-channel basis
+    
+    EXAMPLE:
+       img=load_image('https://mcusercontent.com/1f7db88dcefeafdd417098188/images/78188951-5329-4a51-8808-f68231d17609.png')
+       kernel=gaussian_kernel(40,40)
+       kernel=resize_image(kernel,(80,5))
+       kernel/=kernel.sum()
+       for theta in range(180):
+           display_image(cv_image_filter(img,rotate_image(kernel,theta)))
+    
+    Please note: I don't know if we have to ensure that the kernel 
+    """
     assert is_image(image ),'Input must be an image as defined by rp.is_image'
     assert is_image(kernel),'The kernel must also be an image as defined by rp.is_image'
     image=_prepare_cv_image(image)
@@ -28204,10 +28252,12 @@ def cv_image_filter(image,kernel):
     return cv2.filter2D(image,-1,kernel)
 
 def random_rotation_matrix(dim=3):
-    #Also known as a real orthonormal matrix
-    #Every vector in the output matrix is orthogonal to every vector but itself
-    #Every vector in the output matrix has magnitude 1
-    #Source: https://stackoverflow.com/questions/38426349/how-to-create-random-orthonormal-matrix-in-python-numpy
+    """
+    Also known as a real orthonormal matrix
+    Every vector in the output matrix is orthogonal to every vector but itself
+    Every vector in the output matrix has magnitude 1
+    Source: https://stackoverflow.com/questions/38426349/how-to-create-random-orthonormal-matrix-in-python-numpy
+    """
     random_state = np.random
     H = np.eye(dim)
     D = np.ones((dim,))
@@ -28227,8 +28277,10 @@ def random_rotation_matrix(dim=3):
     return H
 
 def wordcloud_image(words,width=512,height=512,colormap='viridis',**kwargs):
-    #EXAMPLE:
-    #   display_image(wordcloud_image(get_source_code(r)))
+    """
+    EXAMPLE:
+       display_image(wordcloud_image(get_source_code(r)))
+    """
     pip_import('wordcloud')
     
     if not isinstance(words,str):
@@ -28247,11 +28299,13 @@ def wordcloud_image(words,width=512,height=512,colormap='viridis',**kwargs):
     return wordcloud.to_array()
 
 def display_pandas_correlation_heatmap(dataframe,*,title=None,show_numbers=False,method='pearson',block=False):
-    #This function is used for exploratory analysis with pandas dataframes. It lets you see which variables are correlated to which other variables, and by how much.
-    #The dataframe argument should be a pandas.DataFrame object
-    #show_numbers will, when True, show the correlation value as a number over each square in the grid. Typically, it only looks good if the squares on the grid are large (otherwise the numbers won't fit). Because of this, I turned it off by default - but if you enable it it can make your plot much more informative!
-    #EXAMPLE:
-    #   display_pandas_correlation_heatmap(show_numbers=True,dataframe=pip_import('pandas').read_csv('https://raw.githubusercontent.com/mwaskom/seaborn-data/master/titanic.csv'))
+    """
+    This function is used for exploratory analysis with pandas dataframes. It lets you see which variables are correlated to which other variables, and by how much.
+    The dataframe argument should be a pandas.DataFrame object
+    show_numbers will, when True, show the correlation value as a number over each square in the grid. Typically, it only looks good if the squares on the grid are large (otherwise the numbers won't fit). Because of this, I turned it off by default - but if you enable it it can make your plot much more informative!
+    EXAMPLE:
+       display_pandas_correlation_heatmap(show_numbers=True,dataframe=pip_import('pandas').read_csv('https://raw.githubusercontent.com/mwaskom/seaborn-data/master/titanic.csv'))
+    """
     pip_import('seaborn')
     pip_import('matplotlib')
     pip_import('pandas')
@@ -28293,14 +28347,16 @@ def get_youtube_video_title(url):
     return _get_youtube_video_data_via_embeddify(url)['title']
 
 def view_table(data):
-    #Launches a program that lets you view tabular data
-    #Kinda like microsoft excel, but in a terminal
-    #Can view numpy arrays
-    #Can view pandas dataframes
-    #Can view .csv files (given a filepath)
-    #Can view .csv files (given the contents as a string)
-    #Can view lists of lists such as view_table([[1,2,3],['a','b','c'],[[1,2,3],{'key':'value'},None]])
-    #Can view multiline strings that look like tables, such as 'a b c\nd e f\nthings stuff things fourth thing six'
+    """
+    Launches a program that lets you view tabular data
+    Kinda like microsoft excel, but in a terminal
+    Can view numpy arrays
+    Can view pandas dataframes
+    Can view .csv files (given a filepath)
+    Can view .csv files (given the contents as a string)
+    Can view lists of lists such as view_table([[1,2,3],['a','b','c'],[[1,2,3],{'key':'value'},None]])
+    Can view multiline strings that look like tables, such as 'a b c\nd e f\nthings stuff things fourth thing six'
+    """
 
 
     pip_import('pandas')
@@ -28539,23 +28595,27 @@ def resize_images_to_fit(*images, height: int = None, width: int = None, interp=
     return [resize_image_to_fit(x,height,width,interp=interp,allow_growth=allow_growth) for x in images]
 
 def resize_images_to_max_size(*images, interp="bilinear"):
-    #Makes sure all images have the same height and width
-    #Does this by stretching all images to the max size found
-    #EXAMPLE:
-    #    ans='https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg&auto=webp https://s3.amazonaws.com/cdn-origin-etr.akc.org/wp-content/uploads/2017/11/13002248/GettyImages-187066830.jpg https://hips.hearstapps.com/hmg-prod.s3.amazonaws.com/images/best-small-dog-breeds-cavalier-king-charles-spaniel-1598992577.jpg?crop=0.468xw:1.00xh;0.259xw,0&resize=480:*'.split()
-    #    ans=load_images(ans)
-    #    display_image_slideshow(ans)
-    #    display_image_slideshow(resize_images_to_max_size(ans))
+    """
+    Makes sure all images have the same height and width
+    Does this by stretching all images to the max size found
+    EXAMPLE:
+        ans='https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg&auto=webp https://s3.amazonaws.com/cdn-origin-etr.akc.org/wp-content/uploads/2017/11/13002248/GettyImages-187066830.jpg https://hips.hearstapps.com/hmg-prod.s3.amazonaws.com/images/best-small-dog-breeds-cavalier-king-charles-spaniel-1598992577.jpg?crop=0.468xw:1.00xh;0.259xw,0&resize=480:*'.split()
+        ans=load_images(ans)
+        display_image_slideshow(ans)
+        display_image_slideshow(resize_images_to_max_size(ans))
+    """
     return resize_images(*images, size=get_max_image_dimensions(*images), interp=interp)
 
 def resize_images_to_min_size(*images, interp="bilinear"):
-    #Makes sure all images have the same height and width
-    #Does this by stretching all images to the min size found
-    #EXAMPLE:
-    #    ans='https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg&auto=webp https://s3.amazonaws.com/cdn-origin-etr.akc.org/wp-content/uploads/2017/11/13002248/GettyImages-187066830.jpg https://hips.hearstapps.com/hmg-prod.s3.amazonaws.com/images/best-small-dog-breeds-cavalier-king-charles-spaniel-1598992577.jpg?crop=0.468xw:1.00xh;0.259xw,0&resize=480:*'.split()
-    #    ans=load_images(ans)
-    #    display_image_slideshow(ans)
-    #    display_image_slideshow(resize_images_to_min(ans))
+    """
+    Makes sure all images have the same height and width
+    Does this by stretching all images to the min size found
+    EXAMPLE:
+        ans='https://i.ytimg.com/vi/MPV2METPeJU/maxresdefault.jpg https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg&auto=webp https://s3.amazonaws.com/cdn-origin-etr.akc.org/wp-content/uploads/2017/11/13002248/GettyImages-187066830.jpg https://hips.hearstapps.com/hmg-prod.s3.amazonaws.com/images/best-small-dog-breeds-cavalier-king-charles-spaniel-1598992577.jpg?crop=0.468xw:1.00xh;0.259xw,0&resize=480:*'.split()
+        ans=load_images(ans)
+        display_image_slideshow(ans)
+        display_image_slideshow(resize_images_to_min(ans))
+    """
     return resize_images(*images, size=get_min_image_dimensions(*images), interp=interp)
 
 def _iterfzf(iterable, *args,**kwargs):
@@ -28949,14 +29009,15 @@ def _get_all_paths_fast(
     #return output
 
 def breadth_first_path_iterator(root='.'):
-    #As opposed to a depth-first path iterator, this goes through every file and directory from the root in a breadth-first manner
-    #It returns a generator instead of a list, which makes computations more efficient (especially for FZF)
-    #TODO: Add a depth-first path iterator
-    #Original code: https://code.activestate.com/recipes/511456-breadth-first-file-iterator/
-    #EXAMPLE:
-    #    for path in breadth_first_path_iterator():
-    #        print(path)
+    """
+    As opposed to a depth-first path iterator, this goes through every file and directory from the root in a breadth-first manner
+    It returns a generator instead of a list, which makes computations more efficient (especially for FZF)
+    EXAMPLE:
+        for path in breadth_first_path_iterator():
+            print(path)
+    """
 
+    #Original code: https://code.activestate.com/recipes/511456-breadth-first-file-iterator/
     #The below function is over 10x as fast as the old implementation
     yield from _get_all_paths_fast(root_dir=root,recursive=True,traversal='breadth_first',lazy=True,ignore_permission_errors=True)
 
@@ -29042,11 +29103,13 @@ def minify_python_code(code:str):
     return python_minifier.minify(code)
 
 def image_to_text(image)->str:
-    #Takes an image, finds text on it, and returns the text as a string
-    #(Optical character recognition)
-    #It's kind of mind-blowing how this can be done in just 6 lines of code...
-    #EXAMPLE:
-    #    print(image_to_text(load_image('http)://www.morefamousquotes.com/images/topics/20170915/quotes-about-hitchhikers-guide-to-the-galaxy.jpg'))
+    """
+    Takes an image, finds text on it, and returns the text as a string
+    (Optical character recognition)
+    It's kind of mind-blowing how this can be done in just 6 lines of code...
+    EXAMPLE:
+        print(image_to_text(load_image('http)://www.morefamousquotes.com/images/topics/20170915/quotes-about-hitchhikers-guide-to-the-galaxy.jpg'))
+    """
     image=as_rgb_image(image)
     image=as_byte_image(image)
     pip_import('pytesseract')
@@ -29055,20 +29118,22 @@ def image_to_text(image)->str:
     return text
 
 def cv_equalize_histogram(image,by_value=True):
-    #Equalizes the histogram of a given image
-    #If by_balue is True, and image is RGB, equalize it's value in HSV space instead of applying equalization per RGB channel
-    #EXAMPLE:
-    #    ans=load_image('https://www.cdc.gov/healthypets/images/pets/cute-dog-headshot.jpg')
-    #    ans=as_grayscale_image(ans)
-    #
-    #    display_image(ans)
-    #    bar_graph(np.cumsum(np.histogram(ans.flatten(),256)[0]))
-    #    input('Before');
-    #
-    #    ans=cv_equalize_histogram(ans)
-    #    display_image(ans)
-    #    bar_graph(np.cumsum(np.histogram(ans.flatten(),256)[0]))
-    #    print('After')
+    """
+    Equalizes the histogram of a given image
+    If by_balue is True, and image is RGB, equalize it's value in HSV space instead of applying equalization per RGB channel
+    EXAMPLE:
+        ans=load_image('https://www.cdc.gov/healthypets/images/pets/cute-dog-headshot.jpg')
+        ans=as_grayscale_image(ans)
+    
+        display_image(ans)
+        bar_graph(np.cumsum(np.histogram(ans.flatten(),256)[0]))
+        input('Before');
+    
+        ans=cv_equalize_histogram(ans)
+        display_image(ans)
+        bar_graph(np.cumsum(np.histogram(ans.flatten(),256)[0]))
+        print('After')
+    """
 
     pip_import('cv2')
     import cv2
@@ -29110,7 +29175,7 @@ def cv_equalize_histogram(image,by_value=True):
 
 
 def compose_rgb_image(r,g,b):
-    #Create an RGB image from three separate channels
+    """ Create an RGB image from three separate channels """
     r=as_grayscale_image(r)
     g=as_grayscale_image(g)
     b=as_grayscale_image(b)
@@ -29124,7 +29189,7 @@ def compose_rgb_image(r,g,b):
     return np.stack((r,g,b),axis=2)
 
 def compose_rgba_image(r,g,b,a):
-    #Create an RGBA image from four separate channels
+    """ Create an RGBA image from four separate channels """
     r=as_grayscale_image(r)
     g=as_grayscale_image(g)
     b=as_grayscale_image(b)
@@ -29141,7 +29206,7 @@ def compose_rgba_image(r,g,b,a):
     return np.stack((r,g,b,a),axis=2)
 
 def compose_image_from_channels(*channels):
-    #Create an RGB or RGBA image from three or four separate channels
+    """ Create an RGB or RGBA image from three or four separate channels """
     assert len(channels) in (3,4),'Cannot create an RGB or RGBA image from %i channels. We need 3 or 4 channels.'%len(channels)
     if len(channels)==3:
         return compose_rgb_image(*channels)
@@ -29149,12 +29214,14 @@ def compose_image_from_channels(*channels):
         return compose_rgba_image(*channels)
 
 def extract_image_channels(image):
-    #Given an RGB image of shape (height,width,3) return a tensor of (3,height,width)
-    #This function is the inverse of compose_image_from_channels
-    #Meant to be used like:
-    #EXAMPLE:
-    #   r,g,b  =extract_image_channels(image)
-    #   r,g,b,a=extract_image_channels(image)
+    """
+    Given an RGB image of shape (height,width,3) return a tensor of (3,height,width)
+    This function is the inverse of compose_image_from_channels
+    Meant to be used like:
+    EXAMPLE:
+       r,g,b  =extract_image_channels(image)
+       r,g,b,a=extract_image_channels(image)
+    """
     assert is_rgb_image(image) or is_rgba_image(image)
     return np.transpose(image,(2,0,1))
 extract_rgb_channels=extract_image_channels
@@ -29209,10 +29276,12 @@ pterm=pseudo_terminal#Just a shortcut. Not to be used in code; just Colab etc wh
 #    return pip_import('rich').print(*args,**kwargs)
 
 def play_the_matrix_animation():
-    #Plays a super cool animation in your terminal that makes it look like you're hacking the matrix
-    #(From the movie)
-    #This code is from: https://github.com/gineer01/matrix-rain
-    #!/usr/bin/env python3
+    """
+    Plays a super cool animation in your terminal that makes it look like you're hacking the matrix
+    (From the movie)
+    This code is from: https://github.com/gineer01/matrix-rain
+    !/usr/bin/env python3
+    """
     
     import random
     import curses
@@ -29492,9 +29561,11 @@ def play_the_matrix_animation():
     curses.wrapper(main)
         
 def view_string_diff(before:str,after:str):
-    #This function asssumes you have git installed
-    #Lets you view the diff between two strings interactively
-    #TODO: Let you accept/reject changes between the diffs and return the result as a string
+    """
+    This function asssumes you have git installed
+    Lets you view the diff between two strings interactively
+    TODO: Let you accept/reject changes between the diffs and return the result as a string
+    """
     
     pip_import('ydiff')
     import os,ydiff,subprocess
@@ -29519,21 +29590,23 @@ def view_string_diff(before:str,after:str):
         delete_directory(temp_dir)
 
 def vim_string_diff(before:str,after:str):
-    #Requires the program 'vimdiff'
-    #Returns the modified 'before' as a string
-    #
-    #How to use vimdiff:
-    #    https://stackoverflow.com/questions/27832630/merge-changes-using-vimdiff
-    #    Summary:
-    #        do    and    dp   are diff other and diff put respectively
-    #        ]c    and    [c   are goto next diff and prev diff respectively
-    #        ^w^w              switches windows
-    #        :wqa              save when you're done
-    #
-    #Interactively diffs between two strings
-    #Returns the result of the 'before' string after changes have been made
-    #    (In other words, it returns the file you see on the left of the split in the vimdiff)
-    #https://vi.stackexchange.com/questions/625/how-do-i-use-vim-as-a-diff-tool
+    """
+    Requires the program 'vimdiff'
+    Returns the modified 'before' as a string
+    
+    How to use vimdiff:
+        https://stackoverflow.com/questions/27832630/merge-changes-using-vimdiff
+        Summary:
+            do    and    dp   are diff other and diff put respectively
+            ]c    and    [c   are goto next diff and prev diff respectively
+            ^w^w              switches windows
+            :wqa              save when you're done
+    
+    Interactively diffs between two strings
+    Returns the result of the 'before' string after changes have been made
+        (In other words, it returns the file you see on the left of the split in the vimdiff)
+    https://vi.stackexchange.com/questions/625/how-do-i-use-vim-as-a-diff-tool
+    """
     
     import os
     original_dir=get_current_directory()
@@ -29582,10 +29655,12 @@ def vim_string_diff(before:str,after:str):
 #        delete_directory(temp_dir)
 
 def vim_paste():
-    #Gets the string in the 0th register of vim and returns it
-    #Looking for a line like
-    #    |3,1,0,1,7,0,1613593399,"Line1","Line2","Line3","Line4","Line5","Line6","Line7"
-    #TODO: Make this code cleaner
+    """
+    Gets the string in the 0th register of vim and returns it
+    Looking for a line like
+        |3,1,0,1,7,0,1613593399,"Line1","Line2","Line3","Line4","Line5","Line6","Line7"
+    TODO: Make this code cleaner
+    """
     def is_valid_int(string):
         try:
             int(string)
@@ -29666,9 +29741,11 @@ def vim_paste():
 
 
 def vim_copy(string:str):
-    #Gets the string in the 0th register of vim and returns it
-    #Writing a line like
-    #    |3,1,0,1,7,0,1613593399,"Line1","Line2","Line3","Line4","Line5","Line6","Line7"
+    """
+    Gets the string in the 0th register of vim and returns it
+    Writing a line like
+        |3,1,0,1,7,0,1613593399,"Line1","Line2","Line3","Line4","Line5","Line6","Line7"
+    """
 
 
     viminfo=text_file_to_string('~/.viminfo') if file_exists('~/.viminfo') else ''
@@ -29707,8 +29784,10 @@ def vim_copy(string:str):
     string_to_text_file('~/.viminfo',new_line+'\n'+viminfo)
 
 def zip_folder_to_bytes(folder_path:str):
-    #Similar to file_to_bytes
-    #Takes a folder_path, zips it into a .zip file, then returns the bytes of that zip file
+    """
+    Similar to file_to_bytes
+    Takes a folder_path, zips it into a .zip file, then returns the bytes of that zip file
+    """
     assert path_exists(folder_path),'zip_folder_to_bytes error: Path does not exist: '+str(folder_path)
     assert is_a_folder(folder_path),'zip_folder_to_bytes error: Path exists but is not a folder: '+str(folder_path)
     temp_zip=temporary_file_path('.zip')
@@ -29782,13 +29861,15 @@ def web_copy_path(path:str=None):
     return path
 
 def get_all_local_ip_addresses():
-    #Returns a list of all local ip addresses currently in use on your local network
-    #Code from: https://stackoverflow.com/questions/207234/list-of-ip-addresses-hostnames-from-local-network-in-python
-    #Can take up to 20 seconds to complete
-    #EXAMPLE:
-    #     >>> get_all_local_ip_addresses()
-    #     ans = ['192.168.1.1', '192.168.1.21', '192.168.1.33', '192.168.1.32', '192.168.1.53', '192.168.1.105', '192.168.1.122', '192.168.1.136', '192.168.1.171', '192.168.1.190', '192.168.1.205', '192.168.1.235', '192.168.1.237', '192.168.1.175', '192.168.1.228', '192.168.1.249']
-    #TODO: Condense this function into less lines. It's pretty big...
+    """
+    Returns a list of all local ip addresses currently in use on your local network
+    Code from: https://stackoverflow.com/questions/207234/list-of-ip-addresses-hostnames-from-local-network-in-python
+    Can take up to 20 seconds to complete
+    EXAMPLE:
+         >>> get_all_local_ip_addresses()
+         ans = ['192.168.1.1', '192.168.1.21', '192.168.1.33', '192.168.1.32', '192.168.1.53', '192.168.1.105', '192.168.1.122', '192.168.1.136', '192.168.1.171', '192.168.1.190', '192.168.1.205', '192.168.1.235', '192.168.1.237', '192.168.1.175', '192.168.1.228', '192.168.1.249']
+    TODO: Condense this function into less lines. It's pretty big...
+    """
      
     import socket,multiprocessing,subprocess,os
     
@@ -29869,9 +29950,11 @@ def get_all_local_ip_addresses():
     return map_network()
 
 def ip_to_mac_address(address):
-    #EXAMPLE:
-    #     >>> [ip_to_mac_address(x) for x in get_all_local_ip_addresses()]
-    #    ans = ['70:4d:7b:e4:c7:b8', '00:11:32:0e:90:6b', '30:5a:3a:7a:e4:a8', 'b0:83:fe:4c:d2:f8', '68:b5:99:a9:c8:a7', '8c:ae:4c:ee:66:28', '00:03:ea:0d:2c:fd', '10:ce:a9:1e:9b:c3', 'b0:a7:37:e6:af:c0']
+    """
+    EXAMPLE:
+         >>> [ip_to_mac_address(x) for x in get_all_local_ip_addresses()]
+        ans = ['70:4d:7b:e4:c7:b8', '00:11:32:0e:90:6b', '30:5a:3a:7a:e4:a8', 'b0:83:fe:4c:d2:f8', '68:b5:99:a9:c8:a7', '8c:ae:4c:ee:66:28', '00:03:ea:0d:2c:fd', '10:ce:a9:1e:9b:c3', 'b0:a7:37:e6:af:c0']
+    """
     if address==get_my_local_ip_address():
         return get_my_mac_address()
     pip_import('getmac')
@@ -29879,13 +29962,15 @@ def ip_to_mac_address(address):
     return getmac.get_mac_address(ip=address)
 
 def ip_to_host_name(address:str)->str:
-    #Will attempt to get the name of the host computer with the given IP address
-    #If no name is returned, this function returns None
-    #EXAMPLE:
-    #    >>> get_my_local_ip_address()
-    #   ans = 192.168.1.33
-    #    >>> ip_to_host_name(ans)
-    #   ans = glass
+    """
+    Will attempt to get the name of the host computer with the given IP address
+    If no name is returned, this function returns None
+    EXAMPLE:
+        >>> get_my_local_ip_address()
+       ans = 192.168.1.33
+        >>> ip_to_host_name(ans)
+       ans = glass
+    """
     import socket
     try:
         out=socket.gethostbyaddr(address)
@@ -29894,11 +29979,13 @@ def ip_to_host_name(address:str)->str:
         return None
 
 def get_mac_address_vendor(address:str)->str:
-    #EXAMPLE:
-    #    >>> get_my_mac_address()
-    #   ans = 30:5a:3a:7a:e4:a8
-    #    >>> get_mac_address_vendor(ans)
-    #   ans = ASUSTek COMPUTER INC.
+    """
+    EXAMPLE:
+        >>> get_my_mac_address()
+       ans = 30:5a:3a:7a:e4:a8
+        >>> get_mac_address_vendor(ans)
+       ans = ASUSTek COMPUTER INC.
+    """
     pip_import('mac_vendor_lookup')
     from mac_vendor_lookup import MacLookup
     return MacLookup().lookup(address)
@@ -30070,14 +30157,16 @@ def _fart(files='.'):
 
 
 def import_all_submodules(module,*,recursive=True,strict=False,verbose=False):
-    #Useful when you're searching for some keyword in a library, but not every submodule has been imported
-    #Background: Modules sometimes don't import everything all at once. When you import PIL, for example, PIL.Image doesn't exist until you use 'import PIL.image'
-    #   This makes it impossible to search for a function, such as 'imsave' using autocompletion or rp's rinsp_search (aka the ?. operator).
-    #If recursive is True, it will import all of the submodule's submodules etc
-    #If strict is True, it will throw an error if any of the modules fail to import properly
-    #If verbose is True, it will print out each module as it's imported (or failed to import)
-    #The 'module' parameter can either be a string, or a python module
-    #EXAMPLE: import_all_submodules('sklearn',verbose=True)
+    """
+    Useful when you're searching for some keyword in a library, but not every submodule has been imported
+    Background: Modules sometimes don't import everything all at once. When you import PIL, for example, PIL.Image doesn't exist until you use 'import PIL.image'
+       This makes it impossible to search for a function, such as 'imsave' using autocompletion or rp's rinsp_search (aka the ?. operator).
+    If recursive is True, it will import all of the submodule's submodules etc
+    If strict is True, it will throw an error if any of the modules fail to import properly
+    If verbose is True, it will print out each module as it's imported (or failed to import)
+    The 'module' parameter can either be a string, or a python module
+    EXAMPLE: import_all_submodules('sklearn',verbose=True)
+    """
         
     assert is_a_module(module) or isinstance(module,str),'import_all_submodules: the "module" parameter should be either a string or a module, but got type '+repr(type(module))
     if isinstance(module,str):
@@ -30125,19 +30214,23 @@ def import_all_submodules(module,*,recursive=True,strict=False,verbose=False):
     return seen_modules-{None}
         
 def dns_lookup(url:str)->str:
-    #Takes a url, and returns a string with the ip that's found
-    #EXAMPLE:
-    #     >> dns_lookup('google.com')
-    #    ans = 172.217.3.110
+    """
+    Takes a url, and returns a string with the ip that's found
+    EXAMPLE:
+         >> dns_lookup('google.com')
+        ans = 172.217.3.110
+    """
     assert connected_to_internet(),'Cannot use dns_lookup because we are not connected to the internet'
     import socket
     return socket.gethostbyname(url)
 
 class _MinFileSizeHeap:
-    #Push file paths to this
-    #When you pop from it, the smallest files get popped first
-    #TODO: Use threading and integrate this with _fzf_multi_grep so that it doesn't get hung on large files as often
-    #This class has been tested and it does work
+    """
+    Push file paths to this
+    When you pop from it, the smallest files get popped first
+    TODO: Use threading and integrate this with _fzf_multi_grep so that it doesn't get hung on large files as often
+    This class has been tested and it does work
+    """
     def __init__(self):
         self.heap=[]
     def push(self,file):
@@ -30245,34 +30338,36 @@ def _fzf_multi_grep(print_instructions=True):
 
 
 def unwarped_perspective_image(image, from_points, to_points=None, height:int=None, width:int=None):
-    #Takes an image, and two corresponding lists of four points, and returns an unwarped image
-    #If you don't specify the to_points, it will simply unwarp the source quadrangle to the resolution of the input image
-    #If you specify to_points, it might be useful in-case you want to adjust the transform etc
-    #Height and width can be manually specified as well, in case you want to capture parts of the perspectie transform that might have been cropped out
-    #When to_points is not specified, we assume that the from_points start from the top left of the desired area, and progress clockwise
-    #
-    #EXAMPLE:
-    #    while True:
-    #        #Place the apriltags clockwise from 0 at the the topleft on your target area then run this program and look at them through your webcam
-    #        image=load_image_from_webcam()
-    #        tags={}
-    #        for tag in detect_apriltags(image):
-    #            tags[tag.id_number]=tag
-    #            
-    #        print("Detected apriltags:",sorted(tags))
-    #        
-    #        corners=[]
-    #        for id_number in [0,1,2,3]:
-    #            if id_number in tags:
-    #                corners.append(tags[id_number].center)
-    #        print(corners)
-    #        
-    #        if len(corners)>=4:
-    #            display_clear()
-    #            display_path(corners)
-    #            image=unwarped_perspective_image(image,corners)
-    #        
-    #        display_image(image)    
+    """
+    Takes an image, and two corresponding lists of four points, and returns an unwarped image
+    If you don't specify the to_points, it will simply unwarp the source quadrangle to the resolution of the input image
+    If you specify to_points, it might be useful in-case you want to adjust the transform etc
+    Height and width can be manually specified as well, in case you want to capture parts of the perspectie transform that might have been cropped out
+    When to_points is not specified, we assume that the from_points start from the top left of the desired area, and progress clockwise
+    
+    EXAMPLE:
+        while True:
+            #Place the apriltags clockwise from 0 at the the topleft on your target area then run this program and look at them through your webcam
+            image=load_image_from_webcam()
+            tags={}
+            for tag in detect_apriltags(image):
+                tags[tag.id_number]=tag
+                
+            print("Detected apriltags:",sorted(tags))
+            
+            corners=[]
+            for id_number in [0,1,2,3]:
+                if id_number in tags:
+                    corners.append(tags[id_number].center)
+            print(corners)
+            
+            if len(corners)>=4:
+                display_clear()
+                display_path(corners)
+                image=unwarped_perspective_image(image,corners)
+            
+            display_image(image)    
+    """
 
     pip_import('cv2')
     import cv2
@@ -30321,48 +30416,48 @@ class AprilTag:
         
 def detect_apriltags(image,family:str='tag36h11'):
     """
-    #Apriltags are a particular type of AR Marker, which looks like a QR Code
-    #Apriltags are lower resolution than normal QR codes though
-    #Each apriltag corresponds to a single number
-    #Some apriltags to print out: https://www.dotproduct3d.com/uploads/8/5/1/1/85115558/apriltags_0-99.pdf
-    #To test out a whole bunch at one time, try printing this out: https://dfimg.dfrobot.com/nobody/makelog/4cd2b76a8912dfe060413b7dece0dfdf.png
-    #The apriltag's corners are specified clockwise from the top left corner of the apriltag
-    #
-    #EXAMPLE: (Try waving some of these apriltags around your webcam after printing them out)
-    #    while True:
-    #        image=load_image_from_webcam()
-    #        results=detect_apriltags(image)
-    #        print("[INFO] {} total AprilTags detected".format(len(results)))
-    #        
-    #        for r in results:
-    #            # extract the bounding box (x, y)-coordinates for the AprilTag
-    #            # and convert each of the (x, y)-coordinate pairs to integers
-    #            import cv2
-    #            (ptA, ptB, ptC, ptD) = r.corners
-    #            ptB = (int(ptB[0]), int(ptB[1]))
-    #            ptC = (int(ptC[0]), int(ptC[1]))
-    #            ptD = (int(ptD[0]), int(ptD[1]))
-    #            ptA = (int(ptA[0]), int(ptA[1]))
-    #    
-    #            # draw the bounding box of the AprilTag detection
-    #            cv2.line(image, ptA, ptB, (0, 255, 0), 2)
-    #            cv2.line(image, ptB, ptC, (0, 255, 0), 2)
-    #            cv2.line(image, ptC, ptD, (0, 255, 0), 2)
-    #            cv2.line(image, ptD, ptA, (0, 255, 0), 2)
-    #    
-    #            # draw the center (x, y)-coordinates of the AprilTag
-    #            (cX, cY) = (int(r.center[0]), int(r.center[1]))
-    #            cv2.circle(image, (cX, cY), 5, (0, 0, 255), -1)
-    #    
-    #            # draw the tag family on the image
-    #            tagFamily = r.family
-    #            tagFamily = str(r.id_number)
-    #            cv2.putText(image, tagFamily, (ptA[0], ptA[1] - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    #            
-    #            #Unwarp the image using the apriltag:
-    #            #image=unwarped_perspective_image(image,r.corners)
-    #    
-    #        display_image(image)
+    Apriltags are a particular type of AR Marker, which looks like a QR Code
+    Apriltags are lower resolution than normal QR codes though
+    Each apriltag corresponds to a single number
+    Some apriltags to print out: https://www.dotproduct3d.com/uploads/8/5/1/1/85115558/apriltags_0-99.pdf
+    To test out a whole bunch at one time, try printing this out: https://dfimg.dfrobot.com/nobody/makelog/4cd2b76a8912dfe060413b7dece0dfdf.png
+    The apriltag's corners are specified clockwise from the top left corner of the apriltag
+    
+    EXAMPLE: (Try waving some of these apriltags around your webcam after printing them out)
+        while True:
+            image=load_image_from_webcam()
+            results=detect_apriltags(image)
+            print("[INFO] {} total AprilTags detected".format(len(results)))
+            
+            for r in results:
+                # extract the bounding box (x, y)-coordinates for the AprilTag
+                # and convert each of the (x, y)-coordinate pairs to integers
+                import cv2
+                (ptA, ptB, ptC, ptD) = r.corners
+                ptB = (int(ptB[0]), int(ptB[1]))
+                ptC = (int(ptC[0]), int(ptC[1]))
+                ptD = (int(ptD[0]), int(ptD[1]))
+                ptA = (int(ptA[0]), int(ptA[1]))
+        
+                # draw the bounding box of the AprilTag detection
+                cv2.line(image, ptA, ptB, (0, 255, 0), 2)
+                cv2.line(image, ptB, ptC, (0, 255, 0), 2)
+                cv2.line(image, ptC, ptD, (0, 255, 0), 2)
+                cv2.line(image, ptD, ptA, (0, 255, 0), 2)
+        
+                # draw the center (x, y)-coordinates of the AprilTag
+                (cX, cY) = (int(r.center[0]), int(r.center[1]))
+                cv2.circle(image, (cX, cY), 5, (0, 0, 255), -1)
+        
+                # draw the tag family on the image
+                tagFamily = r.family
+                tagFamily = str(r.id_number)
+                cv2.putText(image, tagFamily, (ptA[0], ptA[1] - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                
+                #Unwarp the image using the apriltag:
+                #image=unwarped_perspective_image(image,r.corners)
+        
+            display_image(image)
     """
 
     family=family.lower()    
@@ -31463,16 +31558,18 @@ def resize_list_to_fit(array:list, max_length:int):
 
 
 def list_transpose(list_of_lists:list):
-    #EXAMPLE:
-    # >>> list_transpose([[1,2,3],[4,5,6]])
-    # ans = [[1, 4], [2, 5], [3, 6]]
-    #
-    #TODO: Fix this behaviour (extend it to list-of-lists with variable lengths)
-    # ans = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    # >>> split_into_sublists(ans,3)
-    # ans = [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10]]
-    # >>> list_transpose(ans)
-    # ans = [[1, 4, 7, 10]] #What I want: [[1,4,7,10],[2,5,8],[3,6,9]]
+    """
+    EXAMPLE:
+     >>> list_transpose([[1,2,3],[4,5,6]])
+     ans = [[1, 4], [2, 5], [3, 6]]
+    
+    TODO: Fix this behaviour (extend it to list-of-lists with variable lengths)
+     ans = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+     >>> split_into_sublists(ans,3)
+     ans = [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10]]
+     >>> list_transpose(ans)
+     ans = [[1, 4, 7, 10]] #What I want: [[1,4,7,10],[2,5,8],[3,6,9]]
+    """
 
     assert len(set(map(len,list_of_lists)))==1, 'Right now list_transpose only handles rectangular list_of_lists. This functionality may be added in the future.'
     return list(map(list,zip(*list_of_lists)))
