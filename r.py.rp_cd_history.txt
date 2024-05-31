@@ -74,7 +74,6 @@
 /Users/Ryan/PycharmProjects/QuickPython/rp/libs
 /Users/Ryan/PycharmProjects/QuickPython/rp
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/prompt_toolkit
-/Users/Ryan/Desktop/CleanCode/Sandbox
 /Users/Ryan/Documents
 /Users/Ryan/Documents/Adobe Scripts
 /Users
@@ -89,12 +88,14 @@
 /Users/Ryan/.vim/bundle/minimap.vim
 /Users/Ryan/.vim/bundle/minimap.vim/bin
 /Users/Ryan/PycharmProjects/QuickPython
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
 /Users/Ryan/.vim/bundle/vim-xtabline
 /Users/Ryan/.vim
 /Users/Ryan/.vim/bundle
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
 /Users/Ryan
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
+/Users/Ryan/Desktop/CleanCode/Sandbox
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/javascript
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
