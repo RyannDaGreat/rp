@@ -18077,7 +18077,8 @@ def pip_install(pip_args:str):
 
 def update_rp():
     if input_yes_no("Are you sure you'd like to try updating rp? (You will need to restart it to see any effects)"):
-        pip_install("rp --upgrade --no-cache")
+        # --index-url https://pypi.org/simple is so other internal pypi's that are out of date don't prevent the upgrade (looking at you, netflix! https://pypi.netflix.net/simple is often out of date...)
+        pip_install("rp --upgrade --no-cache  --index-url https://pypi.org/simple")
 
 def module_exists(module_name):
     """

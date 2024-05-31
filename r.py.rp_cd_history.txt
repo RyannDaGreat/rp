@@ -6,7 +6,6 @@
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1/images
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets/attempt1
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot/datasets
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5
 /usr
 /Users/Ryan/Desktop/CleanCode/SBU/Research/Jetbot
 /Users/Ryan/Desktop/CleanCode/SBU/Research
@@ -91,11 +90,12 @@
 /Users/Ryan/.vim/bundle/vim-xtabline
 /Users/Ryan/.vim
 /Users/Ryan/.vim/bundle
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
 /Users/Ryan
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
-/Users/Ryan/Desktop/CleanCode/Sandbox
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/javascript
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
+/Users/Ryan/Desktop/CleanCode/Sandbox
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
