@@ -2100,7 +2100,7 @@ def handle_character(buffer,char,event=None):
                 'pipr':'PIP install -r',
                 'pipu':'PIP uninstall',
                 'piu':'PIP uninstall',
-                'pu':'PIP uninstall',
+                'pu':'PU',
                 'pd': 'PYM pudb',
                 'vi':'VIM',
                 'v' :'VIM',

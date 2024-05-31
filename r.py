@@ -1353,10 +1353,10 @@ def gauss_blur(image,σ,single_channel: bool = False,mode: str = 'reflect',shutu
     #        ⎝                                                                      ⎠
 
     # NOTE:
-    #     ⮤ _s=(0,1,2)
-    #     ⮤ [_s[-1]] + list(_s[:-1])
+    #     >>> _s=(0,1,2)
+    #     >>> [_s[-1]] + list(_s[:-1])
     # ans=[2,0,1]
-    #     ⮤ list(_s[1:]) + [_s[0]]
+    #     >>> list(_s[1:]) + [_s[0]]
     # ans=[1,2,0]
 
     # region Works with RGB but fails on single channels
@@ -1454,6 +1454,7 @@ def uniform_float_color_image(height:int,width:int,color:tuple=(0,0,0,0)):
         output = np.ones((height,width,len(color)),dtype=float)*as_numpy_array([[[*color]]])
         assert len(color)==3 and is_rgb_image(output) or len(color)==4 and is_rgba_image(output)
         return output
+
 
 def blend_images(bot,top,alpha=1):
     """
@@ -2067,10 +2068,10 @@ def max_filter(image,diameter,single_channel: bool = False,mode: str = 'reflect'
     #        ⎝                                                                     ⎠
 
     # NOTE:
-    #     ⮤ _s=(0,1,2)
-    #     ⮤ [_s[-1]] + list(_s[:-1])
+    #     >>> _s=(0,1,2)
+    #     >>> [_s[-1]] + list(_s[:-1])
     # ans=[2,0,1]
-    #     ⮤ list(_s[1:]) + [_s[0]]
+    #     >>> list(_s[1:]) + [_s[0]]
     # ans=[1,2,0]
 def min_filter(image,diameter,single_channel: bool = False,mode: str = 'reflect',shutup: bool = False):
     # NOTE: order refers to the derivative of the gauss curve; for edge detection etc.
@@ -2106,10 +2107,10 @@ def min_filter(image,diameter,single_channel: bool = False,mode: str = 'reflect'
     #        ⎝                                                                     ⎠
 
     # NOTE:
-    #     ⮤ _s=(0,1,2)
-    #     ⮤ [_s[-1]] + list(_s[:-1])
+    #     >>> _s=(0,1,2)
+    #     >>> [_s[-1]] + list(_s[:-1])
     # ans=[2,0,1]
-    #     ⮤ list(_s[1:]) + [_s[0]]
+    #     >>> list(_s[1:]) + [_s[0]]
     # ans=[1,2,0]
 def med_filter(image,diameter,single_channel: bool = False,mode: str = 'reflect',shutup: bool = False):
     # NOTE: order refers to the derivative of the gauss curve; for edge detection etc.
@@ -2145,10 +2146,10 @@ def med_filter(image,diameter,single_channel: bool = False,mode: str = 'reflect'
     #        ⎝                                                                     ⎠
 
     # NOTE:
-    #     ⮤ _s=(0,1,2)
-    #     ⮤ [_s[-1]] + list(_s[:-1])
+    #     >>> _s=(0,1,2)
+    #     >>> [_s[-1]] + list(_s[:-1])
     # ans=[2,0,1]
-    #     ⮤ list(_s[1:]) + [_s[0]]
+    #     >>> list(_s[1:]) + [_s[0]]
     # ans=[1,2,0]
 def range_filter(image,diameter,single_channel: bool = False,mode: str = 'reflect',shutup: bool = False):
     args=image,diameter,single_channel,mode,shutup
@@ -2303,6 +2304,31 @@ def image_to_all_normalized_xy_rgb_training_pairs(image):
     #  ⁠⁠⁠⁠ ⎩                                                                      ⎭
     # endregion
 # endregion
+
+
+def xy_float_images(height=256,width=256):
+    """
+    Returns a pair of grayscale images: x, y
+    Where they increase from 0 to 1 on that axis
+    
+    EXAMPLES:
+         >>> #Radius example
+         >>> distance = (((2*xy_float_images()-1)**2).sum(0))**.5
+         >>> display_image(distance)
+         
+         >>> #Animation example
+         >>> for angle in range(360):
+         >>>    angle*=tau/360
+         >>>    x,y=2 * xy_float_images(height=256,width=256) - 1
+         >>>    rotated=x*np.cos(angle)+y*np.sin(angle)
+         >>>    display_image(2*full_range(rotated**5)-1)
+    """
+    y, x = np.meshgrid(
+        np.linspace(0, 1, num=height),
+        np.linspace(0, 1, num=width),
+    )
+    return np.stack([x,y])
+
 
 def _is_instance_of_module_class(x, module_name: str, class_name: str) -> bool:
     """
@@ -2491,7 +2517,7 @@ def randints_complex(*args,**kwargs):
     #Arguments passed to this function are passed to 'randints'
     #The only difference between this function and randints is that this also generates a complex component
     #EXAMPLE:
-    # ⮤ randints_complex(10)
+    # >>> randints_complex(10)
     # ans = [56.+64.j 61. +9.j 58.+42.j 93.+71.j 67.+57.j 67.+67.j 24. +3.j 14.+98.j 92.+96.j 32.+29.j]
     return randints(*args,**kwargs)+randints(*args,**kwargs)*1j
 random_ints_complex=randints_complex
@@ -3048,7 +3074,7 @@ def load_animated_gif(location,*,use_cache=True):
 
     return frames
 
-_load_image_cache={}#TODO Test this and make sure it works. This is currently untested.
+_load_image_cache={}
 
 
 
@@ -4798,10 +4824,17 @@ def _display_downloadable_image_in_notebook_via_ipython(image, file_name:str):
            '<img src="data:image/png;base64,{img_str}" /></a>'.replace('{image_str}',image_str)
     display(HTML(html))
 
-def display_image_in_notebook(image, file_name:str=None):
-    """ Display an image at full resolution in a jupyter notebook """
+def display_image_in_notebook(image):#, file_name:str=None):
+    """ Display an image at full resolution in a jupyter notebook. Returns an updatable channel. """
+
+    channel = JupyterDisplayChannel()
+    channel.update(image)
+    channel.display()
+    return channel
+    
 
     if file_name is not None:
+        #TODO: This doesn't actually work right now :(
         assert isinstance(file_name,str), 'The given file name must be a string, but got type %s'%type(file_name)
         if not has_file_extension(file_name):
             file_name=with_file_extension(file_name,'png')
@@ -4822,6 +4855,154 @@ def display_image_in_notebook(image, file_name:str=None):
 #    pip_import('ipyplot').plot_images([image],img_width=width(image))
 
 
+def _image_to_html(image):
+    # Also good: See below
+    base64_image = rp.encode_image_to_base64(image)
+    return '<img src="data:content/png;base64,%s"/>' % base64_image
+
+class JupyterDisplayChannel:
+    def __init__(self):
+        """
+        Used for displaying and updating content in Jupyter notebooks.
+        It's analagous to a bunch of televisions, all subscribed to this channel.
+        
+        The JupyterDisplayChannel allows you to create multiple viewports and efficiently
+        update them with various types of content, including text, numbers, images, and grids of these.
+
+        First, create a channel. Then, display it whever you want (can be multiple places in your notebook).
+        Then, push updates to it to show content with update() or grid_update()
+        See the self-contained examples below for how to do this.
+
+        TODO: Support more update methods, such as side-by-side images and slideshows etc
+        TODO: Fully support more content types, such as video and audio
+        
+        EXAMPLE:
+            >>> from rp import *
+            >>> channel = JupyterDisplayChannel()
+
+            >>> #You can have multiple viewports for a given channel
+            >>> print("First viewport:")
+            >>> channel.display()
+            >>> print("Second viewport:")
+            >>> channel.display()
+
+            >>> #You can efficiently animate images this way
+            >>> image = rp.cv_text_to_image("Hello\nWorld!")
+            >>> for angle in range(360 * 3):
+            >>>     channel.update(rp.rotate_image(image, angle))
+
+            >>> #You can update anything that Jupyter can display
+            >>> for num in range(45):
+            >>>     channel.update(list(range(num%15)))
+            >>>     rp.sleep(.1)
+
+            >>> #Here's a demo showing how the grid works...
+            >>> rows = [range(i) for i in range(10)]
+            >>> for _ in range(30):
+            >>>     rows = rows[1:] + [rows[0]]
+            >>>     channel.grid_update(rows)
+            >>>     rp.sleep(.1)
+            
+            >>> #And here's a demo showing how the grid can have images in it too...
+            >>> colors = "red green blue cyan magenta yellow black".split()
+            >>> rows = [
+            >>>     [
+            >>>         rp.rotate_image(
+            >>>             rp.cv_text_to_image(color, background_color=rp.color_name_to_byte_color(color)),
+            >>>             rp.random_int(-90, 90)
+            >>>         ) for color in colors
+            >>>     ],
+            >>>     [
+            >>>         rp.rotate_image(
+            >>>             rp.cv_text_to_image(color, color=rp.color_name_to_byte_color(color)),
+            >>>             rp.random_int(-90, 90)
+            >>>         ) for color in colors
+            >>>     ],
+            >>>     colors
+            >>> ]
+            >>> for _ in range(30):
+            >>>     rows = [row[1:] + [row[0]] for row in rows]
+            >>>     channel.grid_update(rows)
+            >>>     rp.sleep(0.1)
+        """
+        rp.pip_import("IPython")
+
+        self._display_id = rp.random_namespace_hash()
+        self._update(None)
+
+    @staticmethod
+    def _convert_content(content):
+        from IPython.display import Image, HTML
+
+        if content is None:
+            #Return nothing
+            return HTML("")
+        elif rp.is_image(content):
+            #Return an image
+            return rp.as_pil_image(content)
+
+            # Also good: See below
+            return HTML(_image_to_html(content))
+        else:
+            #Return whatever you gave it
+            return content
+
+    
+    @staticmethod
+    def _convert_content_grid(content_grid):
+        rp.pip_import('pandas')
+        from pandas import DataFrame
+        from IPython.display import HTML
+
+        #If this errors you gave it an invalid grid
+        grid = [list(row) for row in content_grid]
+
+        #Make the grid rectangular by padding each row to max length
+        width = max(map(len,grid))
+        grid = [row + [None] * (width - len(row)) for row in grid]
+        
+        def convert_grid_item(item):
+            if rp.is_image(item):
+                item = _image_to_html(item)
+            elif item is None:
+                item = ""
+            return item
+
+        grid = [list(map(convert_grid_item, row)) for row in grid]
+
+        df = DataFrame(grid)
+        html = df.to_html(escape=False)
+        return HTML(html)
+
+    def _update(self, converted_content):
+        from IPython.display import update_display
+        self._converted_content = converted_content
+        update_display(self._converted_content, display_id=self._display_id)
+
+    def display(self):
+        """Adds a new viewport"""
+        from IPython.display import display, HTML
+        display(self._converted_content, display_id=self._display_id)
+
+    def clear(self):
+        """Clears the viewports"""
+        self.update(None)
+    
+    def update(self, content):
+        """Updates all viewports spawned from this channel"""
+        self._update(self._convert_content(content))
+
+    def grid_update(self, content_grid):
+        """
+        Updates all viewports spawned from this channel with a grid of content
+        Pass it like [[x0y0, x1y0, x2y0], [x0y1, x1y1, x2y1] ... ]
+        Supports text, numbers and images as elements
+        """
+        self._update(self._convert_content_grid(content_grid))
+
+    def row_update(self, content_row):
+        """A row of content gets displayed"""
+        self.grid_update([content_row])
 
 
 
@@ -4837,14 +5018,12 @@ def display_image(image,block=False):
     """
 
     if _disable_display_image:
-        fansi_print("rp.display_image: Currently disabled; no image displayed",'yellow')
-        return
+        return fansi_print("rp.display_image: Currently disabled; no image displayed",'yellow')
     
     if currently_in_a_tty() and running_in_ssh() and not running_in_ipython() :
     # if currently_in_a_tty() and not currently_running_desktop() and not running_in_ipython() :   #THIS MIGHT BE BETTER - this one is more recent, but I decided to make minimal changes today. Maybe uncomment this in the future if you want.
         #Let display_image work in terminals too, when in ssh and we have no GUI or ipynb options
-        display_image_in_terminal_color(image)
-        return
+        return display_image_in_terminal_color(image)
 
     if not running_in_ipython() and not currently_running_desktop():
         fansi_print("rp.display_image: Warning, no image was displayed - not in desktop environment.",'yellow') #Please note that cv2.imshow will usually segfault if there's no desktop environment!
@@ -4865,15 +5044,13 @@ def display_image(image,block=False):
         except Exception:pass
     if running_in_ipython():
         #Use the ipyplot library to display images at full resultion while in a jupyter notebook
-        display_image_in_notebook(image)
-        return
+        return display_image_in_notebook(image)
     elif module_exists('cv2'):
         try:
             #Personally, I think cv_imshow is better because it's faster.
             #If we have opencv installed, try to use that.
             #If not, then oh well - we'll just continue on and try matplotlib instead
-            cv_imshow(image,wait=10 if not block else 10000000,label='rp.display_image()')
-            return
+            return cv_imshow(image,wait=10 if not block else 10000000,label='rp.display_image()')
         except Exception:#Only excepting exceptions because KeyboardInterrupt is a BaseException, and we want to be able to interrupt while True:display_image(load_image_from_webcam()) without tryiggering matplotlib
             pass #Oh well, we tried!
     global plt
@@ -4913,7 +5090,7 @@ def display_image(image,block=False):
                 image=grayscale_to_rgb(image)
             if image.dtype==bool:
                 image=image.astype(float)
-            cv_imshow(image,wait=10 if not block else 1000000)#Hit esc in the image to exit it
+            return cv_imshow(image,wait=10 if not block else 1000000)#Hit esc in the image to exit it
 
 def with_alpha_checkerboard(image, tile_size=8, first_color=1.0, second_color=0.75):
     checkers = get_checkerboard_image(
@@ -5649,10 +5826,10 @@ def pop_gather(x,*indices):
     My algorithm goes through the indices chronologically, compensating for
     the change in indices by subtracting incrementally larger values from them
     Example:
-     ⮤ ⵁ = ['0', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
-     ⮤ pop_gather(ⵁ,1,3,5,7,9)
+     >>> ⵁ = ['0', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
+     >>> pop_gather(ⵁ,1,3,5,7,9)
     ans = ['a', 'c', 'e', 'g', 'i']
-     ⮤ g
+     >>> g
     ans = ['0', 'b', 'd', 'f', 'h']
     """
     indices=detuple(indices)
@@ -6777,10 +6954,10 @@ def list_set(x):
     Similar to performing list(set(x)), except that it preserves the original order of the items.
     You could also think of it as list_set≣remove_duplicates
     Demo:
-          ⮤ l=[5,4,4,3,3,2,1,1,1]
-          ⮤ list(set(l))
+          >>> l=[5,4,4,3,3,2,1,1,1]
+          >>> list(set(l))
           ans=[1,2,3,4,5]
-          ⮤ list_set(l)  ⟵ This method
+          >>> list_set(l)  ⟵ This method
           ans=[5,4,3,2,1]
     """
     from  more_itertools import unique_everseen  # http://stackoverflow.com/questions/480214/how-do-you-remove-duplicates-from-a-list-in-whilst-preserving-order
@@ -6804,7 +6981,7 @@ def display_dict(d: dict,
     # Made by Ryan Burgert for the purpose of visualizing large dictionaries.
     # EXAMPLE DISPLAY:
     '''
-     ⮤ display_dict({'name': 'Zed', 'age': 39, 'height': 6 * 12 + 2})
+     >>> display_dict({'name': 'Zed', 'age': 39, 'height': 6 * 12 + 2})
     age ⟶  39
     height ⟶  74
     name ⟶  Zed
@@ -8335,9 +8512,9 @@ def matlab_session(matlabroot: str = '/Applications/MATLAB_R2016a.app/bin/matlab
     Worth noting: There's a legit purpose for creating a new matlab session before using it:
       Each session you create will be separate and will have a separate namespace!
       In other words, you can run them simultaneously/separately. For example:
-            ⮤ sess1=matlab_session();sess2=matlab_session();
-            ⮤ sess1.run_code("x=1");sess2.run_code("x=1");
-            ⮤ sess1.get_variable("x"),sess2.get_variable("x")
+            >>> sess1=matlab_session();sess2=matlab_session();
+            >>> sess1.run_code("x=1");sess2.run_code("x=1");
+            >>> sess1.get_variable("x"),sess2.get_variable("x")
             ans=(1,2)
     Also worth noting: You can use whatever functions you normally use in MATLAB, including .m files that you wrote and kept in your default matlab function/script saving directory.
     """
@@ -9835,10 +10012,25 @@ def print_rich_stack_trace(error=None, extra_lines=5, show_locals=False):
         )
     )
 
+
+#Private right now because it feels a bit redundant. maybe expose it in the future. used be web_evaluator
+#https://chatgpt.com/share/ee550199-4242-41c6-88dd-f2a72c8d4c84
+def _get_stack_trace_string(exc):
+    import traceback
+    # Get the traceback object from the exception
+    tb = exc.__traceback__
+    
+    # Create a TracebackException object
+    traceback_exception = traceback.TracebackException(type(exc), exc, tb)
+    
+    # Format the traceback as a string
+    stack_trace_string = ''.join(traceback_exception.format())
+    return stack_trace_string
+
 #endregion
 
 def audio_stretch(mono_audio, new_number_of_samples):# Does not take into account the last bit of looping audio
-    # ⮤ audio_stretch([1,10],10)
+    # >>> audio_stretch([1,10],10)
     # ans = [1,2,3,4,5,6,7,8,9,10]
     return [ linterp(mono_audio,x) for x in np.linspace(0,len(mono_audio)-1,new_number_of_samples)]
 
@@ -10166,7 +10358,7 @@ def shorten_url(url:str)->str:
     #   # goo.gl links are supposed to last forever, according to https://groups.google.com/forum/#!topic/google-url-shortener/Kt0bc5hx9HE
     #   # SOURCE: https://stackoverflow.com/questions/17357351/how-to-use-google-shortener-api-with-python
     #   # API Key source: https://console.developers.google.com/apis/credentials?project=dark-throne-182400
-    #   #  ⮤ goo_shorten_url('ryan-central.org')
+    #   #  >>> goo_shorten_url('ryan-central.org')
     #   # ans = https://goo.gl/Gkgp86
     #   import requests
     #   import json
@@ -10188,7 +10380,7 @@ def shorten_url(url:str)->str:
 #     # Older version:
 #     # def gist(code:str,file_name:str='CodeGist.code',username='sqrtryan@gmail.com',password='d0gememesl0l'):
 #     #     # Posts a gist with the given code and filename.
-#     #     #  ⮤ gist("Hello, World!")
+#     #     #  >>> gist("Hello, World!")
 #     #     # ans = https://gist.github.com/b5b3e404c414f7974c4ccb12106c4fe7
 #     #     import requests,json
 #     #     r = requests.post('https://api.github.com/gists',json.dumps({'files':{file_name:{"content":code}}}),auth=requests.auth.HTTPBasicAuth(username, password))
@@ -10446,7 +10638,7 @@ def _fix_CERTIFICATE_VERIFY_FAILED_errors():
 
 
 def random_namespace_hash(n:int=10,chars_to_choose_from:str="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"):
-    # ⮤ random_namespace_hash(10)
+    # >>> random_namespace_hash(10)
     # ans=DZC7B8GV74
     out=''
     for n in [None]*n:
@@ -10652,7 +10844,7 @@ def _cv_skeletonize(img):
 # noinspection PyTypeChecker
 def print_latex_image(latex: str):
     """
-     ⮤ print_latex_image("\sum_{n=3}^7x^2")
+     >>> print_latex_image("\sum_{n=3}^7x^2")
      ⠀⠀⠀⠀⠠⠟⢉⠟
      ⠀⠀⠀⠀⠀⠀⡏
      ⠀⠀⠀⠀⠀⠀⠃
@@ -10708,7 +10900,7 @@ cv2=pip_import('cv2')
 
 # def is_valud_url(url: str) -> bool:
 #     # PROBLEM:
-#     #     ⮤ ivu("google.com")
+#     #     >>> ivu("google.com")
 #     # ans=False
 #     # I DID NOT WRITE THIS WHOLE FUNCTION ∴ IT MIGHT NOT WORK PERFECTLY. THIS IS FROM: http://stackoverflow.com/questions/452104/is-it-worth-using-pythons-re-compile
 #     import re
@@ -10877,17 +11069,17 @@ def split_into_sublists(l,sublist_len:int,strict=False,keep_remainder=True):
     keep_remainder is not applicable if strict
     if not keep_remainder and sublist_len DOES NOT evenly divide len(l), we can be sure that all tuples in the output are of len sublist_len, even though the total number of elements in the output is less than in l.
     EXAMPLES:
-    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,3 ,0)   -> [(1,2,3),(4,5,6),(7,8,9)]
-    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,0)   -> [(1,2,3,4),(5,6,7,8),(9,)]
-    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,5 ,0)   -> [(1,2,3,4,5),(6,7,8,9)]
-    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,6 ,0)   -> [(1,2,3,4,5,6),(7,8,9)]
-    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0)   -> [(1,2,3,4,5,6,7,8,9)]
-    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0,1) -> [(1,2,3,4,5,6,7,8,9)]
-    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0,0) -> []
-    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,5 ,0,0) -> [(1,2,3,4,5)]
-    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,0,0) -> [(1,2,3,4),(5,6,7,8)]
-    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,3 ,0,0) -> [(1,2,3),(4,5,6),(7,8,9)]
-    ⮤ split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,1,0) -> ERROR: ¬ 4 | 9
+    >>> split_into_sublists([1,2,3,4,5,6,7,8,9］,3 ,0)   -> [(1,2,3),(4,5,6),(7,8,9)]
+    >>> split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,0)   -> [(1,2,3,4),(5,6,7,8),(9,)]
+    >>> split_into_sublists([1,2,3,4,5,6,7,8,9］,5 ,0)   -> [(1,2,3,4,5),(6,7,8,9)]
+    >>> split_into_sublists([1,2,3,4,5,6,7,8,9］,6 ,0)   -> [(1,2,3,4,5,6),(7,8,9)]
+    >>> split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0)   -> [(1,2,3,4,5,6,7,8,9)]
+    >>> split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0,1) -> [(1,2,3,4,5,6,7,8,9)]
+    >>> split_into_sublists([1,2,3,4,5,6,7,8,9］,66,0,0) -> []
+    >>> split_into_sublists([1,2,3,4,5,6,7,8,9］,5 ,0,0) -> [(1,2,3,4,5)]
+    >>> split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,0,0) -> [(1,2,3,4),(5,6,7,8)]
+    >>> split_into_sublists([1,2,3,4,5,6,7,8,9］,3 ,0,0) -> [(1,2,3),(4,5,6),(7,8,9)]
+    >>> split_into_sublists([1,2,3,4,5,6,7,8,9］,4 ,1,0) -> ERROR: ¬ 4 | 9
     """
 
     assert is_number(sublist_len),'sublist_len should be an integer, but got type '+repr(type(sublist_len))
@@ -13182,6 +13374,15 @@ def _view_markdown_in_terminal(file_or_string):
     if temp_path:
         delete_file(path)
 
+def _get_function_names(ans):
+    if isinstance(ans, str):
+        return ans
+    elif hasattr(ans,"__name__"):
+        return ans.__name__
+    elif is_iterable(ans):
+        return [_get_function_names(x) for x in ans]
+    else:
+        raise ValueError("Is not a function: type(ans)="+str(type(ans)))
 
 def _convert_powerpoint_file(path,message=None):
     if message is not None:
@@ -14258,6 +14459,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         LJ LINE JOIN ANS
         AJ JSON ANS
         JA JSON ANS
+        CJ ",".join(map(str,ans))
+
+        FN $r._get_function_names(ans)
 
         SHA $get_sha256_hash(ans,show_progress=True)
 
@@ -14278,6 +14482,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         RST __import__('os').system('reset')
         RS  __import__('os').system('reset')
+
+        BLA $r._autoformat_python_code_via_black(ans)
+        CBP ans=$string_from_clipboard();ans=$r._autoformat_python_code_via_black(ans);$string_to_clipboard(ans)
 
         DAPI __import__('rp.pypi_inspection').pypi_inspection.display_all_pypi_info()
 
@@ -16777,7 +16984,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     if isinstance(__error,IndentationError):
                                         raise __error#Catch this by the indendation fixer
                                     show_error(__error)
-                                if get_ans() is not _temp_old_ans:#This is here so we can say ' ⮤ ans=234' and still rely on PREV
+                                if get_ans() is not _temp_old_ans:#This is here so we can say ' >>> ans=234' and still rely on PREV
                                     set_ans(get_ans())
                                 del _temp_old_ans#
                                 # raise KeyboardInterrupt()
@@ -17245,65 +17452,61 @@ def get_file_size(path:str, human_readable:bool=False):
 
 get_path_size=get_folder_size=get_directory_size=get_file_size
     
-def inherit_def(parent,child=None):
-    # Needs examples for documentation.
-    if child is None:
-        return lambda z:inherit_def(parent,z)
-    # Author: Ryan Burgert
-    # This decorator modifies the child in-place without copying it!
-    # Made because I don't like creating classes when it can be avoided; I'd much rather crate new functions.
-    # This is a decorator used to override default method inputs.
-    assert callable(child )
-    assert callable(parent)
-    #
-    import inspect as inspect
-    child_spec =inspect.getfullargspec(child )
-    parent_spec=inspect.getfullargspec(parent)
-    #region  Example of getfullargspec results:
-    #      ⎧                                    ⎫
-    # def f(a, b:str, c=0, d:int=1, *e, f=2, **g):pass
-    #      ⎩                                    ⎭
-    #             ⎧                                                                                                                                                                   ⎫
-    #             ⎪     ⎧                  ⎫                                   ⎧    ⎫             ⎧   ⎫                 ⎧      ⎫              ⎧                                      ⎫⎪
-    #  FullArgSpec(args=['a', 'b', 'c', 'd'], varargs='e', varkw='g', defaults=(0, 1), kwonlyargs=['f'], kwonlydefaults={'f': 2}, annotations={'b': <class 'str'>, 'd': <class 'int'>})
-    #             ⎪     ⎩                  ⎭                                   ⎩    ⎭             ⎩   ⎭                 ⎩      ⎭              ⎩                                      ⎭⎪
-    #             ⎩                                                                                                                                                                   ⎭
-    #endregion
-    child_args            =child_spec .args
-
-    from rp import mini_terminal_for_pythonista
-    exec(mini_terminal_for_pythonista)
-
-    parent_defaults=parent_spec.defaults or []
-    child_defaults=child_spec.defaults or []
-    undefaulted_child_args=child_args [:len(child_defaults)]
-    parent_args           =parent_spec.args or []
-    defaulted_parent_args =parent_args[-len(parent_defaults):]
-    #
-    parent_defaults=dict(zip(parent_args,parent_defaults))# parent_spec.defaults ≣ parent.__defaults__
-    parent_defaults.update(parent.__kwdefaults__ or {})# Should be no overrides
-    #
-    flag=True
-    for arg,default in reversed(undefaulted_child_args):# All un-defaulted child args
-        if arg in parent_defaults:
-            assert flag,'Error: Please rearrange arguments, this is a vague error message (that could easily be improved) but you cant extend functions like that'
-            # Assertion Explanation:
-            # NOTE: All default args MUST come before undefaulted args, by rules of python syntax.
-            #     def parent(a=5):pass
-            #     def child(z,a,x):pass
-            #   First possiblity for handling this: x is None, and no longer required (which modifies the child)
-            #     def child(z,a=5,x=None):pass
-            #   Second possiblity for handling this: (reordering arguments; could be REALLY hard to debug if misused, which might be easy to do)
-            #     def child(z,x,a=5):pass
-            # This method should use neither method for handling it and instead just throw an error.
-            child.__defaults__=(parent_defaults[arg],)+child.__defaults__
-        else:
-            flag=False
-    from rp import merged_dicts
-    for key in set(parent.__kwdefaults__ or {})-set(child.__defaults__ or {})-set(parent_args)-set(child_args):
-        child.__kwdefaults__=[key]=parent.__kwdefaults__[key]
-    #
-    return child
+#def inherit_def(parent,child=None):
+#    # Needs examples for documentation.
+#    if child is None:
+#        return lambda z:inherit_def(parent,z)
+#    # Author: Ryan Burgert
+#    # This decorator modifies the child in-place without copying it!
+#    # Made because I don't like creating classes when it can be avoided; I'd much rather crate new functions.
+#    # This is a decorator used to override default method inputs.
+#    assert callable(child )
+#    assert callable(parent)
+#    #
+#    import inspect as inspect
+#    child_spec =inspect.getfullargspec(child )
+#    parent_spec=inspect.getfullargspec(parent)
+#    #region  Example of getfullargspec results:
+#    #      ⎧                                    ⎫
+#    # def f(a, b:str, c=0, d:int=1, *e, f=2, **g):pass
+#    #      ⎩                                    ⎭
+#    #             ⎧                                                                                                                                                                   ⎫
+#    #             ⎪     ⎧                  ⎫                                   ⎧    ⎫             ⎧   ⎫                 ⎧      ⎫              ⎧                                      ⎫⎪
+#    #  FullArgSpec(args=['a', 'b', 'c', 'd'], varargs='e', varkw='g', defaults=(0, 1), kwonlyargs=['f'], kwonlydefaults={'f': 2}, annotations={'b': <class 'str'>, 'd': <class 'int'>})
+#    #             ⎪     ⎩                  ⎭                                   ⎩    ⎭             ⎩   ⎭                 ⎩      ⎭              ⎩                                      ⎭⎪
+#    #             ⎩                                                                                                                                                                   ⎭
+#    #endregion
+#    child_args            =child_spec .args
+#    parent_defaults=parent_spec.defaults or []
+#    child_defaults=child_spec.defaults or []
+#    undefaulted_child_args=child_args [:len(child_defaults)]
+#    parent_args           =parent_spec.args or []
+#    defaulted_parent_args =parent_args[-len(parent_defaults):]
+#    #
+#    parent_defaults=dict(zip(parent_args,parent_defaults))# parent_spec.defaults ≣ parent.__defaults__
+#    parent_defaults.update(parent.__kwdefaults__ or {})# Should be no overrides
+#    #
+#    flag=True
+#    for arg,default in reversed(undefaulted_child_args):# All un-defaulted child args
+#        if arg in parent_defaults:
+#            assert flag,'Error: Please rearrange arguments, this is a vague error message (that could easily be improved) but you cant extend functions like that'
+#            # Assertion Explanation:
+#            # NOTE: All default args MUST come before undefaulted args, by rules of python syntax.
+#            #     def parent(a=5):pass
+#            #     def child(z,a,x):pass
+#            #   First possiblity for handling this: x is None, and no longer required (which modifies the child)
+#            #     def child(z,a=5,x=None):pass
+#            #   Second possiblity for handling this: (reordering arguments; could be REALLY hard to debug if misused, which might be easy to do)
+#            #     def child(z,x,a=5):pass
+#            # This method should use neither method for handling it and instead just throw an error.
+#            child.__defaults__=(parent_defaults[arg],)+child.__defaults__
+#        else:
+#            flag=False
+#    from rp import merged_dicts
+#    for key in set(parent.__kwdefaults__ or {})-set(child.__defaults__ or {})-set(parent_args)-set(child_args):
+#        child.__kwdefaults__=[key]=parent.__kwdefaults__[key]
+#    #
+#    return child
 
 def num_args(f):# https://stackoverflow.com/questions/847936/how-can-i-find-the-number-of-arguments-of-a-python-function
     from inspect import isfunction, getargspec
@@ -17395,7 +17598,7 @@ def pretty_print(x,with_lines=False):
     print(fansi_syntax_highlighting(string,style_overrides={'operator':('\033[0;34m','\033[0m'),'string':('\033[0;35m','\033[0m')}))
 
 def string_transpose(x,fill=' '):
-    ''' ⮤ string_transpose("Hello\nWorld")
+    ''' >>> string_transpose("Hello\nWorld")
     ans =
     HW
     eo
@@ -17543,7 +17746,7 @@ def circular_diff(array,axis=0):
 circ_diff=circular_diff#For convenience's sake
 def circular_quotient(array,axis=0):
     """
-    ⮤ circular_quotient([1,2,4,8])
+    >>> circular_quotient([1,2,4,8])
     ans = [2.    2.    2.    0.125]
     """
     return np.roll(array,shift=-1,axis=axis)/array
@@ -17601,9 +17804,9 @@ def circular_gaussian_blur(vector,sigma=1):
     vector=np.asarray(vector)
     assert len(vector.shape)==1,'Right now input must be a vector. This may change in the future.'
     if sigma==0:return np.copy(vector)
-    #  ⮤ circ_gauss_blur([1,0,0,0,0,0])
+    #  >>> circ_gauss_blur([1,0,0,0,0,0])
     # ans = [0.4   0.095 0.005 0.005 0.095 0.4  ]
-    #  ⮤ circ_gauss_blur([1,0,0,0,0])
+    #  >>> circ_gauss_blur([1,0,0,0,0])
     # ans = [0.403 0.244 0.054 0.054 0.244]
     kernel=gaussian_kernel(size=len(vector),sigma=sigma,dim=1)
     kernel=np.roll(kernel,int(np.ceil(len(kernel)/2)))#Shift it over so that the blur doesn't shift the original vector
@@ -19235,25 +19438,25 @@ def as_cv_contour(path):
     elif is_cv_contour    (path):return                    np.asarray(path.copy())
     else:assert False,'Cannot convert 2d path: path='+repr(path)
 # EXAMPLES:
-#       ⮤ as_complex_vector([[1,2],[3,4],[5,6]])
+#       >>> as_complex_vector([[1,2],[3,4],[5,6]])
 #      ans = [1.+2.j 3.+4.j 5.+6.j]
-#       ⮤ as_cv_contour(ans)
+#       >>> as_cv_contour(ans)
 #      ans = [[[1 2]]
 #       [[3 4]]
 #       [[5 6]]]
-#       ⮤ as_complex_vector(ans)
+#       >>> as_complex_vector(ans)
 #      ans = [1.+2.j 3.+4.j 5.+6.j]
-#       ⮤ as_points_array(ans)
+#       >>> as_points_array(ans)
 #      ans = [[1. 2.]
 #       [3. 4.]
 #       [5. 6.]]
-#       ⮤ as_cv_contour(ans)
+#       >>> as_cv_contour(ans)
 #      ans = [[[1 2]]
 #       [[3 4]]
 #       [[5 6]]]
-#       ⮤ as_complex_vector(ans)
+#       >>> as_complex_vector(ans)
 #      ans = [1.+2.j 3.+4.j 5.+6.j]
-#       ⮤ as_points_array(ans)
+#       >>> as_points_array(ans)
 #      ans = [[1. 2.]
 #       [3. 4.]
 #       [5. 6.]]
@@ -19378,7 +19581,7 @@ def least_squares_euclidean_affine(from_points,to_points,*,include_correlation=F
         return affine,r
     return affine
         #Comparison of the new vs old methods:
-    #   ⮤ y=randints_complex(10000)
+    #   >>> y=randints_complex(10000)
     #   2 x=randints_complex(10000)
     #   3 m=6-4j
     #   4 b=3+7j
@@ -19476,14 +19679,14 @@ def rotation_affine_2d(angle,pivot=[0,0],*,out_of=tau):
 
 def inverse_affine(affine):
     #QUICK AND DIRTY EXAMPLE:
-        #  ⮤ A
+        #  >>> A
         # ans = [[11. 62. 90.]
         #  [29.  9. 98.]]
-        #  ⮤ apply_affine([[2,4],[5,6],[7,8]],A)
+        #  >>> apply_affine([[2,4],[5,6],[7,8]],A)
         # ans = [[360. 192.]
         #  [517. 297.]
         #  [663. 373.]]
-        #  ⮤ apply_affine(ans,affine_inverse(A))
+        #  >>> apply_affine(ans,affine_inverse(A))
         # ans = [[2. 4.]
         #  [5. 6.]
         #  [7. 8.]]
@@ -21347,7 +21550,13 @@ def grid_concatenated_images(image_grid):
     output_image=vertically_concatenated_images(image_grid)
     return output_image
 
-def tiled_images(images,length=None,border_color=(.5,.5,.5,1),border_thickness=1,transpose=False):
+def tiled_images(
+    images,
+    length=None,
+    border_color=(0.5, 0.5, 0.5, 1),
+    border_thickness=1,
+    transpose=False,
+):
     """
     EXAMPLE:
        display_image_in_terminal_color(tiled_images([load_image('https://i.pinimg.com/236x/36/69/39/36693999b6e24b1d06d0ee21c9ae320d--caged-nicolas-cage.jpg')]*25))
@@ -21355,6 +21564,10 @@ def tiled_images(images,length=None,border_color=(.5,.5,.5,1),border_thickness=1
     length can be None, an int, or a float specifying aspect ratio
     WARNING: Using length as an aspect ratio is NOT to be used in any code that will last; that functionality is subject to change! Please don't be afraid to make it better (right now the aspect ratio implicitly assumes all the given images are the same size and square...which they're not) 
     """
+
+    #Replace None's with null_images
+    null_image = uniform_float_color_image(0,0)
+    images = [(x if x is not None else null_image) for x in images]
 
     if transpose:
         #Tile the images from top to bottom instead of left to right. Length is now vertical
@@ -21381,12 +21594,20 @@ def tiled_images(images,length=None,border_color=(.5,.5,.5,1),border_thickness=1
     return output
 
 def vertically_flipped_image(image):
-    #Flips (aka mirrors) an image vertically
-    return image[::-1]
+    """Flips (aka mirrors) an image vertically."""
+    if is_pil_image(image):
+        from PIL import Image
+        return image.transpose(Image.FLIP_TOP_BOTTOM)
+    else:
+        return image[::-1]
 
 def horizontally_flipped_image(image):
-    #Flips (aka mirrors) an image horizontally
-    return image[:,::-1]
+    """Flips (aka mirrors) an image horizontally."""
+    if is_pil_image(image):
+        from PIL import Image
+        return image.transpose(Image.FLIP_LEFT_RIGHT)
+    else:
+        return image[:, ::-1]
 
 def least_squares_regression_line_coeffs(X, Y=None, include_correlation=False):
     """
@@ -21704,12 +21925,18 @@ def as_binary_image(image,dither=False):
     assert False,_channel_conversion_error_message
 
 #TODO: Make these faster in special cases, such as where images is a numpy array - and in this case also return a numpy array
-def as_float_images    (images): return [as_float_image    (x) for x in images]
-def as_byte_images     (images): return [as_byte_image     (x) for x in images]
-def as_binary_images   (images): return [as_binary_image   (x) for x in images]
-def as_rgb_images      (images): return [as_rgb_image      (x) for x in images]
-def as_rgba_images     (images): return [as_rgba_image     (x) for x in images]
-def as_grayscale_images(images): return [as_grayscale_image(x) for x in images]
+def _images_conversion(func, images):
+    output = [func(image) for image in images]
+    if _is_numpy_array(images):
+        output = as_numpy_array(output)
+    return output
+
+def as_float_images    (images): return _images_conversion(as_float_image    , images)
+def as_byte_images     (images): return _images_conversion(as_byte_image     , images)
+def as_binary_images   (images): return _images_conversion(as_binary_image   , images)
+def as_rgb_images      (images): return _images_conversion(as_rgb_image      , images)
+def as_rgba_images     (images): return _images_conversion(as_rgba_image     , images)
+def as_grayscale_images(images): return _images_conversion(as_grayscale_image, images)
 
 def random_rgb_byte_color():
     return (randint(255),randint(255),randint(255))
@@ -21786,6 +22013,37 @@ def float_color_to_byte_color(float_color):
 def float_color_to_hex_color(float_color):
     return byte_color_to_hex_color(float_color_to_byte_color(float_color))
 
+_rp_colors = dict(
+    # My color definitions
+    red=(1.0, 0.0, 0.0),
+    green=(0.0, 1.0, 0.0),
+    blue=(0.0, 0.0, 1.0),
+    cyan=(0.0, 1.0, 1.0),
+    magenta=(1.0, 0.0, 1.0),
+    yellow=(1.0, 1.0, 0.0),
+    white=(1.0, 1.0, 1.0),
+    black=(0.0, 0.0, 0.0),
+    grey=(0.5, 0.5, 0.5),
+    gray=(0.5, 0.5, 0.5),
+    orange=(1.0, 0.5, 0.0),
+    purple=(1.0, 0.0, 0.5),
+    # CSS3 Weird Names
+    aqua=(0.0, 1.0, 1.0),
+    lime=(0.0, 1.0, 0.0),
+    fuchsia=(1.0, 0.0, 1.0),
+    # CSS3 Names with perfect fractions
+    chartreuse=(0.5, 1.0, 0.0),
+    darkblue=(0.0, 0.0, 0.5),
+    darkcyan=(0.0, 0.5, 0.5),
+    darkmagenta=(0.5, 0.0, 0.5),
+    darkred=(0.5, 0.0, 0.0),
+    maroon=(0.5, 0.0, 0.0),
+    navy=(0.0, 0.0, 0.5),
+    olive=(0.5, 0.5, 0.0),
+    teal=(0.0, 0.5, 0.5),
+    silver=(0.8, 0.8, 0.8),
+)
+
 def color_name_to_float_color(color_name: str):
     """
     Given a color name, this function returns an RGB float color
@@ -21798,39 +22056,8 @@ def color_name_to_float_color(color_name: str):
     color_name = color_name.replace("_", "")
     color_name = color_name.replace(" ", "")
 
-    rp_colors = dict(
-        # My color definitions
-        red=(1.0, 0.0, 0.0),
-        green=(0.0, 1.0, 0.0),
-        blue=(0.0, 0.0, 1.0),
-        cyan=(0.0, 1.0, 1.0),
-        magenta=(1.0, 0.0, 1.0),
-        yellow=(1.0, 1.0, 0.0),
-        white=(1.0, 1.0, 1.0),
-        black=(0.0, 0.0, 0.0),
-        grey=(0.5, 0.5, 0.5),
-        gray=(0.5, 0.5, 0.5),
-        orange=(1.0, 0.5, 0.0),
-        purple=(1.0, 0.5, 0.0),
-        # CSS3 Weird Names
-        aqua=(0.0, 1.0, 1.0),
-        lime=(0.0, 1.0, 0.0),
-        fuchsia=(1.0, 0.0, 1.0),
-        # CSS3 Names with perfect fractions
-        chartreuse=(0.5, 1.0, 0.0),
-        darkblue=(0.0, 0.0, 0.5),
-        darkcyan=(0.0, 0.5, 0.5),
-        darkmagenta=(0.5, 0.0, 0.5),
-        darkred=(0.5, 0.0, 0.0),
-        maroon=(0.5, 0.0, 0.0),
-        navy=(0.0, 0.0, 0.5),
-        olive=(0.5, 0.5, 0.0),
-        teal=(0.0, 0.5, 0.5),
-        silver=(0.8, 0.8, 0.8),
-    )
-
-    if color_name in rp_colors:
-        return rp_colors[color_name]
+    if color_name in _rp_colors:
+        return _rp_colors[color_name]
 
     else:
         # Use CSS3 webcolors
@@ -21919,6 +22146,35 @@ def running_in_ipython():
     except Exception:
         return False#If we get an error when trying to import IPython...then..well, we're definately NOT running in iPython!
 running_in_jupyter_notebook=running_in_ipython
+
+class JupyterImageChannel:
+    def __init__(self, name=None):
+        assert rp.running_in_jupyter_notebook()
+        
+        self._display_id = rp.random_namespace_hash(4)
+        self._init_update()
+
+    def _get_html(self, image) -> str:
+        """Overwrite this when subclassing"""
+        base64_image = rp.encode_image_to_base64(image)
+        return '<img src="data:image/png;base64,%s"/>' % base64_image
+
+    def _init_update(self):
+        """Overwrite this when subclassing"""
+        self.update(rp.cv_text_to_image(self._display_id, color=rp.random_rgb_byte_color()))
+
+    def display(self):
+        """Adds a new viewport"""
+        from IPython.display import display, HTML
+        display(self._html, display_id=self._display_id)
+        return self
+    
+    def update(self, image):
+        """Updates the viewport"""
+        from IPython.display import update_display
+        self._html = HTML(self._get_html(image))
+        update_display(self._html, display_id=self._display_id)
+        return self
 
 def get_notebook_name(*,include_file_extension=False):
     """
@@ -24020,15 +24276,15 @@ def visible_string_center(string,width,fillchar=' '):
     The small tweak is that this function does (as best as it can).
     This function works with fansi well, but str.center does not.
     NOTE (NOT an example): Justification for why I round torwards the left when centering:
-         ⮤ 'a'.center(1,'+')
+         >>> 'a'.center(1,'+')
         ans = a
-         ⮤ 'a'.center(2,'+')
+         >>> 'a'.center(2,'+')
         ans = a+
-         ⮤ 'a'.center(3,'+')
+         >>> 'a'.center(3,'+')
         ans = +a+
-         ⮤ 'a'.center(4,'+')
+         >>> 'a'.center(4,'+')
         ans = +a++
-         ⮤ 'a'.center(5,'+')
+         >>> 'a'.center(5,'+')
         ans = ++a++
     """
     delta_width=max(0,width-visible_string_length(string))
@@ -24040,18 +24296,18 @@ def visible_string_center(string,width,fillchar=' '):
 def make_string_rectangular(string,align='left',fillchar=' '):
     """
     EXAMPLES:
-     ⮤ s='The mathematician\nPlotting his past relations\n"ex" and "why" axis'
-     ⮤ make_string_rectangular(s,'right',fillchar='-')
+     >>> s='The mathematician\nPlotting his past relations\n"ex" and "why" axis'
+     >>> make_string_rectangular(s,'right',fillchar='-')
        ...MAKES...
          ----------The mathematician
          Plotting his past relations
          --------"ex" and "why" axis
-     ⮤ make_string_rectangular(s,'left',fillchar='-')
+     >>> make_string_rectangular(s,'left',fillchar='-')
        ...MAKES...
          The mathematician----------
          Plotting his past relations
          "ex" and "why" axis--------
-     ⮤ make_string_rectangular(s,'center',fillchar='-')
+     >>> make_string_rectangular(s,'center',fillchar='-')
        ...MAKES...
          ans = -----The mathematician-----
          Plotting his past relations
@@ -24076,20 +24332,20 @@ def horizontally_concatenated_strings(*strings,rectangularize=False,fillchar=' '
     """
     The fillchar parameter only matters if rectangularize is True
     EXAMPLE:
-     ⮤ horizontally_concatenated_strings('Why\nHello\nThere!','My\nName\nIs\nBob','Pleased\nTo\nMeet\nYou!',rectangularize=False)
+     >>> horizontally_concatenated_strings('Why\nHello\nThere!','My\nName\nIs\nBob','Pleased\nTo\nMeet\nYou!',rectangularize=False)
        ...MAKES...
           WhyMyPleased
           HelloNameTo
           There!IsMeet
           BobYou!
     EXAMPLE:
-     ⮤ print(horizontally_concatenated_strings('Why\nHello\nThere!','My\nName\nIs\nBob','Pleased\nTo\nMeet\nYou!',rectangularize=True))
+     >>> print(horizontally_concatenated_strings('Why\nHello\nThere!','My\nName\nIs\nBob','Pleased\nTo\nMeet\nYou!',rectangularize=True))
      Why   My  Pleased
      Hello NameTo
      There!Is  Meet
      Bob       You!
     EXAMPLE:
-     ⮤ print(horizontally_concatenated_strings('a','b\nb','c\nc\nc',rectangularize=True))
+     >>> print(horizontally_concatenated_strings('a','b\nb','c\nc\nc',rectangularize=True))
      abc
       bc
        c
@@ -24118,7 +24374,7 @@ def wrap_string_to_width(string,width):
     """
     TODO: Make this work with visible_string_length so that unicode chars/ansi codes are supported
     EXAMPLE:
-     ⮤ wrap_string_to_width('Hello\nWorld!',2)
+     >>> wrap_string_to_width('Hello\nWorld!',2)
         ans = He
         ll
         o
@@ -24140,7 +24396,7 @@ def bordered_string(string,*,
     NOTE: 99% of the time you should be using a rectangular string, as you can tell with string_is_rectangular
     These examples showcase the usage of a NON-rectangular string to show why, but the rest is hopefully intuitive
     EXAMPLES:
-     ⮤ bordered_string('Hello\nWorld!',fill='-',weight=3)
+     >>> bordered_string('Hello\nWorld!',fill='-',weight=3)
     ans = -----------
     -----------
     -----------
@@ -24149,13 +24405,13 @@ def bordered_string(string,*,
     ------------
     ------------
     ------------
-    ⮤ bordered_string('Hello\nWorld!',fill='-',weight=3,top=0)
+    >>> bordered_string('Hello\nWorld!',fill='-',weight=3,top=0)
     ans = ---Hello---
     ---World!---
     ------------
     ------------
     ------------
-    ⮤ bordered_string('Hello\nWorld!',fill='-',weight=3,right=3)
+    >>> bordered_string('Hello\nWorld!',fill='-',weight=3,right=3)
     ans = -----------
     -----------
     -----------
@@ -24164,7 +24420,7 @@ def bordered_string(string,*,
     ------------
     ------------
     ------------
-    ⮤ bordered_string('Hello\nWorld!',fill='-',weight=3,right=1)
+    >>> bordered_string('Hello\nWorld!',fill='-',weight=3,right=1)
     ans = ---------
     ---------
     ---------
@@ -24173,7 +24429,7 @@ def bordered_string(string,*,
     ----------
     ----------
     ----------
-    ⮤ bordered_string('Hello\nWorld!',fill='-',bottom_fill='+',weight=3,right=1)
+    >>> bordered_string('Hello\nWorld!',fill='-',bottom_fill='+',weight=3,right=1)
     ans = ---------
     ---------
     ---------
@@ -24182,7 +24438,7 @@ def bordered_string(string,*,
     ++++++++++
     ++++++++++
     ++++++++++
-    ⮤ bordered_string('Hello\nWorld!',fill='-',bottom_fill='+',weight=3,right=1,bottom_right_fill='O')
+    >>> bordered_string('Hello\nWorld!',fill='-',bottom_fill='+',weight=3,right=1,bottom_right_fill='O')
     ans = ---------
     ---------
     ---------
@@ -24191,12 +24447,12 @@ def bordered_string(string,*,
     +++++++++O
     +++++++++O
     +++++++++O
-    ⮤ print(bordered_string('Hello\nWorld!',width_fill='│',height_fill='─',top_right_fill='┐',top_left_fill='┌',bottom_left_fill='└',bottom_right_fill='┘'))
+    >>> print(bordered_string('Hello\nWorld!',width_fill='│',height_fill='─',top_right_fill='┐',top_left_fill='┌',bottom_left_fill='└',bottom_right_fill='┘'))
     ┌─────┐
     │Hello│
     │World!│
     └──────┘
-    ⮤ print(bordered_string(make_string_rectangular('Hello\nWorld!'),width_fill='│',height_fill='─',top_right_fill='┐',top_left_fill='┌',bottom_left_fill='└',bottom_right_fill='┘'))
+    >>> print(bordered_string(make_string_rectangular('Hello\nWorld!'),width_fill='│',height_fill='─',top_right_fill='┐',top_left_fill='┌',bottom_left_fill='└',bottom_right_fill='┘'))
     ┌──────┐
     │Hello │
     │World!│
@@ -25157,13 +25413,13 @@ def get_module_path_from_name(module_name):
     """
     Gets the file path of a module without importing it, given the module's name
     EXAMPLES:
-        ⮤ get_module_path_from_name('rp')
+        >>> get_module_path_from_name('rp')
        ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/__init__.py
-        ⮤ get_module_path_from_name('prompt_toolkit')
+        >>> get_module_path_from_name('prompt_toolkit')
        ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/prompt_toolkit/__init__.py
-        ⮤ get_module_path_from_name('numpy')
+        >>> get_module_path_from_name('numpy')
        ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/numpy/__init__.py
-        ⮤ get_module_path_from_name('six')
+        >>> get_module_path_from_name('six')
        ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/six.py
     FROM: https://stackoverflow.com/questions/4693608/find-path-of-module-without-importing-in-python
     """
@@ -25273,12 +25529,12 @@ def open_file_with_default_application(path):
 def mean(*x):
     """
     EXAMPLES:
-     ⮤ mean(1,2,3)
-     ⮤ mean(1,2,3)
+     >>> mean(1,2,3)
+     >>> mean(1,2,3)
     ans = 2.0
-     ⮤ mean(123)
+     >>> mean(123)
     ans = 123.0
-     ⮤ mean([1,5,2,4])
+     >>> mean([1,5,2,4])
     ans = 3.0
     """
     x=detuple(x)
@@ -25292,11 +25548,11 @@ def mean(*x):
 def median(*x):
     """
     EXAMPLES:
-     ⮤ median(1,1,1,5,9,9,9)
+     >>> median(1,1,1,5,9,9,9)
     ans = 5
-     ⮤ median([1,1,1,5,9,9,9])
+     >>> median([1,1,1,5,9,9,9])
     ans = 5
-     ⮤ median(['a','b','c','d','e'])
+     >>> median(['a','b','c','d','e'])
     ans = c
     """
     x=detuple(x)
@@ -26703,7 +26959,7 @@ def _install_filebrowser():
     elif currently_running_windows():
         command = "iwr -useb https://raw.githubusercontent.com/filebrowser/get/master/get.ps1 | iex"
     elif currently_running_unix():
-        command = "curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh"
+        command = "curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash"
     else:
         assert False, "Unsupported OS"
 
@@ -26876,10 +27132,47 @@ def tmux_close_other_windows():
     """Closes all tmux windows except the current one."""
     _tmux_close_windows(lambda w, current: w != current)
 
+def tmux_close_other_sessions():
+    """Closes all tmux sessions except the current one."""
+    current_session = _get_current_tmux_session()
+    all_sessions = _get_all_tmux_sessions()
+    sessions_to_close = [s for s in all_sessions if s != current_session]
 
+    # Close each session
+    for session in sessions_to_close:
+        _run_tmux_command(['tmux', 'kill-session', '-t', session])
+
+def _get_current_tmux_session():
+    """Returns the name of the current tmux session."""
+    return _run_tmux_command(['tmux', 'display-message', '-p', '#{session_name}'])
+
+def _get_all_tmux_sessions():
+    """Returns a list of all session names in tmux."""
+    sessions = _run_tmux_command(['tmux', 'list-sessions', '-F', '#{session_name}']).split()
+    return list(sessions)
+
+def tmux_detach_other_clients():
+    """Detaches all other clients from the current tmux session."""
+    current_session = _get_current_tmux_session()
+    all_clients = _get_all_tmux_clients(current_session)
+    current_client = _get_current_tmux_client()
+    clients_to_detach = [c for c in all_clients if c != current_client]
+
+    # Detach each client
+    for client in clients_to_detach:
+        _run_tmux_command(['tmux', 'detach-client', '-t', client])
+
+def _get_current_tmux_client():
+    """Returns the ID of the current tmux client."""
+    return _run_tmux_command(['tmux', 'display-message', '-p', '#{client_tty}'])
+
+def _get_all_tmux_clients(session):
+    """Returns a list of all client IDs attached to the specified tmux session."""
+    clients = _run_tmux_command(['tmux', 'list-clients', '-t', session, '-F', '#{client_tty}']).split()
+    return list(clients)
     
 def extract_code_from_ipynb(path:str=None):
-    """ This function isnt meant to be used in any code. Its just a utility for running ipynb files in rp, by extracting their code into cells that can be run individually """
+    """ Its a utility for running ipynb files in rp, by extracting their code into cells that can be run individually """
     import json
     if path is None:
         path=input_select_file(file_extension_filter='ipynb')
@@ -26902,6 +27195,9 @@ def _get_facebook_client(email,password):
     return fbchat.Client(email,password)
 
 def send_facebook_message(message:str=None,my_email:str=None,my_password:str=None):
+    """
+    TODO: Fix this its too old to work with current facebook APIs
+    """
     pip_import('fbchat')
     import fbchat as f
     e=my_email or input("Please enter your facebook account's email: ")
@@ -26916,6 +27212,7 @@ def send_facebook_message(message:str=None,my_email:str=None,my_password:str=Non
 
 def get_all_facebook_messages(my_email:str=None,my_password:str=None,my_name:str=None,max_number_of_messages:int=9999)->list:
     """
+    TODO: Fix this its too old to work with current facebook APIs
     Returns a list of all messages between you and one of your contacts on facebook
     Uses a python package called 'fbchat' to do this
     I used this to download all messages between me and one of my friends for safekeeping (facebook makes this difficult)
@@ -30990,6 +31287,10 @@ def as_numpy_images(images):
 
 def as_pil_image(image):
     assert is_image(image), 'as_pil_image: Input is not an image as defined by rp.is_image'
+
+    if is_pil_image(image):
+        return image.copy()
+
     pip_import('PIL')
     from PIL.Image import fromarray
     
