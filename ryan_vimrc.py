@@ -198,7 +198,10 @@ Plugin 'nathanaelkane/vim-indent-guides'
 Plugin 'scrooloose/nerdtree' "File explorer. Get it by pressing F5
 Plugin 'jistr/vim-nerdtree-tabs' "Make NERDTree persist across different tabs
 
-Plugin 'tpope/vim-commentary' "Allows commenting out code with 'gcc' etc
+" Plugin 'tpope/vim-commentary' "Allows commenting out code with 'gcc' etc
+Plugin 'tomtom/tcomment_vim' " JS in HTML isn't commented right with tpope's. This is hopefully more powerful. https://github.com/tpope/vim-commentary/issues/60
+"Shortcut to comment out functions in python without commenting whitespace below them...
+nmap gcd vifokgc
 
 Plugin 'mhinz/vim-startify' "Shows the startup menu
 " Plugin 'dkprice/vim-easygrep' "Currently disabled until I figure out a good way to use it
@@ -852,6 +855,8 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         map <leader>jn :windo set nu!<return>
 
 
+    "Disable Q, which is annoying. Why not reload?
+        nnoremap Q :e<cr>
 
 "Added Nov1 2023
     "GIT STUFF:
@@ -931,8 +936,9 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             " endif
         "MACCHIATO: ⌥l
             Plugin 'smbl64/vim-black-macchiato' "Autformat specific sections of python code using   pip install black-macchiato
-            autocmd FileType python xmap <buffer> <Esc>l <plug>(BlackMacchiatoSelection)
+            " autocmd FileType python xmap <buffer> <Esc>l <plug>(BlackMacchiatoSelection)
             autocmd FileType python nmap <buffer> <Esc>l <plug>(BlackMacchiatoCurrentLine)
+            autocmd FileType python vnoremap <buffer> <Esc>l :BlackMacchiato<cr>
         "RPY FILES:
             autocmd BufRead,BufNewFile *.rpy          set filetype=python "Treat .rpy files as python files
             autocmd BufRead,BufNewFile *ryan_vimrc.py set filetype=vim    "Treat ryan_vimrc.py as a vimrc
@@ -1041,6 +1047,11 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         "STRIP AND PROPOGATE WHITESPACE:
             command! StripWhitespace call StripWhitespace()
             command! PropagateWhitespace call PropagateWhitespace()
+
+        "Right now it doesn't seem to work...
+        ""AUTORELOAD:  :set autoread     :set noautoread
+        "    Plugin 'chrisbra/vim-autoread'
+        "    :set noautoread
         
         "VIM SURROUND:
             " Add parenthesis or quotes around stuff
@@ -2025,6 +2036,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             "The following command is a bit jank but pretty smart. It will make <c-o> map <c-i> back to <c-i>. Idk what plugin maps <c-i> to tab, but its annoying.
             "For some reason I couldn't get autocommands to fix it so I'll do this instead. And simply doing :nnoremap <c-i> <c-i> unfortunately didn't work. But this does.
             :nnoremap <c-o> :nnoremap <c-i <left>> <c-i <left>><cr><c-o>
+            :nnoremap <s-tab> :nnoremap <tab <left>> <c-w <left>>w<cr><c-w>W
 
         "PYTHON PACKAGES:
             "Sometimes we can't install with pip directly into vim. No matter, if we run from RP we can just grab their site packages instead

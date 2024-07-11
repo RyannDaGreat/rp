@@ -18,7 +18,7 @@ def is_zero_arg_callable(func):
     return False
 
 # List to store results and metadata
-_debug_eval_results = []
+_debug_comment_results = []
 
 def debug_comment(value):
     """
@@ -100,7 +100,7 @@ def debug_comment(value):
     if '\n' in result or '\r' in result: 
         result=repr(result) #No multiline allowed! Has to fit in a single comment string
 
-    _debug_eval_results.append((filename, lineno, result))
+    _debug_comment_results.append((filename, lineno, result))
     
     #Let original value pass through
     return value
@@ -114,18 +114,17 @@ def _debug_print(x):
 
 comment_prefix = "# --> " #Make this regex-friendly. TODO: regex escape this
 
-@atexit.register
 def _perform_debug_eval_substitutions():
     # Process each file only once
     file_changes = {}
-    for filename, lineno, result in _debug_eval_results:
+    for filename, lineno, result in _debug_comment_results:
         if filename not in file_changes:
             with open(filename, 'r') as file:
-                lines = file.readlines()
+                file_changes[filename] = file.readlines()
         
         # Prepare new comment
         new_comment = format_debug_comment(result)
-        current_line = lines[lineno - 1]
+        current_line = file_changes[filename][lineno - 1]
         
         #TODO: Do this with split_python_tokens instead and do more checks to make sure the source wasn't modified as it was running so that we're replacing the right line. AKA check to make sure this line in the file matches the line in the linecache, and starts with either rp.debug_comment or debug_comment. And check to make sure we only modify the last --> because --> might be in the value itself (unlikely edge case granted).
 
@@ -135,8 +134,7 @@ def _perform_debug_eval_substitutions():
         else:
             current_line = current_line.rstrip() + new_comment + '\n'
         
-        lines[lineno - 1] = current_line
-        file_changes[filename] = lines
+        file_changes[filename][lineno - 1] = current_line
 
     # Write changes back to the files
     for filename, lines in file_changes.items():
@@ -146,6 +144,11 @@ def _perform_debug_eval_substitutions():
                 file.writelines(lines)
             except Exception:
                 _debug_print("Failed to modify "+filename)
+
+    #Don't do anything twice
+    _debug_comment_results.clear()
+
+atexit.register(_perform_debug_eval_substitutions)
 
 # Example usage within the same file
 if __name__ == "__main__":

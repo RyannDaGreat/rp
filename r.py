@@ -771,12 +771,14 @@ def enable_fansi():
 from contextlib import contextmanager
 @contextmanager
 def without_fansi():
-    #To run a block of code without using fansi.
-    #Example:
-    #   f=lambda:fansi_print("Hello World",'cyan','bold','red')
-    #   f()#With fansi
-    #   with without_fansi():
-    #       f()#Without fansi
+    """
+    Context to run a block of code without using fansi.
+    Example:
+      f=lambda:fansi_print("Hello World",'cyan','bold','red')
+      f()#With fansi
+      with without_fansi():
+          f()#Without fansi
+    """
     global _disable_fansi
     old_disable_fansi=_disable_fansi
     _disable_fansi=True
@@ -786,21 +788,23 @@ def without_fansi():
         _disable_fansi=old_disable_fansi
 
 def fansi(text_string,text_color=None,style=None,background_color=None,*,per_line=True):
-    #TODO: Fix bug: PROBLEM is that '\n' not in fansi('Hello\n','gray')
-    #This function uses ANSI escape sequnces to make colored text in a terminal.
-    #It can also make bolded, underlined, or highlighted text.
-    #It uses ANSI escape sequences to do this...
-    #    ...and so calling it 'fansi' is a pun on 'fancy' and 'ansi'
-    # 'fansi' is a pun, referring to ANSI and fancy
-    # Uses ANSI formatting to give the terminal color outputs.
-    # There are only 8 possible choices from each category, in ［０‚７］⋂ ℤ
-    # Adding 0,30,and 40 because of the ANSI codes. Subtracting 1 later on because the syntax
-    # of this def says that '0' is the absence of any style etc, whereas 1-8 are active styles.
-    # The 'per_line' option applies fansi to every line, which is useful when trying to draw tables and such
-    # Some terminals cant handle ansi escape sequences and just print garbage, so if _disable_fansi is turned on this function just returns unformatted text.
-    #   (This is usually only the case with more obscure terminals, such as one I have for ssh'ing on my phone. But they do exist)
-    # To undo the effect of this function on a string (aka to un-format a string) use rp.strip_ansi_escapes()  (see its documentation for more details)
-    # EXAMPLE: print(fansi('ERROR:','red','bold')+fansi(" ATE TOO MANY APPLES!!!",'blue','underlined','yellow'))
+    """
+    TODO: Fix bug: PROBLEM is that '\n' not in fansi('Hello\n','gray')
+    This function uses ANSI escape sequnces to make colored text in a terminal.
+    It can also make bolded, underlined, or highlighted text.
+    It uses ANSI escape sequences to do this...
+       ...and so calling it 'fansi' is a pun on 'fancy' and 'ansi'
+    'fansi' is a pun, referring to ANSI and fancy
+    Uses ANSI formatting to give the terminal color outputs.
+    There are only 8 possible choices from each category, in ［０‚７］⋂ ℤ
+    Adding 0,30,and 40 because of the ANSI codes. Subtracting 1 later on because the syntax
+    of this def says that '0' is the absence of any style etc, whereas 1-8 are active styles.
+    The 'per_line' option applies fansi to every line, which is useful when trying to draw tables and such
+    Some terminals cant handle ansi escape sequences and just print garbage, so if _disable_fansi is turned on this function just returns unformatted text.
+      (This is usually only the case with more obscure terminals, such as one I have for ssh'ing on my phone. But they do exist)
+    To undo the effect of this function on a string (aka to un-format a string) use rp.strip_ansi_escapes()  (see its documentation for more details)
+    EXAMPLE: print(fansi('ERROR:','red','bold')+fansi(" ATE TOO MANY APPLES!!!",'blue','underlined','yellow'))
+    """
     text_string=str(text_string)
     if per_line:
         lines=line_split(text_string)
@@ -2354,7 +2358,7 @@ def _is_instance_of_module_class(x, module_name: str, class_name: str) -> bool:
 def _is_numpy_array(x):
     return _is_instance_of_module_class(x, 'numpy', 'ndarray')
 
-def _is_torch_tensor(x):
+def is_torch_tensor(x):
     return _is_instance_of_module_class(x, 'torch', 'Tensor')
 
 def _is_pandas_dataframe(x) -> bool:
@@ -2581,7 +2585,7 @@ def random_batch(full_list,batch_size: int = None,*,retain_order: bool = False):
 
         return full_list.iloc[random_indices]
 
-    if _is_torch_tensor(full_list) or _is_numpy_array(full_list):
+    if is_torch_tensor(full_list) or _is_numpy_array(full_list):
         random_indices = random_batch(
             range(len(full_list)),
             batch_size,
@@ -3279,18 +3283,34 @@ def _load_image_from_file_via_opencv(file_name):
     return cv_bgr_rgb_swap(image)#OpenCV is really weird and doesn't use RGB: It uses BGR for some strange legacy reason. We have to swap the channels to make it useful.
 
 
+@contextlib.contextmanager
+def _disable_insecure_request_warning():
+    # Catch warnings related to insecure requests
+    pip_import('requests')
+    from requests.packages.urllib3.exceptions import InsecureRequestWarning
+    with warnings.catch_warnings():
+        # Temporarily suppress InsecureRequestWarning
+        warnings.simplefilter("ignore", InsecureRequestWarning)
+        yield
+
 def load_image_from_url(url: str):
     """
     Url should either be like http://website.com/image.png or like data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...
     Returns a numpy image
     """
-    assert url.startswith('data:image') or is_valid_url(url),'load_image_from_url error: invalid url: '+repr(url)
+    assert url.startswith('data:image') or is_valid_url(url), 'load_image_from_url error: invalid url: ' + repr(url)
+    
+    pip_import('requests')
     pip_import('PIL')
+
+    import requests
     from PIL import Image
-    requests=pip_import('requests')
     from io import BytesIO
-    response=requests.get(url)
-    return np.add(Image.open(BytesIO(response.content)),0)  # Converts it to a numpy array by adding 0 to it.
+    
+    with _disable_insecure_request_warning():
+        response = requests.get(url, verify=False)
+    
+    return np.add(Image.open(BytesIO(response.content)), 0)  # Converts it to a numpy array by adding 0 to it.
 
 def load_image_from_matplotlib(*,dpi:int=None,fig=None):
     """
@@ -5032,7 +5052,7 @@ def display_image(image,block=False):
     if isinstance(image,str):
         fansi_print("display_image usually meant for use with numpy arrays, but you passed it a string, so we'll try to load the image load_image("+repr(image)+") and display that.")
         image=load_image(image)
-    if is_pil_image(image) or _is_torch_tensor(image):
+    if is_pil_image(image) or is_torch_tensor(image):
         image=as_numpy_image(image)
     if not isinstance(image,np.ndarray) and not isinstance(image,list):
         try:
@@ -5654,6 +5674,117 @@ clear_display=display_clear#Synonyms
 def clf():
     pip_import('matplotlib')
     plt.clf()
+
+
+def display_cv_color_histogram(
+    image,
+    *,
+    channels="rgb",
+    linestyle="-",
+    alpha=1,
+    block=False,
+    clf=True
+):
+    """
+    Displays a color histogram of an image using OpenCV and Matplotlib.
+
+    Args:
+        image (str or numpy.ndarray):
+            The input image. It can be either a file path or a numpy array.
+        channels (str, optional):
+            The color channels to plot. It can be a combination of "r", "g", "b" and "a".
+            For example, "r", "g", "rgba", "bgr", etc. Defaults to "rgb".
+        linestyle (str, optional):
+            The linestyle of the histogram plot. Defaults to "-".
+        alpha (float, optional):
+            The transparency of the histogram plot. Defaults to 1.
+        block (bool, optional):
+            If True, blocks execution and allows interactive plot manipulation.
+            If False, displays the plot without blocking the code.
+            If None, doesn't draw the plot. Defaults to False.
+        clf (bool, optional):
+            If True, clears the display before drawing the plot. Defaults to True.
+    """
+    pip_import("cv2")
+    pip_import("numpy")
+    pip_import("matplotlib")
+
+    if isinstance(image, str):
+        image = load_image(image)
+
+    if clf:
+        display_clear()
+
+    import numpy as np
+    import cv2 as cv
+    from matplotlib import pyplot as plt
+
+    image = as_rgba_image(image)
+    image = as_byte_image(image)
+
+    colors = {"r": 0, "g": 1, "b": 2, "a": 3}
+    for channel in channels:
+        index = colors[channel]
+
+        plot_color = channel
+        if plot_color == "a":
+            plot_color = "black"
+
+        hist = cv.calcHist([image], [index], None, [256], [0, 256])
+
+        plt.plot(hist, color=plot_color, linestyle=linestyle, alpha=alpha)
+        plt.xlim([0, 256])
+
+    plt.draw()
+    display_update(block=block)
+    plt.pause(0.001)
+
+
+def display_cv_color_histograms(
+    image1,
+    image2,
+    channels="rgb",
+    block=False,
+    clf=True,
+):
+    """
+    Plots color histograms of two images side by side for comparison using OpenCV and Matplotlib.
+
+    Args:
+        image1 (str or numpy.ndarray):
+            The first input image. It can be either a file path or a numpy array.
+        image2 (str or numpy.ndarray):
+            The second input image. It can be either a file path or a numpy array.
+        channels (str, optional):
+            The color channels to plot. It can be a combination of "r", "g", and "b".
+            Defaults to "rgb".
+        block (bool, optional):
+            If True, blocks execution and allows interactive plot manipulation.
+            If False, displays the plot without blocking the code. Defaults to False.
+            If None, doesn't even draw the plot.
+        clf (bool, optional):
+            If True, clears the display before drawing the plot. Defaults to True.
+
+    Example:
+        >>> image1 = "/path/to/image1.jpg"
+        >>> image2 = "/path/to/image2.png"
+        >>> display_cv_color_histograms(image1, image2, channels="rg", block=True)
+    """
+    display_cv_color_histogram(
+        image1,
+        block=None,
+        clf=clf,
+        channels=channels,
+    )
+
+    display_cv_color_histogram(
+        image2,
+        block=block,
+        clf=False,
+        alpha=0.5,
+        channels=channels,
+    )
+
 # endregion
 # region Min/Max Indices/Elements:［min_valued_indices，max_valued_indices，min_valued_elements，max_valued_elements，max_valued_index，min_valued_index］
 def _minmax_indices(l,f=None,key=None)->list:    
@@ -7268,46 +7399,160 @@ def force_restore_warnings():
 #    return formatted_date
 
 
-def format_date(date):
-    """
-    This function formats datetimes the way I personally like to read them.
+_timezone_translations = {
+    # North America
+    "PST": "America/Los_Angeles",  # Pacific Standard Time
+    "PDT": "America/Los_Angeles",  # Pacific Daylight Time
+    "MST": "America/Denver",       # Mountain Standard Time
+    "MDT": "America/Denver",       # Mountain Daylight Time
+    "CST": "America/Chicago",      # Central Standard Time
+    "CDT": "America/Chicago",      # Central Daylight Time
+    "EST": "America/New_York",     # Eastern Standard Time
+    "EDT": "America/New_York",     # Eastern Daylight Time
+    "HST": "Pacific/Honolulu",     # Hawaii Standard Time
+    "AKST": "America/Anchorage",   # Alaska Standard Time
+    "AKDT": "America/Anchorage",   # Alaska Daylight Time
+    "AST": "America/Puerto_Rico",  # Atlantic Standard Time
+    "ADT": "America/Halifax",      # Atlantic Daylight Time
+    "UTC": "Etc/UTC",              # Coordinated Universal Time
+    "AOE": "Etc/UTC",              # Anywhere on Earth
 
-    EXAMPLE:
-        >>> get_current_date()
-        ans = 2023-08-22 14:06:01.764838
-        >>> format_date(ans)
-        ans = Tue Aug 22, 2023 at 2:06:01PM
+    # Asia
+    "IST": "Asia/Kolkata",         # Indian Standard Time
+    "CST": "Asia/Shanghai",        # China Standard Time
+    "JST": "Asia/Tokyo",           # Japan Standard Time
+    "KST": "Asia/Seoul",           # Korea Standard Time
+    "IDT": "Asia/Jerusalem",       # Israel Daylight Time
+    "IST": "Asia/Jerusalem",       # Israel Standard Time
 
-    TODO: Allow user to specify timezone as string arg - will auto-convert it. Also if timezone='auto', will be auto-inferred.
-    TODO: In the future, only if I want to, I'll add another argument to let you customize the date string. But I really like this format lol
-    Made cross-platform (works on windows now) via GPT4: https://chat.openai.com/share/1af19e07-f63b-42df-ac9b-d2fa58b15715
-    """
+    # Europe
+    "BST": "Europe/London",        # British Summer Time
+    "GMT": "Europe/London",        # Greenwich Mean Time
+    "CET": "Europe/Berlin",        # Central European Time
+    "CEST": "Europe/Berlin",       # Central European Summer Time
+    "EET": "Europe/Athens",        # Eastern European Time
+    "EEST": "Europe/Athens",       # Eastern European Summer Time
+    "MSK": "Europe/Moscow",        # Moscow Standard Time
+
+    # Australia
+    "AEST": "Australia/Sydney",    # Australian Eastern Standard Time
+    "AEDT": "Australia/Sydney",    # Australian Eastern Daylight Time
+    "ACST": "Australia/Adelaide",  # Australian Central Standard Time
+    "ACDT": "Australia/Adelaide",  # Australian Central Daylight Time
+    "AWST": "Australia/Perth",     # Australian Western Standard Time
+    # More of North America
+    "NST": "America/St_Johns",     # Newfoundland Standard Time
+    "NDT": "America/St_Johns",     # Newfoundland Daylight Time
+
+    # Central and South America
+    "ART": "America/Buenos_Aires", # Argentina Time
+    "BRT": "America/Sao_Paulo",    # Brasilia Time
+    "BRST": "America/Sao_Paulo",   # Brasilia Summer Time
+    "CLT": "America/Santiago",     # Chile Standard Time
+    "CLST": "America/Santiago",    # Chile Summer Time
+    "COT": "America/Bogota",       # Colombia Time
+
+    # More of Europe
+    "WET": "Europe/Lisbon",        # Western European Time
+    "WEST": "Europe/Lisbon",       # Western European Summer Time
+    "IST": "Europe/Dublin",        # Irish Standard Time
+
+    # Africa
+    "EAT": "Africa/Nairobi",       # East Africa Time
+    "CAT": "Africa/Harare",        # Central Africa Time
+    "WAT": "Africa/Lagos",         # West Africa Time
+    "WAST": "Africa/Windhoek",     # West Africa Summer Time
+    "SAST": "Africa/Johannesburg", # South Africa Standard Time
+
+    # More of Asia
+    "SGT": "Asia/Singapore",       # Singapore Time
+    "HKT": "Asia/Hong_Kong",       # Hong Kong Time
+    "MYT": "Asia/Kuala_Lumpur",    # Malaysia Time
+    "WIT": "Asia/Jakarta",         # Western Indonesia Time
+    "PHT": "Asia/Manila",          # Philippine Time
+    "THA": "Asia/Bangkok",         # Thailand Standard Time
+
+    # Middle East
+    "AST": "Asia/Riyadh",          # Arabian Standard Time
+    "GST": "Asia/Dubai",           # Gulf Standard Time
+
+    # Pacific
+    "NZST": "Pacific/Auckland",    # New Zealand Standard Time
+    "NZDT": "Pacific/Auckland",    # New Zealand Daylight Time
+    "FJT": "Pacific/Fiji",         # Fiji Time
+    "FJST": "Pacific/Fiji",        # Fiji Summer Time
+    "TOT": "Pacific/Tongatapu",    # Tonga Time
+    "CHAST": "Pacific/Chatham",    # Chatham Standard Time
+    "CHADT": "Pacific/Chatham",    # Chatham Daylight Time
+    "LINT": "Pacific/Kiritimati",  # Line Islands Time
+}
+
+def _translate_timezone(x):
+    assert isinstance(x, str)
+    x = x.upper()
+    if not x in _timezone_translations:
+        raise KeyError(
+            "Invalid timezone string: "
+            + repr(x)
+            + ". Please choose from: "
+            + ", ".join(_timezone_translations)
+        )
+    return _timezone_translations[x]
+
+
+def format_date(date, timezone=None):
     import datetime
+
+    if timezone:
+        pip_import('pytz')
+        import pytz
+
     assert isinstance(date, datetime.datetime), "Input must be a datetime object"
+
+    # Convert to the desired timezone if specified
+    if timezone:
+        target_timezone = pytz.timezone(_translate_timezone(timezone))
+        date = date.astimezone(target_timezone)
 
     # Manually format the hour to remove leading zeros for cross-platform compatibility
     hour = date.hour % 12
     hour = hour if hour else 12  # Convert 0 hour to 12 for 12-hour clock
     minute = date.minute
     second = date.second
-    am_pm = 'AM' if date.hour < 12 else 'PM'
+    am_pm = "AM" if date.hour < 12 else "PM"
 
     # Use platform-independent formatting for the rest of the date
-    date_part = date.strftime('%a %b %d, %Y')
-    time_part = "{hour}:{minute:02d}:{second:02d}{am_pm}".format(hour=hour, minute=minute, second=second, am_pm=am_pm)
+    date_part = date.strftime("%a %b %d, %Y")
+    time_part = "{hour}:{minute:02d}:{second:02d}{am_pm}".format(
+        hour=hour, minute=minute, second=second, am_pm=am_pm
+    )
 
-    formatted_date = "{date_part} at {time_part}".format(date_part=date_part, time_part=time_part)
+    formatted_date = "{date_part} at {time_part}".format(
+        date_part=date_part, time_part=time_part
+    )
 
     if date.tzinfo is not None:
         # If the date has a timezone, add it to the output
-        formatted_date += ' ' + date.tzname()  # PST, EST, etc.
+        timezone_str = date.strftime("%Z")
+        formatted_date += " " + timezone_str
 
     return formatted_date
 
 
-def format_current_date():
-    #TODO: See format_date todo
-    return format_date(get_current_date())
+def format_current_date(timezone=None):
+    """
+    EXAMPLES:
+        >>> format_current_date()#I'm in California
+        ans = "Thu Jun 27, 2024 at 8:15:24PM"
+        >>> format_current_date('PST')
+        ans = "Thu Jun 27, 2024 at 8:15:29PM PDT"
+        >>> format_current_date('EST')
+        ans = "Thu Jun 27, 2024 at 11:15:31PM EDT"
+    """
+    # TODO: See format_date todo
+    return format_date(get_current_date(), timezone=timezone)
+
+
     
 
 
@@ -12782,7 +13027,7 @@ def _rma(ans):
 
         if bad_paths:
             print("The following paths don't exist:\n"+['    '+x for x in bad_paths])
-        if input_yes_no("Are you sure you want to delete the below paths?\n"+line_join(['    '+x for x in ans])):
+        if input_yes_no("Are you sure you want to delete the below paths?\n"+line_join(['    '+str(x) for x in ans])):
             for x in ans:
                 delete_path(x)
     else:
@@ -13246,6 +13491,8 @@ def _pterm_fuzzy_cd(query_path, do_cd=False):
 
         return fuzzy_string_match(query_name, real_name, case_sensitive=case_sensitive)
 
+    query_path=os.path.expanduser(query_path)
+
     if query_path.startswith('/'):
         #Doesn't work for windows. Who cares lol
         root='/'
@@ -13265,7 +13512,11 @@ def _pterm_fuzzy_cd(query_path, do_cd=False):
             ) + "     ... %i more not shown ... " % (len(names) - max_len)
         return '   '.join(map(shlex.quote, names))
    
-    for query_name in path_split(query_path):
+    subpaths = path_split(query_path) 
+    if subpaths and subpaths[0]=='/':
+        del subpaths[0]
+
+    for query_name in subpaths:
         subfolders = _get_all_paths_fast(new_pwd, include_files=False)
         query_pwd = path_join(new_pwd, query_name)
         
@@ -14484,7 +14735,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RS  __import__('os').system('reset')
 
         BLA $r._autoformat_python_code_via_black(ans)
+        SIM $r.sort_imports_via_isort(ans)
         CBP ans=$string_from_clipboard();ans=$r._autoformat_python_code_via_black(ans);$string_to_clipboard(ans)
+        CSP ans=$string_from_clipboard();ans=$sort_imports_via_isort(ans);$string_to_clipboard(ans)
 
         DAPI __import__('rp.pypi_inspection').pypi_inspection.display_all_pypi_info()
 
@@ -14518,6 +14771,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         DR $r._display_columns(dir(),'dir():')
         DUSHA $human_readable_file_size(sum($get_file_size(x,False)for x in $enlist(ans)))
+
+        NM __name__="__main__"
 
         QPHP $r._input_select_multiple_history_multiline() #Query Prompt-Toolkit History Paragraphs (F3)
         QPH  $r._input_select_multiple_history() #Query Prompt-Toolkit History Lines (F3)
@@ -14679,7 +14934,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                     if user_message in command_shortcuts and user_message not in scope():
                         original_user_message=user_message
                         user_message=command_shortcuts[user_message]
-                        if _get_pterm_verbose(): fansi_print("Transformed input to "+repr(user_message.replace(rp_import,''))+' because variable '+repr(original_user_message)+' doesn\'t exist but is a shortcut in SHORTCUTS','magenta','bold')
+                        if _get_pterm_verbose() or not user_message.isupper(): fansi_print("Transformed input to "+repr(user_message.replace(rp_import,''))+' because variable '+repr(original_user_message)+' doesn\'t exist but is a shortcut in SHORTCUTS','magenta','bold')
 
                     if user_message.strip().isalpha() and user_message.strip() and user_message.islower() and not user_message.strip() in scope() and user_message.upper().strip() in help_commands_no_spaces_to_spaces:
                         original_user_message=user_message
@@ -20377,23 +20632,75 @@ def labeled_image(image,
                   background_color=(0,0,0),
                   flip_text=False,
                  ):
-    #Adds a label to an image and returns an image
-    #'size' is either measured in pixels, or is in proportion to the image size
-    #EXAMPLES:
-    #     image=load_image('http://hi-bk.com/wp-content/uploads/2020/08/hibkdog.png',use_cache=True)
-    #     display_image(labeled_image(image,'hello',10))
-    #     display_image(labeled_image(image,'hello',25))
-    #     display_image(labeled_image(image,'hello',.1))
-    #     display_image(labeled_image(image,'hello',.1,align='left'))
-    #     display_image(labeled_image(image,'hello',.1,align='right'))
-    #     display_image(labeled_image(image,'hello',.1,align='center'))
-    #     display_image(labeled_image(image,'hello',.1,position='top'))
-    #     display_image(labeled_image(image,'hello',.1,position='bottom'))
-    #     display_image(labeled_image(image,'hello',.5))
-    #     display_image(labeled_image(image,'hello',.9))
-    #     display_image(labeled_image(image,'hello habba booboo gabba',.9))
-    #     display_image(labeled_image(image,'hello habba booboo gabba',.1))
-    #TODO: Add multiple colors, such as black on white
+    """
+    Adds a label to an image and returns an image
+    'size' is either measured in pixels (int), or is in proportion to the image size (float)
+
+    Args:
+        image (numpy.ndarray): The input image to be labeled.
+        text (str): The text to be added as the label.
+        size (int or float): The size of the label. If an integer, it represents the height of the label in pixels.
+                             If a float, it represents the proportion of the label height relative to the image height.
+                             Default is 15.
+        position (str): The position of the label relative to the image. Can be 'top', 'bottom', 'left', or 'right'.
+                        Default is 'top'.
+        align (str): The alignment of the label text. Can be 'left', 'right', or 'center'. Default is 'center'.
+        text_color (tuple): The color of the label text as an RGB tuple (red, green, blue). Default is white (255, 255, 255).
+        background_color (tuple): The background color of the label as an RGB tuple (red, green, blue). Default is black (0, 0, 0).
+        flip_text (bool): Whether to flip the label text upside down. Default is False. Can be useful when position in ['left', 'right']
+
+    Returns:
+        numpy.ndarray: The image with the label added.
+
+    EXAMPLES:
+        image=load_image('http://hi-bk.com/wp-content/uploads/2020/08/hibkdog.png',use_cache=True)
+        display_image(labeled_image(image,'hello',10))
+        display_image(labeled_image(image,'hello',25))
+        display_image(labeled_image(image,'hello',.1))
+        display_image(labeled_image(image,'hello',.1,align='left'))
+        display_image(labeled_image(image,'hello',.1,align='right'))
+        display_image(labeled_image(image,'hello',.1,align='center'))
+        display_image(labeled_image(image,'hello',.1,position='top'))
+        display_image(labeled_image(image,'hello',.1,position='bottom'))
+        display_image(labeled_image(image,'hello',.5))
+        display_image(labeled_image(image,'hello',.9))
+        display_image(labeled_image(image,'hello habba booboo gabba',.9))
+        display_image(labeled_image(image,'hello habba booboo gabba',.1))
+
+    EXAMPLE:
+        from rp import *
+
+        urls = [
+            "https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pages/images/emma.png?raw=true",
+            "https://www.petplan.co.uk/images/breed-info/bichon-frise/behaviour--personality_bichon-frise.png",
+            "https://www.vidavetcare.com/wp-content/uploads/sites/234/2022/04/labrador-retriever-dog-breed-info.jpeg",
+            "https://i5.walmartimages.com/asr/997e0170-abd7-484e-96b0-81e314b86c20.1d66d31352eae16052b7b9d5e1b34583.jpeg?odnHeight=768&odnWidth=768&odnBg=FFFFFF",
+        ]
+        labels = ["Ryan's Dog", "Bichon Dog", "Labordor Dog", "Hot Dog"]
+        images = load_images(urls)
+
+        # Resize the images evenly on both dimensions so their height is 512
+        images = resize_images_to_fit(images, height=512)
+
+        # Adds labels to the top of the images
+        images = labeled_images(
+            images,
+            labels,
+            # Some optional kwargs:
+            size=30,  # Each label is exactly this tall (in pixels)
+            position="top",
+            text_color=(255, 255, 255),
+            background_color=(0, 0, 0),
+        )
+
+        # Concat them all horizontally
+        combined = horizontally_concatenated_images(images)
+        combined = labeled_image(combined, "Types of Dogs", size=30)
+
+        save_image(combined, "output.png")
+        display_image(combined)
+    """
+
 
     assert is_image(image)
     assert position in ['top','bottom','left','right']
@@ -20465,7 +20772,10 @@ def labeled_image(image,
     assert False,'This line should be unreachable'
 
 def labeled_images(images,labels,*args,**kwargs):
-    #The plural of labeled_image
+    """
+    The plural of labeled_image
+    See rp.labeled_image's documentation
+    """
     assert is_iterable(labels)
     assert is_iterable(images)
 
@@ -20531,6 +20841,9 @@ def cv_text_to_image(text,
                      background_color=(0, 0, 0),
                      monospace=False
                     ):
+    """
+    Uses OpenCV to write words on an image, and returns that image
+    """
 
 
     if monospace:
@@ -20670,13 +20983,15 @@ def with_file_extensions(*paths,extension:str=None,replace=False):
     return [with_file_extension(path, extension, replace=replace) for path in paths]
 
 def with_file_name(path:str,name:str):
-    #Returns the path with a new file name, keeping the old file extension
-    #If the file extension in 'name' is specified though, it will keep the new extension
-    #
-    #EXAMPLE:
-    #     >>> with_file_name('some/parent/folder/file.txt','untitled')
-    #    ans = some/parent/folder/untitled.txt
-    #
+    """
+    Returns the path with a new file name, keeping the old file extension
+    If the file extension in 'name' is specified though, it will keep the new extension
+
+    EXAMPLE:
+        >>> with_file_name('some/parent/folder/file.txt','untitled')
+       ans = some/parent/folder/untitled.txt
+   """
+
     parent_folder=get_parent_folder(path)
     file_name=get_file_name(path)
     assert get_absolute_path(path)==get_absolute_path(path_join(parent_folder,file_name))
@@ -20688,16 +21003,20 @@ def with_file_name(path:str,name:str):
     return path_join(parent_folder,file_name)
 
 def with_folder_name(path:str, name:str):
-    #Like with_file_name, except it will always replace the extension (unlike with_file_name, where if name doesn't have an extension it preserves path's extension)
-    # >>> with_folder_name('Hello/world.jpg','power')
-    # ans = Hello/power
+    """
+    Like with_file_name, except it will always replace the extension (unlike with_file_name, where if name doesn't have an extension it preserves path's extension)
+    >>> with_folder_name('Hello/world.jpg','power')
+    ans = Hello/power
+    """
     return path_join(get_parent_folder(path),name)
     return with_file_name(path,name+'.temp')[:-len('.temp')] #Equivalent to the above
 
 
 def get_path_name(path,include_file_extension=True):
-    #'/tmp/d/a.dat' --> 'a.dat'
-    # For more, see: https://stackoverflow.com/questions/8384737/extract-file-name-from-path-no-matter-what-the-os-path-format
+    """
+    '/tmp/d/a.dat' --> 'a.dat'
+    For more, see: https://stackoverflow.com/questions/8384737/extract-file-name-from-path-no-matter-what-the-os-path-format
+    """
     from pathlib import Path
     output= Path(path).name
     if not include_file_extension:
@@ -20711,8 +21030,10 @@ def get_path_names(*paths, include_file_extensions=True):
 get_folder_names=get_directory_names=get_file_names=get_path_names
 
 def get_relative_path(path,root_directory=None):
-    #Take an absolute path, and turn it into a relative path starting from root_directory
-    #root_directory's default is get_current_directory()
+    """
+    Take an absolute path, and turn it into a relative path starting from root_directory
+    root_directory's default is get_current_directory()
+    """
     if root_directory is None:
         root_directory=get_current_directory()
     assert isinstance(root_directory,str),'root_directory must be a string representing the root path to compare the given path against'
@@ -20723,8 +21044,10 @@ def get_relative_paths(*paths, root_directory=None):
     return [get_relative_path(path, root_directory) for path in detuple(paths)]
 
 def get_absolute_path(path,*,physical=True):
-    #Given a relative path, return its absolute path
-    #If physical, expand all symlinks in the path
+    """
+    Given a relative path, return its absolute path
+    If physical, expand all symlinks in the path
+    """
     path=os.path.expanduser(path)#In case the path has a '~' in it
     if physical:
         path=os.path.realpath(path)#Get rid of any symlinks in the path
@@ -20738,19 +21061,19 @@ def has_file_extension(file_path):
     return get_file_extension(file_path)!=''
 
 def date_modified(path):
-    #Get the date a path was modified
+    """ Get the date a path was modified """
     timestamp=os.path.getmtime(path)#Measured in seconds
     import datetime
     return datetime.datetime.fromtimestamp(timestamp)
 
 def date_created(path):
-    #Get the date a path was created
+    """ Get the date a path was created """
     timestamp=os.path.getctime(path)#Measured in seconds
     import datetime
     return datetime.datetime.fromtimestamp(timestamp)
 
 def date_accessed(path):
-    #Get the date a path was accessed
+    """ Get the date a path was accessed """
     timestamp=os.path.getatime(path)#Measured in seconds
     import datetime
     return datetime.datetime.fromtimestamp(timestamp)
@@ -20951,7 +21274,7 @@ def get_all_files(*args,**kwargs):
     return get_all_paths(*args,**{'include_folders':False,'include_files':True,**kwargs})
 
 def get_all_image_files(*args,**kwargs):
-    #Like get_all_files, but only returns image files. This function is just sugar.
+    """ Like get_all_files, but only returns image files. This function is just sugar.  """
     #TODO: Once get_all_paths supports lazyness, so should this.
     file_paths=get_all_paths(*args,**{'include_folders':False,'include_files':True,**kwargs})
     return list(filter(is_image_file,file_paths))
@@ -20964,7 +21287,7 @@ def get_file_paths(*args,**kwargs):
     assert False,'This function is deprecated. Use get_all_files instead - its the same function with a new name.'
 
 def get_subfolders(folder,*,relative=False,sort_by=None):
-    #Take a folder, and return a list of all of its subfolders
+    """ Take a folder, and return a list of all of its subfolders """
     assert folder_exists(folder),'Folder '+repr(folder)+' doesnt exist!'
     return get_all_paths(folder,include_files=False,include_folders=True,recursive=False,relative=relative,sort_by=sort_by)
 get_subdirectories=get_subfolders
@@ -21034,7 +21357,7 @@ def get_random_file(folder=None):
     Returns a list of strings (file paths) whose length=quantity
     OLD NAME: random_file
     """
-    return random_files(quantity=1,folder=folder)[0]
+    return get_random_files(quantity=1,folder=folder)[0]
 
     
 
@@ -21054,7 +21377,7 @@ def get_random_files(quantity:int,folder=None):
     
     if folder is None:
         folder='.'
-        return get_file_names(random_files(quantity,'.')) #Return something like '__main__.py'
+        return get_file_names(get_random_files(quantity,'.')) #Return something like '__main__.py'
     else:
         assert folder_exists(folder), 'rp.random_file: Folder does not exist: '+repr(folder)
         files=_os_listdir_files(folder)
@@ -23141,6 +23464,7 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
     """
     frames: a list of images as defined by rp.is_image(). Saves an .mp4 file at the path
         - frames can also contain strings, if those strings are image file paths
+        - frames can also be a glob or a folder of images, and if so they will be sorted by number
     Note that frames can also be a generator, as opposed to a numpy array.
     This can let you save larger videos that would otherwise make your computer run out of memory.
     
@@ -23155,7 +23479,7 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
     height = None if height is None else height
     width  = None if width  is None else width 
     
-    if hasattr(frames,'__len__'):
+    if hasattr(frames,'__len__') and not isinstance(frames, str) and all(map(is_image, frames)):
         # If we're not fed a generator without a predefined number of frames,
         # Calculate the max height and width in the video and use that to be the height and width
         max_height, max_width = get_max_image_dimensions(frames)
@@ -23163,6 +23487,22 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
         if width  is None: width =max_width 
     
     writer = VideoWriterMP4(path, framerate, video_bitrate=video_bitrate, height=height, width=width)
+
+    #Make frames speficiable as a glob, folder path, list of images, or list of image paths
+    def load_frame(frame):
+        #This is used to make image loading parallel...
+        if isinstance(frame, str):
+            return load_image(frame)
+        else:
+            return frame
+    if isinstance(frames, str):
+        if is_a_folder(frames):
+            frames = get_all_image_files(frames, sort_by='number')
+        else:
+            frames = glob.glob(frames)
+            frames = sorted(frames)
+            frames = sorted(frames, key=len)
+    loaded_frames = load_files(load_frame, frames, lazy=True)
 
     try:
         for frame in frames:
@@ -25433,11 +25773,16 @@ def get_module_path_from_name(module_name):
 
 def get_module_path(module):
     #Returns the file path of a given python module
-    if not is_a_module(module) and hasattr(module,'__module__'):
-        #This will work for functions too
-        module=module.__module__
+    if not is_a_module(module):
+        if hasattr(module,'__module__'):
+            #This will work for functions too
+            module=module.__module__
+        elif hasattr(type(module),'__module__'):
+            module=type(module).__module__
+
     if isinstance(module,str):
         return get_module_path_from_name(module)
+
     import inspect
     assert inspect.ismodule(module),'get_module_path error: The input you gave is not a module type. You gave input of type '+repr(type(module))
     return inspect.getfile(module)
@@ -26747,6 +27092,7 @@ def _sort_imports_via_isort(code):
     pip_import('isort')
     import isort
     return isort.code(code)
+sort_imports_via_isort = _sort_imports_via_isort
 
 def _set_ryan_tmux_conf():
     conf='''
@@ -26976,13 +27322,13 @@ def _run_filebrowser(port=8080, root='.'):
     _configure_filebrowser()
 
     port=get_next_free_port(port)
-    command = 'filebrowser -r '+shlex.quote(root)+' -p '+str(port)
+    command = 'filebrowser -r '+shlex.quote(root)+' -a 0.0.0.0 -p '+str(port)
     print('r._run_filebrowser: Running '+repr(command))
 
     os.system(command)
 
 
-def port_is_taken(port: int) -> bool:
+def get_port_is_taken(port: int) -> bool:
     """
     Check if a port is already in use.
 
@@ -27011,7 +27357,7 @@ def get_next_free_port(port):
     """
 
     assert isinstance(port, int)
-    while port_is_taken(port):
+    while get_port_is_taken(port):
         port+=1
     return port
 
@@ -28733,7 +29079,12 @@ def cv_resize_image(image,size,interp='bilinear'):
     import cv2  
 
     #Choose an interpolation method
-    interp_methods={'bilinear':cv2.INTER_LINEAR,'bicubic':cv2.INTER_CUBIC,'nearest':cv2.INTER_NEAREST}
+    interp_methods = {
+        "bilinear": cv2.INTER_LINEAR,
+        "bicubic": cv2.INTER_CUBIC,
+        "nearest": cv2.INTER_NEAREST,
+        "area": cv2.INTER_AREA,  #Good for downsampling, but when upsampling acts like nearest neigbors
+    }
     assert interp in interp_methods, 'cv_resize_image: Interp must be one of the following: %s'%str(list(interp_methods))
     interp_method=interp_methods[interp]
 
@@ -28770,6 +29121,7 @@ def cv_resize_images(*images, size, interp='bilinear'):
 resize_images = cv_resize_images  # For now, they will be the same thing
     
 def torch_resize_image(image,size,interp='bilinear'):
+    assert False,'DANGER: Please test this.'
     """
     Valid sizes:
         - A single number: Will scale the entire image by that size
@@ -31271,7 +31623,7 @@ def _autoformat_python_code_via_black(code:str):
 def as_numpy_images(images):
     if _is_numpy_array(images):
         return images.copy()
-    elif _is_torch_tensor(images):
+    elif is_torch_tensor(images):
         import torch
         assert isinstance(images,torch.Tensor)
         assert len(images.shape)==4,'Should be 4d tensor: (batch size, num channels, height, width)'
@@ -31281,7 +31633,7 @@ def as_numpy_images(images):
     else:
         if not is_iterable(images):
             raise TypeError('Unsupported image datatype: %s ; its not even iterable!'%type(images))
-        if all((is_pil_image(x) or _is_torch_tensor(x) or _is_numpy_array(x)) for x in images):
+        if all((is_pil_image(x) or is_torch_tensor(x) or _is_numpy_array(x)) for x in images):
             return [as_numpy_image(x) for x in images]
         else:
             raise TypeError('Unsupported image datatype: %s of %s'%(type(images),repr(set(map(type,images)))))
@@ -31314,7 +31666,7 @@ def as_pil_image(image):
 def as_numpy_image(image):
     if isinstance(image,np.ndarray):
         return image.copy()
-    elif _is_torch_tensor(image):
+    elif is_torch_tensor(image):
         return as_numpy_images(image[None])[0]
     elif is_pil_image(image):
         return as_numpy_array(image)
@@ -31341,14 +31693,14 @@ def as_torch_images(images):
         import torch
         images=torch.Tensor(images)
         return images
-    elif _is_torch_tensor(images):
+    elif is_torch_tensor(images):
         #Not creating a copy. GPU tensors are expensive.
         return images
     else:
         raise TypeError('Unsupported image datatype: %s'%type(images))
 
 def as_torch_image(image):
-    if _is_torch_tensor(image):
+    if is_torch_tensor(image):
         return image.clone()
     elif is_pil_image(image):
         return as_torch_image(as_numpy_image(image))

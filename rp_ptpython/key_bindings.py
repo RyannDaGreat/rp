@@ -2110,6 +2110,7 @@ def handle_character(buffer,char,event=None):
                 'git' :'!git',
                 's3' :'!aws s3', #Doesnt work idk
                 'sss' :'!aws s3',
+                'fm':'!frogmouth',
                 
                 'u' :'CDU',
                 'du' :'CDU',
