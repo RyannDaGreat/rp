@@ -16439,7 +16439,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     "# < Ryan RPRC Start >",
                                     "from rp import *",
                                     # "__import__('rp').r._set_default_session_title()", # now handled in _load_pyin_settings_file
-                                    # "__import__('rp').r._default_timezone='PST'
+                                    "#__import__('rp').r._default_timezone='PST'",
                                     "__import__('rp').r._pip_import_autoyes=True",
                                     "__import__('rp').r._pip_install_needs_sudo=False",
 
