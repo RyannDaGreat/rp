@@ -7500,8 +7500,27 @@ def _translate_timezone(x):
     return _timezone_translations[x]
 
 
+_default_timezone=None
 def format_date(date, timezone=None):
+    """
+    EXAMPLES:
+        >>> get_current_date()
+        ans = 2024-07-11 01:12:59.200330
+        >>> print(type(ans))                ––>   <class 'datetime.datetime'>
+        >>> print(format_date(ans))         ––>   Thu Jul 11, 2024 at 1:12:59AM
+        >>> print(format_date(ans,'pdt'))   ––>   Thu Jul 11, 2024 at 1:12:59AM
+        >>> print(format_date(ans,'cdt'))   ––>   Thu Jul 11, 2024 at 3:12:59PM CDT
+        >>> print(format_date(ans,'edt'))   ––>   Thu Jul 11, 2024 at 4:12:59AM EDT
+        >>> print(format_date(ans,'aoe'))   ––>   Thu Jul 11, 2024 at 8:12:59AM UTC
+        >>> print(format_date(ans,''))      ––>   Thu Jul 11, 2024 at 1:12:59AM
+        >>> print(format_date(ans,None))    ––>   Thu Jul 11, 2024 at 1:12:59AM
+        >>> r._default_timezone='UTC'
+        >>> print(format_date(ans,None))    ––>   Thu Jul 11, 2024 at 8:12:59AM UTC
+        >>> print(format_date(ans,''))      ––>   Thu Jul 11, 2024 at 8:12:59AM
+    """
     import datetime
+
+    if timezone is None: timezone = _default_timezone
 
     if timezone:
         pip_import('pytz')
@@ -16420,8 +16439,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     "# < Ryan RPRC Start >",
                                     "from rp import *",
                                     # "__import__('rp').r._set_default_session_title()", # now handled in _load_pyin_settings_file
+                                    # "__import__('rp').r._default_timezone='PST'
                                     "__import__('rp').r._pip_import_autoyes=True",
                                     "__import__('rp').r._pip_install_needs_sudo=False",
+
                                     "# < Ryan RPRC End >",
                                     "",
                                 ]
