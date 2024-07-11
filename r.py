@@ -7403,12 +7403,16 @@ _timezone_translations = {
     # North America
     "PST": "America/Los_Angeles",  # Pacific Standard Time
     "PDT": "America/Los_Angeles",  # Pacific Daylight Time
+    "PT" : "America/Los_Angeles",  # Pacific Time
     "MST": "America/Denver",       # Mountain Standard Time
     "MDT": "America/Denver",       # Mountain Daylight Time
+    "MT" : "America/Denver",       # Mountain Time
     "CST": "America/Chicago",      # Central Standard Time
     "CDT": "America/Chicago",      # Central Daylight Time
+    "CT" : "America/Chicago",      # Central Time
     "EST": "America/New_York",     # Eastern Standard Time
     "EDT": "America/New_York",     # Eastern Daylight Time
+    "ET" : "America/New_York",     # Eastern Time
     "HST": "Pacific/Honolulu",     # Hawaii Standard Time
     "AKST": "America/Anchorage",   # Alaska Standard Time
     "AKDT": "America/Anchorage",   # Alaska Daylight Time
@@ -7440,6 +7444,7 @@ _timezone_translations = {
     "ACST": "Australia/Adelaide",  # Australian Central Standard Time
     "ACDT": "Australia/Adelaide",  # Australian Central Daylight Time
     "AWST": "Australia/Perth",     # Australian Western Standard Time
+
     # More of North America
     "NST": "America/St_Johns",     # Newfoundland Standard Time
     "NDT": "America/St_Johns",     # Newfoundland Daylight Time
@@ -7485,6 +7490,31 @@ _timezone_translations = {
     "CHAST": "Pacific/Chatham",    # Chatham Standard Time
     "CHADT": "Pacific/Chatham",    # Chatham Daylight Time
     "LINT": "Pacific/Kiritimati",  # Line Islands Time
+    
+    # GMT Offsets
+    "GMT-11": "Etc/GMT+11",
+    "GMT-10": "Etc/GMT+10",
+    "GMT-9" : "Etc/GMT+9",
+    "GMT-8" : "Etc/GMT+8",
+    "GMT-7" : "Etc/GMT+7",
+    "GMT-6" : "Etc/GMT+6", 
+    "GMT-5" : "Etc/GMT+5",
+    "GMT-4" : "Etc/GMT+4",
+    "GMT-3" : "Etc/GMT+3", 
+    "GMT-2" : "Etc/GMT+2",
+    "GMT-1" : "Etc/GMT+1",  
+    "GMT+1" : "Etc/GMT-1",
+    "GMT+2" : "Etc/GMT-2", 
+    "GMT+3" : "Etc/GMT-3",
+    "GMT+4" : "Etc/GMT-4",
+    "GMT+5" : "Etc/GMT-5", 
+    "GMT+6" : "Etc/GMT-6",
+    "GMT+7" : "Etc/GMT-7",
+    "GMT+8" : "Etc/GMT-8",
+    "GMT+9" : "Etc/GMT-9",
+    "GMT+10": "Etc/GMT-10",
+    "GMT+11": "Etc/GMT-11",
+    "GMT+12": "Etc/GMT-12",
 }
 
 def _translate_timezone(x):
@@ -7578,6 +7608,23 @@ def format_current_date(timezone=None):
 _format_datetime = format_date #For compatiability - older code used rp.r._format_datetime
 
     
+def get_current_timezone():
+    """
+    EXAMPLE:
+        >>> get_current_timezone()
+        ans = PST
+    """
+    if r._default_timezone is not None:
+        # If we manually set an override in rprc...
+        return r._default_timezone
+
+    date = get_current_date()
+    target = format_date(date, "")
+    for timezone in r._timezone_translations:
+        result = format_date(date, timezone)
+        if result.startswith(target):
+            return timezone
+
 
 _rinsp_temp_object=None
 _builtin_print=print
