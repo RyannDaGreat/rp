@@ -7614,13 +7614,13 @@ def get_current_timezone():
         >>> get_current_timezone()
         ans = PST
     """
-    if r._default_timezone is not None:
+    if _default_timezone is not None:
         # If we manually set an override in rprc...
-        return r._default_timezone
+        return _default_timezone
 
     date = get_current_date()
     target = format_date(date, "")
-    for timezone in r._timezone_translations:
+    for timezone in _timezone_translations:
         result = format_date(date, timezone)
         if result.startswith(target):
             return timezone
