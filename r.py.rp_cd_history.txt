@@ -90,12 +90,12 @@
 /Users/Ryan/.vim/bundle/vim-xtabline
 /Users/Ryan/.vim
 /Users/Ryan/.vim/bundle
-/Users/Ryan
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/javascript
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
 /Users/Ryan/Desktop/CleanCode/Sandbox
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
+/Users/Ryan
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
