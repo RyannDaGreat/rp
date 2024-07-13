@@ -2118,6 +2118,9 @@ def handle_character(buffer,char,event=None):
 
                 'mm':'!micromamba',
                 'mmi':'!micromamba install',
+
+                'hd':'CDH',
+                'b':'CDH',
             })
 
             for item in 'import w'.split():
@@ -3567,6 +3570,33 @@ def load_python_bindings(python_input):
             if not data.startswith('!') and first_word in rp.r._get_cached_system_commands() and rp.is_valid_shell_syntax(data) and (not rp.is_valid_python_syntax(data) or not first_word in set(ric.globa)|set(python_keywords) ) and not before and not after:
                 #Assume we're pasting a shell command instead 
                 data='!'+data
+            elif (
+                not before
+                and not after
+                and not "\n" in data
+                # and starts_with_any(
+                #     data,
+                #     "/",
+                #     "./",
+                #     "../",
+                #     "~/",
+                #     "\\\\",
+                #     "A:\\",
+                #     "B:\\",
+                #     "C:\\",
+                #     "D:\\",
+                #     "E:\\",
+                #     "F:\\",
+                #     "G:\\",
+                #     "H:\\",
+                #     "I:\\",
+                # )
+                and not rp.is_valid_python_syntax(data)
+                and rp.path_exists(data)
+            ):
+                if not rp.is_a_directory(data) or rp.is_symlink(data):
+                    data = rp.get_parent_folder(data)
+                buffer.insert_text('CD ')
             elif before=='1' and not after and not data[0].isnumeric():
                 #Pasting after 1 --> !
                 buffer.delete_before_cursor()

@@ -321,6 +321,15 @@ class PythonCompleter(Completer):
 
 
                 
+        if starts_with_any(before_line,'CDH ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
+            import os
+            import rp
+
+            updirs = rp.r._get_cdh_back_names()
+                
+            # yield from yield_from_candidates(updirs)
+            yield from yield_from_candidates(updirs,displays=updirs,priority=list(range(len(updirs))))
+            return 
         if starts_with_any(before_line,'CD ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import rp
             import os

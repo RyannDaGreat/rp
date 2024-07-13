@@ -20,7 +20,6 @@ from time import sleep
 sys.path.append(__file__[:-len("r.py")])
 import rp
 import os
-import posix
 import time
 import shlex
 import glob,sys
@@ -11241,6 +11240,63 @@ def _get_prompt_style():
     return _get_prompt_style_cached
 
 
+def _get_cdh_back_names():
+    # For autocompletion of CDH or B
+    return [
+        x
+        for x in unique(
+            reversed(
+                get_path_names(_get_cd_history())
+            ),
+            key=str.lower,
+        )
+        if x.strip()
+    ]
+
+
+def _cdh_back_query(query):
+    assert isinstance(query, str)
+    # Given we CDH to the same query over and over again, we should cycle between matches. That's what all the below logic is to ensure.
+    lines = _get_cd_history()
+    lines = lines[::-1]
+
+    def matches(line):
+        name = get_path_name(line)
+        return fuzzy_string_match(query, name, case_sensitive=False)
+
+    consecutive_matches = []
+    other_matches = []
+    non_matches = []
+    for line in lines:
+        if matches(line):
+            if not non_matches:
+                consecutive_matches.append(line)
+            else:
+                other_matches.append(line)
+        else:
+            non_matches.append(line)
+
+    if other_matches:
+        # Try to choose the first non-consecutive match so we can cycle
+        while other_matches and not folder_exists(other_matches[0]):
+            del other_matches[0]
+
+        if other_matches:
+            return other_matches[0]
+
+    if consecutive_matches:
+        # Let us cycle through history - if we choose the first we'll be stuck
+        while consecutive_matches and not folder_exists(consecutive_matches[0]):
+            del consecutive_matches[0]
+
+        if consecutive_matches:
+            return consecutive_matches[-1]
+
+    raise IndexError("No existing CDH matches for " + query)
+
+
+
+
 _cd_history_size_limit=100000#To avoid spamming the console when we use CDH, limit the number of recent directories to this amount #UPDATE: I decided to make this effectively limitless (100000 is very big lol). Why limit it?
 _cd_history_path=__file__+'.rp_cd_history.txt'
 def _get_cd_history():
@@ -16486,7 +16542,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                     "# < Ryan RPRC Start >",
                                     "from rp import *",
                                     # "__import__('rp').r._set_default_session_title()", # now handled in _load_pyin_settings_file
-                                    "#__import__('rp').r._default_timezone='PST'",
+                                    "#__import__('rp').r._default_timezone=rp.get_current_timezone()",
                                     "__import__('rp').r._pip_import_autoyes=True",
                                     "__import__('rp').r._pip_install_needs_sudo=False",
 
@@ -16985,11 +17041,31 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 _clean_cd_history()
                             user_message=''
 
-                        elif not '\n' in user_message and (user_message=='CD' or user_message.startswith('CD ') or user_message.startswith('CDU') or user_message=='CDP') or user_message=='CDB' or user_message=='CDU' or user_message=='CDA' or user_message in 'CDZ' or user_message=='CDQ':
+                        elif (
+                            not "\n" in user_message
+                            and (
+                                user_message == "CD"
+                                or user_message.startswith("CD ")
+                                or user_message.startswith("CDU ")
+                                or user_message.startswith("CDH ")
+                                or user_message == "CDP"
+                            )
+                            or user_message == "CDB"
+                            or user_message == "CDU"
+                            or user_message == "CDA"
+                            or user_message in "CDZ"
+                            or user_message == "CDQ"
+                        ):
                             if user_message.startswith('CD '):
                                 #Do fuzzy searching
                                 old_cd_path = user_message[len('CD '):]
                                 new_cd_path = _pterm_fuzzy_cd(old_cd_path)
+                                user_message = 'CD '+new_cd_path
+
+                            if user_message.startswith('CDH '):
+                                #Do fuzzy searching
+                                old_cd_path = user_message[len('CDH '):]
+                                new_cd_path = _cdh_back_query(old_cd_path)
                                 user_message = 'CD '+new_cd_path
                                 
                             if user_message=='CDU':
@@ -25841,6 +25917,9 @@ def get_module_path_from_name(module_name):
 
 def get_module_path(module):
     #Returns the file path of a given python module
+    if isinstance(module,str):
+        return get_module_path_from_name(module)
+
     if not is_a_module(module):
         if hasattr(module,'__module__'):
             #This will work for functions too
@@ -25848,6 +25927,7 @@ def get_module_path(module):
         elif hasattr(type(module),'__module__'):
             module=type(module).__module__
 
+    #Yes, we need that twice...
     if isinstance(module,str):
         return get_module_path_from_name(module)
 
