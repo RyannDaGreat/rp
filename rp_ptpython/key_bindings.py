@@ -2062,7 +2062,7 @@ def handle_character(buffer,char,event=None):
             return True
 
         if not after and char==' ' and before.replace('_','').isalpha():
-            autocaps = 'cd py pym apy apym acat cat vim tab fd rn run ccat ncat pip take mkdir cdu'.split()
+            autocaps = 'cd py pym apy apym acat cat vim tab fd rn run ccat ncat pip take mkdir cdu lss lsr'.split()
 
             import rp
             shortcuts = {c:'!'+c for c in rp.r._get_cached_system_commands()}
@@ -3570,33 +3570,38 @@ def load_python_bindings(python_input):
             if not data.startswith('!') and first_word in rp.r._get_cached_system_commands() and rp.is_valid_shell_syntax(data) and (not rp.is_valid_python_syntax(data) or not first_word in set(ric.globa)|set(python_keywords) ) and not before and not after:
                 #Assume we're pasting a shell command instead 
                 data='!'+data
-            elif (
-                not before
-                and not after
-                and not "\n" in data
-                # and starts_with_any(
-                #     data,
-                #     "/",
-                #     "./",
-                #     "../",
-                #     "~/",
-                #     "\\\\",
-                #     "A:\\",
-                #     "B:\\",
-                #     "C:\\",
-                #     "D:\\",
-                #     "E:\\",
-                #     "F:\\",
-                #     "G:\\",
-                #     "H:\\",
-                #     "I:\\",
-                # )
-                and not rp.is_valid_python_syntax(data)
-                and rp.path_exists(data)
-            ):
-                if not rp.is_a_directory(data) or rp.is_symlink(data):
-                    data = rp.get_parent_folder(data)
-                buffer.insert_text('CD ')
+
+            # #On paste, if its a path, turn it into CD <path>
+            # #This works well! But it got annoying - can't we do this on a CLI-level?
+            # #For that reason, I commented this out.
+            # elif (
+            #     not before
+            #     and not after
+            #     and not "\n" in data
+            #     # and starts_with_any(
+            #     #     data,
+            #     #     "/",
+            #     #     "./",
+            #     #     "../",
+            #     #     "~/",
+            #     #     "\\\\",
+            #     #     "A:\\",
+            #     #     "B:\\",
+            #     #     "C:\\",
+            #     #     "D:\\",
+            #     #     "E:\\",
+            #     #     "F:\\",
+            #     #     "G:\\",
+            #     #     "H:\\",
+            #     #     "I:\\",
+            #     # )
+            #     and not rp.is_valid_python_syntax(data)
+            #     and rp.path_exists(data)
+            # ):
+            #     if not rp.is_a_directory(data) or rp.is_symlink(data):
+            #         data = rp.get_parent_folder(data)
+            #     buffer.insert_text('CD ')
+
             elif before=='1' and not after and not data[0].isnumeric():
                 #Pasting after 1 --> !
                 buffer.delete_before_cursor()

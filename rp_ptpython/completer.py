@@ -373,7 +373,7 @@ class PythonCompleter(Completer):
             import os
             yield from yield_from_candidates(*pathsmod(os.scandir(get_path_before_cursor())))
             return 
-        if re.fullmatch(r'(CAT |NCAT |CCAT |OPEN |ACAT |TAB |RUN |PY |APY |PYM |APYM ).*',before) and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
+        if re.fullmatch(r'(CAT |NCAT |CCAT |OPEN |ACAT |TAB |RUN |PY |APY |PYM |APYM |LSS |LSR ).*',before) and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
             from rp import is_a_file
             import rp

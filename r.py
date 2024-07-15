@@ -11267,6 +11267,7 @@ def _cdh_back_query(query):
     consecutive_matches = []
     other_matches = []
     non_matches = []
+    deleted_matches = []
     for line in lines:
         if matches(line):
             if not non_matches:
@@ -11279,6 +11280,7 @@ def _cdh_back_query(query):
     if other_matches:
         # Try to choose the first non-consecutive match so we can cycle
         while other_matches and not folder_exists(other_matches[0]):
+            deleted_matches.append(other_matches[0])
             del other_matches[0]
 
         if other_matches:
@@ -11287,12 +11289,16 @@ def _cdh_back_query(query):
     if consecutive_matches:
         # Let us cycle through history - if we choose the first we'll be stuck
         while consecutive_matches and not folder_exists(consecutive_matches[0]):
+            deleted_matches.append(consecutive_matches[0])
             del consecutive_matches[0]
 
         if consecutive_matches:
             return consecutive_matches[-1]
 
-    raise IndexError("No existing CDH matches for " + query)
+    if deleted_matches:
+        raise IndexError("None of the CDH matches for " + repr(query) + " still exist on your filesystem. Use CDH CLEAN to delete them.")
+    else:
+        raise IndexError("No CDH matches for " + repr(query))
 
 
 
@@ -13681,6 +13687,16 @@ def _pterm_fuzzy_cd(query_path, do_cd=False):
             failed = True
             break
         elif len(matches)>1:
+            if len(subpaths)==1:
+                #Break the ambiguity with the current completion candidates if available...
+                #Currently for simplicity of implementation checking  we're not going deep into paths aka len(subpaths)==1...
+                can = _ric_current_candidate_fuzzy_matches(query_name)
+                if can is not None:
+                    new_pwd = can.strip('/')
+                    if currently_running_windows():
+                        new_pwd = new_pwd.strip("\\")
+                    continue
+
             import shlex
             print(
                 fansi("Multiple fuzzy matches for ", "red")
@@ -13707,6 +13723,15 @@ def _pterm_fuzzy_cd(query_path, do_cd=False):
             _pterm_cd(new_pwd)
         return new_pwd
 
+
+def _ric_current_candidate_fuzzy_matches(query):
+    #Return the first pt completion candidate if they exist and match the query...
+    import rp.r_iterm_comm as ric
+    can = ric.current_candidates
+    if can and fuzzy_string_match(query, can[0], case_sensitive=False):
+        return can[0]
+    else:
+        return None
 
 
             
@@ -14729,6 +14754,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         DKH DISKH
          KH DISKH
 
+        DQ CDHQ FAST
 
         PRP PYM rp
 
@@ -14860,6 +14886,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         SIM $r.sort_imports_via_isort(ans)
         CBP ans=$string_from_clipboard();ans=$r._autoformat_python_code_via_black(ans);$string_to_clipboard(ans)
         CSP ans=$string_from_clipboard();ans=$sort_imports_via_isort(ans);$string_to_clipboard(ans)
+        RMS $r._removestar(ans)
 
         DAPI __import__('rp.pypi_inspection').pypi_inspection.display_all_pypi_info()
 
@@ -14909,6 +14936,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         TMUX !tmux
 
         FB $r._run_filebrowser()
+
+        NL $fansi_print('Number of lines in ans: %i'%$number_of_lines(ans), 'yellow')
 
         ZG !lazygit
         UNCOMMIT !git reset --soft HEAD^
@@ -16695,20 +16724,39 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 fansi_print("DITTO --> re-running last successful command "+str(ditto_number)+" times, shown below in yellow:",'blue','underlined')
                                 user_message='\n'.join([successful_command_history[-1]]*ditto_number)
                                 fansi_print(user_message,"yellow")
-                        elif user_message=='LS SEL' or user_message=='LSS' or user_message in ['LS REL','LSR']:
-                            rel = user_message in ['LS REL','LSR']
-                            if rel:
-                                fansi_print("LS REL aka LSR--> LS Select (Relative Path) --> Same as LSS, except uses relative path instead of global path--> Please select a file or folder",'blue','underlined')
+                        elif user_message=='LS SEL' or user_message=='LSS' or user_message in ['LS REL','LSR'] or starts_with_any(user_message, "LSS ", 'LSR ') and not '\n' in user_message:
+                            if starts_with_any(user_message, "LSS ", "LSR "):
+                                command_name = user_message[:len("LSS")]
+                                lss_name = user_message[len("LSS "):]
+                                import rp.r_iterm_comm as ric
+                                if not path_exists(lss_name) and ric.current_candidates and fuzzy_string_match(lss_name, ric.current_candidates[0], case_sensitive=False):
+                                    #Don't need tab to autocomplete these paths, which is why it's fast...
+                                    candidate_0 = ric.current_candidates[0]
+                                    new_lss_name = candidate_0.strip('/').strip('\\')
+                                    fansi_print(command_name+": Completed "+repr(lss_name)+" to "+repr(new_lss_name), 'blue')
+                                    lss_name=new_lss_name
+
+                                if command_name=='LSR':
+                                    user_message = repr(lss_name)
+                                elif command_name=='LSS':
+                                    user_message=repr(path_join(get_current_directory(),lss_name))
+
+
+                                # user_message=repr(get_absolute_path(user_message[len("LSS "):]))
                             else:
-                                fansi_print("LS SEL aka LSS--> LS Select --> Please select a file or folder",'blue','underlined')
-                            try:
-                                path=input_select_path()
+                                rel = user_message in ['LS REL','LSR']
                                 if rel:
-                                    path=get_relative_path(path)
-                                user_message='ans = '+repr(path)
-                            except KeyboardInterrupt:
-                                fansi_print("\t(LS SEL cancelled)",'blue')
-                                user_message=''
+                                    fansi_print("LS REL aka LSR--> LS Select (Relative Path) --> Same as LSS, except uses relative path instead of global path--> Please select a file or folder",'blue','underlined')
+                                else:
+                                    fansi_print("LS SEL aka LSS--> LS Select --> Please select a file or folder",'blue','underlined')
+                                try:
+                                    path=input_select_path()
+                                    if rel:
+                                        path=get_relative_path(path)
+                                    user_message='ans = '+repr(path)
+                                except KeyboardInterrupt:
+                                    fansi_print("\t(LS SEL cancelled)",'blue')
+                                    user_message=''
                         
                         elif user_message=='FDT':
                             fansi_print("FDT aka FinD Text --> Grep with FZF",'blue','bold')
@@ -16984,7 +17032,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 # user_message="__import__('os').mkdir(%s)"%repr(new_dir)
                                 user_message=''
 
-                        elif user_message in {'CDH', 'CDH FAST'} :
+                        elif user_message in {'CDH', 'CDH FAST', "CDHQ FAST"} :
                             fansi_print("CDH --> CD History --> Please select an entry to cd into!",'blue','bold')
                             hist=_get_cd_history()
                             fast=user_message=='CDH FAST' or fansi_is_disabled()
@@ -17022,12 +17070,15 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 # stringify=identity if fast else slow_stringify
                                 stringify=fast_stringify if fast else slow_stringify
                                 import sys
-                                new_dir = input_select(
-                                    "Please choose a directory",
-                                    hist[::-1],
-                                    stringify=stringify,
-                                    reverse=True,
-                                )
+                                if user_message=='CDHQ FAST':
+                                    new_dir = _iterfzf(hist[::-1], exact=True)
+                                else:
+                                    new_dir = input_select(
+                                        "Please choose a directory",
+                                        hist[::-1],
+                                        stringify=stringify,
+                                        reverse=True,
+                                    )
                                 user_message='import sys,os;os.chdir('+repr(new_dir)+');sys.path.append(os.getcwd())# '+user_message
 
                                 #The next two lines are duplicated code from the below 'CD' section!
@@ -17049,6 +17100,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 or user_message.startswith("CDU ")
                                 or user_message.startswith("CDH ")
                                 or user_message == "CDP"
+                                or not is_valid_python_syntax(user_message) and folder_exists(user_message)
                             )
                             or user_message == "CDB"
                             or user_message == "CDU"
@@ -17056,6 +17108,10 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                             or user_message in "CDZ"
                             or user_message == "CDQ"
                         ):
+                            if not is_valid_python_syntax(user_message) and folder_exists(user_message):
+                                #Pasting a folder path and entering CD's to it
+                                user_message = "CD "+user_message
+
                             if user_message.startswith('CD '):
                                 #Do fuzzy searching
                                 old_cd_path = user_message[len('CD '):]
@@ -31401,8 +31457,10 @@ def _clear_jupyter_notebook_outputs(path:str=None, auto_yes=False):
 
     if auto_yes or input_yes_no('Are you sure you want to clear the outputs of '+path+'?'):
         pip_import('jupyter')
+        pip_import('nbstripout')
         escaped_path = '"'+path+'"'
         command=sys.executable+' -m jupyter nbconvert --ClearOutputPreprocessor.enabled=True --clear-output '+escaped_path
+        command+='\n'+sys.executable+' -m nbstripout '+escaped_path
         original_file_size=get_file_size(path,human_readable=True)
         shell_command(command)
         new_file_size=get_file_size(path,human_readable=True)
