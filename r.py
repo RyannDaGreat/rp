@@ -13412,23 +13412,30 @@ def _get_env_info():
 
 def _view_image_via_textual_imageview(image):
     #Views image in a terminal
-    assert isinstance(image,str) or is_image(image)
+    assert isinstance(image, str) or is_image(image)
     
-    pip_import('textual_imageview','textual-imageview')
+    pip_import('textual_imageview', 'textual-imageview')
     import textual_imageview.app
     
-    if isinstance(image,str):
-        app = textual_imageview.app.ImageViewerApp(image)
-        app.run()
+    if isinstance(image, str):
+        original_colorterm = os.getenv('COLORTERM')
+        try:
+            os.environ['COLORTERM'] = 'truecolor'
+            app = textual_imageview.app.ImageViewerApp(image)
+            app.run()
+        finally:
+            if original_colorterm is None:
+                del os.environ['COLORTERM']
+            else:
+                os.environ['COLORTERM'] = original_colorterm
     else:
         assert is_image(image)
         try:
-            path=temporary_file_path('png')
+            path = temporary_file_path('png')
             save_image(image, path)
             _view_image_via_textual_imageview(path)
         finally:
             delete_file(path)
-
 def _ISM(ans):
     #Input Select Multi
     #TODO make it for things other than lists of strings, like lists of ints. To do this make it into a line-numbered string dict -> values then use those values to look up keys ->  get answer. Better yet create a fzf wrapper for this task - to select non-string things!
@@ -14767,6 +14774,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         ZSH $os.system("zsh");
         BOP TOP
 
+        bashtop $r._run_bashtop() #Good where BOP doesn't work and MON is too basic
+
         BA   $os.system("bash");
         S   $os.system("sh");
         Z   $os.system("zsh");
@@ -14956,6 +14965,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         MDA $r._view_markdown_in_terminal(ans) # Displays markdown
 
         PIF PIP freeze
+
+        HOSTLAB !python -m jupyter lab --ip 0.0.0.0 --port 5678 --NotebookApp.password='' --NotebookApp.token='' --allow-root
 
         '''.replace('$',rp_import)
         # SA string_to_text_file(input("Filename:"),str(ans))#SaveAnsToFile
@@ -15810,7 +15821,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                     # endregion
                     # region  Short-hand rinsp
                     elif user_message=='?v' or user_message=='VIMA':
-                        if not is_image(get_ans()):
+                        if not is_image(get_ans()) and not is_image_file(get_ans()):
                             if user_message=='VIMA':
                                 if _get_pterm_verbose(): fansi_print("VIMA (VIM ans) is an alias for ?v","blue",'bold',)
                             if _get_pterm_verbose(): fansi_print("?v --> Running rp.vim(ans)...","blue",'bold',new_line=False)
@@ -27516,6 +27527,26 @@ def _install_filebrowser():
 
     os.system(command)
 
+def _run_bashtop():
+    if not "bashtop" in get_system_commands():
+        # Auto-install bashtop
+        fansi_print(
+            'rp: "bashtop" command not found - trying to install it!', "yellow", "bold"
+        )
+        if currently_running_linux():
+            os.system("""yes | sudo add-apt-repository ppa:bashtop-monitor/bashtop
+                         sudo apt update
+                         sudo apt install bashtop""")
+        elif currently_running_mac():
+            assert False, 'TODO - install bashtop on Mac. But for real, just use bpytop - its better anyway. Use BOP'
+        elif currently_running_windows():
+            assert False, 'TODO'
+        else:
+            assert False, 'Wat?'
+
+    #Run it!
+    os.system('bashtop')
+
 
 def _configure_filebrowser():
     #https://filebrowser.org/configuration/authentication-method
@@ -31245,6 +31276,207 @@ def unwarped_perspective_image(image, from_points, to_points=None, height:int=No
     # use cv2.warpPerspective() to warp your image to a top-down view
     warped = cv2.warpPerspective(image, M, (width, height), flags=cv2.INTER_LINEAR)
     return warped
+
+
+def _pip_import_pyflow():
+    """
+    This function attempts to import the 'pyflow' module. If the import fails, 
+    it will clone the 'pyflow' repository from GitHub, build the module, and then import it.
+
+    Returns:
+        module: The 'pyflow' module if successfully imported.
+    """
+    try:
+        import pyflow
+        return pyflow
+    except ImportError:
+        this_folder = rp.get_parent_folder(__file__)
+        downloads_folder = rp.path_join(this_folder, "downloads")
+        rp.make_directory(downloads_folder)
+        rp.pip_import("Cython")
+        with rp.SetCurrentDirectoryTemporarily(downloads_folder):
+            pyflow_path = 'pyflow.git'
+            
+            if not rp.folder_exists(pyflow_path):
+                pyflow_path = rp.git_clone("https://github.com/pathak22/pyflow.git")
+                
+            with rp.SetCurrentDirectoryTemporarily(pyflow_path):
+                sys.path.append(rp.get_absolute_path('.'))
+                
+                try:
+                    import pyflow
+                    return pyflow
+                except ImportError:
+                    os.system(sys.executable + " setup.py build_ext -i")
+
+        import pyflow
+        return pyflow
+
+
+def get_optical_flow_via_pyflow(image_from, image_to):
+    """
+    Returns a [2, H, W] numpy array for dx and dy respectively, measured in pixels
+
+    Uses pyflow: https://github.com/pathak22/pyflow
+    Automatically installs it if it's not available
+
+    EXAMPLE:
+        image_0 = 'https://github.com/pathak22/pyflow/blob/master/examples/car2.jpg?raw=true'
+        image_1 = 'https://github.com/pathak22/pyflow/blob/master/examples/car1.jpg?raw=true'
+        image_0, image_1 = rp.load_images(image_0, image_1, use_cache=True)
+        image_0, image_1 = rp.as_float_images([image_0, image_1])
+        image_0, image_1 = rp.as_rgba_images([image_0, image_1])
+        
+        dx, dy = get_optical_flow_via_pyflow(image_0, image_1)
+        rp.display_image(optical_flow_to_image(dx, dy))
+        
+        image_1_pred = cv_remap(image_0, -dx, -dy, relative=True)
+        image_1_pred = rp.with_alpha_checkerboard(image_1_pred)
+        
+        rp.display_image_slideshow([image_0, image_1_pred, image_1])
+    """
+    _pip_import_pyflow()
+    import pyflow
+
+    assert rp.is_image(image_from)
+    assert rp.is_image(image_to  )
+    assert rp.get_image_dimensions(image_from) == rp.get_image_dimensions(image_to) 
+
+    #Can handle float and byte RGBA RGB and grayscale, but not binary images
+    if is_binary_image(image_from): image_from = as_rgb_image(image_from)
+    if is_binary_image(image_to  ): image_from = as_rgb_image(image_to  )
+
+    # 0 or default:RGB, 1:GRAY (but pass gray image with shape (h,w,1))
+    colType = 1 if rp.is_grayscale_image(image_from) and rp.is_grayscale_image(image_to) else 0
+    image_from = rp.as_rgb_image(rp.as_float_image(image_from))
+    image_to   = rp.as_rgb_image(rp.as_float_image(image_to  ))
+    if colType == 1:
+        image_from = image_from[:,:,:1]
+        image_to   = image_to  [:,:,:1]
+
+    # pyflow can complain about non-contiguous arrays
+    image_from = np.ascontiguousarray(image_from)
+    image_to   = np.ascontiguousarray(image_to  )
+        
+    # Flow Options: From their demo.py
+    # I don't know what these do yet, so I'll leave them as default
+    alpha = 0.012
+    ratio = 0.75
+    minWidth = 20
+    nOuterFPIterations = 7
+    nInnerFPIterations = 1
+    nSORIterations = 30
+
+    #This spams the console. Not sure how to best prevent that. There's no argument for silence.
+    #'warped' is just image_before warped into image_after using the flow
+    dx, dy, warped = pyflow.coarse2fine_flow(
+        image_from,
+        image_to,
+        alpha,
+        ratio,
+        minWidth,
+        nOuterFPIterations,
+        nInnerFPIterations,
+        nSORIterations,
+        colType,
+    )
+
+    flow = np.stack([dx, dy], axis=0)
+
+    return flow
+
+def optical_flow_to_image(dx, dy, *, mode='saturation'):
+    """
+    Visualize optical flow as an RGB image - and return the image.
+    
+    The hue represents the angle of the flow, while magnitude is represented by either brightness or saturation.
+    It has the same general idea as torchvision.utils.flow_to_image - when mode = 'saturation'
+    
+    Args:
+       dx (numpy.ndarray matrix): The x-component of the optical flow.
+       dy (numpy.ndarray matrix): The y-component of the optical flow.
+       mode (str, optional): The visualization mode. Can be:
+           - 'saturation': The saturation represents the magnitude. Default.
+           - 'brightness': The brightness represents the magnitude.
+    
+    Returns:
+       numpy.ndarray: The RGB image visualizing the optical flow.
+    
+    Raises:
+       AssertionError: If dx and dy are not float matrices with the same shape, or if the mode is invalid.
+
+    EXAMPLE:
+        (see get_optical_flow_via_pyflow's docstring for an example)
+    """
+    assert rp.is_a_matrix(dx), "dx must be a matrix"
+    assert rp.is_a_matrix(dy), "dy must be a matrix"
+    assert rp.is_float_image(dx), "dx must be a float image"
+    assert rp.is_float_image(dy), "dy must be a float image"
+    assert dx.shape == dy.shape, "dx and dy must have the same shape"
+    assert mode in ['saturation', 'brightness'], "mode must be either 'saturation' or 'brightness'"
+    
+    rp.pip_import('cv2')
+    import cv2
+    
+    hsv = np.zeros((*dx.shape, 3), dtype=np.uint8)
+    hsv[:] = 255
+    mag, ang = cv2.cartToPolar(dx, dy)
+    hsv[..., 0] = ang * 180 / np.pi / 2
+    hsv[..., {'brightness': 2, 'saturation': 1}[mode]] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
+       
+    rgb = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    
+    return rgb
+
+
+def cv_remap(image, x, y, *, relative=False, interp = 'bilinear'):
+    """
+    If image is RGBA, then out-of-bounds regions will have 0-alpha
+    This is like a UV mapping - where x and y's values are mapped to image
+    If relative=True, it will warp image - treating x and y like dx and dy
+        Note: Because this is a mapping, the direction of movement will be opposite dx and dy - so you may need to negate them!
+
+    EXAMPLE:
+        (see get_optical_flow_via_pyflow's docstring for an example)
+    
+    """
+    assert rp.is_a_matrix(x), "x must be a matrix"
+    assert rp.is_a_matrix(y), "y must be a matrix"
+    assert rp.get_image_dimensions(x) == rp.get_image_dimensions(y) 
+
+    #Can handle float and byte RGBA RGB and grayscale, but not binary images
+    if is_binary_image(image): image = as_rgb_image(image)
+    
+    out_height, out_width = rp.get_image_dimensions(x    )
+    in_height , in_width  = rp.get_image_dimensions(image)
+
+    x = x.astype(np.float32)
+    y = y.astype(np.float32)
+
+    if relative:
+        #Treat x and y as deltas - like with optical flow
+        assert in_height == out_height
+        assert in_width  == out_width 
+        in_x, in_y = np.meshgrid(np.arange(in_width), np.arange(in_height))
+        x += in_x
+        y += in_y
+
+    rp.pip_import('cv2')
+    import cv2
+
+    #Choose an interpolation method
+    interp_methods = {
+        "bilinear": cv2.INTER_LINEAR,
+        "bicubic": cv2.INTER_CUBIC,
+        "nearest": cv2.INTER_NEAREST,
+        #Can't use "area" interp
+    }
+    assert interp in interp_methods, 'rp.cv_remap: interp=%s is not valid. Please choose from %s' % (interp, list(interp_methods))
+    interp_method = interp_methods[interp]
+    
+    out = cv2.remap(image, x, y, interp_method)
+
+    return out
 
 @memoized
 def _get_apriltag_detector(**kwargs):
