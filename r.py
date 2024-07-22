@@ -2354,11 +2354,16 @@ def _is_instance_of_module_class(x, module_name: str, class_name: str) -> bool:
         return False
 
 
-def _is_numpy_array(x):
+def is_numpy_array(x):
     return _is_instance_of_module_class(x, 'numpy', 'ndarray')
+_is_numpy_array = is_numpy_array #Backwards compatibility with code that expected _is_numpy_array
 
 def is_torch_tensor(x):
     return _is_instance_of_module_class(x, 'torch', 'Tensor')
+
+def _is_torch_image(image):
+    "Returns True if image could be a CHW torch image"
+    return is_torch_tensor(image) and image.ndim==3
 
 def _is_pandas_dataframe(x) -> bool:
     return _is_instance_of_module_class(x, 'pandas', 'DataFrame')
@@ -2876,8 +2881,7 @@ def load_files(
     show_progress=False,
     strict=True,
     lazy=False,
-    buffer_limit=None,
-    include_paths=False #Might be removed...
+    buffer_limit=None
 ):
     """
     Load a list of files with optional multithreading.
@@ -2887,11 +2891,9 @@ def load_files(
     - num_threads (int, optional): Number of threads for concurrent loading. Defaults to 32 if set to None. If set to 0, runs on the main thread.
     - show_progress (True, False, 'eta' or 'tqdm'): Whether to show a progress bar. If set to 'tqdm', uses tqdm library. If set to 'eta', uses rp.eta. Defaults to False.
     - strict (True, False, or None): Behavior if a file fails to load. True throws an error, False skips the file, None yields None.
-    - include_paths (bool): If True, yields (path, content) tuples instead of just the contents of each file.
 
     Yields:
     - any or None: The content of each file, or None if the file fails to load and strict is set to None.
-                   Or, if include_paths is True, will return tuples of (path, content) instead.
 
     This function is a generator that yields the loaded files one by one.
 
@@ -2901,7 +2903,6 @@ def load_files(
     TODO: The eta can't display a specific message like "loading images" etc - it's locked to load_files right now. How can I *elegantly* allow this naming but also allow it to use tqdm? 
     TODO: Make convert_image_files take advantage of this function
     """
-    assert not include_paths, "I would like to remove this argument for simplicity - this could just be worked into load_file. Remove this assertion if you decide you actually think this is useful..."
 
     files = _load_files(
         load_file,
@@ -2910,7 +2911,6 @@ def load_files(
         show_progress,
         strict,
         buffer_limit,
-        include_paths,
     )
 
     if lazy:
@@ -2925,7 +2925,6 @@ def _load_files(
     show_progress=False,
     strict=True,
     buffer_limit=None,
-    include_paths=False,
 ):
     "Helper function for load_files"
 
@@ -3001,9 +3000,7 @@ def _load_files(
         
         progress_func("update")
         
-        if content is SKIP or not include_paths:
-            return content
-        return path, content
+        return content
     
     def skip_filter(iterable):
         return filter(lambda x: x is not SKIP, iterable)
@@ -3585,6 +3582,8 @@ def encode_image_to_base64(image,filetype=None,quality=100):
 
     return base64.b64encode(byte_data).decode("utf-8")
 
+def encode_images_to_base64(images,filetype=None,quality=100):
+    return [encode_image_to_base64(image, filetype, quality) for image in images]
 
 
 def decode_image_from_bytes(encoded_image:bytes):
@@ -9588,15 +9587,26 @@ sync_sort=sync_sorted#For backwards compatiability
 #         # Sorts main_list and reorders all *lists_in_descending_sorting_priority the same way, in sync with main_list
 #         return tuple(zip(*sorted(zip(*lists_in_descending_sorting_priority),key=lambda x:tuple(map(key,x)))))
 
-def starts_with_any(string,*prefixes):
-    prefixes=detuple(prefixes)
-    if isinstance(prefixes,str): prefixes=[prefixes]
-    return any(string.startswith(x) for x in prefixes)
+def _string_with_any(string, substrings, match_func, return_match=False):
+    "Helper function that checks if string matches any of the substrings using the given match_func."
+    substrings = detuple(substrings)
+    if isinstance(substrings, str):
+        substrings = [substrings]
+    for substring in substrings:
+        if match_func(string, substring):
+            if return_match:
+                return substring
+            else:
+                return True
+    return None if return_match else False
 
-def ends_with_any(string,*suffixes):
-    suffixes=detuple(suffixes)
-    if isinstance(suffixes,str): suffixes=[suffixes]
-    return any(string.endswith(x) for x in suffixes)
+def starts_with_any(string, *prefixes, return_match=False):
+    "Returns True if begins with any of the prefixes. If return_match, it returns that prefix if it exists - else None."
+    return _string_with_any(string, prefixes, str.startswith, return_match)
+
+def ends_with_any(string, *suffixes, return_match=False):
+    "Returns True if ends with any of the suffixes. If return_match, it returns that suffix if it exists - else None."
+    return _string_with_any(string, suffixes, str.endswith, return_match)
 
     
 def _contains_func_y(y):
@@ -9612,6 +9622,8 @@ def _contains_func_y(y):
 def contains_any(x,*y):
     """
     Returns True if x contains any of y.
+
+    TODO: Add a return_match=False optional arg, like in starts_with_any and ends_with_any
 
     EXAMPLES:
         assert contains_any('texture','tex') == True
@@ -9654,6 +9666,8 @@ def contains_all(x,*y):
 def in_any(x,*y):
     """
     Returns True if x is in any of y.
+
+    TODO: Add a return_match=False optional arg, like in starts_with_any and ends_with_any
 
     EXAMPLES:
         assert in_any('tex','texture', 'textbook') == True
@@ -14657,6 +14671,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RA     RUNA
         EA     RUNA
 
+        BAA  $os.system('bash '+str(ans))
+        ZSHA $os.system('bash '+str(ans))
+
         #PYA and PUA are similar to EA except they run in separate process
         PYA $os.system($sys.executable+' '+$shlex.quote(ans));
         PUA $os.system($sys.executable+' -m pudb '+$shlex.quote(ans));
@@ -14854,6 +14871,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         LNAH $os.symlink(ans,$get_file_name(ans));ans=$get_file_name(ans)#Created_Symlink
         LN   $os.symlink(ans,$get_file_name(ans));ans=$get_file_name(ans)#Created_Symlink
+        HL   $make_hardlink(ans,$get_file_name(ans))
 
         TMDA $os.system('tmux list-sessions -F "#{session_name}" | xargs -I % tmux detach -s %') #Detach all users from all tmux sessions
     
@@ -14928,7 +14946,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         RCLAH $os.system($printed("rclone copy --checksum --progress --transfers 128 --metadata %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself!
 
         DR $r._display_columns(dir(),'dir():')
-        DUSHA $human_readable_file_size(sum($get_file_size(x,False)for x in $enlist(ans)))
+        DUSHA $fansi_print($human_readable_file_size(sum($get_file_size(x,False)for x in $enlist(ans))),'cyan','bold')
 
         NM __name__="__main__"
 
@@ -18011,8 +18029,10 @@ def _rich_print(x):
     print(string)
 
 def pretty_print(x,with_lines=False):
-    #Used to print out highly-nested dicts and lists etc, which are hard to read when it's all in one line.
-    #Particularly useful for JSON objets from web requests.
+    """
+    Used to print out highly-nested dicts and lists etc, which are hard to read when it's all in one line.
+    Particularly useful for JSON objets from web requests.
+    """
     if not with_lines and sys.version_info>(3,6):
         try:
             _rich_print(x)
@@ -18084,8 +18104,10 @@ def string_transpose(x,fill=' '):
     return '\n'.join(''.join(i) for i in zip(*l))
 
 def print_to_string(f,*args,**kwargs):
-    #args and kwargs are passed to f
-    #Example: assert print_to_string(lambda:print("Hello World"))=="Hello World"
+    """
+    args and kwargs are passed to f
+    Example: assert print_to_string(lambda:print("Hello World"))=="Hello World"
+    """
     assert callable(f)
     out=''
     def patch(x):
@@ -18259,11 +18281,13 @@ def circular_cross_correlate(a,b):
     return circular_convolve(reverse(a).conj(),b)#This is according to what I think the wikipedia defintion is...
 circ_cross_corr=circular_cross_correlate
 def circular_auto_correlate(a):
-    #TODO extend to multiple dimenations etc.
-    #According to wikipedia, auto-correlation is defined as a vector's cross-correlation with itself.
-    #The first element of the output is dot(a,a), AKA
-    #   circular_auto_correlate(a)[0]  ====  np.dot(a,a)
-    #This function returns a shift-invariant descriptor of vector 'a', with half the degrees of freedom of a
+    """
+    TODO extend to multiple dimenations etc.
+    According to wikipedia, auto-correlation is defined as a vector's cross-correlation with itself.
+    The first element of the output is dot(a,a), AKA
+      circular_auto_correlate(a)[0]  ====  np.dot(a,a)
+    This function returns a shift-invariant descriptor of vector 'a', with half the degrees of freedom of a
+    """
     return circular_cross_correlate(a,a)
 circ_auto_corr=circular_auto_correlate
 def circular_gaussian_blur(vector,sigma=1):
@@ -18944,9 +18968,11 @@ def powerset(iterable,reverse=False):
     return chain.from_iterable(combinations(s, r) for r in order)
 
 def print_fix(ans):
-    #Meant to use this command in the pseudoterminal: `print_fix\py
-    #Turn all python2 print statements (without the parenthesis) into python3-style statements
-    #Example: print_fix('if True:\n\tprint 5')    ====    'if True:\n\tprint(5)'
+    """
+    Meant to use this command in the pseudoterminal: `print_fix\py
+    Turn all python2 print statements (without the parenthesis) into python3-style statements
+    Example: print_fix('if True:\n\tprint 5')    ====    'if True:\n\tprint(5)'
+    """
     ans=ans.splitlines()
     for i,e in enumerate(ans):
         if e.lstrip().startswith('print '):
@@ -18964,8 +18990,10 @@ def remove_all_whitespace(string):
 
 #region OpenCV Helpers
 def cv_bgr_rgb_swap(image_or_video):
-    #Works for both images AND video
-    #Opencv has an annoying feature: it uses BGR instead of RGB. Heckin' hipsters. This swaps RGB to BGR, vice-versa.
+    """
+    Works for both images AND video
+    Opencv has an annoying feature: it uses BGR instead of RGB. Heckin' hipsters. This swaps RGB to BGR, vice-versa.
+    """
     image_or_video=np.asarray(image_or_video)
     image_or_video=image_or_video.copy()
     temp=image_or_video.copy()
@@ -19577,9 +19605,11 @@ def cosine_similarity(x,y):
 #     return sorted(contours,key=lambda candidate:cv_contour_match(contour,candidate,**kwargs))[:n or len(contours)]
 
 def _cv_morphological_helper(image,diameter,cv_method,*,copy,circular,iterations):
-    #Used for erosion, dilation, and other functions.
-    #Please see the documentation if you'd like to know what a morpholocical filter is:
-    #https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_imgproc/py_morphological_ops/py_morphological_ops.html
+    """
+    Used for erosion, dilation, and other functions.
+    Please see the documentation if you'd like to know what a morpholocical filter is:
+    https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_imgproc/py_morphological_ops/py_morphological_ops.html
+    """
     image=as_byte_image(image)
     original_dtype=image.dtype
     # if image.dtype==bool:image=image.astype(np.uint8)
@@ -19601,8 +19631,10 @@ def cv_erode (image,diameter=2,*,copy=True,circular=False,iterations=1):
     cv2=pip_import('cv2')
     return _cv_morphological_helper(image,diameter,cv_method=cv2.erode ,copy=copy,circular=circular,iterations=iterations)
 def cv_dilate(image,diameter=2,*,copy=True,circular=False,iterations=1):
-    #Dilates image with a box kernel. Runs very quickly because it takes two orthoganal 1-d passes.
-    #TODO max_filter is now kinda redundant, and slower if you dont have opencv. What to do about that?
+    """
+    Dilates image with a box kernel. Runs very quickly because it takes two orthoganal 1-d passes.
+    TODO max_filter is now kinda redundant, and slower if you dont have opencv. What to do about that?
+    """
     cv2=pip_import('cv2')
     return _cv_morphological_helper(image,diameter,cv_method=cv2.dilate,copy=copy,circular=circular,iterations=iterations)
 
@@ -19802,30 +19834,32 @@ def cumulative_euclidean_distances(points,*,include_zero=False,loop=False):
     return np.cumsum(differential_euclidean_distances(points, include_zero=include_zero,loop=loop))
 
 def evenly_split_path(path,number_of_pieces=100,*,loop=False):
-    #Path is a list of points. Can be any number of dimensions.
-    #The euclidean distance from each point to the next point in the output of this function is NOT guarenteed to be even by iteself; however it is guarenteed to be equidistant ALONG the path given to this function
-    #Evenly splits the path into number_of_pieces pieces
-    #PRO TIP: This function works with points of any dimension! (Not just 2d, as shown in the examples below)
-    #Example:
-        #CODE: evenly_split_path([[0,0],[0,1],[1,1],[1,0]],7,loop=False)
-        #OUTPUT: [[0.  0. ]
-        #         [0.  0.5]
-        #         [0.  1. ]
-        #         [0.5 1. ]
-        #         [1.  1. ]
-        #         [1.  0.5]
-        #         [1.  0. ]]
-    #Example:
-        #CODE: evenly_split_path([[0,0],[0,1],[1,1],[1,0]],8,loop=True)
-        #OUTPUT: [[0.  0. ]
-        #         [0.  0.5]
-        #         [0.  1. ]
-        #         [0.5 1. ]
-        #         [1.  1. ]
-        #         [1.  0.5]
-        #         [1.  0. ]
-        #         [0.5 0. ]]
-    #Tip: Also, try graphing these examples with scatter_plot(ans)
+    """
+    Path is a list of points. Can be any number of dimensions.
+    The euclidean distance from each point to the next point in the output of this function is NOT guarenteed to be even by iteself; however it is guarenteed to be equidistant ALONG the path given to this function
+    Evenly splits the path into number_of_pieces pieces
+    PRO TIP: This function works with points of any dimension! (Not just 2d, as shown in the examples below)
+    Example:
+        CODE: evenly_split_path([[0,0],[0,1],[1,1],[1,0]],7,loop=False)
+        OUTPUT: [[0.  0. ]
+                [0.  0.5]
+                [0.  1. ]
+                [0.5 1. ]
+                [1.  1. ]
+                [1.  0.5]
+                [1.  0. ]]
+    Example:
+        CODE: evenly_split_path([[0,0],[0,1],[1,1],[1,0]],8,loop=True)
+        OUTPUT: [[0.  0. ]
+                [0.  0.5]
+                [0.  1. ]
+                [0.5 1. ]
+                [1.  1. ]
+                [1.  0.5]
+                [1.  0. ]
+                [0.5 0. ]]
+    Tip: Also, try graphing these examples with scatter_plot(ans)
+    """
     path=np.asarray(path)
     path=as_points_array(path)
     cum_dists=cumulative_euclidean_distances(path,include_zero=True,loop=loop)
@@ -19931,17 +19965,19 @@ def as_cv_contour(path):
 
 
 def contours_to_image(contours,*,scale=1,crop=True,**kwargs):
-    #Returns a grayscale binary image of dtype bool
-    #This function draws the given path onto a blank, black image scaled to fit the contour
-    #By increasing 'scale' from 1 to some larger number, you increase the resolution of the output
-    #TODO add flags for whether these contours are loops, for padding/margin etc, color/thickness of contours
-    #Give this function contours and it will turn it into a black and white image
-    #Hint: kwarg fill=True
-    #You don't need to specify the size; that will be auto-calculated for you (which is why this function is so convenient)
-    #EXAMPLE:
-    #   tris=[randints_complex(randint(3,10))for _ in range(3)]#Three Triangles
-    #   img=contours_to_image(tris)
-    #   display_image(img)
+    """
+    Returns a grayscale binary image of dtype bool
+    This function draws the given path onto a blank, black image scaled to fit the contour
+    By increasing 'scale' from 1 to some larger number, you increase the resolution of the output
+    TODO add flags for whether these contours are loops, for padding/margin etc, color/thickness of contours
+    Give this function contours and it will turn it into a black and white image
+    Hint: kwarg fill=True
+    You don't need to specify the size; that will be auto-calculated for you (which is why this function is so convenient)
+    EXAMPLE:
+      tris=[randints_complex(randint(3,10))for _ in range(3)]#Three Triangles
+      img=contours_to_image(tris)
+      display_image(img)
+    """
     contours=[contour for contour in contours if len(contour)>1]#Gives errors otherwise
     if not contours:
         return np.asarray([[]],bool)#Return an empty image if we have no contours. This is to avoid errors later on.
@@ -19959,17 +19995,19 @@ def contours_to_image(contours,*,scale=1,crop=True,**kwargs):
     return cv_draw_contours(image,contours,**kwargs)>0
 
 def contour_to_image(contour,**kwargs):
-    #The singular form of contours_to_image (just give it one contour instead of a list of contours)
+    """ The singular form of contours_to_image (just give it one contour instead of a list of contours) """
     return contours_to_image([contour],**kwargs)
 
 #endregion
 def squared_distance_matrix(from_points,to_points=None):
-    #if to_points is None, it defaults to from_points (returning a symmetric matrix)
-    #This function exists so you don't have to use distance_matrix then square it (which is both inefficient and can lead to floating point errors)
-    #from_points and to_points are like [(x0,y0,...), (x1,y1,...), ...] or [(x0,y0,z0,...), (x1,y1,z1,...), ...], or some numpy equivalent
-    #Returns a matrix M such that M[i,j] ==== euclidean_distance(from_points[i],to_points[j])**2
-    #Example: squared_distance_matrix([[0,0],[10,10],[-10,-10]], [[1,0],[0,1],[5,6],[4,5],[-1,-1],[-5,-6]]).shape   ====   (3,6)
-    #Example: squared_distance_matrix([[1,0],[0,1],[5,6],[4,5],[-1,-1],[-5,-6]], [[0,0],[10,10],[-10,-10]]).shape   ====   (6,3)
+    """
+    if to_points is None, it defaults to from_points (returning a symmetric matrix)
+    This function exists so you don't have to use distance_matrix then square it (which is both inefficient and can lead to floating point errors)
+    from_points and to_points are like [(x0,y0,...), (x1,y1,...), ...] or [(x0,y0,z0,...), (x1,y1,z1,...), ...], or some numpy equivalent
+    Returns a matrix M such that M[i,j] ==== euclidean_distance(from_points[i],to_points[j])**2
+    Example: squared_distance_matrix([[0,0],[10,10],[-10,-10]], [[1,0],[0,1],[5,6],[4,5],[-1,-1],[-5,-6]]).shape   ====   (3,6)
+    Example: squared_distance_matrix([[1,0],[0,1],[5,6],[4,5],[-1,-1],[-5,-6]], [[0,0],[10,10],[-10,-10]]).shape   ====   (6,3)
+    """
     if to_points is None:to_points=from_points
     if is_complex_vector(from_points) or is_cv_contour(from_points):from_points=as_points_array(from_points)
     if is_complex_vector(to_points  ) or is_cv_contour(to_points  ):to_points  =as_points_array(to_points  )
@@ -19978,66 +20016,72 @@ def squared_distance_matrix(from_points,to_points=None):
     return np.sum((to_points-from_points)**2,2)#Use numpy's broadcasting rules to make this function fast and concise
 
 def distance_matrix(from_points,to_points=None):
-    #if to_points is None, it defaults to from_points (returning a symmetric matrix)
-    #from_points and to_points are like [(x0,y0,...), (x1,y1,...), ...] or [(x0,y0,z0,...), (x1,y1,z1,...), ...], or some numpy equivalent
-    #Returns a matrix M such that M[i,j] ==== euclidean_distance(from_points[i],to_points[j])
-    #Example: distance_matrix([[0,0],[10,10],[-10,-10]], [[1,0],[0,1],[5,6],[4,5],[-1,-1],[-5,-6]]).shape   ====   (3,6)
-    #Example: distance_matrix([[1,0],[0,1],[5,6],[4,5],[-1,-1],[-5,-6]], [[0,0],[10,10],[-10,-10]]).shape   ====   (6,3)
+    """
+    if to_points is None, it defaults to from_points (returning a symmetric matrix)
+    from_points and to_points are like [(x0,y0,...), (x1,y1,...), ...] or [(x0,y0,z0,...), (x1,y1,z1,...), ...], or some numpy equivalent
+    Returns a matrix M such that M[i,j] ==== euclidean_distance(from_points[i],to_points[j])
+    Example: distance_matrix([[0,0],[10,10],[-10,-10]], [[1,0],[0,1],[5,6],[4,5],[-1,-1],[-5,-6]]).shape   ====   (3,6)
+    Example: distance_matrix([[1,0],[0,1],[5,6],[4,5],[-1,-1],[-5,-6]], [[0,0],[10,10],[-10,-10]]).shape   ====   (6,3)
+    """
     return squared_distance_matrix(from_points,to_points)**.5
 
 def closest_points(from_points,to_points=None,*,return_values=False):
-    #if to_points is None, it defaults to from_points (returning a symmetric matrix)
-    #This function was originally created to help implement the ICP algorithm (Iterative Closest Point algorithm), but has other uses as well
-    #from_points and to_points are like [(x0,y0,...), (x1,y1,...), ...] or [(x0,y0,z0,...), (x1,y1,z1,...), ...], or some numpy equivalent
-    #In the edge-case where two to_points are equidistant from some point in from_points, a single index will be selected arbitrarily by numpy.argmin
-    #Outputs a list of indices referring to elements in to_points, with the same length as from_points.
-    #NOTE there is an exception: if return_values is True, we return the actual points themselves instead of their indices in to_points
-    #Takes a set of points from_points, and a set of to_points, and returns [index of closest point in to_points to P for P in from_points]
-    #Example: closest_points([[0,0],[10,10],[-10,-10]], [[1,0],[0,1],[5,6],[4,5],[-1,-1],[-5,-6]])   ====   [0 2 5]
-    #Example: closest_points([[1,0],[0,1],[5,6],[4,5],[-1,-1],[-5,-6]], [[0,0],[10,10],[-10,-10]])   ====   [0 0 1 0 0 2]
-    #return_values is False by defualt because there could be duplicate values, but there can never be duplicate indices. Therefore, returning indices gives more information.
+    """
+    if to_points is None, it defaults to from_points (returning a symmetric matrix)
+    This function was originally created to help implement the ICP algorithm (Iterative Closest Point algorithm), but has other uses as well
+    from_points and to_points are like [(x0,y0,...), (x1,y1,...), ...] or [(x0,y0,z0,...), (x1,y1,z1,...), ...], or some numpy equivalent
+    In the edge-case where two to_points are equidistant from some point in from_points, a single index will be selected arbitrarily by numpy.argmin
+    Outputs a list of indices referring to elements in to_points, with the same length as from_points.
+    NOTE there is an exception: if return_values is True, we return the actual points themselves instead of their indices in to_points
+    Takes a set of points from_points, and a set of to_points, and returns [index of closest point in to_points to P for P in from_points]
+    Example: closest_points([[0,0],[10,10],[-10,-10]], [[1,0],[0,1],[5,6],[4,5],[-1,-1],[-5,-6]])   ====   [0 2 5]
+    Example: closest_points([[1,0],[0,1],[5,6],[4,5],[-1,-1],[-5,-6]], [[0,0],[10,10],[-10,-10]])   ====   [0 0 1 0 0 2]
+    return_values is False by defualt because there could be duplicate values, but there can never be duplicate indices. Therefore, returning indices gives more information.
+    """
     to_points  =np.asarray(to_points  )#If this or the next line cause errors, then it's up to the user of this function to figure out why.
     from_points=np.asarray(from_points)
     indices=np.argmin(distance_matrix(from_points,to_points),1)
     return to_points[indices] if return_values else indices
 
 def least_squares_euclidean_affine(from_points,to_points,*,include_correlation=False):
-    #TODO: Inspect this function! Is it right?!?!? It seems to follow
-    #This function is strictly limited to two dimensions.
-    #This function is like least_squares_affine, except skew is skipped. Only translation, rotation and scale are considered here.
-    #This function is meant as an alternative to OpenCV's estimateRigidTransform function (with fullAffine=False), which I find frustrating to use (it sometimes returns None, and can only take certain numerical data types). Unlike OpenCV, this does NOT use ransac.
-    #Returns an affine matrix with shape (2,3) that attempts to transform points in from_points to points to their respective point in to_points
-    #from_points and to_points are like [(x0,y0), (x1,y1), ...] or [[x0,y0], [x1,y1],...], or some numpy equivalent
-    #If include_extra is False, this function will just return the affine matrix. No fuss.
-    #However, if include_extra is True, this function will return a tuple in the form (affine,correlation)
-    #This function was written with the help of https://nghiaho.com/?p=2208 (or https://archive.is/UVROT or https://web.archive.org/web/20190611175717/https://nghiaho.com/?p=2208 if the link is broken)
-    #Test Example:
-    #  # CODE:
-    #  #  from_points=np.array([[0,0],[1,0],[0 ,1],[-1,0] ,[0,-1]])      #A plus-shape
-    #  #  to_points  =np.array([[0,0],[1.1,0.9],[-1.2,.9],[-.8,-1.1],[1,-1]])+[0,1]#An x-shape shifted up by 1 with a bit of noise
-    #  #  affine=least_squares_euclidean_affine(from_points,to_points)
-    #  #  ans=apply_affine(from_points,affine)
-    #  #  print('affine=\n',affine)
-    #  #  print('ans=\n',ans)
-    #  #  print('to_points=\n',to_points)
-    #  # OUTPUT:
-    #  #  affine=
-    #  #   [[ 0.95 -1.05  0.02]
-    #  #   [ 1.05   0.95  0.94]]
-    #  #  ans=
-    #  #   [[ 0.02  0.94]
-    #  #   [ 0.97   1.99]
-    #  #   [-1.03   1.89]
-    #  #   [-0.93  -0.11]
-    #  #   [ 1.07  -0.01]]
-    #  #  to_points=
-    #  #   [[ 0.   1. ]
-    #  #   [ 1.1   1.9]
-    #  #   [-1.2   1.9]
-    #  #   [-0.8  -0.1]
-    #  #   [ 1.    0. ]]
-    #  # ANALYSIS:
-    #  #   You can see that to_points is close to ans, which means it worked pretty well.
+    """
+    TODO: Inspect this function! Is it right?!?!? It seems to follow
+    This function is strictly limited to two dimensions.
+    This function is like least_squares_affine, except skew is skipped. Only translation, rotation and scale are considered here.
+    This function is meant as an alternative to OpenCV's estimateRigidTransform function (with fullAffine=False), which I find frustrating to use (it sometimes returns None, and can only take certain numerical data types). Unlike OpenCV, this does NOT use ransac.
+    Returns an affine matrix with shape (2,3) that attempts to transform points in from_points to points to their respective point in to_points
+    from_points and to_points are like [(x0,y0), (x1,y1), ...] or [[x0,y0], [x1,y1],...], or some numpy equivalent
+    If include_extra is False, this function will just return the affine matrix. No fuss.
+    However, if include_extra is True, this function will return a tuple in the form (affine,correlation)
+    This function was written with the help of https://nghiaho.com/?p=2208 (or https://archive.is/UVROT or https://web.archive.org/web/20190611175717/https://nghiaho.com/?p=2208 if the link is broken)
+    Test Example:
+     # CODE:
+     #  from_points=np.array([[0,0],[1,0],[0 ,1],[-1,0] ,[0,-1]])      #A plus-shape
+     #  to_points  =np.array([[0,0],[1.1,0.9],[-1.2,.9],[-.8,-1.1],[1,-1]])+[0,1]#An x-shape shifted up by 1 with a bit of noise
+     #  affine=least_squares_euclidean_affine(from_points,to_points)
+     #  ans=apply_affine(from_points,affine)
+     #  print('affine=\n',affine)
+     #  print('ans=\n',ans)
+     #  print('to_points=\n',to_points)
+     # OUTPUT:
+     #  affine=
+     #   [[ 0.95 -1.05  0.02]
+     #   [ 1.05   0.95  0.94]]
+     #  ans=
+     #   [[ 0.02  0.94]
+     #   [ 0.97   1.99]
+     #   [-1.03   1.89]
+     #   [-0.93  -0.11]
+     #   [ 1.07  -0.01]]
+     #  to_points=
+     #   [[ 0.   1. ]
+     #   [ 1.1   1.9]
+     #   [-1.2   1.9]
+     #   [-0.8  -0.1]
+     #   [ 1.    0. ]]
+     # ANALYSIS:
+     #   You can see that to_points is close to ans, which means it worked pretty well.
+    """
 
     #TODO Clean this up. Here's the newer implementation which runs faster than the old one:
     from_points=as_complex_vector(from_points)
@@ -20086,10 +20130,12 @@ def least_squares_euclidean_affine(from_points,to_points,*,include_correlation=F
         return result
 
 def least_squares_affine(from_points,to_points,*,include_extra=False):
-    #TODO Clean this function up and make it more like least_squares_euclidean_affine
-    #from_points and to_points are like [(x0,y0), (x1,y1), ...] or [[x0,y0], [x1,y1],...], or some numpy equivalent
-    #If include_extra is False, this function will just return the affine matrix. No fuss.
-    #However, if include_extra is True, this function will return a class (with static values) in this form: {'affine':‹the affine matrix (a 2x3 matrix)›, 'error':‹total error (a number)›, 'residuals':‹individual errors for every point (a list of numbers)›) (Access it with result.affine, result.error, result.residuals, etc.)
+    """
+    TODO Clean this function up and make it more like least_squares_euclidean_affine
+    from_points and to_points are like [(x0,y0), (x1,y1), ...] or [[x0,y0], [x1,y1],...], or some numpy equivalent
+    If include_extra is False, this function will just return the affine matrix. No fuss.
+    However, if include_extra is True, this function will return a class (with static values) in this form: {'affine':‹the affine matrix (a 2x3 matrix)›, 'error':‹total error (a number)›, 'residuals':‹individual errors for every point (a list of numbers)›) (Access it with result.affine, result.error, result.residuals, etc.)
+    """
     to_points  =np.asarray(to_points  )#If this or the next line cause errors, then it's up to the user of this function to figure out why.
     from_points=np.asarray(from_points)
     assert from_points.shape[1]==to_points.shape[1]==2,'All points must be two dimensional. from_points and to_points should both have shapes like (N,2), where N is any integer >=2. from_points.shape=='+str(from_points.shape)+' and to_points.shape=='+str(to_points.shape)
@@ -20112,32 +20158,36 @@ def least_squares_affine(from_points,to_points,*,include_extra=False):
     return result
 
 def translation_affine(vector):
-    # EXAMPLE:
-    #   CODE:
-    #     translation_affine([20,30])
-    #   RESULT:
-    #     [[ 1.  0. 20.]
-    #      [ 0.  1. 30.]]
+    """
+    EXAMPLE:
+      CODE:
+        translation_affine([20,30])
+      RESULT:
+        [[ 1.  0. 20.]
+         [ 0.  1. 30.]]
+    """
     return np.column_stack((np.eye(len(vector)),vector))
 
 def rotation_affine_2d(angle,pivot=[0,0],*,out_of=tau):
-    #EXAMPLE:
-    #  CODE:
-    #    rotation_affine_2d(90,out_of=360)
-    #  RESULT:
-    #    [[ 0. -1.  0.]
-    #     [ 1.  0.  0.]]
-    #EXAMPLE:
-    #  CODE:
-    #    print(apply_affine([[0 ,0]],rotation_affine_2d(180,pivot=[1,1],out_of=360)))
-    #    print(apply_affine([[-1,1]],rotation_affine_2d(180,pivot=[1,1],out_of=360)))
-    #    print(apply_affine([[-1,1]],rotation_affine_2d(180,pivot=[0,0],out_of=360)))
-    #  RESULT:
-    #    [[ 2.  2.]]
-    #    [[ 3.  1.]]
-    #    [[ 1. -1.]]
-    #  ANALYSIS:
-    #    Note how (in the second two lines) the change from pivot [1,1] to [0,0] changed the result
+    """
+    EXAMPLE:
+     CODE:
+       rotation_affine_2d(90,out_of=360)
+     RESULT:
+       [[ 0. -1.  0.]
+        [ 1.  0.  0.]]
+    EXAMPLE:
+     CODE:
+       print(apply_affine([[0 ,0]],rotation_affine_2d(180,pivot=[1,1],out_of=360)))
+       print(apply_affine([[-1,1]],rotation_affine_2d(180,pivot=[1,1],out_of=360)))
+       print(apply_affine([[-1,1]],rotation_affine_2d(180,pivot=[0,0],out_of=360)))
+     RESULT:
+       [[ 2.  2.]]
+       [[ 3.  1.]]
+       [[ 1. -1.]]
+     ANALYSIS:
+       Note how (in the second two lines) the change from pivot [1,1] to [0,0] changed the result
+    """
     pivot   =np.asarray(pivot)
     shift   =translation_affine(-pivot)                                   #Shift pivot to origin
     rotation=np.column_stack((rotation_matrix(angle,out_of=out_of),[0,0]))#Rotate about the origin
@@ -20145,60 +20195,66 @@ def rotation_affine_2d(angle,pivot=[0,0],*,out_of=tau):
     return combined_affine(shift,rotation,unshift)
 
 def inverse_affine(affine):
-    #QUICK AND DIRTY EXAMPLE:
-        #  >>> A
-        # ans = [[11. 62. 90.]
-        #  [29.  9. 98.]]
-        #  >>> apply_affine([[2,4],[5,6],[7,8]],A)
-        # ans = [[360. 192.]
-        #  [517. 297.]
-        #  [663. 373.]]
-        #  >>> apply_affine(ans,affine_inverse(A))
-        # ans = [[2. 4.]
-        #  [5. 6.]
-        #  [7. 8.]]
+    """
+    QUICK AND DIRTY EXAMPLE:
+         >>> A
+        ans = [[11. 62. 90.]
+         [29.  9. 98.]]
+         >>> apply_affine([[2,4],[5,6],[7,8]],A)
+        ans = [[360. 192.]
+         [517. 297.]
+         [663. 373.]]
+         >>> apply_affine(ans,affine_inverse(A))
+        ans = [[2. 4.]
+         [5. 6.]
+         [7. 8.]]
+    """
     affine=append_zeros_row(affine)
     affine[-1][-1]=1
     return np.linalg.inv(affine)[:2]
 
 def identity_affine(ndim=2):
-    # EXAMPLE:
-    #   CODE:
-    #     identity_affine(2)
-    #   RESULT:
-    #     [[1. 0. 0.]
-    #      [0. 1. 0.]]
-    # EXAMPLE:
-    #   CODE:
-    #     identity_affine(3)
-    #   RESULT:
-    #     [[1. 0. 0. 0.]
-    #      [0. 1. 0. 0.]
-    #      [0. 0. 1. 0.]]
+    """
+    EXAMPLE:
+      CODE:
+        identity_affine(2)
+      RESULT:
+        [[1. 0. 0.]
+         [0. 1. 0.]]
+    EXAMPLE:
+      CODE:
+        identity_affine(3)
+      RESULT:
+        [[1. 0. 0. 0.]
+         [0. 1. 0. 0.]
+         [0. 0. 1. 0.]]
+    """
     return append_zeros_column(np.eye(ndim))
 
 def combined_affine(*affines):
-    #Return the affine matrix needed to apply all matrices in 'affines' in the order they were given
-    #TODO: Add more input assertions, such as all affines must have same shape, etc
-    #apply_affine(points,combined_affine(affine_1,affine_2))  is the same as  apply_affine(apply_affine(points,affine_1),affine_2)
-    #PROPERTIES:
-    #  Associative:  C(a,C(b,c)) ==== C(C(a,b),c) ==== C(a,b,c)  where C is combined_affine
-    #EXAMPLE:
-    #  CODE:
-    #     af1=[[5, 3, 8], [8, 3, 6]]
-    #     af2=[[8, 3, 3], [1, 5, 3]]
-    #     p  =[[3, 6], [8, 4], [9,2]]
-    #     print(apply_affine(apply_affine(p,af1),af2))
-    #     print(apply_affine(p,combined_affine(af1,af2)))
-    #  OUTPUT:
-    #    [[475. 284.]
-    #     [729. 473.]
-    #     [727. 482.]]
-    #    [[475. 284.]
-    #     [729. 473.]
-    #     [727. 482.]]
-    #  ANALYSIS:
-    #    Note that the two outputs are exactly equivalent.
+    """
+    Return the affine matrix needed to apply all matrices in 'affines' in the order they were given
+    TODO: Add more input assertions, such as all affines must have same shape, etc
+    apply_affine(points,combined_affine(affine_1,affine_2))  is the same as  apply_affine(apply_affine(points,affine_1),affine_2)
+    PROPERTIES:
+     Associative:  C(a,C(b,c)) ==== C(C(a,b),c) ==== C(a,b,c)  where C is combined_affine
+    EXAMPLE:
+     CODE:
+        af1=[[5, 3, 8], [8, 3, 6]]
+        af2=[[8, 3, 3], [1, 5, 3]]
+        p  =[[3, 6], [8, 4], [9,2]]
+        print(apply_affine(apply_affine(p,af1),af2))
+        print(apply_affine(p,combined_affine(af1,af2)))
+     OUTPUT:
+       [[475. 284.]
+        [729. 473.]
+        [727. 482.]]
+       [[475. 284.]
+        [729. 473.]
+        [727. 482.]]
+     ANALYSIS:
+       Note that the two outputs are exactly equivalent.
+    """
     assert affines,'combined_affine must take in at least one affine or else it has no idea what matrix shape to return'
     affines=tuple(map(np.asarray,affines))#If this breaks, its up to the user of this function to fix any errors
     shape=affines[0].shape
@@ -20212,11 +20268,13 @@ def combined_affine(*affines):
     return out[:2]
 
 def apply_affine(points,affine):#,*,copy=True):
-    #This function applies a given affine transform (specified as a matrix) to a list of points and returns the list of resulting points
-    #This function generalizes to affines of all dimensions (not just 2d)
-    #'points' is like [(x0,y0), (x1,y1), ...] or [[x0,y0], [x1,y1],...], or some numpy equivalent
-    #affine is a 2x3 (for 2d) or 3x4 (for 3d) or 4x5 (for 4d) or (etc) affine-transform matrix.
-    #EXAMPLE: For examples, see the documentation for least_squares_euclidean_affine (it's a function in r.py, which can be obtained in a pypi package called 'rp')
+    """
+    This function applies a given affine transform (specified as a matrix) to a list of points and returns the list of resulting points
+    This function generalizes to affines of all dimensions (not just 2d)
+    'points' is like [(x0,y0), (x1,y1), ...] or [[x0,y0], [x1,y1],...], or some numpy equivalent
+    affine is a 2x3 (for 2d) or 3x4 (for 3d) or 4x5 (for 4d) or (etc) affine-transform matrix.
+    EXAMPLE: For examples, see the documentation for least_squares_euclidean_affine (it's a function in r.py, which can be obtained in a pypi package called 'rp')
+    """
     affine=np.asarray(affine)#If this or the next line cause errors, then it's up to the user of this function to figure out why.
     points=np.asarray(points)
     assert len(points.shape)==2,'Points should be a matrix, but points.shape=='+str(points.shape)
@@ -20227,20 +20285,22 @@ def apply_affine(points,affine):#,*,copy=True):
     return (affine@append_ones_row(points.T)).T#The '@' character is a matrix multiplication operator in numpy
 
 def icp_least_squares_euclidean_affine(from_points,to_points,max_iter=5,*,include_extra=False):
-    #icp stands for "iterative closest point". It's an algorithm used to match point-clouds.
-    #The length of from_points and to_points does NOT have to match. However, they must both have at least two points each (otherwise it's impossible to determine a euclidean transform between them).
-    #In this function we're matching point clouds, but in specifically two dimensions, and allowing only translation, rotation and scale
-    #from_points and to_points are like [(x0,y0,...), (x1,y1,...), ...] or [(x0,y0,z0,...), (x1,y1,z1,...), ...], or some numpy equivalent
-    #Returns a 2x3 affine transform matrix
-    #TEST CODE:
-    #   a=random_element(contours).squeeze()
-    #   b=random_element(contours).squeeze()
-    #   scatter_plot([])
-    #   scatter_plot(b,clear=False)
-    #   scatter_plot(a,clear=False)
-    #   for _ in range(5):
-    #       result=icp_least_squares_euclidean_affine(a,b,include_extra=True,max_iter=_+1)
-    #       scatter_plot(result.points,clear=False)
+    """
+    icp stands for "iterative closest point". It's an algorithm used to match point-clouds.
+    The length of from_points and to_points does NOT have to match. However, they must both have at least two points each (otherwise it's impossible to determine a euclidean transform between them).
+    In this function we're matching point clouds, but in specifically two dimensions, and allowing only translation, rotation and scale
+    from_points and to_points are like [(x0,y0,...), (x1,y1,...), ...] or [(x0,y0,z0,...), (x1,y1,z1,...), ...], or some numpy equivalent
+    Returns a 2x3 affine transform matrix
+    TEST CODE:
+      a=random_element(contours).squeeze()
+      b=random_element(contours).squeeze()
+      scatter_plot([])
+      scatter_plot(b,clear=False)
+      scatter_plot(a,clear=False)
+      for _ in range(5):
+          result=icp_least_squares_euclidean_affine(a,b,include_extra=True,max_iter=_+1)
+          scatter_plot(result.points,clear=False)
+    """
     #END TEST CODE
     from_points=np.asarray(from_points)#If this or the next line cause errors, then it's up to the user of this function to figure out why.
     to_points=np.asarray(to_points)
@@ -20324,27 +20384,31 @@ def is_affine_matrix(affine):
     affine=np.asarray(affine)
     return affine.shape==(2,3)
 def euclidean_affine_to_complex_linear_coeffs(affine):
-    #mx+b in the complex plane corresponds to a euclidean transform
-    #This function takes a euclidean affine and returns it's complex m, b coeffs (from the y=mx+b convention)
-    #Example:
-    #Given affine matrix [[a  b  c]
-    #                     [d  e  f]]
-    #We can assert that a=e and d=-b because it's euclidean and rewrite it as
-    #                    [[a -d  c]
-    #                     [d  a  f]]
-    #Which corresponds to a transform represented by transforming complex number x:
-    #   x' = mx+b = (a+di)x+(c+fi)
-    #And therefore m=a+di and b=c+fi
+    """
+    mx+b in the complex plane corresponds to a euclidean transform
+    This function takes a euclidean affine and returns it's complex m, b coeffs (from the y=mx+b convention)
+    Example:
+    Given affine matrix [[a  b  c]
+                        [d  e  f]]
+    We can assert that a=e and d=-b because it's euclidean and rewrite it as
+                       [[a -d  c]
+                        [d  a  f]]
+    Which corresponds to a transform represented by transforming complex number x:
+      x' = mx+b = (a+di)x+(c+fi)
+    And therefore m=a+di and b=c+fi
+    """
     assert is_euclidean_affine_matrix(affine),'The given affine is not a euclidean transform. affine=='+repr(affine)
     m=affine[0][0]+affine[1][0]*1j #Corresponds to rotation and scale
     b=affine[0][2]+affine[1][2]*1j #Corresponds to tranlation
     return m,b
 def complex_linear_coeffs_to_euclidean_affine(m,b):
-    #This is the inverse of euclidean_affine_to_complex_linear_coeffs
-    #Where F=complex_linear_coeffs_to_euclidean_affine and G=euclidean_affine_to_complex_linear_coeffs,
-    #F(*G(X))  ==== X for all euclidean affines X and
-    #G(F(m,b)) ==== m,b for all complex numbers m,b
-    #Please see euclidean_affine_to_complex_linear_coeffs's documentation for an explanation of what this function does
+    """
+    This is the inverse of euclidean_affine_to_complex_linear_coeffs
+    Where F=complex_linear_coeffs_to_euclidean_affine and G=euclidean_affine_to_complex_linear_coeffs,
+    F(*G(X))  ==== X for all euclidean affines X and
+    G(F(m,b)) ==== m,b for all complex numbers m,b
+    Please see euclidean_affine_to_complex_linear_coeffs's documentation for an explanation of what this function does
+    """
     return np.asarray([[m.real,-m.imag,b.real],[m.imag,m.real,b.imag]])
 
 
@@ -20353,7 +20417,7 @@ def complex_linear_coeffs_to_euclidean_affine(m,b):
 #region Hashing functions
 
 class HandyHashable:
-    #A wrapper for any data that makes it hashable
+    """ A wrapper for any data that makes it hashable """
     def __init__(self,value):
         self.value=value
         self._hash=handy_hash(value)
@@ -20370,8 +20434,10 @@ class HandyHashable:
         return "HandyHashable("+repr(self.value)+")"
 
 class HandyDict(dict):
-    #A dict that can use more than just normal keys by using handyhash
-    #This class might get more methods over time.
+    """
+    A dict that can use more than just normal keys by using handyhash
+    This class might get more methods over time.
+    """
     def __init__(self,*args,**kwargs):
         return dict.__init__(self,*args,**kwargs)
     def __setitem__(self, key, value):
@@ -20388,11 +20454,13 @@ class HandyDict(dict):
 #TODO: HandySet
 
 def handy_hash(value,fallback=None):
-    #This function is really handy!
-    #Meant for hashing things that can't normally be hashed, like lists and dicts and numpy arrays. It pretends they're immutable.
-    #This function can hash all sorts of values. Anything mutable should be frozen, we're not just returning an ID.
-    #For example, lists are turned into tuples, and dicts like {"A":"B","C":"D"} are turned into ((""))
-    #If it can't hash something, it will just use fallback to hash it. By default, though, fallback is
+    """
+    This function is really handy!
+    Meant for hashing things that can't normally be hashed, like lists and dicts and numpy arrays. It pretends they're immutable.
+    This function can hash all sorts of values. Anything mutable should be frozen, we're not just returning an ID.
+    For example, lists are turned into tuples, and dicts like {"A":"B","C":"D"} are turned into ((""))
+    If it can't hash something, it will just use fallback to hash it. By default, though, fallback is
+    """
     def default_fallback(value):
         # fansi_print('Warning: fallback_hash was called on value where repr(value)=='+repr(value),'yellow') #This is annoying
         return id(value)
@@ -20455,7 +20523,9 @@ __hashers[slice]=_slice_hash
 
 
 def args_hash(function,*args,**kwargs):
-    #Return the hashed input that would be passed to 'function', using handy_hash. This function is used for memoizers. function must be provided for context so that arguments passed that can be passed as either kwargs or args both return the same hash.
+    """
+    Return the hashed input that would be passed to 'function', using handy_hash. This function is used for memoizers. function must be provided for context so that arguments passed that can be passed as either kwargs or args both return the same hash.
+    """
     assert callable(function),'Cant hash the inputs of function because function isnt callable and therefore doesnt receive arguments. repr(function)=='+repr(function)
     args=list(args)
     try:
@@ -22630,7 +22700,7 @@ def get_color_brightness(color):
 
 def get_image_dimensions(image):
     """ Return (height,width) of an image """
-    assert is_image(image)
+    assert is_image(image) or _is_torch_image(image)
     return get_image_height(image),get_image_width(image)
 
 #def get_images_dimensions(*images):
@@ -22652,12 +22722,14 @@ def get_image_dimensions(image):
 
 def get_image_height(image):
     #Return the image's height measured in pixels
+    if _is_torch_image(image): return image.shape[1] #Assumes a CHW image
     assert is_image(image)
     if is_pil_image(image):return image.height
     return image.shape[0]
 
 def get_image_width(image):
     #Return the image's width measured in pixels
+    if _is_torch_image(image): return image.shape[2] #Assumes a CHW image
     assert is_image(image)
     if is_pil_image(image):return image.width
     return image.shape[1]
@@ -24218,7 +24290,6 @@ def copy_paths(
         num_threads=num_threads,
         show_progress=show_progress,
         strict=strict,
-        include_paths=False,
         lazy=lazy,
     )
 
@@ -25983,7 +26054,9 @@ def get_module_path_from_name(module_name):
         raise
 
 def get_module_path(module):
-    #Returns the file path of a given python module
+    """
+    Returns the file path of a given python module
+    """
     if isinstance(module,str):
         return get_module_path_from_name(module)
 
@@ -26188,7 +26261,7 @@ def download_url(url, path=None, *, skip_existing=False):
         pip_import('requests')
         import requests
 
-        if path_exists(path) and skip_existing:
+        if skip_existing and path_exists(path):
             #Don't download anything - skip it if it already exists
             return path
 
@@ -26248,19 +26321,27 @@ def debug(level=0):
 
 from rp.experimental.debug_comment import debug_comment
 
+
+def _tensorify(x):
+    if not is_torch_tensor(x) and not is_numpy_array(x):
+        x = as_numpy_array(x)
+    return x
+
 def is_a_matrix(matrix):
-    matrix=as_numpy_array(matrix)
+    matrix = _tensorify(matrix)
     return len(matrix.shape)==2
 
 def is_a_square_matrix(matrix):
-    matrix=as_numpy_array(matrix)
+    matrix = _tensorify(matrix)
     return is_a_matrix(matrix) and matrix.shape[0]==matrix.shape[1]
 
 def square_matrix_size(matrix):
-    #Square matrices are of shape (N,N) where N is some integer
-    #This function returns N
-    #Lets you not have to choose between matrix.shape[0] and matrix.shape[1], which are both equivalent.
-    matrix=as_numpy_array(matrix)
+    """
+    Square matrices are of shape (N,N) where N is some integer
+    This function returns N
+    Lets you not have to choose between matrix.shape[0] and matrix.shape[1], which are both equivalent.
+    """
+    matrix = _tensorify(matrix)
     assert is_a_square_matrix(matrix)
     return matrix.shape[0]
 
@@ -27340,6 +27421,9 @@ def _set_ryan_tmux_conf():
     #https://unix.stackexchange.com/questions/21742/renumbering-windows-in-tmux
     set-option -g renumber-windows on
 
+    #When use :rename, let us use names as long as we want...
+    set -g status-left-length 10000
+
 
 #YANKING:
     # Let tmux copy to the system clipboard.
@@ -27557,7 +27641,7 @@ def _run_filebrowser(port=8080, root='.'):
     _configure_filebrowser()
 
     port=get_next_free_port(port)
-    command = 'filebrowser -r '+shlex.quote(root)+' -a 0.0.0.0 -p '+str(port)
+    command = 'filebrowser -r '+shlex.quote(root)+' -a 0.0.0.0 -p '+str(port)+ ' --noauth'
     print('r._run_filebrowser: Running '+repr(command))
 
     os.system(command)
@@ -29356,33 +29440,236 @@ def cv_resize_images(*images, size, interp='bilinear'):
 resize_images = cv_resize_images  # For now, they will be the same thing
     
 def torch_resize_image(image,size,interp='bilinear'):
-    assert False,'DANGER: Please test this.'
     """
+    The given image should be a CHW torch tensor.
+
     Valid sizes:
         - A single number: Will scale the entire image by that size
         - A tuple with integers in it: Will scale the image to those dimensions (height, width)
         - A tuple with None in it: A dimension with None will default to the image's dimension
+
+    EXAMPLE:
+        image = load_image('https://avatars.githubusercontent.com/u/17944835?v=4&size=64')
+        image=as_torch_image(image)
+        display_image(torch_resize_image(image,10,'area'))
     """
+    
+    assert rp.r._is_torch_image(image)
 
+    pip_import('einops')
     pip_import('torch')
-    import torch
 
-    interp_methods={'bilinear':'bilinear','bicubic':'bicubic','nearest':'nearest'}
+    import torch
+    import torch.nn.functional as F
+    from einops import rearrange
+
+    # Choose an interpolation method
+    interp_methods = {
+        "bilinear",
+        "bicubic",
+        "area",  # Good for downsampling, but when upsampling acts like nearest neigbors
+        "nearest",
+        "nearest-exact",  # https://github.com/pytorch/pytorch/pull/64501 - for integer size factors it's the same as 'nearest'
+    }
     assert interp in interp_methods, 'torch_resize_image: Interp must be one of the following: %s'%str(list(interp_methods))
-    interp_method=interp_methods[interp]
 
     if is_number(size):
         assert size>=0, 'Cannot resize an image by a negative factor'
-        height=round(image.shape[0]*size)
-        width =round(image.shape[1]*size)
+        height=np.ceil(get_image_height(image)*size)
+        width =np.ceil(get_image_width (image)*size)
     else:
         height,width=size
-        height=image.shape[0] if height is None else height
-        width =image.shape[1] if width  is None else width
+        height=get_image_height(image) if height is None else height
+        width =get_image_width (image) if width  is None else width
+    
+    height=int(height)
+    width =int(width )
+    
+    out  = rearrange(
+        F.interpolate(
+            rearrange(image, "c h w -> 1 c h w"),
+            size=(height, width),
+            mode=interp,
+        ),
+        "1 c h w -> c h w",
+    )
 
-    out = torch.nn.functional.interpolate(image.unsqueeze(0), size=(height,width), mode=interp_method)
+    assert out.shape==(image.shape[0], height, width)
 
-    return out.squeeze(0)
+    return out
+
+def torch_remap_image(image, x, y, *, relative=False, interp='bilinear', add_alpha_mask=False):
+    """
+    Remap an image tensor using the given x and y coordinate tensors.
+    Out-of-bounds regions will be given 0's
+    Analagous to rp.cv_remap_image, which is used for images as defined by rp.is_image()
+    
+    If the image is RGBA, then out-of-bounds regions will have 0-alpha.
+    This is like a UV mapping - where x and y's values are mapped to the image.
+    If relative=True, it will warp the image - treating x and y like dx and dy.
+        Note: Because this is a mapping, the direction of movement will be opposite dx and dy - so you may need to negate them!
+
+    If add_alpha_mask=True, an additional alpha channel full of 1's will be concatenated to the input image tensor.
+    This alpha channel will become 0 for out-of-bounds regions after remapping, serving as an indicator for invalid regions.
+
+    Args:
+        image (torch.Tensor): Input image tensor of shape [C, H, W], where C is the number of channels (e.g., 3 for RGB, 4 for RGBA),
+                              H is the height, and W is the width of the image.
+        x (torch.Tensor): X-coordinate tensor of shape [H_out, W_out] specifying the x-coordinates for remapping,
+                          where H_out is the output height and W_out is the output width.
+        y (torch.Tensor): Y-coordinate tensor of shape [H_out, W_out] specifying the y-coordinates for remapping.
+        relative (bool, optional): If True, treat x and y as deltas (dx and dy) and perform relative warping. Default is False.
+        interp (str, optional): Interpolation method. Can be one of 'bilinear', 'bicubic', or 'nearest'. Default is 'bilinear'.
+        add_alpha_mask (bool, optional): If True, an additional alpha channel full of 1's will be concatenated to the input image tensor. Default is False.
+
+    Returns:
+        torch.Tensor: Remapped image tensor.
+            - If add_alpha_mask=False, the output shape is [C, H_out, W_out], where:
+                - C is the number of channels in the input image.
+                - H_out is the output height.
+                - W_out is the output width.
+            - If add_alpha_mask=True, the output shape is [C+1, H_out, W_out], where:
+                - C+1 includes the additional alpha channel.
+                - H_out is the output height.
+                - W_out is the output width.
+
+    EXAMPLE:
+        >>> def calculate_wave_pattern(h, w, frame):
+        ...     # Create a grid of coordinates
+        ...     y, x = torch.meshgrid(torch.arange(h), torch.arange(w))
+        ...     
+        ...     # Calculate the distance from the center of the image
+        ...     center_x, center_y = w // 2, h // 2
+        ...     dist_from_center = torch.sqrt((x - center_x)**2 + (y - center_y)**2)
+        ...     
+        ...     # Calculate the angle from the center of the image
+        ...     angle_from_center = torch.atan2(y - center_y, x - center_x)
+        ...     
+        ...     # Calculate the wave pattern based on the distance and angle
+        ...     wave_freq = 0.05  # Frequency of the waves
+        ...     wave_amp = 10.0   # Amplitude of the waves
+        ...     wave_offset = frame * 0.05  # Offset for animation
+        ...     
+        ...     dx = wave_amp * torch.cos(dist_from_center * wave_freq + angle_from_center + wave_offset)
+        ...     dy = wave_amp * torch.sin(dist_from_center * wave_freq + angle_from_center + wave_offset)
+        ...     
+        ...     return dx, dy
+        ... 
+        >>> def demo_wiggly_dog():
+        ...     real_image = as_torch_image(
+        ...         rp.cv_resize_image(
+        ...             load_image(
+        ...                 "https://i.natgeofe.com/n/4f5aaece-3300-41a4-b2a8-ed2708a0a27c/domestic-dog_thumb_square.jpg"
+        ...             ),
+        ...             (512, 512),
+        ...         )
+        ...     )
+        ...     
+        ...     #real_image = torch.rand(real_image.shape)
+        ...     
+        ...     out_frames = []
+        ...     
+        ...     for frame in range(200):
+        ...         h, w = get_image_dimensions(real_image)
+        ...         
+        ...         dx, dy = calculate_wave_pattern(h, w, frame)
+        ...         
+        ...         warped_image = torch_remap_image(real_image, dx, dy, relative=True, interp='bilinear', add_alpha_mask=True)    
+        ...         warped_image = as_numpy_image(warped_image)
+        ...         warped_image = with_alpha_checkerboard(warped_image)
+        ...         out_frames.append(warped_image)
+        ...         
+        ...     display_video(out_frames)
+        ... 
+        >>> demo_wiggly_dog()
+
+    Note: For interp='nearest', will x and y be floored or rounded?
+        Answer: The values will be rounded! Shifting x relative by -.01 will not make any change!
+        EXAMPLE ANALYSIS:
+            >>> load_image('https://avatars.githubusercontent.com/u/17944835?v=4&size=64')
+            >>> image = as_torch_image(load_image('https://avatars.githubusercontent.com/u/17944835?v=4&size=64'))
+            >>> x, y = image[:2] * 0
+
+            >>> #Testing what happens when we shift with nearest interp...it rounds the positions!
+            >>> display_image(torch_remap_image(image, x    , y, relative=True                  )) # Does not change the image
+            >>> display_image(torch_remap_image(image, x+1  , y, relative=True                  )) # Shifts image to left by one pixel  
+            >>> display_image(torch_remap_image(image, x-1  , y, relative=True                  )) # Shifts image to right by one pixel
+            >>> display_image(torch_remap_image(image, x    , y, relative=True, interp='nearest')) # Same as with bilinear - does nothing
+            >>> display_image(torch_remap_image(image, x+.01, y, relative=True, interp='nearest')) # Does not change anything!
+            >>> display_image(torch_remap_image(image, x-.01, y, relative=True, interp='nearest')) # Does not change anything!
+            >>> display_image(torch_remap_image(image, x-.49, y, relative=True, interp='nearest')) # Does not change anything!  
+            >>> display_image(torch_remap_image(image, x-.5 , y, relative=True, interp='nearest')) # Changes stuff. Some pixels are shifted, some aren't
+            >>> display_image(torch_remap_image(image, x-.51, y, relative=True, interp='nearest')) # Just like x-1, shifts image to right by 1 pixel
+
+            >>> #Checking 'nearest' recursive stability - it passes!
+            >>> new_image=image
+            >>> for _ in range(10):
+            ...     display_image(new_image)
+            ...     new_image = torch_remap_image(new_image, x, y, relative=True, interp="nearest")
+            >>> assert (image==new_image).all()
+
+            >>> #Checking 'bilinear' recursive stability - it numerically  passes, but is not bitwise-perfect
+            >>> new_image=image
+            >>> for _ in range(10):
+            ...     display_image(new_image)
+            ...     new_image = torch_remap_image(new_image, x, y, relative=True, interp="bilinear")
+            >>> print((image==new_image).all()     ) #Printed: tensor(False)
+            >>> print((image-new_image).abs().max()) #Printed: tensor(8.3447e-06)
+    """
+
+    assert rp.r._is_torch_image(image), "image must be a torch tensor with shape [C, H, W]"
+    assert is_torch_tensor(x) and is_a_matrix(x), "x must be a torch tensor with shape [H_out, W_out]"
+    assert is_torch_tensor(y) and is_a_matrix(y), "y must be a torch tensor with shape [H_out, W_out]"
+    assert x.shape == y.shape, "x and y must have the same shape, but got x.shape={} and y.shape={}".format(x.shape, y.shape)
+    assert image.device==x.device==y.device, "all inputs must be on the same device"
+
+    pip_import('einops')
+    pip_import('torch')
+
+    import torch
+    import torch.nn.functional as F
+    from einops import rearrange
+
+    in_c, in_height, in_width = image.shape
+    out_height, out_width = x.shape
+
+    if add_alpha_mask:
+        alpha_mask = torch.ones_like(image[:1])
+        image = torch.cat([image, alpha_mask], dim=0)
+
+    if relative:
+        assert in_height == out_height, "For relative warping, input and output heights must match, but got in_height={} and out_height={}".format(in_height, out_height)
+        assert in_width  == out_width , "For relative warping, input and output widths must match, but got in_width={} and out_width={}".format(in_width, out_width)
+        in_y, in_x = torch.meshgrid(torch.arange(in_height), torch.arange(in_width))
+        x = x + rearrange(in_x, "h w -> 1 h w").to(image.device)
+        y = y + rearrange(in_y, "h w -> 1 h w").to(image.device)
+
+    # Normalize coordinates to [-1, 1] range - which F.grid_sample requires
+    x = (x / (in_width - 1)) * 2 - 1
+    y = (y / (in_height - 1)) * 2 - 1
+
+    # Stack x and y coordinates
+    grid = torch.stack([x, y], dim=-1)
+
+    # Choose an interpolation method
+    interp_methods = {
+        "bilinear": "bilinear",
+        "bicubic": "bicubic",
+        "nearest": "nearest",
+    }
+    assert interp in interp_methods, 'torch_remap_image: interp must be one of the following: {}'.format(list(interp_methods))
+    interp_mode = interp_methods[interp]
+
+    # Remap the image using grid_sample
+    out = F.grid_sample(rearrange(image, "c h w -> 1 c h w"), grid, mode=interp_mode, align_corners=True)
+    out = rearrange(out, "1 c h w -> c h w")
+
+    # Assert the shape of the output tensor
+    expected_c = in_c+1 if add_alpha_mask else in_c
+    assert out.shape == (expected_c, out_height, out_width), "Expected output shape: ({}, {}, {}), but got: {}".format(expected_c, out_height, out_width, out.shape)
+
+    return out
+
 
 def resize_images_to_hold(*images, height: int = None, width: int = None, interp='bilinear', allow_shrink=True):
     """ Plural of resize_image_to_hold """
@@ -31285,11 +31572,21 @@ def _pip_import_pyflow():
 
     Returns:
         module: The 'pyflow' module if successfully imported.
+
+    WARNING: This didn't work on my M1 Mac!
     """
+    
+
+
+
     try:
         import pyflow
         return pyflow
     except ImportError:
+
+        import platform
+        assert not currently_running_mac() and platform.processor()=='arm', 'pyflow doesnt compile on M1 Macs - I tried...'
+
         this_folder = rp.get_parent_folder(__file__)
         downloads_folder = rp.path_join(this_folder, "downloads")
         rp.make_directory(downloads_folder)
@@ -31330,7 +31627,7 @@ def get_optical_flow_via_pyflow(image_from, image_to):
         dx, dy = get_optical_flow_via_pyflow(image_0, image_1)
         rp.display_image(optical_flow_to_image(dx, dy))
         
-        image_1_pred = cv_remap(image_0, -dx, -dy, relative=True)
+        image_1_pred = cv_remap_image(image_0, -dx, -dy, relative=True)
         image_1_pred = rp.with_alpha_checkerboard(image_1_pred)
         
         rp.display_image_slideshow([image_0, image_1_pred, image_1])
@@ -31429,7 +31726,7 @@ def optical_flow_to_image(dx, dy, *, mode='saturation'):
     return rgb
 
 
-def cv_remap(image, x, y, *, relative=False, interp = 'bilinear'):
+def cv_remap_image(image, x, y, *, relative=False, interp = 'bilinear'):
     """
     If image is RGBA, then out-of-bounds regions will have 0-alpha
     This is like a UV mapping - where x and y's values are mapped to image
@@ -31471,7 +31768,7 @@ def cv_remap(image, x, y, *, relative=False, interp = 'bilinear'):
         "nearest": cv2.INTER_NEAREST,
         #Can't use "area" interp
     }
-    assert interp in interp_methods, 'rp.cv_remap: interp=%s is not valid. Please choose from %s' % (interp, list(interp_methods))
+    assert interp in interp_methods, 'rp.cv_remap_image: interp=%s is not valid. Please choose from %s' % (interp, list(interp_methods))
     interp_method = interp_methods[interp]
     
     out = cv2.remap(image, x, y, interp_method)
@@ -32054,7 +32351,7 @@ def get_git_date_modified(file_path):
 def _autoformat_python_code_via_black(code:str):
     pip_import('black')
     import black
-    return black.format_str(code,mode=black.Mode())
+    return black.format_str(code,mode=black.Mode(line_length=1000))
 
 
 
