@@ -18713,7 +18713,8 @@ known_pypi_module_package_names={
     'clinical_trials/api/xml2dict': 'clinical-trials',
     'colors': 'ansicolors',
     'compose': 'docker-compose',
-    'cv2': 'opencv-python',
+    # 'cv2': 'opencv-python',
+    'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? Idk!
     'cython': 'Cython',
     'deprecate': 'pyDeprecate',
     'diff_match_patch': 'diff-match-patch',
@@ -23574,16 +23575,23 @@ def get_video_file_duration(path,use_cache=True):
     _get_video_file_duration_cache[path]=out
     return out
 
-def load_video_stream(path):
-    """
-    Much faster than load_video, which loads all the frames into a numpy array. This means load_video has to iterate through all the frames before you can even use the first frame.
-    load_video_stream is a generator, meaning to get the next frame you use python's builtin 'next' function
-    Returns a generator that iterates through the frame images
-    EXAMPLE:
-        for frame in load_video_stream("/Users/Ryan/Desktop/media.io_Silicon Valley - Gavin - Animals Compilation copy.mp4"):display_image(frame)
-    EXAMPLE:
-        for frame in load_video_stream(download_youtube_video('https://www.youtube.com/watch?v=cAy4zULKFDU')):display_image(frame)  #Monty python clip
-    """
+_get_video_file_framerate_cache={}
+def get_video_file_framerate(path, use_cache=True):
+
+    path = get_absolute_path(path) #Important for caching
+    if use_cache and path in _get_video_file_framerate_cache:
+        return _get_video_file_framerate_cache[path]
+
+    pip_import('moviepy')
+    from moviepy.editor import VideoFileClip
+
+    with VideoFileClip(path) as video:
+        framerate = video.fps
+
+    _get_video_file_framerate_cache[path] = framerate
+    return framerate
+
+def _load_video_stream(path):
     cv2=pip_import('cv2')
     assert file_exists(path),'load_video error: path '+repr(path)+' does not point to a file that exists'#Opencv will silently fail if this breaks
     cv_stream=cv2.VideoCapture(path)
@@ -23592,6 +23600,29 @@ def load_video_stream(path):
         if not not_done:
             return
         yield cv_bgr_rgb_swap(frame)
+
+def load_video_stream(path):
+    """
+    Much faster than load_video, which loads all the frames into a numpy array. This means load_video has to iterate through all the frames before you can even use the first frame.
+    load_video_stream is a generator, meaning to get the next frame you use python's builtin 'next' function
+    Returns a generator that iterates through the frame images
+
+    If possible, this generator will also have a length! Useful for tqdm etc..td
+    Don't rely on that though, it might not always work? Depends on 'moviepy'
+
+    EXAMPLE:
+        for frame in load_video_stream("/Users/Ryan/Desktop/media.io_Silicon Valley - Gavin - Animals Compilation copy.mp4"):display_image(frame)
+    EXAMPLE:
+        for frame in load_video_stream(download_youtube_video('https://www.youtube.com/watch?v=cAy4zULKFDU')):display_image(frame)  #Monty python clip
+    """
+    frame_iterator = _load_video_stream(path)
+    try:
+        num_frames = get_video_file_num_frames(path)
+        frame_iterator = IteratorWithLen(frame_iterator, num_frames)
+    except Exception:
+        pass
+    return frame_iterator
+
 
 _load_video_cache={}
 def load_video(path,*,show_progress=True,use_cache=False):
@@ -23921,6 +23952,137 @@ def encode_video_to_bytes(video,filetype:str='.avi',framerate=30):
         if file_exists(video_file):
             delete_file(video_file)
     
+
+def add_audio_to_video_file(video_path, audio_path, output_path=None):
+    """
+    Add audio to a video file without recompressing the video.
+
+    This function uses FFmpeg to add audio from an audio file to a video file
+    without recompressing the video stream. The audio is cut off at the end of the
+    video's duration.
+
+    Parameters:
+        - video_path (str): The path to the input video file.
+        - audio_path (str): The path to the input audio file.
+        - output_path (str): The path where the output video file with added audio will be saved.
+
+    Supported Video Formats:
+        - MP4 (.mp4)
+        - MOV (.mov)
+        - AVI (.avi)
+        - MKV (.mkv)
+        - WebM (.webm)
+        - FLV (.flv)
+        - WMV (.wmv)
+        - MPEG (.mpeg, .mpg)
+        - OGV (.ogv)
+
+    Supported Audio Formats:
+        - MP3 (.mp3)
+        - WAV (.wav)
+        - AAC (.aac)
+        - FLAC (.flac)
+        - OGG (.ogg)
+        - M4A (.m4a)
+        - WMA (.wma)
+
+    Returns:
+        - str: The path to the output video file with added audio.
+
+    Note: FFmpeg must be installed and accessible from the command line for this function to work.
+    """
+    import subprocess
+    
+    assert 'ffmpeg' in get_system_commands(), 'Please install ffmpeg'    
+
+    if output_path is None:
+        output_path = get_unique_copy_path(
+            with_file_name(
+                video_path,
+                with_file_extension(
+                    get_file_name(video_path, include_file_extension=False) + "_with_audio",
+                    get_file_extension(video_path),
+                ),
+            )
+        )
+
+    ffmpeg_cmd = [
+        "ffmpeg",
+        "-i", video_path,
+        "-i", audio_path,
+        "-c:v", "copy",
+        "-c:a", "aac",
+        "-map", "0:v:0",
+        "-map", "1:a:0",
+        "-shortest",
+        output_path
+    ]
+
+    try:
+        subprocess.run(ffmpeg_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        fansi_print("Audio added to video successfully: "+output_path,'green')
+        return output_path
+    except subprocess.CalledProcessError as e:
+        fansi_print("Error occurred during audio addition:", "red")
+        fansi_print("Command: " + " ".join(ffmpeg_cmd), "red")
+        fansi_print("Error output: " + e.stderr.decode("utf-8"), "red")
+        return None
+
+
+def change_video_file_framerate(video_path, new_framerate, output_path=None):
+    """
+    Change the framerate of a video without recompressing or changing the audio.
+    This function uses FFmpeg to change the framerate of a video file without
+    recompressing the video stream or modifying the audio.
+    Parameters:
+        - video_path (str): The path to the input video file.
+        - new_framerate (float): The new framerate for the video (e.g., 25, 30, 60).
+        - output_path (str): The path where the output video file with the new framerate will be saved.
+    Returns:
+        - str: The path to the output video file with the new framerate.
+    Note: FFmpeg must be installed and accessible from the command line for this function to work.
+    References:
+        https://superuser.com/questions/1088382/change-framerate-in-ffmpeg-without-reencoding
+    """
+    import subprocess
+    
+    assert 'ffmpeg' in get_system_commands(), 'Please install ffmpeg'    
+    
+    if output_path is None:
+        output_path = get_unique_copy_path(
+            with_file_name(
+                video_path,
+                with_file_extension(
+                    get_file_name(video_path, include_file_extension=False)
+                    + "_"
+                    + str(new_framerate)
+                    + "_fps",
+                    get_file_extension(video_path),
+                ),
+            )
+        )
+        
+    input_framerate = get_video_file_framerate(video_path)
+    itsscale = input_framerate / new_framerate
+    
+    ffmpeg_cmd = [
+        "ffmpeg",
+        "-itsscale", str(itsscale),
+        "-i", video_path,
+        "-codec", "copy",
+        output_path
+    ]
+    try:
+        subprocess.run(ffmpeg_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        fansi_print("Video framerate changed successfully: "+output_path, 'green')
+        return output_path
+    except subprocess.CalledProcessError as e:
+        fansi_print("Error occurred during framerate change:", "red")
+        fansi_print("Command: " + " ".join(ffmpeg_cmd), "red")
+        fansi_print("Error output: " + e.stderr.decode("utf-8"), "red")
+        return None
+
+
 def directory_exists(path):
     if not isinstance(path,str): return False
     return os.path.isdir(path)
@@ -31695,6 +31857,10 @@ def optical_flow_to_image(dx, dy, *, mode='saturation'):
        mode (str, optional): The visualization mode. Can be:
            - 'saturation': The saturation represents the magnitude. Default.
            - 'brightness': The brightness represents the magnitude.
+
+       TODO: Use floating-point HSV precision, and a custom mag factor
+       mag_factor (float, optional): the magnitude will be scaled by this number if specified,
+                                     otherwise the magnitude will be scaled with full_range
     
     Returns:
        numpy.ndarray: The RGB image visualizing the optical flow.
@@ -31707,6 +31873,8 @@ def optical_flow_to_image(dx, dy, *, mode='saturation'):
     """
     assert rp.is_a_matrix(dx), "dx must be a matrix"
     assert rp.is_a_matrix(dy), "dy must be a matrix"
+    if is_torch_tensor(dx):dx=as_numpy_array(dx)
+    if is_torch_tensor(dy):dy=as_numpy_array(dy)
     assert rp.is_float_image(dx), "dx must be a float image"
     assert rp.is_float_image(dy), "dy must be a float image"
     assert dx.shape == dy.shape, "dx and dy must have the same shape"
