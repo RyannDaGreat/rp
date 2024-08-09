@@ -279,17 +279,44 @@ def identity(*args):
 # region ［list_flatten］
 #FORMERLY CALLED list_pop (a bit of a misnomer; I know that now, after having taken CSE214.)
 
+def list_roll(x,shift=0):
+    """
+    Demo:
+        >>> for _ in range(10):
+                print(list_roll(range(10),_))
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        [9, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        [8, 9, 2, 3, 4, 5, 6, 7, 8, 9]
+        [7, 8, 9, 3, 4, 5, 6, 7, 8, 9]
+        [6, 7, 8, 9, 4, 5, 6, 7, 8, 9]
+        [5, 6, 7, 8, 9, 5, 6, 7, 8, 9]
+        [4, 5, 6, 7, 8, 9, 6, 7, 8, 9]
+        [3, 4, 5, 6, 7, 8, 9, 7, 8, 9]
+        [2, 3, 4, 5, 6, 7, 8, 9, 8, 9]
+        [1, 2, 3, 4, 5, 6, 7, 8, 9, 9]
+        
+    Efficiency Test/Comparison: https://chatgpt.com/share/7de702fb-3aef-4f7a-b3f6-2ecc0d2c9fec
+    """
+    if not shift:
+        return list(x)
+    shift%=len(x)
+    return list(x[-shift:])+list(x[shift:])
+
 def list_flatten(list_2d):
-    #Old, MUCH SLOWER version: list_flatten=lambda list_2d:scoop(lambda old,new:list(old) + list(new),list_2d,[])
-    #
-    #Example Speed boost over scoop:
-    # List size: 21000
-    #    Time taken by list comprehension: 0.032008200883865356 seconds
-    #    Time taken by itertools.chain: 0.016012614592909813 seconds
-    #    Time taken by scoop: 64.72587646916509 seconds
-    # See https://gist.github.com/SqrtRyan/91dd2edd469c0cef1a545bc576efabf0
+    """
+    Example Speed boost over scoop:
+    List size: 21000
+       Time taken by list comprehension: 0.032008200883865356 seconds
+       Time taken by itertools.chain: 0.016012614592909813 seconds
+       Time taken by scoop: 64.72587646916509 seconds
+    See https://gist.github.com/SqrtRyan/91dd2edd469c0cef1a545bc576efabf0
+
+    Old, MUCH SLOWER version: list_flatten=lambda list_2d:scoop(lambda old,new:list(old) + list(new),list_2d,[])
+    """
+
     from itertools import chain
     return list(chain.from_iterable(list_2d))
+
 list_pop=list_flatten#Just because I'm used to list_pop, even though it doesn't make much sense lol. Thought of 'popping' the inner brackets of [[a,b],[c,d]] to [a,b,c,d] as if the inner brackets looked like bubbles to be popped. Has no relationship to popping an item off a stack or queue lol
 # endregion
 # region ［summation，product］
@@ -397,12 +424,14 @@ def set_current_directory(path):
     os.chdir(path)
 
 class SetCurrentDirectoryTemporarily:
-    #Temporarily CD into a directory
-    #Example:
-    #    print(get_current_directory())
-    #    with SetCurrentDirectoryTemporarily('/home'):
-    #        print(get_current_directory())
-    #    print(get_current_directory())
+    """
+    Temporarily CD into a directory
+    Example:
+       print(get_current_directory())
+       with SetCurrentDirectoryTemporarily('/home'):
+           print(get_current_directory())
+       print(get_current_directory())
+    """
     def __init__(self,directory:str=None):
         self.directory=directory
         
@@ -2267,14 +2296,95 @@ def grid2d_map(grid2d_input,value_func=identity) -> list:
 # ⁠⁠⁠               ⎪                                                              ⎩                  ⎭⎪
 # ⁠⁠⁠               ⎩                                                                                  ⎭
 
+def _auto_interp_for_resize_image(resize_func, image, new_size):
+    """
+    A private function used by image resizing functions in rp when their interp=='auto'
+
+    'area' interpolation is good for shrinking images
+    'bilinear' interpolation is good for growing images
+    This function lets you automatically choose the best interp method.
+    If one dimension grows whereas the other dimension shrinks, we should use two resizings: one for 'bilinear' and the other 'area'
+    
+    resize_func: is expected to be an image resizing function from rp, such as rp.resize_image, rp.cv_resize_image or rp.torch_resize_image
+                 it should be able to handle sizes such as (None, width) to indicate one dimension should be unchanged
+                 This function is meant to be called by those functions, when the interp method is 'auto'
+    image      : should be an image type compatible with rp.get_image_dimensions and the given resize_func
+    new_size   : is expected to be a tuple containing two integers (height, width)
+
+    EXAMPLE:
+        >>> def demo_resize_interp(interp='auto'):
+        ...     import numpy as np
+        ...     import time
+        ...     
+        ...     # Assuming get_checkerboard_image returns an image and other functions are available
+        ...     c = get_checkerboard_image(128,128)
+        ...     original_height = get_image_height(c)
+        ...     original_width = get_image_width(c)
+        ...     frames = 360  # Total number of frames for a smoother and longer animation
+        ...     start_angle = np.pi / 4  # Starting at 45 degrees
+        ...     max_multiplier = 3  # Maximum size multiplier
+        ...
+        ...     for _ in range(2):    
+        ...         for frame in range(frames):
+        ...             # Calculate the new dimensions using sine and cosine with a 45-degree offset
+        ...             # Amplitude is adjusted to vary directly from 1 to max_multiplier times the original size
+        ...             new_height = int((np.sin(2 * np.pi * frame / frames + start_angle) + 1) / 2 * (max_multiplier - 1) * original_height + 1)
+        ...             new_width = int((np.cos(2 * np.pi * frame / frames + start_angle) + 1) / 2 * (max_multiplier - 1) * original_width + 1)
+        ...         
+        ...             # Resize and display the image
+        ...             
+        ...             resized_image = cv_resize_image(c, (new_height, new_width), interp=interp)
+        ...             #resized_image = resize_image(c, (new_height, new_width), interp=interp)
+        ...             
+        ...             resized_image = crop_image(resized_image, height=300, width=300)
+        ...             resized_image=blend_images((0,.25,.5),resized_image)
+        ...             resized_image=labeled_image(resized_image,interp,background_color=(0,64,128))
+        ...             resized_image=shift_image_hue(resized_image,len(interp)/6) #Different background colors so we can easily see when interp changes
+        ...             display_image(resized_image)
+        ...
+        ... demo_resize_interp('auto')
+        ... demo_resize_interp('nearest')
+        ... demo_resize_interp('bilinear')
+        ... demo_resize_interp('area')
+    """
+
+    assert isinstance(new_size, tuple) and len(new_size) == 2 and all(isinstance(x,int) for x in new_size)
+    old_size = get_image_dimensions(image)
+
+    old_height, old_width = old_size
+    new_height, new_width = new_size
+
+    growth_interp = "bilinear"
+    shrink_interp = "area"
+
+    out = image
+
+    #In the case that both dimensions grow, or both dimensions shrink, we only need to use the resize_func once
+    if   new_height == old_height and new_width == old_width: out = out.copy()
+    elif new_height >= old_height and new_width >= old_width: out = resize_func(out, size=(new_height, new_width), interp=growth_interp)
+    elif new_height <= old_height and new_width <= old_width: out = resize_func(out, size=(new_height, new_width), interp=shrink_interp)
+    else:
+        #In the case that one dimension grows and the other shrinks, we use the resize_func twice to use both interp methods
+        #Do the potential shrink operation first then the growth operation for speed's sake
+
+        if new_height < old_height: out = resize_func(out, size=(new_height, None     ), interp=shrink_interp)
+        if new_width  < old_width : out = resize_func(out, size=(None      , new_width), interp=shrink_interp)
+
+        if new_height > old_height: out = resize_func(out, size=(new_height, None     ), interp=growth_interp)
+        if new_width  > old_width : out = resize_func(out, size=(None      , new_width), interp=growth_interp)
+
+    return out
+
 def resize_image(image,scale,interp='bilinear'):
     """
     resize_image resizes images. Who woulda thunk it? Stretchy-squishy image resizing!
     :param image: a numpy array, preferably. But it can also handle pure-python list-of-lists if that fails.
     :param scale: can either be a scalar (get it? for SCALE? lol ok yeah that died quickly) or a tuple of integers to specify the new dimensions we want like (128,128)
-    :param interp: ONLY APPLIES FOR numpy arrays! interp ∈ {'nearest','bilinear','bicubic','cubic'}
+    :param interp: ONLY APPLIES FOR numpy arrays! interp ∈ {'auto','nearest','bilinear','bicubic','cubic'}
     :return: returns the resized image
+    Note: Auto here is kinda redundant: scipy or skimage does nice interp on its own
     """
+    if interp=='auto': interp='bilinear'
     assert interp in {'nearest','bilinear','bicubic'}
     if scale == 1:
         return image
@@ -2300,6 +2410,9 @@ def resize_image(image,scale,interp='bilinear'):
                 if not height: height=ceil(get_image_height(image)/get_image_width (image)*width )
                 if not width : width =ceil(get_image_width (image)/get_image_height(image)*height)
         # return resize(image,(height,width))
+
+        # if interp=='auto': return _auto_interp_for_resize_image(resize_image, image, (height, width))
+
         order={'nearest':0,'bilinear':1,'bicubic':3}[interp]
         return resize(image,(height,width),order=order)
     except Exception:pass
@@ -30072,7 +30185,7 @@ def _prepare_cv_image(image):
 
     return image
     
-def cv_resize_image(image,size,interp='bilinear'):
+def cv_resize_image(image,size,interp='auto'):
     """
     This function is similar to r.resize_image (which uses scipy), except this uses OpenCV and is much faster
     Valid sizes:
@@ -30091,6 +30204,7 @@ def cv_resize_image(image,size,interp='bilinear'):
         "bicubic": cv2.INTER_CUBIC,
         "nearest": cv2.INTER_NEAREST,
         "area": cv2.INTER_AREA,  #Good for downsampling, but when upsampling acts like nearest neigbors
+        "auto": None,  #Automatically chooses between 'area' and 'bilinear' and does that independently for each axis
     }
     assert interp in interp_methods, 'cv_resize_image: Interp must be one of the following: %s'%str(list(interp_methods))
     interp_method=interp_methods[interp]
@@ -30115,11 +30229,13 @@ def cv_resize_image(image,size,interp='bilinear'):
     height=int(height)
     width =int(width)
     
+    if interp=='auto': return _auto_interp_for_resize_image(cv_resize_image, image, (height, width))
+
     out = cv2.resize(image,(width,height),interpolation=interp_method)
     
     return out
 
-def cv_resize_images(*images, size, interp='bilinear'):
+def cv_resize_images(*images, size, interp='auto'):
     images=detuple(images)
     assert all(is_image(x) for x in images), 'Not all given images satisfy rp.is_image'
     images=[cv_resize_image(image, size, interp) for image in images]
@@ -30127,7 +30243,7 @@ def cv_resize_images(*images, size, interp='bilinear'):
 
 resize_images = cv_resize_images  # For now, they will be the same thing
     
-def torch_resize_image(image,size,interp='bilinear'):
+def torch_resize_image(image,size,interp='auto'):
     """
     The given image should be a CHW torch tensor.
 
@@ -30158,6 +30274,7 @@ def torch_resize_image(image,size,interp='bilinear'):
         "area",  # Good for downsampling, but when upsampling acts like nearest neigbors
         "nearest",
         "nearest-exact",  # https://github.com/pytorch/pytorch/pull/64501 - for integer size factors it's the same as 'nearest'
+        "auto",  #Automatically chooses between 'area' and 'bilinear' and does that independently for each axis
     }
     assert interp in interp_methods, 'torch_resize_image: Interp must be one of the following: %s'%str(list(interp_methods))
 
@@ -30172,6 +30289,8 @@ def torch_resize_image(image,size,interp='bilinear'):
     
     height=int(height)
     width =int(width )
+
+    if interp=='auto': return _auto_interp_for_resize_image(torch_resize_image, image, (height, width))
     
     out  = rearrange(
         F.interpolate(
@@ -30359,12 +30478,12 @@ def torch_remap_image(image, x, y, *, relative=False, interp='bilinear', add_alp
     return out
 
 
-def resize_images_to_hold(*images, height: int = None, width: int = None, interp='bilinear', allow_shrink=True):
+def resize_images_to_hold(*images, height: int = None, width: int = None, interp='auto', allow_shrink=True):
     """ Plural of resize_image_to_hold """
     images=detuple(images)
     return [resize_image_to_hold(x,height,width,interp=interp,allow_shrink=allow_shrink) for x in images]
 
-def resize_image_to_hold(image, height: int = None, width: int = None, *, interp='bilinear', allow_shrink=True):
+def resize_image_to_hold(image, height: int = None, width: int = None, *, interp='auto', allow_shrink=True):
     """
     Resizes an image so that the specified bounding box can fit entirely inside the image, while maintaining the
     aspect ratio of the input image.
@@ -30375,7 +30494,7 @@ def resize_image_to_hold(image, height: int = None, width: int = None, *, interp
     :param image: The input image to be resized.
     :param height: The height of the bounding box (default is None).
     :param width: The width of the bounding box (default is None).
-    :param interp: Interpolation method to be used while resizing (default is 'bilinear').
+    :param interp: Interpolation method to be used while resizing (default is 'auto').
     :param allow_shrink: A boolean flag that determines if the image can be shrunk (default is True).
     :return: The resized image with the specified dimensions fitting inside.
     
@@ -30418,7 +30537,7 @@ def resize_image_to_hold(image, height: int = None, width: int = None, *, interp
 
     return rp.cv_resize_image(image, scale, interp=interp)
 
-def resize_image_to_fit(image, height:int=None, width:int=None, *, interp='bilinear', allow_growth=True):
+def resize_image_to_fit(image, height:int=None, width:int=None, *, interp='auto', allow_growth=True):
     """
     Scale image on both axes evenly to fit in this bounding box
     If not allow_growth, it won't modify the image if height and width are larger than the input image
@@ -30451,7 +30570,7 @@ def resize_image_to_fit(image, height:int=None, width:int=None, *, interp='bilin
         
     return rp.cv_resize_image(image, scale, interp=interp)
 
-def resize_images_to_fit(*images, height: int = None, width: int = None, interp='bilinear', allow_growth=True):
+def resize_images_to_fit(*images, height: int = None, width: int = None, interp='auto', allow_growth=True):
     images=detuple(images)
     return [resize_image_to_fit(x,height,width,interp=interp,allow_growth=allow_growth) for x in images]
 
