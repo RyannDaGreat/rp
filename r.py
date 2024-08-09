@@ -1459,67 +1459,137 @@ def uniform_float_color_image(height:int,width:int,color:tuple=(0,0,0,0)):
         return output
 
 
-def blend_images(bot,top,alpha=1):
+def blend_images(bot, top, alpha=1, mode="normal"):
     """
-    bot and top can be either images, floats, or colors. 
-    If it is an image, we blend using that image.
-    If it is a color, it should be an RGB or RGBA float color (a tuple with three or four values between 0 and 1)
-    If it is a float, it's treated as an RGB color with R=G=B=that value
-    
-    Alpha can either be an image or a number
-    If alpha is an image, it will be first converted to grayscale
-    Where alpha is closer to 1, top will be more opaque. When alpha is closer to 0, top will be more transparent and bot will show more.
-    
-    This function is meant to blend images like in photoshop
-    Blending images is different from a simple blend function, as the alpha channels are not blended as well
-    
-    EXAMPLE:
-       dice     ='https://bellard.org/bpg/3.png'
-       penguin  ='https://www.gstatic.com/webp/gallery3/2_webp_a.png'
-       mountains='https://cdn.britannica.com/67/19367-050-885866B4/Valley-Taurus-Mountains-Turkey.jpg'
-       checkerboard='https://static8.depositphotos.com/1176848/894/i/450/depositphotos_8945283-stock-photo-checkerboard-chess-background.jpg'
-       dice     =load_image(dice     ) #Has alpha channel
-       penguin  =load_image(penguin  ) #Has alpha channel
-       mountains=load_image(mountains) #Has no alpha channel
-       checkerboard=load_image(checkerboard) #Has no alpha channel
-       composite=blend_images(mountains,penguin,.5) #Penguin is slightly transparent
-       composite=blend_images(composite,dice,alpha=checkerboard) #Mix the dice on with a checkerboard mask
-       display_image(composite) #Result should look like https://i.imgur.com/lF8Sxuc.jpeg
-    
-    EXAMPLE:
-       dice = 'https://bellard.org/bpg/3.png'
-       dice = load_image(dice)  #Has alpha channel
-       display_image(blend_images((0,1,0),dice))               #Should look like https://i.imgur.com/iu6Z8bk.png
-       display_image(blend_images((0,1,0),(1,0,1),alpha=dice)) #Should look like https://i.imgur.com/gxaauuD.png
-       display_image(blend_images(1,1/2,alpha=dice))           #Should look like https://i.imgur.com/f0sKWY5.png
-    
-    EXAMPLE:    
+    Blends two images together using various blending modes.
+
+    Args:
+        bot (Union[numpy.ndarray, float, Tuple[float, float, float], Tuple[float, float, float, float]]):
+            The bottom image to blend. Can be an image, a float (treated as a grayscale value),
+            or a color (RGB or RGBA tuple with values between 0 and 1).
+
+        top (Union[numpy.ndarray, float, Tuple[float, float, float], Tuple[float, float, float, float]]):
+            The top image to blend. Can be an image, a float (treated as a grayscale value),
+            or a color (RGB or RGBA tuple with values between 0 and 1).
+
+        alpha (Union[numpy.ndarray, float], optional): 
+            The alpha mask or value to use for blending.
+            If an image, it will be converted to grayscale. Where alpha is closer to 1, top will be
+            more opaque. Where alpha is closer to 0, top will be more transparent and bot will show more.
+            Defaults to 1.
+
+        mode (str, optional): The blend mode to use. Can be one of:
+            - "normal"   : Blends images like in Photoshop
+            - "add"      : Adds pixel values of the two images
+            - "multiply" : Multiplies pixel values of the two images
+            - "subtract" : Subtracts pixel values of top from bot
+            - "min"      : Takes the minimum pixel value from top and bot
+            - "max"      : Takes the maximum pixel value from top and bot
+            - "contrast" : Multiplies the bot image by top, centered at .5. 
+                           Here, top can be any floating point such as > 1.0 or even -1.0 to invert the image.
+            Some modes also support "clip" at the end to force pixel outputs to be between 0 and 1.
+                - "add clip"
+                - "multiply clip"
+                - "subtract clip"
+                - "contrast clip"
+
+            These modes are inspired by photoshop. 
+            NOTE:
+                The specific implementation of alpha with respect to some of them is subject to change (except 'normal', that's set in stone).
+                Don't rely on any blending except 'normal' mode to have a specific calculation with respect to alpha values!
+
+            Defaults to "normal".
+
+    Returns:
+        numpy.ndarray: The blended image.
+            Will always return a float rgba image as defined by rp.is_float_image and rp.is_rgba_image
+
+    Examples:
+        Example 1: Blending multiple images
+        >>> dice     ='https://bellard.org/bpg/3.png'
+        >>> penguin  ='https://www.gstatic.com/webp/gallery3/2_webp_a.png'
+        >>> mountains='https://cdn.britannica.com/67/19367-050-885866B4/Valley-Taurus-Mountains-Turkey.jpg'
+        >>> checkerboard='https://static8.depositphotos.com/1176848/894/i/450/depositphotos_8945283-stock-photo-checkerboard-chess-background.jpg'
+        >>> dice     =load_image(dice     ) #Has alpha channel
+        >>> penguin  =load_image(penguin  ) #Has alpha channel
+        >>> mountains=load_image(mountains) #Has no alpha channel
+        >>> checkerboard=load_image(checkerboard) #Has no alpha channel
+        >>> composite=blend_images(mountains,penguin,.5) #Penguin is slightly transparent
+        >>> composite=blend_images(composite,dice,alpha=checkerboard) #Mix the dice on with a checkerboard mask
+        >>> display_image(composite) #Result should look like https://i.imgur.com/lF8Sxuc.jpeg
+
+        Example 2: Blending with colors and alpha
+        >>> dice = 'https://bellard.org/bpg/3.png'
+        >>> dice = load_image(dice)  #Has alpha channel  
+        >>> display_image(blend_images((0,1,0),dice))               #Should look like https://i.imgur.com/iu6Z8bk.png
+        >>> display_image(blend_images((0,1,0),(1,0,1),alpha=dice)) #Should look like https://i.imgur.com/gxaauuD.png  
+        >>> display_image(blend_images(1,1/2,alpha=dice))           #Should look like https://i.imgur.com/f0sKWY5.png
+
+        Example 3: Numeric blending examples
         >>> blend_images(0,.5,.5)
-       ans = [[[0.25 0.25 0.25 1.  ]]]
-        >>> blend_images(0,(0,1,0),.5)
-       ans = [[[0.  0.5 0.  1. ]]]
+        [[[0.25 0.25 0.25 1.  ]]]
+        >>> blend_images(0,(0,1,0),.5) 
+        [[[0.  0.5 0.  1. ]]]
         >>> blend_images(1,(0,1,0),.5)
-       ans = [[[0.5 1.  0.5 1. ]]]
+        [[[0.5 1.  0.5 1. ]]] 
         >>> blend_images(1,(0,1,0,.5),.5)
-       ans = [[[0.75 1.   0.75 1.  ]]]
-    
-    EXAMPLE:
-       dog=load_image('https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg.jpg')
-       nebula=load_image('https://spaceplace.nasa.gov/nebula/en/nebula1.en.jpg')
-       nebula,dog=crop_images_to_min_size(nebula,dog)
-       text=cv_text_to_image("OUTER\nSPACE\nDOGGO!!",scale=4,thickness=20)
-       composite=blend_images(dog,nebula,alpha=text)
-       display_image(composite) #Should look like https://i.imgur.com/wEc1t8e.png
-       composite=blend_images(dog,nebula,alpha=cv_gauss_blur(text,sigma=15))#Should look like https://i.imgur.com/YtPtR1p.png
-    
-    Most of the code here is to handle the different types of inputs (top and bot can be floats, images or colors etc)
+        [[[0.75 1.   0.75 1.  ]]]
+
+        Example 4: Complex blending with text and blur
+        >>> dog=load_image('https://i.insider.com/5484d9d1eab8ea3017b17e29?width=600&format=jpeg.jpg')
+        >>> nebula=load_image('https://spaceplace.nasa.gov/nebula/en/nebula1.en.jpg')  
+        >>> nebula,dog=crop_images_to_min_size(nebula,dog)
+        >>> text=cv_text_to_image("OUTER\\nSPACE\\nDOGGO!!",scale=4,thickness=20)
+        >>> composite=blend_images(dog,nebula,alpha=text)  
+        >>> display_image(composite) #Should look like https://i.imgur.com/wEc1t8e.png
+        >>> composite=blend_images(dog,nebula,alpha=cv_gauss_blur(text,sigma=15)) #Should look like https://i.imgur.com/YtPtR1p.png
+
+        Example 5: Different blending modes
+        >>> display_image(blend_images(mountains,penguin,mode='add'))     #Add mode example
+        >>> display_image(blend_images(mountains,penguin,mode='multiply')) #Multiply mode example
+
+        Example 5: Live webcam demo with multiple blend modes
+        >>> lena_image = load_image(
+        >>>     "https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png",
+        >>>     use_cache=True,
+        >>> )
+        >>> while True:
+        >>>     cam_image = load_image_from_webcam()
+        >>>     display_image(
+        >>>         blend_images(
+        >>>             blend_images(
+        >>>                 cam_image,
+        >>>                 rotate_image(lena_image, toc() * 10),
+        >>>                 mode="multiply",
+        >>>             ),
+        >>>             lena_image,
+        >>>             mode="add",
+        >>>         ),
+        >>>     )
+
+
+    Note:
+        Most of the code here is to handle the different types of inputs (top and bot can be floats, images or colors etc)
+        If the alpha, top or bot image dimensions don't match - its ok! It will choose the size of the larger one and align their top left corners.
     """
     
     #Input validation
     assert is_image(top) or is_color(top) and len(top) in {3,4} or is_number(top)
     assert is_image(bot) or is_color(bot) and len(bot) in {3,4} or is_number(bot)
     assert is_image(alpha) or is_number(alpha)
-    
+
+
+    blend_modes = {
+        "normal"  ,
+        "min"     ,
+        "max"     ,
+        "add"     , "add clip"     ,
+        "multiply", "multiply clip",
+        "subtract", "subtract clip",
+        "contrast", "contrast clip",
+    }
+    assert mode in blend_modes, 'Please choose a blend mode from the following options: '+str(blend_modes)
+
     #Determine the height and width of the output
     input_images = [x for x in (bot,top,alpha) if is_image(x)]
     if input_images:
@@ -1546,9 +1616,9 @@ def blend_images(bot,top,alpha=1):
     #Make sure all images are now the same size
     bot,top,alpha=crop_images_to_max_size(bot,top,alpha)
 
-    top  =as_rgba_image     (as_float_image(top  ))
-    bot  =as_rgba_image     (as_float_image(bot  ))
-    alpha=as_grayscale_image(as_float_image(alpha))
+    top  =as_rgba_image     (as_float_image(top  ,copy=False),copy=False)
+    bot  =as_rgba_image     (as_float_image(bot  ,copy=False),copy=False)
+    alpha=as_grayscale_image(as_float_image(alpha,copy=False),copy=False)
     
     top_alpha=top[:,:,3] #The alpha channel of the top image
     bot_alpha=bot[:,:,3] #The alpha channel of the bot image
@@ -1557,13 +1627,24 @@ def blend_images(bot,top,alpha=1):
     output_alpha=1-((1-alpha)*(1-bot_alpha)) #The alpha channel of the output image. The output image is always more opaque than the input
     
     alpha=alpha[:,:,None]
-    
-    output=bot*(1-alpha)+top*alpha
+
+    if   "normal"   in mode.split(): output = bot * (1 - alpha) + top * alpha
+    elif "add"      in mode.split(): output = bot + top * alpha
+    elif "multiply" in mode.split(): output = bot * (1 - alpha + top * alpha)
+    elif "subtract" in mode.split(): output = bot - top * alpha
+    elif "min"      in mode.split(): output = np.minimum(bot, top)
+    elif "max"      in mode.split(): output = np.maximum(bot, top)
+    elif "contrast" in mode.split(): output = bot * (1 - alpha) + ((bot - 0.5) * top + 0.5) * alpha
+
+    if 'clip' in mode.split():
+        #If we specify we want to clip the output, it will be constrained between 0 and 1. Useful for some blend modes such as "add clip" etc
+        output = np.clip(output, 0, 1)
+
     output[:,:,3]=output_alpha
     
     return output
 
-def overlay_images(*images):
+def overlay_images(*images,mode='normal'):
     """
     Blends all the given images on top of one another; the last one being on top
     It takes into consideration any alpha channels, if the images are RGBA
@@ -1572,10 +1653,16 @@ def overlay_images(*images):
         images=images[0]
     if is_image(images):
         return images.copy()
+
     if is_image(images[0]):
+        #Bottom is an image
         output=images[0]+0
+    else:
+        #It's a float or color tuple
+        output=images[0]
+
     for image in images[1:]:
-        output=blend_images(output,image)
+        output=blend_images(output,image,mode=mode)
     return output
     
 def get_checkerboard_image(height=64,
@@ -1669,12 +1756,13 @@ def with_drop_shadow(
     **DEFAULT ARGUMENT VALUES ARE SUBJECT TO CHANGE**
     """
     
-    image=as_float_image(image)
+    image=as_numpy_image(image,copy=False)
+    image=as_float_image(image,copy=False)
     alpha=get_image_alpha(image)
     shadow_alpha=shift_image(alpha,x,y,allow_growth=False)
     shadow_alpha=cv_gauss_blur(shadow_alpha,sigma=blur)
     height,width=get_image_dimensions(image)
-    shadow=with_alpha_channel(uniform_float_color_image(height,width,color),shadow_alpha*opacity)
+    shadow=with_alpha_channel(uniform_float_color_image(height,width,color),shadow_alpha*opacity,copy=False)
     return blend_images(shadow,image)
 
 def with_drop_shadows(images,**kwargs):
@@ -1726,7 +1814,7 @@ def with_corner_radius(image, radius, *, antialias=True):
     if antialias:
         mask = mask.resize(original_mask_size)
 
-    alpha = as_float_image(get_image_alpha(image)) * as_float_image(mask)
+    alpha = as_float_image(get_image_alpha(image),copy=False) * as_float_image(mask,copy=False)
     return with_image_alpha(image, alpha)
 
     
@@ -2326,9 +2414,9 @@ def xy_float_images(height=256,width=256):
          >>>    rotated=x*np.cos(angle)+y*np.sin(angle)
          >>>    display_image(2*full_range(rotated**5)-1)
     """
-    y, x = np.meshgrid(
-        np.linspace(0, 1, num=height),
+    x, y = np.meshgrid(
         np.linspace(0, 1, num=width),
+        np.linspace(0, 1, num=height),
     )
     return np.stack([x,y])
 
@@ -3854,7 +3942,7 @@ def save_openexr_image(image, file_path):
     #Prepare the image: It should be either an RGB or RGBA floating point image
     if is_grayscale_image(image):
         image=as_rgb_image(image)
-    image=as_float_image(image)
+    image=as_float_image(image,copy=False)
     assert len(image.shape)==3 #(height, width, num_channels)
     height, width, num_channels = image.shape
     
@@ -5051,7 +5139,7 @@ def display_image(image,block=False):
         fansi_print("display_image usually meant for use with numpy arrays, but you passed it a string, so we'll try to load the image load_image("+repr(image)+") and display that.")
         image=load_image(image)
     if is_pil_image(image) or is_torch_tensor(image):
-        image=as_numpy_image(image)
+        image=as_numpy_image(image,copy=False)
     if not isinstance(image,np.ndarray) and not isinstance(image,list):
         try:
             import torch
@@ -8479,6 +8567,10 @@ def string_to_text_file(file_path: str,string: str,) -> None:
     file.close()
     return file_path
 
+def save_text_file(string, file_path):
+    "save_text_file(string, text_file) writes text file"
+    return string_to_text_file(file_path, string)
+
 
 _text_file_to_string_cache={}
 def text_file_to_string(file_path: str,use_cache=False) -> str:
@@ -8512,7 +8604,8 @@ def text_file_to_string(file_path: str,use_cache=False) -> str:
         #UnicodeDecodeError: 'ascii' codec can't decode byte 0xc3 in position 4781: ordinal not in range(128)
         return open(file_path, encoding='latin').read()
 
-# load_text_file = text_file_to_string
+#Yes. This is a welcome alias.
+load_text_file = text_file_to_string
 
 def load_text_files(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False, lazy=False):
     """
@@ -9143,7 +9236,7 @@ def is_iterable(x):
         return False
 
 def space_split(x: str) -> list:
-    #Please don't use this - it's old and made it before I knew python well. Just use x.split().
+    """ Please don't use this - it's old and made it before I knew python well. Just use x.split().  """
     return list(filter(lambda y:y != '',x.split(" ")))  # Splits things by spaces but doesn't allow empty parts
 def deepcopy_multiply(iterable,factor: int):
     # Used for multiplying lists without copying their addresses
@@ -9153,8 +9246,10 @@ def deepcopy_multiply(iterable,factor: int):
         out+=deepcopy(iterable)
     return out
 def assert_equality(*args,equality_check=identity):
-    # When you have a,b,c,d and e and they're all equal and you just can't choose...when the symmetry is just too much symmetry!
-    # PLEASE NOTE: This does not check every combination: it assumes that equality_check is symmetric!
+    """
+    When you have a,b,c,d and e and they're all equal and you just can't choose...when the symmetry is just too much symmetry!
+    PLEASE NOTE: This does not check every combination: it assumes that equality_check is symmetric!
+    """
     length=len(args)
     if length == 0:
         return None
@@ -9168,9 +9263,11 @@ def assert_equality(*args,equality_check=identity):
         base=arg
     return base
 def get_nested_value(list_to_be_accessed,*address_int_list,ignore_errors: bool = False):
-    # Needs to be better documented. ignore_errors will simply stop tunneling through the array if it gets an error and return the latest value created.
-    # Also note: this could con
-    # a[b][c][d] ≣ get_nested_value(a,b,c,d)
+    """
+    Needs to be better documented. ignore_errors will simply stop tunneling through the array if it gets an error and return the latest value created.
+    Also note: this could con
+    a[b][c][d] ≣ get_nested_value(a,b,c,d)
+    """
     for i in detuple(address_int_list):
         try:
             list_to_be_accessed=list_to_be_accessed[i]
@@ -11010,7 +11107,7 @@ def display_image_in_terminal(image,dither=True,auto_resize=True,bordered=False)
     """
     if isinstance(image,str):
         image=load_image(image)
-    image=as_numpy_image(image)
+    image=as_numpy_image(image,copy=False)
     def width(image) -> int:
         return len(image)
     def height(image) -> int:
@@ -11048,7 +11145,7 @@ def display_image_in_terminal_color(image):
     pip_import('timg')
     if file_exists(image) or is_valid_url(image):
         image=load_image(image)
-    image=as_numpy_image(image)
+    image=as_numpy_image(image,copy=False)
     assert is_image(image)
     if get_image_height(image)%2:
         #We can only display pixel heights of 2,4,6,8 etc.
@@ -11110,7 +11207,7 @@ def display_image_in_terminal_imgcat(image):
 def auto_canny(image,sigma=0.33,lower=None,upper=None):
     pip_import('cv2')
     cv2=pip_import('cv2')
-    image=as_numpy_image(image)
+    image=as_numpy_image(image,copy=False)
 
     if image.dtype!=np.uint8:
         image=full_range(image,0,255).astype(np.uint8)
@@ -11551,19 +11648,19 @@ def rotate_image(image,angle_in_degrees,interp='bilinear'):
             "https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png"
         )
     """
-    image=as_numpy_image(image)
-    image=as_rgba_image(image)
+    image=as_numpy_image(image,copy=False)
+    image=as_rgba_image(image,copy=False)
     alpha=get_image_alpha(image)
     rotate=lambda x: _rotate_rgb_image(x, angle_in_degrees, interp)
     alpha=rotate(alpha)
-    rgb=rotate(as_rgb_image(image))
-    return with_alpha_channel(rgb,alpha)
+    rgb=rotate(as_rgb_image(image,copy=False))
+    return with_alpha_channel(rgb,alpha,copy=False)
 
 def _rotate_rgb_image(image, angle_in_degrees, interp='bilinear'):
     """
     Will return an RGB image, not an RGBA one
     """
-    image=as_numpy_image(image)
+    image=as_numpy_image(image,copy=False)
     assert is_image(image)
 
     #Handle the edge cases: 0, 90, 180, 270, 360, etc - we don't need OpenCV for this
@@ -12880,8 +12977,10 @@ def is_sound_file(file_path):
     return _guess_mimetype(file_path)=='audio'
 
 def is_utf8_file(path):
-    #Returns True iff the file path is a UTF-8 file
-    #Faster than trying to use text_file_to_string(path), because it doesn't need to read the whole file
+    """
+    Returns True iff the file path is a UTF-8 file
+    Faster than trying to use text_file_to_string(path), because it doesn't need to read the whole file
+    """
     if not file_exists(path):
         return False
     import codecs
@@ -13810,6 +13909,21 @@ def _convert_powerpoint_file(path,message=None):
     return process_powerpoint_file(path)
 
 
+def _write_default_gitignore():
+    types_to_ignore='pyc swp un~'.split()
+    types_to_ignore=['*.'+x for x in types_to_ignore]
+
+    new_lines = (
+        ["#<RP Default Gitignore Start>"]
+        + types_to_ignore
+        + ["#<RP Default Gitignore End>"]
+    )
+
+    file = append_line_to_file(line_join(new_lines),'.gitignore')
+    fansi_print("Wrote lines to "+file,'green','bold')
+    return file
+    
+
 def _get_pterm_verbose():
     return False
     return True
@@ -14387,6 +14501,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         CDU
         CDH
         CDH FAST
+        CDH GIT
         CDZ
         CDQ
         CAT
@@ -14653,8 +14768,14 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         
         HC CDH
         HD CDH
+        DG  CDH GIT
+        HDG CDH GIT
         HDF  CDH FAST
         CDHF CDH FAST
+        VCDH $vim($r._cd_history_path);ans=$r._cd_history_path
+        CDHV $vim($r._cd_history_path);ans=$r._cd_history_path
+        VHD  $vim($r._cd_history_path);ans=$r._cd_history_path
+        HDV  $vim($r._cd_history_path);ans=$r._cd_history_path
 
         GMP $get_module_path(ans)
 
@@ -14690,7 +14811,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         CM RMORE
 
         GPP $get_path_parent(ans)
-        GFN $get_file_name(ans)
+        GFN $get_file_name(ans) if isinstance(ans,str) else $get_file_names(ans)
         GPN $get_path_name(ans)
 
 
@@ -14867,6 +14988,9 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         GCLP $git_clone($string_from_clipboard())
         GCLA $git_clone(ans)
         GURL $get_git_remote_url()
+        REPO $get_path_parent($get_git_repo_root($get_absolute_path('.')))
+        UG   $r._pterm_cd($get_path_parent($get_git_repo_root($get_absolute_path('.'))))
+        GU   $r._pterm_cd($get_path_parent($get_git_repo_root($get_absolute_path('.'))))
         WGA if $os.system('wget\\x20'+ans)==0: ans=$get_file_name(ans)
 
         LNAH $os.symlink(ans,$get_file_name(ans));ans=$get_file_name(ans)#Created_Symlink
@@ -14953,6 +15077,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         QPHP $r._input_select_multiple_history_multiline() #Query Prompt-Toolkit History Paragraphs (F3)
         QPH  $r._input_select_multiple_history() #Query Prompt-Toolkit History Lines (F3)
         QVH  $r._input_select_multiple_history($pterm_history_filename) #Query VHISTORY
+
+        GITIGNORE $r._write_default_gitignore()
 
         PPTA $r._convert_powerpoint_file(ans)
         PPT $r._convert_powerpoint_file($input_select_file(file_extension_filter='pptx'),message='Select a powerpoint file')
@@ -17061,8 +17187,11 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 # user_message="__import__('os').mkdir(%s)"%repr(new_dir)
                                 user_message=''
 
-                        elif user_message in {'CDH', 'CDH FAST', "CDHQ FAST"} :
-                            fansi_print("CDH --> CD History --> Please select an entry to cd into!",'blue','bold')
+                        elif user_message in {'CDH', 'CDH FAST', "CDHQ FAST", "CDH GIT"} :
+                            if user_message=='CDH GIT':
+                                fansi_print("CDH GIT --> CD History Git Repos --> Please select a git repo to cd into!",'blue','bold')
+                            else:
+                                fansi_print("CDH --> CD History --> Please select an entry to cd into!",'blue','bold')
                             hist=_get_cd_history()
                             fast=user_message=='CDH FAST' or fansi_is_disabled()
                             if not hist:
@@ -17099,12 +17228,18 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
                                 # stringify=identity if fast else slow_stringify
                                 stringify=fast_stringify if fast else slow_stringify
                                 import sys
+                                hist_options=hist[::-1]
+                                if user_message=='CDH GIT':
+                                    hist_options=[is_a_git_repo(x,use_cache=True) for x in hist_options]
+                                    hist_options=[x for x in hist_options if x]
+                                    hist_options=get_paths_parents(hist_options)
+                                    hist_options=list(unique(hist_options))
                                 if user_message=='CDHQ FAST':
-                                    new_dir = _iterfzf(hist[::-1], exact=True)
+                                    new_dir = _iterfzf(hist_options, exact=True)
                                 else:
                                     new_dir = input_select(
                                         "Please choose a directory",
-                                        hist[::-1],
+                                        hist_options,
                                         stringify=stringify,
                                         reverse=True,
                                     )
@@ -17721,8 +17856,10 @@ def battery_seconds_remaining():
 
 
 def total_disc_bytes(path):
-    # path can be either a folder or a file; it will detect that for you. Implemented recursively (checks subfolders)
-    # returns total size in bytes
+    """
+    path can be either a folder or a file; it will detect that for you. Implemented recursively (checks subfolders)
+    returns total size in bytes
+    """
 
     def get_file_size(path):
         return os.path.getsize(path)
@@ -18890,27 +19027,28 @@ def pip_import(module_name,package_name=None,*,auto_yes=False):
     """
     TODO: Make this function only request sudo if we need it. Otherwise it's a nuisance.
     TODO: Add an "always" option to "yes" and "no" for installing modules.
-    #Attempts to import a module, and if successful returns it.
-    #If it's unsuccessful, it attempts to find it on pypi, and if
-    #    it can, it asks you if you'd like to install it, and if
-    #    you say 'yes', rp will attempt to install it for you.
-    #Note: There are some cases where it won't ask you, and instead will just go ahead and install the packages needed
-    #   - If you're in Google Colab, it won't ask before installing packages as needed
-    #
-    #The rp module uses tons and tons of packages from pypi.
-    #You don't need to install all of them to make rp work,
-    #    because not all functions need all of these packages.
-    #However, when you DO need a certain package's module,
-    #    and we try importing it, we get an import error.
-    #Normally, this isn't a problem, because most packages on pypi
-    #    have the same package name as the module name.
-    #For example: 'pip install rp' allows 'import rp', because the pypi-name
-    #    and the import name are the same thing.
-    #Some modules break this rule though. For example, opencv:
-    #    opencv is installed with 'pip install opencv-python' and imported like 'cv2=pip_import('cv2')'.
-    #Obviously, "cv2"!="opencv-python". And because of this, when you get an error "can't cv2=pip_import('cv2')",
-    #    you can't just fix it with 'pip install cv2'. You have to google it. That's annoying.
-    #THIS FUNCTION addresses that problem. pip
+
+    Attempts to import a module, and if successful returns it.
+    If it's unsuccessful, it attempts to find it on pypi, and if
+       it can, it asks you if you'd like to install it, and if
+       you say 'yes', rp will attempt to install it for you.
+    Note: There are some cases where it won't ask you, and instead will just go ahead and install the packages needed
+      - If you're in Google Colab, it won't ask before installing packages as needed
+
+    The rp module uses tons and tons of packages from pypi.
+    You don't need to install all of them to make rp work,
+       because not all functions need all of these packages.
+    However, when you DO need a certain package's module,
+       and we try importing it, we get an import error.
+    Normally, this isn't a problem, because most packages on pypi
+       have the same package name as the module name.
+    For example: 'pip install rp' allows 'import rp', because the pypi-name
+       and the import name are the same thing.
+    Some modules break this rule though. For example, opencv:
+       opencv is installed with 'pip install opencv-python' and imported like 'cv2=pip_import('cv2')'.
+    Obviously, "cv2"!="opencv-python". And because of this, when you get an error "can't cv2=pip_import('cv2')",
+       you can't just fix it with 'pip install cv2'. You have to google it. That's annoying.
+    THIS FUNCTION addresses that problem. pip
     """
 
     assert isinstance(module_name,str),'pip_import: error: module_name must be a string, but got type '+repr(type(module_name))#Probably better done with raise typerror but meh whatever
@@ -19183,15 +19321,19 @@ def cv_simplify_contour(contour, epsilon=0.001):
     return approx_contour
 
 def cv_distance_to_contour(contour,x,y):
-    #Return the distance from x,y to the point on contour closest to x,y
+    """
+    Return the distance from x,y to the point on contour closest to x,y
+    """
     cv2=pip_import('cv2')
     contour=as_cv_contour(contour)
     return abs(cv2.pointPolygonTest(contour,(x,y),True))
 
 def cv_closest_contour_point(contour,x,y):
-    #Return the point on contour closest to x,y
-    #EXAMPLE:
-    #    cv_closest_contour_point([[1,1],[2,2],[3,3],[4,4],[5,5]],4.4,4.4)  -->  (4,4)
+    """
+    Return the point on contour closest to x,y
+    EXAMPLE:
+       cv_closest_contour_point([[1,1],[2,2],[3,3],[4,4],[5,5]],4.4,4.4)  -->  (4,4)
+    """
     cv2=pip_import('cv2')
     points=contour
     points=as_points_array(points)
@@ -19229,16 +19371,18 @@ def cv_draw_rectangle(image,
                       thickness=1,
                       copy=True,
                       antialias=True):
-    #Right now rectangles are defined by two (x,y) points (start_point, end_point). They're required keyword arguments for now,
-    # becuase I might add more ways to specify rectangles in the future such as top_left, and height/width.
-    #
-    #EXAMPLE:
-    #    image=load_image('https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png')
-    #    for _ in range(100):
-    #        def random_coords():
-    #            return ( random_int(get_image_height(image)),random_int(get_image_width(image)))
-    #        image=cv_draw_rectangle(image,start_point=random_coords(),end_point=random_coords(),color=random_rgb_byte_color())
-    #        display_image(image)
+    """
+    Right now rectangles are defined by two (x,y) points (start_point, end_point). They're required keyword arguments for now,
+    becuase I might add more ways to specify rectangles in the future such as top_left, and height/width.
+
+    EXAMPLE:
+       image=load_image('https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png')
+       for _ in range(100):
+           def random_coords():
+               return ( random_int(get_image_height(image)),random_int(get_image_width(image)))
+           image=cv_draw_rectangle(image,start_point=random_coords(),end_point=random_coords(),color=random_rgb_byte_color())
+           display_image(image)
+    """
 
     #Input assertions:
     assert isinstance(start_point,tuple) and len(start_point)==2
@@ -19275,6 +19419,165 @@ def cv_draw_circle(image,x,y,radius=5,color=(255,255,255),*,antialias=True,copy=
     image,kwargs=_cv_helper(image=image,copy=copy,antialias=antialias)
     cv2.circle(image,(x,y),radius,color,-1,**kwargs)
     return image
+
+def cv_line_graph(
+    y_values,
+    x_values=None,
+    *,
+    height=None,
+    width=None,
+    y_min=None,
+    y_max=None,
+    x_min=None,
+    x_max=None,
+    background_color=(255, 255, 255, 0),
+    line_color=(0, 0, 0, 255),
+    vertical_bar_x=None,
+    vertical_bar_color=(255, 0, 0, 255),
+    antialias=True,
+    thickness=1,
+    vertical_bar_thickness=None
+):
+    """
+    Draws a line graph using OpenCV with the given values and colors.
+
+    Args:
+        y_values (list or numpy.ndarray): The y-values of the data points.
+        x_values (list or numpy.ndarray, optional): The x-values of the data points. If not provided, the indices of y_values will be used.
+        height (int, optional): The height of the output image. If not provided, it will be determined based on the range of y-values.
+        width (int, optional): The width of the output image. If not provided, it will be determined based on the number of data points.
+        y_min (float, optional): The minimum value of the y-axis. If not provided, it will be determined based on the minimum y-value.
+        y_max (float, optional): The maximum value of the y-axis. If not provided, it will be determined based on the maximum y-value.
+        x_min (float, optional): The minimum value of the x-axis. If not provided, it will be determined based on the minimum x-value.
+        x_max (float, optional): The maximum value of the x-axis. If not provided, it will be determined based on the maximum x-value.
+        background_color (tuple, optional): The RGBA color of the background. Default is (255, 255, 255, 255) (white).
+        line_color (tuple, optional): The RGBA color of the line. Default is (0, 0, 0, 255) (black).
+        vertical_bar_x (float, optional): The x-coordinate of the vertical bar. If provided, a vertical bar will be drawn at this x-coordinate.
+        vertical_bar_color (tuple, optional): The RGBA color of the vertical bar. Default is (255, 0, 0, 255) (red).
+        antialias (bool, optional): Whether to apply antialiasing to the line. Default is True.
+        thickness (int, optional): The thickness of the line. Default is 1.
+        vertical_bar_thickness (int, optional): The thickness of the vertical bar. If not provided, it defaults to the thickness option.
+
+    Returns:
+        numpy.ndarray: The resulting line graph image as a uint8 HW4 image.
+
+    Notes:
+        To have multiple lines, I reccomend using rp.overlay_images and running this function multiple times with a transparent background
+
+    Example:
+        >>> # Example usage: Moving sine waves with moving vertical x bars and changing colors, widths, and alpha values
+        ... def animate_sine_waves(num_frames=1000):
+        ...     for frame in range(num_frames):
+        ...         t = frame * 0.1
+        ...         y_values = [math.sin(x + t) for x in np.linspace(0, 2 * math.pi, 100)]
+        ...         x_values = np.linspace(0, 2 * math.pi, 100)
+        ...
+        ...         height = int(200 + 50 * math.sin(t))
+        ...         width = int(400 + 50 * math.cos(t))
+        ...         y_min, y_max = -1.5, 1.5
+        ...         x_min, x_max = 0, 2 * math.pi
+        ...
+        ...         background_color = (int(math.sin(t) * 127 + 128), int(math.cos(t) * 127 + 128), 0, int(abs(math.sin(t)) * 255))
+        ...         line_color = (int(math.cos(t) * 127 + 128), int(math.sin(t) * 127 + 128), 0, int(abs(math.cos(t)) * 255))
+        ...         vertical_bar_x = 2 * math.pi * (frame % num_frames) / num_frames
+        ...         vertical_bar_color = (255, 0, 0, int(abs(math.sin(t)) * 255))
+        ...
+        ...         thickness = int(2 + math.sin(t))
+        ...         vertical_bar_thickness = int(4 + math.cos(t))
+        ...
+        ...         #rp.gather_args_call passes current variables as kwargs
+        ...         graph = rp.gather_args_call(cv_line_graph)  
+        ...
+        ...         rp.display_alpha_image(graph)
+        ... animate_sine_waves()
+
+    Example:
+        >>> def mouse_graph_demo():
+        ...     #This demo is pure eye candy!
+        ...     mouse_xs = []
+        ...     mouse_ys = []
+        ...     while True:
+        ...         #Add mouse positions to the graph
+        ...         mouse_x, mouse_y = get_mouse_position()
+        ...         mouse_xs.append(mouse_x)
+        ...         mouse_ys.append(mouse_y)
+        ...  
+        ...         #Only record so much
+        ...         history=300
+        ...         mouse_xs=mouse_xs[-history:]
+        ...         mouse_ys=mouse_ys[-history:]
+        ...  
+        ...         #Make sure the y values of the graph are the same for the same values
+        ...         y_min = min(mouse_xs + mouse_ys)
+        ...         y_max = max(mouse_xs + mouse_ys)
+        ...         thickness=2
+        ...  
+        ...         #Create the graph image
+        ...         graph = overlay_images(
+        ...             (0,0,0,0),
+        ...             gather_args_call(cv_line_graph, mouse_xs, height=100, width=500, line_color=(255, 64, 32, 255)),
+        ...             gather_args_call(cv_line_graph, mouse_ys, height=100, width=500, line_color=(64, 255, 32, 255)),
+        ...             mode='add'
+        ...         )
+        ...         
+        ...         #Raaainboww! Hue gradient from left to right
+        ...         gradient = (1-xy_float_images(*get_image_dimensions(graph))[0])/3
+        ...         graph=shift_image_hue(graph,gradient)
+        ...  
+        ...         #Add some pretty glow effects! Adding the alphas is improper...but looks really cool
+        ...         graph+=cv_alpha_weighted_gauss_blur(graph, sigma=30)*1.5
+        ...         
+        ...         graph=labeled_image(graph,'Min=%i Max=%i Entries=%i'%(y_min,y_max,len(mouse_xs)))
+        ...         graph=labeled_image(graph,'MouseX=%i MouseY=%i'%(mouse_x,mouse_y),position='bottom')
+        ...         
+        ...         display_alpha_image(graph,tile_size=70,first_color=.1,second_color=.2)
+        ... mouse_graph_demo()
+
+    """
+
+    #Ensure things are installed
+    rp.pip_import('cv2')
+    rp.pip_import('numpy')
+
+    #Keep imports inside the function
+    import numpy as np
+    import cv2
+    import math
+
+    # Convert input values to numpy arrays
+    y_values = np.array(y_values, dtype=np.float32)
+    x_values = np.array(x_values, dtype=np.float32) if x_values is not None else np.arange(len(y_values), dtype=np.float32)
+
+    # Determine the dimensions of the output image if not provided
+    height = height or int(np.ptp(y_values))
+    width = width or len(y_values)
+
+    # Determine the range of the axes if not provided
+    y_min = y_min if y_min is not None else np.min(y_values)
+    y_max = y_max if y_max is not None else np.max(y_values)
+    x_min = x_min if x_min is not None else np.min(x_values)
+    x_max = x_max if x_max is not None else np.max(x_values)
+
+    # Create the output image with the specified background color
+    graph = np.full((height, width, 4), background_color, dtype=np.uint8)
+
+    # Map the data points to pixel coordinates
+    x = ((x_values - x_min) / (x_max - x_min) * width).astype(int)
+    y = ((y_max - y_values) / (y_max - y_min) * height).astype(int)
+
+    # Draw the line graph
+    line_type = cv2.LINE_AA if antialias else cv2.LINE_8
+    cv2.polylines(graph, [np.column_stack((x, y))], isClosed=False, color=line_color, thickness=thickness, lineType=line_type)
+
+    # Draw the vertical bar if provided
+    if vertical_bar_x is not None:
+        bar_x = int((vertical_bar_x - x_min) / (x_max - x_min) * width)
+        bar_thickness = thickness if vertical_bar_thickness is None else vertical_bar_thickness
+        cv2.line(graph, (bar_x, 0), (bar_x, height), color=vertical_bar_color, thickness=bar_thickness)
+
+    return graph
+
+
 
 def cv_apply_affine_to_image(image,affine,output_resolution=None):
     """
@@ -19640,6 +19943,7 @@ def cv_dilate(image,diameter=2,*,copy=True,circular=False,iterations=1):
     return _cv_morphological_helper(image,diameter,cv_method=cv2.dilate,copy=copy,circular=circular,iterations=iterations)
 
 def cv_gauss_blur(image,sigma=1):
+    """Gauss blur an image with the given radius using opencv"""
     cv2=pip_import('cv2')
 
     if is_binary_image(image):
@@ -19649,6 +19953,55 @@ def cv_gauss_blur(image,sigma=1):
     if not sigma%2:
         sigma+=1#Make sigma odd
     return cv2.GaussianBlur(image,(sigma,sigma),0)
+
+def cv_alpha_weighted_gauss_blur(image,sigma):
+    """
+    cv_gauss_blur blurs all channels independently: R,G,B and A
+    But this can mix the background with the foreground, making it ugly around mask edges
+    This function fixes that problem by weighting the blur on the alpha values
+    This function has the same IO signature as cv_gauss_blur
+
+    Example:
+        >>> #This example shows the difference between regular gauss blur and this function
+        >>> def create_test_image():
+        >>>     import cv2
+        >>>     height = width = 300
+        >>>     image = np.zeros((height, width, 4), dtype=np.uint8)
+        >>>     cv2.line(image, (50, 100), (250, 100), (0, 255, 0, 255), 10)
+        >>>     cv2.line(image, (50, 150), (250, 150), (255, 255, 0, 255), 10)
+        >>>     cv2.line(image, (50, 200), (250, 200), (255, 0, 0, 255), 10)
+        >>>     return image
+        >>> sigma=50
+        >>> test_image=create_test_image()
+        >>> alpha_blurred=cv_alpha_weighted_gauss_blur(test_image,sigma)
+        >>> regular_blurred=cv_gauss_blur(test_image,sigma)
+        >>> display_alpha_image(
+        >>>     grid_concatenated_images(
+        >>>         [
+        >>>             [test_image,alpha_blurred, regular_blurred],
+        >>>             [None]+as_rgb_images([alpha_blurred, regular_blurred]),
+        >>>         ]
+        >>>     ),
+        >>> )
+    """
+    image=as_float_image(image,copy=False)
+    image=as_rgba_image(image,copy=False)
+    
+    epsilon=1e-4
+    alpha=get_image_alpha(image)
+    alpha=np.maximum(epsilon,alpha)
+    alpha=as_rgb_image(alpha)
+    rgb=as_rgb_image(image)
+    
+    weight=cv_gauss_blur(alpha,sigma)
+    color=cv_gauss_blur(alpha*rgb,sigma)
+    
+    output=color/weight
+    output=with_alpha_channel(output,weight,copy=False)
+    
+    return output
+    
+
 
 
 
@@ -19874,17 +20227,17 @@ def evenly_split_path(path,number_of_pieces=100,*,loop=False):
 
 #region Conversions between path types
 def is_complex_vector(x):
-    #Return True iff x is like [1+2j,3+4j,5+6j,...]
+    """ Return True iff x is like [1+2j,3+4j,5+6j,...] """
     x=np.asarray(x)
     if not len(x):return True#Vaccuous truth
     return len(x.shape)==1 and np.iscomplexobj(x)
 def is_points_array(x):
-    #Return True iff x is like [[1,2],[3,4],[5,6],...]
+    """ Return True iff x is like [[1,2],[3,4],[5,6],...] """
     x=np.asarray(x)
     if not len(x):return True#Vaccuous truth
     return len(x.shape)==2 and x.shape[1]==2
 def is_cv_contour(x):
-    #Return True iff x is like [[[1,2]],[[3,4]],[[5,6]],...] and dtype=np.int32
+    """ Return True iff x is like [[[1,2]],[[3,4]],[[5,6]],...] and dtype=np.int32 """
     x=np.asarray(x)#TODO this might cast it to a type other than np.int32 if given a list...though it wouldn't be WRONG to say it's not a cv contour in this case...idk should I change this or leave it be?
     if not len(x):return True#Vaccuous truth
     return len(x.shape)==3 and x.shape[1]==1 and x.shape[2]==2 and x.dtype==np.int32
@@ -19919,21 +20272,21 @@ def _cv_contour_to_complex_vector(cv_contour):
 
 #Automatic path conversions (tries to detect the type of path then convert appropriately)
 def as_complex_vector(path):
-    #Automatically convert path path data
+    """ Automatically convert path path data """
     if isinstance(path,set) or isinstance(path,dict):path=list(path)
     if   is_complex_vector(path):return                        np.asarray(path.copy())
     elif is_points_array  (path):return   _points_array_to_complex_vector(path)
     elif is_cv_contour    (path):return     _cv_contour_to_complex_vector(path)
     else:assert False,'Cannot convert 2d path: path='+repr(path)
 def as_points_array(path):
-    #Automatically convert path data
+    """ Automatically convert path data """
     if isinstance(path,set) or isinstance(path,dict):path=list(path)
     if   is_complex_vector(path):return _complex_vector_to_points_array(path)
     elif is_points_array  (path):return                      np.asarray(path.copy())
     elif is_cv_contour    (path):return     _cv_contour_to_points_array(path)
     else:assert False,'Cannot convert 2d path: path='+repr(path)
 def as_cv_contour(path):
-    #Automatically convert path data
+    """ Automatically convert path data """
     if isinstance(path,set) or isinstance(path,dict):path=list(path)
     if   is_complex_vector(path):return _complex_vector_to_cv_contour(path)
     elif is_points_array  (path):return   _points_array_to_cv_contour(path)
@@ -21024,7 +21377,8 @@ def labeled_image(image,
         
         label=cv_text_to_image(text)
 
-        label=cv_resize_image(label,height/get_image_height(label))  
+        size_factor = height/get_image_height(label)
+        label=cv_resize_image(label,size_factor,interp='area' if size_factor<1 else 'bilinear')  
         if get_image_width(label)>width:
             label=cv_resize_image(label,width/get_image_width(label))
             
@@ -21081,10 +21435,12 @@ def _cv_char_to_image(char: str, width=None, height=None, **kwargs):
 
 
 def _cv_text_to_image_monospace(text, **kwargs):
-    #Right now this is approx 2x slower than non-monospace, even with the optimizations. I could probably optimize it more but meh
-    #Note: This guarentees that all characters in the output image will be monospaced
-    #However, it does NOT guarentee that two output images will have the *same* spacing, though it gets close.
-    #TODO: Do that...we will probably need to simply add all printable chars to the 'chars' variable
+    """
+    Right now this is approx 2x slower than non-monospace, even with the optimizations. I could probably optimize it more but meh
+    Note: This guarentees that all characters in the output image will be monospaced
+    However, it does NOT guarentee that two output images will have the *same* spacing, though it gets close.
+    TODO: Do that...we will probably need to simply add all printable chars to the 'chars' variable
+    """
 
     import string
 
@@ -21575,8 +21931,10 @@ def get_subfolders(folder,*,relative=False,sort_by=None):
 get_subdirectories=get_subfolders
 
 def _os_listdir_files(folder):
-    #like get_all_files, but returns only file names and is a little faster
-    #https://stackoverflow.com/questions/3207219/how-do-i-list-all-files-of-a-directory
+    """
+    like get_all_files, but returns only file names and is a little faster
+    https://stackoverflow.com/questions/3207219/how-do-i-list-all-files-of-a-directory
+    """
 
     return [entry.name for entry in os.scandir(folder) if entry.is_file()]
 
@@ -21804,6 +22162,7 @@ def rp_iglob(
             raise TypeError("Unsupported type: "+str(type(file_pattern))+")")
 
 def rp_glob(*args,**kwargs):
+    """ See rp_iglob's docstring """
     return list(rp_iglob(*args,**kwargs))
 
 
@@ -22039,8 +22398,10 @@ def knn_clusters(vectors,k=5,spatial_dict=FlannDict):
     return out
 
 def r_transform(path):
-    #Stands for Ryan-Transform. Used for path matching in my 2019 Zebra summer internship. Removes translation, rotation and scale freedom from the path.
-    #NOTE: According to wolfram alpha, d/dx ln(d/dx f(x)) == f''(x)/f'(x) (this is not true in the discrete domain, however.)
+    """
+    Stands for Ryan-Transform. Used for path matching in my 2019 Zebra summer internship. Removes translation, rotation and scale freedom from the path.
+    NOTE: According to wolfram alpha, d/dx ln(d/dx f(x)) == f''(x)/f'(x) (this is not true in the discrete domain, however.)
+    """
     path=as_complex_vector(path)
     path=circ_diff(path)#Translation invariance: Get all the deltas of the curve. Essentially, take the derivative.
     path=circ_quot(path)#Scale and rotation invariance: essentially get the rotation vectors needed to proportionally scale and twist one delta to the next
@@ -22048,8 +22409,10 @@ def r_transform(path):
     return path
 
 def r_transform_inverse(path):
-    #Note that we lose scale, rotation and translational information
-    #r_transform(r_transform_inverse(r_transform(path))) == r_transform(path)
+    """
+    Note that we lose scale, rotation and translational information
+    r_transform(r_transform_inverse(r_transform(path))) == r_transform(path)
+    """
     path=as_complex_vector(path)
     path=circ_diff_inverse(path)
     path=np.exp(path)
@@ -22058,11 +22421,13 @@ def r_transform_inverse(path):
 
 
 def horizontally_concatenated_images(*image_list):
+    """
+    First image in image_list goes on the left
+    TODO: Handle non-RGB images (include RGBA, grayscale, etc)
+    This is different from np.column_stack because it handles images of different resolutions.
+    It also can mix RGB, greyscale, and RGBA images.
+    """
     image_list=detuple(image_list)
-    #First image in image_list goes on the left
-    #TODO: Handle non-RGB images (include RGBA, grayscale, etc)
-    #This is different from np.column_stack because it handles images of different resolutions.
-    #It also can mix RGB, greyscale, and RGBA images.
 
     #try:
     #    #Might be faster than converting all to RGBA then doing height stuff to them all
@@ -22071,19 +22436,24 @@ def horizontally_concatenated_images(*image_list):
     #except Exception as e:
     #    pass
 
-    image_list=[as_rgba_image(as_float_image(image)) for image in image_list]#Right now, bring the images to the max possible format for compatiability. Might make it smarter later such as to preserve the format if all input images are binary, for example.
+    #Choose the optimal datatype
+    image_converter = _common_image_converter(image_list)
+
+    image_list=[image_converter(image,copy=False) for image in image_list]
     max_height=max(img.shape[0]for img in image_list)
     def heightify(img):
         s=list(img.shape)
+        if s[0]==max_height:
+            return img #Don't copy - its slow.
         s[0]=max_height
-        out=np.zeros(tuple(s))
+        out=np.zeros(tuple(s),dtype=img.dtype)
         out[:img.shape[0]]+=img
         return out
     #Make all images RGB instead of RGBA as a hack...
     return np.column_stack(tuple([heightify(img) for img in image_list]))
 
 def vertically_concatenated_images(*image_list):
-    #First image in image_list goes on the top
+    """ First image in image_list goes on the top """
     image_list=detuple(image_list)
     return np.rot90(horizontally_concatenated_images([np.rot90(image,-1) for image in reversed(image_list)]))
 
@@ -22139,13 +22509,15 @@ def grid_concatenated_images(image_grid):
 
     #A 0x0 transparent pixel
     null_img = uniform_float_color_image(0,0,(0,0,0,0))
+    null_converter = _common_image_converter([x for x in list_flatten(image_grid) if is_image(x)])
+    null_img = null_converter(null_img)
 
     for y,image_row in enumerate(image_grid):
         image_grid[y]=image_row=list(image_row)
         for x,image in enumerate(image_row):
             if image is None: image=null_img
             assert is_image(image),'All inputs must be images, but '+repr(image)+' is not an image as defined by rp.is_image()!'
-            image_grid[y][x]=as_rgba_image(as_float_image(image))
+            image_grid[y][x]=image
             max_image_widths[x]=max(max_image_widths[x],get_image_width(image))
 
     for y,image_row in enumerate(image_grid):
@@ -22169,6 +22541,8 @@ def tiled_images(
     Sugar for what I often do with grid_concatenated_images
     length can be None, an int, or a float specifying aspect ratio
     WARNING: Using length as an aspect ratio is NOT to be used in any code that will last; that functionality is subject to change! Please don't be afraid to make it better (right now the aspect ratio implicitly assumes all the given images are the same size and square...which they're not) 
+
+    Setting border_thickness=0 can result in large speed boosts right now
     """
 
     #Replace None's with null_images
@@ -22192,11 +22566,22 @@ def tiled_images(
         if length_is_aspect_ratio:
             length = int(ceil(length * ratio))
 
-    format_image=lambda image: bordered_image_solid_color(image,color=border_color,thickness=border_thickness,top=0,left=0)
+    format_image = (
+        (
+            lambda image: bordered_image_solid_color(
+                image, color=border_color, thickness=border_thickness, top=0, left=0
+            )
+        )
+        if border_thickness
+        else identity
+    )
+
     images=[format_image(image) for image in images]
     images=split_into_sublists(images,length)
     output=grid_concatenated_images(images)
-    output=bordered_image_solid_color(output,color=border_color,thickness=border_thickness,bottom=0,right=0)
+
+    if border_thickness:
+        output=bordered_image_solid_color(output,color=border_color,thickness=border_thickness,bottom=0,right=0)
     return output
 
 def vertically_flipped_image(image):
@@ -22447,25 +22832,25 @@ def _rgba_image_to_grayscale_image     (image):return _rgb_image_to_grayscale_im
 def _rgba_image_to_rgb_image           (image):return as_numpy_array(image)[:,:,:3]
 def _rgba_image_to_rgba_image          (image):return as_numpy_array(image).copy()
 
-def as_grayscale_image(image):
+def as_grayscale_image(image,*,copy=True):
     assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
-    if is_grayscale_image(image):return _grayscale_image_to_grayscale_image(image)
+    if is_grayscale_image(image):return _grayscale_image_to_grayscale_image(image) if copy else image
     if is_rgb_image      (image):return       _rgb_image_to_grayscale_image(image)
     if is_rgba_image     (image):return      _rgba_image_to_grayscale_image(image)
     assert False,'This line should be impossible to reach because is_image(image).'
 
-def as_rgb_image(image):
+def as_rgb_image(image,*,copy=True):
     assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
     if is_grayscale_image(image):return _grayscale_image_to_rgb_image(image)
-    if is_rgb_image      (image):return       _rgb_image_to_rgb_image(image)
+    if is_rgb_image      (image):return       _rgb_image_to_rgb_image(image) if copy else image
     if is_rgba_image     (image):return      _rgba_image_to_rgb_image(image)
     assert False,'This line should be impossible to reach because is_image(image).'
 
-def as_rgba_image(image):
+def as_rgba_image(image,*,copy=True):
     assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
     if is_grayscale_image(image):return _grayscale_image_to_rgba_image(image)
     if is_rgb_image      (image):return       _rgb_image_to_rgba_image(image)
-    if is_rgba_image     (image):return      _rgba_image_to_rgba_image(image)
+    if is_rgba_image     (image):return      _rgba_image_to_rgba_image(image) if copy else image
     assert False,'This line should be impossible to reach because is_image(image).'
 
 # Channel dtype conversions:
@@ -22504,21 +22889,21 @@ def _binary_image_to_byte_image  (image):return _float_image_to_byte_image(_bina
 def _binary_image_to_binary_image(image):return image.copy()
 
 _channel_conversion_error_message='The given input image has an unrecognized dtype (there are no converters for it)'
-def as_float_image(image):
+def as_float_image(image,*,copy=True):
     assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
-    if is_float_image (image):return  _float_image_to_float_image(image)
+    if is_float_image (image):return  _float_image_to_float_image(image) if copy else image
     if is_byte_image  (image):return   _byte_image_to_float_image(image)
     if is_binary_image(image):return _binary_image_to_float_image(image)
     assert False,_channel_conversion_error_message
 
-def as_byte_image(image):
+def as_byte_image(image,*,copy=True):
     assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
     if is_float_image (image):return  _float_image_to_byte_image(image)
-    if is_byte_image  (image):return   _byte_image_to_byte_image(image)
+    if is_byte_image  (image):return   _byte_image_to_byte_image(image) if copy else image
     if is_binary_image(image):return _binary_image_to_byte_image(image)
     assert False,_channel_conversion_error_message
 
-def as_binary_image(image,dither=False):
+def as_binary_image(image,dither=False,*,copy=True):
     # EXAMPLE of 'dither': while True: display_image(as_binary_image(load_image_from_webcam(),dither=True))
     assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
 
@@ -22527,22 +22912,126 @@ def as_binary_image(image,dither=False):
 
     if is_float_image (image):return  _float_image_to_binary_image(image)
     if is_byte_image  (image):return   _byte_image_to_binary_image(image)
-    if is_binary_image(image):return _binary_image_to_binary_image(image)
+    if is_binary_image(image):return _binary_image_to_binary_image(image) if copy else image
     assert False,_channel_conversion_error_message
 
 #TODO: Make these faster in special cases, such as where images is a numpy array - and in this case also return a numpy array
-def _images_conversion(func, images):
-    output = [func(image) for image in images]
+def _images_conversion(func, images, *, copy_check ,copy=True):
+
+    if _is_numpy_array(images):
+        #Optimization: A bit of complicated, ugly logic here - but it's all just for optimization. 
+        #Deleting this block won't affect the functionality of this function, only the speed in certain edge cases.
+
+        if not len(images):
+            #Copying zero-length tensors takes basically 0 time
+            return images.copy()
+
+        #We might need to do a check on the first image to avoid reimplementing a image-type check function
+        assert len(images)
+
+        if not copy and copy_check(images[0]):
+            #Optimization: Potentially skip a conversion alltogether
+            #Example: A video
+            #     >>> q=as_byte_images(ans,)
+            #    TICTOC: 0.28664    seconds
+            #     >>> q=as_byte_images(ans,copy=False)
+            #    TICTOC: 0.00007    seconds
+            return images
+
+        elif func==as_float_image:
+            if images.dtype==np.uint8:
+                return images/255
+            elif images.dtype==bool:
+                return images+0.0
+            else:
+                return images.copy()
+
+        elif func==as_byte_image:
+            if images.dtype==np.uint8:
+                return images.copy()
+            elif images.dtype==bool:
+                return images.astype(np.uint8) * 255
+            else:
+                return (images*255).astype(np.uint8)
+
+        elif func==as_byte_image:
+            if images.dtype==np.uint8:
+                return images>127
+            elif images.dtype==bool:
+                return images.copy()
+            else:
+                return images>.5
+
+        elif func==as_rgb_image:
+            if len(images.shape)==3: #Given grayscale images
+                #BHW matrices turn into RGB tensors
+                # return ... Fill this in. Duplicate the grayscale along all RGB channels
+                pass #Not implemented yet
+            assert len(images.shape==4) #BHWC
+            C=images.shape[3]
+            if C==3:
+                return images.copy()
+            else:
+                assert C==4
+                return images[:,:,:3]
+
+        elif func==as_rgba_image:
+            if len(images.shape)==3: #Given grayscale images
+                #BHW matrices turn into RGB tensors
+                # return ... Fill this in. Alpha channel is 1 if floating point else 255 if uint8 else True if bool, the other 3 are duplciated from the grayscale matrices...
+                pass #Not implemented yet
+            assert len(images.shape==4) #BHWC
+            C=images.shape[3]
+            if C==3:
+                # return ... add a 4th channel 
+                pass #Not implemented yet
+            else:
+                assert C==4
+                return images.copy()
+
+        elif func==as_grayscale_image:
+            if len(images.shape)==3: #Given grayscale images
+                return images.copy()
+            assert len(images.shape==4) #BHWC
+            #Average the RGB channels and turn back to uint8 or float or binary...
+            pass #Not implemented yet
+
+
+        #TODO: Handle all edge cases of as_rgb_images, as_rgba_images, as_binary_images
+
+
+    #TODO: This can be optimized in the case that images is a numpy array by doing vectorized operations on it
+    output = [func(as_numpy_image(image,copy=copy),copy=copy) for image in images]
     if _is_numpy_array(images):
         output = as_numpy_array(output)
+
     return output
 
-def as_float_images    (images): return _images_conversion(as_float_image    , images)
-def as_byte_images     (images): return _images_conversion(as_byte_image     , images)
-def as_binary_images   (images): return _images_conversion(as_binary_image   , images)
-def as_rgb_images      (images): return _images_conversion(as_rgb_image      , images)
-def as_rgba_images     (images): return _images_conversion(as_rgba_image     , images)
-def as_grayscale_images(images): return _images_conversion(as_grayscale_image, images)
+def as_float_images    (images,*,copy=True): return _images_conversion(as_float_image    , images, copy=copy, copy_check=is_float_image    )  
+def as_byte_images     (images,*,copy=True): return _images_conversion(as_byte_image     , images, copy=copy, copy_check=is_byte_image     )  
+def as_binary_images   (images,*,copy=True): return _images_conversion(as_binary_image   , images, copy=copy, copy_check=is_binary_image   )  
+def as_rgb_images      (images,*,copy=True): return _images_conversion(as_rgb_image      , images, copy=copy, copy_check=is_rgb_image      )  
+def as_rgba_images     (images,*,copy=True): return _images_conversion(as_rgba_image     , images, copy=copy, copy_check=is_rgba_image     )  
+def as_grayscale_images(images,*,copy=True): return _images_conversion(as_grayscale_image, images, copy=copy, copy_check=is_grayscale_image)  
+
+def _common_image_channel_converter(images):
+    """Given a list of images, choose the cheapest as_*_image function that preserves as much data as possible"""
+    if   any(map(is_rgba_image, images)): return as_rgba_image
+    elif any(map(is_rgb_image , images)): return as_rgb_image
+    else                                : return as_grayscale_image
+
+def _common_image_dtype_converter(images):
+    """Given a list of images, choose the cheapest as_*_image function that preserves as much data as possible"""
+    if   any(map(is_float_image, images)): return as_float_image
+    elif any(map(is_byte_image , images)): return as_byte_image
+    else                                 : return as_binary_image
+
+def _common_image_converter(images):
+    dtype_converter = _common_image_dtype_converter(images)
+    channel_converter = _common_image_channel_converter(images)
+    def converter(image, copy=True):
+        return channel_converter(dtype_converter(image,copy=copy),copy=copy)
+    return converter
 
 def random_rgb_byte_color():
     return (randint(255),randint(255),randint(255))
@@ -22593,16 +23082,20 @@ def hex_color_to_byte_color(hex_color:str):
 hex_color_to_tuple = hex_color_to_byte_color #This was its old name. This is here to preserve compatiability.
 
 def hex_color_to_float_color(hex_color:str):
-    #EXAMPLE:
-    #     >>> hex_color_to_byte_color('#007FFF')
-    #    ans = (0, .5, 1)
+    """
+    EXAMPLE:
+        >>> hex_color_to_byte_color('#007FFF')
+       ans = (0, .5, 1)
+    """
     color=hex_color_to_byte_color(hex_color)
     return tuple(x/255 for x in color)
 
 def byte_color_to_hex_color(byte_color:tuple, hashtag=True):
-    #EXAMPLE:
-    #    >>> byte_color_to_hex_color((0,255,127))
-    #    ans = #00FF7F
+    """
+    EXAMPLE:
+       >>> byte_color_to_hex_color((0,255,127))
+       ans = #00FF7F
+    """
     assert is_byte_color(byte_color)
 
     byte_color = [int(min(255,max(0,x))) for x in byte_color]
@@ -22722,14 +23215,18 @@ def get_image_dimensions(image):
 #    return [get_image_dimensions(x) for x in images]
 
 def get_image_height(image):
-    #Return the image's height measured in pixels
+    """
+    Return the image's height measured in pixels
+    """
     if _is_torch_image(image): return image.shape[1] #Assumes a CHW image
     assert is_image(image)
     if is_pil_image(image):return image.height
     return image.shape[0]
 
 def get_image_width(image):
-    #Return the image's width measured in pixels
+    """
+    Return the image's width measured in pixels
+    """
     if _is_torch_image(image): return image.shape[2] #Assumes a CHW image
     assert is_image(image)
     if is_pil_image(image):return image.width
@@ -23042,11 +23539,11 @@ def bordered_image_solid_color(image,color=(1.,1.,1.,1.),thickness=1,width=None,
     bottom=height    if bottom is None else bottom
     left  =width     if left   is None else left
     right =width     if right  is None else right
-    
+
     #We convert the image into rgba-floating point format (with colors between 0 and 1)
-    image=np.asarray(image)
-    image=as_rgba_image(image)
-    image=as_float_image(image)
+    image=as_numpy_image(image,copy=False)
+    image=as_rgba_image (image,copy=False)
+    image=as_float_image(image,copy=False)
 
     colorize = lambda x: x*0+[[list(color)]]
 
@@ -24913,20 +25410,29 @@ def crop_image(image, height: int = None, width: int = None, origin='top left'):
             for theta in np.linspace(0,pi):
                 display_image(crop_image(ans,100+1000*np.cos(theta)**2,100+1000*np.sin(theta)**2,'center'))
                 sleep(1/60)
-    """
 
+    """
 
     assert is_image(image)
     image_width  = get_image_width (image)
     image_height = get_image_height(image)
-    assert image_height, image_width == image.shape
-    assert any(image.shape),'The image must have at least 1 pixel to be cropped'
+    assert (image_height, image_width) == image.shape[:2]
 
     if height is None:height=image_height
     if width  is None:width =image_width 
     height=int(height)
     width =int(width)
     assert height>=0 and width>=0, 'Images can\'t have a negative height or width'
+
+    if not any(get_image_dimensions(image)):
+        #Handle cropping images that have height or width==0, allowing for zero-padding
+        #Todo: This can probably be more elegant, but whatever...
+        if is_grayscale_image(image):
+            return np.zeros((height,width)).astype(image.dtype)
+        if is_rgb_image(image):
+            return np.zeros((height,width,3)).astype(image.dtype)
+        if is_rgba_image(image):
+            return np.zeros((height,width,4)).astype(image.dtype)
 
     origins=['top left','center','bottom right'] #TODO: Possibly add more origins
     assert origin in origins,'Invalid origin: %s. Please select from %s'%(repr(origin),repr(origins))
@@ -25966,6 +26472,12 @@ def get_mouse_position():
     EXAMPLE: while True:print(get_mouse_position()) #Move your mouse around and watch the numbers change
     """
     return _get_pynput_mouse_controller().position
+
+def get_mouse_x():
+    return get_mouse_position()[0]
+
+def get_mouse_y():
+    return get_mouse_position()[1]
 
 def set_mouse_position(*position):
     """
@@ -28886,7 +29398,7 @@ def hsv_to_rgb(hsv_image):
     output = _hsv_to_rgb_cache(hsv_image)
 
     if alpha is not None:
-        output=with_alpha_channel(output,alpha)
+        output=with_alpha_channel(output,alpha,copy=False)
 
     return output
 
@@ -28922,7 +29434,7 @@ def rgb_to_hsv(rgb_image):
     output = _rgb_to_hsv_cache(rgb_image)
 
     if alpha is not None:
-        output=with_alpha_channel(output,alpha)
+        output=with_alpha_channel(output,alpha,copy=False)
 
     return output
 
@@ -28945,21 +29457,21 @@ get_image_brightness=get_image_value
 
 def get_image_red(image):
     """Takes in an image as defined by rp.is_image and returns a matrix"""
-    image=as_numpy_image(image)
+    image=as_numpy_image(image,copy=False)
     if is_grayscale_image(image):
         image=as_rgb_image(image)
     return image[:,:,0]
         
 def get_image_green(image):
     """Takes in an image as defined by rp.is_image and returns a matrix"""
-    image=as_numpy_image(image)
+    image=as_numpy_image(image,copy=False)
     if is_grayscale_image(image):
         image=as_rgb_image(image)
     return image[:,:,1]
 
 def get_image_blue(image):
     """Takes in an image as defined by rp.is_image and returns a matrix"""
-    image=as_numpy_image(image)
+    image=as_numpy_image(image,copy=False)
     if is_grayscale_image(image):
         image=as_rgb_image(image)
     return image[:,:,2]
@@ -29040,10 +29552,24 @@ def with_image_hue(image, hue):
     rgb = hsv_to_rgb(hsv)
 
     if alpha is not None:
-        rgba=with_alpha_channel(rgb,alpha)
+        rgba=with_alpha_channel(rgb,alpha,copy=False)
         return rgba
 
     return rgb
+
+def shift_image_hue(image, shift):
+    """
+    EXAMPLE:
+        >>> while True:
+        >>> display_image(
+        >>>     shift_image_hue(
+        >>>         resize_image_to_fit(load_image_from_webcam(), height=256, interp="area"),
+        >>>         toc() / 10,
+        >>>     )
+        >>> )
+    """
+    new_hue = blend_images(get_image_hue(image),shift,mode='add')
+    return with_image_hue(image,new_hue)
 
 
 def with_image_saturation(image, saturation):
@@ -29066,7 +29592,7 @@ def with_image_saturation(image, saturation):
     rgb = hsv_to_rgb(hsv)
 
     if alpha is not None:
-        rgba=with_alpha_channel(rgb,alpha)
+        rgba=with_alpha_channel(rgb,alpha,copy=False)
         return rgba
 
     return rgb
@@ -29091,7 +29617,7 @@ def with_image_brightness(image, brightness):
     rgb = hsv_to_rgb(hsv)
 
     if alpha is not None:
-        rgba=with_alpha_channel(rgb,alpha)
+        rgba=with_alpha_channel(rgb,alpha,copy=False)
         return rgba
 
     return rgb
@@ -29867,7 +30393,7 @@ def resize_image_to_hold(image, height: int = None, width: int = None, *, interp
     """
     assert rp.is_image(image)
     assert height is not None or width is not None
-    image = as_numpy_image(image)
+    image = as_numpy_image(image,copy=False)
 
     if allow_shrink:
         assert height or width, ('If allow_shrink is True, at least one dimension must be nonzero. '
@@ -29903,7 +30429,7 @@ def resize_image_to_fit(image, height:int=None, width:int=None, *, interp='bilin
     image_height, image_width = rp.get_image_dimensions(image)
     scale = 1
 
-    image = as_numpy_image(image)
+    image = as_numpy_image(image,copy=False)
 
     # height and width are optional
     if height is None and width is None:
@@ -30566,7 +31092,7 @@ def extract_alpha_channel(image):
     image=as_rgba_image(image)
     return image[:,:,3]
 
-get_image_alpha=extract_alpha_channel #Uncomment this if you think it would make the code nicer!
+get_alpha_channel=get_image_alpha=extract_alpha_channel #Uncomment this if you think it would make the code nicer!
 
 def apply_image_function_per_channel(image,function):
     #Apply a grayscale funcion on every image channel individually
@@ -30576,7 +31102,7 @@ def apply_image_function_per_channel(image,function):
     channels=extract_image_channels(image)
     return compose_image_from_channels(*(function(channel) for channel in channels))
 
-def with_alpha_channel(image, alpha):
+def with_alpha_channel(image, alpha, copy=True):
     """
     Assigns an alpha channel to an image
     The alpha can either be given as a number between 0 and 1,
@@ -30592,11 +31118,12 @@ def with_alpha_channel(image, alpha):
     assert is_image(alpha)
     assert get_image_dimensions(image) == get_image_dimensions(alpha)
 
-    alpha = as_grayscale_image(alpha)
-    alpha = as_float_image(alpha)
+    alpha = as_grayscale_image(alpha,copy=False)
+    alpha = as_float_image(alpha,copy=False)
 
-    image = as_rgba_image(image)
-    image = as_float_image(image)
+    image = as_rgba_image(image,copy=False)
+    image = as_float_image(image,copy=False)
+    if copy: image = image.copy()
     image[:, :, 3] = alpha
 
     return image
@@ -31879,6 +32406,8 @@ def optical_flow_to_image(dx, dy, *, mode='saturation'):
     assert rp.is_float_image(dy), "dy must be a float image"
     assert dx.shape == dy.shape, "dx and dy must have the same shape"
     assert mode in ['saturation', 'brightness'], "mode must be either 'saturation' or 'brightness'"
+    dx=dx.astype(float) # np.float16 doesnt work
+    dy=dy.astype(float) # np.float16 doesnt work
     
     rp.pip_import('cv2')
     import cv2
@@ -32378,6 +32907,10 @@ def histogram_via_bokeh(values, bins:int=50, *,
 
 def get_git_remote_url(repo='.'):
     assert folder_exists(repo)
+    repo=is_a_git_repo(repo)
+    if not repo:
+        assert False, 'Is not a git repo: '+str(repo)
+    
     pip_import('git')
     import git
     ans=git.Remote.urls
@@ -32410,16 +32943,27 @@ def get_git_commit_message(folder='.'):
         master = repo.head.reference
         return master.commit.message
 
-def is_a_git_repo(folder='.'):
+_is_a_git_repo_cache=dict()
+def is_a_git_repo(folder='.', use_cache=False):
+    """Returns False if it's not a git repo, returns the root .git folder if it is"""
     if not is_a_folder(folder):
         return False
     pip_import('git')
     import git
     try:
         _ = git.Repo(folder,search_parent_directories=True).git_dir
-        return True
+        output= _
     except git.exc.InvalidGitRepositoryError:
-        return False
+        output= False
+    _is_a_git_repo_cache[folder]=output
+    return output
+
+def get_git_repo_root(folder='.', use_cache=False):
+    "Returns the git root of folder (the .git folder). If it's not a git repo, it throws an error."
+    assert isinstance(folder, str)
+    output = is_a_git_repo(folder, use_cache)
+    assert output, 'Is not a git repo: '+str(folder)
+    return output
 
 def git_clone(url,path=None):
     def get_repo_name_from_url(url):
@@ -32523,9 +33067,12 @@ def _autoformat_python_code_via_black(code:str):
 
 
 
-def as_numpy_images(images):
+def as_numpy_images(images,copy=True):
     if _is_numpy_array(images):
-        return images.copy()
+        if copy:
+            return images.copy()
+        else:
+            return images
     elif is_torch_tensor(images):
         import torch
         assert isinstance(images,torch.Tensor)
@@ -32537,7 +33084,7 @@ def as_numpy_images(images):
         if not is_iterable(images):
             raise TypeError('Unsupported image datatype: %s ; its not even iterable!'%type(images))
         if all((is_pil_image(x) or is_torch_tensor(x) or _is_numpy_array(x)) for x in images):
-            return [as_numpy_image(x) for x in images]
+            return [as_numpy_image(x,copy=copy) for x in images]
         else:
             raise TypeError('Unsupported image datatype: %s of %s'%(type(images),repr(set(map(type,images)))))
 
@@ -32566,9 +33113,12 @@ def as_pil_image(image):
 
     return fromarray(image)
 
-def as_numpy_image(image):
+def as_numpy_image(image,*,copy=True):
     if isinstance(image,np.ndarray):
-        return image.copy()
+        if copy:
+            return image.copy()
+        else:
+            return image
     elif is_torch_tensor(image):
         return as_numpy_images(image[None])[0]
     elif is_pil_image(image):
@@ -32606,7 +33156,7 @@ def as_torch_image(image):
     if is_torch_tensor(image):
         return image.clone()
     elif is_pil_image(image):
-        return as_torch_image(as_numpy_image(image))
+        return as_torch_image(as_numpy_image(image,copy=False))
     elif isinstance(image,np.ndarray):
         return as_torch_images(image[None])[0]
     else:
@@ -32639,7 +33189,8 @@ class ImageDataset:
             image=self.transform(image)
         return image
 
-        
+
+_select_torch_device_used_gpus = set()        
 def select_torch_device(n=0, *, silent=False, prefer_used=False):
     """
     Returns the appropriate PyTorch device based on the available hardware and system configuration.
@@ -32681,6 +33232,7 @@ def select_torch_device(n=0, *, silent=False, prefer_used=False):
     """
 
     import torch
+    global _select_torch_device_used_gpus 
 
     if currently_running_mac():
         if not hasattr(torch.backends,'mps') or not torch.backends.mps.is_available():
@@ -32709,7 +33261,7 @@ def select_torch_device(n=0, *, silent=False, prefer_used=False):
         return torch.device('cpu')
 
     all_gpus = get_all_gpu_ids()
-    used_gpus = get_gpu_ids_used_by_process()
+    used_gpus = list(set(get_gpu_ids_used_by_process()) | _select_torch_device_used_gpus)
 
     if prefer_used and used_gpus and not silent:
         if len(used_gpus)==1:
@@ -32728,6 +33280,9 @@ def select_torch_device(n=0, *, silent=False, prefer_used=False):
         n = new_n
 
     selected_gpu_id = get_gpu_with_most_free_vram(n, choices=available_gpus)
+
+    #On docker environments, we can't reliably detect which GPU's are used by this process - so just record what this function outputs and assume we're using that GPU.
+    _select_torch_device_used_gpus |= {selected_gpu_id}
 
     if gpu_count == 0:
         if not silent:
@@ -32758,12 +33313,14 @@ def select_torch_device(n=0, *, silent=False, prefer_used=False):
         #                        └────────┴──────────────────┴────────────────┴────────┴────────┴──────┴──────┴────────────────────────────────────┘
         #We must correctly select the line number
         # headers[3+selected_gpu_id]=arrow_header <--- Old version, not good enough: see above example
-        selected_line_number = min(i for i in range(len(lines)) if strip_ansi_escapes(lines[i]).strip().startswith("│   "+str(selected_gpu_id)))
-        headers[selected_line_number]=arrow_header 
-        
-        lines=[header+line for header,line in zip(headers,lines)]
-        if not silent:
-            print(line_join(lines))
+        possible_lines=[i for i in range(len(lines)) if strip_ansi_escapes(lines[i]).strip().startswith("│   "+str(selected_gpu_id))]
+        if possible_lines:
+            selected_line_number = min(possible_lines)
+            headers[selected_line_number]=arrow_header 
+            
+            lines=[header+line for header,line in zip(headers,lines)]
+            if not silent:
+                print(line_join(lines))
 
     return output
 
