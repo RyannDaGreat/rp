@@ -2121,6 +2121,9 @@ def handle_character(buffer,char,event=None):
 
                 'hd':'CDH',
                 'b':'CDH',
+                'inm':'if __name__ == "__main__":',
+
+                'torchrun':'PYM torch.distributed.run',
             })
 
             for item in 'import w'.split():
@@ -2726,6 +2729,7 @@ def load_python_bindings(python_input):
                                          '\\diph':'diff_pt_history',
                                          '\\qph':'query_pt_history',
                                          '\\irp':'inline_rp',
+                                         '\\inm':'if_name_main',
                                          }
                         # header_commands.update(header_jump_commands)
                         header_commands.update(header_arg_commands)
@@ -3024,6 +3028,8 @@ def load_python_bindings(python_input):
                                     except:
                                         text='#inline_rp ERROR'
                                     buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                if header=='if_name_main':
+                                    buffer.insert_text('if __name__ == "__main__":\n    ')
                                 if header=='repr':
                                     #A shortcut to `repr\py
                                     text=buffer.document.text
