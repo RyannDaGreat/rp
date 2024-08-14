@@ -23641,7 +23641,23 @@ def bordered_image_solid_color(image,color=(1.,1.,1.,1.),thickness=1,width=None,
     Currently converts the input image into floating-point rgba
     You can specify the border by thickness (controls top,bottom,left and right all at once)
     You can override that thickness by setting width or height to some values (height overrides top and bottom if they're None and width overrides left and right if they're None)
+    Negative thicknesses go into the image
     You can override top, bottom, left and right manually (if these are set, they override anything set by width or height etc)
+
+    EXAMPLE:
+        >>> for thickness in range(-100, 101):
+        ...     display_image(
+        ...         crop_image(
+        ...             bordered_image_solid_color(
+        ...                 uniform_float_color_image(200, 200, (0.25, 0.5, 1, 1)),
+        ...                 thickness=10,
+        ...                 height=thickness,
+        ...             ),
+        ...             height=400,
+        ...             width=400,
+        ...             origin="center",
+        ...         )
+        ...     )
     """
     assert len(color)==4,'Color must be rgba floats'
 
@@ -30476,6 +30492,231 @@ def torch_remap_image(image, x, y, *, relative=False, interp='bilinear', add_alp
     assert out.shape == (expected_c, out_height, out_width), "Expected output shape: ({}, {}, {}), but got: {}".format(expected_c, out_height, out_width, out.shape)
 
     return out
+
+def get_bilinear_weights(x, y):
+    """
+    Calculate bilinear interpolation weights for a set of (x, y) coordinates.
+
+    This function takes a set of (x, y) coordinates and returns the corresponding
+    bilinear interpolation weights and the integer coordinates of the 4 neighboring
+    pixels for each input coordinate.
+
+    The math behind this function is explained here:
+        https://www.desmos.com/calculator/esool5qrrd
+
+    Args:
+        x (torch.Tensor or numpy.ndarray): The x-coordinates of the input points.
+        y (torch.Tensor or numpy.ndarray): The y-coordinates of the input points.
+
+    Returns:
+        tuple: A tuple containing three elements:
+            - X (torch.Tensor or numpy.ndarray): The integer x-coordinates of the 4 neighboring pixels for each input point. Shape: (4, *x.shape)
+            - Y (torch.Tensor or numpy.ndarray): The integer y-coordinates of the 4 neighboring pixels for each input point. Shape: (4, *y.shape)
+            - W (torch.Tensor or numpy.ndarray): The bilinear interpolation weights for each of the 4 neighboring pixels. Shape: (4, *x.shape)
+
+    Note:
+        - x and y should have the same shape.
+        - This function works with both PyTorch tensors and NumPy arrays.
+        - Was originally called calculate_subpixel_weights, featured in TRITON's source/unprojector.py 
+            (see https://github.com/TritonPaper/TRITON/blob/master/source/unprojector.py)
+    """
+    assert x.shape == y.shape, "x and y must have the same shape"
+    shape = x.shape
+
+    Rx = x % 1
+    Ry = y % 1
+    Qx = 1 - Rx
+    Qy = 1 - Ry
+
+    A=Rx*Ry #Weight for  ceil(x), ceil(y)
+    B=Rx*Qy #Weight for  ceil(x),floor(y)
+    C=Qx*Qy #Weight for floor(x),floor(x)
+    D=Qx*Ry #Weight for floor(x), ceil(y)
+
+    Cx = x.ceil().long()
+    Cy = y.ceil().long()
+    Fx = x.floor().long()
+    Fy = y.floor().long()
+
+    stack = pip_import('torch').stack if is_torch_tensor(x) else np.stack
+    
+    X = stack((Cx, Cx, Fx, Fx))  # All X values
+    Y = stack((Cy, Fy, Fy, Cy))  # All Y values
+    W = stack((A, B, C, D))      # Weights
+
+    assert X.shape == (4, *shape), "Expected X.shape == (4, *x.shape), but got {}".format(X.shape)
+    assert Y.shape == (4, *shape), "Expected Y.shape == (4, *y.shape), but got {}".format(Y.shape)
+    assert W.shape == (4, *shape), "Expected W.shape == (4, *x.shape), but got {}".format(W.shape)
+
+    return X, Y, W
+
+def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', height=None, width=None, prepend_ones=False):
+    """
+    Scatter add an image tensor using the given x and y coordinate tensors.
+    Pixels warped out-of-bounds will be skipped.
+    This is similar to torch_remap_image, but uses scatter_add instead of remapping.
+    
+    If relative=True, it will treat x and y as deltas (dx and dy) and perform relative scatter adding.
+        Note: Because this is a scatter operation, the direction of movement will be the same as dx and dy.
+
+    Args:
+        image (torch.Tensor): Input image tensor of shape [C, H, W], where C is the number of channels (e.g., 3 for RGB, 4 for RGBA),
+                              H is the height, and W is the width of the image.
+        x (torch.Tensor): X-coordinate tensor of shape [H_out, W_out] specifying the x-coordinates for scatter adding,
+                          where H_out is the output height and W_out is the output width.
+        y (torch.Tensor): Y-coordinate tensor of shape [H_out, W_out] specifying the y-coordinates for scatter adding.
+        relative (bool, optional): If True, treat x and y as deltas (dx and dy) and perform relative scatter adding. Default is False.
+        interp (str, optional): Specifies how to handle fractional coordinates. Can be one of 'bilinear' (the slowest one), 'floor' (the fastest one), 'ceil', or 'round'. Default is 'floor'.
+        height (int, optional): The output height. If not specified, it is inferred from the input image height.
+        width (int, optional): The output width. If not specified, it is inferred from the input image width.
+        prepend_ones (bool, optional): If True, prepends a channel of ones to the input tensor before calculation. Useful for getting the sum easily by accessing output[0]. This option is simply for convenience. Default is False.
+
+    Returns:
+        torch.Tensor: Scatter added image tensor of shape [C, H_out, W_out] or [C+1, H_out, W_out] if prepend_ones is True, where:
+            - C is the number of channels in the input image.
+            - H_out is the output height.
+            - W_out is the output width.
+
+    Example:
+        >>> def demo_torch_scatter_add_image(interp,normalize=False,):
+        ...     import torch
+        ...
+        ...     url = "https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png"
+        ...     image=as_torch_image(load_image(url))
+        ...     
+        ...     # Define the animation parameters
+        ...     num_frames = 100
+        ...     wave_speed = 0.1
+        ...     wave_freq = 0.025
+        ...     wave_amp = 20
+        ...
+        ...     def get_frames():
+        ...         for frame in range(num_frames):
+        ...             y, x = torch.meshgrid(torch.arange(image.shape[1]), torch.arange(image.shape[2]))
+        ...             x = x.float()
+        ...             y = y.float()
+        ...
+        ...             # Apply sine and cosine waves to create caustics effect
+        ...             dx = wave_amp * torch.cos(wave_freq * (x + y) + frame * wave_speed)
+        ...             dy = wave_amp * torch.sin(wave_freq * (x - y) + frame * wave_speed)
+        ...
+        ...             caustics_image = torch_scatter_add_image(
+        ...                 image,
+        ...                 dx,
+        ...                 dy,
+        ...                 relative=True,
+        ...                 interp=interp,
+        ...                 prepend_ones=True
+        ...             )
+        ...             total, caustics_image = caustics_image[0],caustics_image[1:]
+        ...             if normalize:
+        ...                 caustics_image/=total
+        ...
+        ...             # Append the current frame to the list of frames
+        ...             yield caustics_image
+        ...
+        ...     display_video(get_frames(),framerate=60)
+        ...
+        ... demo_torch_scatter_add_image('floor')
+        ... demo_torch_scatter_add_image('floor',normalize=True)
+        ... demo_torch_scatter_add_image('bilinear',normalize=True)
+    """
+
+    assert rp.r._is_torch_image(image), "image must be a torch tensor with shape [C, H, W]"
+    assert is_torch_tensor(x) and is_a_matrix(x), "x must be a torch tensor with shape [H_out, W_out]"
+    assert is_torch_tensor(y) and is_a_matrix(y), "y must be a torch tensor with shape [H_out, W_out]"
+    assert x.shape == y.shape, "x and y must have the same shape, but got x.shape={} and y.shape={}".format(x.shape, y.shape)
+    assert image.device==x.device==y.device, "all inputs must be on the same device"
+    assert interp in ['floor', 'ceil', 'round', 'bilinear'], "interp must be one of 'floor', 'ceil', 'round', or 'bilinear'"
+    assert height is None or (isinstance(height, int) and height > 0), "height must be a positive integer"
+    assert width is None or (isinstance(width, int) and width > 0), "width must be a positive integer"
+
+    pip_import('einops')
+    pip_import('torch')
+    pip_import('torch_scatter')
+
+    import torch
+    from einops import rearrange
+    from torch_scatter import scatter_add
+
+    if prepend_ones:
+        #We might prepend a channel of ones to keep track of how many were added so we can normalize later
+        #For example, to get the mean we would divide output[1:]/output[0]
+        ones = torch.ones_like(image[:1])
+        image = torch.cat([ones, image], dim=0)
+
+    in_c, in_height, in_width = image.shape
+    out_height, out_width = x.shape
+    
+    # If we don't specify the output width and height in args, copy the height and width of the input image
+    out_width = width if width is not None else in_width
+    out_height = height if height is not None else in_height
+    
+    x = x.to(image.device)
+    y = y.to(image.device)
+
+    # Apply the specified rounding interp to the coordinates
+    if interp == 'bilinear':
+        #A form of antialiasing
+        components = []
+        for X, Y, W in zip(*get_bilinear_weights(x, y)):
+            components.append(
+                torch_scatter_add_image(
+                    image,
+                    X,
+                    Y,
+                    relative=relative,
+                    interp="floor",
+                    height=height,
+                    width=width,
+                    prepend_ones=False,
+                ) * W
+            )
+        return sum(components)
+    if interp == 'round':
+        x = x.round()
+        y = y.round()
+    elif interp == 'ceil':
+        x = x.ceil()
+        y = y.ceil()
+    else:
+        assert interp == 'floor'
+        # Will be implicitly floored during conversion
+
+    # Make sure x and y are int64 values, for indexing in torch_scatter
+    x = x.long()
+    y = y.long()
+
+    if relative:
+        assert in_height == out_height, "For relative scatter adding, input and output heights must match, but got in_height={} and out_height={}".format(in_height, out_height)
+        assert in_width == out_width, "For relative scatter adding, input and output widths must match, but got in_width={} and out_width={}".format(in_width, out_width)
+        in_y, in_x = torch.meshgrid(torch.arange(in_height), torch.arange(in_width))
+        x += in_x
+        y += in_y
+
+    # Flatten the image tensor
+    flat_image = rearrange(image, "c h w -> (h w) c")
+
+    # Compute the flattened indices for scatter_add
+    # And Filter out out-of-bounds indices based on the specified output height and width
+    indices = y * out_width + x
+    valid_indices = (y >= 0) & (y < out_height) & (x >= 0) & (x < out_width)
+    valid_mask = rearrange(valid_indices, "h w -> (h w)")
+    indices    = rearrange(indices, "h w -> (h w)")
+    valid_indices = indices[valid_mask]
+    valid_flat_image = flat_image[valid_mask]
+
+    # Initialize the output tensor with zeros
+    out = torch.zeros((out_height * out_width, in_c), dtype=image.dtype, device=image.device)
+
+    # Perform scatter_add operation only for valid indices
+    out = scatter_add(valid_flat_image, valid_indices, out=out, dim=0)
+
+    # Reshape the output tensor back to the original shape
+    out = rearrange(out, "(h w) c -> c h w", h=out_height, w=out_width)
+
+    return out
+
 
 
 def resize_images_to_hold(*images, height: int = None, width: int = None, interp='auto', allow_shrink=True):
