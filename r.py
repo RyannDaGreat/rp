@@ -3046,20 +3046,44 @@ def temporary_numpy_random_seed(seed=None):
 
 # endregion
 # region rant/ranp: ［run_as_new_thread，run_as_new_process］
-def run_as_new_thread(funcᆢvoid,*args,**kwargs):  # ⟵ THIS IS DUBIOUS. I DON'T KNOW IF IT DOES WHAT ITS SUPPOSED TO....
-    # Used when we simply don't need/want all the complexities of the threading module.
-    # An anonymous thread that only ceases once the def is finished.
+def run_as_new_thread(func,*args,**kwargs):
+    """
+    Used when we simply don't need/want all the complexities of the threading module.
+    An anonymous thread that only ceases once the def is finished.
+
+    Example:
+        >>> @run_as_new_thread
+        ... def _():
+        ...     for _ in range(5) :
+        ...         sleep(1)
+        ...         print(_)
+
+        >>> run_as_new_thread(save_image, image, 'image.jpg')
+    """
     new_thread=threading.Thread
-    new_thread=new_thread(target=funcᆢvoid,args=args,kwargs=kwargs)
+    new_thread=new_thread(target=func,args=args,kwargs=kwargs)
     new_thread.start()
     return new_thread
-def run_as_new_process(funcᆢvoid,*args,**kwargs):
-    # Used when we simply don't need/want all the complexities of the threading module.
-    # An anonymous thread that only ceases once the def is finished.
+
+def run_as_new_process(func,*args,**kwargs):
+    """
+    Used when we simply don't need/want all the complexities of the multiprocessing module
+    An anonymous process that only ceases once the def is finished.
+
+    Example:
+        >>> @run_as_new_process
+        ... def _():
+        ...     for _ in range(5) :
+        ...         sleep(1)
+        ...         print(_)
+
+        >>> run_as_new_process(save_image, image, 'image.jpg')
+    """
     import multiprocessing as mp
-    new_process=mp.Process(target=funcᆢvoid,args=args,kwargs=kwargs)
+    new_process=mp.Process(target=func,args=args,kwargs=kwargs)
     new_process.start()  # can't tell the difference between start and run
     return new_process
+
 # endregion
 def is_valid_url(url:str)->bool:
     #Return true iff the url string is syntactically valid
@@ -33858,6 +33882,9 @@ def as_pil_image(image):
 
     pip_import('PIL')
     from PIL.Image import fromarray
+
+    image = as_numpy_image(image)
+    assert is_image(image), image.shape
     
     if not is_grayscale_image(image) and not is_byte_image(image):
         #PIL.Image.fromarray can't handle:
@@ -34208,17 +34235,19 @@ def set_cuda_visible_devices(*devices):
 
         
 def _removestar(code:str,max_line_length=100,quiet=False):
-    #Takes something like:
-    #    from numpy import *
-    #    from rp import *
-    #    asarray([1,2,3])
-    #    display_image(x)
-    #And turns it into this:
-    #    from numpy import asarray
-    #    from rp import display_image
-    #    asarray([1,2,3])
-    #    display_image(x)
-    #It removes the stars
+    """
+    Takes something like:
+       from numpy import *
+       from rp import *
+       asarray([1,2,3])
+       display_image(x)
+    And turns it into this:
+       from numpy import asarray
+       from rp import display_image
+       asarray([1,2,3])
+       display_image(x)
+    It removes the stars
+    """
     pip_import('removestar')
     from removestar.removestar import fix_code
     return fix_code(code,file='filename is irrelevant',max_line_length=max_line_length,quiet=True)
@@ -34439,10 +34468,9 @@ def resize_list_to_fit(array:list, max_length:int):
     """
 
     if len(array)<max_length:
-        return [*array]
-    else:
-        return resize_list(array,max_length)
+        max_length = len(array)
 
+    return resize_list(array,max_length)
 
 def list_transpose(list_of_lists:list):
     """
