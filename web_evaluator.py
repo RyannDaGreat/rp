@@ -564,14 +564,14 @@ class Client:
     def __hash__(self):
         return hash(repr(self))
 
-class ClientWrangler:
+class ClientDelegator:
 
     def __init__(self, clients: list[Client]=[], *, on_connection_error='unregister', max_jobs_per_client=1):
         """      
-        The ClientWrangler class enables distributing Python computation across multiple servers.
+        The ClientDelegator class enables distributing Python computation across multiple servers.
 
         It maintains a pool of Client objects, each representing a connection to a server 
-        running the web_evaluator module. The ClientWrangler delegates jobs to available 
+        running the web_evaluator module. The ClientDelegator delegates jobs to available 
         servers, automatically balancing the workload.
 
         Args:
@@ -606,26 +606,26 @@ class ClientWrangler:
         Usage:
             >>> from web_evaluator import *
             >>> servers = [Client('192.168.0.1'), Client('192.168.0.2')]
-            >>> wrangler = ClientWrangler(servers)
+            >>> delegator = ClientDelegator(servers)
 
             >>> # Execute a job on the next available server  
-            >>> result = wrangler.evaluate('math.sqrt(49)')
+            >>> result = delegator.evaluate('math.sqrt(49)')
 
             >>> # Add a new server to the pool
             >>> new_server = Client('192.168.0.3')
-            >>> wrangler.register_client(new_server)
+            >>> delegator.register_client(new_server)
 
             >>> # Remove a server from the pool
-            >>> wrangler.unregister_client(servers[0]) 
+            >>> delegator.unregister_client(servers[0]) 
 
             >>> # Jobs are queued until a server is available
             >>> for i in range(100):
-            >>>     wrangler.evaluate(f'print({i})')
+            >>>     delegator.evaluate(f'print({i})')
 
         Example:
             >>> # Run servers on ports 43234 through 43237
             >>> from web_evaluator import *
-            >>> w=ClientWrangler([],on_connection_error='wait')
+            >>> w=ClientDelegator([],on_connection_error='wait')
             >>> for _ in range(8):
             >>>     run_as_new_thread(w.evaluate,'sleep(.5);print(123)')
             >>> w.register_client(Client(server_port=43234))
@@ -633,17 +633,17 @@ class ClientWrangler:
             >>> w.register_client(Client(server_port=43236))
             >>> w.register_client(Client(server_port=43237))
 
-        The ClientWrangler abstracts the details of server communication, job queueing, 
+        The ClientDelegator abstracts the details of server communication, job queueing, 
         and load balancing, making it easier to scale Python computation across multiple machines.
         
         The original use case of this class is to allow streaming data processing for torch dataloaders,
         so we don't need to process a huge dataset's optical flow etc before training. Especially because 
-        dataloader workers cannot use GPU on torch, communicating via a ClientWrangler to a bunch of 
+        dataloader workers cannot use GPU on torch, communicating via a ClientDelegator to a bunch of 
         GPU-enabled slave workers is a good option.
 
         A simple way to have clients enlist is to keep a file clients.txt, and each time a relevant 
         client is made it does rp.append_line_to_file(repr(client), 'clients.txt')
-        And then we do ClientWrangler(map(Client.from_string,set(rp.file_line_iterator('clients.txt'))))
+        And then we do ClientDelegator(map(Client.from_string,set(rp.file_line_iterator('clients.txt'))))
         Note that if we have on_connection_error='unregister', any bad servers will be quickly removed
         """
         assert on_connection_error in ['wait', 'unregister', 'raise']
@@ -674,10 +674,10 @@ class ClientWrangler:
             client (Client): The Client instance to add to the pool.
 
         Raises:
-            AssertionError: If the client is already registered with another ClientWrangler.
+            AssertionError: If the client is already registered with another ClientDelegator.
         """
-        #Add an attribute _busy_count - used for the ClientWrangler
-        assert not hasattr(client, '_busy_count'), 'A Client should belong to at most one ClientWrangler'
+        #Add an attribute _busy_count - used for the ClientDelegator
+        assert not hasattr(client, '_busy_count'), 'A Client should belong to at most one ClientDelegator'
         client._busy_count=0
 
         with self._register_lock:
@@ -698,7 +698,7 @@ class ClientWrangler:
         """
         Internal, private method.
 
-        Updates the internal state of the ClientWrangler.
+        Updates the internal state of the ClientDelegator.
         Possibly releases a thread lock to enable a queued evalution job.
 
         This method is called automatically after registering or unregistering clients,
