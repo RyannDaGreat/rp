@@ -1,4 +1,5 @@
 import ast
+from concurrent.futures import thread
 import traceback
 from urllib.parse import urlparse, parse_qs
 import socket
@@ -14,6 +15,7 @@ from http.server import (
 import argparse
 from socketserver import ThreadingMixIn
 import threading
+from collections import deque
 
 import rp
 from contextlib import nullcontext
@@ -32,6 +34,7 @@ DEFAULT_SERVER_PORT = 43234 #This is an arbitrary port I chose because its easy 
 #    However, communication is not encrypted, and also you can freeze the server if given bad code (for example, an infinite loop given by the client can hang the server)
 #    With this in mind, it's extremely useful in situations where you need to offload computation from one computer to another.
 #    Because it's an HTTP server, one server can service multiple clients.
+#    It can also double as a web server and fileserver, allowing you to host websites with it that can even run custom python code from the frontend, similar to Jupyter lab.
 #    To use this module, one computer runs the run_server() function and the other creates a Client and uses client.evaluate()
 #    For testing, you can also use "python3 -m rp.experimental.web_evaluator" on client, server or both
 
@@ -42,6 +45,33 @@ sync_lock = threading.Lock()
 # https://stackoverflow.com/questions/55951233/does-pythons-asyncio-lock-acquire-maintain-order
 
 class Evaluation:
+    """
+    The Evaluation class represents the result of executing Python code on the server.
+    Instances of this class are created by web_evaluator servers,
+    and passed over the network to Client objects, that then deserialize and read them.
+    
+    It includes the following attributes:
+        - code: The original Python code that was executed.
+        - value: The return value of the executed code (if it didn't error)
+        - error: The exception object if an error occurred during execution.
+        - errored: A boolean indicating whether an error occurred.
+        - is_eval: A boolean indicating whether the code was executed using eval() (as opposed to exec()).
+        - is_exec: A boolean indicating whether the code was executed using exec().
+    The `error` and `value` attributes are not always present - 
+        but you can determine if they are from other attributes (see `create`'s docstring)
+
+    Here's an example of accessing the attributes of an Evaluation object:
+        >>> result = client.evaluate('x + y')
+        >>> print(result.code)  # Output: 'x + y'
+        >>> print(result.value)  # Output: 30
+        >>> print(result.errored)  # Output: False
+        >>> print(result.is_eval)  # Output: True
+        
+        >>> result = client.evaluate('invalid code')
+        >>> print(result.errored)  # Output: True
+        >>> print(result.error)  # Output: SyntaxError: invalid syntax
+    """
+
     __slots__='code sync is_eval is_exec errored error value'.split()
 
     @staticmethod
@@ -172,12 +202,13 @@ def _HandlerMaker(scope:dict=None, base_class=SimpleHTTPRequestHandler):
             
             if should_handle:
                 #Get the request inputs
+                body = self.get_request_body()
+                data = rp.bytes_to_object(body)
+                code = data["code"]
                 sync = data.get("sync", True) #Defaults to True for compatibility - older webevals didn't have a sync option
+                assert isinstance(code, str)
+
                 with (sync_lock if sync else nullcontext()):
-                    code = data["code"]
-                    body = self.get_request_body()
-                    data = rp.bytes_to_object(body)
-                    assert isinstance(code, str)
 
                     if "vars" in data:
                         assert isinstance(data["vars"], dict)
@@ -514,6 +545,239 @@ class Client:
             assert isinstance(result,list)
             result=[Evaluation.from_dict(x) for x in result]
         return result
+    
+    def __repr__(self):
+        """
+        Client's repr is such that we can copy client via eval(repr(client))
+        This makes it easy to store and load them into text files
+        """
+        return "Client(%s, %s, sync=%s)"%(repr(self.server_name), repr(self.server_port), repr(self.sync))
+
+    @staticmethod
+    def from_string(string):
+        """
+        Client.from_string(repr(client)) is the same as copy(client)
+        """
+        assert string.startswith('Client(')
+        return eval(string)
+
+    def __hash__(self):
+        return hash(repr(self))
+
+class ClientWrangler:
+
+    def __init__(self, clients: list[Client]=[], *, on_connection_error='unregister', max_jobs_per_client=1):
+        """      
+        The ClientWrangler class enables distributing Python computation across multiple servers.
+
+        It maintains a pool of Client objects, each representing a connection to a server 
+        running the web_evaluator module. The ClientWrangler delegates jobs to available 
+        servers, automatically balancing the workload.
+
+        Args:
+            clients (list[Client], optional): A list of Client instances representing servers to manage.
+                Defaults to an empty list. Clients can also be added later with register_client().
+                Only one of each client instance may be added, but you can register
+                    multiple client instances with the same address/port.
+            
+            on_connection_error (str, optional): Specifies behavior when a client encounters a connection
+                error. Defaults to 'unregister'. Valid values:
+                - 'unregister': Remove the client from the pool. Avoids delays due to server outages.
+                - 'raise': Raise the error immediately to the caller.
+                - 'wait': Keep trying the request until the server responds. May delay jobs indefinitely.
+            
+            max_jobs_per_client (int, optional): The maximum number of jobs that can be concurrently 
+                executed by a single client before it's considered busy. Defaults to 1. 
+                Values above 1 are only meaningful if the Client instances have sync=False
+
+        Methods:
+            register_client(client: Client) -> None:
+                Adds a Client instance to the pool of managed servers.
+
+            unregister_client(client: Client) -> None:  
+                Removes a Client instance from the pool of managed servers.
+
+            evaluate(code: str, **vars) -> Evaluation:
+                Submits a job to be executed on the next available server.
+                The code is executed as if by client.evaluate(code, **vars).
+                If no servers are available, the job is queued until one becomes available.
+                Returns an Evaluation object representing the result of the execution.
+
+        Usage:
+            >>> from web_evaluator import *
+            >>> servers = [Client('192.168.0.1'), Client('192.168.0.2')]
+            >>> wrangler = ClientWrangler(servers)
+
+            >>> # Execute a job on the next available server  
+            >>> result = wrangler.evaluate('math.sqrt(49)')
+
+            >>> # Add a new server to the pool
+            >>> new_server = Client('192.168.0.3')
+            >>> wrangler.register_client(new_server)
+
+            >>> # Remove a server from the pool
+            >>> wrangler.unregister_client(servers[0]) 
+
+            >>> # Jobs are queued until a server is available
+            >>> for i in range(100):
+            >>>     wrangler.evaluate(f'print({i})')
+
+        Example:
+            >>> # Run servers on ports 43234 through 43237
+            >>> from web_evaluator import *
+            >>> w=ClientWrangler([],on_connection_error='wait')
+            >>> for _ in range(8):
+            >>>     run_as_new_thread(w.evaluate,'sleep(.5);print(123)')
+            >>> w.register_client(Client(server_port=43234))
+            >>> w.register_client(Client(server_port=43235))
+            >>> w.register_client(Client(server_port=43236))
+            >>> w.register_client(Client(server_port=43237))
+
+        The ClientWrangler abstracts the details of server communication, job queueing, 
+        and load balancing, making it easier to scale Python computation across multiple machines.
+        
+        The original use case of this class is to allow streaming data processing for torch dataloaders,
+        so we don't need to process a huge dataset's optical flow etc before training. Especially because 
+        dataloader workers cannot use GPU on torch, communicating via a ClientWrangler to a bunch of 
+        GPU-enabled slave workers is a good option.
+
+        A simple way to have clients enlist is to keep a file clients.txt, and each time a relevant 
+        client is made it does rp.append_line_to_file(repr(client), 'clients.txt')
+        And then we do ClientWrangler(map(Client.from_string,set(rp.file_line_iterator('clients.txt'))))
+        Note that if we have on_connection_error='unregister', any bad servers will be quickly removed
+        """
+        assert on_connection_error in ['wait', 'unregister', 'raise']
+        self.on_connection_error=on_connection_error
+
+        self._clients=[]
+        self._locks=deque()
+        self._free_clients=[]
+        self.max_jobs_per_client=max_jobs_per_client
+
+        #TODO: I'm not super confident this won't have race conditions.
+        #I also don't know if we need all these locks. But empirically, so far, it seems to work perfectly.
+        #I've added some additional locks below to mitigate what I anticipate so far
+        self._update_lock = threading.Lock()
+        self._register_lock = threading.Lock()
+        self._evaluate_lock = threading.Lock()
+        self._client_select_lock = threading.Lock()
+        self._release_lock = threading.Lock()
+
+        for client in clients:
+            self.register_client(client)
+
+    def register_client(self, client):
+        """
+        Adds a Client instance to the pool of managed servers.
+
+        Args:
+            client (Client): The Client instance to add to the pool.
+
+        Raises:
+            AssertionError: If the client is already registered with another ClientWrangler.
+        """
+        #Add an attribute _busy_count - used for the ClientWrangler
+        assert not hasattr(client, '_busy_count'), 'A Client should belong to at most one ClientWrangler'
+        client._busy_count=0
+
+        with self._register_lock:
+            self._clients.append(client)
+            self._update()
+
+    def unregister_client(self, client):
+        """
+        Removes a Client instance from the pool of managed servers.
+
+        Args:
+            client (Client): The Client instance to remove from the pool.
+        """
+        with self._register_lock:
+            self._clients = [c for c in self._clients if c is not client]
+
+    def _update(self):
+        """
+        Internal, private method.
+
+        Updates the internal state of the ClientWrangler.
+        Possibly releases a thread lock to enable a queued evalution job.
+
+        This method is called automatically after registering or unregistering clients,
+        or after a job is submitted or completed. It updates the list of available servers
+        and assigns pending jobs to free servers if possible.
+        """
+        with self._update_lock:
+            self._free_clients = [c for c in self._clients if c._busy_count<self.max_jobs_per_client]
+            if self._locks and self._free_clients:
+                self._release_lock.acquire()
+                self._locks.popleft().release()
+                self._chosen_client = rp.random_element(self._free_clients)
+                self._chosen_client._busy_count+=1
+
+    def evaluate(self, code, **vars):
+        """
+        Submits a job to be executed on the next available server. Blocks until evaluated.
+
+        This method behaves like Client.evaluate(code, **vars), but automatically selects
+        a server from the pool of registered clients. If no servers are available, the job
+        is queued until a server becomes free.
+
+        Args:
+            code (str): The Python code to execute on the server.
+            **vars: Additional variables to pass to the server for the job execution.
+
+        Returns:
+            Evaluation: An Evaluation object representing the result of the job execution.
+
+        Note:
+            If no clients are registered, this method will block until a client is added
+            using register_client().
+        """
+        
+        with self._evaluate_lock:
+            lock = threading.Lock()
+            lock.acquire()
+
+            self._locks.append(lock)
+
+            self._update() 
+
+        #Second time we acquire - will lock if _update didn't unlock it
+        lock.acquire()
+        client = self._chosen_client
+        self._release_lock.release()
+
+        self._update()
+
+        try:
+            result = client.evaluate(code, **vars)
+            return result
+        
+        except requests.exceptions.ConnectionError as e:
+            rp.fansi_print("Warning: "+str(client)+" is unreachable! Error: "+str(e), 'red')
+            
+            if self.on_connection_error == 'unregister':
+                #Delete dead clients
+                self.unregister_client(client)
+                return self.evaluate(code, **vars)
+            elif self.on_connection_error == 'raise':
+                #Throw an error right away - handle it elsewhere
+                raise
+            elif self.on_connection_error == 'wait':
+                while True:
+                    try:
+                        result = client.evaluate(code, **vars)
+                        return result
+                    except requests.exceptions.ConnectionError:
+                        time.sleep(1)
+            else:
+                assert False, 'Invalid self.on_connection_error value: '+str(self.on_connection_error)
+
+        finally:
+            client._busy_count-=1
+            assert client._busy_count>=0
+            self._update()
+        
+            
 
 
 def interactive_mode():

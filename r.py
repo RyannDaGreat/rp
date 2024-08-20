@@ -269,11 +269,13 @@ def pam(funcs,*args,**kwargs):
 # endregion
 # region ［identity］
 def identity(*args):
-    # The identity function. ƒ﹙𝓍﹚﹦ 𝓍    where   ƒ ≣ identity
-    #Examples:
-    #   identity(2) == 2
-    #   identity('Hello World!') == 'Hello World!'
-    #   identity(1,2,3) == (1,2,3)  #When given multiple args, returns a tuple
+    """
+    The identity function. ƒ﹙𝓍﹚﹦ 𝓍    where   ƒ ≣ identity
+    Examples:
+      identity(2) == 2
+      identity('Hello World!') == 'Hello World!'
+      identity(1,2,3) == (1,2,3)  #When given multiple args, returns a tuple
+    """
     return detuple(args)
 # endregion
 # region ［list_flatten］
@@ -2113,7 +2115,7 @@ def trim_video(video,length:int):
     if len(video)>=length:
         return video[:length]
 
-    number_of_extra_frames=len(length-len(video))
+    number_of_extra_frames=length-len(video)
 
     assert len(video),'Cannot extend a video with no frames - we need an example frame to determine the width and height'
     last_frame=video[-1]
@@ -2296,7 +2298,7 @@ def grid2d_map(grid2d_input,value_func=identity) -> list:
 # ⁠⁠⁠               ⎪                                                              ⎩                  ⎭⎪
 # ⁠⁠⁠               ⎩                                                                                  ⎭
 
-def _auto_interp_for_resize_image(resize_func, image, new_size):
+def _auto_interp_for_resize_image(resize_func, image, new_size, copy_attr='copy'):
     """
     A private function used by image resizing functions in rp when their interp=='auto'
 
@@ -2360,7 +2362,7 @@ def _auto_interp_for_resize_image(resize_func, image, new_size):
     out = image
 
     #In the case that both dimensions grow, or both dimensions shrink, we only need to use the resize_func once
-    if   new_height == old_height and new_width == old_width: out = out.copy()
+    if   new_height == old_height and new_width == old_width: out = getattr(out, copy_attr)()
     elif new_height >= old_height and new_width >= old_width: out = resize_func(out, size=(new_height, new_width), interp=growth_interp)
     elif new_height <= old_height and new_width <= old_width: out = resize_func(out, size=(new_height, new_width), interp=shrink_interp)
     else:
@@ -4952,6 +4954,7 @@ def add_ipython_kernel(kernel_name: str = None, display_name: str = None):
 def display_video(video,framerate=30):
     """
     Video can either be a string, or a video (aka a 4d tensor or iterable of images)
+    Example: display_video('https://www.youtube.com/watch?v=jvipPYFebWc')
     """
     if running_in_jupyter_notebook():
         display_video_in_notebook(video,framerate)
@@ -4959,10 +4962,11 @@ def display_video(video,framerate=30):
         #Todo: Add keyboard controls to play, pause, rewind, restart, next frame, prev frame, go to frame, adjust framerate
         #It would be much like display_image_slideshow (maybe even add functionality to display_image_slideshow and use that?)
         if isinstance(video,str):
-            if not file_exists(video):
-                raise FileNotFoundError(video)
-            assert is_video_file(video),repr(video)+' is not a video file'
-            video=load_video(video)
+            if not is_valid_url(video):
+                if not file_exists(video):
+                    raise FileNotFoundError(video)
+                assert is_video_file(video),repr(video)+' is not a video file'
+            video=load_video_stream(video)
         
         time_start=gtoc()
         time_per_frame=1/framerate
@@ -6776,8 +6780,8 @@ def gather_args_wrapper(func, *, frames_back=1):
 
     TODO: Make this play nice with rp.memoized, right now they don't like each other
 
-    Example:
         >>> @gather_args_wrapper
+    Example:
         ... def example_func(a, b, c):
         ...     print(f"a={a}, b={b}, c={c}")
         ...
@@ -7131,6 +7135,46 @@ def replace_if_none(value):
 #             return output
 #     raise Exception('get_current_module(): failed to get the current module') 
 
+def squelch_call(func, *args, exception_types=(Exception,), on_exception=identity, **kwargs):
+    """
+    Calls the given function with the provided arguments and keyword arguments, suppressing specified exceptions.
+
+    Args:
+        func (callable): The function to be called.
+        *args: Positional arguments to be passed to the function.
+        exception_types (type or iterable of types, optional): The exception type(s) to be caught and suppressed.
+            Default is (Exception,), which catches all exceptions.
+        on_exception (callable, optional): A function to be called with the caught exception as an argument.
+            Default is identity, which returns the exception unchanged.
+        **kwargs: Keyword arguments to be passed to the function.
+
+    Returns:
+        The return value of the function if no exception is raised.
+        If an exception of the specified type(s) is raised, returns the result of calling on_exception with the caught exception.
+
+    Raises:
+        AssertionError: If exception_types is not a single exception type or an iterable of exception types.
+
+    Example:
+        >>> def divide(a, b):
+        ...     return a / b
+        ...
+        >>> squelch_call(divide, 10, 2)
+        5.0
+        >>> squelch_call(divide, 10, 0, exception_types=ZeroDivisionError, on_exception=lambda e: "Cannot divide by zero")
+        'Cannot divide by zero'
+    """
+    
+    #exception_types can be an exception type, or an iterable of exception types
+    if not (isinstance(exception_types,type) and issubclass(exception_types,BaseException)):
+        assert is_iterable(exception_types)
+        exception_types=tuple(exception_types)
+        assert all(isinstance(x,type) and issubclass(x,BaseException) for x in exception_types)
+        
+    try:
+        return func(*args, **kwargs)
+    except exception_types as exception:
+        return on_exception(exception)
 
 def rebind_globals_to_module(module, *, monkey_patch=False):
     """
@@ -11864,14 +11908,16 @@ def reload_rp():
     import rp
     return rp
     
-def eta(total_n,min_interval=.3,title="r.eta"):
-    # DEMO:
-    # a = eta(2000,title='test')
-    # for i in range(2000):
-    #     sleep(.031)
-    #     a(i)
-    #
-    # This method is slopily written.
+def _eta(total_n,min_interval=.3,title="r.eta"):
+    """
+    Example:
+        >>> a = eta(2000,title='test')
+        ... for i in range(2000):
+        ...     sleep(.031)
+        ...     a(i)
+
+    This method is slopily written, but works perfectly.
+    """
     timer=tic()
     interval_timer=[tic()]
     title='\r'+title+": "
@@ -11892,6 +11938,41 @@ def eta(total_n,min_interval=.3,title="r.eta"):
     def out(n,print_out=True):
         return display_eta(n/total_n,timer(),print_out=print_out,TOTAL_TO_CIMPLET=total_n,COMPLETSOFAR=n)
     return out
+
+class eta:
+    """
+    Example:
+        >>> a = eta(2000,title='test')
+        ... for i in range(2000):
+        ...     sleep(.031)
+        ...     a(i)
+
+    Example:
+        >>> for i in eta(range(100)):
+        ...     sleep(.1)
+    """
+
+    def __init__(self, x, min_interval=.3,title="r.eta"):
+        assert isinstance(x, int) or hasattr(x, '__len__')
+
+        if hasattr(x, '__len__'):
+            self.elements = x
+            x = len(x)
+        else:
+            assert is_number(x)
+            self.elements = range(x)
+
+        self.display_eta = _eta(x, min_interval, title)
+
+    def __call__(self, n, print_out=True):
+        self.display_eta(n, print_out)
+
+    def __iter__(self):
+        for i,e in enumerate(self.elements):
+            self(i)
+            yield e
+        self(i+1)
+            
 
 
 
@@ -15181,6 +15262,8 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
 
         RCLAHF $os.system($printed("rclone copy --progress --transfers 128 --metadata %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself! The 'F' stands for fast, which is because this skips checksums - it wont overwrite any files ever!
         RCLAH $os.system($printed("rclone copy --checksum --progress --transfers 128 --metadata %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself!
+
+        WEV from rp.web_evaluator import Client, run_server
 
         DR $r._display_columns(dir(),'dir():')
         DUSHA $fansi_print($human_readable_file_size(sum($get_file_size(x,False)for x in $enlist(ans))),'cyan','bold')
@@ -19264,6 +19347,8 @@ def cv_imshow(img,label="cvImshow",*,
         # on_key_press will either be sent a character representing the key (such as pressing 'a' makes key='a') or else a multi-character string describing it. Examples: 'left','right','backspace','delete'
         ):
 
+    img=as_numpy_image(img,copy=False)
+
     if running_in_google_colab() or running_in_ipython():
         #Quick hack to make sure the notebook doesn't crash
         #It will crash if you try to use cv2.imshow in it
@@ -21314,23 +21399,27 @@ class CachedInstances:
             cls._instance_cache = HandyDict()
         return cls._instance_cache
 
-def get_sha256_hash(source, *, show_progress: bool = False) -> str:
+def get_sha256_hash(source, *, show_progress: bool = False, as_int: bool = False) -> str:
     """
     Calculate the SHA-256 hash of the provided data or the contents of a file specified by its path.
+    If as_int is True, returns the hash as an integer.
 
     :param source:
         - bytes: The data to hash.
         - str: The file path whose contents are to be hashed.
     :param show_progress: Keyword-only argument that dictates whether to display a progress bar during the hash computation.
-    :return: The SHA-256 hash as a hexadecimal string.
-    
+    :param as_int: Keyword-only argument that returns the hash as an integer instead of a hexadecimal string.
+    :return: The SHA-256 hash as a hexadecimal string or an integer.
+
     EXAMPLES:
         >>> get_sha256_hash('/Users/ryan/Downloads/A dolphin reading.png')
-       ans = cd318d7a18c5ebf899c53d5a580d5bb659e99c1ca2961ac0507cb0d2946498f6
+        ans = cd318d7a18c5ebf899c53d5a580d5bb659e99c1ca2961ac0507cb0d2946498f6
         >>> get_sha256_hash(b'test bytestring')
-       ans = 79945b2e3369479b02fabcd95a6d124524a2939e40003c2dcba182c35cf6c10a
+        ans = 79945b2e3369479b02fabcd95a6d124524a2939e40003c2dcba182c35cf6c10a
         >>> get_sha256_hash(object_to_bytes([1,2,3,4,5]))
-       ans = ab10184fc37b8a4bf42feef31ada80b347d2096b0dc161921579753765565577
+        ans = ab10184fc37b8a4bf42feef31ada80b347d2096b0dc161921579753765565577
+        >>> get_sha256_hash('/path/to/file', as_int=True)
+        69026873886289201118877060911792184041901559641924946149006354401672729373074
     """
     import hashlib
     import os
@@ -21351,7 +21440,7 @@ def get_sha256_hash(source, *, show_progress: bool = False) -> str:
 
     progress_bar = None
     if show_progress:
-       #TODO: Make it unified with load_files, one unified tqdm/eta function - supporting the same argument formats
+        #TODO: Make it unified with load_files, one unified tqdm/eta function - supporting the same argument formats
         pip_import('tqdm')
         from tqdm import tqdm
         progress_bar = tqdm(total=total_size, desc=progress_desc, unit='B', unit_scale=True, unit_divisor=1024)
@@ -21368,8 +21457,11 @@ def get_sha256_hash(source, *, show_progress: bool = False) -> str:
     if hasattr(byte_stream, 'close'):
         byte_stream.close()
 
-    return hash_obj.hexdigest()
+    hash_result = hash_obj.hexdigest()
+    if as_int:
+        hash_result = int(hash_result, 16)
 
+    return hash_result
 
 def labeled_image(image,
                   text:str,
@@ -21644,7 +21736,15 @@ def _single_line_cv_text_to_image(text,*,scale,font,thickness,color,tight_fit,ba
         image=crop_image_zeros(image)
     return image
 
-
+def _get_file_path(path_or_url):
+    """If given a url, get a file path that can be used for things"""
+    #TODO: Use this to make strip_file_extension etc work for URL's as well
+    # if path_or_url.startswith(('http://', 'https://')):
+    if is_valid_url(path_or_url):
+        from urllib.parse import urlparse
+        parsed_url = urlparse(path_or_url)
+        return parsed_url.path
+    return path_or_url
 
 
 def strip_file_extension(file_path):
@@ -21673,6 +21773,7 @@ def get_file_extension(file_path):
     'a/b/c'        --> ''
      For more, see: https://stackoverflow.com/questions/541390/extracting-extension-from-filename-in-python
     """
+    file_path = _get_file_path(file_path)
     return os.path.splitext(file_path)[1].rpartition('.')[2]
 
 def with_file_extension(path:str,extension:str,*,replace=False):
@@ -21719,7 +21820,9 @@ def with_file_extension(path:str,extension:str,*,replace=False):
         else:
             if replace:
                 path=strip_file_extension(path)
-            return path+'.'+extension
+            if extension!="":
+                path+='.'+extension
+            return path
 
 def with_file_extensions(*paths,extension:str=None,replace=False):
     if extension is None:
@@ -23080,7 +23183,7 @@ def _images_conversion(func, images, *, copy_check ,copy=True):
                 #BHW matrices turn into RGB tensors
                 # return ... Fill this in. Duplicate the grayscale along all RGB channels
                 pass #Not implemented yet
-            assert len(images.shape==4) #BHWC
+            assert len(images.shape)==4 #BHWC
             C=images.shape[3]
             if C==3:
                 return images.copy()
@@ -23093,7 +23196,7 @@ def _images_conversion(func, images, *, copy_check ,copy=True):
                 #BHW matrices turn into RGB tensors
                 # return ... Fill this in. Alpha channel is 1 if floating point else 255 if uint8 else True if bool, the other 3 are duplciated from the grayscale matrices...
                 pass #Not implemented yet
-            assert len(images.shape==4) #BHWC
+            assert len(images.shape)==4 #BHWC
             C=images.shape[3]
             if C==3:
                 # return ... add a 4th channel 
@@ -23105,7 +23208,7 @@ def _images_conversion(func, images, *, copy_check ,copy=True):
         elif func==as_grayscale_image:
             if len(images.shape)==3: #Given grayscale images
                 return images.copy()
-            assert len(images.shape==4) #BHWC
+            assert len(images.shape)==4 #BHWC
             #Average the RGB channels and turn back to uint8 or float or binary...
             pass #Not implemented yet
 
@@ -24142,47 +24245,160 @@ def input_select_multiple(question='Please select any number of options:',option
         
         unselected=[option for option in indices if option not in selected]
         
+def get_youtube_video_url(url_or_id):
+    """
+    Gets the url of a youtube video, given either the url (in which case nothing changes) or its id
+    
+    Example:
+         >>> get_youtube_video_url('0yeejC2YVLo')
+         'https://www.youtube.com/watch?v=0yeejC2YVLo'
+         >>> get_youtube_video_url('https://www.youtube.com/watch?v=0yeejC2YVLo')
+         'https://www.youtube.com/watch?v=0yeejC2YVLo'
+    """
+
+    if '/' in url_or_id:
+        url = url_or_id
+    else:
+        url = "https://www.youtube.com/watch?v="+url_or_id
+    return url
+
+def _is_youtube_video_url(url):
+    return url.startswith("https://www.youtube.com/watch?v=") and is_valid_url(url)
+
+def download_youtube_video(url_or_id: str,
+                           path=None,
+                           *,
+                           need_video=True,
+                           need_audio=True,
+                           max_resolution=None,
+                           min_resolution=None,
+                           resolution_preference=max,
+                           skip_existing=False,
+                           show_progress=True,
+                           overwrite=False):
+    """
+    Downloads a YouTube video based on the given URL or video ID. The function can selectively download video only, 
+    audio only, or both depending on the parameters. All downloads are currently as mp4 files.
+
+    If need_audio is True, we might only download the audio file (or might download a video with audio)
+    If need_video is True, we might download a video without audio (potentially at much higher resolution)
+    If both are True, it tends to only download at 360p (aka video height=360).
+
+    Parameters:
+        - url_or_id (str): The YouTube video URL or video ID.
+        - path (str, optional): The destination path where the video/audio will be saved. If not provided,
+                                The path will be:    ./<YouTubeVideo Title>.mp4
+                                Where <YouTubeVideo Title> is the video title as displayed on the website
+                                Right now it must be an mp4 file if specified manually!
+        - need_video (bool, optional): If set to True, downloads the video track. Defaults to True.
+        - need_audio (bool, optional): If set to True, downloads the audio track. If False and `need_video` is True,
+                                       downloads video only without audio. Defaults to True.
+        - max_resolution (int, optional): The maximum resolution allowed for the video. Defaults to None. Only matters if need_video
+        - min_resolution (int, optional): The minimum resolution required for the video. Defaults to None. Only matters if need_video
+        - resolution_preference (callable, optional): A function to determine the preferred resolution from available options. Only matters if need_video
+                                                      (Different youtube videos have different resolutoin options)
+                                                      It will be passed a sorted list of integers, such as [144, 240, 360, 720, 1080] etc
+                                                      These correspond to 144p, 240p, 360p etc - and refer to the minimum(height, width) of a video
+                                                      In other words, 720P for a vertical video means the video has 720-pixel width, and 720p for a landscape video means it has 720-pixel height
+                                                      Defaults to max, which selects the highest available resolution.
+                                                      
+        - skip_existing (bool, optional): If set to True, skips downloading if the file already exists at the destination path. Defaults to False.
+        - show_progress (bool, optional): If set to True, will show download progress over time. Defaults to True.
+        - overwrite (bool, optional): If set to True, overwrites the existing file at the destination path. Defaults to False.
+                                      If False, and the output path already exists, it will create a new non-conflicting path
+                                      like some_video_copy.mp4 or some_video_copy2.mp4 etc
+
+    Returns:
+        - str: The path to the downloaded MP4 file (which might contain just video, just audio or both)
+
+    Note:
+        - Current backend library: pytubefix. This might change in the future, but the black-box specification of download_youtube_video should always remain the same.
+        - [Aug 19 2024]: pytube didnt work: https://stackoverflow.com/questions/78160027/how-to-solve-http-error-400-bad-request-in-pytube
+                         so, I used this (as suggested in that stack overflow post): https://github.com/JuanBindez/pytubefix
+                         
+    Examples:
+        >>> download_youtube_video("https://www.youtube.com/watch?v=jvipPYFebWc", need_audio=True, need_video=True, show_progress=False)
+        ans = /Users/ryan/Lindsey Stirling - Roundtable Rival (Official Music Video)_copy1.mp4
+        >>> get_video_file_shape(ans)
+        ans = (5235, 360, 640, 3)            #Asking for both video and audio resulted in a 360P video.
+        >>> download_youtube_video("https://www.youtube.com/watch?v=jvipPYFebWc", need_audio=True, need_video=False, show_progress=False)
+        ans = /Users/ryan/Lindsey Stirling - Roundtable Rival (Official Music Video)_copy2.mp4
+        >>> get_video_file_shape(ans)
+        ERROR: KeyError: 'video_fps'         #This is an audio-only MP4 file
+        >>> download_youtube_video("https://www.youtube.com/watch?v=jvipPYFebWc", need_audio=False, need_video=True, show_progress=False)
+        ans = /Users/ryan/Lindsey Stirling - Roundtable Rival (Official Music Video)_copy3.mp4
+        >>> get_video_file_shape(ans)
+        ans = (5234, 1080, 1920, 3)          #Now at 1080P!
+        >>> download_youtube_video("jvipPYFebWc", need_audio=False, need_video=True, show_progress=False) #Same thing as the above
+    """
+
+    #Common logic invariant to external libraries:
+    url = get_youtube_video_url(url_or_id)
+    assert need_video or need_audio, 'Cannot have no audio and no video'
+    if path is None:
+        path = get_youtube_video_title(url)
+    path = with_file_extension(path, 'mp4')
+    if path_exists(path):
+        if skip_existing:
+            return path
+        elif overwrite:
+            delete_file(path)
+        else:
+            path=get_unique_copy_path(path)
+    assert get_file_extension(path) == 'mp4' 
+
+    #Logic that's specific to pytubefix:
+    pip_import('pytubefix')
+    from pytubefix import YouTube
+    from pytubefix.cli import on_progress
+    yt = YouTube(url, on_progress_callback = on_progress if show_progress else None)
+    if need_video:
+        
+        #Allow us to choose the resolution of the video we load - we might want to avoid loading giant videos for example
+        resolutions=set(int(x.resolution[:-1])for x in yt.streams if x.resolution if not None) #Like {360, 1080, 720, 360, 144}
+        original_resolutions = sorted(resolutions)
+        if min_resolution is not None:resolutions={x for x in resolutions if x>=min_resolution}
+        if max_resolution is not None:resolutions={x for x in resolutions if x<=max_resolution}
+        resolutions=sorted(resolutions) #An increasing list of unique integers 
+        assert len(resolutions), 'No resolutions fit between given min_resolution=%s and max_resolution=%s. Available resolutions for %s are: %s'%(min_resolution, max_resolution, url, original_resolutions)
+        preferred_resolution=resolution_preference(resolutions) #Choosing the best resoltion
+        best_resolution=str(max(resolutions))+'p' # Like "720p"
+        
+        ys = yt.streams.filter(mime_type='video/mp4', resolution=best_resolution).get_highest_resolution(progressive=need_audio)
+    else:
+        ys = yt.streams.filter(mime_type='audio/mp4').get_audio_only()
+    out_path = ys.download(output_path=get_parent_directory(path),filename=get_file_name(path))
+        
+    #Common logic invariant to external libraries:
+    assert file_exists(out_path)
+    assert get_file_extension(out_path)=='mp4', 'For simplicity I would like this function to only return mp4 files. Is this possible?'+ out_path
+    return out_path
+
 @memoized
-def download_youtube_video(url,path='./'):
-    #TODO: Implement a fallback method using 'you_get' (you_get is a pypy package. where pytube gets 403 permission errors donwloading lindsey stirling videos, you_get succeedes)
-    pip_import('pytube')
-    import pytube
-    yt = pytube.YouTube(url)
-    stream = yt.streams.first()
-    stream.download(path)
-    return os.path.join(path,stream.default_filename)
+def _get_youtube_video_data_via_embeddify(url):
+    #See https://pypi.org/project/embeddify/
+    #Uses a specification called 'oembed', which lets us get info such as title/author etc without an api key (it's perfectly legal, and an intended use-case by google)
+    #EXAMPLE:
+    #     >>> _get_youtube_video_data_via_embeddify('https://www.youtube.com/watch?v=2wii8hfNkzE')
+    #    ans = {'title': 'Day9] Daily #596   Rigged Games Funday Monday P1', 'width': 560, 'version': '1.0', 'type': 'video', 'height': 315, 'provider_url': 'https://www.youtube.com/', 'author_name': 'Day9TV', 'thumbnail_url': 'https://i.ytimg.com/vi/2wii8hfNkzE/hqdefault.jpg', 'author_url': 'https://www.youtube.com/user/day9tv', 'provider_name': 'YouTube', 'thumbnail_width': 480, 'thumbnail_height': 360, 'html': '<iframe width="560" height="315" src="https://www.youtube.com/embed/2wii8hfNkzE?feature=oembed" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'}
+    assert isinstance(url,str)
+    assert is_valid_url(url)
+    pip_import('embeddify')
+    from embeddify import Embedder
+    embedder = Embedder()
+    result = embedder(url)
+    return result.data
+    
+def get_youtube_video_title(url_or_id):
+    """
+    Returns the title of a youtube video, given either its url or video id
 
-# def make_video(outvid, images=None, fps=30, size=None,is_color=True, format="FMP4"):
-#     #WARNING: THIS DEFINITION IS GONIG TO CHANGE LATER TO MAKE IT SIMPLER
-#     #CODE FROM https://www.dlology.com/blog/how-to-run-object-detection-and-segmentation-on-video-fast-for-free/
-#     """
-#     Create a video from a list of images.
-
-#     @param      outvid      output video
-#     @param      images      list of images to use in the video
-#     @param      fps         frame per second
-#     @param      size        size of each frame
-#     @param      is_color    color
-#     @param      format      see http://www.fourcc.org/codecs.php
-#     @return                 see http://opencv-python-tutroals.readthedocs.org/en/latest/py_tutorials/py_gui/py_video_display/py_video_display.html
-#     """
-#     from cv2 import VideoWriter, VideoWriter_fourcc, imread, resize
-#     fourcc = VideoWriter_fourcc(*format)
-#     vid = None
-#     for image in images:
-#         if not os.path.exists(image):
-#             raise FileNotFoundError(image)
-#         img = imread(image)
-#         if vid is None:
-#             if size is None:
-#                 size = img.shape[1], img.shape[0]
-#             vid = VideoWriter(outvid, fourcc, float(fps), size, is_color)
-#         if size[0] != img.shape[1] and size[1] != img.shape[0]:
-#             img = resize(img, size)
-#         vid.write(img)
-#     vid.release()
-#     return vid
-
+    Example:
+        >>> get_youtube_video_title('aHjpOzsQ9YI')
+        'Lindsey Stirling - Crystallize (Dubstep Violin Original Song)'
+    """
+    url = get_youtube_video_url(url_or_id)
+    return _get_youtube_video_data_via_embeddify(url)['title']
 
 def _get_video_file_duration_via_moviepy(path):
     #https://stackoverflow.com/questions/3844430/how-to-get-the-duration-of-a-video-in-python
@@ -24217,15 +24433,26 @@ def get_video_file_framerate(path, use_cache=True):
     _get_video_file_framerate_cache[path] = framerate
     return framerate
 
-def _load_video_stream(path):
-    cv2=pip_import('cv2')
-    assert file_exists(path),'load_video error: path '+repr(path)+' does not point to a file that exists'#Opencv will silently fail if this breaks
-    cv_stream=cv2.VideoCapture(path)
-    while True:
-        not_done,frame=cv_stream.read()
-        if not not_done:
-            return
-        yield cv_bgr_rgb_swap(frame)
+#UNCOMMENT ONCE I USE SMART_OPEN SOMEWHERE
+# def _smart_open(path, mode="rb"):
+#     #TODO: Use this in load_image, load_text_file, etc - it can read from zip files and stream from AWS etc 
+#     #This function is currently unused! It failed to stream MP4 files to opencv or moviepy
+#     pip_import("smart_open")
+#     import smart_open
+#     path=smart_open.smart_open(path, mode)
+
+def _load_video_stream(location):
+    #I don't know how to stream videos directly from the web. So instead we'll download it as a temp file and stram it from there. Not ideal but better than nothing.
+    with _MaybeTemporarilyDownloadVideo(location) as path:
+        
+        cv2=pip_import('cv2')
+        assert file_exists(path),'load_video error: path '+repr(path)+' does not point to a file that exists'#Opencv will silently fail if this breaks
+        cv_stream=cv2.VideoCapture(path)
+        while True:
+            not_done,frame=cv_stream.read()
+            if not not_done:
+                return
+            yield cv_bgr_rgb_swap(frame)
 
 def load_video_stream(path):
     """
@@ -24233,14 +24460,19 @@ def load_video_stream(path):
     load_video_stream is a generator, meaning to get the next frame you use python's builtin 'next' function
     Returns a generator that iterates through the frame images
 
+    It can load videos from URL's as well, but right now it does so by downloading the video as a temp file and then deleting it
+
     If possible, this generator will also have a length! Useful for tqdm etc..td
     Don't rely on that though, it might not always work? Depends on 'moviepy'
 
+    EXAMPLE:
+        display_video(load_video_stream('https://www.shutterstock.com/shutterstock/videos/10884623/preview/stock-footage--k-pastel-pixel-animation-background-seamless-loop.webm'))
     EXAMPLE:
         for frame in load_video_stream("/Users/Ryan/Desktop/media.io_Silicon Valley - Gavin - Animals Compilation copy.mp4"):display_image(frame)
     EXAMPLE:
         for frame in load_video_stream(download_youtube_video('https://www.youtube.com/watch?v=cAy4zULKFDU')):display_image(frame)  #Monty python clip
     """
+
     frame_iterator = _load_video_stream(path)
     try:
         num_frames = get_video_file_num_frames(path)
@@ -24631,6 +24863,10 @@ def add_audio_to_video_file(video_path, audio_path, output_path=None):
                 ),
             )
         )
+
+    fansi_print(audio_path,'yellow')
+    fansi_print(video_path,'yellow')
+    fansi_print(output_path,'yellow')
 
     ffmpeg_cmd = [
         "ffmpeg",
@@ -27050,6 +27286,15 @@ def download_url(url, path=None, *, skip_existing=False):
     if path is None:
         path=get_file_name(url)
 
+    if skip_existing and path_exists(path):
+        #Don't download anything - skip it if it already exists
+        return path
+
+    #Create the parent directory of the destination if it doesn't already exist
+    root = get_path_parent(path)
+    if make_directory and not path_exists(root):
+        rp.make_directory(root)
+
     if is_s3_url(url):
         import subprocess
 
@@ -27059,18 +27304,21 @@ def download_url(url, path=None, *, skip_existing=False):
             raise Exception("rp.download_url failed to download s3 url %s to path %s: "%(url,path) + str(e))
 
         return path
+
+    elif _is_youtube_video_url(url):
+        return download_youtube_video(url, path, skip_existing=skip_existing, show_progress=False)
         
     elif is_valid_url(url):
         pip_import('requests')
         import requests
 
-        if skip_existing and path_exists(path):
-            #Don't download anything - skip it if it already exists
-            return path
-
         response = requests.get(url)
-        open(path,'wb').write(response.content)
+
+        with open(path, 'wb') as file:
+            file.write(response.content)
+
         return path
+
     else:
         raise ValueError("Invalid URL: "+str(url)[:1000])
 
@@ -27105,6 +27353,173 @@ def download_urls(
         lazy=lazy,
         buffer_limit=buffer_limit,
     )
+
+class TemporarilyDownloadUrl:
+    """
+    Downloads a file from a URL to a temporary or specified path,
+    automatically deleting the file upon exiting the context.
+
+    Example:
+        >>> with TemporarilyDownloadUrl('http://example.com/file.pdf') as filepath:
+        ...     # Use 'filepath' here; file will be deleted automatically when done.
+    """
+    def __init__(self, url:str, path=None):
+        self.url = url
+        self.path = temporary_file_path(get_file_extension(url)) if path is None else path
+
+    def __enter__(self):
+        return download_url(self.url, self.path)
+        
+    def __exit__(self, *_):
+        try:
+            os.remove(self.path)
+        except FileNotFoundError:
+            pass
+
+class _MaybeTemporarilyDownloadVideo:
+    def __init__(self, url_or_path:str, ):
+
+        self.url_or_path = url_or_path
+
+        if is_valid_url(url_or_path) and not file_exists(url_or_path):
+            self.temp_path = temporary_file_path(get_file_extension(url_or_path))
+
+    def __enter__(self):
+        if hasattr(self, 'temp_path'):
+            #Download something if we need to
+            if _is_youtube_video_url(self.url_or_path):
+                #A youtube video download
+                out = self.temp_path = download_youtube_video(
+                    self.url_or_path,
+                    need_video=True,
+                    need_audio=False,
+                )
+            else:
+                #A regular download
+                out = self.temp_path = download_url(self.url_or_path, self.temp_path)
+            assert out==self.temp_path
+        else:
+            #Nothing needs to be downloaded
+            out=self.url_or_path
+        return out
+        
+    def __exit__(self, *_):
+        if hasattr(self, 'temp_path'):
+            try:
+                os.remove(self.temp_path)
+            except FileNotFoundError:
+                pass
+
+def download_url_to_cache(url, cache_dir=None, skip_existing=True, hash_func=None):
+    """
+    Like download_url, except you only specify the output diectory - the filename will be chosen for you based on hashing the url.
+    Downloads a file from a specified URL into a caching directory, creating a filename based on a hash of the URL. 
+
+    Args:
+        url (str): The URL of the file to be downloaded.
+        cache_dir (str, optional): The directory to store the cached files. If None, uses the system's temporary directory.
+        skip_existing (bool): If True, skips downloading files that already exist in the cache directory.
+
+    Returns:
+        str: The full path to the downloaded or existing cached file.
+
+    Notes:
+        - Use `get_cache_file_path` to retrieve the path to a cached file without downloading it.
+    """
+    return download_url(
+        url,
+        get_cache_file_path(url, cache_dir=cache_dir, hash_func=hash_func),
+        skip_existing=skip_existing,
+    )
+
+def get_cache_file_path(url, *, cache_dir=None, file_extension=None, hash_func=None):
+    """
+    Computes a cache file path for the provided input
+    It is a pure function, and uses no system calls - making it fast
+    By default, uses your system's temporarily file path as your cache directory (as opposed to any network storage)
+
+    Parameters:
+        url (str or any): Typically a url. Input based on which the hash for the file name is generated.
+            It can also be any object compatible with rp.object_to_bytes - doesn't stictly have to be a url.
+        cache_dir (str, optional): Directory for storing cached files. Defaults to system's temporary directory.
+        file_extension (str, optional): The file extension of the output path. If none, is inferred automatically.
+        hash_func (callable, optional): Function to compute hash of `url`. Uses SHA-256 with a prefix by default.
+
+    Returns:
+        str: Full path to the cache file, incorporating directory, hashed file name, and extension.
+
+    Example:
+        >>> get_cache_file_path("example_data", cache_dir="/tmp", file_extension=".txt")
+        '/tmp/rp_cachefile_<hashcode>.txt'
+
+        >>> #Load the image from a url, caching it to your harddrive for extra speed - persistently between python processes
+        >>> image = load_image(download_url_to_cache('https://picsum.photos/seed/picsum/536/354'))
+
+    Examples (hash_func):
+        >>> print(download_url_to_cache('https://picsum.photos/seed/picsum/536/354'))
+        /var/folders/pm/461ntwb12b7bbqcjw1s6t0kw0000gn/T/rp_cachefile_d4a556ad5dd6bb4c43fc2d2eb08194d9b888fb7eb3e58b5473e7a46059b4217f
+        >>> print(download_url_to_cache('https://picsum.photos/seed/picsum/536/354',hash_func=get_file_name))
+        /var/folders/pm/461ntwb12b7bbqcjw1s6t0kw0000gn/T/354
+        >>> print(download_url_to_cache('https://picsum.photos/seed/picsum/536/354',hash_func=get_parent_folder))
+        /var/folders/pm/461ntwb12b7bbqcjw1s6t0kw0000gn/T/https://picsum.photos/seed/picsum/536
+
+
+        >>> print(download_url_to_cache('https://picsum.photos/seed/picsum/536/354',hash_func=identity))
+        /var/folders/pm/461ntwb12b7bbqcjw1s6t0kw0000gn/T/https://picsum.photos/seed/picsum/536/354
+        >>> assert file_exists('/var/folders/pm/461ntwb12b7bbqcjw1s6t0kw0000gn/T/https://picsum.photos/seed/picsum/536/354')
+
+        >>> #NOTE: The /'s in the url created a nested path, it's not flat! That might be ok for your needs though.
+        >>> #So, the next version might be more palatable...
+        >>> print(download_url_to_cache('https://picsum.photos/seed/picsum/536/354',hash_func=lambda url:url.replace("/","\\")))
+        /var/folders/pm/461ntwb12b7bbqcjw1s6t0kw0000gn/T/https:\\picsum.photos\seed\picsum\536\354
+
+    Original purpose: To make download_url_to_cache from download_url via
+        >>> download_url(url, get_cache_file_path(url), skip_existing=True)
+    """
+
+    #Input validation
+    assert cache_dir is None or isinstance(cache_dir, str)
+    assert file_extension is None or isinstance(file_extension, str)
+
+    #Get and verify the cache_dir
+    if cache_dir is None:
+        import tempfile
+        cache_dir=tempfile.gettempdir()
+    assert isinstance(cache_dir, str), type(cache_dir)
+
+    #Get an appropriate file extension if possible
+    if file_extension is None:
+        if isinstance(url, str):
+            file_extension = get_file_extension(url)
+        else:
+            #I don't know what it should be, so leave it empty for now.
+            #Maybe it's supposed to be a directory?
+            #Future: Infer the extension from x's type in this case:
+            #    in the future, we might have support for x as .pth or .npy or .png etc
+            file_extension = ''
+    assert isinstance(file_extension, str)
+
+
+    if hash_func is None:
+        prefix = 'rp_cachefile_'
+        hashcode = get_sha256_hash(url.encode() if isinstance(url, str) else object_to_bytes(url))
+        filename = prefix+str(hashcode)
+    else:
+        hashcode = hash_func(url)
+        filename = str(hashcode)
+
+    filename = with_file_extension(filename, file_extension)
+
+    output = path_join(cache_dir, filename)
+    return output
+
+def get_cache_file_paths(urls, *, cache_dir=None, file_extension=None, hash_func=None, lazy=False):
+    """Plural of get_cache_file_path, supporting a `lazy` option"""
+    func = gather_args_wrap(get_cache_file_path)
+    out = map(func, urls)
+    if not lazy:
+        out = list(out)
+    return out
 
 def debug(level=0):
     """
@@ -29788,6 +30203,7 @@ def apply_colormap_to_image(image,colormap_name='viridis'):
     pip_import('cv2')
     import cv2
     import cmapy
+    image=as_numpy_image(image)
     image=as_rgb_image(image)
     image=as_byte_image(image)
     image_colorized = cv2.applyColorMap(image, cmapy.cmap(colormap_name))
@@ -30110,23 +30526,6 @@ def display_pandas_correlation_heatmap(dataframe,*,title=None,show_numbers=False
 
     update_display(block=block)
 
-def _get_youtube_video_data_via_embeddify(url):
-    #See https://pypi.org/project/embeddify/
-    #Uses a specification called 'oembed', which lets us get info such as title/author etc without an api key (it's perfectly legal, and an intended use-case by google)
-    #EXAMPLE:
-    #     >>> _get_youtube_video_data_via_embeddify('https://www.youtube.com/watch?v=2wii8hfNkzE')
-    #    ans = {'title': 'Day9] Daily #596   Rigged Games Funday Monday P1', 'width': 560, 'version': '1.0', 'type': 'video', 'height': 315, 'provider_url': 'https://www.youtube.com/', 'author_name': 'Day9TV', 'thumbnail_url': 'https://i.ytimg.com/vi/2wii8hfNkzE/hqdefault.jpg', 'author_url': 'https://www.youtube.com/user/day9tv', 'provider_name': 'YouTube', 'thumbnail_width': 480, 'thumbnail_height': 360, 'html': '<iframe width="560" height="315" src="https://www.youtube.com/embed/2wii8hfNkzE?feature=oembed" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'}
-    assert isinstance(url,str)
-    assert is_valid_url(url)
-    pip_import('embeddify')
-    from embeddify import Embedder
-    embedder = Embedder()
-    result = embedder(url)
-    return result.data
-    
-def get_youtube_video_title(url):
-    return _get_youtube_video_data_via_embeddify(url)['title']
-
 def view_table(data):
     """
     Launches a program that lets you view tabular data
@@ -30306,7 +30705,7 @@ def torch_resize_image(image,size,interp='auto'):
     height=int(height)
     width =int(width )
 
-    if interp=='auto': return _auto_interp_for_resize_image(torch_resize_image, image, (height, width))
+    if interp=='auto': return _auto_interp_for_resize_image(torch_resize_image, image, (height, width), 'clone')
     
     out  = rearrange(
         F.interpolate(
@@ -30690,7 +31089,10 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
     if relative:
         assert in_height == out_height, "For relative scatter adding, input and output heights must match, but got in_height={} and out_height={}".format(in_height, out_height)
         assert in_width == out_width, "For relative scatter adding, input and output widths must match, but got in_width={} and out_width={}".format(in_width, out_width)
-        in_y, in_x = torch.meshgrid(torch.arange(in_height), torch.arange(in_width))
+        in_y, in_x = torch.meshgrid(
+            torch.arange(in_height, device=image.device),
+            torch.arange(in_width, device=image.device),
+        )
         x += in_x
         y += in_y
 
@@ -33480,6 +33882,8 @@ def as_numpy_image(image,*,copy=True):
         else:
             return image
     elif is_torch_tensor(image):
+        if is_a_matrix(image):
+            return as_numpy_array(image)
         return as_numpy_images(image[None])[0]
     elif is_pil_image(image):
         return as_numpy_array(image)
@@ -33956,6 +34360,8 @@ def resize_list(array:list, length: int):
     """
     This function stretches or compresses a list to a given length using nearest-neighbor interpolation. 
     The last element of the input list is always included in the output list, regardless of the target length.
+    
+    If the given array is a torch tensor or numpy array, the output will be the same type
 
     Parameters:
         array (list): The input list to resize.
@@ -34003,8 +34409,14 @@ def resize_list(array:list, length: int):
         step = (len(array) - 1) / (length - 1)
     else:
         step = 0  # default step size to 0 if array has only 1 element or target length is 1
+        
+    indices = [round(i * step) for i in range(length)]
+    
+    if is_numpy_array(array) or is_torch_tensor(array):
+        return array[indices]
+    else:
+        return [array[i] for i in indices]
 
-    return [array[round(i * step)] for i in range(length)]
 
 def resize_lists_to_max_len(*lists):
     lists=detuple(lists)
@@ -35015,11 +35427,15 @@ def type_string_with_keyboard(s, time_per_stroke=1/30):
         if character == '\n':
             keyboard.press(Key.enter)
             keyboard.release(Key.enter)
+        elif character=='\x1b':
+            keyboard.press(Key.esc)
+            keyboard.release(Key.esc)
         else:
             keyboard.press(character)
             keyboard.release(character)
 
         time.sleep(time_per_stroke)
+            
 
 def delaunay_interpolation_weights(key_points, query_points):
     """
