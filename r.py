@@ -5696,10 +5696,173 @@ def histogram_in_terminal(values,sideways=False):
 
     print(out)
 
-def line_graph_in_terminal(y):
-    pip_import('plotille')
+def line_graph_via_plotille(
+    y_values,
+    x_values=None,
+    width=None,
+    height=None,
+    y_min=None,
+    y_max=None,
+    x_min=None,
+    x_max=None,
+    background_color=None,
+    line_color=None,
+    xlabel="X",
+    ylabel="Y",
+    silent=False,
+):
+    """
+    Draws a line graph in the terminal using Plotille with the given values and colors.
+
+    Args:
+        y_values (list):           The y-values of the data points.
+        x_values (list, optional): The x-values of the data points.     Defaults to the indices of y_values will be used.
+        width     (int, optional): The width of the output graph.       Defaults to the terminal width.
+        height    (int, optional): The height of the output graph.      Defaults to the terminal height.
+        y_min   (float, optional): The minimum value of the y-axis.     Defaults to the minimum y-value.
+        y_max   (float, optional): The maximum value of the y-axis.     Defaults to the maximum y-value.
+        x_min   (float, optional): The minimum value of the x-axis.     Defaults to the minimum x-value.
+        x_max   (float, optional): The maximum value of the x-axis.     Defaults to the maximum x-value.
+        background_color (str, optional): The color of the background.  Defaults to None (transparent background).
+        line_color (str, optional): The color of the line.              Defaults to None (default terminal text color).
+        xlabel (str, optional): The label for the x-axis.               Defaults to "X".
+        ylabel (str, optional): The label for the y-axis.               Defaults to "Y".
+        silent (bool, optional): If True, the graph will not be printed to the terminal.  Default is False.
+
+    Returns:
+        str: The string representation of the graph.
+
+    Notes:
+        The graph is printed directly to the terminal using Plotille unless `silent` is True.
+        The width and height of the graph are automatically adjusted based on
+        the terminal size if not provided.
+
+    Example:
+        >>> import math
+        >>> x_values = [x / 10.0 for x in range(-50, 50, 1)]
+        >>> y_values = [math.sin(x) for x in x_values]
+        >>> graph = line_graph_in_terminal(y_values, x_values, line_color='blue', xlabel='Angle', ylabel='Sine', silent=True)
+        >>> print(graph)
+    """
+    pip_import("plotille")
     import plotille
-    print(plotille.plot(list(range(len(y))),y,bg=None,lc=None,width=get_terminal_width()-20,height=get_terminal_height()-13))
+
+    if x_values is None:
+        x_values = list(range(len(y_values)))
+
+    graph = plotille.plot(
+        x_values,
+        y_values,
+        bg=background_color,
+        lc=line_color,
+        width =width  or (get_terminal_width () - 20),
+        height=height or (get_terminal_height() - 13),
+        x_min=x_min,
+        x_max=x_max,
+        y_min=y_min,
+        y_max=y_max,
+        X_label=xlabel,
+        Y_label=ylabel,
+    )
+
+    if not silent:
+        print(graph)
+
+    return graph
+
+def line_graph_live(func, *, length=None, framerate=60, graph=None):
+    """
+    Continuously update and display a line graph based on values returned by a given function.
+
+    This function repeatedly calls the provided `func` to obtain new values, appends them to a list
+    of `values`, and updates the displayed line graph using the specified `graph` function.
+
+    Args:
+        func (callable): A function that returns the next value to be plotted on the line graph.
+            Takes no arguments, and returns a number.
+
+        length (int, optional): The maximum number of values to display on the graph. If specified,
+            the list of values will be truncated to this length. Defaults to None, which keeps all values.
+            Effectively creates a sliding window, like an oscilloscope.
+
+        framerate (int, optional): The desired framerate of the graph updates in frames per second.
+            Defaults to 60.
+
+        graph (callable, optional): A function that takes the list of `values` and displays the line graph.
+
+    Examples:
+        >>> #Using matplotlib
+        ... line_graph_live(
+        ...     get_mouse_y,
+        ...     graph=line_graph,
+        ...     length=100,
+        ... )
+
+        >>> #Using cv_line_graph
+        ... line_graph_live(
+        ...     get_mouse_y,
+        ...     graph=lambda values: display_image(cv_line_graph(values, height=200, width=500)),
+        ...     length=100,
+        ... )
+
+        >>> #Use plotille to plot everything
+        ... line_graph_live(
+        ...     get_mouse_y,
+        ...     graph=lambda values:line_graph_via_plotille(values,line_color='cyan',background_color='red'),
+        ...     length=100,
+        ...     framerate=30,
+        ... )
+
+        >>> #Faster than plotille
+        ... height=get_terminal_height()
+        ... width=get_terminal_width()
+        ... line_graph_live(
+        ...     get_mouse_y,
+        ...     graph=lambda values: display_image_in_terminal(
+        ...         inverted_image(
+        ...             cv_line_graph(
+        ...                 values,
+        ...                 height=height,
+        ...                 width=width,
+        ...                 antialias=False,
+        ...             )
+        ...         )
+        ...     ),
+        ...     length=300,
+        ... )
+
+    """
+    if graph is None:
+        if currently_in_a_tty():
+            graph = line_graph_via_plotille
+        else:
+            # TODO: Use JupyterDisplayChannel where applicable
+            graph = line_graph
+
+    interval = 1 / framerate
+    values = []
+
+    while True:
+        start_time = time.time()
+        new_value = func()
+        values.append(new_value)
+
+        if length is not None and len(values) > length:
+            values = values[-length:]
+
+        graph(values)
+
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+
+        sleep(max(0, interval - elapsed_time))
+
+
+def line_graph_in_terminal(y):
+    line_graph_via_plotille(y)
+    # pip_import('plotille')
+    # import plotille
+    # print(plotille.plot(list(range(len(y))),y,bg=None,lc=None,width=get_terminal_width()-20,height=get_terminal_height()-13))
 
 def line_graph(*y_values,
                 show_dots: bool         = False,
@@ -15292,7 +15455,7 @@ def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseud
         DR $r._display_columns(dir(),'dir():')
         DUSHA $fansi_print($human_readable_file_size(sum($get_file_size(x,False)for x in $enlist(ans))),'cyan','bold')
 
-        NM __name__="__main__"
+        INM __name__="__main__"
 
         QPHP $r._input_select_multiple_history_multiline() #Query Prompt-Toolkit History Paragraphs (F3)
         QPH  $r._input_select_multiple_history() #Query Prompt-Toolkit History Lines (F3)
@@ -18907,414 +19070,7 @@ def _refresh_autocomplete_module_list():
 def line_join(iterable,separator='\n'):
     return separator.join(map(str,iterable))
 
-_pip_install_needs_sudo=True
-def pip_install(pip_args:str):
-    assert isinstance(pip_args,str),'pip_args must be a string like "numpy --upgrade" or "rp --upgrade --no-cache --user" etc'
-    import os
-    if currently_running_unix() and rp.r._pip_install_needs_sudo:
-        #Attempt to get root priveleges. Sometimes we need root priveleges to install stuff. If we're on unix, attempt to become the root for this process. There's probably a better way to do this but idk how and don't really care that much even though I probably should...
-        os.system('sudo echo')#This should only prompt for a password once...making the next command run in sudo.
-    os.system(sys.executable+' -m pip install '+pip_args)
-    _refresh_autocomplete_module_list()
-    #DONT DELETE THIS COMMENT BLOCK: An alternative way to install things with pip:
-    #    from pip.__main__ import _main as pip
-    #    errored=pip(['install', package_name]+['--upgrade']*upgrade)
-    #    if errored:
-    #        assert False,'pip_install: installation of module '+repr(package_name)+' failed.'
 
-def update_rp():
-    if input_yes_no("Are you sure you'd like to try updating rp? (You will need to restart it to see any effects)"):
-        # --index-url https://pypi.org/simple is so other internal pypi's that are out of date don't prevent the upgrade (looking at you, netflix! https://pypi.netflix.net/simple is often out of date...)
-        pip_install("rp --upgrade --no-cache  --index-url https://pypi.org/simple")
-
-def module_exists(module_name):
-    """
-    Check if a Python module exists without importing it.
-
-    Args:
-        module_name (str): The name of the module to check.
-
-    Returns:
-        bool: True if the module exists, False otherwise.
-    """
-    try:
-        # Try to import the imp module
-        import imp
-        try:
-            imp.find_module(module_name)
-            return True
-        except ImportError:
-            return False
-    except ImportError:
-        # If imp is not available, fall back to importlib
-        import importlib.util
-        # Reference: https://stackoverflow.com/questions/check-if-python-module-exists-without-importing-it
-        return importlib.util.find_spec(module_name) is not None
-
-
-def pip_install_multiple(packages, shotgun=True, quiet=False):
-    """
-    Install multiple packages via pip.
-
-    If shotgun is True:
-        Try to install each package individually. If a package fails, the function
-        continues with the next package.
-    
-    If shotgun is False:
-        Attempt to install all packages. If any package fails, none will be installed.
-        This is similar to installing packages in one go using a requirements.txt file.
-    
-    Args:
-        packages (str or list): A list of packages or a string of space-separated package names.
-        shotgun (bool): Installation strategy. See description above.
-        quiet (bool): If True, suppress pip's output.
-
-    Returns:
-        List[str]: A list of successfully installed packages.
-    """
-    import sys
-    import subprocess
-    import shlex
-
-    if isinstance(packages, str):
-        if file_exists(packages):
-            fansi_print("Reading packages from "+repr(packages), 'blue')
-            packages=text_file_to_string(packages)
-        packages = line_split(packages)
-
-    def fix_package(package):
-        if '@' in package and len(package.strip().split())==3:
-            #clip @ git+https://github.com/openai/CLIP.git
-            #    is installed via
-            #pip install git+https://github.com/openai/CLIP.git
-            package=package.strip().split()[-1]
-        return package
-
-    assert is_iterable(packages)
-    assert all(isinstance(x, str) for x in packages)
-    packages = list(map(fix_package, packages))
-
-    
-    successful_packages = []
-    base_command = [sys.executable, '-m', 'pip', 'install']
-    
-    if quiet:
-        base_command.append('-q')
-
-    if not shotgun:
-        # Install all packages in one go
-        # quoted_packages = [shlex.quote(pkg) for pkg in packages]
-        quoted_packages = list_flatten([shlex.split(pkg) for pkg in packages])
-        command = base_command + quoted_packages
-        result = subprocess.run(command)
-        
-        if result.returncode == 0:  # if the command was successful
-            print(fansi("All packages were successfully installed!", "green"))
-            return packages
-        else:
-            print(fansi("Failed to install one or more packages. None were installed.", "red"))
-            return []
-    else:
-        for package in packages:
-            command = base_command + shlex.split(package)
-            result = subprocess.run(command)
-            
-            if result.returncode == 0:  # if the command was successful
-                successful_packages.append(package)
-                print(fansi("Successfully installed {}.".format(package), "green"))
-            else:
-                print(fansi("Failed to install {}. Continuing with the next package.".format(package), "red"))
-
-        return successful_packages
-
-    global _need_module_refresh
-    _need_module_refresh=True
-
-
-
-
-known_pypi_module_package_names={
-    # To update this list, copy-paste the output of rp.pypi_inspection.get_pypi_module_package_names()
-    # A list of some non-obvious pypi package names given their module names, used by pip_import
-    # Let's make this dict as big as we can! More the merrier...
-    'Crypto': 'pycrypto',
-    'IPython': 'ipython',
-    'OpenGL': 'PyOpenGL',
-    'PIL': 'Pillow',
-    'PyQt5': 'PyQt5-sip',
-    'Xlib': 'python-xlib',
-    '_ast27': 'typed-ast',
-    '_ast3': 'typed-ast',
-    '_bimpy': 'bimpy',
-    '_black_version': 'black',
-    '_dlib_pybind11': 'dlib',
-    '_plotly_future_': 'plotly',
-    '_plotly_utils': 'plotly',
-    '_sentencepiece': 'sentencepiece',
-    '_sounddevice': 'sounddevice',
-    'absl': 'absl-py',
-    'ahocorasick': 'pyahocorasick',
-    'async_timeout': 'async-timeout',
-    'atari_py': 'atari-py',
-    'babel': 'Babel',
-    'backports': 'configparser',
-    'black_primer': 'black',
-    'blackd': 'black',
-    'blib2to3': 'black',
-    'bs4': 'beautifulsoup4',
-    'cached_property': 'cached-property',
-    'caffe2': 'torch',
-    'chart_studio': 'chart-studio',
-    'clinical_trials': 'clinical-trials',
-    'clinical_trials/api': 'clinical-trials',
-    'clinical_trials/api/xml2dict': 'clinical-trials',
-    'colors': 'ansicolors',
-    'compose': 'docker-compose',
-    # 'cv2': 'opencv-python',
-    'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? Idk!
-    'cython': 'Cython',
-    'deprecate': 'pyDeprecate',
-    'diff_match_patch': 'diff-match-patch',
-    'dns': 'dnspython',
-    'dockerpycreds': 'docker-pycreds',
-    'dot_parser': 'pydotz',
-    'dotenv': 'python-dotenv',
-    'dt_authentication': 'dt-authentication-daffy',
-    'dt_data_api': 'dt-data-api-daffy',
-    'dt_shell': 'duckietown-shell',
-    'duckietown_docker_utils': 'duckietown-docker-utils-daffy',
-    'easyprocess': 'EasyProcess',
-    'editor': 'python-editor',
-    'eglRenderer': 'pybullet',
-    'examples': 'test-tube',
-    'faiss': 'faiss-gpu',
-    'ffmpeg': 'ffmpeg-python',
-    'getmac': 'get-mac',
-    'git': 'GitPython',
-    'github': 'PyGithub',
-    'glances': 'Glances',
-    'google': 'protobuf',
-    'google_auth_oauthlib': 'google-auth-oauthlib',
-    'gpt_2_simple': 'gpt-2-simple',
-    'greptile': 'Greptile',
-    'grpc': 'grpcio',
-    'gtts_token': 'gTTS-token',
-    'httpcore/_async': 'httpcore',
-    'httpcore/_backends': 'httpcore',
-    'httpcore/_sync': 'httpcore',
-    'httpx/_transports': 'httpx',
-    'integrations': 'torchmetrics',
-    'ioc': 'python-ioc',
-    'is_even_aast': 'iseven-aast',
-    'jinja2_time': 'jinja2-time',
-    'js2py': 'Js2Py',
-    'jupyter_lsp': 'jupyter-lsp',
-    'jupyterlab_git': 'jupyterlab-git',
-    'jupyterlab_server': 'jupyterlab-server',
-    'keras': 'keras-nightly',
-    'keras_gym': 'keras-gym',
-    'keras_preprocessing': 'Keras-Preprocessing',
-    'lazy_object_proxy': 'lazy-object-proxy',
-    'lib2to3': '2to3',
-    'libarchive': 'libarchive-c',
-    'libfuturize': 'future',
-    'libpasteurize': 'future',
-    'lpips_tf': 'lpips-tf',
-    'mac_vendor_lookup': 'mac-vendor-lookup',
-    'markdown': 'Markdown',
-    'markdown_it': 'markdown-it-py',
-    'matplotlib_inline': 'matplotlib-inline',
-    'mpl_toolkits': 'matplotlib',
-    'more_itertols':'more-itertools',
-    'mplcairo': 'git+https://github.com/matplotlib/mplcairo',#Some features only available on master branch: https://stackoverflow.com/questions/26702176/is-it-possible-to-do-additive-blending-with-matplotlib
-    'mypy_extensions': 'mypy-extensions',
-    'neural_style': 'neural-style',
-    'nmap3': 'python3-nmap',
-    'notebook_as_pdf': 'notebook-as-pdf',
-    'nvidia_smi': 'nvidia-ml-py3',
-    'oembed': 'python-oembed',
-    'ometa': 'Parsley',
-    'opt_einsum': 'opt-einsum',
-    'ot': 'POT',
-    'paho': 'paho-mqtt',
-    'pandocattributes': 'pandoc-attributes',
-    'parsley': 'Parsley',
-    'past': 'future',
-    'pasta': 'google-pasta',
-    'piglet': 'piglet-templates',
-    'pl_bolts': 'pytorch-lightning-bolts',
-    'pl_examples': 'pytorch-lightning',
-    'plotlywidget': 'plotly',
-    'prompt_toolkit': 'prompt-toolkit',
-    'pyasn1_modules': 'pyasn1-modules',
-    'pybullet_data': 'pybullet',
-    'pybullet_envs': 'pybullet',
-    'pybullet_robots': 'pybullet',
-    'pybullet_utils': 'pybullet',
-    'pydot': 'pydotz',
-    'pyfx' : 'python-fx',
-    'pyinstrument_cext': 'pyinstrument-cext',
-    'pylab': 'matplotlib',
-    'pyls': 'python-language-server',
-    'pyls_black': 'pyls-black',
-    'pyls_jsonrpc': 'python-jsonrpc-server',
-    'pyls_spyder': 'pyls-spyder',
-    'pynvml': 'nvidia-ml-py3',
-    'pytorch_lightning': 'pytorch-lightning',
-    'pyvirtualdisplay': 'PyVirtualDisplay',
-    'pywt': 'PyWavelets',
-    'pyximport': 'Cython',
-    'qdarkstyle': 'QDarkStyle',
-    'qtawesome': 'QtAwesome',
-    'ranger': 'ranger-fm',
-    'requests_oauthlib': 'requests-oauthlib',
-    'requests_toolbelt': 'requests-toolbelt',
-    'requirements': 'requirements-parser',
-    'rich_traceback': 'rich-traceback',
-    'rtmidi': 'python-rtmidi',
-    'rtree': 'Rtree',
-    'sentry_sdk': 'sentry-sdk',
-    'serial': 'pyserial',#WARNING: there is a 'pip install serial' which ALSO creates a 'serial' module. This module is the WRONG SERIAL MODULE.
-    'skimage': 'scikit-image',
-    'sklearn': 'scikit-learn',
-    'skvideo': 'sk-video',
-    'skvideo.io': 'sk-video',
-    'slugify': 'python-slugify',
-    'smart_open': 'smart-open',
-    'spacy_legacy': 'spacy-legacy',
-    'speech_recognition': 'SpeechRecognition', #Needs pyaudio, and needs portaudio. I'm not sure if pyaudio needs portaudio?
-    'sphinx': 'Sphinx',
-    'sphinx_rtd_theme': 'sphinx-rtd-theme',
-    'sphinxcontrib': 'sphinxcontrib-htmlhelp',
-    'spyder_kernels': 'spyder-kernels',
-    'tensorboard_data_server': 'tensorboard-data-server',
-    'tensorboard_plugin_wit': 'tensorboard-plugin-wit',
-    'tensorflow': 'tensorflow-gpu',
-    'tensorflow_estimator': 'tensorflow-estimator',
-    'terml': 'Parsley',
-    'tesseract_ocr': 'tesseract-ocr',
-    'test': 'pyinstrument',
-    'test_tube': 'test-tube',
-    'tests': 'torchmetrics',
-    'text_unidecode': 'text-unidecode',
-    'three_merge': 'three-merge',
-    'timg/methods': 'timg',
-    'typed_ast': 'typed-ast',
-    'typing_extensions': 'typing-extensions',
-    'websocket': 'websocket-client',
-    'websockets/extensions': 'websockets',
-    'werkzeug': 'Werkzeug',
-    'wheel-platform-tag-is-broken-on-empty-wheels-see-issue-141': 'sklearn',
-    'whisper': 'openai-whisper',
-    'xontrib': 'xonsh',
-    'yapftests': 'yapf',
-    'yaml':'PyYAML',
-    'zalgo_text': 'zalgo-text'
-}
-
-
-#class _rp_persistent_dict:
-#    def __init__(self,name):
-#        #TODO: Make this a persistent file that's opened by rp upon booting and saved when things change
-#        pass
-#    def __getitem__(self,key):
-#        return self.data[key]
-#    def __setitem__(self,key,value):
-#        self.data[key]=value
-#    def __delitem__(self,key):
-#        self[data]=key
-
-class _rp_persistent_set:
-    def __init__(self,name=''):
-        #TODO: Make this a persistent file that's opened by rp upon booting and saved when things change
-        self.data=set()
-
-    def add(self,key):
-        self.data|={key}
-
-    def __contains__(self,key):
-        return key in self.data
-
-    def delete(self,key):
-        self.data-={key}
-
-
-
-_pip_import_blacklist=_rp_persistent_set()
-
-_pip_import_autoyes=False #This will always be a private variable, but it might be exposed via a function
-def pip_import(module_name,package_name=None,*,auto_yes=False):
-    """
-    TODO: Make this function only request sudo if we need it. Otherwise it's a nuisance.
-    TODO: Add an "always" option to "yes" and "no" for installing modules.
-
-    Attempts to import a module, and if successful returns it.
-    If it's unsuccessful, it attempts to find it on pypi, and if
-       it can, it asks you if you'd like to install it, and if
-       you say 'yes', rp will attempt to install it for you.
-    Note: There are some cases where it won't ask you, and instead will just go ahead and install the packages needed
-      - If you're in Google Colab, it won't ask before installing packages as needed
-
-    The rp module uses tons and tons of packages from pypi.
-    You don't need to install all of them to make rp work,
-       because not all functions need all of these packages.
-    However, when you DO need a certain package's module,
-       and we try importing it, we get an import error.
-    Normally, this isn't a problem, because most packages on pypi
-       have the same package name as the module name.
-    For example: 'pip install rp' allows 'import rp', because the pypi-name
-       and the import name are the same thing.
-    Some modules break this rule though. For example, opencv:
-       opencv is installed with 'pip install opencv-python' and imported like 'cv2=pip_import('cv2')'.
-    Obviously, "cv2"!="opencv-python". And because of this, when you get an error "can't cv2=pip_import('cv2')",
-       you can't just fix it with 'pip install cv2'. You have to google it. That's annoying.
-    THIS FUNCTION addresses that problem. pip
-    """
-
-    assert isinstance(module_name,str),'pip_import: error: module_name must be a string, but got type '+repr(type(module_name))#Probably better done with raise typerror but meh whatever
-
-    try:
-        #This is approx 20 times faster than the old code using importlib.import_module(module_name)
-        #Apparently thats slow but __import__ is fast
-        #Idk why? But this makes it much faster...maybe I can phase out importlib from this function entirely...but thats for another day
-        return __import__(module_name)
-    except ModuleNotFoundError:
-        #If we can't find the module, continue on...
-        pass
-
-    if package_name is None:
-        package_name=module_name
-    if package_name in known_pypi_module_package_names:
-        package_name=known_pypi_module_package_names[package_name]
-
-    def offer_to_blacklist():
-        if input_yes_no('Would you like to blacklist %s? (In the future, pip_import will no longer try to install it)'%module_name):
-            _pip_import_blacklist.add(module_name)
-            print('TODO: This message tells you how to remove items from the blacklist')
-
-    import importlib
-    try:
-        return importlib.import_module(module_name)
-    except ImportError:
-        if module_exists(module_name) or module_name in _pip_import_blacklist:
-            raise #We're getting an import error for some reason other than not having installed the module
-        if connected_to_internet():
-            if auto_yes or rp.r._pip_import_autoyes or running_in_google_colab() or input_yes_no("Failed to import module "+repr(module_name)+'. You might be able to get this module by installing package '+repr(package_name)+' with pip. Would you like to try that?'):
-                print("Attempting to install",package_name,'with pip...')
-                pip_install(package_name)
-                fansi_print("pip_import: successfully installed package "+repr(package_name)+"; attempting to import it...",'green',new_line=False)
-                assert module_exists(module_name),'pip_import: error: Internal assertion failed (rp thought we successfully installed your package, but perhaps it didnt actually work, or maybe this package isn\'t compatiable with this version of python. Right now I dont know how to detect this).'# pip_import needs to be fixed if you see this message.'
-                out=pip_import(module_name,package_name)#This shouldn't recurse more than once
-                fansi_print("success!",'green')
-                return out
-            else:
-                print("...very well then. Throwing an import error...")
-                offer_to_blacklist()
-                raise
-        else:
-            #We would fail to install the package becuase we have no internet
-            fansi_print("pip_import: normally we would try to install your package via pip, but you're not connected to the internet. Failed to pip_install("+repr(package_name)+')')
-            raise
 
 def powerset(iterable,reverse=False):
     "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
@@ -19784,8 +19540,8 @@ def cv_line_graph(
     graph = np.full((height, width, 4), background_color, dtype=np.uint8)
 
     # Map the data points to pixel coordinates
-    x = ((x_values - x_min) / (x_max - x_min) * width).astype(int)
-    y = ((y_max - y_values) / (y_max - y_min) * height).astype(int)
+    x = ((x_values - x_min) / (x_max - x_min + 1e-10) * width ).astype(int)
+    y = ((y_max - y_values) / (y_max - y_min + 1e-10) * height).astype(int)
 
     # Draw the line graph
     line_type = cv2.LINE_AA if antialias else cv2.LINE_8
@@ -24391,6 +24147,8 @@ def download_youtube_video(url_or_id: str,
         ys = yt.streams.filter(mime_type='video/mp4', resolution=best_resolution).get_highest_resolution(progressive=need_audio)
     else:
         ys = yt.streams.filter(mime_type='audio/mp4').get_audio_only()
+
+    assert ys is not None, 'Could not find an MP4 youtube video that satisfied the given contsraints (url=%s, need_audio=%s, need_video=%s, max_resolution=%s, min_resolution=%s)'%(repr(url),need_audio, need_video, max_resolution, min_resolution)
     out_path = ys.download(output_path=get_parent_directory(path),filename=get_file_name(path))
         
     #Common logic invariant to external libraries:
@@ -35568,12 +35326,456 @@ def get_free_disk_space(path='/'):
     total, used, free = shutil.disk_usage(path)
     return free
 
+_pip_install_needs_sudo=True
+def pip_install(pip_args:str):
+    assert isinstance(pip_args,str),'pip_args must be a string like "numpy --upgrade" or "rp --upgrade --no-cache --user" etc'
+    import os
+    if currently_running_unix() and rp.r._pip_install_needs_sudo:
+        #Attempt to get root priveleges. Sometimes we need root priveleges to install stuff. If we're on unix, attempt to become the root for this process. There's probably a better way to do this but idk how and don't really care that much even though I probably should...
+        os.system('sudo echo')#This should only prompt for a password once...making the next command run in sudo.
+    os.system(sys.executable+' -m pip install '+pip_args)
+    _refresh_autocomplete_module_list()
+    #DONT DELETE THIS COMMENT BLOCK: An alternative way to install things with pip:
+    #    from pip.__main__ import _main as pip
+    #    errored=pip(['install', package_name]+['--upgrade']*upgrade)
+    #    if errored:
+    #        assert False,'pip_install: installation of module '+repr(package_name)+' failed.'
+
+def update_rp():
+    if input_yes_no("Are you sure you'd like to try updating rp? (You will need to restart it to see any effects)"):
+        # --index-url https://pypi.org/simple is so other internal pypi's that are out of date don't prevent the upgrade (looking at you, netflix! https://pypi.netflix.net/simple is often out of date...)
+        pip_install("rp --upgrade --no-cache  --index-url https://pypi.org/simple")
+
+def module_exists(module_name):
+    """
+    Check if a Python module exists without importing it.
+
+    Args:
+        module_name (str): The name of the module to check.
+
+    Returns:
+        bool: True if the module exists, False otherwise.
+    """
+    try:
+        # Try to import the imp module
+        import imp
+        try:
+            imp.find_module(module_name)
+            return True
+        except ImportError:
+            return False
+    except ImportError:
+        # If imp is not available, fall back to importlib
+        import importlib.util
+        # Reference: https://stackoverflow.com/questions/check-if-python-module-exists-without-importing-it
+        return importlib.util.find_spec(module_name) is not None
+
+
+def pip_install_multiple(packages, shotgun=True, quiet=False):
+    """
+    Install multiple packages via pip.
+
+    If shotgun is True:
+        Try to install each package individually. If a package fails, the function
+        continues with the next package.
+    
+    If shotgun is False:
+        Attempt to install all packages. If any package fails, none will be installed.
+        This is similar to installing packages in one go using a requirements.txt file.
+    
+    Args:
+        packages (str or list): A list of packages or a string of space-separated package names.
+        shotgun (bool): Installation strategy. See description above.
+        quiet (bool): If True, suppress pip's output.
+
+    Returns:
+        List[str]: A list of successfully installed packages.
+    """
+    import sys
+    import subprocess
+    import shlex
+
+    if isinstance(packages, str):
+        if file_exists(packages):
+            fansi_print("Reading packages from "+repr(packages), 'blue')
+            packages=text_file_to_string(packages)
+        packages = line_split(packages)
+
+    def fix_package(package):
+        if '@' in package and len(package.strip().split())==3:
+            #clip @ git+https://github.com/openai/CLIP.git
+            #    is installed via
+            #pip install git+https://github.com/openai/CLIP.git
+            package=package.strip().split()[-1]
+        return package
+
+    assert is_iterable(packages)
+    assert all(isinstance(x, str) for x in packages)
+    packages = list(map(fix_package, packages))
+
+    
+    successful_packages = []
+    base_command = [sys.executable, '-m', 'pip', 'install']
+    
+    if quiet:
+        base_command.append('-q')
+
+    if not shotgun:
+        # Install all packages in one go
+        # quoted_packages = [shlex.quote(pkg) for pkg in packages]
+        quoted_packages = list_flatten([shlex.split(pkg) for pkg in packages])
+        command = base_command + quoted_packages
+        result = subprocess.run(command)
+        
+        if result.returncode == 0:  # if the command was successful
+            print(fansi("All packages were successfully installed!", "green"))
+            return packages
+        else:
+            print(fansi("Failed to install one or more packages. None were installed.", "red"))
+            return []
+    else:
+        for package in packages:
+            command = base_command + shlex.split(package)
+            result = subprocess.run(command)
+            
+            if result.returncode == 0:  # if the command was successful
+                successful_packages.append(package)
+                print(fansi("Successfully installed {}.".format(package), "green"))
+            else:
+                print(fansi("Failed to install {}. Continuing with the next package.".format(package), "red"))
+
+        return successful_packages
+
+    global _need_module_refresh
+    _need_module_refresh=True
+
+
+
+
+known_pypi_module_package_names={
+    # To update this list, copy-paste the output of rp.pypi_inspection.get_pypi_module_package_names()
+    # A list of some non-obvious pypi package names given their module names, used by pip_import
+    # Let's make this dict as big as we can! More the merrier...
+    'Crypto': 'pycrypto',
+    'IPython': 'ipython',
+    'OpenGL': 'PyOpenGL',
+    'PIL': 'Pillow',
+    'PyQt5': 'PyQt5-sip',
+    'Xlib': 'python-xlib',
+    '_ast27': 'typed-ast',
+    '_ast3': 'typed-ast',
+    '_bimpy': 'bimpy',
+    '_black_version': 'black',
+    '_dlib_pybind11': 'dlib',
+    '_plotly_future_': 'plotly',
+    '_plotly_utils': 'plotly',
+    '_sentencepiece': 'sentencepiece',
+    '_sounddevice': 'sounddevice',
+    'absl': 'absl-py',
+    'ahocorasick': 'pyahocorasick',
+    'async_timeout': 'async-timeout',
+    'atari_py': 'atari-py',
+    'babel': 'Babel',
+    'backports': 'configparser',
+    'black_primer': 'black',
+    'blackd': 'black',
+    'blib2to3': 'black',
+    'bs4': 'beautifulsoup4',
+    'cached_property': 'cached-property',
+    'caffe2': 'torch',
+    'chart_studio': 'chart-studio',
+    'clinical_trials': 'clinical-trials',
+    'clinical_trials/api': 'clinical-trials',
+    'clinical_trials/api/xml2dict': 'clinical-trials',
+    'colors': 'ansicolors',
+    'compose': 'docker-compose',
+    # 'cv2': 'opencv-python',
+    'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? Idk!
+    'cython': 'Cython',
+    'deprecate': 'pyDeprecate',
+    'diff_match_patch': 'diff-match-patch',
+    'dns': 'dnspython',
+    'dockerpycreds': 'docker-pycreds',
+    'dot_parser': 'pydotz',
+    'dotenv': 'python-dotenv',
+    'dt_authentication': 'dt-authentication-daffy',
+    'dt_data_api': 'dt-data-api-daffy',
+    'dt_shell': 'duckietown-shell',
+    'duckietown_docker_utils': 'duckietown-docker-utils-daffy',
+    'easyprocess': 'EasyProcess',
+    'editor': 'python-editor',
+    'eglRenderer': 'pybullet',
+    'examples': 'test-tube',
+    'faiss': 'faiss-gpu',
+    'ffmpeg': 'ffmpeg-python',
+    'getmac': 'get-mac',
+    'git': 'GitPython',
+    'github': 'PyGithub',
+    'glances': 'Glances',
+    'google': 'protobuf',
+    'google_auth_oauthlib': 'google-auth-oauthlib',
+    'gpt_2_simple': 'gpt-2-simple',
+    'greptile': 'Greptile',
+    'grpc': 'grpcio',
+    'gtts_token': 'gTTS-token',
+    'httpcore/_async': 'httpcore',
+    'httpcore/_backends': 'httpcore',
+    'httpcore/_sync': 'httpcore',
+    'httpx/_transports': 'httpx',
+    'integrations': 'torchmetrics',
+    'ioc': 'python-ioc',
+    'is_even_aast': 'iseven-aast',
+    'jinja2_time': 'jinja2-time',
+    'js2py': 'Js2Py',
+    'jupyter_lsp': 'jupyter-lsp',
+    'jupyterlab_git': 'jupyterlab-git',
+    'jupyterlab_server': 'jupyterlab-server',
+    'keras': 'keras-nightly',
+    'keras_gym': 'keras-gym',
+    'keras_preprocessing': 'Keras-Preprocessing',
+    'lazy_object_proxy': 'lazy-object-proxy',
+    'lib2to3': '2to3',
+    'libarchive': 'libarchive-c',
+    'libfuturize': 'future',
+    'libpasteurize': 'future',
+    'lpips_tf': 'lpips-tf',
+    'mac_vendor_lookup': 'mac-vendor-lookup',
+    'markdown': 'Markdown',
+    'markdown_it': 'markdown-it-py',
+    'matplotlib_inline': 'matplotlib-inline',
+    'mpl_toolkits': 'matplotlib',
+    'more_itertols':'more-itertools',
+    'mplcairo': 'git+https://github.com/matplotlib/mplcairo',#Some features only available on master branch: https://stackoverflow.com/questions/26702176/is-it-possible-to-do-additive-blending-with-matplotlib
+    'mypy_extensions': 'mypy-extensions',
+    'neural_style': 'neural-style',
+    'nmap3': 'python3-nmap',
+    'notebook_as_pdf': 'notebook-as-pdf',
+    'nvidia_smi': 'nvidia-ml-py3',
+    'oembed': 'python-oembed',
+    'ometa': 'Parsley',
+    'opt_einsum': 'opt-einsum',
+    'ot': 'POT',
+    'paho': 'paho-mqtt',
+    'pandocattributes': 'pandoc-attributes',
+    'parsley': 'Parsley',
+    'past': 'future',
+    'pasta': 'google-pasta',
+    'piglet': 'piglet-templates',
+    'pl_bolts': 'pytorch-lightning-bolts',
+    'pl_examples': 'pytorch-lightning',
+    'plotlywidget': 'plotly',
+    'prompt_toolkit': 'prompt-toolkit',
+    'pyasn1_modules': 'pyasn1-modules',
+    'pybullet_data': 'pybullet',
+    'pybullet_envs': 'pybullet',
+    'pybullet_robots': 'pybullet',
+    'pybullet_utils': 'pybullet',
+    'pydot': 'pydotz',
+    'pyfx' : 'python-fx',
+    'pyinstrument_cext': 'pyinstrument-cext',
+    'pylab': 'matplotlib',
+    'pyls': 'python-language-server',
+    'pyls_black': 'pyls-black',
+    'pyls_jsonrpc': 'python-jsonrpc-server',
+    'pyls_spyder': 'pyls-spyder',
+    'pynvml': 'nvidia-ml-py3',
+    'pytorch_lightning': 'pytorch-lightning',
+    'pyvirtualdisplay': 'PyVirtualDisplay',
+    'pywt': 'PyWavelets',
+    'pyximport': 'Cython',
+    'qdarkstyle': 'QDarkStyle',
+    'qtawesome': 'QtAwesome',
+    'ranger': 'ranger-fm',
+    'requests_oauthlib': 'requests-oauthlib',
+    'requests_toolbelt': 'requests-toolbelt',
+    'requirements': 'requirements-parser',
+    'rich_traceback': 'rich-traceback',
+    'rtmidi': 'python-rtmidi',
+    'rtree': 'Rtree',
+    'sentry_sdk': 'sentry-sdk',
+    'serial': 'pyserial',#WARNING: there is a 'pip install serial' which ALSO creates a 'serial' module. This module is the WRONG SERIAL MODULE.
+    'skimage': 'scikit-image',
+    'sklearn': 'scikit-learn',
+    'skvideo': 'sk-video',
+    'skvideo.io': 'sk-video',
+    'slugify': 'python-slugify',
+    'smart_open': 'smart-open',
+    'spacy_legacy': 'spacy-legacy',
+    'speech_recognition': 'SpeechRecognition', #Needs pyaudio, and needs portaudio. I'm not sure if pyaudio needs portaudio?
+    'sphinx': 'Sphinx',
+    'sphinx_rtd_theme': 'sphinx-rtd-theme',
+    'sphinxcontrib': 'sphinxcontrib-htmlhelp',
+    'spyder_kernels': 'spyder-kernels',
+    'tensorboard_data_server': 'tensorboard-data-server',
+    'tensorboard_plugin_wit': 'tensorboard-plugin-wit',
+    'tensorflow': 'tensorflow-gpu',
+    'tensorflow_estimator': 'tensorflow-estimator',
+    'terml': 'Parsley',
+    'tesseract_ocr': 'tesseract-ocr',
+    'test': 'pyinstrument',
+    'test_tube': 'test-tube',
+    'tests': 'torchmetrics',
+    'text_unidecode': 'text-unidecode',
+    'three_merge': 'three-merge',
+    'timg/methods': 'timg',
+    'typed_ast': 'typed-ast',
+    'typing_extensions': 'typing-extensions',
+    'websocket': 'websocket-client',
+    'websockets/extensions': 'websockets',
+    'werkzeug': 'Werkzeug',
+    'wheel-platform-tag-is-broken-on-empty-wheels-see-issue-141': 'sklearn',
+    'whisper': 'openai-whisper',
+    'xontrib': 'xonsh',
+    'yapftests': 'yapf',
+    'yaml':'PyYAML',
+    'zalgo_text': 'zalgo-text'
+}
+
+
+#class _rp_persistent_dict:
+#    def __init__(self,name):
+#        #TODO: Make this a persistent file that's opened by rp upon booting and saved when things change
+#        pass
+#    def __getitem__(self,key):
+#        return self.data[key]
+#    def __setitem__(self,key,value):
+#        self.data[key]=value
+#    def __delitem__(self,key):
+#        self[data]=key
+
+class _rp_persistent_set:
+    def __init__(self,name=''):
+        #TODO: Make this a persistent file that's opened by rp upon booting and saved when things change
+        self.data=set()
+
+    def add(self,key):
+        self.data|={key}
+
+    def __contains__(self,key):
+        return key in self.data
+
+    def delete(self,key):
+        self.data-={key}
+
+
+
+_pip_import_blacklist=_rp_persistent_set()
+
+_pip_import_autoyes=False #This will always be a private variable, but it might be exposed via a function
+def pip_import(module_name,package_name=None,*,auto_yes=False):
+    """
+    TODO: Make this function only request sudo if we need it. Otherwise it's a nuisance.
+    TODO: Add an "always" option to "yes" and "no" for installing modules.
+
+    Attempts to import a module, and if successful returns it.
+    If it's unsuccessful, it attempts to find it on pypi, and if
+       it can, it asks you if you'd like to install it, and if
+       you say 'yes', rp will attempt to install it for you.
+    Note: There are some cases where it won't ask you, and instead will just go ahead and install the packages needed
+      - If you're in Google Colab, it won't ask before installing packages as needed
+
+    The rp module uses tons and tons of packages from pypi.
+    You don't need to install all of them to make rp work,
+       because not all functions need all of these packages.
+    However, when you DO need a certain package's module,
+       and we try importing it, we get an import error.
+    Normally, this isn't a problem, because most packages on pypi
+       have the same package name as the module name.
+    For example: 'pip install rp' allows 'import rp', because the pypi-name
+       and the import name are the same thing.
+    Some modules break this rule though. For example, opencv:
+       opencv is installed with 'pip install opencv-python' and imported like 'cv2=pip_import('cv2')'.
+    Obviously, "cv2"!="opencv-python". And because of this, when you get an error "can't cv2=pip_import('cv2')",
+       you can't just fix it with 'pip install cv2'. You have to google it. That's annoying.
+    THIS FUNCTION addresses that problem. pip
+    """
+
+    assert isinstance(module_name,str),'pip_import: error: module_name must be a string, but got type '+repr(type(module_name))#Probably better done with raise typerror but meh whatever
+
+    try:
+        #This is approx 20 times faster than the old code using importlib.import_module(module_name)
+        #Apparently thats slow but __import__ is fast
+        #Idk why? But this makes it much faster...maybe I can phase out importlib from this function entirely...but thats for another day
+        return __import__(module_name)
+    except ModuleNotFoundError:
+        #If we can't find the module, continue on...
+        pass
+
+    if package_name is None:
+        package_name=module_name
+    if package_name in known_pypi_module_package_names:
+        package_name=known_pypi_module_package_names[package_name]
+
+    def offer_to_blacklist():
+        if input_yes_no('Would you like to blacklist %s? (In the future, pip_import will no longer try to install it)'%module_name):
+            _pip_import_blacklist.add(module_name)
+            print('TODO: This message tells you how to remove items from the blacklist')
+
+    import importlib
+    try:
+        return importlib.import_module(module_name)
+    except ImportError:
+        if module_exists(module_name) or module_name in _pip_import_blacklist:
+            raise #We're getting an import error for some reason other than not having installed the module
+        if connected_to_internet():
+            if auto_yes or rp.r._pip_import_autoyes or running_in_google_colab() or input_yes_no("Failed to import module "+repr(module_name)+'. You might be able to get this module by installing package '+repr(package_name)+' with pip. Would you like to try that?'):
+                print("Attempting to install",package_name,'with pip...')
+                pip_install(package_name)
+                fansi_print("pip_import: successfully installed package "+repr(package_name)+"; attempting to import it...",'green',new_line=False)
+                assert module_exists(module_name),'pip_import: error: Internal assertion failed (rp thought we successfully installed your package, but perhaps it didnt actually work, or maybe this package isn\'t compatiable with this version of python. Right now I dont know how to detect this).'# pip_import needs to be fixed if you see this message.'
+                out=pip_import(module_name,package_name)#This shouldn't recurse more than once
+                fansi_print("success!",'green')
+                return out
+            else:
+                print("...very well then. Throwing an import error...")
+                offer_to_blacklist()
+                raise
+        else:
+            #We would fail to install the package becuase we have no internet
+            fansi_print("pip_import: normally we would try to install your package via pip, but you're not connected to the internet. Failed to pip_install("+repr(package_name)+')')
+            raise
+
+_rp_git_token=None #Set in RPRC
+_rp_git_dir=path_join(get_parent_directory(__file__),'git')
+def git_import(repo,token=None):
+    assert isinstance(repo,str)
+    assert token is None or isinstance(token,str)
+    
+    module_name = repo #For now these are the same, might diverge in the future if I want other peoples repos
+    module = 'rp.git.'+module_name
+    
+    
+    try:
+        return __import__(module)
+    except ImportError:
+        pass
+    
+    if token is None:
+        token=_rp_git_token
+        
+    if token is None:
+        url = "https://github.com/RyannDaGreat/"+repo
+    else:
+        url = "https://api:%s@github.com/RyannDaGreat/%s.git"%(token,repo)
+        
+    path = path_join(_rp_git_dir, module_name)
+    fansi_print('rp_git_import: Attempting to git clone new module %s at %s to %s'%(module, url, path), 'cyan')
+    git_clone(url,path)
+    
+    try:
+        return __import__(module)
+    except ImportError:
+        fansi_print('rp_git_import: Failed to import repo='+repr(repo), 'red', 'bold')
+        raise
+
 def get_mask_iou(*masks):
     """Calculates the IOU (intersection over union) of multiple binary masks"""
     masks=detuple(masks)
     assert all(is_image(mask) for mask in masks), 'All masks must be images as defined by rp.is_image'
     assert len(set(get_image_dimensions(mask) for mask in masks))==1, 'All masks must have the same dimensions, but got shapes '+repr(set(get_image_dimensions(mask) for mask in masks))
-    masks = as_numpy_array([as_binary_image(as_grayscale_image(mask)) for mask in masks])
+    masks = as_numpy_array(
+        as_binary_images(as_grayscale_images(masks, copy=False,), copy=False,)
+    )
     intersection = np.min(masks, axis=0)
     union = np.max(masks, axis=0)
 
