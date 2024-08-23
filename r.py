@@ -12511,6 +12511,10 @@ xrange=range  # To make it more compatiable when i copypaste py2 code
 term='pseudo_terminal(locals(),globals())'# For easy access: exec(term). Can use in the middle of other methods!
 
 def is_valid_python_syntax(code,mode='exec'):
+    """
+    Returns True if the code is valid python syntax, False otherwise.
+    The 'mode' specifies the type of python code - 'exec' is a superset of 'eval'.
+    """
     assert isinstance(code,str),'Code should be a string'
     import ast, traceback
     valid = True
@@ -12520,6 +12524,10 @@ def is_valid_python_syntax(code,mode='exec'):
     except Exception:
         valid = False
     return valid
+
+def _is_valid_exeval_python_syntax(code, mode):
+    code, _ = _parse_exeval_code(code)
+    return is_valid_python_syntax(code)
 
 
 def is_valid_shell_syntax(code,*, silent=True, command=None):
@@ -12591,21 +12599,220 @@ _ipython_exeval=None
 
 # region This section MUST come last! This is for if we're running the 'r' class as the main thread (runs pseudo_terminal)―――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――
 
+
+class _ExevalDirective:
+    def __init__(self, line: str):
+        self.command, self.args = self.parse(line)
+
+    @staticmethod
+    def parse(directive_line):
+        """
+        Validates that all directives are supported by exeval.
+        Currently supported:
+            %return <var namet
+            %private_scope
+        """
+
+        assert isinstance(directive_line, str)
+
+        try:
+            if directive_line == "private_scope":
+                return directive_line, ""
+
+            command, args = directive_line.split(maxsplit=1)
+
+            if command == "return":
+                assert args.strip(), "The '%return ...' directive must specify a variable name"
+                return command, args
+
+            if command in "prepend_code append_code".split():
+                assert args.strip(), "The '%s ...' directive must specify a python expression, not an empty string"%command
+                assert is_valid_python_syntax(args, 'eval'), "The '%%command ...' directive was given invalid python eval syntax: "%command+repr(args)
+                return command, args
+
+        except Exception:
+            raise ValueError("Invalid exeval directive line: " + repr('%'+directive_line))
+
+        raise ValueError("Invalid exeval directive line: " + repr('%'+directive_line))
+
+    def __str__(self):
+        return (self.command + " " + self.args).strip()
+
+    def __repr__(self):
+        return "rp.r._ExevalDirective(%s)" % repr(str(self))
+
+    def __eq__(self, x):
+        """
+        Allows checks such as 
+            assert 'private_scope' in [_ExevalDirective('private_scope')]
+        To make code more concise
+        """
+        return str(self) == str(x)
+
+
+def _parse_exeval_code(code:str):
+    """
+    Used to allow exeval to use python code with lines that start with %, called 'directives'
+
+    Directives are a set of single-line commands at the beginning of the code that start with a '%' symbol.
+    The function extracts these directives and the remaining code, returning both.
+
+    Parameters:
+        - code (str): A string containing the full code block, starting with directives prefixed by '%'.
+
+    Returns:
+        - tuple: A length-2 tuple containing a string and a list
+            1. The python code after the directives (a string)
+            2. A list of _ExevalDirective objects
+
+    Examples:
+        >>> code_block = '''
+            %return 123
+            print('Hello, world!')
+            for i in range(5):
+                print(i)
+            '''
+        >>> code, directives = _parse_exeval_code(code_block)
+        >>> print(directives)
+        ['return 123']
+        >>> print(code)
+        print('Hello, world!')
+        for i in range(5):
+            print(i)
+    """
+
+    #Iterate over each line exactly once
+    lines = code.splitlines()
+
+    directives = []
+    code_out = lines[:]
+
+    for line in lines:
+        strip = line.strip()
+
+        if strip: #Ignore empty directive lines
+            if not strip.startswith('%'):
+                break
+
+            directive_line = strip[1:]
+
+            if directive_line: #Ignore empty directives
+                directive = _ExevalDirective(directive_line)
+                directives.append(directive)
+
+        del code_out[0]
+
+    code_out = '\n'.join(code_out)
+
+    return code_out, directives
+
+
 def exeval(code:str, scope=None):
     """
     Performs either exec(code) or eval(code) and returns the result
     The code will be patched into the linecache - so you can get informative stack traces from it!
     By default it uses the scope of the caller
+
+    The function supports directives at the top of the code block, prefixed with a '%' symbol.
+    Supported directives:
+        - 'return <variable_name>': Allows specifying a variable to be returned from the executed code's scope.
+              This allows you to use exec code 
+        - 'private_scope': Creates a private copy of the scope before executing the code for better concurrency.
+        - 'prepend_code <python_expression>': Prepends some code to your command, specified by a given python expression
+        - 'append_code <python_expression>': Just like like prepend_code, except the code is added to the end instead of the beginning
+
+    Parameters:
+        - code (str): The python code string to be executed or evaluated, with possible additional directive lines at the top.
+        - scope (dict, optional): The scope in which to execute or evaluate the code.
+                                  If not provided, the caller's scope is used.
+
+    Returns:
+        - The result of the executed or evaluated code.
+          If the 'return' directive is used, the value of the specified variable is returned.
+
+    Raises:
+        - KeyError: If the 'return' directive is used and the specified variable is not found in the scope.
+        - Any exception raised during the execution or evaluation of the code.
+
+    Example (return <variable_name> directive):
+        >>> code = '''
+            %return z
+            a = 1
+            b = 2
+            z = a + b
+            '''
+        >>> result = exeval(code)
+        >>> print(result)
+        3
+
+    Example (private_scope directive):
+        >>> scope = {'a' : 0}
+        >>> exeval('''
+            %private_scope
+            a = 1
+            print(a)
+            ''', scope)
+        1
+        >>> exeval('a', scope)
+        0
+        >>> exeval('a = 1', scope)
+        >>> exeval('a', scope)
+        1
+
+    Example (prepend_code directive):
+        >>> exeval('%prepend_code rp.load_text_file("code.py")')
+
+    Example (prepend_code directive):
+        >>> code = '''
+            %prepend_code "def greet(name): return 'Hello, ' + name"
+            print(greet("Alice"))
+            '''
+        >>> exeval(code)
+        Hello, Alice
+
+    Example (append_code directive):
+        >>> exeval('%prepend_code rp.load_text_file("code.py")')
+
+    Example (append_code directive):
+        >>> code = '''
+            %append_code "result = multiply(3, 4)"
+            %return result
+            def multiply(a, b):
+                return a * b
+            '''
+        >>> result = exeval(code)
+        >>> print(result)
+        12
     """
+
+    code, directives = _parse_exeval_code(code)
 
     if scope is None:
         #Execute code in the scope of the caller
         scope=get_scope(1)
 
+    for directive in directives:
+        if directive == 'private_scope':
+            # Create a private copy of the scope so that we don't change variables. Good for concurrency when returning results
+            scope = scope.copy()
+        if directive.command in 'prepend_code append_code'.split():
+            sourced_code = exeval(directive.args, scope)
+
+            assert isinstance(sourced_code, str), "The %s directive returned a non-string result: %s"%(repr(directive), type(sourced_code))
+            if   directive.command=='prepend_code': code = sourced_code + "\n" + code
+            elif directive.command=='append_code' : code = code + "\n" + sourced_code
+
     result, error = _pterm_exeval(code, scope)
 
     if error is not None:
         raise error
+
+    for directive in directives:
+        if directive.command == 'return':
+            return_directive_var_name = directive.args
+            if return_directive_var_name not in scope:
+                raise KeyError("rp.exeval return directive: cannot find variable "+repr(return_directive_var_name))
+            result = scope[return_directive_var_name]
 
     return result
 
@@ -19956,8 +20163,8 @@ def cv_alpha_weighted_gauss_blur(image,sigma):
         >>> display_alpha_image(
         >>>     grid_concatenated_images(
         >>>         [
-        >>>             [test_image,alpha_blurred, regular_blurred],
-        >>>             [None]+as_rgb_images([alpha_blurred, regular_blurred]),
+        >>>             [test_image, alpha_blurred, regular_blurred],
+        >>>             as_rgb_images([test_image, alpha_blurred, regular_blurred]),
         >>>         ]
         >>>     ),
         >>> )
@@ -25100,21 +25307,56 @@ def copy_paths(
     )
 
 
-def get_path_parent(path_or_url:str):
+def get_path_parent(path_or_url:str, levels=1):
     """
     Retrieve the parent directory or URL of the given path or URL.
     
     Examples:
-        get_path_parent('oaijsd/odjf/aoijf/sdojif.ojf')      -> 'oaijsd/odjf/aoijf'
-        get_path_parent('/')                                 -> '/'
-        get_path_parent('/apsokd')                           -> '/'
-        get_path_parent('/apsokd.asd')                       -> '/'
-        get_path_parent('/aps/asda/sokd.asd')                -> '/aps/asda'
-        get_path_parent('http://www.example.com/path/to')    -> 'http://www.example.com/path'
-        get_path_parent('http://www.example.com/?query')     -> 'http://www.example.com/'
-        get_path_parent('http://www.example.com/')           -> 'http://www.example.com/'
-        get_path_parent('s3://bucket/key/to/object')         -> 's3://bucket/key/to'
+        >>> get_path_parent('oaijsd/odjf/aoijf/sdojif.ojf')      -> 'oaijsd/odjf/aoijf'
+        >>> get_path_parent('/')                                 -> '/'
+        >>> get_path_parent('/apsokd')                           -> '/'
+        >>> get_path_parent('/apsokd.asd')                       -> '/'
+        >>> get_path_parent('/aps/asda/sokd.asd')                -> '/aps/asda'
+        >>> get_path_parent('http://www.example.com/path/to')    -> 'http://www.example.com/path'
+        >>> get_path_parent('http://www.example.com/?query')     -> 'http://www.example.com/'
+        >>> get_path_parent('http://www.example.com/')           -> 'http://www.example.com/'
+        >>> get_path_parent('s3://bucket/key/to/object')         -> 's3://bucket/key/to'
+
+    Examples:
+        >>> #With paths:
+        >>> path =                        '/opt/homebrew/lib/python3.10/site-packages/rp'
+        >>> get_path_parent(path,0  )  ->  /opt/homebrew/lib/python3.10/site-packages/rp
+        >>> get_path_parent(path    )  ->  /opt/homebrew/lib/python3.10/site-packages
+        >>> get_path_parent(path,1  )  ->  /opt/homebrew/lib/python3.10/site-packages
+        >>> get_path_parent(path,2  )  ->  /opt/homebrew/lib/python3.10
+        >>> get_path_parent(path,3  )  ->  /opt/homebrew/lib
+        >>> get_path_parent(path,5  )  ->  /opt
+        >>> get_path_parent(path,6  )  ->  /
+        >>> get_path_parent(path,7  )  ->  /
+        >>> get_path_parent(path,700)  ->  /
+
+        >>> #With URLs:
+        >>> path =                         'https://huggingface.co/datasets/OneOverZero/MAGICK/commit/abcdefg'
+        >>> get_path_parent(path,0  )  ->   https://huggingface.co/datasets/OneOverZero/MAGICK/commit/abcdefg
+        >>> get_path_parent(path    )  ->   https://huggingface.co/datasets/OneOverZero/MAGICK/commit
+        >>> get_path_parent(path,1  )  ->   https://huggingface.co/datasets/OneOverZero/MAGICK/commit
+        >>> get_path_parent(path,2  )  ->   https://huggingface.co/datasets/OneOverZero/MAGICK
+        >>> get_path_parent(path,3  )  ->   https://huggingface.co/datasets/OneOverZero
+        >>> get_path_parent(path,4  )  ->   https://huggingface.co/datasets
+        >>> get_path_parent(path,5  )  ->   https://huggingface.co/
+        >>> get_path_parent(path,6  )  ->   https://huggingface.co/
+        >>> get_path_parent(path,7  )  ->   https://huggingface.co/
+        >>> get_path_parent(path,700)  ->   https://huggingface.co/
     """
+
+
+    assert levels>=0
+    if levels==0:
+        return path_or_url
+    if levels>1:
+        for level in range(levels):
+            path_or_url = get_path_parent(path_or_url)
+        return path_or_url
     
     # Parse the input
     from urllib.parse import urlparse, urlunparse
@@ -25133,9 +25375,9 @@ get_file_folder=get_path_parent#Synonyms that might make more sense to read in t
 get_file_directory=get_path_parent
 get_parent_directory=get_parent_folder=get_path_parent
 
-def get_paths_parents(*paths_or_urls):
+def get_paths_parents(*paths_or_urls, levels=1):
     "Plural of get_path_parent"
-    return [get_path_parent(path) for path in detuple(paths_or_urls)]
+    return [get_path_parent(path, levels) for path in detuple(paths_or_urls)]
 
 def make_directory(path):
     """
@@ -35216,6 +35458,9 @@ def type_string_with_keyboard(s, time_per_stroke=1/30):
         elif character=='\x1b':
             keyboard.press(Key.esc)
             keyboard.release(Key.esc)
+        elif character=='\b':
+            keyboard.press(Key.backspace)
+            keyboard.release(Key.backspace)
         else:
             keyboard.press(character)
             keyboard.release(character)

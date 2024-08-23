@@ -52,11 +52,11 @@ class Evaluation:
     
     It includes the following attributes:
         - code: The original Python code that was executed.
-        - value: The return value of the executed code (if it didn't error)
+        - value: The return value of the executed code (if it didn't error and is_eval)
         - error: The exception object if an error occurred during execution.
         - errored: A boolean indicating whether an error occurred.
         - is_eval: A boolean indicating whether the code was executed using eval() (as opposed to exec()).
-        - is_exec: A boolean indicating whether the code was executed using exec().
+        - is_exec: A boolean indicating whether the code was executed using exec(). Will be (not is_eval)
     The `error` and `value` attributes are not always present - 
         but you can determine if they are from other attributes (see `create`'s docstring)
 
@@ -102,7 +102,7 @@ class Evaluation:
         self.is_exec=False
         self.errored=False
         try:
-            if rp.is_valid_python_syntax(self.code,mode='eval'):
+            if rp.r._is_valid_exeval_python_syntax(self.code,mode='eval'):
                 self.is_eval=True
                 self.value=self._exeval(self.code,scope,sync)
             else:
@@ -224,9 +224,6 @@ def _HandlerMaker(scope:dict=None, base_class=SimpleHTTPRequestHandler):
                     self.send_content_bytes(content, "application/octet-stream")
 
             return should_handle
-
-        #TODO:
-        #    Multithreaded
 
         def handle_web_query(self):
             if not self.has_path_prefix("/webeval/web"):
@@ -363,7 +360,9 @@ def _HandlerMaker(scope:dict=None, base_class=SimpleHTTPRequestHandler):
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     pass
 
-def run_server(server_port:int=None,scope:dict=None, handler_base_class=SimpleHTTPRequestHandler):
+def run_server(server_port:int=None,
+               scope:dict=None,
+               handler_base_class=SimpleHTTPRequestHandler):
     """
     Set handler_base_class = SimpleHTTPRequestHandler to make it a fileserver + python-to-python server
     Set handler_base_class = BaseHTTPRequestHandler to make it a python-to-python-only server (no fileserver)
@@ -524,7 +523,78 @@ class Client:
             >>> v=[x.value for x in l if not x.errored]
             >>> # result: v=[1,2]
 
-        TODO: Allow multiple code's to be passed in one request, which will be processed by the server as multiple Evaluation objects. Can decrease the latency by reducing number of round-trips to and from the server
+        EXEVAL DIRECTIVES:
+            [I may remove this documentation in the future, as rp.exeval's docstring has a near-duplicate of this information]
+
+            The Client class uses the `exeval` function internally to execute code on the server. The `exeval` function
+            supports directives that provide additional functionality (please see rp.exeval for a full list):
+
+            1. `%return <variable_name>`: Allows specifying a variable to be returned from the executed code's scope.
+               This is useful when executing code that cannot be evaluated as an expression.
+
+               Example:
+                   >>> code = '''
+                       %return result
+                       a = 10
+                       b = 20
+                       result = a + b
+                       '''
+                   >>> result = client.evaluate(code)
+                   >>> print(result.value)
+                   30
+
+               Example:
+                   >>> code = '''
+                       %return output
+                       %private_scope
+                       def f():
+                           import time
+                           return time.time()
+                       output = f()
+                       '''
+                   >>> result = client.evaluate(code)
+                   >>> print(result.value)
+                   1724402196.466829
+
+            2. `%private_scope`: Creates a private copy of the scope before executing the code. This directive ensures that
+               variable changes made during code execution are not persistent between requests. It is particularly important
+               when `sync=False` to prevent unintended side effects and maintain the integrity of the server's scope.
+
+               Example (without `%private_scope`):
+                   >>> code1 = 'x = 10'
+                   >>> code2 = 'print(x)'
+                   >>> client.evaluate(code1)
+                   >>> client.evaluate(code2)
+                   10
+
+               Example (with `%private_scope`):
+                   >>> code1 = '''
+                       %private_scope
+                       x = 10
+                       '''
+                   >>> code2 = 'print(x)'
+                   >>> client.evaluate(code1)
+                   >>> client.evaluate(code2).error
+                   NameError: name 'x' is not defined
+
+               In the example without `%private_scope`, the variable `x` is persisted between requests, allowing the second
+               request to access its value. However, with `%private_scope`, each request has its own isolated scope, and
+               variables defined in one request are not accessible in subsequent requests.
+
+            3. `prepend_code <python_expression>`: Prepends·some·code·to·your·command,·specified·by·a·given·python·expression.
+               This allows for creation of variables in the given scope from server-side code, which cannot happen without this directive.
+
+               Example:
+                    >>> exeval('%prepend_code rp.load_text_file("code.py")')
+
+               (see rp.exeval's docstring for more examples)
+            
+            3. `append_code` <python_expression>`: Just like prepend_code, but adds code to the end instead of the beginning
+
+               Example:
+                    >>> exeval('%append_code rp.load_text_file("code.py")')
+
+               (see rp.exeval's docstring for more examples)
         """
         
 
