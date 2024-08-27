@@ -425,7 +425,7 @@ class PythonInput(object):
                                    'Don\'t require pressing TAB. (Not compatible with "History search".)',
                        get_current_value=lambda:['off','on'][self.complete_while_typing],
                        get_values=lambda:{
-                           'on':lambda:enable('complete_while_typing') and disable('enable_history_search'),
+                           'on':lambda:enable('complete_while_typing'),
                            'off':lambda:disable('complete_while_typing'),
                        }),
                 Option(title='History search',
@@ -434,7 +434,7 @@ class PythonInput(object):
                                    'with the current text. (Not compatible with "Complete while typing".)',
                        get_current_value=lambda:['off','on'][self.enable_history_search],
                        get_values=lambda:{
-                           'on':lambda:enable('enable_history_search') and disable('complete_while_typing'),
+                           'on':lambda:enable('enable_history_search'),
                            'off':lambda:disable('enable_history_search'),
                        }),
                 simple_option(title='Mouse support',

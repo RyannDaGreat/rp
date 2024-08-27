@@ -1339,7 +1339,9 @@ def rgb_to_grayscale(image):  # A demonstrative implementation of this pair
     # Calculated by taking the average of the three channels.
     try:
         image=as_numpy_array(image)
-        return np.average(image,2).astype(image.dtype)  # Very fast if possible
+        assert image.ndim==3 #HWC
+        return image.mean(2)
+        # return np.average(image,2).astype(image.dtype)  # Very fast if possible
     except Exception:
         # The old way, when I used nested lists to represent images
         # (Only doing this if the numpy way fails so my older scripts don't break)
@@ -1849,9 +1851,14 @@ def with_corner_radius(image, radius, *, antialias=True):
     return with_image_alpha(image, alpha)
 
     
-def _crop_images_to_max_or_min_size(*images,origin='top left',criterion=max):
+def _crop_images_to_max_or_min_size(*images,origin='top left',criterion=max,copy=True):
     
     images=detuple(images)
+
+    if is_numpy_array(images) or is_torch_tensor(images): #If its an array skip the extra compute
+        if copy: return images+0
+        else   : return images
+
     dimensions=[get_image_dimensions(image) for image in images]
     
     if len(set(dimensions))==1:
@@ -1865,7 +1872,7 @@ def _crop_images_to_max_or_min_size(*images,origin='top left',criterion=max):
     images=[crop_image(image,max_height,max_width,origin=origin) for image in images]
     return images
 
-def crop_images_to_max_size(*images,origin='top left'):
+def crop_images_to_max_size(*images,origin='top left',copy=True):
     """
     Makes sure all images have the same height and width
     Does this by adding additional black space around images if needed
@@ -1877,9 +1884,9 @@ def crop_images_to_max_size(*images,origin='top left'):
         display_image_slideshow(crop_images_to_max_size(ans))
         display_image_slideshow(crop_images_to_max_size(ans,origin='center'))
     """
-    return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=max)
+    return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=max,copy=copy)
 
-def crop_images_to_min_size(*images,origin='top left'):
+def crop_images_to_min_size(*images,origin='top left',copy=True):
     """
     Makes sure all images have the same height and width
     Does this by cropping out the edges of the images if needed
@@ -1891,7 +1898,7 @@ def crop_images_to_min_size(*images,origin='top left'):
         display_image_slideshow(crop_images_to_min_size(ans))
         display_image_slideshow(crop_images_to_min_size(ans,origin='center'))
     """
-    return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=min)
+    return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=min,copy=copy)
 
 def crop_image_to_square(image, *, origin="center", grow=False):
     """
@@ -2099,18 +2106,20 @@ def get_center_crop_bounds(image_dimensions, crop_dimensions):
 
     return tuple(bounds)
 
-def trim_video(video,length:int):
+def trim_video(video,length:int,copy=True):
     """
     This function takes a video and a length, and returns a video with that length
     If the desired length is longer than the video, additional blank frames will be added to the end
-    TODO: This function has NOT been tested yet! There are no examples!
-    TODO: Add examples
-    TODO: Test this function for all use cases, including:
+    TODO: Add examples for all use-cases, including:
         -Decreasing video length
         -Increasing video length for lists of images
         -Increasing video length for numpy-array videos
     """
     assert length>=0,'Cannot trim a video to a negative length'
+    assert is_numpy_array(video) or isinstance(video, list), 'Only list-videos and numpy-videos are supported right now'
+
+    if len(video)==length and not copy:
+        return video
     
     if len(video)>=length:
         return video[:length]
@@ -2120,7 +2129,10 @@ def trim_video(video,length:int):
     assert len(video),'Cannot extend a video with no frames - we need an example frame to determine the width and height'
     last_frame=video[-1]
     assert is_image(last_frame)
-    extra_frames=[np.zeros_like(last_frame) for _ in range(number_of_extra_frames)]
+
+    # extra_frames=np.asarray([np.zeros_like(last_frame)]*number_of_extra_frames)
+    zero_frame = np.zeros_like(last_frame)
+    extra_frames = np.repeat(zero_frame[None], number_of_extra_frames, axis=0)
 
     if isinstance(video,list):
         if not length:
@@ -2128,23 +2140,56 @@ def trim_video(video,length:int):
         return video+extra_frames
         
     elif isinstance(video,np.ndarray):
-        return np.concatenate(video,np.asarray(extra_frames))
+        return np.concatenate((video,np.asarray(extra_frames)))
     
     else:
         raise TypeError('Unsupported video type: %s'%type(video))
 
-def _make_videos_same_length(*videos):
-    #Adds blank frames to the end of videos to make sure they're all the same number of frames
+def trim_videos(*videos, length: int):
+    """Plural of rp.trim_video"""
+    videos = detuple(videos)
+
+    output = []
+    for video in videos:
+        video = trim_video(video, length)
+        output.append(video)
+
+    return output
+
+def _trim_videos_to_same_length(*videos,mode=max,copy=True):
+    """
+    If mode = max, adds blank frames to the end of videos to make sure they're all the same number of frames
+    If mode = min, cuts off every video to become the shortest of all lengths
+    If possible, returns a numpy array instead of a list
+    If copy=False, it might return the original tensor without copying
+    """
     videos=detuple(videos)
-    max_length=max(len(video) for video in videos)
-    videos=[trim_video(video,max_length) for video in videos]
+
+    if is_numpy_array(videos) or is_torch_tensor(videos): #If its an array skip the extra compute
+        if copy: return videos+0
+        else   : return videos
+
+    lengths = list(map(len, videos))
+    out_length = mode(lengths)
+    videos = trim_videos(videos, length=out_length)
+
+    if all(map(is_numpy_array, videos)) and set(x.shape for x in videos)==1:
+        #If possible, return a numpy array
+        videos = as_numpy_array(videos)
+
     return videos
+
+def trim_videos_to_max_length(*videos, copy=True):
+    return _trim_videos_to_same_length(*videos, mode=max, copy=copy)
+    
+def trim_videos_to_min_length(*videos, copy=True):
+    return _trim_videos_to_same_length(*videos, mode=min, copy=copy)
 
 def _concatenated_videos(image_method,videos):
     videos=detuple(videos)
     videos=[video for video in videos if len(video)] #Exclude videos with no frames
-    videos=[crop_images_to_max_size(video) for video in videos]
-    videos=_make_videos_same_length(videos)
+    videos=[crop_images_to_max_size(video,copy=False) for video in videos]
+    videos=trim_videos_to_max_length(videos,copy=False)
     output=[image_method(*frames) for frames in zip(*videos)]
     return output
      
@@ -2579,6 +2624,9 @@ def _is_pandas_iloc_iterable(x) -> bool:
 
 def is_pil_image(image) -> bool:
     return _is_instance_of_module_class(image, 'PIL.Image', 'Image')
+
+def _is_easydict(x) -> bool:
+    return _is_instance_of_module_class(x, 'easydict', 'EasyDict')
 # region Randomness:［random_index，random_element，random_permutation，randint，random_float，random_chance，random_batch，shuffled，random_parallel_batch］
 
 import random
@@ -14516,8 +14564,42 @@ def _get_pterm_verbose():
     return False
     return True
 
+
+class _PtermLevelTitleContext:
+    def __init__(self, level_title):
+        import rp.r_iterm_comm as ric
+        self.level = ric.pseudo_terminal_level
+        self.should_do = bool(level_title)# or bool(self.level)
+        if self.should_do:
+            self.level_title = level_title
+            self.old_title = rp.r._get_session_title()
+            # self.end = '] ' if not self.level else ' : LV%i]'%self.level
+            self.end = ']'
+            self.new_title = self.old_title + '[' + str(self.level_title) + self.end
+
+    def __enter__(self):
+        if self.should_do:
+            rp.r._set_session_title(self.new_title)
+            return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.should_do:
+            rp.r._set_session_title(self.old_title)
+
+
 _cd_history=[]
-def pseudo_terminal(*dicts,get_user_input=python_input,modifier=None,style=pseudo_terminal_style(),enable_ptpython=True,eval=eval,exec=exec,rprc=''):
+def pseudo_terminal(
+    *dicts,
+    get_user_input=python_input,
+    modifier=None,
+    style=pseudo_terminal_style(),
+    enable_ptpython=True,
+    eval=eval,
+    exec=exec,
+    rprc="",
+    level_title=""
+):
+  with _PtermLevelTitleContext(level_title):
     try:
         import signal
         signal.signal(signal.SIGABRT,lambda:"rpy: pseudo terminal: sigabrt avoided!")
@@ -21458,6 +21540,7 @@ def labeled_image(image,
                   text_color=(255,255,255),
                   background_color=(0,0,0),
                   flip_text=False,
+                  size_by_lines=False,
                  ):
     """
     Adds a label to an image and returns an image
@@ -21475,6 +21558,8 @@ def labeled_image(image,
         text_color (tuple): The color of the label text as an RGB tuple (red, green, blue). Default is white (255, 255, 255).
         background_color (tuple): The background color of the label as an RGB tuple (red, green, blue). Default is black (0, 0, 0).
         flip_text (bool): Whether to flip the label text upside down. Default is False. Can be useful when position in ['left', 'right']
+        size_by_lines (bool): If True, the `size` argument is multiplied by the number of lines in the text, so it can grow accordingly
+                              Good in combination with wrap_string_to_width
 
     Returns:
         numpy.ndarray: The image with the label added.
@@ -21533,9 +21618,18 @@ def labeled_image(image,
     assert position in ['top','bottom','left','right']
     assert align in ['left','right','center']
     assert isinstance(size,float) or isinstance(size,int)
-    assert size>0
     assert len(background_color)==3
     assert len(text_color)==3
+
+    text=str(text)
+
+    if size_by_lines:
+        num_lines = bool(text) * number_of_lines(text)
+        size *= num_lines
+
+    if size==0:
+        from copy import copy
+        return copy(image)
 
     if position in ['left', 'right']:
         angle = 90 if position=='left' else -90
@@ -21554,8 +21648,6 @@ def labeled_image(image,
         image=rotate_image(image,-angle)
 
         return image
-
-    text=str(text)
     
     if position in ['top','bottom']:
         if isinstance(size,float):
@@ -21603,6 +21695,7 @@ def labeled_images(images,labels,*args,**kwargs):
     """
     The plural of labeled_image
     See rp.labeled_image's documentation
+    TODO: Optimize this when video is numpy array
     """
     assert is_iterable(labels)
     assert is_iterable(images)
@@ -21616,6 +21709,27 @@ def labeled_images(images,labels,*args,**kwargs):
 
     assert len(images)==len(labels)
     return [labeled_image(image,label,*args,**kwargs) for image,label in zip(images,labels)]
+
+def labeled_videos(videos,labels,*args,**kwargs):
+    """
+    The plural of labeled_image
+    See rp.labeled_image's documentation
+    TODO: Optimize this when videos are numpy arrays
+    """
+    assert is_iterable(labels)
+    assert is_iterable(videos)
+
+    if not is_numpy_array(videos) and not is_torch_tensor(videos):
+        videos=list(videos)
+
+    if isinstance(labels,str):
+        labels=[labels]*len(videos)
+    else:    
+        labels=list(labels)
+
+    assert len(videos)==len(labels)
+    return [labeled_images(video,label,*args,**kwargs) for video,label in zip(videos,labels)]
+
 
 @memoized
 def _cv_char_to_image(char: str, width=None, height=None, **kwargs):
@@ -22660,7 +22774,7 @@ def vertically_concatenated_images(*image_list):
     image_list=detuple(image_list)
     return np.rot90(horizontally_concatenated_images([np.rot90(image,-1) for image in reversed(image_list)]))
 
-def grid_concatenated_images(image_grid):  
+def grid_concatenated_images(image_grid, *, origin=None):  
     """
     Given a list of lists of images, like [[image1, image2],[image3,image4]], join them all together into one big image
     If you want to skip an image in the grid, you can use None to represent a 1x1 transparent pixel
@@ -22725,7 +22839,7 @@ def grid_concatenated_images(image_grid):
 
     for y,image_row in enumerate(image_grid):
         for x,image in enumerate(image_row):
-            image_row[x]=crop_image(image,width=max_image_widths[x])#Cropping can also make the image larger by padding it with zeroes
+            image_row[x]=crop_image(image,width=max_image_widths[x], origin=origin)#Cropping can also make the image larger by padding it with zeroes
         image_grid[y]=horizontally_concatenated_images(image_row)
 
     output_image=vertically_concatenated_images(image_grid)
@@ -22737,6 +22851,7 @@ def tiled_images(
     border_color=(0.5, 0.5, 0.5, 1),
     border_thickness=1,
     transpose=False,
+    origin = None,
 ):
     """
     EXAMPLE:
@@ -22781,11 +22896,49 @@ def tiled_images(
 
     images=[format_image(image) for image in images]
     images=split_into_sublists(images,length)
-    output=grid_concatenated_images(images)
+    output=grid_concatenated_images(images, origin=origin)
 
     if border_thickness:
         output=bordered_image_solid_color(output,color=border_color,thickness=border_thickness,bottom=0,right=0)
     return output
+
+def tiled_videos(videos, *, show_progress=False, **kwargs):
+    """
+    Tiles videos together. 
+    Uses same args and kwargs as rp.tiled_images - see its docstring for what they do
+    Assumes videos are in BTI form, where I is image (so I is like HWC or CHW or PIL etc)
+    
+    Todo: Also support lazy
+    Todo: Heavily optimize! Right now faster when border_thickness=0
+    Todo: Add examples to docstring
+    """
+
+    from copy import copy
+
+    if not len(videos):
+        #If the videos have no length...whatever. Return nothingness.
+        return copy(videos)
+
+    videos = trim_videos_to_max_length(videos, copy=False)
+    length = len(videos[0])
+    out_frames = []
+    
+    times = range(length)
+    if show_progress:
+        times = eta(times, title='rp.tiled_videos')
+
+    for time in times:
+        tiles = [video[time] for video in videos]
+        out_frame = tiled_images(tiles, **kwargs)
+        out_frames.append(out_frame)
+    
+    if len(set(x.shape for x in out_frames))==1:
+        #If possible, return a numpy array
+        return as_numpy_array(out_frames)
+
+    return out_frames
+
+
 
 def vertically_flipped_image(image):
     """Flips (aka mirrors) an image vertically."""
@@ -23176,7 +23329,7 @@ def _images_conversion(func, images, *, copy_check ,copy=True):
                 return images.copy()
             else:
                 assert C==4
-                return images[:,:,:3]
+                return images[:,:,:,:3]
 
         elif func==as_rgba_image:
             if len(images.shape)==3: #Given grayscale images
@@ -24494,6 +24647,33 @@ def load_video(path,*,show_progress=True,use_cache=False):
         _load_video_cache[path]=out
     return out
 
+def load_videos(
+    *paths,
+    show_progress=True,
+    use_cache=False,
+    num_threads=None,
+    strict=True,
+    lazy=False,
+    buffer_limit=None
+):
+    """
+    Plural of load_video
+    Loads many videos.
+
+    Args:
+        See load_video for documentation on the paths and use_cache args. Also see rp_iglob's docstring for paths.
+        See load_files for documentation on the num_threads, show_progress, strict, lazy and buffer_limit args
+    """
+    #I don't know if there's much advantage in doing this in parallel...but we'll try...
+
+    paths = detuple(paths)
+    paths = rp_iglob(paths)
+
+    def load(path):
+        return load_video(path, show_progress=False, use_cache=use_cache)
+
+    return gather_args_call(load_files, load, paths)
+
 def save_video_avi(frames,path:str=None,framerate:int=30):
     #Saves the frames of the video to an .avi file
 
@@ -24671,7 +24851,7 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
     finally:
         writer.finish()
         
-    return path
+    return writer.path
 
 
 
@@ -25779,7 +25959,7 @@ def shift_image(image,x=0,y=0,*,allow_growth=True):
     return image
 
 
-def crop_image(image, height: int = None, width: int = None, origin='top left'):
+def crop_image(image, height: int = None, width: int = None, origin=None):
     """
     Returns a cropped image to the specified width and height
     If either hieght or width aren't specified (and left as None), their size will be untouched
@@ -25801,6 +25981,8 @@ def crop_image(image, height: int = None, width: int = None, origin='top left'):
                 sleep(1/60)
 
     """
+
+    if origin is None: origin = 'top left'
 
     assert is_image(image)
     image_width  = get_image_width (image)
@@ -34486,6 +34668,10 @@ def list_transpose(list_of_lists:list):
      ans = [[1, 4, 7, 10]] #What I want: [[1,4,7,10],[2,5,8],[3,6,9]]
     """
 
+    #Optimizations for tensors - effectively the same but potentially much faster
+    if is_numpy_array (list_of_lists): return list_of_lists.transpose(0,1)
+    if is_torch_tensor(list_of_lists): return list_of_lists.permute  (0,1)
+
     assert len(set(map(len,list_of_lists)))==1, 'Right now list_transpose only handles rectangular list_of_lists. This functionality may be added in the future.'
     return list(map(list,zip(*list_of_lists)))
 
@@ -34549,6 +34735,131 @@ def dict_transpose(dic):
         if temp:  # only add to output if there's at least one key
             out[key] = temp
     return out
+
+def list_dict_transpose(data):
+    """
+    Transpose a list of dictionaries or a dictionary of lists.
+
+    If the input is a dictionary of lists, the function will return a list of dictionaries,
+    where each dictionary represents a transposed row of the original data. The keys of the
+    dictionaries will be the same as the keys in the original dictionary.
+
+    If the input is a list of dictionaries, the function will return a dictionary of lists,
+    where each list represents a transposed column of the original data. The keys of the
+    dictionary will be the same as the keys in the original dictionaries.
+    
+    It will try to preserve the types: 
+        If EasyDict is used anywhere, it will be used again in the output
+
+    The function assumes that all inner lists or dictionaries have the same length or keys.
+
+    Args:
+        data (dict or list): The input data to be transposed.
+
+    Returns:
+        dict or list: The transposed data.
+
+    Examples:
+        >>> data1 = {'a': [1, 2], 'b': [3, 4]}
+        >>> list_dict_transpose(data1)
+        [{'a': 1, 'b': 3}, {'a': 2, 'b': 4}]
+
+        >>> data2 = [{'a': 1, 'b': 3}, {'a': 2, 'b': 4}]
+        >>> list_dict_transpose(data2)
+        {'a': [1, 2], 'b': [3, 4]}
+
+        >>> data3 = {'a': [1, 2], 'b': [3, 4], 'c': [5, 6]}
+        >>> list_dict_transpose(data3)
+        [{'a': 1, 'b': 3, 'c': 5}, {'a': 2, 'b': 4, 'c': 6}]
+
+        >>> data4 = [{'a': 1, 'b': 3, 'c': 5}, {'a': 2, 'b': 4, 'c': 6}]
+        >>> list_dict_transpose(data4)
+        {'a': [1, 2], 'b': [3, 4], 'c': [5, 6]}
+
+        >>> data5 = {}
+        >>> list_dict_transpose(data5)
+        {}
+
+        >>> data6 = []
+        >>> list_dict_transpose(data6)
+        []
+    """
+
+    from copy import copy
+    from collections.abc import Mapping, Set, Iterable
+
+    if not len(data):
+        # If data is empty, just return an empty output
+        return copy(data)
+
+    inner_sample = random_element(data)
+    inner_type = type(inner_sample)
+    outer_type = type(data)
+
+    #Future: If needed, we can make these arguments
+    #The output list and dict types: can be customized
+    #Try to automatically infer the best type
+    list_type=None
+    dict_type=None
+    if list_type is None: list_type = list
+    if dict_type is None:
+        if rp.r._is_easydict(inner_sample) or rp.r._is_easydict(data):
+            pip_import('easydict')
+            from easydict import EasyDict as dict_type
+        else:
+            dict_type = dict
+
+    if issubclass(outer_type, Mapping):
+        # If data is dict-like {'a':, 'b':[3,4]} turn it to [{'a':1,'b':3},{'a':2,'b':4}]
+
+        keys = set(data)
+        length = len(inner_sample)
+
+        # Input assertions
+        assert issubclass(inner_type, Iterable)
+        assert all(len(data[key]) == length for key in keys), "Right now all contained lists must be same length"
+
+        #                 ┌                                                                        ┐
+        #                 │┌                                                                      ┐│
+        #                 ││         ┌                                    ┐                       ││
+        #                 ││         │┌                                  ┐│                       ││
+        #                 ││         ││          ┌   ┐┌ ┐                ││               ┌      ┐││
+        output = list_type([dict_type({key : data[key][i] for key in keys}) for i in range(length)])
+        #                 ││         ││          └   ┘└ ┘                ││               └      ┘││
+        #                 ││         │└                                  ┘│                       ││
+        #                 ││         └                                    ┘                       ││
+        #                 │└                                                                      ┘│
+        #                 └                                                                        ┘
+
+    elif issubclass(outer_type, Iterable):
+        # If data is list-like [{'a':1,'b':3},{'a':2,'b':4}] turn it to {'a':[1,2], 'b':[3,4]}
+
+        keys = set(inner_sample)
+        length = len(data)
+
+        # Input assertions
+        assert issubclass(inner_type, Mapping)
+        assert all(set(data[i]) == keys for i in range(length)), "Right now all contained lists must be same length"
+
+        #                 ┌                                                                        ┐
+        #                 │┌                                                                      ┐│
+        #                 ││               ┌                                     ┐                ││
+        #                 ││               │┌                                   ┐│                ││
+        #                 ││               ││    ┌ ┐┌   ┐               ┌      ┐││                ││
+        output = dict_type({key : list_type([data[i][key] for i in range(length)]) for key in keys})
+        #                 ││               ││    └ ┘└   ┘               └      ┘││                ││
+        #                 ││               │└                                   ┘│                ││
+        #                 ││               └                                     ┘                ││
+        #                 │└                                                                      ┘│
+        #                 └                                                                        ┘
+
+    else:
+        assert False, "r.list_dict_transpose: Unsupported outer_type: " + str(outer_type)
+        
+    return output
+        
+dict_list_transpose = list_dict_transpose #Same thing
+
 
 def dict_walk(d):
     """
