@@ -15511,6 +15511,7 @@ def pseudo_terminal(
         RX  ryanxonshrc
         RRY  RYAN RPRC YES
         RVY  RYAN VIMRC YES
+        RVN  RYAN VIMRC NO
         RRNG  RYAN RANGERRC
 
         RZG  $r._load_ryan_lazygit_config()
@@ -17365,10 +17366,13 @@ def pseudo_terminal(
                             user_message='ans = '+repr(get_absolute_path('~/.tmux.conf'))
 
 
-                        elif user_message=='RYAN VIMRC' or user_message=='RYAN VIMRC YES':
-                            if 'YES' in user_message or input_yes_no('Would you like to add Ryan Burgert\'s vim settings to your ~/.vimrc?'):
-                                _set_ryan_vimrc()
-                                user_message='ans = '+repr(get_absolute_path('~/.vimrc'))
+                        elif user_message=='RYAN VIMRC' or user_message=='RYAN VIMRC YES' or user_message=='RYAN VIMRC NO':
+
+                            confirm = not 'YES' in user_message
+                            if 'NO' in user_message:
+                                confirm = 'NO'
+                            _set_ryan_vimrc(confirm = confirm)
+                            user_message='ans = '+repr(get_absolute_path('~/.vimrc'))
 
                         elif user_message=='RYAN RANGERRC':
                             ranger_config_path=_set_ryan_ranger_config()
@@ -28759,7 +28763,7 @@ set preview_images_method iterm2
     make_folder(folder)
     return append_line_to_file(config, path_join(folder, "rc.conf"))
 
-def _set_ryan_vimrc():
+def _set_ryan_vimrc(confirm=False):
     """
     ON MAC, Ropevim Is annoying to install:
         :py3 import os; print(os.__file__)
@@ -28772,6 +28776,12 @@ def _set_ryan_vimrc():
 
         /opt/homebrew/Cellar/python@3.12/3.12.2_1/Frameworks/Python.framework/Versions/3.12/bin/python3 -m pip install ropevim  --brea
         k-system-packages
+
+    confirm is a janky argument rn lol 'NO' means we install packages but do not replace vimrc
+    True means we ask for confirmation before replacing vimrc file
+    False means we don't ask and replace the vimrc file
+    In all cases right now we still install pip dependenceis
+    Only pseudo_terminal uses this confirm argument (and it will stay that way) so it's not a big deal this is messy, it can be cleaned later. The default is to autoinstall without asking.
     """
 
     packages = 'isort black-macchiato pyflakes removestar ropevim drawille pudb'.split()
@@ -28786,16 +28796,18 @@ def _set_ryan_vimrc():
         except Exception:
             print("Skipped pip install ..."+str(package))
 
-    vimrc_path=get_absolute_path('~/.vimrc')
-    if file_exists(vimrc_path):
-        copy_file(vimrc_path, vimrc_path+'___rp_auto_backup___'+format_current_date()) #Create a backup of the current vimrc
+    # if not confirm or input_yes_no("Overwrite current vimrc?"):
+    if not confirm=='NO' and (not confirm or input_yes_no('Would you like to add Ryan Burgert\'s vim settings to your ~/.vimrc?')):
+        vimrc_path=get_absolute_path('~/.vimrc')
+        if file_exists(vimrc_path):
+            copy_file(vimrc_path, vimrc_path+'___rp_auto_backup___'+format_current_date()) #Create a backup of the current vimrc
 
-    vimrc=text_file_to_string(get_module_path_from_name('rp.ryan_vimrc'))
-    string_to_text_file(vimrc_path,vimrc)
-    shell_command('git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim')
-    import os
-    os.system('vim +PluginInstall +qall')
-    print("Finished setting your ~/.vimrc vim settings. Give it a try! Enter 'ans?v' without quotes to see your new ~/.vimrc file")
+        vimrc=text_file_to_string(get_module_path_from_name('rp.ryan_vimrc'))
+        string_to_text_file(vimrc_path,vimrc)
+        shell_command('git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim')
+        import os
+        os.system('vim +PluginInstall +qall')
+        print("Finished setting your ~/.vimrc vim settings. Give it a try! Enter 'ans?v' without quotes to see your new ~/.vimrc file")
 
 def _set_ryan_xonshrc():
     xonshrc_path=get_absolute_path('~/.xonshrc')
