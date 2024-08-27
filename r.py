@@ -21841,6 +21841,159 @@ def _single_line_cv_text_to_image(text,*,scale,font,thickness,color,tight_fit,ba
         image=crop_image_zeros(image)
     return image
 
+
+@memoized
+def _slow_pil_text_to_image(
+    text,
+    *,
+    size=12,
+    font="Courier",
+    color=(255, 255, 255, 255),
+    background_color=(0, 0, 0, 0)
+):
+    # Works well! But is SO FUCKING SLOW on its own...by putting characters together and concating them we can do better...
+    # CONTEXT: https://chatgpt.com/share/a7f61066-b6dd-41e4-a28f-b9ccc84aa632
+
+    pip_import("PIL")
+    from PIL import Image, ImageDraw, ImageFont
+    import numpy as np
+
+
+    try:
+        assert font is not None
+        font = ImageFont.truetype(font, size)
+    except (IOError, AssertionError):
+        font = ImageFont.load_default(size=size)
+        #print("Failed to load %s, using default font: %s" % (font, font))
+
+    # Use a wide character sequence to normalize the starting and ending boundaries
+    delimiter_text = (
+        "   "
+        + "QWERTYUIOP{}|ASDFGHJKL:\"ZXCVBNM<>?~!@#$%^&*()_+=-0987654321`qwertyuiop[]\\';lkjhgfdsazxcvbnm,./   "
+    )
+    full_text = delimiter_text + text + delimiter_text
+
+    # Get bounding box of the full text
+    full_text_bbox = font.getbbox(full_text)
+    full_text_width = full_text_bbox[2] - full_text_bbox[0]
+    full_text_height = full_text_bbox[3] - full_text_bbox[1]
+
+    # Draw the text on an image
+    image = Image.new(
+        "RGBA", (full_text_width, full_text_height), color=background_color
+    )
+    draw = ImageDraw.Draw(image)
+    draw.text(
+        (-full_text_bbox[0], -full_text_bbox[1]), full_text, font=font, fill=color
+    )
+
+    # Determine width of the delimiter text for cropping
+    delimiter_text_width = font.getbbox(delimiter_text)[2]
+
+    numpy_image = np.array(image)[:, delimiter_text_width:-delimiter_text_width]
+    return numpy_image
+
+def as_rgba_float_color(color):
+    """
+    TODO: use this all over RP!
+    """
+    assert isinstance(color, tuple) or is_number(color) or isinstance(color,str)
+    if isinstance(color,str):
+        color=color_name_to_float_color(color)
+    if is_number(color):
+        color = (color, ) * 3
+    if len(color) == 3:
+        color = color + (1,)
+    assert len(color) == 4 
+    return color
+
+def pil_text_to_image(
+    text,
+    *,
+    size=64,
+    font=None,
+    color=(1, 1, 1, 1),
+    background_color=(0, 0, 0, 0),
+    align="left",
+):
+    """
+    Uses PIL as an alternative backend to cv_text_to_image
+    Returns an image with the given text and size and font etc
+
+    Supports much more fonts than cv_text_to_image, which is the main appeal of this function
+    
+    The 'size' parameter determines the height of the output image per-line - though sometimes the height may be off by 1 or 2 pixels from the gien size
+
+    color and background_color can be a number, an RGB float tuple, an RGBA float tuple, or a color name like 'red'
+
+    This function uses _slow_pil_text_to_image - and somehow concatting letters is faster than using pil natively ¯\_(ツ)_/¯
+    
+    EXAMPLE:
+        >>> for font in ["Menlo", "Times New Roman", "Courier", "Futura", "Comic Sans", "Calibri"]:
+        ...     color = random_rgb_float_color()
+        ...     display_alpha_image(
+        ...         with_drop_shadow(
+        ...             pil_text_to_image(
+        ...                 "Hello World\nClara\n" + font,
+        ...                 size=120,
+        ...                 font=font,
+        ...                 align="center",
+        ...                 color=color,
+        ...             ),
+        ...             color=tuple(x/2 for x in color),x=2,y=2
+        ...         )
+        ...     )
+
+        >>> for color in [0,.1,.2,.3,.4,.5,.6,.7,.8,.9,10,'red','green','blue','cyan','magenta','purple','yellow']:
+        ...     display_alpha_image(
+        ...             pil_text_to_image(
+        ...                 "Hello World\nClara\n" + str(color),
+        ...                 size=120,
+        ...                 align="center",
+        ...                 color=color,
+        ...             ),
+        ...     )
+    """
+    text = str(text)
+    assert align in ["left", "right", "center"]
+    assert font is None or isinstance(font, str)
+
+    color = as_rgba_float_color(color)
+    background_color = as_rgba_float_color(background_color)
+
+    text_lines = text.split("\n")
+
+    image_lines = [
+        horizontally_concatenated_images(
+            [
+                _slow_pil_text_to_image(
+                    char,
+                    color=(1, 1, 1, 1),
+                    background_color=(0, 0, 0, 0),
+                    size=size,
+                    font=font,
+                )
+                for char in text_line
+            ]
+        )
+        for text_line in text_lines
+    ]
+
+    image_grid = [[x] for x in image_lines]
+
+    image = grid_concatenated_images(
+        image_grid,
+        origin={"left": "top left", "center": "center", "right": "bottom right"}[align],
+    )
+
+    color = np.asarray(list(color), dtype=np.float32)
+    background_color = np.asarray(list(background_color), dtype=np.float32)
+
+    image = (image * color) + (1 - image) * background_color
+    
+    return image
+
+
 def _get_file_path(path_or_url):
     """If given a url, get a file path that can be used for things"""
     #TODO: Use this to make strip_file_extension etc work for URL's as well
