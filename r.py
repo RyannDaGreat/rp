@@ -1918,6 +1918,15 @@ def crop_image_to_square(image, *, origin="center", grow=False):
     
     return image
 
+def crop_images_to_square(images, *, origin="center", grow=False):
+    """
+    TODO: Optimize me!
+    """
+    output = [crop_image_to_square(image, origin=origin, grow=grow) for image in images]
+    if is_numpy_array(images):
+        output = as_numpy_array(output)
+    return output
+
 def crop_image_at_random_position(image, height, width, include_position=False):
     """
     Returns a randomly-positioned cropped version of the input image with the specified height and width.
@@ -17520,6 +17529,8 @@ def pseudo_terminal(
                             print(fansi_syntax_highlighting(user_message))
                         elif user_message.startswith("RANT ") or user_message.startswith("RANT\n"):
                             user_message="run_as_new_thread(exec,"+repr(user_message[5:].strip())+",globals(),locals())"
+                        elif user_message=='RANT':
+                            user_message="run_as_new_thread(exec,"+repr(get_ans())+",globals(),locals());"
                         elif user_message.startswith("RANP "):
                             user_message="run_as_new_process(exec,"+repr(user_message[5:].strip())+",globals(),locals())"
                         elif user_message=='VPASTE':

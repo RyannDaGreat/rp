@@ -1,12 +1,10 @@
 import ast
-from concurrent.futures import thread
 import traceback
 from urllib.parse import urlparse, parse_qs
-import socket
 import json
 import time
 from http.server import (
-    BaseHTTPRequestHandler,
+    # BaseHTTPRequestHandler,
     HTTPServer,
     SimpleHTTPRequestHandler,
     # BaseHTTPServer,
@@ -22,9 +20,6 @@ from contextlib import nullcontext
 
 rp.pip_import('requests')
 import requests
-
-rp.pip_import('icecream')
-from icecream import ic
 
 DEFAULT_SERVER_PORT = 43234 #This is an arbitrary port I chose because its easy to remember and didn't conflict with any known services I could find on https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
 
@@ -52,13 +47,13 @@ class Evaluation:
     
     It includes the following attributes:
         - code: The original Python code that was executed.
-        - value: The return value of the executed code (if it didn't error and is_eval)
+        - value: The return value of the executed code (if it didn't error)
         - error: The exception object if an error occurred during execution.
         - errored: A boolean indicating whether an error occurred.
         - is_eval: A boolean indicating whether the code was executed using eval() (as opposed to exec()).
         - is_exec: A boolean indicating whether the code was executed using exec(). Will be (not is_eval)
-    The `error` and `value` attributes are not always present - 
-        but you can determine if they are from other attributes (see `create`'s docstring)
+    The `error` attribute is not always present - it is present if any only if errored==True
+    Likewise, the `value` attribute is present if and only if errored==False
 
     Here's an example of accessing the attributes of an Evaluation object:
         >>> result = client.evaluate('x + y')
@@ -636,7 +631,7 @@ class Client:
 
 class ClientDelegator:
 
-    def __init__(self, clients: list[Client]=[], *, on_connection_error='unregister', max_jobs_per_client=1):
+    def __init__(self, clients=[], *, on_connection_error='unregister', max_jobs_per_client=1):
         """      
         The ClientDelegator class enables distributing Python computation across multiple servers.
 
@@ -847,9 +842,144 @@ class ClientDelegator:
             assert client._busy_count>=0
             self._update()
         
-            
+class ClientRoster:
+    """
+    SIGNATURES IN THIS CLASS ARE SUBJECT TO CHANGE! It can likely be made more elegant.
 
+    The ClientRoster class manages a roster of clients for the ClientDelegator.
 
+    It provides methods to load clients from a file, clear the roster, and register new clients.
+    Clients can register themselves to the roster, allowing the ClientDelegator to discover and utilize them.
+
+    Args:
+        location (str, optional): The file path where the client roster is stored.
+            Defaults to a file named 'web_evaluator.py.default_client_roster.txt' in the same directory as the script.
+
+    Methods:
+        load_clients(unique: bool = True, silent: bool = False) -> list[Client]:
+            Loads the clients from the roster file and returns them as a list of Client instances.
+            If 'unique' is True (default), only unique clients will be loaded.
+            If 'silent' is True, no output will be printed during loading.
+
+        clear() -> None:
+            Clears the contents of the roster file.
+
+        register(server_port: int = DEFAULT_SERVER_PORT, server_name: str = None, sync: bool = True, unique: bool = True, silent: bool = False) -> None:
+            Registers a new server/client to the roster file.
+            If server_name is not provided, the local IP address is used.
+            If 'sync' is True (default), the client will use synchronous communication.
+            If 'unique' is True (default), duplicate clients will not be registered.
+            If 'silent' is True, no output will be printed during registration.
+
+    Example:
+        >>> from web_evaluator import ClientRoster, ClientDelegator, run_server
+
+        >>> # Register a server to the roster. Run this on several processes.
+        >>> port = rp.get_next_free_port(43234, 'localhost')
+        >>> roster = ClientRoster()
+        >>> roster.register(port)
+        >>> run_server(port)
+
+        >>> # In a separate process, load clients from the roster and create a ClientDelegator
+        >>> roster = ClientRoster()
+        >>> clients = roster.load_clients(unique=True)
+        >>> delegator = ClientDelegator(clients)
+        >>> result = delegator.evaluate('math.sqrt(49)')
+    """
+
+    def __init__(self, location=None):
+        """
+        Initializes a new instance of the ClientRoster class.
+
+        Args:
+            location (str, optional): The file path where the client roster is stored.
+                Defaults to a file named 'web_evaluator.py.default_client_roster.txt' in the same directory as the script.
+        """
+        if location is None:
+            # The default client roster is kept in rp's directory
+            location = __file__ + '.default_client_roster.txt'
+
+        location = rp.get_absolute_path(location)
+
+        self.location = location
+
+    def load_clients(self, *, unique=True, silent=False):
+        """
+        Loads the clients from the roster file and returns them as a list of Client instances.
+
+        Args:
+            unique (bool, optional): If True (default), only unique clients will be loaded.
+            silent (bool, optional): If True, no output will be printed during loading. Defaults to False.
+
+        Returns:
+            list[Client]: A list of Client instances loaded from the roster file.
+        """
+        if not silent:
+            rp.fansi_print("rp.web_evaluator.ClientRoster: Loading clients from " + self.location, 'green')
+
+        text = rp.load_text_file(self.location)
+        lines = text.splitlines()
+
+        if unique:
+            lines = rp.unique(lines)
+
+        clients = []
+        for line in lines:
+            line = line.strip()
+
+            if line:
+                client = Client.from_string(line)
+
+                if not silent:
+                    rp.fansi_print("   - Added " + str(client), 'green')
+
+                clients.append(client)
+
+        return clients
+
+    def clear(self):
+        """
+        Clears the contents of the roster file.
+        """
+        rp.save_text_file("", self.location)
+
+    def register(self, server_port=DEFAULT_SERVER_PORT, server_name=None, *, sync=True, unique=True, silent=False):
+        """
+        Registers a new client to the roster file.
+
+        Args:
+            server_port (int, optional): The port number of the server. Defaults to DEFAULT_SERVER_PORT.
+            server_name (str, optional): The name or IP address of the server.
+                If not provided, the local IP address is used.
+            sync (bool, optional): Indicates whether the client should use synchronous communication.
+                Defaults to True.
+            unique (bool, optional): If True (default), duplicate clients will not be registered.
+            silent (bool, optional): If True, no output will be printed during registration. Defaults to False.
+        """
+        if server_name is None:
+            server_name = rp.get_my_local_ip_address()
+
+        client = Client(
+            server_name=server_name,
+            server_port=server_port,
+            sync=sync,
+        )
+
+        line = repr(client)
+
+        if unique:
+            if any(str(client) == str(x) for x in self.load_clients(silent=True)):
+                if not silent:
+                    rp.fansi_print("rp.web_evaluator.ClientRoster: Did NOT register duplicate client " + line + " to " + self.location, 'yellow')
+                return
+
+        rp.append_line_to_file(line, self.location)
+
+        if not silent:
+            rp.fansi_print("rp.web_evaluator.ClientRoster: Enlisted " + line + " to " + self.location, 'green')
+
+    def __repr__(self):
+        return "ClientRoster(%s)" % repr(self.location)
 def interactive_mode():
     if rp.input_yes_no("Is this the server? No means this is the client."):
         print("Running the server.")
