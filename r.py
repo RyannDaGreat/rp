@@ -21925,7 +21925,7 @@ def pil_text_to_image(
     font=None,
     color=(1, 1, 1, 1),
     background_color=(0, 0, 0, 0),
-    align="left",
+    align="left"
 ):
     """
     Uses PIL as an alternative backend to cv_text_to_image
@@ -24751,20 +24751,27 @@ def get_video_file_framerate(path, use_cache=True):
 #     import smart_open
 #     path=smart_open.smart_open(path, mode)
 
-def _load_video_stream(location):
+def _load_video_stream(location, start_frame=0):
     #I don't know how to stream videos directly from the web. So instead we'll download it as a temp file and stram it from there. Not ideal but better than nothing.
     with _MaybeTemporarilyDownloadVideo(location) as path:
         
         cv2=pip_import('cv2')
         assert file_exists(path),'load_video error: path '+repr(path)+' does not point to a file that exists'#Opencv will silently fail if this breaks
         cv_stream=cv2.VideoCapture(path)
+        
+        if start_frame:
+            # Set the frame position to start_frame
+            # This is always faster than iterating though all the frames! Even so, it might still be slow for big videos.
+            # Needs to find the nearest iframe and decode from there.
+            cv_stream.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+        
         while True:
             not_done,frame=cv_stream.read()
             if not not_done:
                 return
             yield cv_bgr_rgb_swap(frame)
 
-def load_video_stream(path):
+def load_video_stream(path, *, start_frame=0, with_length=True):
     """
     Much faster than load_video, which loads all the frames into a numpy array. This means load_video has to iterate through all the frames before you can even use the first frame.
     load_video_stream is a generator, meaning to get the next frame you use python's builtin 'next' function
@@ -24775,6 +24782,9 @@ def load_video_stream(path):
     If possible, this generator will also have a length! Useful for tqdm etc..td
     Don't rely on that though, it might not always work? Depends on 'moviepy'
 
+    If with_length, will attempt to give this iterator a __len__. If it fails, it won't error - the output simply won't have a __len__ attribute.
+    with_length will make it a tiny bit slower, as calling get_video_file_num_frames is not instant.
+
     EXAMPLE:
         display_video(load_video_stream('https://www.shutterstock.com/shutterstock/videos/10884623/preview/stock-footage--k-pastel-pixel-animation-background-seamless-loop.webm'))
     EXAMPLE:
@@ -24782,41 +24792,100 @@ def load_video_stream(path):
     EXAMPLE:
         for frame in load_video_stream(download_youtube_video('https://www.youtube.com/watch?v=cAy4zULKFDU')):display_image(frame)  #Monty python clip
     """
+    assert isinstance(start_frame, int) and start_frame >= 0, "rp.load_video_stream: start_frame must be a non-negative integer, got {}".format(start_frame)
+    assert isinstance(path, str), "rp.load_video_stream: path must be a string, got {}".format(type(path).__name__)
 
-    frame_iterator = _load_video_stream(path)
-    try:
-        num_frames = get_video_file_num_frames(path)
-        frame_iterator = IteratorWithLen(frame_iterator, num_frames)
-    except Exception:
-        pass
+    frame_iterator = _load_video_stream(path, start_frame=start_frame)
+
+    if with_length:
+        try:
+            num_frames = get_video_file_num_frames(path)
+            num_frames = max(0, num_frames - start_frame)
+
+            frame_iterator = IteratorWithLen(frame_iterator, num_frames)
+        except Exception:
+            pass
+
     return frame_iterator
 
 
-_load_video_cache={}
-def load_video(path,*,show_progress=True,use_cache=False):
+_load_video_cache = {}
+def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cache=False):
     """
     This function does not take into account framerates or audio. It just returns a numpy array full of images.
-    It's slower than load_video_stream, but it can be cached using use_cache (which would actually make it faster, if applicable)
+    It's slower to call than load_video_stream, but it can be cached using use_cache (which would actually make it faster, if applicable)
+
+    Args:
+        path (str): The path or URL of the video file to load.
+        start_frame (int, optional): The frame number to start loading from. Defaults to 0.
+        length (int, optional): The maximum number of frames to load. If None, all frames are loaded.
+        show_progress (bool, optional): Whether to display progress messages during loading. Defaults to True.
+                                        Setting this to False can result in a small performance boost, as it won't 
+                                        check the length of the video (which might take a small bit of time)
+        use_cache (bool, optional): Whether to cache the loaded video for faster subsequent loading. Defaults to False.
+
+    Returns:
+        numpy.ndarray: A NumPy array containing the loaded video frames in THWC form.
+
+    Notes:
+        - This function does not consider framerates or audio. It only returns a NumPy array of frame images.
+        - If `use_cache` is True and the video has been previously loaded, the cached result will be returned.
+        - The function uses `load_video_stream` internally to load the video frames.
+
+    Examples:
+        >>> video = load_video("path/to/video.mp4")
+        >>> video.shape
+        (num_frames, height, width, 3)
+
+        >>> video = load_video("path/to/video.mp4", start_frame=100, length=50)
+        >>> video.shape
+        (50, height, width, 3)
     """
-    progress_prefix="\rload_video: path="+repr(path)+": "
+    assert length is None or (isinstance(length, int) and length >= 0), "rp.load_video: length must be None or a non-negative integer, got {}".format(length)
+    assert isinstance(start_frame, int) and start_frame >= 0, "rp.load_video: start_frame must be a non-negative integer, got {}".format(start_frame)
+    assert isinstance(path, str), "rp.load_video: path must be a string, got {}".format(type(path).__name__)
+
+    progress_prefix = "\rload_video: path=" + repr(path) + ": "
+    
     if path_exists(path):
-        path=get_absolute_path(path) #This is important for caching. 
+        path = get_absolute_path(path)  # This is important for caching.
+    
     if use_cache and path in _load_video_cache:
         return _load_video_cache[path]
-    stream=load_video_stream(path)
-    out=[]
-    for i,frame in enumerate(stream):
-        if show_progress:print(end=progress_prefix+"Loaded frame "+str(i)+"...")
+    
+    stream = load_video_stream(path, start_frame = start_frame, with_length=show_progress)
+    out = []
+    
+    for i, frame in enumerate(stream):
+        if length is not None and i>= length:
+            break
+        if show_progress:
+            if hasattr(stream, "__len__"):
+                output_length = min(length, len(stream)) #This is the number of frames that will be returned
+                progress_message = "Loaded frame %i of %i..." % (i + 1, output_length)
+            else:
+                progress_message = "Loaded frame %i..." % (i+1)
+            print(end=progress_prefix + progress_message)
         out.append(frame)
-    if show_progress:print(end=progress_prefix+'done loading frames, creating numpy array...')
-    out=np.asarray(out)
-    if show_progress:print(end='done.\r\n')
+    
+    if show_progress:
+        print(end=progress_prefix + 'done loading frames, creating numpy array...')
+    
+    out = np.asarray(out)
+    
+    if show_progress:
+        print(end='done.\r\n')
+    
     if use_cache:
-        _load_video_cache[path]=out
+        _load_video_cache[path] = out
+    
     return out
+
 
 def load_videos(
     *paths,
+    start_frame=0,
+    length=None,
     show_progress=True,
     use_cache=False,
     num_threads=None,
@@ -24829,7 +24898,7 @@ def load_videos(
     Loads many videos.
 
     Args:
-        See load_video for documentation on the paths and use_cache args. Also see rp_iglob's docstring for paths.
+        See load_video for documentation on the paths, start_frame, length and use_cache args. Also see rp_iglob's docstring for paths.
         See load_files for documentation on the num_threads, show_progress, strict, lazy and buffer_limit args
     """
     #I don't know if there's much advantage in doing this in parallel...but we'll try...
@@ -24838,7 +24907,13 @@ def load_videos(
     paths = rp_iglob(paths)
 
     def load(path):
-        return load_video(path, show_progress=False, use_cache=use_cache)
+        return load_video(
+            path,
+            start_frame=start_frame,
+            length=length,
+            show_progress=False,
+            use_cache=use_cache,
+        )
 
     return gather_args_call(load_files, load, paths)
 
