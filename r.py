@@ -1851,7 +1851,7 @@ def with_corner_radius(image, radius, *, antialias=True):
     return with_image_alpha(image, alpha)
 
     
-def _crop_images_to_max_or_min_size(*images,origin='top left',criterion=max,copy=True):
+def _crop_images_to_max_or_min_size(*images,origin='top left',criterion=max,copy=True,do_height=True,do_width=True):
     
     images=detuple(images)
 
@@ -1866,10 +1866,10 @@ def _crop_images_to_max_or_min_size(*images,origin='top left',criterion=max,copy
         return list(images)
     #
     heights,widths=zip(*dimensions)
-    max_height=criterion(heights)
-    max_width =criterion(widths)
+    max_height=criterion(heights) if do_height else None
+    max_width =criterion(widths) if do_width else None
     
-    images=[crop_image(image,max_height,max_width,origin=origin) for image in images]
+    images=[crop_image(image,max_height,max_width,origin=origin, copy=copy) for image in images]
     return images
 
 def crop_images_to_max_size(*images,origin='top left',copy=True):
@@ -1900,7 +1900,19 @@ def crop_images_to_min_size(*images,origin='top left',copy=True):
     """
     return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=min,copy=copy)
 
-def crop_image_to_square(image, *, origin="center", grow=False):
+def crop_images_to_max_height(*images,origin='top left',copy=True):
+    return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=max,copy=copy,do_width=False)
+
+def crop_images_to_max_width(*images,origin='top left',copy=True):
+    return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=max,copy=copy,do_height=False)
+
+def crop_images_to_min_height(*images,origin='top left',copy=True):
+    return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=min,copy=copy,do_width=False)
+
+def crop_images_to_min_width(*images,origin='top left',copy=True):
+    return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=min,copy=copy,do_height=False)
+
+def crop_image_to_square(image, *, origin="center", grow=False, copy=True):
     """
     Crops an image so that it becomes square.
     If grow==True, the image can become larger instead of smaller
@@ -1914,15 +1926,15 @@ def crop_image_to_square(image, *, origin="center", grow=False):
     else:
         size = min(get_image_dimensions(image))
         
-    image = crop_image(image, height=size, width=size, origin=origin)
+    image = crop_image(image, height=size, width=size, origin=origini, copy=copy)
     
     return image
 
-def crop_images_to_square(images, *, origin="center", grow=False):
+def crop_images_to_square(images, *, origin="center", grow=False, copy=True):
     """
     TODO: Optimize me!
     """
-    output = [crop_image_to_square(image, origin=origin, grow=grow) for image in images]
+    output = [crop_image_to_square(image, origin=origin, grow=grow, copy=copy) for image in images]
     if is_numpy_array(images):
         output = as_numpy_array(output)
     return output
@@ -21964,6 +21976,20 @@ def pil_text_to_image(
         ...                 color=color,
         ...             ),
         ...     )
+
+        >>> fonts = get_all_ttf_fonts()
+        ... fonts = random_batch(fonts, 5)
+        ... for _ in range(100):
+        ...     text = "Hello World!"
+        ...     letters = [
+        ...         pil_text_to_image(letter, size=120, font=random_element(fonts))
+        ...         for letter in text
+        ...     ]
+        ...     letters = bordered_images_solid_color(letters, color=(1, 0, 0, 1))
+        ...     letters = [rotate_image(letter, random_int(-30, 30)) for letter in letters]
+        ...     letters = [cv_resize_image(letter, random_float(0.7, 1.3)) for letter in letters]
+        ...     #letters = crop_images_to_max_size(letters, origin="center")
+        ...     display_image(horizontally_concatenated_images(letters, origin="center"))
     """
     text = str(text)
     assert align in ["left", "right", "center"]
@@ -22905,40 +22931,56 @@ def r_transform_inverse(path):
     return path
 
 
-def horizontally_concatenated_images(*image_list):
+def horizontally_concatenated_images(*image_list,origin=None):
     """
     First image in image_list goes on the left
     TODO: Handle non-RGB images (include RGBA, grayscale, etc)
     This is different from np.column_stack because it handles images of different resolutions.
     It also can mix RGB, greyscale, and RGBA images.
+
+
+    TODO: Implement the origin argument for both this func and vertically_concatenated_images
     """
+
+    #Right now crop_images doesn't support origins such as simply 'top' and 'bottom'
+    if origin=='top': origin='top left'
+    if origin=='bottom': origin='bottom right'
+
     image_list=detuple(image_list)
 
-    #try:
-    #    #Might be faster than converting all to RGBA then doing height stuff to them all
-    #    print("HORCAT SHORTCUT")
-    #    return np.concatenate(as_numpy_array(image_list), axis=2)
-    #except Exception as e:
-    #    pass
+    if origin is None:
+        #Like top-left
+        #OLDER AND MARGINALLY FASTER SOLUTION - please make the other branch optimized so we can finally let go of this older code
+        #The newer version uses crop_image with copy=False, which is a little slower.
+        #We need that for origins like center though
+        image_converter = _common_image_converter(image_list)
 
-    #Choose the optimal datatype
-    image_converter = _common_image_converter(image_list)
+        image_list=[image_converter(image,copy=False) for image in image_list]
+        max_height=max(img.shape[0]for img in image_list)
+        def heightify(img):
+            s=list(img.shape)
+            if s[0]==max_height:
+                return img #Don't copy - its slow.
+            s[0]=max_height
+            out=np.zeros(tuple(s),dtype=img.dtype)
+            out[:img.shape[0]]+=img
+            return out
+        #Make all images RGB instead of RGBA as a hack...
+        return np.column_stack(tuple([heightify(img) for img in image_list]))
 
-    image_list=[image_converter(image,copy=False) for image in image_list]
-    max_height=max(img.shape[0]for img in image_list)
-    def heightify(img):
-        s=list(img.shape)
-        if s[0]==max_height:
-            return img #Don't copy - its slow.
-        s[0]=max_height
-        out=np.zeros(tuple(s),dtype=img.dtype)
-        out[:img.shape[0]]+=img
-        return out
-    #Make all images RGB instead of RGBA as a hack...
-    return np.column_stack(tuple([heightify(img) for img in image_list]))
+    else:
 
+        if not is_numpy_array(image_list):
+            image_converter = _common_image_converter(image_list)
+            image_list=[image_converter(image,copy=False) for image in image_list]
+            image_list=crop_images_to_max_height(image_list, origin=origin, copy=False)
+            return np.column_stack(tuple(image_list))
+        else:
+            return np.column_stack(image_list)
+    
 def vertically_concatenated_images(*image_list):
     """ First image in image_list goes on the top """
+    #TODO: Add an origin argument. Make sure we rotate it, so top left becomes...what? bottom left? idk think about it.
     image_list=detuple(image_list)
     return np.rot90(horizontally_concatenated_images([np.rot90(image,-1) for image in reversed(image_list)]))
 
@@ -23008,7 +23050,7 @@ def grid_concatenated_images(image_grid, *, origin=None):
     for y,image_row in enumerate(image_grid):
         for x,image in enumerate(image_row):
             image_row[x]=crop_image(image,width=max_image_widths[x], origin=origin)#Cropping can also make the image larger by padding it with zeroes
-        image_grid[y]=horizontally_concatenated_images(image_row)
+        image_grid[y]=horizontally_concatenated_images(image_row, origin=origin)
 
     output_image=vertically_concatenated_images(image_grid)
     return output_image
@@ -24861,7 +24903,12 @@ def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cach
             break
         if show_progress:
             if hasattr(stream, "__len__"):
-                output_length = min(length, len(stream)) #This is the number of frames that will be returned
+
+                #This is the number of frames that will be returned
+                output_length = len(stream)
+                if length is not None:
+                    output_length = min(length, len(stream)) 
+
                 progress_message = "Loaded frame %i of %i..." % (i + 1, output_length)
             else:
                 progress_message = "Loaded frame %i..." % (i+1)
@@ -25172,8 +25219,40 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
     
 #    return path
 
+def save_video_gif(video, path=None, *, framerate=30):
+    """
+    Save a video to a GIF with given path and framerate.
+    Returns the path of the new GIF.
 
-def save_video(images,path,framerate=60):
+    Right now framerate only seems to be accurate for low framerates.
+    Todo: Fix that.
+    """
+
+    if isinstance(video, str):
+        assert is_video_file(video)
+        video=load_video_stream(video)
+
+    if path is None:
+        path = get_unique_copy_path('video.gif')
+    path = with_file_extension(path ,'gif')
+
+    # Number of millis between frames
+    frame_duration_millis = round(1 / framerate * 1000)
+
+    frames = map(as_pil_image, video)
+    frame_one = next(frames)
+    frame_one.save(
+        path,
+        format="GIF",
+        append_images=frames,
+        save_all=True,
+        duration=frame_duration_millis,
+        loop=0,
+    )
+
+    return path
+
+def save_video(images, path, *, framerate=60):
     """
     #TODO: add options for sound and framerate. Possibly quality options but probably not (that should be delegated to a function meant for a specific format)
     #Save a series of images into a video.
@@ -25186,6 +25265,8 @@ def save_video(images,path,framerate=60):
         return save_video_mp4(images,path,framerate=framerate)
     if path.endswith('.avi'):
         return save_video_avi(images,path,framerate=framerate)
+    if path.endswith('.gif'):
+        return save_video_gif(images,path,framerate=framerate)
 
 
     assert False, 'Below this line mightn not work. Until further notice, please specify .avi or .mp4 in the path argument'
@@ -26202,7 +26283,7 @@ def shift_image(image,x=0,y=0,*,allow_growth=True):
     return image
 
 
-def crop_image(image, height: int = None, width: int = None, origin=None):
+def crop_image(image, height: int = None, width: int = None, origin=None, copy=False):
     """
     Returns a cropped image to the specified width and height
     If either hieght or width aren't specified (and left as None), their size will be untouched
@@ -26237,6 +26318,13 @@ def crop_image(image, height: int = None, width: int = None, origin=None):
     height=int(height)
     width =int(width)
     assert height>=0 and width>=0, 'Images can\'t have a negative height or width'
+
+    if height==image_height and width==image_width:
+        #Shortcut - optimization
+        if copy:
+            return image+0
+        else:
+            return image
 
     if not any(get_image_dimensions(image)):
         #Handle cropping images that have height or width==0, allowing for zero-padding
@@ -31065,6 +31153,9 @@ def cv_resize_image(image,size,interp='auto'):
         - A tuple with integers in it: Will scale the image to those dimensions (height, width)
         - A tuple with None in it: A dimension with None will default to the image's dimension
     Unlike r.resize_image, this function will not always return a floating point image. If given a byte image, the result will also be a byte image
+
+    TODO: Add an alpha-aware arg, like cv_alpha_weighted_gauss_blur. Propogate arg to all funcs that use this.
+          How to do it with expansion aka bilinear interp?
     """
     
     pip_import('cv2')
@@ -31489,11 +31580,9 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
 
     pip_import('einops')
     pip_import('torch')
-    pip_import('torch_scatter')
 
     import torch
     from einops import rearrange
-    from torch_scatter import scatter_add
 
     if prepend_ones:
         #We might prepend a channel of ones to keep track of how many were added so we can normalize later
@@ -31552,9 +31641,10 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
         )
         x += in_x
         y += in_y
+            
 
-    # Flatten the image tensor
-    flat_image = rearrange(image, "c h w -> (h w) c")
+    # Initialize the output tensor with zeros
+    out = torch.zeros((out_height * out_width, in_c), dtype=image.dtype, device=image.device)
 
     # Compute the flattened indices for scatter_add
     # And Filter out out-of-bounds indices based on the specified output height and width
@@ -31563,19 +31653,18 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
     valid_mask = rearrange(valid_indices, "h w -> (h w)")
     indices    = rearrange(indices, "h w -> (h w)")
     valid_indices = indices[valid_mask]
+
+    # Flatten the image tensor
+    flat_image = rearrange(image, "c h w -> (h w) c")
     valid_flat_image = flat_image[valid_mask]
 
-    # Initialize the output tensor with zeros
-    out = torch.zeros((out_height * out_width, in_c), dtype=image.dtype, device=image.device)
-
-    # Perform scatter_add operation only for valid indices
-    out = scatter_add(valid_flat_image, valid_indices, out=out, dim=0)
+    # Perform scatter_add operation using torch.index_add
+    out.index_add_(0, valid_indices, valid_flat_image)
 
     # Reshape the output tensor back to the original shape
     out = rearrange(out, "(h w) c -> c h w", h=out_height, w=out_width)
 
     return out
-
 
 
 def resize_images_to_hold(*images, height: int = None, width: int = None, interp='auto', allow_shrink=True):

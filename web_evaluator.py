@@ -33,6 +33,31 @@ DEFAULT_SERVER_PORT = 43234 #This is an arbitrary port I chose because its easy 
 #    To use this module, one computer runs the run_server() function and the other creates a Client and uses client.evaluate()
 #    For testing, you can also use "python3 -m rp.experimental.web_evaluator" on client, server or both
 
+"""
+
+MAJOR TODO: 
+    - Why doesn't sync work in py2py mode? It works in web browser!!
+        We have to create a test to prove if it works or not. Client-side.
+
+TODO:
+    - ClientDelegator server: dynamically reads from a roster and updates who's available, and proxies requests to its workers. This will balance workload.
+          Downside: traffic will have to pass through it as a bottleneck. Oh well - perhaps it can become a traffic controller in the future. Should keep it extensible.
+    - Make Sync Optional: Clients should not have to know if their server should be sync or not by default. The server should have that info and the Client should be able to override it.
+          That also makes Clients with None as a sync option more simple to look at.
+          add a sync=None option to Clients, and a sync=bool option -- Clients's sync option will default to the Server's sync option when None
+    - Client Timeout options. Useful to make a ping operator to check if server online and responsive.
+
+    - A
+
+        Todo:
+            This class can gracefully balance evaluations between clients within a multithreaded context,
+            but multiple ClientDelegator's in multiple processes will trip over eachother's shoelaces
+            (nothing catastrophic, but it will be slower than a centralized one).
+            One solution is to have a single server dedicated to delegation, that all workers pass requests through.
+            It would be a middleman through which all traffic passes. This might hoog bandwidth and slow down 
+
+"""
+
 
 sync_lock = threading.Lock()
 # According to this stack overflow post, 
@@ -141,7 +166,8 @@ class Evaluation:
     def __repr__(self):
         return '<Evaluation: errored=%s is_eval=%s>'%(self.errored,self.is_eval)
 
-def _HandlerMaker(scope:dict=None, base_class=SimpleHTTPRequestHandler):
+def _HandlerMaker(scope:dict=None, *, base_class=SimpleHTTPRequestHandler, default_sync=True):
+    assert isinstance(default_sync, bool)
 
     def update_scope(vars):
         assert isinstance(vars, dict), 'update_scope received '+str(type(vars))
@@ -200,8 +226,9 @@ def _HandlerMaker(scope:dict=None, base_class=SimpleHTTPRequestHandler):
                 body = self.get_request_body()
                 data = rp.bytes_to_object(body)
                 code = data["code"]
-                sync = data.get("sync", True) #Defaults to True for compatibility - older webevals didn't have a sync option
-                assert isinstance(code, str)
+                sync = data.get("sync", default_sync) #Defaults to True for compatibility - older webevals didn't have a sync option
+                assert isinstance(code, str), type(code)
+                assert isinstance(sync, bool), sync
 
                 with (sync_lock if sync else nullcontext()):
 
@@ -242,9 +269,11 @@ def _HandlerMaker(scope:dict=None, base_class=SimpleHTTPRequestHandler):
                 return data.get(name, query_params.get(name, [default])[0])
 
             code = get_param("code", "")
-            sync = get_param("sync", True)
+            sync = get_param("sync", default_sync)
             vars_string = get_param("vars", "{}")
             content_type = get_param("content_type")  # Default to None
+            assert isinstance(sync, bool), sync
+            assert isinstance(code, str), type(code)
 
             with (sync_lock if sync else nullcontext()):
                 try:
@@ -357,10 +386,15 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
 
 def run_server(server_port:int=None,
                scope:dict=None,
+               *,
+               sync=True,
                handler_base_class=SimpleHTTPRequestHandler):
     """
     Set handler_base_class = SimpleHTTPRequestHandler to make it a fileserver + python-to-python server
     Set handler_base_class = BaseHTTPRequestHandler to make it a python-to-python-only server (no fileserver)
+
+    Args:
+        - sync (bool): The default value of sync if not specified by the client. Determines whether this server is multithreaded or singlethreaded on a request that doesnt specify whether it should be or not.
 
     EXAMPLE WEBSITE 1:
         #TODO: Set sync to false for image loading!
@@ -441,6 +475,8 @@ def run_server(server_port:int=None,
 
 
     """
+    assert isinstance(sync, bool)
+
     if server_port is None:
         server_port = DEFAULT_SERVER_PORT
 
@@ -453,7 +489,7 @@ def run_server(server_port:int=None,
     # webServer = HTTPServer(
     webServer = ThreadingHTTPServer(
         (host_name, server_port),
-        _HandlerMaker(scope, base_class=handler_base_class),
+        _HandlerMaker(scope, base_class=handler_base_class, default_sync=sync),
     )
     print("Server started at http://%s:%s" % (rp.get_my_local_ip_address(), server_port))
 
@@ -465,10 +501,12 @@ def run_server(server_port:int=None,
     print("Server stopped.")
 
 class Client:
-    def __init__(self, server_name: str = "localhost", server_port: int = None, sync=True):
+    def __init__(self, server_name: str = "localhost", server_port: int = None, *, sync=None):
         #server_name is like "127.0.1.33" or like "glass.local"
         if server_port is None:
             server_port = DEFAULT_SERVER_PORT
+
+        assert sync is None or isinstance(sync, bool)
 
         self.server_port=server_port
         self.server_name=server_name
@@ -599,6 +637,7 @@ class Client:
         assert isinstance(vars,dict)
         if vars:
             data['vars']=vars
+        if self.sync is not None:
             data['sync']=self.sync
         data=rp.object_to_bytes(data)
         response=requests.request('POST',self.server_url,data=data)
@@ -616,7 +655,8 @@ class Client:
         Client's repr is such that we can copy client via eval(repr(client))
         This makes it easy to store and load them into text files
         """
-        return "Client(%s, %s, sync=%s)"%(repr(self.server_name), repr(self.server_port), repr(self.sync))
+        if self.sync is None: return "Client(%s, %s)"         %(repr(self.server_name), repr(self.server_port))
+        else:                 return "Client(%s, %s, sync=%s)"%(repr(self.server_name), repr(self.server_port), repr(self.sync))
 
     @staticmethod
     def from_string(string):
@@ -797,6 +837,9 @@ class ClientDelegator:
             If no clients are registered, this method will block until a client is added
             using register_client().
         """
+
+        if not self._clients:
+            rp.fansi_print("ClientDelegator.evaluate: We currently have no clients. Evaluation is paused until a new client is registered.", 'yellow')
         
         with self._evaluate_lock:
             lock = threading.Lock()
@@ -818,7 +861,7 @@ class ClientDelegator:
             return result
         
         except requests.exceptions.ConnectionError as e:
-            rp.fansi_print("Warning: "+str(client)+" is unreachable! Error: "+str(e), 'red')
+            rp.fansi_print("Warning: "+str(client)+" is unreachable! Error: "+str(e), 'yellow')
             
             if self.on_connection_error == 'unregister':
                 #Delete dead clients
@@ -917,6 +960,11 @@ class ClientRoster:
         if not silent:
             rp.fansi_print("rp.web_evaluator.ClientRoster: Loading clients from " + self.location, 'green')
 
+        if not rp.file_exists(self.location):
+            if not silent:
+                rp.fansi_print("rp.web_evaluator.ClientRoster: Roster file doesn't exist; loaded no clients: " + self.location, 'yellow')
+            return []
+
         text = rp.load_text_file(self.location)
         lines = text.splitlines()
 
@@ -980,6 +1028,7 @@ class ClientRoster:
 
     def __repr__(self):
         return "ClientRoster(%s)" % repr(self.location)
+
 def interactive_mode():
     if rp.input_yes_no("Is this the server? No means this is the client."):
         print("Running the server.")
