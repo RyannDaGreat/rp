@@ -1148,6 +1148,31 @@ def run_delegation_server(server_port=None,
                           refresh_interval = 5
                           ):
 
+    """
+    Starts a delegation server that manages a pool of web_evaluator servers for distributed computation.
+
+    The delegation server acts as a centralized coordinator for a group of web_evaluator servers. 
+    It maintains a roster of available servers and delegates incoming jobs to them using a ClientDelegator instance.
+
+    Clients can submit jobs to the delegation server, which then forwards the jobs to the next available web_evaluator server.
+    This allows clients to utilize multiple servers for computation without needing to manage the server connections directly.
+
+    Key features and considerations:
+    - Provides a simplified interface for clients to submit jobs without worrying about server management
+    - Delegates incoming jobs to available servers using a ClientDelegator instance
+    - Utilizes a ClientRoster to discover and manage a list of available web_evaluator servers
+    - Automatically refreshes the server roster at a configurable interval to handle dynamic additions or removals
+
+    Args:
+        server_port (int): The port we run the delegation server on. Defaults to DEFAULT_DELEGATION_SERVER_PORT
+        refresh_interval (int): The number of seconds we wait before re-reading the roster and trying to add its clients
+        roster (ClientRoster, optional)
+        delegator (ClientDelegator, optional)
+
+    TODO: Computation is wasted pickling and unpickling the objects before they're forwarded. Ideally, this would be entirely agnostic to the type of HTTP requests that pass through it - and forward the requests through steamingly to minimize latency. 
+    Also, ideally this wouldn't have to forward the data at all - instead keeping track of which clients are busy and which aren't, and simply returning the client they should make a request with. However, this requires bidirectional communication (or timeouts in the event of errors) - which currently goes against Web Evaluator's assymetrical setup.
+    """
+
     #If not specified, create the default versions
     if roster    is None: roster    = ClientRoster()
     if delegator is None: delegator = ClientDelegator()
@@ -1194,6 +1219,16 @@ class NotADelegationServerError(Exception):
 class DelegationClient(Client):
     """
     A Client meant to be used for talking to a server launched via rp.web_evaluator.run_delegation_server
+
+    The DelegationClient extends the base Client class and is specifically designed to communicate with a server
+    running the `run_delegation_server` function. It provides a transparent way to execute code on a pool of
+    web_evaluator servers managed by the delegation server.
+
+    The `evaluate` method of the DelegationClient sends the code and variables to the delegation server,
+    which then forwards the job to the next available web_evaluator server in its pool. The result is returned
+    back to the client through the delegation server.
+
+    TODO: Make this more efficient - see run_delegation_server's TODO. As a blackbox, the signatures can stay the same
     """
     DEFAULT_PORT = DEFAULT_DELEGATION_SERVER_PORT
     def evaluate(self, code, **vars):
@@ -1211,6 +1246,11 @@ class DelegationClient(Client):
         ).replace('CODE', repr(code)).replace('VARS', vars_string)
 
         result = super().evaluate(code, **vars)
+
+        if not result.errored:
+            result = result.value
+        else:
+            rp.fansi_print("Delegatee Error: "+str(result.error),'red','bold')
 
         return result
 
