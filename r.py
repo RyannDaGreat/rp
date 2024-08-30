@@ -29796,7 +29796,6 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
               - echo 1
               - echo 2
             - window_name: '1'
-              layout: tiled
               panes:
               - echo 3
 
@@ -29805,7 +29804,6 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
             session_name: my_session
             windows:
             - window_name: '0'
-              layout: tiled
               panes:
               - echo 123
 
@@ -29814,11 +29812,9 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
             session_name: my_session
             windows:
             - window_name: a
-              layout: tiled
               panes:
               - echo 123
             - window_name: b
-              layout: tiled
               panes:
               - echo 456
 
@@ -29837,7 +29833,6 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
               - echo 4
               - echo 5
             - window_name: '1'
-              layout: tiled
               shell_command_before: cd ~
               panes:
               - echo 6
@@ -29887,14 +29882,13 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
     for window_name, pane_commands in windows.items():
         window = {
             "window_name": str(window_name),
-            "layout": "tiled",
         }
 
         command_before = process_command(command_before)
         if command_before:
             window["shell_command_before"] = command_before
 
-        window["panes"] = []
+        panes = []
 
         if isinstance(pane_commands, str):
             pane_commands = pane_commands.splitlines()
@@ -29903,7 +29897,14 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
         for command in pane_commands:
             command_before = process_command(command)
             if command:
-                window["panes"].append(command if isinstance(command, str) else {"shell_command": command})
+                panes.append(command if isinstance(command, str) else {"shell_command": command})
+
+        if len(panes)>1:
+            #Only bother to add this line if we need it
+            window["layout"] = "tiled"
+
+        window["panes"] = panes
+
 
         config["windows"].append(window)
 
@@ -33930,6 +33931,8 @@ def unwarped_perspective_image(image, from_points, to_points=None, height:int=No
     warped = cv2.warpPerspective(image, M, (width, height), flags=cv2.INTER_LINEAR)
     return warped
 
+_rp_folder = get_parent_folder(__file__)
+_rp_downloads_folder = path_join(_rp_folder, "downloads")
 
 def _pip_import_pyflow():
     """
@@ -33953,11 +33956,9 @@ def _pip_import_pyflow():
         import platform
         assert not currently_running_mac() and platform.processor()=='arm', 'pyflow doesnt compile on M1 Macs - I tried...'
 
-        this_folder = rp.get_parent_folder(__file__)
-        downloads_folder = rp.path_join(this_folder, "downloads")
-        rp.make_directory(downloads_folder)
+        rp.make_directory(_rp_downloads_folder)
         rp.pip_import("Cython")
-        with rp.SetCurrentDirectoryTemporarily(downloads_folder):
+        with rp.SetCurrentDirectoryTemporarily(_rp_downloads_folder):
             pyflow_path = 'pyflow.git'
             
             if not rp.folder_exists(pyflow_path):
