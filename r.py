@@ -1479,6 +1479,8 @@ def uniform_float_color_image(height:int,width:int,color:tuple=(0,0,0,0)):
         display_image(image) #The result will look like https://i.imgur.com/COlmGRT.png 
     """
     
+    color = as_rgba_float_color(color)
+
     assert height>=0 and width>=0
     assert is_number(color) or is_color(color) and len(color) in {3,4}, 'Color should be a number, an RGB float color, or an RGBA float color'
     
@@ -1611,7 +1613,6 @@ def blend_images(bot, top, alpha=1, mode="normal"):
     assert is_image(bot) or is_color(bot) and len(bot) in {3,4} or is_number(bot)
     assert is_image(alpha) or is_number(alpha)
 
-
     blend_modes = {
         "normal"  ,
         "min"     ,
@@ -1631,6 +1632,10 @@ def blend_images(bot, top, alpha=1, mode="normal"):
     else:
         #Otherwise, the output image will have a height and width of 1x1
         height,width = 1, 1
+
+    #Possibly use color names or hex codes
+    if isinstance(top, str): top = as_rgba_float_color(top)
+    if isinstance(bot, str): top = as_rgba_float_color(bot)
         
     #If top or bot are numbers, turn them into grayscale RGB float colors
     if is_number(top):top=float(top);top=(top,top,top);assert is_float_color(top)
@@ -5701,6 +5706,12 @@ def display_color_255(*color: list):
     """ Example: display_color_255(255,0,0)# ⟵ Displays Red """
     # noinspection PyUnresolvedReferences
     display_image([(np.matrix(detuple(color)) / 256).tolist()])
+
+def display_float_color(*color):
+    color=detuple(color)
+    image=uniform_float_color_image(height=128, width=128, color=color)
+    display_alpha_image(image,first_color=1,second_color=0)
+
 def display_grayscale_image(matrix,pixel_interpolation_method_name: str = 'bicubic',refresh=True):
     pixel_interpolation_method_name=str(pixel_interpolation_method_name).lower()  # Note that None⟶'none'
     assert pixel_interpolation_method_name in [None,'none','nearest','bilinear','bicubic','spline16','spline36','hanning','hamming','hermite','kaiser','quadric','catrom','gaussian','bessel','mitchell','sinc','lanczos']  # These are the options. See http://stackoverflow.com/questions/14722540/smoothing-between-pixels-of-imagesc-imshow-in-matlab-like-the-matplotlib-imshow/14728122#14728122
@@ -7556,9 +7567,11 @@ def _filter_dict_via_fzf(input_dict):
 
 # endregion
 # region  List/Dict Functions/Displays: ［list_to_index_dict，invert_dict，invert_dict，invert_list_to_dict，dict_to_list，list_set，display_dict，display_list］
+
 def list_to_index_dict(l: list) -> dict:
-    # ['a','b','c'] ⟶ {0: 'a', 1: 'b', 2: 'c'}
+    """ ['a','b','c'] ⟶ {0: 'a', 1: 'b', 2: 'c'} """
     return {i:v for i,v in enumerate(l)}
+
 def invert_dict(d: dict,bijection=True) -> dict:
     if bijection:
         # {0: 'a', 1: 'b', 2: 'c'} ⟶ {'c': 2, 'b': 1, 'a': 0}
@@ -7572,13 +7585,16 @@ def invert_dict(d: dict,bijection=True) -> dict:
             else:
                 out[v]=k,
         return out
+
 def invert_list_to_dict(l: list) -> dict:
     """ ['a','b','c'] ⟶ {'c': 2, 'a': 0, 'b': 1} """
     assert len(set(l)) == len(l),'r.dict_of_values_to_indices: l contains duplicate values, so we cannot return a 1-to-1 function; and thus ∄ a unique dict that converts values to indices for this list!'
     return invert_dict(list_to_index_dict(l))
+
 def dict_to_list(d: dict) -> list:
     """ Assumes keys should be in ascending order """
     return gather(d,sorted(d.keys()))
+
 def list_set(x):
     """
     Similar to performing list(set(x)), except that it preserves the original order of the items.
@@ -7592,6 +7608,7 @@ def list_set(x):
     """
     from  more_itertools import unique_everseen  # http://stackoverflow.com/questions/480214/how-do-you-remove-duplicates-from-a-list-in-whilst-preserving-order
     return list(unique_everseen(x))
+
 # ――――――――――――――――――――――
 # Three fansi colors (see the fansi function for all possible color names):
 default_display_key_color=lambda x123:fansi(x123,'cyan')
@@ -7663,6 +7680,7 @@ def rip_music(URL: str,output_filename: str = default_rip_music_output_filename,
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
         ydl.download([URL])
     return output_filename + "." + desired_output_extension
+
 def rip_info(URL: str):
     """
     A companion method for rip_music, this will give you all the meta-data of each youtube video or vimeo or soundcloud etc.
@@ -9106,6 +9124,11 @@ def load_yaml_files(*paths, use_cache=False, strict=True, num_threads=None, show
     load_file = lambda path: load_yaml_file(path, use_cache=use_cache)
     if show_progress in ['eta',True]: show_progress='eta:Loading YAML files'
     return load_files(load_file, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
+
+def parse_yaml(string):
+    from yaml import safe_load
+    output = safe_load(string)
+    return output
 
 def parse_dyaml(code:str)->dict:
     """
@@ -11151,6 +11174,20 @@ def is_string_literal(s:str):
 
 def indentify(s:str,indent='\t'):
     return '\n'.join(indent + x for x in s.split('\n'))
+
+def unindent(string, indent=" "):
+    """Removes common leading indentation from a multi-line string. Similar to textwrap.dedent - but allows you to specify your own indent characters."""
+    def count_leading(line, char):
+        return len(line) - len(line.lstrip(char))
+
+    lines = string.splitlines()
+
+    levels = [count_leading(line, indent) for line in lines if line.strip(indent)]
+    indent_level = min(levels)
+
+    new_lines = [line[indent_level * len(indent) :] for line in lines]
+
+    return line_join(new_lines)
 
 def lrstrip_all_lines(s:str):
     return '\n'.join([x.lstrip().rstrip()for x in s.split('\n')])
@@ -13425,19 +13462,77 @@ def launch_xonsh():
         #We definitely want to restore the old arguments
         sys.argv=old_sys_argv
     
-def with_line_numbers(string,prefix='%i. ',start_from=0):
+def with_line_numbers(string, prefix="%i. ", *, start_from=0, align=False):
     """
-     >>> with_line_numbers('a\nb\nc')
-     ans = 0. a
-           1. b
-           2. c
-     >>> with_line_numbers('a\nb\nc', start_from=1)
-     ans = 1. a
-           2. b
-           3. c
+    EXAMPLES: 
+        >>> with_line_numbers('a\nb\nc')
+        ans = 0. a
+              1. b
+              2. c
+        >>> with_line_numbers('a\nb\nc', start_from=1)
+        ans = 1. a
+              2. b
+              3. c
+
+        >>> print(poem)
+        In the Land of
+        Mordor where
+        the Shadows
+        lie. One ring
+        to rule them
+        all, One ring
+        to find them,
+        One ring to
+        bring them all,
+        and in the
+        darkness bind
+        them, In the
+        land of mordor
+        where the
+        shadows lie.
+
+        >>> print(with_line_numbers(poem))
+        0. In the Land of
+        1. Mordor where
+        2. the Shadows
+        3. lie. One ring
+        4. to rule them
+        5. all, One ring
+        6. to find them,
+        7. One ring to
+        8. bring them all,
+        9. and in the
+        10. darkness bind
+        11. them, In the
+        12. land of mordor
+        13. where the
+        14. shadows lie.
+
+        >>> print(with_line_numbers(poem,align=True))
+         0. In the Land of
+         1. Mordor where
+         2. the Shadows
+         3. lie. One ring
+         4. to rule them
+         5. all, One ring
+         6. to find them,
+         7. One ring to
+         8. bring them all,
+         9. and in the
+        10. darkness bind
+        11. them, In the
+        12. land of mordor
+        13. where the
+        14. shadows lie.
     """
     lines=string.splitlines()
-    lines=[prefix%(i+start_from)+e for i,e in enumerate(lines)]
+    prefixes=[prefix%(i+start_from) for i in range(len(lines))]
+
+    if align:
+        max_prefix_length=max(map(len,prefixes))
+        prefixes = [prefix.rjust(max_prefix_length) for prefix in prefixes]
+
+    lines=[prefix + line for prefix, line in zip(prefixes, lines)]
     return line_join(lines)
     
 def number_of_lines(string):
@@ -15528,7 +15623,7 @@ def pseudo_terminal(
         RXC ryanxonshrc
         RR  ryanrprc
         RT  ryantmuxrc
-        RV  ryanvimrc
+        # RV  ryanvimrc
         RX  ryanxonshrc
         RRY  RYAN RPRC YES
         RVY  RYAN VIMRC YES
@@ -15725,7 +15820,7 @@ def pseudo_terminal(
         RST __import__('os').system('reset')
         RS  __import__('os').system('reset')
 
-        BLA $r._autoformat_python_code_via_black(ans)
+        BLA $r._autoformat_python_code_via_black(str(ans))
         SIM $r.sort_imports_via_isort(ans)
         CBP ans=$string_from_clipboard();ans=$r._autoformat_python_code_via_black(ans);$string_to_clipboard(ans)
         CSP ans=$string_from_clipboard();ans=$sort_imports_via_isort(ans);$string_to_clipboard(ans)
@@ -24112,6 +24207,8 @@ def bordered_image_solid_color(image,color=(1.,1.,1.,1.),thickness=1,width=None,
         ...         )
         ...     )
     """
+    
+    color = as_rgba_float_color(color)
     assert len(color)==4,'Color must be rgba floats'
 
     #Inheritance options (better than having to specify top, bottom, left and right all manually if that would be redundant)
@@ -29599,6 +29696,277 @@ def _get_all_tmux_clients(session):
     """Returns a list of all client IDs attached to the specified tmux session."""
     clients = _run_tmux_command(['tmux', 'list-clients', '-t', session, '-F', '#{client_tty}']).split()
     return list(clients)
+
+def tmux_get_all_session_names():
+    """
+    Retrieve the names of all active tmux sessions.
+
+    Returns:
+        list: A list of strings representing the names of all active tmux sessions.
+    """
+    pip_import('libtmux')
+    import libtmux
+    
+    server = libtmux.Server()
+    return [session.name for session in server.list_sessions()]
+
+def tmux_get_unique_session_name(name=""):
+    """ Given a prefix, will return a new session name that doesn't exist already """
+    existing_sessions=tmux_get_all_session_names()
+    
+    candidate_name = name
+    index = 0
+    while not candidate_name or candidate_name in existing_sessions:
+        candidate_name = name + '.' * bool(name) + str(index)
+        index+=1
+    
+    return candidate_name
+        
+def tmux_get_current_session_name():
+    """
+    Returns:
+        str: The name of the current tmux session.
+
+    Raises:
+        AssertionError: If you run this function outside of tmux
+
+    Examples:
+        # Within a tmux session
+        >>> tmux_get_current_session_name()
+        'mysession'
+    """
+    assert running_in_tmux(), 'rp.tmux_get_current_session_name: This function must be called while running in tmux'
+    return _run_tmux_command('tmux display-message -p #{session_name}'.split())
+
+def tmux_session_exists(session_name):
+    """
+    Returns True if a session exists, False otherwise.
+    """
+    assert isinstance(session_name, str), "Session name must be a string."
+
+    return session_name in tmux_get_all_session_names()
+
+def tmux_kill_session(session_name):
+    """
+    Kill a specified tmux session by its name.
+
+    Args:
+        session_name (str): The name of the tmux session to kill.
+
+    Raises:
+        AssertionError: If the name is not a string.
+        ValueError: If no session with the specified name exists.
+        
+    Example:
+        >>> squelch_call(tmux_kill_session,'0') # Tries to kill session 0 if it exists
+    """
+    pip_import('libtmux')
+    import libtmux
+    
+    assert isinstance(session_name, str), "Session name must be a string."
+
+    server = libtmux.Server()
+    session = server.find_where({"session_name": session_name})
+    
+    if session:
+        session.kill_session()
+        print("rp.tmux_kill_session: Session %s killed successfully."%repr(session_name))
+    else:
+        raise ValueError("No session named '{}' found.".format(session_name))
+
+def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None):
+    """
+    Creates a yaml file to be loaded by tmuxp. See https://github.com/tmux-python/tmuxp
+    It lets you easily create such files without much overhead, pythonically.
+    You provide a list of windows (or a dict of windows, if you want control over the window names).
+    Each window itself is either a single command (a string) or a list of panes (str commands or lists of str commands).
+    The session_name can be specified, but if it isn't it will automatically choose an unchosen session name (so it can be started without  conflicts).
+    command_before can either be a string or a list of strings, and will be run in each created pane before the above specified per-pane commands
+    Make use of the outputs with rp.tmuxp_load_session_from_yaml ! (or the "tmuxp load <file.yaml>" command after saving the output to a file)
+
+
+    EXAMPLE:
+        >>> print(tmuxp_create_session_yaml([["echo 1", "echo 2"], "echo 3"]))
+
+            session_name: '0'
+            windows:
+            - window_name: '0'
+              layout: tiled
+              panes:
+              - echo 1
+              - echo 2
+            - window_name: '1'
+              layout: tiled
+              panes:
+              - echo 3
+
+        >>> print(tmuxp_create_session_yaml('echo 123',session_name='my_session'))
+
+            session_name: my_session
+            windows:
+            - window_name: '0'
+              layout: tiled
+              panes:
+              - echo 123
+
+        >>> print(tmuxp_create_session_yaml({"a": "echo 123", "b": "echo 456"}, session_name="my_session"))
+
+            session_name: my_session
+            windows:
+            - window_name: a
+              layout: tiled
+              panes:
+              - echo 123
+            - window_name: b
+              layout: tiled
+              panes:
+              - echo 456
+
+        >>> print(tmuxp_create_session_yaml([[['echo 1','echo 2','echo 3'],'echo 4','echo 5'],'echo 6'], command_before="cd ~"))
+
+            session_name: '0'
+            windows:
+            - window_name: '0'
+              layout: tiled
+              shell_command_before: cd ~
+              panes:
+              - shell_command:
+                - echo 1
+                - echo 2
+                - echo 3
+              - echo 4
+              - echo 5
+            - window_name: '1'
+              layout: tiled
+              shell_command_before: cd ~
+              panes:
+              - echo 6
+              
+        >>> ans=tmuxp_create_session_yaml([[['say Hello','say World']]])
+        ... tmuxp_load_session_from_yaml(ans,attach=False)
+
+        >>> #Try this example from when you're *NOT* in a tmux session. It will attach you to it.
+        >>> session_name=tmux_get_unique_session_name()
+        ... ans=tmuxp_create_session_yaml([[['say Hello','say World']]],session_name=session_name)
+        ... tmuxp_load_session_from_yaml(ans,attach=True)
+        ... #Process will be blocked until session is dead.
+        ... tmux_kill_session(session_name)
+
+    """
+    import yaml
+
+    # Input assertions
+    assert isinstance(windows, (str, list, dict))
+    assert isinstance(session_name, str) or session_name is None
+    assert isinstance(command_before, (str, list)) or command_before is None
+
+    if session_name is None:
+        session_name = tmux_get_unique_session_name()
+
+    config = {"session_name": session_name, "windows": []}
+
+    if isinstance(windows, str):
+        windows = [windows]
+
+    if isinstance(windows, list):
+        windows = {str(i): e for i, e in enumerate(windows)}
+
+    assert isinstance(windows, dict), "Internal assertion"
+    assert all(isinstance(k, str) for k in windows.keys()), "All window names must be strings"
+    assert all(isinstance(v, (list, str)) for v in windows.values()), "All window commands must be strings (for single pane) or lists of strings (for multiple panes). Strings can be multiline for multiple commands"
+
+    def process_command(command):
+        if not command:
+            command = []
+        elif isinstance(command, str):
+            command = command.splitlines()
+        elif len(command) == 1:
+            command = command[0]
+        return command
+
+    for window_name, pane_commands in windows.items():
+        window = {
+            "window_name": str(window_name),
+            "layout": "tiled",
+        }
+
+        command_before = process_command(command_before)
+        if command_before:
+            window["shell_command_before"] = command_before
+
+        window["panes"] = []
+
+        if isinstance(pane_commands, str):
+            pane_commands = pane_commands.splitlines()
+        assert isinstance(pane_commands, list)
+
+        for command in pane_commands:
+            command_before = process_command(command)
+            if command:
+                window["panes"].append(command if isinstance(command, str) else {"shell_command": command})
+
+        config["windows"].append(window)
+
+    return yaml.dump(config, default_flow_style=False, sort_keys=False)
+
+def tmuxp_load_session_from_yaml(session_yaml,*,attach=False):
+    """
+    Input can be a yaml string or yaml file path
+    Uses the "tmuxp load <yaml file>" command to spin up a tmux session
+    Good in combination with rp.tmuxp_create_session_from_yaml !
+    Also to read the session name afterwards, use parse_yaml(session_yaml)['session_name']
+    If attach is False, we spin up the tmux session without attaching it
+    If it is True, we try to attach to it immediately. This will block the current process.
+
+    EXAMPLE:
+        >>> tmuxp_load_session_from_yaml(
+        ...     tmuxp_create_session_yaml(
+        ...         [[func_call_to_shell_command(list, map(print, range(i))) for i in range(9)]]
+        ...     ),
+        ...     attach=True,
+        ... ) 
+    """
+    pip_import("tmuxp")
+
+    if file_exists(session_yaml):
+        session_path = session_yaml
+        session_yaml = load_text_file(session_path)
+        should_delete = False
+    else:
+        assert isinstance(session_yaml, str), "input should be a yaml string"
+        session_path = temporary_file_path("yaml")
+        save_text_file(session_yaml, session_path)
+        should_delete = True
+
+    try:
+        command = "tmuxp load " + shlex.quote(session_path)
+        if not attach:
+            #https://tmuxp.git-pull.com/cli/load.html
+            #Load the session without attaching it
+            command+= " -d"
+            
+        fansi_print("rp.tmuxp_create_session: " + command, "green", "bold")
+        fansi_print(
+            indentify(
+                with_line_numbers(session_yaml, align=True, prefix="%i ▏"),
+                indent="    ",
+            ),
+            "green",
+        )
+        os.system(command)
+
+    finally:
+        if should_delete:
+            delete_file(session_path)
+
+    ##Future: I might return something, such as the session name
+    # data = parse_yaml(session_yaml)
+    # assert 'session_name' in data
+    # output = data['session_name']
+
+
+
+
     
 def extract_code_from_ipynb(path:str=None):
     """ Its a utility for running ipynb files in rp, by extracting their code into cells that can be run individually """
@@ -30756,9 +31124,11 @@ def apply_colormap_to_image(image,colormap_name='viridis'):
     return image_colorized
 
 def zalgo_text(text:str,amount:int=1):
-    #EXAMPLE: zalgo_text('Hello World',0) == 'Hello World'
-    #EXAMPLE: zalgo_text('Hello World',1) == 'H̵ͮe͚͘ĺ̫l̬ͧoͥ̈ W͗͜o̴͇r̖̃l̡͚d̛͓'
-    #EXAMPLE: zalgo_text('Hello World',2) == 'H̓ͨ̐e͆͟͢l̘͆͝l̦̘ͪo̰ͮ͢ W̴̓ͅǫ̨͛r̞̫͘l̴̼̎d̯͑̕'
+    """
+    EXAMPLE: zalgo_text('Hello World',0) == 'Hello World'
+    EXAMPLE: zalgo_text('Hello World',1) == 'H̵ͮe͚͘ĺ̫l̬ͧoͥ̈ W͗͜o̴͇r̖̃l̡͚d̛͓'
+    EXAMPLE: zalgo_text('Hello World',2) == 'H̓ͨ̐e͆͟͢l̘͆͝l̦̘ͪo̰ͮ͢ W̴̓ͅǫ̨͛r̞̫͘l̴̼̎d̯͑̕'
+    """
     assert isinstance(text,str)
     assert isinstance(amount,int)
     assert amount>=0
@@ -30776,86 +31146,46 @@ def zalgo_text(text:str,amount:int=1):
     return z.zalgofy(text)
 
 def big_ascii_text(text:str,*,font='standard'):
-    #Returns big ascii art text!
-    #EXAMPLE:
-    # ➤ big_ascii_text('Hello World!')
-    #    ans =  
-    #     _   _        _  _         __        __              _      _  _ 
-    #    | | | |  ___ | || |  ___   \ \      / /  ___   _ __ | |  __| || |
-    #    | |_| | / _ \| || | / _ \   \ \ /\ / /  / _ \ | '__|| | / _` || |
-    #    |  _  ||  __/| || || (_) |   \ V  V /  | (_) || |   | || (_| ||_|
-    #    |_| |_| \___||_||_| \___/     \_/\_/    \___/ |_|   |_| \__,_|(_)
-    #Some of my favorite fonts:
-    #    varsity
-    #    sub-zero
-    #    stop
-    #    stforek
-    #    starwars
-    #    standard
-    #    speed
-    #    slant
-    #    serifcap
-    #    roman
-    #    puffy
-    #    poison
-    #    nvscript
-    #    fratkur
-    #    doh
-    #    cybermedium
-    #    big
-    #    alpha
-    #    fancy92
-    #    fancy89
-    #    fancy57
-    #    fancy61
+    """
+    Returns big ascii art text!
+    EXAMPLE:
+     ➤ big_ascii_text('Hello World!')
+        ans =  
+         _   _        _  _         __        __              _      _  _ 
+        | | | |  ___ | || |  ___   \ \      / /  ___   _ __ | |  __| || |
+        | |_| | / _ \| || | / _ \   \ \ /\ / /  / _ \ | '__|| | / _` || |
+        |  _  ||  __/| || || (_) |   \ V  V /  | (_) || |   | || (_| ||_|
+        |_| |_| \___||_||_| \___/     \_/\_/    \___/ |_|   |_| \__,_|(_)
+    Some of my favorite fonts:
+        varsity
+        sub-zero
+        stop
+        stforek
+        starwars
+        standard
+        speed
+        slant
+        serifcap
+        roman
+        puffy
+        poison
+        nvscript
+        fratkur
+        doh
+        cybermedium
+        big
+        alpha
+        fancy92
+        fancy89
+        fancy57
+        fancy61
+    """
 
     pip_import('art')
     import art
     assert font in art.FONT_NAMES,'Please choose from the following fonts:'+'\n'+repr(art.FONT_NAMES)
     big_text=art.text2art(text,font)
     return big_text
-
-#class torch_utils:
-#    #This class might later become a module.
-#    #This class holds utility functions specific to pytorch
-#    def as_torch_image(image):
-#        import torch
-#        if isinstance(image,torch.Tensor):
-#            return image
-#        else:
-#            image=as_numpy_array(image)
-#            assert is_image(image)
-#            if is_grayscale_image(image):
-#                image=np.expand_dims(image,2)
-#            image=image.transpose(2,0,1)
-#            image=torch.Tensor(image)
-#            return image
-#    def as_numpy_image(image):
-#        import torch
-#        if isinstance(image,torch.Tensor):
-#            image=as_numpy_array(image)
-#            image=image.transpose(1,2,0)
-#            if image.shape[2]==1:
-#                image=image.squeeze(2)
-#            return image
-#        else:
-#            assert is_image(image)
-#            return image
-#    class ImageFolderDataset(torch.utils.data.Dataset):
-#        # A pytorch image dataset which features image caching, making 10x or more times as fast
-#        def __init__(self,folder:str):
-#            self.recognized_file_types='apng bmp cur gif ico jfif jpeg jpg pjp pjpeg png svg tif tiff webp'
-#            self.folder=folder
-#            self.refresh_paths()
-#        def refresh_paths(self):
-#            self.paths=rp.get_all_paths(self.folder,file_extension_filter=self.recognized_file_types,include_files=True,include_folders=False)
-#        def __len__(self):
-#            return len(self.paths)
-#        def __getitem__(self,index):
-#            image_path=self.paths[index]
-#            image=rp.load_image(image_path,use_cache=True)
-#            image=as_torch_image(image)
-#            return image
 
 def bytes_to_file(data:bytes,path:str=None):
     assert isinstance(data,bytes)
@@ -30882,6 +31212,45 @@ def file_to_object(path:str):
 def object_to_file(object,path:str):
     return bytes_to_file(object_to_bytes(object),path)
 
+def bytes_to_base64(bytestring: bytes) -> str:
+    import base64
+    return base64.b64encode(bytestring).decode('utf-8')
+
+def base64_to_bytes(base64_string: str) -> bytes:
+    import base64
+    return base64.b64decode(base64_string)
+
+def func_call_to_shell_command(func, *args, **kwargs):
+    """
+    In some circumstances (with exotic args or kwargs) this could be better than the fire.Fire module
+
+    EXAMPLE:
+        >>> func_call_to_shell_command(print,[1,2,3])
+        ans = /opt/homebrew/opt/python@3.10/bin/python3.10 -m rp exec 'rp.r._call_from_base64_string('"'"'gASVPwAAAAAAAAB9lCiMBGZ1bmOUjAhidWlsdGluc5SMBXByaW50lJOUjARhcmdzlF2UKEsBSwJLA2WFlIwGa3dhcmdzlH2UdS4='"'"')'
+        >>> !/opt/homebrew/opt/python@3.10/bin/python3.10 -m rp exec 'rp.r._call_from_base64_string('"'"'gASVPwAAAAAAAAB9lCiMBGZ1bmOUjAhidWlsdGluc5SMBXByaW50lJOUjARhcmdzlF2UKEsBSwJLA2WFlIwGa3dhcmdzlH2UdS4='"'"')'
+        Transformed command into 'import os;os.system(\'/opt/homebrew/opt/python@3.10/bin/python3.10 -m rp exec \\\'rp.r._call_from_base64_string(\\\'"\\\'"\\\'gASVPwAAAAAAAAB9lCiMBGZ1bmOUjAhidWlsdGluc5SMBXByaW50lJOUjARhcmdzlF2UKEsBSwJLA2WFlIwGa3dhcmdzlH2UdS4=\\\'"\\\'"\\\')\\\'\')'
+        [1, 2, 3]
+    """
+    import shlex
+    
+    python_path = sys.executable
+    bundle = dict(func=func, args=args, kwargs=kwargs)
+
+    base64_string = bytes_to_base64(object_to_bytes(bundle))
+    python_command = "rp.r._call_from_base64_string(%s)" % repr(base64_string)
+    
+    command = shlex.quote(python_path) + " -m rp exec " + shlex.quote(python_command)
+
+    return command
+
+def _call_from_base64_string(base64_string):
+    bundle = bytes_to_object(base64_to_bytes(base64_string))
+
+    func = bundle["func"]
+    args = bundle["args"]
+    kwargs = bundle["kwargs"]
+
+    return func(*args, **kwargs)
 
 
 def _launch_ranger():

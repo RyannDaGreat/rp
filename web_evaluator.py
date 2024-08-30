@@ -1,27 +1,23 @@
-import ast
-import traceback
-from urllib.parse import urlparse, parse_qs
-import json
-import time
-from http.server import (
-    # BaseHTTPRequestHandler,
-    HTTPServer,
-    SimpleHTTPRequestHandler,
-    # BaseHTTPServer,
-    # SimpleHTTPServer,
-)
 import argparse
-from socketserver import ThreadingMixIn
+import ast
+import json
+import textwrap
 import threading
+import time
+import traceback
 from collections import deque
+from contextlib import nullcontext
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+from socketserver import ThreadingMixIn
+from urllib.parse import parse_qs, urlparse
 
 import rp
-from contextlib import nullcontext
 
 rp.pip_import('requests')
 import requests
 
 DEFAULT_SERVER_PORT = 43234 #This is an arbitrary port I chose because its easy to remember and didn't conflict with any known services I could find on https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
+DEFAULT_DELEGATION_SERVER_PORT = 33234 #The port for delegation servers is different, making them easy to find if we have many servers
 
 #RP's Web Evaluator
 #    This module provides duct-tape to connect python between computers
@@ -35,19 +31,10 @@ DEFAULT_SERVER_PORT = 43234 #This is an arbitrary port I chose because its easy 
 
 """
 
-MAJOR TODO: 
-    - Why doesn't sync work in py2py mode? It works in web browser!!
-        We have to create a test to prove if it works or not. Client-side.
-
 TODO:
     - ClientDelegator server: dynamically reads from a roster and updates who's available, and proxies requests to its workers. This will balance workload.
           Downside: traffic will have to pass through it as a bottleneck. Oh well - perhaps it can become a traffic controller in the future. Should keep it extensible.
-    - Make Sync Optional: Clients should not have to know if their server should be sync or not by default. The server should have that info and the Client should be able to override it.
-          That also makes Clients with None as a sync option more simple to look at.
-          add a sync=None option to Clients, and a sync=bool option -- Clients's sync option will default to the Server's sync option when None
     - Client Timeout options. Useful to make a ping operator to check if server online and responsive.
-
-    - A
 
         Todo:
             This class can gracefully balance evaluations between clients within a multithreaded context,
@@ -242,7 +229,19 @@ def _HandlerMaker(scope:dict=None, *, base_class=SimpleHTTPRequestHandler, defau
                     response = evaluation
 
                     #Send over the result
-                    content = rp.object_to_bytes(response)
+                    try:
+                        content = rp.object_to_bytes(response)
+                    except Exception as e:
+                        #If the output involves something we can't pickle, return that as an error
+                        if e:
+                            response['errored']=True
+                            response['error']=e
+                            if 'value' in response:
+                                del response['value']
+                            rp.fansi_print("ERROR When serializing response:",'red','bold')
+                            rp.print_stack_trace()
+                            content = rp.object_to_bytes(response)
+
                     self.send_content_bytes(content, "application/octet-stream")
 
             return should_handle
@@ -390,11 +389,34 @@ def run_server(server_port:int=None,
                sync=True,
                handler_base_class=SimpleHTTPRequestHandler):
     """
-    Set handler_base_class = SimpleHTTPRequestHandler to make it a fileserver + python-to-python server
-    Set handler_base_class = BaseHTTPRequestHandler to make it a python-to-python-only server (no fileserver)
+    Runs a web_evaluator server, which provides an HTTP interface for remote Python code execution (and can double as a fileserver as well)
 
     Args:
-        - sync (bool): The default value of sync if not specified by the client. Determines whether this server is multithreaded or singlethreaded on a request that doesnt specify whether it should be or not.
+        server_port (int, optional): The port number on which the server will listen for incoming connections. 
+            If not provided, it defaults to the value of `rp.web_evaluator.DEFAULT_SERVER_PORT` (43234).
+            Choose a port that is not already in use by other services.
+
+        scope (dict, optional): A dictionary containing the scope we run exec/eval inside. Pass it globals() or some custom dictionary to control what run_server sees / has access to. By default, it uses the scope of this function's caller.
+
+        sync (bool): The default value of sync if not specified by the client. Determines whether this server is multithreaded or singlethreaded on a request that doesnt specify whether it should be or not. Defaults to True (synchronous execution - aka one handling request at a time)
+
+        handler_base_class (class, optional): The base class for the HTTP request handler. This determines the capabilities of the server.
+            If `SimpleHTTPRequestHandler` (default), the server will serve files from the current directory in addition to 
+            accepting code execution requests. This is useful for serving HTML/JS files that can interact with the Python backend.
+            If `BaseHTTPRequestHandler`, the server will only support code execution requests and will not serve files.
+            You can also provide your own custom handler class to extend the server's functionality.
+
+    Returns:
+        None. The function will block indefinitely to handle incoming HTTP requests until the process is terminated.
+
+    The server supports several types of requests, including:
+        - Python code execution requests (POST to /webeval/py2py)
+        - Python code execution with result formatting (POST to /webeval/web/evaluate)
+        - Binary response from Python code execution (POST to /webeval/web/bytes) 
+        - JavaScript library hosting (GET /webeval/rp.js)
+
+    Clients can interact with this server using the `rp.web_evaluator.Client` class or by making HTTP requests directly (such as the following web-browser-based examples)
+
 
     EXAMPLE WEBSITE 1:
         #TODO: Set sync to false for image loading!
@@ -501,10 +523,19 @@ def run_server(server_port:int=None,
     print("Server stopped.")
 
 class Client:
+    DEFAULT_PORT = DEFAULT_SERVER_PORT
     def __init__(self, server_name: str = "localhost", server_port: int = None, *, sync=None):
-        #server_name is like "127.0.1.33" or like "glass.local"
+        """
+        Initialize a Client object, which is used to interact with a web_evaluator server (started with rp.web_evaluator.run_server).
+        The Client stores the address and port of the server, as well as other settings such as sync (synchronous server-side execution vs asynchronous)
+
+        Args:
+            - server_name (str): server_name is like "127.0.1.33" or like "glass.local"
+            - server_port(int): the port of the server. Defaults to rp.web_evaluator.Client.DEFAULT_PORT
+            - sync (bool, optional): Whether commands sent by this Client should be synchronous or not. If sync is None, uses the server's default sync option. If bool, overrides it. See run_server's doc too.
+        """
         if server_port is None:
-            server_port = DEFAULT_SERVER_PORT
+            server_port = self.DEFAULT_PORT
 
         assert sync is None or isinstance(sync, bool)
 
@@ -614,7 +645,7 @@ class Client:
                request to access its value. However, with `%private_scope`, each request has its own isolated scope, and
                variables defined in one request are not accessible in subsequent requests.
 
-            3. `prepend_code <python_expression>`: Prepends·some·code·to·your·command,·specified·by·a·given·python·expression.
+            3. `prepend_code <python_expression>`: Prepends some code to your command, specified by a given python expression.
                This allows for creation of variables in the given scope from server-side code, which cannot happen without this directive.
 
                Example:
@@ -630,17 +661,25 @@ class Client:
                (see rp.exeval's docstring for more examples)
         """
         
+        return self._evaluate(
+            code=code,
+            vars=vars,
+            server_url=self.server_url,
+            sync=self.sync,
+        )
 
+    @staticmethod
+    def _evaluate(*, code, vars, server_url, sync):
         data={}
         data['code']=code
         assert isinstance(code,str) or all(isinstance(x,str) for x in code),'Client.evaluate: code must either be a string or a list of strings'
         assert isinstance(vars,dict)
         if vars:
             data['vars']=vars
-        if self.sync is not None:
-            data['sync']=self.sync
+        if sync is not None:
+            data['sync']=sync
         data=rp.object_to_bytes(data)
-        response=requests.request('POST',self.server_url,data=data)
+        response=requests.request('POST',server_url,data=data)
         result=rp.bytes_to_object(response.content)
         assert isinstance(result,dict) or isinstance(result,list),'Client.evaluate: Bad response...please make sure the server and client are running on the same version of python and rp.'
         if isinstance(result,dict):
@@ -649,25 +688,49 @@ class Client:
             assert isinstance(result,list)
             result=[Evaluation.from_dict(x) for x in result]
         return result
+
+    def ping(self):
+        """ Returns a float of how long it took to reach the server asynchronously """
+        start_time = time.time()
+
+        #This is literally just for the sake of timing...
+        self._evaluate(
+            code="#PING",
+            vars={},
+            server_url=self.server_url,
+            sync=False,
+        )
+
+        end_time = time.time()
+
+        elapsed_time = end_time - start_time
+
+        return elapsed_time
     
     def __repr__(self):
         """
         Client's repr is such that we can copy client via eval(repr(client))
         This makes it easy to store and load them into text files
         """
-        if self.sync is None: return "Client(%s, %s)"         %(repr(self.server_name), repr(self.server_port))
-        else:                 return "Client(%s, %s, sync=%s)"%(repr(self.server_name), repr(self.server_port), repr(self.sync))
+        if self.sync is None: return "%s(%s, %s)"         %(type(self).__name__, repr(self.server_name), repr(self.server_port))
+        else:                 return "%s(%s, %s, sync=%s)"%(type(self).__name__, repr(self.server_name), repr(self.server_port), repr(self.sync))
 
     @staticmethod
     def from_string(string):
         """
-        Client.from_string(repr(client)) is the same as copy(client)
+        Client.from_string(repr(client)) is the same as copy.copy(client)
         """
-        assert string.startswith('Client(')
-        return eval(string)
+        output = eval(string)
+        assert isinstance(output, Client)
+        return output
 
     def __hash__(self):
         return hash(repr(self))
+
+    def __eq__(self, x):
+        if not isinstance(x, Client):
+            return False
+        return repr(self) == repr(x)
 
 class ClientDelegator:
 
@@ -771,23 +834,60 @@ class ClientDelegator:
         for client in clients:
             self.register_client(client)
 
-    def register_client(self, client):
+    def register_client(self, client, *, unique=True, after_ping=False, silent=False):
         """
         Adds a Client instance to the pool of managed servers.
 
         Args:
             client (Client): The Client instance to add to the pool.
+            unique (bool): If true, will not register the same client twice
+            after_ping (bool): If true, will try to ping the client in a separate thread, and upon success it will be registered
+            silent (bool): If True, won't print anything
 
         Raises:
             AssertionError: If the client is already registered with another ClientDelegator.
         """
-        #Add an attribute _busy_count - used for the ClientDelegator
-        assert not hasattr(client, '_busy_count'), 'A Client should belong to at most one ClientDelegator'
-        client._busy_count=0
 
-        with self._register_lock:
-            self._clients.append(client)
-            self._update()
+        if unique and client in self._clients:
+            #TODO: This is a duplicate code block. Simplify somwhow?
+            #If unique is True, don't add the same client twice.
+            if not silent:
+                rp.fansi_print("ClientDelegator.register_client: Skipped duplicate registration: "+str(client), 'yellow')
+            return
+
+        if after_ping:
+            @rp.run_as_new_thread
+            def register_client_after_ping():
+                try:
+                    # print("Pinging",client) #Good for debugging
+                    client.ping()
+                except Exception as e:
+                    if not silent:
+                        rp.fansi_print("ClientDelegator.register_client: Didn't register - failed to ping "+str(client)+" because of Error: "+str(e), 'yellow')
+                    return #Don't register it!
+
+                self.register_client(
+                    client,
+                    unique=unique,
+                    after_ping=False,
+                )
+
+        else:
+            with self._register_lock:
+                if unique and client in self._clients:
+                    #If unique is True, don't add the same client twice.
+                    if not silent:
+                        rp.fansi_print("ClientDelegator.register_client: Skipped duplicate registration: "+str(client), 'yellow')
+                    return
+
+                #Add an attribute _busy_count - used for the ClientDelegator
+                assert not hasattr(client, '_busy_count'), 'A Client should belong to at most one ClientDelegator'
+                client._busy_count=0
+
+
+                rp.fansi_print("ClientDelegator.register_client: Registered "+str(client), 'green', 'bold')
+                self._clients.append(client)
+                self._update()
 
     def unregister_client(self, client):
         """
@@ -798,6 +898,18 @@ class ClientDelegator:
         """
         with self._register_lock:
             self._clients = [c for c in self._clients if c is not client]
+
+        rp.fansi_print("ClientDelegator.unregister_client: Unregistered "+str(client), 'magenta')
+
+    def register_clients(self, clients, **kwargs):
+        """ Plural of register_client """
+        for client in clients:
+            self.register_client(client, **kwargs)
+
+    def unregister_clients(self, clients):
+        """ Plural of unregister_client """
+        for client in clients:
+            self.unregister_client(client)
 
     def _update(self):
         """
@@ -1016,7 +1128,7 @@ class ClientRoster:
         line = repr(client)
 
         if unique:
-            if any(str(client) == str(x) for x in self.load_clients(silent=True)):
+            if client in self.load_clients(silent=True):
                 if not silent:
                     rp.fansi_print("rp.web_evaluator.ClientRoster: Did NOT register duplicate client " + line + " to " + self.location, 'yellow')
                 return
@@ -1028,6 +1140,79 @@ class ClientRoster:
 
     def __repr__(self):
         return "ClientRoster(%s)" % repr(self.location)
+
+def run_delegation_server(server_port=None,
+                          *,
+                          delegator=None,
+                          roster=None,
+                          refresh_interval = 5
+                          ):
+
+    #If not specified, create the default versions
+    if roster    is None: roster    = ClientRoster()
+    if delegator is None: delegator = ClientDelegator()
+    if server_port is None: server_port = DEFAULT_DELEGATION_SERVER_PORT
+
+    stop_refreshing = False
+
+    def refresh_clients():
+        try:
+            roster_clients = roster.load_clients(silent=True)
+
+            delegator.register_clients(
+                roster_clients,
+                unique=True,
+                after_ping=True,
+                silent=True,
+            )
+
+        except Exception:
+            rp.fansi_print("run_delegation_server: Failed to load from "+str(roster), 'red', 'bold')
+            rp.print_stack_trace()
+
+    try:
+        @rp.run_as_new_thread
+        def refresh_loop():
+            while not stop_refreshing:
+                refresh_clients()
+                time.sleep(refresh_interval)
+
+        scope = dict(
+            roster = roster,
+            delegator = delegator,
+        )
+                
+        run_server(server_port, scope=scope, sync=False)
+
+    finally:
+        #Exiting the server - kill loose threads
+        stop_refreshing = True
+
+class NotADelegationServerError(Exception):
+    pass
+
+class DelegationClient(Client):
+    """
+    A Client meant to be used for talking to a server launched via rp.web_evaluator.run_delegation_server
+    """
+    DEFAULT_PORT = DEFAULT_DELEGATION_SERVER_PORT
+    def evaluate(self, code, **vars):
+        vars_string = ", ".join(x+'='+x for x in vars)
+
+        code = rp.unindent(
+            """
+            %private_scope
+            %return result
+            import rp.web_evaluator as we
+            if 'delegator' not in dir():
+                raise we.NotADelegationServerError
+            result = delegator.evaluate(CODE, VARS)
+            """
+        ).replace('CODE', repr(code)).replace('VARS', vars_string)
+
+        result = super().evaluate(code, **vars)
+
+        return result
 
 def interactive_mode():
     if rp.input_yes_no("Is this the server? No means this is the client."):
@@ -1095,4 +1280,6 @@ if __name__ == '__main__':
 
     except KeyboardInterrupt:
         print("Received KeyboardInterrupt. Exiting.")
+
+
 
