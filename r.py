@@ -8755,8 +8755,23 @@ def load_image_from_webcam(webcam_index: int = 0,
                            height:int=None,
                            shutup=False
                            ):
-    # Change webcam_index if you have multiple cameras
-    # EX: while True: display_image(med_filter(load_image_from_webcam(1),σ=0));sleep(0);clf()#⟵ Constant webcam display
+    """
+    If your camera supports multiple resolutions, input the dimensions in the height and width parameters
+    For example, Xiang's raspberry pi webcam was taking pictures at 720p even though the camera could take 1080p pictures.
+      When I set width=1920 and height=1080, it fixed the problem, letting it take 1080p pictures
+
+    Note: this can be finicky! You have to set both the height and width correctly for this to work.
+    Note that when you set width and height using this method, they will stay like that until changed again.
+    For example, on my 2021 Macboox Max, using the default webcam, here are some results:
+
+    These properties can be discovered using the r._cv_print_cam_props function
+    To discover which resolutions are supported by your webcam, see this tutorial: 
+       https://www.learnpythonwithrune.org/find-all-possible-webcam-resolutions-with-opencv-in-python/
+
+    Change webcam_index if you have multiple cameras
+
+    EXAMPLE: while True: display_image(med_filter(load_image_from_webcam(1),σ=0));sleep(0);clf()#⟵ Constant webcam display
+    """
 
     if running_in_google_colab():return _load_image_from_webcam_in_jupyter_notebook()
 
@@ -8773,22 +8788,16 @@ def load_image_from_webcam(webcam_index: int = 0,
     
     cap=_cameras[webcam_index]
 
-    #If your camera supports multiple resolutions, input the dimensions in the height and width parameters
-    #For example, Xiang's raspberry pi webcam was taking pictures at 720p even though the camera could take 1080p pictures.
-    #   When I set width=1920 and height=1080, it fixed the problem, letting it take 1080p pictures
-    #
-    #Note: this can be finicky! You have to set both the height and width correctly for this to work.
-    #Note that when you set width and height using this method, they will stay like that until changed again.
-    #For example, on my 2021 Macboox Max, using the default webcam, here are some results:
-    #
-    #These properties can be discovered using the r._cv_print_cam_props function
-    #To discover which resolutions are supported by your webcam, see this tutorial: 
-    #    https://www.learnpythonwithrune.org/find-all-possible-webcam-resolutions-with-opencv-in-python/
-    #
     if width  is not None: cap.set(cv2.CAP_PROP_FRAME_WIDTH , width )
     if height is not None: cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
 
-    success,img=cap.read()
+    for _ in range(2): 
+        #This many tries to initialize the camera
+        #I found the camera returns black
+        success,img=cap.read()
+        if img.any():
+            break
+
     assert success        , 'Failed to take a photo with webcam #%i'%webcam_index 
     assert img is not None, 'Failed to take a photo with webcam #%i'%webcam_index
 
@@ -21711,15 +21720,28 @@ def get_sha256_hash(source, *, show_progress: bool = False, as_int: bool = False
 
     return hash_result
 
+def _labeled_image_text_to_image(text,
+                                 align,
+                                 font):
+    
+    if font is None: font = 3 #The default font for opencv
+
+    if   isinstance(font, int): output = cv_text_to_image(text, align=align, font=font)
+    elif isinstance(font, str): output = pil_text_to_image(text, align=align, font=font, size=100)
+    else: assert False, 'labeled_image: font must be a string or an int between 0 and 8'
+
+    return output
+
 def labeled_image(image,
                   text:str,
                   size=15,
                   position='top',
                   align='center',
-                  text_color=(255,255,255),
-                  background_color=(0,0,0),
+                  text_color=(1,1,1,1),
+                  background_color=(0,0,0,1),
                   flip_text=False,
                   size_by_lines=False,
+                  font=None,
                  ):
     """
     Adds a label to an image and returns an image
@@ -21739,66 +21761,100 @@ def labeled_image(image,
         flip_text (bool): Whether to flip the label text upside down. Default is False. Can be useful when position in ['left', 'right']
         size_by_lines (bool): If True, the `size` argument is multiplied by the number of lines in the text, so it can grow accordingly
                               Good in combination with wrap_string_to_width
+        font (int, str, optional): Can be an int between 0 and 8 (to use opencv) or a string (to use PIL) such as "Menlo", "Times New Roman", "Courier", "Futura", "Comic Sans", "Calibri" etc (get a bit list of available fonts with rp.get_all_ttf_fonts() )
 
     Returns:
         numpy.ndarray: The image with the label added.
 
     EXAMPLES:
-        image=load_image('http://hi-bk.com/wp-content/uploads/2020/08/hibkdog.png',use_cache=True)
-        display_image(labeled_image(image,'hello',10))
-        display_image(labeled_image(image,'hello',25))
-        display_image(labeled_image(image,'hello',.1))
-        display_image(labeled_image(image,'hello',.1,align='left'))
-        display_image(labeled_image(image,'hello',.1,align='right'))
-        display_image(labeled_image(image,'hello',.1,align='center'))
-        display_image(labeled_image(image,'hello',.1,position='top'))
-        display_image(labeled_image(image,'hello',.1,position='bottom'))
-        display_image(labeled_image(image,'hello',.5))
-        display_image(labeled_image(image,'hello',.9))
-        display_image(labeled_image(image,'hello habba booboo gabba',.9))
-        display_image(labeled_image(image,'hello habba booboo gabba',.1))
+        >>> image=load_image('http://hi-bk.com/wp-content/uploads/2020/08/hibkdog.png',use_cache=True)
+        >>> display_image(labeled_image(image,'hello',10))
+        >>> display_image(labeled_image(image,'hello',25))
+        >>> display_image(labeled_image(image,'hello',.1))
+        >>> display_image(labeled_image(image,'hello',.1,align='left'))
+        >>> display_image(labeled_image(image,'hello',.1,align='right'))
+        >>> display_image(labeled_image(image,'hello',.1,align='center'))
+        >>> display_image(labeled_image(image,'hello',.1,position='top'))
+        >>> display_image(labeled_image(image,'hello',.1,position='bottom'))
+        >>> display_image(labeled_image(image,'hello',.5))
+        >>> display_image(labeled_image(image,'hello',.9))
+        >>> display_image(labeled_image(image,'hello habba booboo gabba',.9))
+        >>> display_image(labeled_image(image,'hello habba booboo gabba',.1))
 
     EXAMPLE:
-        from rp import *
 
-        urls = [
-            "https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pages/images/emma.png?raw=true",
-            "https://www.petplan.co.uk/images/breed-info/bichon-frise/behaviour--personality_bichon-frise.png",
-            "https://www.vidavetcare.com/wp-content/uploads/sites/234/2022/04/labrador-retriever-dog-breed-info.jpeg",
-            "https://i5.walmartimages.com/asr/997e0170-abd7-484e-96b0-81e314b86c20.1d66d31352eae16052b7b9d5e1b34583.jpeg?odnHeight=768&odnWidth=768&odnBg=FFFFFF",
-        ]
-        labels = ["Ryan's Dog", "Bichon Dog", "Labordor Dog", "Hot Dog"]
-        images = load_images(urls)
+        >>> for font in [
+        ...     #OpenCV Fonts
+        ...     0, 1, 2, 3, 4, 5, 6, 7,
+        ...     #Regular fonts
+        ...     "Gill Sans",
+        ...     "Baskerville",
+        ...     "Rockwell",
+        ...     "Calibri",
+        ...     "Trebuchet MS",
+        ...     "Verdana",
+        ...     "Times New Roman",
+        ...     "Futura",
+        ...     "Courier",
+        ...     "Century Gothic",
+        ...     "Georgia",
+        ...     "Arial",
+        ...     "Bookman",
+        ...     "Palatino",
+        ...     "Impact",
+        ...     "Copperplate",
+        ...     "Papyrus",
+        ... ]:
+        ...     from rp import *
+        ...     
+        ...     urls = [
+        ...         "https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pages/images/emma.png?raw=true",
+        ...         "https://www.petplan.co.uk/images/breed-info/bichon-frise/behaviour--personality_bichon-frise.png",
+        ...         "https://www.vidavetcare.com/wp-content/uploads/sites/234/2022/04/labrador-retriever-dog-breed-info.jpeg",
+        ...         "https://i5.walmartimages.com/asr/997e0170-abd7-484e-96b0-81e314b86c20.1d66d31352eae16052b7b9d5e1b34583.jpeg?odnHeight=768&odnWidth=768&odnBg=FFFFFF",
+        ...     ]
+        ...     labels = ["Ryan's Dog", "Bichon Dog", "Labordor Dog", "Hot Dog"]
+        ...     images = load_images(urls,use_cache=True)
+        ...     
+        ...     # Resize the images evenly on both dimensions so their height is 512
+        ...     images = resize_images_to_fit(images, height=256)
+        ...     
+        ...     # Adds labels to the top of the images
+        ...     images = labeled_images(
+        ...         images,
+        ...         labels,
+        ...         # Some optional kwargs:
+        ...         size=30,  # Each label is exactly this tall (in pixels)
+        ...         position="top",
+        ...         text_color="cyan",
+        ...         background_color="black",
+        ...         font=font,
+        ...     )
+        ...     
+        ...     # Concat them all horizontally
+        ...     combined = horizontally_concatenated_images(images)
+        ...     combined = labeled_image(
+        ...         combined,
+        ...         "Types of Dogs\nFont = " + str(font),
+        ...         size=30,
+        ...         font=font,
+        ...         size_by_lines=True,
+        ...     )
+        ...     
+        ...     save_image(combined, "output.png")
+        ...     display_image(combined)
+        ...     input(font)
 
-        # Resize the images evenly on both dimensions so their height is 512
-        images = resize_images_to_fit(images, height=512)
-
-        # Adds labels to the top of the images
-        images = labeled_images(
-            images,
-            labels,
-            # Some optional kwargs:
-            size=30,  # Each label is exactly this tall (in pixels)
-            position="top",
-            text_color=(255, 255, 255),
-            background_color=(0, 0, 0),
-        )
-
-        # Concat them all horizontally
-        combined = horizontally_concatenated_images(images)
-        combined = labeled_image(combined, "Types of Dogs", size=30)
-
-        save_image(combined, "output.png")
-        display_image(combined)
     """
 
+    #We use float colors now
+    background_color = as_rgba_float_color(background_color)
+    text_color       = as_rgba_float_color(text_color)
 
     assert is_image(image)
     assert position in ['top','bottom','left','right']
     assert align in ['left','right','center']
     assert isinstance(size,float) or isinstance(size,int)
-    assert len(background_color)==3
-    assert len(text_color)==3
 
     text=str(text)
 
@@ -21838,10 +21894,9 @@ def labeled_image(image,
         height=max(height,1)         #Label height in pixels
         width=get_image_width(image) #Label width in pixels
         
-        label=cv_text_to_image(text,align=align)
+        label=_labeled_image_text_to_image(text,align=align,font=font)
 
-        size_factor = height/get_image_height(label)
-        label=cv_resize_image(label,size_factor,interp='area' if size_factor<1 else 'bilinear')  
+        label=resize_image_to_fit(label, height=height)
         if get_image_width(label)>width:
             label=cv_resize_image(label,width/get_image_width(label))
             
@@ -21855,8 +21910,6 @@ def labeled_image(image,
         #Apply colors to label
         #We need to turn the RGB byte color into RGBA float color.
         #TODO: Make a method for this in RP along with other color conversion methods...
-        background_color=tuple(float_clamp(x/255,0,1) for x in background_color) + (1,)
-        text_color      =tuple(float_clamp(x/255,0,1) for x in text_color      ) + (1,)
         label=blend_images(background_color,text_color,label)
 
         if flip_text:
@@ -21891,7 +21944,7 @@ def labeled_images(images,labels,*args,**kwargs):
 
 def labeled_videos(videos,labels,*args,**kwargs):
     """
-    The plural of labeled_image
+    The plural of labeled_images
     See rp.labeled_image's documentation
     TODO: Optimize this when videos are numpy arrays
     """
@@ -21967,6 +22020,19 @@ def cv_text_to_image(text,
                     ):
     """
     Uses OpenCV to write words on an image, and returns that image
+
+    EXAMPLE DEMO (Shows all fonts):
+        >>> collages=[]
+        ... for scale in [1,2,3,4,5]:
+        ...     images=[]
+        ...     for font in range(8):
+        ...         images.append(cv_text_to_image('Hello World! My name is Clara',font=font,scale=scale))
+        ...     images=labeled_images(images,['Font #%i'%i for i in range(8)],align='left')
+        ...     images=crop_images_to_max_width(images)
+        ...     collage=tiled_images(images,length=1,border_color='red')
+        ...     collage=labeled_image(collage,'rp.cv_text_to_image: Scale = %i'%scale,text_color=(255,0,0),size=15*scale)
+        ...     collages.append(collage)
+        ... display_image_slideshow(collages)
     """
 
 
@@ -22071,7 +22137,7 @@ def _slow_pil_text_to_image(
     numpy_image = np.array(image)[:, delimiter_text_width:-delimiter_text_width]
     return numpy_image
 
-def as_rgba_float_color(color):
+def as_rgba_float_color(color,clamp=True):
     """
     TODO: use this all over RP!
     """
@@ -22083,6 +22149,8 @@ def as_rgba_float_color(color):
     if len(color) == 3:
         color = color + (1,)
     assert len(color) == 4 
+    if clamp:
+        color = tuple(max(0,min(1,x)) for x in color)
     return color
 
 def pil_text_to_image(
@@ -23133,10 +23201,37 @@ def horizontally_concatenated_images(*image_list,origin=None):
         else:
             return np.column_stack(image_list)
     
-def vertically_concatenated_images(*image_list):
-    """ First image in image_list goes on the top """
-    #TODO: Add an origin argument. Make sure we rotate it, so top left becomes...what? bottom left? idk think about it.
+def vertically_concatenated_images(*image_list,origin=None):
+    """ 
+    First image in image_list goes on the top
+
+    EXAMPLE (Demo origin):
+        >>> for origin in 'left center right'.split():
+        ...     for i in range(100):
+        ...         phase=i/10
+        ...         freq=2
+        ...         splits=20
+        ...         url='https://www.heraldweekly.com/wp-content/uploads/cmg_images/186799/rid_4e7f32e1c4f1b2a5d07cb112d3cb8941/2AF9T8H-From-Past-to-Present-Transgender-Icons-That-Have-Shaped-History-Kim-Petras-scaled.jpg.pro-cmg.jpg'
+        ...         image=load_image(url,use_cache=True)
+        ...         image=resize_image_to_fit(image,height=512)
+        ...         images=split_tensor_into_regions(image,splits)
+        ...         scales=np.sin(np.linspace(start=0,stop=pi,num=splits)*freq+phase)*.5+1
+        ...         images=[cv_resize_image(image,scale) for image,scale in zip(images,scales)]
+        ...         images=bordered_images_solid_color(images,color='red')
+        ...         collage=vertically_concatenated_images(images,origin=origin)
+        ...         collage=cv_resize_image(collage,(512,512))
+        ...         collage=labeled_image(collage,'Origin = '+origin)
+        ...         display_image(collage)
+    """
     image_list=detuple(image_list)
+
+    if origin=='right': origin='bottom right'
+    if origin=='left' : origin=None
+    if origin is not None and not is_numpy_array(image_list):
+        #Todo: make it more efficient. But also, it's totally stable and will work perfectly.
+        assert isinstance(origin, str)
+        return grid_concatenated_images([[x] for x in image_list], origin=origin)
+
     return np.rot90(horizontally_concatenated_images([np.rot90(image,-1) for image in reversed(image_list)]))
 
 def grid_concatenated_images(image_grid, *, origin=None):  
