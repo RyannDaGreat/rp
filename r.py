@@ -5413,7 +5413,8 @@ def display_image(image,block=False):
                 image=image.astype(float)
             return cv_imshow(image,wait=10 if not block else 1000000)#Hit esc in the image to exit it
 
-def with_alpha_checkerboard(image, tile_size=8, first_color=1.0, second_color=0.75):
+def with_alpha_checkerboard(image, *, tile_size=8, first_color=1.0, second_color=0.75):
+    """ If the given image is RGBA, put a checkerboard pattern behind it and return a new opaque image """
     checkers = get_checkerboard_image(
         *get_image_dimensions(image),
         tile_size=tile_size,
@@ -5421,6 +5422,25 @@ def with_alpha_checkerboard(image, tile_size=8, first_color=1.0, second_color=0.
         second_color=second_color
     )
     return blend_images(checkers, image)
+
+def with_alpha_checkerboards(*images, tile_size=8, first_color=1.0, second_color=.75):
+    """ Plural of rp.with_alpha_checkerboard """
+    images = detuple(images)
+    is_numpy = is_numpy_array(images)
+    output = [
+        with_alpha_checkerboard(
+            image,
+            tile_size=tile_size,
+            first_color=first_color,
+            second_color=second_color,
+        )
+        for image in images
+    ]
+    if is_numpy:
+        #In future: Optimize
+        output = as_numpy_array(output)
+    return output
+
 
 def display_alpha_image(image, block=False, tile_size=8, first_color=1.0, second_color=0.75):
     alpha_checkerboard_image = with_alpha_checkerboard(
@@ -14752,8 +14772,11 @@ def pseudo_terminal(
             if isinstance(d,dict):
                 return d
             return d.__dict__
-        dicts=[get_scope(1)]
-        dicts[0]['ans']=None
+        new_dicts=[get_scope(1)]
+        for d in dicts:
+            new_dicts[0].update(d)
+        new_dicts[0]['ans']=None
+        dicts=new_dicts
 
 
         # dicts=[{"ans":None,'blarge':1234}]#,*map(dictify,dicts)]# Keeping the 'ans' variable separate. It has highest priority
@@ -20331,9 +20354,42 @@ def cv_dilate(image,diameter=2,*,copy=True,circular=False,iterations=1):
     cv2=pip_import('cv2')
     return _cv_morphological_helper(image,diameter,cv_method=cv2.dilate,copy=copy,circular=circular,iterations=iterations)
 
-def cv_gauss_blur(image,sigma=1):
-    """Gauss blur an image with the given radius using opencv"""
+def cv_gauss_blur(image, sigma=1, *, alpha_weighted=False):
+    """
+    Gauss blur an image with the given radius using opencv
+
+    The alpha_weighted option:
+        cv_gauss_blur blurs all channels independently: R,G,B and A
+        But this can mix the background with the foreground, making it ugly around mask edges
+        This function fixes that problem by weighting the blur on the alpha values
+        This function has the same IO signature as cv_gauss_blur
+
+        Example:
+            >>> #This example shows the difference between regular gauss blur and this function
+            >>> def create_test_image():
+            >>>     import cv2
+            >>>     height = width = 300
+            >>>     image = np.zeros((height, width, 4), dtype=np.uint8)
+            >>>     cv2.line(image, (50, 100), (250, 100), (0, 255, 0, 255), 10)
+            >>>     cv2.line(image, (50, 150), (250, 150), (255, 255, 0, 255), 10)
+            >>>     cv2.line(image, (50, 200), (250, 200), (255, 0, 0, 255), 10)
+            >>>     return image
+            >>> sigma=50
+            >>> test_image=create_test_image()
+            >>> alpha_blurred  =cv_gauss_blur(test_image,sigma,alpha_weighted=True)
+            >>> regular_blurred=cv_gauss_blur(test_image,sigma,alpha_weighted=False)
+            >>> display_alpha_image(
+            >>>     grid_concatenated_images(
+            >>>         [
+            >>>             [test_image, alpha_blurred, regular_blurred],
+            >>>             as_rgb_images([test_image, alpha_blurred, regular_blurred]),
+            >>>         ]
+            >>>     ),
+            >>> )
+    """
     cv2=pip_import('cv2')
+
+    if alpha_weighted: return _alpha_weighted_rgba_image_func(cv_gauss_blur, image, sigma)
 
     if is_binary_image(image):
         image=as_float_image(image) #cv2.GaussianBlur can't handle binary images, just float_images and byte_images
@@ -20343,38 +20399,43 @@ def cv_gauss_blur(image,sigma=1):
         sigma+=1#Make sigma odd
     return cv2.GaussianBlur(image,(sigma,sigma),0)
 
-def cv_alpha_weighted_gauss_blur(image,sigma):
+def is_opaque_image(image):
     """
-    cv_gauss_blur blurs all channels independently: R,G,B and A
-    But this can mix the background with the foreground, making it ugly around mask edges
-    This function fixes that problem by weighting the blur on the alpha values
-    This function has the same IO signature as cv_gauss_blur
+    If there is a single transparent pixel in the image, return false
+    Equivalent to the slower:
+        return (as_rgba_image(image)==as_rgba_image(as_rgb_image(image))).all()
+    """
 
-    Example:
-        >>> #This example shows the difference between regular gauss blur and this function
-        >>> def create_test_image():
-        >>>     import cv2
-        >>>     height = width = 300
-        >>>     image = np.zeros((height, width, 4), dtype=np.uint8)
-        >>>     cv2.line(image, (50, 100), (250, 100), (0, 255, 0, 255), 10)
-        >>>     cv2.line(image, (50, 150), (250, 150), (255, 255, 0, 255), 10)
-        >>>     cv2.line(image, (50, 200), (250, 200), (255, 0, 0, 255), 10)
-        >>>     return image
-        >>> sigma=50
-        >>> test_image=create_test_image()
-        >>> alpha_blurred=cv_alpha_weighted_gauss_blur(test_image,sigma)
-        >>> regular_blurred=cv_gauss_blur(test_image,sigma)
-        >>> display_alpha_image(
-        >>>     grid_concatenated_images(
-        >>>         [
-        >>>             [test_image, alpha_blurred, regular_blurred],
-        >>>             as_rgb_images([test_image, alpha_blurred, regular_blurred]),
-        >>>         ]
-        >>>     ),
-        >>> )
+    return (
+        is_grayscale_image(image)
+        or is_rgb_image(image)
+        or is_rgba_image(image)
+        and (
+            is_byte_image(image)
+            and (get_alpha_channel(image) == 255).all()
+            or (get_alpha_channel(image) >= 1).all()
+        )
+    )
+
+def is_transparent_image(image):
     """
+    If there is a single transparent pixel in the image, return True
+    Equivalent to the slower:
+        return (as_rgba_image(image)!=as_rgba_image(as_rgb_image(image))).all()
+    """
+    return is_image(image) and is_opaque_image(image)
+
+def _alpha_weighted_rgba_image_func(func, image, *args, **kwargs):
+    """
+    Func is a function that looks like func(image, *args, **kwargs) and operates on RGBA images as defined by rp.is_rgba_image]
+    See usages throughout rp.r - such as rp.cv_gauss_blur with alpha_weighted = True! Please see its docstring for examples!!
+    """
+    if is_opaque_image(image):
+        #If the given image doesn't have any alpha, just return 
+        return func(image, *args, **kwargs)
+
     image=as_float_image(image,copy=False)
-    image=as_rgba_image(image,copy=False)
+    image=as_rgba_image (image,copy=False)
     
     epsilon=1e-4
     alpha=get_image_alpha(image)
@@ -20382,17 +20443,13 @@ def cv_alpha_weighted_gauss_blur(image,sigma):
     alpha=as_rgb_image(alpha)
     rgb=as_rgb_image(image)
     
-    weight=cv_gauss_blur(alpha,sigma)
-    color=cv_gauss_blur(alpha*rgb,sigma)
+    weight=func(alpha    ,*args,**kwargs)
+    color =func(alpha*rgb,*args,**kwargs)
     
     output=color/weight
     output=with_alpha_channel(output,weight,copy=False)
     
     return output
-    
-
-
-
 
 #endregion
 
@@ -20417,10 +20474,10 @@ def loop_direction_2d(loop):
     next[:,0]*=-1
     return np.sum(np.prod(loop+next,1))
 def is_clockwise(loop):
-    #loop is like [(x,y),(x,y)...] (two dimensions)
+    """ loop is like [(x,y),(x,y)...] (two dimensions) """
     return loop_direction_2d(loop)<0
 def is_counter_clockwise(loop):
-    #loop is like [(x,y),(x,y)...] (two dimensions)
+    """ loop is like [(x,y),(x,y)...] (two dimensions) """
     return loop_direction_2d(loop)>0
 def cv_make_clockwise(contour):
     return contour if is_clockwise(contour) else contour[::-1]
@@ -21781,7 +21838,7 @@ def labeled_image(image,
         height=max(height,1)         #Label height in pixels
         width=get_image_width(image) #Label width in pixels
         
-        label=cv_text_to_image(text)
+        label=cv_text_to_image(text,align=align)
 
         size_factor = height/get_image_height(label)
         label=cv_resize_image(label,size_factor,interp='area' if size_factor<1 else 'bilinear')  
@@ -21905,7 +21962,8 @@ def cv_text_to_image(text,
                      color=(255, 255, 255),
                      tight_fit=False,
                      background_color=(0, 0, 0),
-                     monospace=False
+                     monospace=False,
+                     align='left'
                     ):
     """
     Uses OpenCV to write words on an image, and returns that image
@@ -21937,7 +21995,9 @@ def cv_text_to_image(text,
                 background_color=background_color,
             )
         )
-    return vertically_concatenated_images(images)
+
+    origin = {"left": "top left", "center": "center", "right": "bottom right"}[align]
+    return grid_concatenated_images([[x] for x in images], origin=origin)
 
 def _single_line_cv_text_to_image(text,*,scale,font,thickness,color,tight_fit,background_color):
     #EXAMPLE:
@@ -21966,8 +22026,8 @@ def _slow_pil_text_to_image(
     *,
     size=12,
     font="Courier",
-    color=(255, 255, 255, 255),
-    background_color=(0, 0, 0, 0)
+    color=(255, 255, 255, 255), #Is a byte color
+    background_color=(0, 0, 0, 0)  #Is a byte color
 ):
     # Works well! But is SO FUCKING SLOW on its own...by putting characters together and concating them we can do better...
     # CONTEXT: https://chatgpt.com/share/a7f61066-b6dd-41e4-a28f-b9ccc84aa632
@@ -22030,9 +22090,9 @@ def pil_text_to_image(
     *,
     size=64,
     font=None,
-    color=(1, 1, 1, 1),
-    background_color=(0, 0, 0, 0),
-    align="left"
+    align="left",
+    color=(1, 1, 1, 1), #Is a float color
+    background_color=(0, 0, 0, 0) #Is a float color
 ):
     """
     Uses PIL as an alternative backend to cv_text_to_image
@@ -23088,42 +23148,42 @@ def grid_concatenated_images(image_grid, *, origin=None):
        See the example functions...
     It's a combination of vertically_concatenated_images and horizontally_concatenated_images simultaneously that maintains a gridlike structure
     EXAMPLE:
-        doggy=load_image('https://nationaltoday.com/wp-content/uploads/2020/02/doggy-date-night.jpg')
-        imagechunks=[]
-        imagechunks+=list(split_tensor_into_regions(doggy,4,2))
-        imagechunks+=list(split_tensor_into_regions(doggy,2,4))
-        imagechunks=[bordered_image_solid_color(image,thickness=5,color=(0,1,0,1)) for image in imagechunks]
-        imagechunks=shuffled(imagechunks)
-        ans=split_into_sublists(imagechunks,4)
-        display_image(grid_concatenated_images(ans))
+        >>> doggy=load_image('https://nationaltoday.com/wp-content/uploads/2020/02/doggy-date-night.jpg')
+        >>> imagechunks=[]
+        >>> imagechunks+=list(split_tensor_into_regions(doggy,4,2))
+        >>> imagechunks+=list(split_tensor_into_regions(doggy,2,4))
+        >>> imagechunks=[bordered_image_solid_color(image,thickness=5,color=(0,1,0,1)) for image in imagechunks]
+        >>> imagechunks=shuffled(imagechunks)
+        >>> ans=split_into_sublists(imagechunks,4)
+        >>> display_image(grid_concatenated_images(ans))
     EXAMPLE:
-        dog=load_image('https://nationaltoday.com/wp-content/uploads/2020/02/doggy-date-night.jpg')
-        dog=resize_image(dog,.25)
-        regions=split_tensor_into_regions(dog,3,5,flat=False)
-        regions=grid2d_map(regions, lambda image: bordered_image_solid_color(image,color=(1,0,0,1),thickness=5))
-        for angle in list(range(360)):
-            display_image(grid_concatenated_images(grid2d_map(regions, lambda image: rotate_image(image,angle))))
+        >>> dog=load_image('https://nationaltoday.com/wp-content/uploads/2020/02/doggy-date-night.jpg')
+        >>> dog=resize_image(dog,.25)
+        >>> regions=split_tensor_into_regions(dog,3,5,flat=False)
+        >>> regions=grid2d_map(regions, lambda image: bordered_image_solid_color(image,color=(1,0,0,1),thickness=5))
+        >>> for angle in list(range(360)):
+        >>>     display_image(grid_concatenated_images(grid2d_map(regions, lambda image: rotate_image(image,angle))))
     EXAMPLE:
-        ans='https://pbs.twimg.com/profile_images/945393898649665536/Ea5FkV5q.jpg'
-        ans=load_image(ans)
-        ans=split_tensor_into_regions(ans,10,10)
-        ans=[bordered_image_solid_color(x,color=random_rgba_float_color(),thickness=5) for x in ans]
-        ans=split_into_sublists(ans,10)
-        ans=grid_concatenated_images(ans)
-        display_image(ans)
+        >>> ans='https://pbs.twimg.com/profile_images/945393898649665536/Ea5FkV5q.jpg'
+        >>> ans=load_image(ans)
+        >>> ans=split_tensor_into_regions(ans,10,10)
+        >>> ans=[bordered_image_solid_color(x,color=random_rgba_float_color(),thickness=5) for x in ans]
+        >>> ans=split_into_sublists(ans,10)
+        >>> ans=grid_concatenated_images(ans)
+        >>> display_image(ans)
     EXAMPLE:
-        ans='https://pbs.twimg.com/profile_images/945393898649665536/Ea5FkV5q.jpg'
-        ans=load_image(ans)
-        tiles=split_tensor_into_regions(ans,10,10)
-        ans=[horizontally_concatenated_images(tile,resize_image(cv_text_to_image(str(i)),.25)) for i,tile in enumerate(tiles)]
-        ans=[bordered_image_solid_color(an,color=(0,.5,1,1)) for an in ans]
-        ans=split_into_sublists(ans,10)
-        ans=grid_concatenated_images(ans)
-        display_image(ans)
+        >>> ans='https://pbs.twimg.com/profile_images/945393898649665536/Ea5FkV5q.jpg'
+        >>> ans=load_image(ans)
+        >>> tiles=split_tensor_into_regions(ans,10,10)
+        >>> ans=[horizontally_concatenated_images(tile,resize_image(cv_text_to_image(str(i)),.25)) for i,tile in enumerate(tiles)]
+        >>> ans=[bordered_image_solid_color(an,color=(0,.5,1,1)) for an in ans]
+        >>> ans=split_into_sublists(ans,10)
+        >>> ans=grid_concatenated_images(ans)
+        >>> display_image(ans)
     EXAMPLE:
-        i='https://hips.hearstapps.com/hmg-prod/images/dog-puppy-on-garden-royalty-free-image-1586966191.jpg?crop=0.752xw:1.00xh;0.175xw,0&resize=1200:*'
-        i=cv_resize_image(load_image(i),(256,256))
-        display_image(grid_concatenated_images([[None,i,None],[i,None,i],[None,i,None]]))
+        >>> i='https://hips.hearstapps.com/hmg-prod/images/dog-puppy-on-garden-royalty-free-image-1586966191.jpg?crop=0.752xw:1.00xh;0.175xw,0&resize=1200:*'
+        >>> i=cv_resize_image(load_image(i),(256,256))
+        >>> display_image(grid_concatenated_images([[None,i,None],[i,None,i],[None,i,None]]))
     """
 
     image_grid=list(image_grid)
@@ -24295,7 +24355,62 @@ def get_principle_components(tensors,number_of_components=None):
     assert len(principle_components)==len(eigenvectors)==number_of_components,'This is an internal assertion that should never fail'
     return principle_components
 
-def cv_box_blur(image,diameter=3,width=None,height=None):
+def cv_box_blur(image,diameter=3,width=None,height=None,*,alpha_weighted=False):
+    """ 
+    A box blur using opencv. Width and height override diameter. See cv_gauss_blur for examples of alpha_weighted 
+    EXAMPLE:
+        >>> for sigma in range(100):
+        ...    # This example shows the difference between regular gauss blur and this function
+        ...    def create_test_image():
+        ...        import cv2
+        ...
+        ...        height = width = 300
+        ...        image = np.zeros((height, width, 4), dtype=np.uint8)
+        ...        cv2.line(image, (50, 100), (250, 100), (0, 255, 0, 255), 10)
+        ...        cv2.line(image, (50, 150), (250, 150), (255, 255, 0, 255), 10)
+        ...        cv2.line(image, (50, 200), (250, 200), (255, 0, 0, 255), 10)
+        ...        return image
+        ...
+        ...    test_image = create_test_image()
+        ...    alpha_blurred = cv_box_blur(test_image, sigma, alpha_weighted=True)
+        ...    regular_blurred = cv_box_blur(test_image, sigma, alpha_weighted=False)
+        ...    display_alpha_image(
+        ...        labeled_image(
+        ...            grid_concatenated_images(
+        ...                [
+        ...                    labeled_images(
+        ...                        with_alpha_checkerboards(
+        ...                            test_image,
+        ...                            alpha_blurred,
+        ...                            regular_blurred,
+        ...                            tile_size=10,
+        ...                        ),
+        ...                        [
+        ...                            "RGB Blur",
+        ...                            "Alpha-Weighted RGBA Blur",
+        ...                            "Regular RGBA Blur",
+        ...                        ],
+        ...                        size_by_lines=True,
+        ...                    ),
+        ...                    as_rgb_images([test_image, alpha_blurred, regular_blurred]),
+        ...                ],
+        ...                origin="bottom",
+        ...            ),
+        ...            "rp.cv_box_blur : sigma = %i" % sigma,
+        ...            size=30,
+        ...        )
+        ...    )
+    """
+    if alpha_weighted:
+        return _alpha_weighted_rgba_image_func(
+            cv_box_blur,
+            image,
+            diameter=diameter,
+            width=width,
+            height=height,
+            alpha_weighted=False,
+        )
+
     cv2=pip_import('cv2')
     image=np.asarray(image)
     image=_prepare_cv_image(image)
@@ -26853,7 +26968,95 @@ def visible_string_length(string):
 def string_width(string):
     return max(map(visible_string_length,line_split(string)),default=0)
 def string_height(string):
-    return len(line_split(string))
+    return number_of_lines(string)
+
+
+def _pad_string_height(string, height, origin=None):
+    """
+    Pad a string with the specified extra height at the given origin.
+
+    Args:
+        string (str): The input string to be padded.
+        height (int): The extra height (number of lines) to pad the string.
+        origin (str, optional): The origin of the padding. Must be one of 'top', 'bottom', or 'center'.
+                                If not provided, the string is returned unchanged.
+
+    Returns:
+        str: The padded string.
+
+    Raises:
+        ValueError: If the input string is not a string or height is negative.
+    """
+    if not isinstance(string, str):
+        raise ValueError("Input string must be a string.")
+    if not isinstance(height, int) or height < 0:
+        raise ValueError("Height must be a non-negative integer.")
+    
+    if origin == 'top':
+        return '\n' * height + string
+    elif origin == 'bottom':
+        return string + '\n' * height
+    elif origin == 'center':
+        top_pad = height // 2
+        bottom_pad = height - top_pad
+        return '\n' * top_pad + string + '\n' * bottom_pad
+    else:
+        return string
+
+def pad_to_same_number_of_lines(*strings, origin='top'):
+    """
+    Pad multiple strings to have the same number of lines with the specified origin.
+
+    Args:
+        *strings (str): Variable number of input strings to be padded.
+        origin (str, optional): The origin of the padding. Must be one of 'top', 'bottom', or 'center'.
+                                Defaults to 'top'.
+
+    Returns:
+        list: A list of padded strings, all having the same number of lines.
+
+    Raises:
+        ValueError: If any of the input strings is not a string or origin is not one of 'top', 'bottom', or 'center'.
+        
+    EXAMPLE:
+        >>> for origin in ["top", "center", "bottom"]:
+        ...     print("-" * 10,'origin='+origin,'-'*10)
+        ...     print(
+        ...         horizontally_concatenated_strings(
+        ...             pad_to_same_number_of_lines(
+        ...                 "Hello\nWorld", "My", "Name\nIs\nClara", origin=origin
+        ...             ),
+        ...             rectangularize=True,
+        ...         )
+        ...     )
+        ... #OUTPUT:
+        ... #---------- origin=top ----------
+        ... #       Name
+        ... #Hello  Is
+        ... #WorldMyClara
+        ... #---------- origin=center ----------
+        ... #Hello  Name
+        ... #WorldMyIs
+        ... #       Clara
+        ... #---------- origin=bottom ----------
+        ... #HelloMyName
+        ... #World  Is
+        ... #       Clara
+    """
+    strings = detuple(strings)
+    if not all(isinstance(x, str) for x in strings):
+        raise ValueError("All input strings must be strings.")
+    if origin not in ['top', 'bottom', 'center']:
+        raise ValueError("Origin must be one of 'top', 'bottom', or 'center'.")
+    
+    num_lines = [number_of_lines(s) for s in strings]
+    max_num_lines = max(num_lines)
+    new_lines = [_pad_string_height(s, max_num_lines - n, origin) for s, n in zip(strings, num_lines)]
+    
+    return new_lines
+
+pad_strings_to_max_height = pad_to_same_number_of_lines
+
 
 def pad_string_to_dims(string,*,height,width,fill=' '):
     assert string_width (string)<=width
@@ -31515,7 +31718,7 @@ def _prepare_cv_image(image):
 
     return image
     
-def cv_resize_image(image,size,interp='auto'):
+def cv_resize_image(image, size, interp="auto", *, alpha_weighted=False):
     """
     This function is similar to r.resize_image (which uses scipy), except this uses OpenCV and is much faster
     Valid sizes:
@@ -31526,10 +31729,28 @@ def cv_resize_image(image,size,interp='auto'):
 
     TODO: Add an alpha-aware arg, like cv_alpha_weighted_gauss_blur. Propogate arg to all funcs that use this.
           How to do it with expansion aka bilinear interp?
+
+    EXAMPLE: alpha_weighted:
+        >>> # When downscaling this image, we see crusty edges unless alpha_weighted=True
+        ...
+        ... text_image = pil_text_to_image(
+        ...     "Hello World", size=256, color=(1, 0, 0, 1), background_color=(0, 0, 1, 0)
+        ... )
+        ...
+        ... display_image(
+        ...     vertically_concatenated_images(
+        ...                                 cv_resize_image(text_image, 0.25                      ) ,
+        ...         with_alpha_checkerboard(cv_resize_image(text_image, 0.25, alpha_weighted=True )),
+        ...         with_alpha_checkerboard(cv_resize_image(text_image, 0.25, alpha_weighted=False)),
+        ...     )
+        ... )
     """
     
     pip_import('cv2')
     import cv2  
+
+    if alpha_weighted:
+        return _alpha_weighted_rgba_image_func(cv_resize_image, image, size, interp)
 
     #Choose an interpolation method
     interp_methods = {
@@ -31568,7 +31789,7 @@ def cv_resize_image(image,size,interp='auto'):
     
     return out
 
-def cv_resize_images(*images, size, interp='auto'):
+def cv_resize_images(*images, size, interp='auto', alpha_weighted=False):
     images=detuple(images)
     assert all(is_image(x) for x in images), 'Not all given images satisfy rp.is_image'
     images=[cv_resize_image(image, size, interp) for image in images]
@@ -32096,7 +32317,15 @@ def resize_image_to_hold(image, height: int = None, width: int = None, *, interp
 
     return rp.cv_resize_image(image, scale, interp=interp)
 
-def resize_image_to_fit(image, height:int=None, width:int=None, *, interp='auto', allow_growth=True):
+def resize_image_to_fit(
+    image,
+    height: int = None,
+    width: int = None,
+    *,
+    interp="auto",
+    allow_growth=True,
+    alpha_weighted=False
+):
     """
     Scale image on both axes evenly to fit in this bounding box
     If not allow_growth, it won't modify the image if height and width are larger than the input image
@@ -32127,13 +32356,30 @@ def resize_image_to_fit(image, height:int=None, width:int=None, *, interp='auto'
     if width < image_width * scale:
         scale = width / image_width
         
-    return rp.cv_resize_image(image, scale, interp=interp)
+    return rp.cv_resize_image(image, scale, interp=interp, alpha_weighted=alpha_weighted)
 
-def resize_images_to_fit(*images, height: int = None, width: int = None, interp='auto', allow_growth=True):
+def resize_images_to_fit(
+    *images,
+    height: int = None,
+    width: int = None,
+    interp="auto",
+    allow_growth=True,
+    alpha_weighted=False
+):
     images=detuple(images)
-    return [resize_image_to_fit(x,height,width,interp=interp,allow_growth=allow_growth) for x in images]
+    return [
+        resize_image_to_fit(
+            x,
+            height,
+            width,
+            interp=interp,
+            allow_growth=allow_growth,
+            alpha_weighted=alpha_weighted,
+        )
+        for x in images
+    ]
 
-def resize_images_to_max_size(*images, interp="bilinear"):
+def resize_images_to_max_size(*images, interp="bilinear", alpha_weighted=False):
     """
     Makes sure all images have the same height and width
     Does this by stretching all images to the max size found
@@ -32143,9 +32389,14 @@ def resize_images_to_max_size(*images, interp="bilinear"):
         display_image_slideshow(ans)
         display_image_slideshow(resize_images_to_max_size(ans))
     """
-    return resize_images(*images, size=get_max_image_dimensions(*images), interp=interp)
+    return resize_images(
+        *images,
+        size=get_max_image_dimensions(*images),
+        interp=interp,
+        alpha_weighted=alpha_weighted
+    )
 
-def resize_images_to_min_size(*images, interp="bilinear"):
+def resize_images_to_min_size(*images, interp="bilinear", alpha_weighted=False):
     """
     Makes sure all images have the same height and width
     Does this by stretching all images to the min size found
@@ -32155,7 +32406,7 @@ def resize_images_to_min_size(*images, interp="bilinear"):
         display_image_slideshow(ans)
         display_image_slideshow(resize_images_to_min(ans))
     """
-    return resize_images(*images, size=get_min_image_dimensions(*images), interp=interp)
+    return resize_images(*images, size=get_min_image_dimensions(*images), interp=interp, alpha_weighted=alpha_weighted)
 
 def _iterfzf(iterable, *args,**kwargs):
     pip_import('iterfzf')
