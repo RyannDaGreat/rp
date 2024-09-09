@@ -1806,7 +1806,7 @@ def with_drop_shadow(
 def with_drop_shadows(images,**kwargs):
     return [with_drop_shadow(image,**kwargs) for image in images]
     
-def with_corner_radius(image, radius, *, antialias=True):
+def with_corner_radius(image, radius, *, antialias=True, background=None):
     """
     Applies an alpha mask to round off the corners of an image
     Radius is, of course, measured in pixels
@@ -1855,7 +1855,61 @@ def with_corner_radius(image, radius, *, antialias=True):
     alpha = as_float_image(get_image_alpha(image),copy=False) * as_float_image(mask,copy=False)
     return with_image_alpha(image, alpha)
 
-    
+
+def with_corner_radii(*images, radius, antialias=True):
+    images = detuple(images)
+    return [with_corner_radius(image, radius, antialias=antialias) for image in images]
+
+
+def get_alpha_outline(image,*,inner_radius=0,outer_radius=0,include_edges=True,allow_growth=False):
+    """
+    You should set inner_radius>0 or outer_radius>0
+
+    include_edges (bool): Has an effect when inner_radius>0 - if True, it assumes there's 0 alpha outside the image - and as a result can create an outline aronud the edges of the image
+
+    Returns an alpha mask
+    """
+    if include_edges:
+        image=bordered_image_solid_color(image,color=(0,0,0,0))
+        
+    if allow_growth and outer_radius:
+        image=bordered_image_solid_color(image,color=color,thickness=outer_radius)
+        
+    mask=get_alpha_channel(image)
+    mask=as_binary_image(mask)
+    dilated=cv_dilate(mask,diameter=outer_radius,circular=True)
+    eroded=cv_erode(mask,diameter=inner_radius,circular=True)
+    outline=dilated&~eroded
+
+    if include_edges:    
+        outline=outline[1:-1,1:-1]
+
+    outline = as_grayscale_image(outline)
+
+    return outline
+
+def with_alpha_outline(image,*,inner_radius=0,outer_radius=0,include_edges=True,color=(1,1,1,1),allow_growth=False):
+    if allow_growth and outer_radius:
+        image=bordered_image_solid_color(image,color=(0,0,0,0),thickness=outer_radius)
+        
+    outline = get_alpha_outline(
+        image,
+        inner_radius=inner_radius,
+        outer_radius=outer_radius,
+        include_edges=include_edges,
+        allow_growth=False
+    )
+    color=as_rgba_float_color(color)
+        
+
+    return blend_images(image,color,outline)
+
+
+def with_alpha_outlines(*images,**kwargs):
+    images=detuple(images)
+    return [with_alpha_outline(image,**kwargs) for image in images]
+        
+
 def _crop_images_to_max_or_min_size(*images,origin='top left',criterion=max,copy=True,do_height=True,do_width=True):
     
     images=detuple(images)
@@ -19389,6 +19443,7 @@ def get_process_exists(pid: int) -> bool:
 process_exists=get_process_exists
 
 def get_process_start_date(pid=None):
+    """Given a process ID, returns a datetime object of when it started"""
     if pid is None: pid=get_process_id()
 
     try:
@@ -19408,6 +19463,61 @@ def get_process_start_date(pid=None):
         return "No process found with PID: {}".format(pid)
     except Exception as e:
         return "An error occurred: {}".format(e)
+
+def kill_process(pid, signall="SIGKILL"):
+    """
+    Send a signal to a process identified by its PID.
+
+    Args:
+        pid (int): Process ID to which the signal is sent.
+        signall (str or int): The signal to send. Default is 'SIGKILL'.
+
+    Common signals:
+        SIGKILL - Immediately terminate the process (cannot be caught or ignored).
+        SIGTERM - Request the process to terminate gracefully.
+        SIGHUP  - Sent to a process when its controlling terminal is closed.
+        SIGINT  - Sent to a process by its controlling terminal when a user interrupts the process with a keyboard input, typically Ctrl+C.
+
+    Examples of usage:
+        kill_process(1234)  # Defaults to sending SIGKILL
+        kill_process(1234, 'SIGTERM')  # Send SIGTERM to request graceful termination
+        kill_process(1234, 'SIGHUP')  # Send SIGHUP typically used to trigger a reload of configuration
+        kill_process(1234, 'SIGINT')  # Simulate a keyboard interrupt
+
+    Exceptions:
+        ValueError: If the signal name is not valid or no such process exists.
+        Exception: For other unexpected errors.
+    """
+    import os
+    import signal
+
+    try:
+        # Convert the signall to its corresponding integer value
+        if isinstance(signall, str):
+            signall = getattr(signal, signall)
+
+        # Send the signal to the process
+        os.kill(pid, signall)
+        print("Signal {} successfully sent to process {}.".format(signall, pid))
+    except AttributeError:
+        valid_signals = ", ".join([s for s in dir(signal) if s.startswith("SIG") and not s.startswith("SIG_")])
+        error_message = "Error: {} is not a valid signal. Choose from: {}".format(signall, valid_signals)
+        raise ValueError(error_message)
+    except ProcessLookupError:
+        error_message = "No process found with PID {}.".format(pid)
+        raise ValueError(error_message)
+
+
+def kill_processes(*pids, signall="SIGKILL", strict=True):
+    """Plural of rp.kill_process"""
+    pids = detuple(pids)
+    for pid in pids:
+        try:
+            kill_process(pid)
+        except Exception:
+            if strict:
+                raise
+
 
 
 def regex_match(string,regex)->bool:
@@ -19733,9 +19843,8 @@ def cv_simplify_contour(contour, epsilon=0.001):
     pip_import("cv2")
     import cv2
 
-    big_number = 1000
+    big_number = 100000
     contour = as_cv_contour(contour * big_number)  # It turns into ints
-    print(contour)
     approx_contour = cv2.approxPolyDP(contour, epsilon, closed=True)
     approx_contour = as_points_array(approx_contour)
     approx_contour = approx_contour / big_number
@@ -21804,9 +21913,25 @@ def labeled_image(image,
         ...     "Impact",
         ...     "Copperplate",
         ...     "Papyrus",
+        ...     #Google Fonts
+        ...     "G:Quicksand",
+        ...     "G:Protest Guerrilla",
+        ...     "G:Roboto Slab",
+        ...     "G:Bebas Neue",
+        ...     "G:Matemasie",
+        ...     "G:Zilla Slab",
+        ...     "G:Abril Fatface",
+        ...     "G:Permanent Marker",
+        ...     "G:Macondo",
+        ...     "G:Cinzel",
+        ...     "G:Vollkorn",
+        ...     "G:Orbitron",
+        ...     "G:Marcellus",
+        ...     "G:Rubik Mono One",
+        ...     "G:Prata",
         ... ]:
         ...     from rp import *
-        ...     
+        ...
         ...     urls = [
         ...         "https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pages/images/emma.png?raw=true",
         ...         "https://www.petplan.co.uk/images/breed-info/bichon-frise/behaviour--personality_bichon-frise.png",
@@ -21815,10 +21940,10 @@ def labeled_image(image,
         ...     ]
         ...     labels = ["Ryan's Dog", "Bichon Dog", "Labordor Dog", "Hot Dog"]
         ...     images = load_images(urls,use_cache=True)
-        ...     
+        ...
         ...     # Resize the images evenly on both dimensions so their height is 512
         ...     images = resize_images_to_fit(images, height=256)
-        ...     
+        ...
         ...     # Adds labels to the top of the images
         ...     images = labeled_images(
         ...         images,
@@ -21830,7 +21955,7 @@ def labeled_image(image,
         ...         background_color="black",
         ...         font=font,
         ...     )
-        ...     
+        ...
         ...     # Concat them all horizontally
         ...     combined = horizontally_concatenated_images(images)
         ...     combined = labeled_image(
@@ -21840,7 +21965,7 @@ def labeled_image(image,
         ...         font=font,
         ...         size_by_lines=True,
         ...     )
-        ...     
+        ...
         ...     save_image(combined, "output.png")
         ...     display_image(combined)
         ...     input(font)
@@ -21850,6 +21975,8 @@ def labeled_image(image,
     #We use float colors now
     background_color = as_rgba_float_color(background_color)
     text_color       = as_rgba_float_color(text_color)
+
+    image=as_numpy_image(image)
 
     assert is_image(image)
     assert position in ['top','bottom','left','right']
@@ -21878,7 +22005,8 @@ def labeled_image(image,
             align=align,
             text_color=text_color,
             background_color=background_color,
-            flip_text=flip_text
+            flip_text=flip_text,
+            font=font,
         )
         image=rotate_image(image,-angle)
 
@@ -22214,6 +22342,10 @@ def pil_text_to_image(
         ...     #letters = crop_images_to_max_size(letters, origin="center")
         ...     display_image(horizontally_concatenated_images(letters, origin="center"))
     """
+    
+    if isinstance(font,str) and font.startswith("G:"):
+        font = download_google_font(font[len("G:"):])
+
     text = str(text)
     assert align in ["left", "right", "center"]
     assert font is None or isinstance(font, str)
@@ -22233,7 +22365,7 @@ def pil_text_to_image(
                     size=size,
                     font=font,
                 )
-                for char in text_line
+                for char in (text_line or [''])
             ]
         )
         for text_line in text_lines
@@ -22253,6 +22385,242 @@ def pil_text_to_image(
     
     return image
 
+def download_google_font(font_name, *, skip_existing=True):
+    """
+    Original code from: https://gist.github.com/ravgeetdhillon/0063aaee240c0cddb12738c232bd8a49
+    
+    EXAMPLE:
+        >>> #Go to https://fonts.google.com to explore more fonts!
+        ... vertically_concatenated_images(
+        ...     [
+        ...         pil_text_to_image(
+        ...             get_folder_name(get_parent_folder(font))
+        ...             + ": Hello World! My name is Clara",
+        ...             size=128,
+        ...             font=font,
+        ...             color=random_rgb_float_color(),
+        ...         )
+        ...         for font in download_google_fonts(
+        ...             "Quicksand",
+        ...             "Nanum Gothic",
+        ...             "Roboto",
+        ...             "SUSE",
+        ...             "Mingzat",
+        ...             "Protest Guerrilla",
+        ...             "Open Sans",
+        ...             "Playwrite CU",
+        ...             "Poppins",
+        ...             "Roboto Mono",
+        ...             "Handjet",
+        ...             "Nunito",
+        ...             "Ubuntu",
+        ...             "Roboto Slab",
+        ...             "Bebas Neue",
+        ...             "Pixelify Sans",
+        ...             "Tomorrow",
+        ...             "Abel",
+        ...             "Caveat",
+        ...             "Matemasie",
+        ...             "Zilla Slab",
+        ...             "Abril Fatface",
+        ...             "Permanent Marker",
+        ...             "Satisfy",
+        ...             "Macondo",
+        ...             "Cinzel",
+        ...             "Vollkorn",
+        ...             "Orbitron",
+        ...             "Marcellus",
+        ...             "Rubik Mono One",
+        ...             "Prata",
+        ...         )
+        ...     ]
+        ... )
+
+    EXAMPLE:
+        >>> #Generates an image with over 200 fonts in it for your viewing pleasure
+        >>> font_names = [
+        ...     "G:Abril Fatface", "G:Acme", "G:Adamina", "G:Akronim", "G:Alef", "G:Alegreya",
+        ...     "G:Alegreya Sans", "G:Aleo", "G:Alfa Slab One", "G:Amatic SC", "G:Amiri", "G:Angkor",
+        ...     "G:Anonymous Pro", "G:Antic Didone", "G:Anton", "G:Arima Madurai", "G:Arimo", "G:Armata",
+        ...     "G:Arvo", "G:Asap", "G:Aubrey", "G:Azeret Mono", "G:Baloo Bhai", "G:Bangers",
+        ...     "G:Barlow", "G:Barriecito", "G:Baumans", "G:Bebas Neue", "G:Berkshire Swash", "G:Bigelow Rules",
+        ...     "G:Bilbo Swash Caps", "G:Bitter", "G:Bree Serif", "G:Bungee", "G:Bungee Hairline", "G:Bungee Outline",
+        ...     "G:Butcherman", "G:Cabin", "G:Caesar Dressing", "G:Calligraffitti", "G:Cardo", "G:Catamaran",
+        ...     "G:Caveat", "G:Cedarville Cursive", "G:Chango", "G:Chela One", "G:Cherry Cream Soda", "G:Chicle",
+        ...     "G:Chivo", "G:Cinzel", "G:Codystar", "G:Comfortaa", "G:Corben", "G:Cormorant",
+        ...     "G:Courgette", "G:Courier Prime", "G:Coustard", "G:Covered By Your Grace", "G:Crafty Girls", "G:Creepster",
+        ...     "G:Damion", "G:Dancing Script", "G:Diplomata", "G:Dokdo", "G:Domine", "G:Dosis",
+        ...     "G:Encode Sans", "G:Euphoria Script", "G:Ewert", "G:Exo", "G:Fascinate", "G:Faster One",
+        ...     "G:Faustina", "G:Felipa", "G:Finger Paint", "G:Fira Sans", "G:Fredericka the Great", "G:Fredoka One",
+        ...     "G:Frijole", "G:Galindo", "G:Gelasio", "G:Gentium Book Basic", "G:Geo", "G:Give You Glory",
+        ...     "G:Gloria Hallelujah", "G:Great Vibes", "G:Gudea", "G:Hanalei", "G:Henny Penny", "G:Herr Von Muellerhoff",
+        ...     "G:Hind", "G:Homemade Apple", "G:IBM Plex Mono", "G:IM Fell French Canon", "G:Iceberg", "G:Iceland",
+        ...     "G:Inconsolata", "G:Indie Flower", "G:Inria Serif", "G:Irish Grover", "G:Istok Web", "G:Italiana",
+        ...     "G:Jaldi", "G:JetBrains Mono", "G:Jolly Lodger", "G:Josefin Sans", "G:Judson", "G:Just Me Again Down Here",
+        ...     "G:Kalam", "G:Karla", "G:Kaushan Script", "G:Kavoon", "G:Kirang Haerang", "G:Kristi",
+        ...     "G:La Belle Aurore", "G:Lacquer", "G:Lakki Reddy", "G:Lato", "G:League Script", "G:Libre Baskerville",
+        ...     "G:Lily Script One", "G:Limelight", "G:Linden Hill", "G:Lobster", "G:Londrina Shadow", "G:Lora",
+        ...     "G:Markazi Text", "G:Maven Pro", "G:Meddon", "G:Merriweather", "G:Metal Mania", "G:Miniver",
+        ...     "G:Mitr", "G:Monofett", "G:Monoton", "G:Montserrat", "G:Mrs Sheppards", "G:Muli",
+        ...     "G:Neuton", "G:Nobile", "G:Nosifer", "G:Noto Sans KR", "G:Noto Sans Mono", "G:Noto Serif",
+        ...     "G:Nunito", "G:Odibee Sans", "G:Old Standard TT", "G:Open Sans", "G:Oswald", "G:Overpass",
+        ...     "G:Oxygen", "G:PT Sans", "G:PT Serif", "G:Pacifico", "G:Passion One", "G:Pathway Gothic One",
+        ...     "G:Permanent Marker", "G:Pirata One", "G:Playfair Display", "G:Pontano Sans", "G:Poppins", "G:Princess Sofia",
+        ...     "G:Prociono", "G:Prompt", "G:Proza Libre", "G:Quantico", "G:Quattrocento Sans", "G:Quicksand",
+        ...     "G:Rakkas", "G:Raleway", "G:Ravi Prakash", "G:Righteous", "G:Roboto", "G:Roboto Condensed",
+        ...     "G:Roboto Mono", "G:Roboto Slab", "G:Rubik", "G:Ruda", "G:Ruge Boogie", "G:Ruslan Display",
+        ...     "G:Sacramento", "G:Sancreek", "G:Sarabun", "G:Satisfy", "G:Shadows Into Light", "G:Shojumaru",
+        ...     "G:Shrikhand", "G:Sigmar One", "G:Sintony", "G:Slabo 27px", "G:Snowburst One", "G:Sonsie One",
+        ...     "G:Source Code Pro", "G:Space Mono", "G:Spectral", "G:Spicy Rice", "G:Sriracha", "G:Stint Ultra Expanded",
+        ...     "G:Supermercado One", "G:Tajawal", "G:Trade Winds", "G:Trirong", "G:Ubuntu", "G:Ultra",
+        ...     "G:UnifrakturMaguntia", "G:Unlock", "G:Vampiro One", "G:Varela Round", "G:Vesper Libre", "G:Vibes",
+        ...     "G:Vollkorn", "G:Voltaire", "G:Wallpoet", "G:Warnes", "G:Wellfleet", "G:Work Sans",
+        ...     "G:Yellowtail", "G:Zilla Slab",
+        ... ]
+        ... ims = [
+        ...     *eta(
+        ...         IteratorWithLen(
+        ...             (
+        ...                 cv_resize_image(
+        ...                     pil_text_to_image(
+        ...                         f[2:],
+        ...                         font=f,
+        ...                         color=tuple(x * 2 for x in random_rgb_float_color()),
+        ...                         size=128,
+        ...                     ),
+        ...                     0.5,
+        ...                     alpha_weighted=True,
+        ...                 )
+        ...                 for f in font_names
+        ...             ),
+        ...             length=len(font_names),
+        ...         )
+        ...     )
+        ... ]
+        ... ims = crop_images_to_max_size(ims, origin="center")
+        ... collage = tiled_images(
+        ...     ims,
+        ...     border_thickness=0,
+        ...     length=6,
+        ... )
+        ... # collage = with_drop_shadow(collage, x=5, y=5, blur=20, opacity=0.5, color=(1, 1, 1, 1))
+        ... collage = blend_images(0, collage)
+        ... display_image(collage)
+        ... print(save_image(collage, "collage.png"))
+        ... open_file_with_default_application("collage.png")
+
+
+    """
+    import requests
+    import os
+    
+    def get_urls(content):
+        '''
+        Parses the css file and retrieves the font urls.
+        Parameters: 
+        content (string): The data which needs to be parsed for the font urls.
+        Returns: 
+        A list of urls.
+        '''
+
+        urls = []
+        for i in range(len(content)):
+
+            # read the content until you encounter url string
+            # after you encounter the url string, scan the content until a closing parenthesis is encountered
+            # store the fetched url in the urls list
+            if content[i: i+3] == 'url':
+                j = i + 4
+                url = ''
+                while content[j] != ')':
+                    url += content[j]
+                    j += 1
+                urls.append(url)
+
+        return urls
+
+
+    def fetch_data(urls):
+        '''
+        Downloads the font files from the `urls` list.
+        Parameters: 
+        urls (list): List of urls from which the font files have to be downloaded.
+        Returns: 
+        None
+        '''
+        paths=[]
+
+        for index, url in enumerate(urls):
+
+            # get the font's name from it url
+            font_name = url.split('/')[-1]
+
+            # download the font data from its url
+            response = requests.get(url)
+
+            # save the downloaded data to the font file
+            path = fonts_folder+'/'+font_name
+            with open(path, 'wb') as f:
+                f.write(response.content)
+                paths.append(path)
+
+            print('Downloaded {}, {} of {} fonts.'.format(font_name, index + 1, len(urls)))
+
+        return paths
+
+    def main(method, src):
+        '''
+        Main Function for the app.
+        Parameters: 
+        method (string): Add link if the `src` is a HTTP/HTTPS link.
+                         Add file if the `src` is a local CSS file.
+        src (string):    Add the path of the link or the file, depending on the `method` parameter.
+        Returns: 
+        None
+        '''
+
+        if method == 'file':
+            with open(src) as f:
+                content = f.read()
+
+        elif method == 'link':
+            content = str(requests.get(src).content)
+
+        # extract the urls from the content
+        urls = get_urls(content)
+        print('Fetched {} urls.'.format(len(urls)))
+
+        # download the font files
+        paths = fetch_data(urls)
+
+        return paths
+
+    fonts_folder = path_join(rp.r._rp_downloads_folder, "google_fonts",font_name)
+
+    if folder_exists(fonts_folder):
+        paths = get_all_files(fonts_folder)
+    else:
+        make_directory(fonts_folder)
+
+        template = 'https://fonts.googleapis.com/css?family=%s&display=swap'
+        url = template % font_name
+        paths = main('link', url)
+
+        # if not len(paths):
+        #     #Don't fool the cache into thinking we downloaded anything
+        #     #On second thought, this will make repeated mistakes quick to rectify...
+        #     delete_folder(fonts_folder)
+
+    assert len(paths)>=1, "Failed to retrieve a google font with the name "+repr(font_name)+" Please check \n\thttps://fonts.google.com/specimen/"+font_name+"\nand see if it's a real google font"
+    assert len(paths)==1, "Right now we assume only one font is downloaded - but there are multiple: "+"\n\t".join(paths)+"\nPlease modify this func by giving it an argument to disambiguate which font to return - or find another solution!"
+
+    path = paths[0]
+    return path
+
+def download_google_fonts(*font_names,skip_existing=True):
+    """ See download_google_font's docstring. This is it's plural form. """
+    font_names=detuple(font_names)
+    return [download_google_font(font_name,skip_existing=skip_existing) for font_name in font_names]
 
 def _get_file_path(path_or_url):
     """If given a url, get a file path that can be used for things"""
@@ -23595,7 +23963,10 @@ def _binary_floyd_steinburg_dithering(image):
 
 #region Image Channel Conversions
 def is_image(image):
-    #An image must be either grayscale, rgb, or rgba and have be either a bool, np.uint8, or floating point dtype
+    """
+    An image must be either grayscale (a numpy matrix), rgb (a HWC tensor), or rgba (a HWC tensor) and have be either a bool, np.uint8, or floating point (between 0 and 1) dtype
+    It can also be a PIL image
+    """
     try:
         image=as_numpy_array(image)
     except Exception:
@@ -23673,17 +24044,20 @@ def as_rgba_image(image,*,copy=True):
 def is_float_image(image):
     #A float image is made with floating-point real values between 0 and 1
     # https://stackoverflow.com/questions/37726830/how-to-determine-if-a-number-is-any-type-of-int-core-or-numpy-signed-or-not?noredirect=1&lq=1
+    if is_torch_tensor(image): return False
     image=np.asarray(image)
     return np.issubdtype(image.dtype,np.floating)
 
 def is_byte_image(image):
     #A byte image is made of unsigned bytes (aka np.uint8)
     #Return true if the datatype is an integer between 0 and 255
+    if is_torch_tensor(image): return False
     image=np.asarray(image)
     return image.dtype==np.uint8
 
 def is_binary_image(image):
     #A binary image is made of boolean values (AKA true or false)
+    if is_torch_tensor(image): return False
     image=np.asarray(image)
     return image.dtype==bool
 
@@ -26665,7 +27039,7 @@ def crop_image(image, height: int = None, width: int = None, origin=None, copy=F
         out = crop_image(out, height = height, width = width, origin = 'bottom right')
         return out
 
-    blank_pixel=np.zeros_like(image[0][0])
+    blank_pixel=np.zeros(image.shape[2:],dtype=image.dtype)
     out=blank_pixel
     out=np.expand_dims(out,0)
     out=np.repeat(out,width,0)
@@ -32099,6 +32473,9 @@ def torch_remap_image(image, x, y, *, relative=False, interp='bilinear', add_alp
         in_y, in_x = torch.meshgrid(torch.arange(in_height), torch.arange(in_width))
         x = x + rearrange(in_x, "h w -> 1 h w").to(image.device)
         y = y + rearrange(in_y, "h w -> 1 h w").to(image.device)
+    else:
+        x = rearrange(x, "h w -> 1 h w")
+        y = rearrange(y, "h w -> 1 h w")
 
     # Normalize coordinates to [-1, 1] range - which F.grid_sample requires
     x = (x / (in_width - 1)) * 2 - 1
@@ -32106,6 +32483,7 @@ def torch_remap_image(image, x, y, *, relative=False, interp='bilinear', add_alp
 
     # Stack x and y coordinates
     grid = torch.stack([x, y], dim=-1)
+    grid = grid.to(image.dtype)
 
     # Choose an interpolation method
     interp_methods = {
@@ -32125,6 +32503,139 @@ def torch_remap_image(image, x, y, *, relative=False, interp='bilinear', add_alp
     assert out.shape == (expected_c, out_height, out_width), "Expected output shape: ({}, {}, {}), but got: {}".format(expected_c, out_height, out_width, out.shape)
 
     return out
+
+def apply_uv_map(image, uv_map, *, uv_form="xy", interp="bilinear", relative=False):
+    """
+    Applies a UV map to an image to remap it
+    Unlike cv_remap_image or torch_remap_image, UV maps are on a scale from 0 to 1 (not absolute pixel values)
+    Can handle both images defined by rp.is_image and torch_images
+    Defaults to the datatype of image (since this is what we would normally backprop through if it is torch)
+    
+    EXAMPLE:
+        >>> image = load_image(
+        ...     "https://www.servicedogtrainingschool.org/storage/app/uploads/public/62f/bad/31c/62fbad31c7a74968893226.png",
+        ...     use_cache=True,
+        ... )
+        ... image = cv_resize_image(image, 0.5)
+        ... uv_map = load_image(
+        ...     "https://github.com/RyannDaGreat/Images/blob/master/test_images/parker_puzzle_uv_map.png?raw=true",
+        ...     use_cache=True,
+        ... )
+        ...
+        ... #Uncomment any combination of these two lines to test them as torch images or a mix
+        ... #image =as_torch_image(image)
+        ... #uv_map=as_torch_image(as_float_image(uv_map))
+        ...
+        ... display_image(
+        ...     with_alpha_checkerboard(
+        ...         with_drop_shadow(
+        ...             tiled_images(
+        ...                 labeled_images(
+        ...                     [
+        ...                         image,
+        ...                         uv_map,
+        ...                         apply_uv_map(image, uv_map),
+        ...                     ],
+        ...                     ["image", "uv_map", "apply_uv_map(image,uv_map)"],
+        ...                     font="G:Quicksand",
+        ...                     size=30,
+        ...                 ),
+        ...                 border_thickness=50,
+        ...                 border_color=(1, 1, 1, 0),
+        ...                 length=3,
+        ...             ),
+        ...             x=10,
+        ...             y=10,
+        ...             blur=100,
+        ...         ),
+        ...         tile_size=32,
+        ...         first_color=1,
+        ...         second_color=0.9,
+        ...     )
+        ... )
+
+    """
+    
+    #In case we want U to represent first axis (which is y) instead of x
+    assert uv_form in ['xy', 'yx'], 'rp.apply_uv_map: uv_form should be either "xy" or "yx", but is '+repr(uv_form)
+    xi = uv_form.find('x')
+    yi = uv_form.find('y')
+    
+    if is_image(uv_map):
+        assert not is_grayscale_image(image),'A grayscale UV map is pretty dang useless. You sure you didnt make a mistake?'
+        assert not is_binary_image(image),'A binary UV map is pretty dang useless. You sure you didnt make a mistake?'
+        uv_map=as_float_image(uv_map)
+        x=uv_map[:,:,xi]
+        y=uv_map[:,:,yi]
+    elif is_torch_tensor(uv_map):
+        assert uv_map.ndim==3, 'rp.apply_uv_map: uv_map, if torch tensor, should be in CHW form if a torch tensor. Given '+str(uv_map.shape)
+        x=uv_map[xi]
+        y=uv_map[yi]
+    else:
+        assert False, 'rp.apply_uv_map: Invalid uv_map of type '+str(type(uv_map))+' ; check that it is an image as defined by rp.is_image or is a torch tensor'
+
+    image_height, image_width = get_image_dimensions(image)
+    x=x*image_width
+    y=y*image_height
+
+    if is_image(image):
+        assert not is_grayscale_image(image),'A grayscale UV map is pretty dang useless. You sure you didnt make a mistake?'
+        assert not is_binary_image(image),'A binary UV map is pretty dang useless. You sure you didnt make a mistake?'
+        x=as_numpy_array(x)
+        y=as_numpy_array(y)
+        output = cv_remap_image(image, x, y, interp=interp, relative=relative)
+    elif is_torch_tensor(image):
+        assert image.ndim==3, 'rp.apply_uv_map: image, if torch tensor, should be in CHW form if a torch tensor. Given '+str(uv_map.shape)
+        import torch
+        x=torch.tensor(x).to(image.device)
+        y=torch.tensor(y).to(image.device)
+        output = torch_remap_image(image, x, y, interp=interp, relative=relative)
+    else:
+        assert False, 'rp.apply_uv_map: Invalid image of type '+str(type(image))+' ; check that it is an image as defined by rp.is_image or is a torch tensor'
+        
+    return output
+
+def get_identity_uv_map(height=256,width=256,uv_form='xy'):
+    """
+    Returns an RGB UV-Map image with the form uv_form
+    
+    EXAMPLE:
+        >>> display_image(
+        ...     with_alpha_checkerboard(
+        ...         with_drop_shadow(
+        ...             tiled_images(
+        ...                 labeled_images(
+        ...                     [get_identity_uv_map(uv_form=f) for f in "xy yx".split()],
+        ...                     ["uv_form=xy", "uv_form=yx"],
+        ...                     font="G:Quicksand",
+        ...                     size=30,
+        ...                 ),
+        ...                 border_thickness=50,
+        ...                 border_color=(1, 1, 1, 0),
+        ...             ),
+        ...             x=10,
+        ...             y=10,
+        ...             blur=100,
+        ...         ),
+        ...         tile_size=32,
+        ...         first_color=1,
+        ...         second_color=.9,
+        ...     )
+        ... )
+    """
+
+    assert uv_form in ['xy', 'yx'], 'rp.get_identity_uv_map: uv_form should be either "xy" or "yx", but is '+repr(uv_form)
+    xi = uv_form.find('x')
+    yi = uv_form.find('y')
+
+    output=np.zeros((height,width,3))
+    x,y=xy_float_images(height,width)
+
+    output[:,:,xi]=x
+    output[:,:,yi]=y
+
+    return output
+
 
 def get_bilinear_weights(x, y):
     """
@@ -34463,7 +34974,7 @@ def cv_remap_image(image, x, y, *, relative=False, interp = 'bilinear'):
     assert rp.get_image_dimensions(x) == rp.get_image_dimensions(y) 
 
     #Can handle float and byte RGBA RGB and grayscale, but not binary images
-    if is_binary_image(image): image = as_rgb_image(image)
+    if is_binary_image(image): image = as_byte_image(image)
     
     out_height, out_width = rp.get_image_dimensions(x    )
     in_height , in_width  = rp.get_image_dimensions(image)
@@ -34473,8 +34984,8 @@ def cv_remap_image(image, x, y, *, relative=False, interp = 'bilinear'):
 
     if relative:
         #Treat x and y as deltas - like with optical flow
-        assert in_height == out_height
-        assert in_width  == out_width 
+        assert in_height == out_height, 'rp.cv_remap_image: If using relative=True, the UV map must be the same shape as the input image'
+        assert in_width  == out_width , 'rp.cv_remap_image: If using relative=True, the UV map must be the same shape as the input image'
         in_x, in_y = np.meshgrid(np.arange(in_width), np.arange(in_height))
         x += in_x
         y += in_y
