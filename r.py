@@ -26,6 +26,7 @@ import glob,sys
 import random
 import warnings
 import pickle
+import tempfile
 import contextlib
 
 
@@ -2689,7 +2690,7 @@ _is_numpy_array = is_numpy_array #Backwards compatibility with code that expecte
 def is_torch_tensor(x):
     return _is_instance_of_module_class(x, 'torch', 'Tensor')
 
-def _is_torch_image(image):
+def is_torch_image(image):
     "Returns True if image could be a CHW torch image"
     return is_torch_tensor(image) and image.ndim==3
 
@@ -3919,6 +3920,22 @@ def encode_image_to_bytes(image,filetype=None,quality=100):
     return byte_data
 
 
+def encode_images_to_bytes(images, filetype=None, quality=100):
+    object = [encode_image_to_bytes(x, filetype=filetype, quality=quality) for x in images]
+    return object_to_bytes(object)
+
+def decode_images_from_bytes(encoded_images):
+    if isinstance(encoded_images, bytes):
+        encoded_images = bytes_to_object(encoded_images)
+
+    images = [decode_image_from_bytes(x) for x in encoded_images]
+
+    if len(set(x.shape for x in images))==1:
+        #If possible turn it into a numpy array
+        images = as_numpy_array(images)
+
+    return images
+      
 
 def encode_image_to_base64(image,filetype=None,quality=100):
     """
@@ -7120,9 +7137,10 @@ def gather_args_wrapper(func, *, frames_back=1):
         callable: The wrapped function that, when invoked, calls the original function with the gathered arguments.
 
     TODO: Make this play nice with rp.memoized, right now they don't like each other
+    TODO: Make gather_args_call implemented with gather_args_wrap, not the other way around - that way we can still use the frames_back argument in gather_args_wrap
 
-        >>> @gather_args_wrapper
     Example:
+        >>> @gather_args_wrapper
         ... def example_func(a, b, c):
         ...     print(f"a={a}, b={b}, c={c}")
         ...
@@ -7516,6 +7534,36 @@ def squelch_call(func, *args, exception_types=(Exception,), on_exception=identit
         return func(*args, **kwargs)
     except exception_types as exception:
         return on_exception(exception)
+
+def squelch_wrap(func, exception_types=(Exception,), on_exception=identity):
+    """ 
+    Wraps a function using squelch_call (can be a decorator)
+    squelch_wrap is to squelch_call as gather_args_wrap is to gather_args_call
+    TODO: Make squelch_call implemented with squelch_wrap, not the other way around - that way we can still use the on_exception and exception_types arguments in squelch_wrap
+
+    EXAMPLE:
+        >>> def f():
+        ...     1/0
+        >>> f()
+        ERROR: ZeroDivisionError: division by zero
+        >>> print(repr(squelch_call(f)))
+        ZeroDivisionError('division by zero')
+        >>> g=squelch_wrap(f)
+        >>> print(repr(g()))
+        ZeroDivisionError('division by zero')
+    """
+    import functools
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return squelch_call(
+            func,
+            *args,
+            exception_types=exception_types,
+            on_exception=on_exception,
+            **kwargs,
+        )
+    return wrapper
+    
 
 def rebind_globals_to_module(module, *, monkey_patch=False):
     """
@@ -23016,7 +23064,15 @@ def get_all_files(*args,**kwargs):
 def get_all_image_files(*args,**kwargs):
     """ Like get_all_files, but only returns image files. This function is just sugar.  """
     #TODO: Once get_all_paths supports lazyness, so should this.
-    file_paths=get_all_paths(*args,**{'include_folders':False,'include_files':True,**kwargs})
+    file_paths = get_all_paths(
+        *args,
+        **{
+            "include_folders": False,
+            "include_files": True,
+            "sort_by" : "number",
+            **kwargs,
+        }
+    )
     return list(filter(is_image_file,file_paths))
 
 def get_all_folders(*args,**kwargs):
@@ -24384,7 +24440,7 @@ def get_color_brightness(color):
 
 def get_image_dimensions(image):
     """ Return (height,width) of an image """
-    assert is_image(image) or _is_torch_image(image)
+    assert is_image(image) or is_torch_image(image)
     return get_image_height(image),get_image_width(image)
 
 #def get_images_dimensions(*images):
@@ -24408,7 +24464,7 @@ def get_image_height(image):
     """
     Return the image's height measured in pixels
     """
-    if _is_torch_image(image): return image.shape[1] #Assumes a CHW image
+    if is_torch_image(image): return image.shape[1] #Assumes a CHW image
     assert is_image(image)
     if is_pil_image(image):return image.height
     return image.shape[0]
@@ -24417,7 +24473,7 @@ def get_image_width(image):
     """
     Return the image's width measured in pixels
     """
-    if _is_torch_image(image): return image.shape[2] #Assumes a CHW image
+    if is_torch_image(image): return image.shape[2] #Assumes a CHW image
     assert is_image(image)
     if is_pil_image(image):return image.width
     return image.shape[1]
@@ -25361,6 +25417,19 @@ def download_youtube_video(url_or_id: str,
         >>> get_video_file_shape(ans)
         ans = (5234, 1080, 1920, 3)          #Now at 1080P!
         >>> download_youtube_video("jvipPYFebWc", need_audio=False, need_video=True, show_progress=False) #Same thing as the above
+
+    Example:
+        >>> #Get the highest quality video along with the highest quality audio
+        ... #It appears to me that the highest quality YouTube MP4 files are either one or the other,
+        ... #The only video files with audio directly downloadable were 360p and not MP4 files
+        ... #So, if we download them separately and combine them we get the highest quality possible
+        ... #Note: QuickTime might not be able to play it - but other players like IINA or VLC can
+        ... url = "https://www.youtube.com/watch?v=kxGrd7mlB5M"
+        ... audio_file = download_youtube_video(url, need_audio=True, need_video=False)
+        ... video_file = download_youtube_video(url, need_audio=False, need_video=True)
+        ... output_file = add_audio_to_video_file(video_file, audio_file)
+        ... print('Please play',output_file)
+
     """
 
     #Common logic invariant to external libraries:
@@ -25399,7 +25468,7 @@ def download_youtube_video(url_or_id: str,
     else:
         ys = yt.streams.filter(mime_type='audio/mp4').get_audio_only()
 
-    assert ys is not None, 'Could not find an MP4 youtube video that satisfied the given contsraints (url=%s, need_audio=%s, need_video=%s, max_resolution=%s, min_resolution=%s)'%(repr(url),need_audio, need_video, max_resolution, min_resolution)
+    assert ys is not None, 'Could not find an MP4 youtube video that satisfied the given contsraints (url=%s, need_audio=%s, need_video=%s, max_resolution=%s, min_resolution=%s). Try relaxing a contstraint, such as not requiring audio or not requiring video etc.'%(repr(url),need_audio, need_video, max_resolution, min_resolution)
     out_path = ys.download(output_path=get_parent_directory(path),filename=get_file_name(path))
         
     #Common logic invariant to external libraries:
@@ -25414,8 +25483,8 @@ def _get_youtube_video_data_via_embeddify(url):
     #EXAMPLE:
     #     >>> _get_youtube_video_data_via_embeddify('https://www.youtube.com/watch?v=2wii8hfNkzE')
     #    ans = {'title': 'Day9] Daily #596   Rigged Games Funday Monday P1', 'width': 560, 'version': '1.0', 'type': 'video', 'height': 315, 'provider_url': 'https://www.youtube.com/', 'author_name': 'Day9TV', 'thumbnail_url': 'https://i.ytimg.com/vi/2wii8hfNkzE/hqdefault.jpg', 'author_url': 'https://www.youtube.com/user/day9tv', 'provider_name': 'YouTube', 'thumbnail_width': 480, 'thumbnail_height': 360, 'html': '<iframe width="560" height="315" src="https://www.youtube.com/embed/2wii8hfNkzE?feature=oembed" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'}
-    assert isinstance(url,str)
-    assert is_valid_url(url)
+    assert isinstance(url,str), 'Need url string, but got type '+str(type(url))
+    assert is_valid_url(url), 'Not a valid url: '+repr(url)
     pip_import('embeddify')
     from embeddify import Embedder
     embedder = Embedder()
@@ -28789,7 +28858,6 @@ def get_cache_file_path(url, *, cache_dir=None, file_extension=None, hash_func=N
 
     #Get and verify the cache_dir
     if cache_dir is None:
-        import tempfile
         cache_dir=tempfile.gettempdir()
     assert isinstance(cache_dir, str), type(cache_dir)
 
@@ -30454,7 +30522,7 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
     Each window itself is either a single command (a string) or a list of panes (str commands or lists of str commands).
     The session_name can be specified, but if it isn't it will automatically choose an unchosen session name (so it can be started without  conflicts).
     command_before can either be a string or a list of strings, and will be run in each created pane before the above specified per-pane commands
-    Make use of the outputs with rp.tmuxp_load_session_from_yaml ! (or the "tmuxp load <file.yaml>" command after saving the output to a file)
+    Make use of the outputs with rp.tmuxp_launch_session_from_yaml ! (or the "tmuxp load <file.yaml>" command after saving the output to a file)
 
 
     EXAMPLE:
@@ -30508,16 +30576,96 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
               shell_command_before: cd ~
               panes:
               - echo 6
+
+        >>> tmuxp_create_session_yaml(
+        ...         [
+        ...             [
+        ...                 [
+        ...                     "echo 1",
+        ...                     "echo 2",
+        ...                     "echo 3\necho w",
+        ...                 ],
+        ...                 "echo 4\necho x",
+        ...                 "echo 5",
+        ...             ],
+        ...             "echo 6\necho y",
+        ...         ],
+        ...         command_before="cd ~\necho z",
+        ...     )
+        ... )
+        ... #It handles multiline strings as follows:
+
+            session_name: '0'
+            windows:
+            - window_name: '0'
+              shell_command_before:
+              - cd ~
+              - echo z
+              layout: tiled
+              panes:
+              - shell_command:
+                - echo 1
+                - echo 2
+                - echo 3
+                - echo w
+              - shell_command:
+                - echo 4
+                - echo x
+              - shell_command:
+                - echo 5
+            - window_name: '1'
+              shell_command_before:
+              - cd ~
+              - echo z
+              layout: tiled
+              panes:
+              - shell_command:
+                - echo 6
+              - shell_command:
+                - echo y
               
         >>> ans=tmuxp_create_session_yaml([[['say Hello','say World']]])
-        ... tmuxp_load_session_from_yaml(ans,attach=False)
+        ... tmuxp_launch_session_from_yaml(ans,attach=False)
 
         >>> #Try this example from when you're *NOT* in a tmux session. It will attach you to it.
         >>> session_name=tmux_get_unique_session_name()
         ... ans=tmuxp_create_session_yaml([[['say Hello','say World']]],session_name=session_name)
-        ... tmuxp_load_session_from_yaml(ans,attach=True)
+        ... tmuxp_launch_session_from_yaml(ans,attach=True)
         ... #Process will be blocked until session is dead.
         ... tmux_kill_session(session_name)
+
+        >>> #A demo of how nesting lists works
+        >>> commands = ['echo a','echo b','echo c']
+        >>> print(tmuxp_create_session_yaml(commands))
+            session_name: '0'
+            windows:
+            - window_name: '0'
+              panes:
+              - echo a
+            - window_name: '1'
+              panes:
+              - echo b
+            - window_name: '2'
+              panes:
+              - echo c
+        >>> print(tmuxp_create_session_yaml([commands]))
+            session_name: '0'
+            windows:
+            - window_name: '0'
+              layout: tiled
+              panes:
+                - echo a
+                - echo b
+                - echo c
+        >>> print(tmuxp_create_session_yaml([[commands]]))
+            session_name: '0'
+            windows:
+            - window_name: '0'
+              panes:
+              - shell_command:
+                - echo a
+                - echo b
+                - echo c
 
     """
     import yaml
@@ -30549,6 +30697,12 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
             command = command.splitlines()
         elif len(command) == 1:
             command = command[0]
+        
+        #Expand any more multiline strings
+        if not isinstance(command, str):
+            assert is_iterable(command)
+            command = list_flatten(map(str.splitlines, command))
+
         return command
 
     for window_name, pane_commands in windows.items():
@@ -30567,7 +30721,9 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
         assert isinstance(pane_commands, list)
 
         for command in pane_commands:
-            command_before = process_command(command)
+            command = process_command(command)
+            if not isinstance(command, str) and len(command)==1:
+                command = command[0]
             if command:
                 panes.append(command if isinstance(command, str) else {"shell_command": command})
 
@@ -30580,9 +30736,9 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
 
         config["windows"].append(window)
 
-    return yaml.dump(config, default_flow_style=False, sort_keys=False)
+    return yaml.dump(config, default_flow_style=False, sort_keys=False, width=9999999)
 
-def tmuxp_load_session_from_yaml(session_yaml,*,attach=False):
+def tmuxp_launch_session_from_yaml(session_yaml,*,attach=False):
     """
     Input can be a yaml string or yaml file path
     Uses the "tmuxp load <yaml file>" command to spin up a tmux session
@@ -30592,7 +30748,7 @@ def tmuxp_load_session_from_yaml(session_yaml,*,attach=False):
     If it is True, we try to attach to it immediately. This will block the current process.
 
     EXAMPLE:
-        >>> tmuxp_load_session_from_yaml(
+        >>> tmuxp_launch_session_from_yaml(
         ...     tmuxp_create_session_yaml(
         ...         [[func_call_to_shell_command(list, map(print, range(i))) for i in range(9)]]
         ...     ),
@@ -31860,23 +32016,28 @@ def big_ascii_text(text:str,*,font='standard'):
     big_text=art.text2art(text,font)
     return big_text
 
-def bytes_to_file(data:bytes,path:str=None):
-    assert isinstance(data,bytes)
+def bytes_to_file(data: bytes, path: str = None):
+    assert isinstance(data, bytes), 'Expected bytes, got ' + str(type(data))
+
     if path is None:
-        path=temporary_file_path()
+        path = temporary_file_path()
+
+    def helper():
+        with open(path, 'wb') as out:
+            out.write(data)
+        return path
+
     try:
-        out=open(path,'wb')
-        out.write(data)
-    finally:
-        out.close()
-    return path
-    
-def file_to_bytes(path:str):
-    try:
-        out=open(path,'rb')
-        data=out.read()
-    finally:
-        out.close()
+        return helper()
+    except FileNotFoundError:
+        #Faster than checking for folder exists every time
+        make_directory(get_parent_directory(path))
+        return helper()
+
+
+def file_to_bytes(path: str):
+    with open(path, 'rb') as out:
+        data = out.read()
     return data
 
 def file_to_object(path:str):
@@ -32187,7 +32348,7 @@ def _prepare_cv_image(image):
 
     return image
     
-def cv_resize_image(image, size, interp="auto", *, alpha_weighted=False):
+def cv_resize_image(image, size, interp="auto", *, alpha_weighted=False, copy=True):
     """
     This function is similar to r.resize_image (which uses scipy), except this uses OpenCV and is much faster
     Valid sizes:
@@ -32198,6 +32359,8 @@ def cv_resize_image(image, size, interp="auto", *, alpha_weighted=False):
 
     TODO: Add an alpha-aware arg, like cv_alpha_weighted_gauss_blur. Propogate arg to all funcs that use this.
           How to do it with expansion aka bilinear interp?
+
+    If copy==False, and the size doesn't change the image, just returns the original image as is without copying it
 
     EXAMPLE: alpha_weighted:
         >>> # When downscaling this image, we see crusty edges unless alpha_weighted=True
@@ -32251,6 +32414,11 @@ def cv_resize_image(image, size, interp="auto", *, alpha_weighted=False):
     
     height=int(height)
     width =int(width)
+
+    #Take a shortcut - and if we don't need to copy it, just return the original tensor for speed's sake
+    if (height,width) == rp.get_image_dimensions(image):
+        if copy: return image.copy()
+        else   : return image
     
     if interp=='auto': return _auto_interp_for_resize_image(cv_resize_image, image, (height, width))
 
@@ -32266,7 +32434,7 @@ def cv_resize_images(*images, size, interp='auto', alpha_weighted=False):
 
 resize_images = cv_resize_images  # For now, they will be the same thing
     
-def torch_resize_image(image,size,interp='auto'):
+def torch_resize_image(image, size, interp="auto", *, copy=True):
     """
     The given image should be a CHW torch tensor.
 
@@ -32275,13 +32443,15 @@ def torch_resize_image(image,size,interp='auto'):
         - A tuple with integers in it: Will scale the image to those dimensions (height, width)
         - A tuple with None in it: A dimension with None will default to the image's dimension
 
+    If copy==False, and the size doesn't change the image, just returns the original image as is without copying it
+
     EXAMPLE:
         image = load_image('https://avatars.githubusercontent.com/u/17944835?v=4&size=64')
         image=as_torch_image(image)
         display_image(torch_resize_image(image,10,'area'))
     """
     
-    assert rp.r._is_torch_image(image)
+    assert rp.r.is_torch_image(image)
 
     pip_import('einops')
     pip_import('torch')
@@ -32312,6 +32482,11 @@ def torch_resize_image(image,size,interp='auto'):
     
     height=int(height)
     width =int(width )
+
+    #Take a shortcut - and if we don't need to copy it, just return the original tensor for speed's sake
+    if (height,width) == rp.get_image_dimensions(image):
+        if copy: return image.clone()
+        else   : return image
 
     if interp=='auto': return _auto_interp_for_resize_image(torch_resize_image, image, (height, width), 'clone')
     
@@ -32447,7 +32622,7 @@ def torch_remap_image(image, x, y, *, relative=False, interp='bilinear', add_alp
             >>> print((image-new_image).abs().max()) #Printed: tensor(8.3447e-06)
     """
 
-    assert rp.r._is_torch_image(image), "image must be a torch tensor with shape [C, H, W]"
+    assert rp.r.is_torch_image(image), "image must be a torch tensor with shape [C, H, W]"
     assert is_torch_tensor(x) and is_a_matrix(x), "x must be a torch tensor with shape [H_out, W_out]"
     assert is_torch_tensor(y) and is_a_matrix(y), "y must be a torch tensor with shape [H_out, W_out]"
     assert x.shape == y.shape, "x and y must have the same shape, but got x.shape={} and y.shape={}".format(x.shape, y.shape)
@@ -32766,7 +32941,7 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
         ... demo_torch_scatter_add_image('bilinear',normalize=True)
     """
 
-    assert rp.r._is_torch_image(image), "image must be a torch tensor with shape [C, H, W]"
+    assert rp.r.is_torch_image(image), "image must be a torch tensor with shape [C, H, W]"
     assert is_torch_tensor(x) and is_a_matrix(x), "x must be a torch tensor with shape [H_out, W_out]"
     assert is_torch_tensor(y) and is_a_matrix(y), "y must be a torch tensor with shape [H_out, W_out]"
     assert x.shape == y.shape, "x and y must have the same shape, but got x.shape={} and y.shape={}".format(x.shape, y.shape)
@@ -35729,9 +35904,11 @@ class ImageDataset:
             image=self.transform(image)
         return image
 
+def _get_select_torch_device_lock_file():
+    return path_join(tempfile.gettempdir(), 'select_torch_device_lock.txt')
 
 _select_torch_device_used_gpus = set()        
-def select_torch_device(n=0, *, silent=False, prefer_used=False):
+def select_torch_device(n=0, *, silent=False, prefer_used=False, reserve=False):
     """
     Returns the appropriate PyTorch device based on the available hardware and system configuration.
     
@@ -35750,6 +35927,8 @@ def select_torch_device(n=0, *, silent=False, prefer_used=False):
         silent (bool, optional): If True, suppresses print statements. Defaults to False.
         prefer_used (bool, optional): If True, selects a GPU already in use by the current
             process if available. Defaults to False.
+        reserve (bool, optional): If True, will reserve the GPU for future usage - by allocating a small amount of VRAM
+            It requires the filelock library, which will be used to prevent other processes from claiming the same GPU at the same time
 
     Returns:
         torch.device: The selected PyTorch device ('cpu', 'mps', or 'cuda:<gpu_id>').
@@ -35769,6 +35948,30 @@ def select_torch_device(n=0, *, silent=False, prefer_used=False):
           selects an available GPU based on the index n.
         - If prefer_used is set and there are GPUs currently in use by the process, the function
           will select from those GPUs.
+
+    Example (reserve):
+        Put this in torch_device_selector.py:
+            from rp import *
+            import torch
+            sleep(random_float(0))
+            device=select_torch_device(reserve=True)
+            torch.zeros(1).to(device)
+            sleep(10)
+            print("SELECTED",device)
+
+        Then run this shell command (adjust the number of lines to your number of GPU's):
+            python torch_device_selector_test.py &
+            python torch_device_selector_test.py &
+            python torch_device_selector_test.py &
+            python torch_device_selector_test.py &
+            python torch_device_selector_test.py &
+            python torch_device_selector_test.py &
+            python torch_device_selector_test.py &
+            python torch_device_selector_test.py
+
+        Because of reserve's use of the 'filelock' library, they won't clobber each other
+        Each GPU will be reserved once, by a different process
+
     """
 
     import torch
@@ -35799,6 +36002,28 @@ def select_torch_device(n=0, *, silent=False, prefer_used=False):
     if not torch.cuda.is_available():
         fansi_print("Selecting CPU because torch.cuda is not available - either you don't have cuda, or torch wasn't compiled to support it.",style='bold')
         return torch.device('cpu')
+
+    if reserve:
+        pip_import('filelock') #https://py-filelock.readthedocs.io/en/latest/
+        from filelock import FileLock
+        import torch #Assume we have this installed already - pip_import shouldn't handle this
+
+        #Keep the GPU lock file local to the current running machine - don't lock GPU selection over different conda instances or comptuers over NFS
+        gpu_lock_file = _get_select_torch_device_lock_file()
+
+        lock = FileLock(gpu_lock_file)
+        with lock:
+            selected_device = select_torch_device(
+                n=n,
+                silent=silent,
+                prefer_used=prefer_used,
+                reserve=False,
+            )
+
+            #Reserve it. Even after this function exits, this process will still be listed as using VRAM.
+            torch.zeros(1).to(selected_device)
+
+            return selected_device
 
     all_gpus = get_all_gpu_ids()
     used_gpus = list(set(get_gpu_ids_used_by_process()) | _select_torch_device_used_gpus)
@@ -36730,6 +36955,7 @@ def get_gpu_count():
     from py3nvml.py3nvml import nvmlDeviceGetCount
 
     return nvmlDeviceGetCount()
+get_num_gpus = get_gpu_count
 
 
 def get_all_gpu_ids():

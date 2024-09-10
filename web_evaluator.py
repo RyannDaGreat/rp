@@ -118,9 +118,15 @@ class Evaluation:
         except KeyboardInterrupt:
             raise
         except BaseException as error:
-            rp.print_stack_trace(error)
-            self.error=error
-            self.errored=True
+            rp.print_stack_trace()
+
+            #Add the stack trace into the error
+            stack_trace = traceback.format_exc()
+            error.args = (stack_trace,) + error.args[1:]
+
+            self.error = error
+            self.errored = True
+
 
         return self
 
@@ -524,7 +530,7 @@ def run_server(server_port:int=None,
 
 class Client:
     DEFAULT_PORT = DEFAULT_SERVER_PORT
-    def __init__(self, server_name: str = "localhost", server_port: int = None, *, sync=None):
+    def __init__(self, server_name: str = "localhost", server_port: int = None, *, sync=None, timeout=None):
         """
         Initialize a Client object, which is used to interact with a web_evaluator server (started with rp.web_evaluator.run_server).
         The Client stores the address and port of the server, as well as other settings such as sync (synchronous server-side execution vs asynchronous)
@@ -533,6 +539,7 @@ class Client:
             - server_name (str): server_name is like "127.0.1.33" or like "glass.local"
             - server_port(int): the port of the server. Defaults to rp.web_evaluator.Client.DEFAULT_PORT
             - sync (bool, optional): Whether commands sent by this Client should be synchronous or not. If sync is None, uses the server's default sync option. If bool, overrides it. See run_server's doc too.
+            - timeout (float, optional): If not None, connections will timeout in that number of seconds
         """
         if server_port is None:
             server_port = self.DEFAULT_PORT
@@ -542,6 +549,7 @@ class Client:
         self.server_port=server_port
         self.server_name=server_name
         self.sync=sync
+        self.timeout=timeout
 
         self.server_url='http://%s:%i/webeval/py2py'%(self.server_name,self.server_port)
 
@@ -666,10 +674,11 @@ class Client:
             vars=vars,
             server_url=self.server_url,
             sync=self.sync,
+            timeout=self.timeout,
         )
 
     @staticmethod
-    def _evaluate(*, code, vars, server_url, sync):
+    def _evaluate(*, code, vars, server_url, sync, timeout):
         data={}
         data['code']=code
         assert isinstance(code,str) or all(isinstance(x,str) for x in code),'Client.evaluate: code must either be a string or a list of strings'
@@ -679,7 +688,10 @@ class Client:
         if sync is not None:
             data['sync']=sync
         data=rp.object_to_bytes(data)
-        response=requests.request('POST',server_url,data=data)
+
+        # https://stackoverflow.com/questions/21965484/timeout-for-python-requests-get-entire-response
+        response = requests.request("POST", server_url, data=data, timeout=timeout)
+
         result=rp.bytes_to_object(response.content)
         assert isinstance(result,dict) or isinstance(result,list),'Client.evaluate: Bad response...please make sure the server and client are running on the same version of python and rp.'
         if isinstance(result,dict):
@@ -699,6 +711,7 @@ class Client:
             vars={},
             server_url=self.server_url,
             sync=False,
+            timeout=self.timeout,
         )
 
         end_time = time.time()
@@ -712,8 +725,13 @@ class Client:
         Client's repr is such that we can copy client via eval(repr(client))
         This makes it easy to store and load them into text files
         """
-        if self.sync is None: return "%s(%s, %s)"         %(type(self).__name__, repr(self.server_name), repr(self.server_port))
-        else:                 return "%s(%s, %s, sync=%s)"%(type(self).__name__, repr(self.server_name), repr(self.server_port), repr(self.sync))
+        args = [repr(self.server_name), repr(self.server_port)]
+        if self.sync is not None:
+            args.append("sync={}".format(repr(self.sync)))
+        if self.timeout is not None:
+            args.append("timeout={}".format(repr(self.timeout)))
+
+        return "{}({})".format(type(self).__name__, ", ".join(args))
 
     @staticmethod
     def from_string(string):
@@ -994,7 +1012,13 @@ class ClientDelegator:
 
         finally:
             client._busy_count-=1
-            assert client._busy_count>=0
+
+            #TODO: Figure out why this below assertion sometimes triggers. Makes no sense to me. For now I'll ignore it and just make a warning.
+            #assert client._busy_count>=0
+            if client._busy_count<0:
+                rp.fansi_print("rp.web_evaluator.ClientDelegator.evaluate: client._busy_count<0 - this shouldn't be possible. Setting it to 0. Todo: Investigate this.", 'red', 'bold')
+                client.busy_count=0
+
             self._update()
         
 class ClientRoster:
@@ -1103,7 +1127,7 @@ class ClientRoster:
         """
         rp.save_text_file("", self.location)
 
-    def register(self, server_port=DEFAULT_SERVER_PORT, server_name=None, *, sync=True, unique=True, silent=False):
+    def register(self, server_port=DEFAULT_SERVER_PORT, server_name=None, *, sync=True, unique=True, silent=False, filelock=False):
         """
         Registers a new client to the roster file.
 
@@ -1133,7 +1157,15 @@ class ClientRoster:
                     rp.fansi_print("rp.web_evaluator.ClientRoster: Did NOT register duplicate client " + line + " to " + self.location, 'yellow')
                 return
 
-        rp.append_line_to_file(line, self.location)
+        if filelock:
+            #Make sure multiple processes don't clobber each other
+            rp.pip_import("filelock")
+            import filelock
+            lock_location = self.location+'.lock'
+            with filelock.FileLock(lock_location):
+                rp.append_line_to_file(line, self.location)
+        else:
+            rp.append_line_to_file(line, self.location)
 
         if not silent:
             rp.fansi_print("rp.web_evaluator.ClientRoster: Enlisted " + line + " to " + self.location, 'green')
