@@ -30450,6 +30450,8 @@ def tmux_get_all_session_names():
     server = libtmux.Server()
     return [session.name for session in server.list_sessions()]
 
+tmux_list_sessions = tmux_get_all_session_names
+
 def tmux_get_unique_session_name(name=""):
     """ Given a prefix, will return a new session name that doesn't exist already """
     existing_sessions=tmux_get_all_session_names()
@@ -30513,6 +30515,15 @@ def tmux_kill_session(session_name):
         print("rp.tmux_kill_session: Session %s killed successfully."%repr(session_name))
     else:
         raise ValueError("No session named '{}' found.".format(session_name))
+
+def tmux_kill_sessions(*session_names,strict=False):
+    """Plural of tmux_kill_session"""
+    session_names = detuple(session_names)
+    if strict:
+        for name in session_names:
+            assert tmux_session_exists(name), 'rp.tmux_kill_sessions: Is strict and session %s doesnt exist'%repr(name)
+    for session_name in session_names:
+        tmux_kill_session(session_name)
 
 def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None):
     """
