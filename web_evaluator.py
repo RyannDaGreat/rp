@@ -1143,13 +1143,14 @@ class ClientRoster:
 
         client_file = rp.path_join(self.location, line)
 
-        if not silent and rp.path_exists(client_file):
-            rp.fansi_print("rp.web_evaluator.ClientRoster: Did NOT register duplicate client " + line + " to " + self.location, 'yellow')
+        if rp.path_exists(client_file):
+            if not silent:
+                rp.fansi_print("rp.web_evaluator.ClientRoster: Did NOT register duplicate client " + line + " to " + self.location, 'yellow')
+        else:
+            rp.touch_file(client_file)
 
-        rp.touch_file(client_file)
-
-        if not silent:
-            rp.fansi_print("rp.web_evaluator.ClientRoster: Enlisted " + line + " to " + self.location, 'green')
+            if not silent:
+                rp.fansi_print("rp.web_evaluator.ClientRoster: Enlisted " + line + " to " + self.location, 'green')
 
     def __repr__(self):
         return "ClientRoster(%s)" % repr(self.location)
