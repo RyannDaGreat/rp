@@ -1820,7 +1820,7 @@ def with_corner_radius(image, radius, *, antialias=True, background=None):
             display_alpha_image(
                 with_drop_shadow(
                     crop_image(
-                        with_rounded_corners(image, radius),
+                        with_corner_radius(image, radius),
                         get_image_height(image) + 200,
                         get_image_width(image) + 200,
                         origin="center",
@@ -1855,6 +1855,62 @@ def with_corner_radius(image, radius, *, antialias=True, background=None):
 
     alpha = as_float_image(get_image_alpha(image),copy=False) * as_float_image(mask,copy=False)
     return with_image_alpha(image, alpha)
+
+def with_image_glow(image, *, blur=None, strength=None):
+    """
+    Adds a bloom effect to an image with a given blur and strength.
+    The default values are subject to change - they're purely aesthetic!
+
+    EXAMPLE:
+        >>> for i in range(1000):
+        ...     display_image(
+        ...         with_image_glow(
+        ...             resize_image_to_fit(pil_text_to_image(
+        ...                 "Hello World\n0123456789\n" + str(i),
+        ...                 font="https://github.com/ctrlcctrlv/lcd-font/raw/master/otf/LCD14.otf",
+        ...                 color=(.5,.9,.1),
+        ...                 size=256,
+        ...                 align='center',
+        ...             ),height=512sp),
+        ...             blur=50,
+        ...             strength=1.5,
+        ...         )
+        ...     )
+    
+    EXAMPLE:
+        >>> url = "https://www.shutterstock.com/shutterstock/videos/1077886106/preview/stock-footage-jun-hong-kong-china-asia-drone-hyperlapse-of-hong-kong-international-financial-centre.webm"
+        ... video = load_video(url)
+        ... frames = []
+        ... for frame in eta(video):
+        ...     frame = with_image_glow(frame)
+        ...     frames.append(frame)
+        ... display_video(
+        ...     vertically_concatenated_videos(
+        ...         labeled_videos([video, frames], ["Input Video", "with_image_glow"])
+        ...     )
+        ... )
+    """
+    if blur is None:
+        blur = 10
+    if strength is None:
+        strength = 1
+
+    image = as_float_image(image)
+    image = as_rgba_image(image)
+
+    blurred = cv_gauss_blur(image, blur, alpha_weighted=True)
+    glow = as_rgb_image(blurred) * as_rgb_image(get_image_alpha(blurred))
+
+    rgb = as_rgb_image(image) + glow * strength
+
+    return with_image_rgb(image, rgb)
+
+
+def with_image_glows(*images, blur=None, strength=None):
+    """Plural of with_image_glow"""
+    images=detuple(images)
+    return [with_image_glow(image,blur=blur,strength=strength) for image in images]
+
 
 
 def with_corner_radii(*images, radius, antialias=True):
@@ -9471,7 +9527,16 @@ def load_dyaml_file(path:str)->dict:
     code=text_file_to_string(path)
     return parse_dyaml(code)
 
+def touch_file(path):
+    """Equivalent to the 'touch' command - creates a file if it doesnt exist and if it does updates its date_modified"""
 
+    parent = get_parent_folder(path)
+    if not folder_exists(parent):
+        make_folder(parent)
+
+    from pathlib import Path
+    Path(path).touch()
+    return path
 
 # endregion
 # region MATLAB Integration: ［matlab_session，matlab，matlab_pseudo_terminal］
@@ -22391,8 +22456,11 @@ def pil_text_to_image(
         ...     display_image(horizontally_concatenated_images(letters, origin="center"))
     """
     
-    if isinstance(font,str) and font.startswith("G:"):
-        font = download_google_font(font[len("G:"):])
+    if isinstance(font,str):
+        if font.startswith("G:"):
+            font = download_google_font(font[len("G:"):])
+        elif is_valid_url(font):
+            font = download_font(font)
 
     text = str(text)
     assert align in ["left", "right", "center"]
@@ -22664,6 +22732,15 @@ def download_google_font(font_name, *, skip_existing=True):
 
     path = paths[0]
     return path
+
+@memoized
+def download_font(url):
+    """
+    https://github.com/ctrlcctrlv/lcd-font/raw/master/otf/LCD14.otf
+    """
+    _download_font_dir=path_join(_rp_folder,"downloads/fonts")
+    make_directory(_download_font_dir)
+    return download_url(url, _download_font_dir, skip_existing=True)
 
 def download_google_fonts(*font_names,skip_existing=True):
     """ See download_google_font's docstring. This is it's plural form. """
@@ -28653,22 +28730,28 @@ def download_url(url, path=None, *, skip_existing=False):
     """
     Works with both HTTP and Aws S3 Urls
     Download a file from a url and return the path it downloaded to. It no path is specified, it will choose one for you and return it (as a string)
+    If path exists and it is a folder, it will download to the url's filename in that folder
     EXAMPLE: open_file_with_default_application(download_url('https://i.imgur.com/qSmVyCo.jpg'))#Show a picture of a cat
     """
     assert isinstance(url,str),'url should be a string, but got type '+repr(type(url))
     assert path is None or isinstance(path,str),'path should be either None or a string, but got type '+repr(type(path))
 
-    if path is None:
-        path=get_file_name(url)
+    if is_a_folder(path):
+        root = path
+        path = path_join(root, get_file_name(url))
+
+    else:
+        if path is None:
+            path=get_file_name(url)
+
+        #Create the parent directory of the destination if it doesn't already exist
+        root = get_path_parent(path)
+        if make_directory and not path_exists(root):
+            rp.make_directory(root)
 
     if skip_existing and path_exists(path):
         #Don't download anything - skip it if it already exists
         return path
-
-    #Create the parent directory of the destination if it doesn't already exist
-    root = get_path_parent(path)
-    if make_directory and not path_exists(root):
-        rp.make_directory(root)
 
     if is_s3_url(url):
         import subprocess
@@ -30408,6 +30491,8 @@ def tmux_close_other_sessions():
     for session in sessions_to_close:
         _run_tmux_command(['tmux', 'kill-session', '-t', session])
 
+tmux_kill_other_sessions = tmux_close_other_sessions
+
 def _get_current_tmux_session():
     """Returns the name of the current tmux session."""
     return _run_tmux_command(['tmux', 'display-message', '-p', '#{session_name}'])
@@ -30488,16 +30573,17 @@ def tmux_session_exists(session_name):
 
     return session_name in tmux_get_all_session_names()
 
-def tmux_kill_session(session_name):
+def tmux_kill_session(session_name, strict=False):
     """
     Kill a specified tmux session by its name.
 
     Args:
         session_name (str): The name of the tmux session to kill.
+        strict (bool, optional): If True, will throw an error if trying to kill a nonexistant session
 
     Raises:
         AssertionError: If the name is not a string.
-        ValueError: If no session with the specified name exists.
+        ValueError: If no session with the specified name exists and strict==True
         
     Example:
         >>> squelch_call(tmux_kill_session,'0') # Tries to kill session 0 if it exists
@@ -30514,14 +30600,20 @@ def tmux_kill_session(session_name):
         session.kill_session()
         print("rp.tmux_kill_session: Session %s killed successfully."%repr(session_name))
     else:
-        raise ValueError("No session named '{}' found.".format(session_name))
+        if strict:
+            raise ValueError("rp.tmux_kill_session: No session named '{}' found.".format(session_name))
 
 def tmux_kill_sessions(*session_names,strict=False):
     """Plural of tmux_kill_session"""
     session_names = detuple(session_names)
+
+    #If strict, make sure all sessions exist before trying to kill any of them
     if strict:
         for name in session_names:
-            assert tmux_session_exists(name), 'rp.tmux_kill_sessions: Is strict and session %s doesnt exist'%repr(name)
+            if not tmux_session_exists(name):
+                raise ValueError('rp.tmux_kill_sessions: Is strict and session %s doesnt exist'%repr(name))
+
+    #Then, kill all the sessions
     for session_name in session_names:
         tmux_kill_session(session_name)
 
@@ -30691,15 +30783,18 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
 
     config = {"session_name": session_name, "windows": []}
 
+    def is_listlike(x):
+        return isinstance(x, (list, tuple))
+
     if isinstance(windows, str):
         windows = [windows]
 
-    if isinstance(windows, list):
+    if is_listlike(windows):
         windows = {str(i): e for i, e in enumerate(windows)}
 
     assert isinstance(windows, dict), "Internal assertion"
     assert all(isinstance(k, str) for k in windows.keys()), "All window names must be strings"
-    assert all(isinstance(v, (list, str)) for v in windows.values()), "All window commands must be strings (for single pane) or lists of strings (for multiple panes). Strings can be multiline for multiple commands"
+    assert all(is_listlike(v) or isinstance(v, str) for v in windows.values()), "All window commands must be strings (for single pane) or lists of strings (for multiple panes). Strings can be multiline for multiple commands"
 
     def process_command(command):
         if not command:
@@ -30729,7 +30824,7 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
 
         if isinstance(pane_commands, str):
             pane_commands = pane_commands.splitlines()
-        assert isinstance(pane_commands, list)
+        assert is_listlike(pane_commands)
 
         for command in pane_commands:
             command = process_command(command)
@@ -33830,6 +33925,8 @@ def with_alpha_channel(image, alpha, copy=True):
     or a grayscale image whose brigtness will be used as alpha
     
     Will output an RGBA float image
+
+    TODO: Mutate image if copy=False
     """
     if is_number(alpha):
         # Assume alpha is a float between 0 and 1
@@ -33850,6 +33947,9 @@ def with_alpha_channel(image, alpha, copy=True):
     return image
 
 with_image_alpha=with_alpha_channel #You can uncomment this if you ever think it will enhance readability along with the functions with_image_green and with_image_hue etc
+
+def with_image_rgb(image, rgb, copy=True):
+    return with_image_alpha(rgb, get_image_alpha(image), copy=copy)
 
 pterm=pseudo_terminal#Just a shortcut. Not to be used in code; just Colab etc where I don't want to type pseudo_terminal. What?? Don't look at me like that - I'm lazy lol
 
@@ -34837,12 +34937,14 @@ def _fdt_for_command_line():
         pass
 
 
-def _fzf_multi_grep(print_instructions=True):
+def _fzf_multi_grep(extensions='',print_instructions=True):
     pip_import('iterfzf')
 
     heap=_MinFileSizeHeap()
 
     zero_width_space='\u200b' #Prevents file names from being included in the search
+
+    extensions = extensions.split()
 
     if fansi_is_enabled():
         #This is an arbitrary choice...but sometimes its nice to be able to search file names too.
@@ -34876,10 +34978,23 @@ def _fzf_multi_grep(print_instructions=True):
         lines=[title(line_number+1)+line for line_number,line in enumerate(lines)]
         lines=lines[::-1] #For FZF, which pputs the first things on the bottom
         return lines
+
+    def should_read(path):
+        if extensions and not ends_with_any(path, extensions):
+            return False
+        if not is_utf8_file(path):
+            return False
+        return True
         
     def text_files_walk():
         root='.'
-        return map(get_relative_path,filter(is_utf8_file,files_walk(root)))
+        return map(
+            get_relative_path,
+            filter(
+                should_read,
+                files_walk(root),
+            ),
+        )
     
     def text_lines_walk():
         import multiprocessing.pool,itertools
@@ -34918,6 +35033,7 @@ def _fzf_multi_grep(print_instructions=True):
     return output
     
 
+fdt=_fzf_multi_grep
 
 
 def unwarped_perspective_image(image, from_points, to_points=None, height:int=None, width:int=None):
@@ -37850,7 +37966,7 @@ known_pypi_module_package_names={
     'colors': 'ansicolors',
     'compose': 'docker-compose',
     # 'cv2': 'opencv-python',
-    'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? Idk!
+    'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? (Update: so far, so good!)
     'cython': 'Cython',
     'deprecate': 'pyDeprecate',
     'diff_match_patch': 'diff-match-patch',

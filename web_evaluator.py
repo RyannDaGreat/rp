@@ -1,5 +1,6 @@
 import argparse
 import ast
+import os
 import json
 import textwrap
 import threading
@@ -826,11 +827,6 @@ class ClientDelegator:
         so we don't need to process a huge dataset's optical flow etc before training. Especially because 
         dataloader workers cannot use GPU on torch, communicating via a ClientDelegator to a bunch of 
         GPU-enabled slave workers is a good option.
-
-        A simple way to have clients enlist is to keep a file clients.txt, and each time a relevant 
-        client is made it does rp.append_line_to_file(repr(client), 'clients.txt')
-        And then we do ClientDelegator(map(Client.from_string,set(rp.file_line_iterator('clients.txt'))))
-        Note that if we have on_connection_error='unregister', any bad servers will be quickly removed
         """
         assert on_connection_error in ['wait', 'unregister', 'raise']
         self.on_connection_error=on_connection_error
@@ -1023,31 +1019,28 @@ class ClientDelegator:
         
 class ClientRoster:
     """
-    SIGNATURES IN THIS CLASS ARE SUBJECT TO CHANGE! It can likely be made more elegant.
-
     The ClientRoster class manages a roster of clients for the ClientDelegator.
 
-    It provides methods to load clients from a file, clear the roster, and register new clients.
+    It provides methods to load clients from your filesystem, clear the roster, and register new clients.
     Clients can register themselves to the roster, allowing the ClientDelegator to discover and utilize them.
 
     Args:
-        location (str, optional): The file path where the client roster is stored.
-            Defaults to a file named 'web_evaluator.py.default_client_roster.txt' in the same directory as the script.
+        location (str, optional): The folder path where the client roster is stored.
+            Defaults to a folder named 'web_evaluator.py.default_client_roster' in the same directory as the script.
 
     Methods:
-        load_clients(unique: bool = True, silent: bool = False) -> list[Client]:
-            Loads the clients from the roster file and returns them as a list of Client instances.
+        load_clients(silent: bool = False) -> list[Client]:
+            Loads the clients from the roster folder and returns them as a list of Client instances.
             If 'unique' is True (default), only unique clients will be loaded.
             If 'silent' is True, no output will be printed during loading.
 
         clear() -> None:
-            Clears the contents of the roster file.
+            Clears the contents of the roster foldefolder.
 
-        register(server_port: int = DEFAULT_SERVER_PORT, server_name: str = None, sync: bool = True, unique: bool = True, silent: bool = False) -> None:
-            Registers a new server/client to the roster file.
+        register(server_port: int = DEFAULT_SERVER_PORT, server_name: str = None, sync: bool = True, silent: bool = False) -> None:
+            Registers a new server/client to the roster folder.
             If server_name is not provided, the local IP address is used.
             If 'sync' is True (default), the client will use synchronous communication.
-            If 'unique' is True (default), duplicate clients will not be registered.
             If 'silent' is True, no output will be printed during registration.
 
     Example:
@@ -1061,9 +1054,11 @@ class ClientRoster:
 
         >>> # In a separate process, load clients from the roster and create a ClientDelegator
         >>> roster = ClientRoster()
-        >>> clients = roster.load_clients(unique=True)
+        >>> clients = roster.load_clients()
         >>> delegator = ClientDelegator(clients)
         >>> result = delegator.evaluate('math.sqrt(49)')
+
+    It stores clients via filenames in a roster folder, which makes it more robust to race conditions than maintaining a text file
     """
 
     def __init__(self, location=None):
@@ -1071,41 +1066,36 @@ class ClientRoster:
         Initializes a new instance of the ClientRoster class.
 
         Args:
-            location (str, optional): The file path where the client roster is stored.
-                Defaults to a file named 'web_evaluator.py.default_client_roster.txt' in the same directory as the script.
+            location (str, optional): The folder path where the client roster is stored.
+                Defaults to a folder named 'web_evaluator.py.default_client_roster' in the same directory as the script.
         """
         if location is None:
             # The default client roster is kept in rp's directory
-            location = __file__ + '.default_client_roster.txt'
+            location = __file__ + '.default_client_roster'
 
         location = rp.get_absolute_path(location)
 
         self.location = location
 
-    def load_clients(self, *, unique=True, silent=False):
+    def load_clients(self, *, silent=False):
         """
-        Loads the clients from the roster file and returns them as a list of Client instances.
+        Loads the clients from the roster folder and returns them as a list of Client instances.
 
         Args:
-            unique (bool, optional): If True (default), only unique clients will be loaded.
             silent (bool, optional): If True, no output will be printed during loading. Defaults to False.
 
         Returns:
-            list[Client]: A list of Client instances loaded from the roster file.
+            list[Client]: A list of Client instances loaded from the roster folder.
         """
         if not silent:
             rp.fansi_print("rp.web_evaluator.ClientRoster: Loading clients from " + self.location, 'green')
 
-        if not rp.file_exists(self.location):
+        if not rp.folder_exists(self.location):
             if not silent:
-                rp.fansi_print("rp.web_evaluator.ClientRoster: Roster file doesn't exist; loaded no clients: " + self.location, 'yellow')
+                rp.fansi_print("rp.web_evaluator.ClientRoster: Roster folder doesn't exist; loaded no clients: " + self.location, 'yellow')
             return []
 
-        text = rp.load_text_file(self.location)
-        lines = text.splitlines()
-
-        if unique:
-            lines = rp.unique(lines)
+        lines = os.listdir(self.location)
 
         clients = []
         for line in lines:
@@ -1123,13 +1113,14 @@ class ClientRoster:
 
     def clear(self):
         """
-        Clears the contents of the roster file.
+        Clears the contents of the roster folder.
         """
-        rp.save_text_file("", self.location)
+        #Move it then delete it so it's immediately deleted
+        rp.delete_folder(rp.move_folder(self.location, rp.temporary_file_path()))
 
-    def register(self, server_port=DEFAULT_SERVER_PORT, server_name=None, *, sync=True, unique=True, silent=False, filelock=False):
+    def register(self, server_port=DEFAULT_SERVER_PORT, server_name=None, *, sync=True, silent=False):
         """
-        Registers a new client to the roster file.
+        Registers a new client to the roster folder.
 
         Args:
             server_port (int, optional): The port number of the server. Defaults to DEFAULT_SERVER_PORT.
@@ -1137,7 +1128,6 @@ class ClientRoster:
                 If not provided, the local IP address is used.
             sync (bool, optional): Indicates whether the client should use synchronous communication.
                 Defaults to True.
-            unique (bool, optional): If True (default), duplicate clients will not be registered.
             silent (bool, optional): If True, no output will be printed during registration. Defaults to False.
         """
         if server_name is None:
@@ -1151,21 +1141,12 @@ class ClientRoster:
 
         line = repr(client)
 
-        if unique:
-            if client in self.load_clients(silent=True):
-                if not silent:
-                    rp.fansi_print("rp.web_evaluator.ClientRoster: Did NOT register duplicate client " + line + " to " + self.location, 'yellow')
-                return
+        client_file = rp.path_join(self.location, line)
 
-        if filelock:
-            #Make sure multiple processes don't clobber each other
-            rp.pip_import("filelock")
-            import filelock
-            lock_location = self.location+'.lock'
-            with filelock.FileLock(lock_location):
-                rp.append_line_to_file(line, self.location)
-        else:
-            rp.append_line_to_file(line, self.location)
+        if not silent and rp.path_exists(client_file):
+            rp.fansi_print("rp.web_evaluator.ClientRoster: Did NOT register duplicate client " + line + " to " + self.location, 'yellow')
+
+        rp.touch_file(client_file)
 
         if not silent:
             rp.fansi_print("rp.web_evaluator.ClientRoster: Enlisted " + line + " to " + self.location, 'green')
@@ -1218,7 +1199,6 @@ def run_delegation_server(server_port=None,
 
             delegator.register_clients(
                 roster_clients,
-                unique=True,
                 after_ping=True,
                 silent=True,
             )
