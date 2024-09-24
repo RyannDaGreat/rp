@@ -1976,7 +1976,7 @@ def get_progress_bar_image(
     height=10,
     width=100,
     bar_color="white",
-    background_color="black",
+    background_color="black"
 ):
     """
     Generate a rectangular RGBA progress bar image.
@@ -2027,7 +2027,7 @@ def image_with_progress_bar(
     *,
     size=10,
     bar_color="white",
-    background_color="black",
+    background_color="black"
 ):
     """
     Adds a progress bar to an image.
@@ -2070,7 +2070,7 @@ def video_with_progress_bar(
     size=10,
     bar_color="white",
     background_color="black",
-    lazy=False,
+    lazy=False
 ):
     """
     Adds a progress bar to the top of a video to see how far into it you are.
