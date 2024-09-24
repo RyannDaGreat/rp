@@ -1341,7 +1341,7 @@ def rgb_to_grayscale(image):  # A demonstrative implementation of this pair
     try:
         image=as_numpy_array(image)
         assert image.ndim==3 #HWC
-        return image.mean(2)
+        return image.mean(2).astype(image.dtype)
         # return np.average(image,2).astype(image.dtype)  # Very fast if possible
     except Exception:
         # The old way, when I used nested lists to represent images
@@ -1610,9 +1610,12 @@ def blend_images(bot, top, alpha=1, mode="normal"):
     """
     
     #Input validation
-    assert is_image(top) or is_color(top) and len(top) in {3,4} or is_number(top)
-    assert is_image(bot) or is_color(bot) and len(bot) in {3,4} or is_number(bot)
+    assert is_image(top) or is_color(top) and len(top) in {3,4} or is_number(top) or isinstance(top,str)
+    assert is_image(bot) or is_color(bot) and len(bot) in {3,4} or is_number(bot) or isinstance(bot,str)
     assert is_image(alpha) or is_number(alpha)
+
+    if isinstance(top, str):top=as_rgba_float_color(top)
+    if isinstance(bot, str):bot=as_rgba_float_color(bot)
 
     blend_modes = {
         "normal"  ,
@@ -1965,7 +1968,141 @@ def with_alpha_outline(image,*,inner_radius=0,outer_radius=0,include_edges=True,
 def with_alpha_outlines(*images,**kwargs):
     images=detuple(images)
     return [with_alpha_outline(image,**kwargs) for image in images]
-        
+
+
+def get_progress_bar_image(
+    progress,
+    *,
+    height=10,
+    width=100,
+    bar_color="white",
+    background_color="black",
+):
+    """
+    Generate a rectangular RGBA progress bar image.
+
+    Args:
+        progress (float): Progress value between 0 and 1.
+        height (int): Height of the progress bar image in pixels. Default is 10.
+        width  (int): Width  of the progress bar image in pixels. Default is 100.
+        bar_color        (str, tuple[float], float): Color of the progress bar.
+        background_color (str, tuple[float], float): Color of the background.
+
+    Colors can be given as a string, as a float, or a tuple of RGB or RGBA floats (see as_rgba_float_color)
+
+    Returns:
+        numpy.ndarray: RGBA image of the progress bar.
+
+    EXAMPLE:
+        >>> N=1000
+        ... for i in range(N):
+        ...     display_image(get_progress_bar_image(i/N,width=10))
+    """
+
+    bar_color = as_rgba_float_color(bar_color)
+    background_color = as_rgba_float_color(background_color)
+
+    progress = clamp(progress, 0, 1)
+
+    background = uniform_float_color_image(height, width, background_color)
+
+    alpha = np.zeros((height, width))
+
+    bar_width = progress * width
+    bar_floor = int(bar_width)
+    bar_remainder = bar_width - bar_floor
+
+    alpha[:, : int(bar_floor)] = 1
+    if bar_remainder and bar_floor < width:
+        # A bit of antialising
+        alpha[:, bar_floor] = bar_remainder
+
+    bar_image = blend_images(background_color, bar_color, alpha)
+    return bar_image
+
+
+def image_with_progress_bar(
+    image,
+    progress,
+    *,
+    size=10,
+    bar_color="white",
+    background_color="black",
+):
+    """
+    Adds a progress bar to an image.
+    See rp.get_progress_bar_image for further documentation.
+    
+    EXAMPLE:
+        >>> image = load_image(
+        ...     "https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png",
+        ...     use_cache=True,
+        ... )
+        ... N = 1000
+        ... for i in range(N):
+        ...     display_alpha_image(
+        ...         labeled_image(
+        ...             image_with_progress_bar(
+        ...                 image,
+        ...                 i / N,
+        ...                 bar_color="white",
+        ...                 background_color="dark blue",
+        ...             ),
+        ...             f"{i}",
+        ...             font="G:Chivo Mono",
+        ...             background_color="dark blue",
+        ...         ),
+        ...     )
+
+    """
+
+    width = get_image_width(image)
+    height = size
+
+    progress_bar_image = gather_args_call(get_progress_bar_image)
+
+    return vertically_concatenated_images(progress_bar_image, image)
+
+
+def video_with_progress_bar(
+    video,
+    *,
+    size=10,
+    bar_color="white",
+    background_color="black",
+    lazy=False,
+):
+    """
+    Adds a progress bar to the top of a video to see how far into it you are.
+    See rp.get_progress_bar_image for further documentation.
+
+    EXAMPLE:
+       >>> display_video(
+       ...     video_with_progress_bar(
+       ...         load_video(
+       ...             "https://www.shutterstock.com/shutterstock/videos/1070160847/preview/stock-footage-electric-car-drive-on-the-wind-turbines-background-car-drives-along-a-mountain-road-electric-car.webm",
+       ...             use_cache=True,
+       ...         ),
+       ...         lazy=True,
+       ...     )
+       ... )
+    """
+    
+    def helper():
+        nonlocal size, bar_color, background_color
+        length = len(video)
+        for index, image in enumerate(video):
+            progress = index / (length - 1)
+            frame = gather_args_call(image_with_progress_bar)
+            yield frame
+
+    output = helper()
+
+    if not lazy:
+        output = list(output)
+
+    return output
+
 
 def _crop_images_to_max_or_min_size(*images,origin='top left',criterion=max,copy=True,do_height=True,do_width=True):
     
@@ -2322,21 +2459,21 @@ def trim_videos_to_max_length(*videos, copy=True):
 def trim_videos_to_min_length(*videos, copy=True):
     return _trim_videos_to_same_length(*videos, mode=min, copy=copy)
 
-def _concatenated_videos(image_method,videos):
+def _concatenated_videos(image_method,videos,origin):
     videos=detuple(videos)
     videos=[video for video in videos if len(video)] #Exclude videos with no frames
     videos=[crop_images_to_max_size(video,copy=False) for video in videos]
     videos=trim_videos_to_max_length(videos,copy=False)
-    output=[image_method(*frames) for frames in zip(*videos)]
+    output=[image_method(*frames,origin=origin) for frames in zip(*videos)]
     return output
      
-def horizontally_concatenated_videos(*videos):
+def horizontally_concatenated_videos(*videos,origin=None):
     #TODO: Optimize this to not use horizontally_concatenated_images (which is slow)
-    return _concatenated_videos(horizontally_concatenated_images,videos)
+    return _concatenated_videos(horizontally_concatenated_images,videos,origin=origin)
     
-def vertically_concatenated_videos(*videos):
+def vertically_concatenated_videos(*videos,origin=None):
     #TODO: Optimize this to not use vertically_concatenated_images (which is slow)
-    return _concatenated_videos(vertically_concatenated_images,videos)
+    return _concatenated_videos(vertically_concatenated_images,videos,origin=origin)
 
 def max_filter(image,diameter,single_channel: bool = False,mode: str = 'reflect',shutup: bool = False):
     # NOTE: order refers to the derivative of the gauss curve; for edge detection etc.
@@ -5176,13 +5313,14 @@ def add_ipython_kernel(kernel_name: str = None, display_name: str = None):
     print("Successfully added Python " + display_name + " as a Jupyter kernel.")
 
 
-def display_video(video,framerate=30):
+def display_video(video,framerate=30,*,loop=False):
     """
     Video can either be a string, or a video (aka a 4d tensor or iterable of images)
     Example: display_video('https://www.youtube.com/watch?v=jvipPYFebWc')
+    TODO: Implement loop for jupyter
     """
     if running_in_jupyter_notebook():
-        display_video_in_notebook(video,framerate)
+        display_video_in_notebook(video,framerate=framerate)
     else:
         #Todo: Add keyboard controls to play, pause, rewind, restart, next frame, prev frame, go to frame, adjust framerate
         #It would be much like display_image_slideshow (maybe even add functionality to display_image_slideshow and use that?)
@@ -5192,73 +5330,128 @@ def display_video(video,framerate=30):
                     raise FileNotFoundError(video)
                 assert is_video_file(video),repr(video)+' is not a video file'
             video=load_video_stream(video)
-        
-        time_start=gtoc()
-        time_per_frame=1/framerate
 
-        for i, frame in enumerate(video):
-            time_before_display = gtoc()
-            display_image(frame)
-            time_after_display = gtoc()
-            sleep(max(0, time_per_frame - (time_after_display - time_before_display)))
+        for _ in range(9999999999999999999 if loop else 1):
+            
+            time_start=gtoc()
+            time_per_frame=1/framerate
 
-def display_video_in_notebook(video,framerate=30):
+            for i, frame in enumerate(video):
+                time_before_display = gtoc()
+                display_image(frame)
+                time_after_display = gtoc()
+                sleep(max(0, time_per_frame - (time_after_display - time_before_display)))
+
+# def display_video_in_notebook(video,framerate=30):
+#     """
+#     Video can be either a string pointing to the path of a video, or the video itself. If it is the video itself, it will be embedded as a gif and displayed that way. 
+#     This function can also display gif's and other video URL's we find on the web
+#     """
+#     if isinstance(video,str):
+#         if file_exists(video) or is_valid_url(video):
+#             filetype=get_file_extension(video)
+#
+#             video_filetypes='webm mp4 ogg'.split() #These are the only video filetypes officially supported by the HTML standard (see https://www.w3schools.com/html/html_media.asp)
+#             image_filetypes='gif'.split()
+#
+#             assert filetype in video_filetypes+image_filetypes,'Invalid filetype: '+repr(video)+', video must be one of these types: '+str(video_filetypes+image_filetypes).replace("'",'')
+#
+#             if filetype in video_filetypes:
+#                 from IPython.display import Video,display_html
+#                 if is_valid_url(video):
+#                     display_html(Video(url=video))
+#                 else:
+#                     display_html(Video(data=video))
+#             else:
+#                 assert filetype in image_filetypes
+#                 from IPython.display import Image,display_html
+#                 if is_valid_url(video):
+#                     display_html(Image(url=video))
+#                 else:
+#                     display_html(Image(data=video))
+#         else:
+#             raise FileNotFoundError(video)
+#     else:
+#         display_embedded_video_in_notebook(video)
+
+def display_video_in_notebook(video, filetype='gif', *, framerate=60):
     """
-    Video can be either a string pointing to the path of a video, or the video itself. If it is the video itself, it will be embedded as a gif and displayed that way. 
-    This function can also display gif's and other video URL's we find on the web
+    Display a video or image in a Jupyter notebook.
+
+    Args:
+        video: The video object to display.
+        filetype (str, optional): The filetype of the video or image. Supported filetypes are 'gif', 'png', 'mp4', and 'avi'. Defaults to 'gif'.
+        framerate (int, optional): The framerate of the video. Defaults to 60.
+
+    Raises:
+        ValueError: If an unsupported filetype is provided.
+
+    Examples:
+        >>> video = create_video(...)
+        >>> display_video_in_jupyter_notebook(video, filetype='mp4', embed=True)
     """
-    if isinstance(video,str):
-        if file_exists(video) or is_valid_url(video):
-            filetype=get_file_extension(video)
+    embed=True # embed (bool, optional): Whether to embed the video or image content directly in the notebook. If False, the video or image is displayed using the file path. Defaults to False.
 
-            video_filetypes='webm mp4 ogg'.split() #These are the only video filetypes officially supported by the HTML standard (see https://www.w3schools.com/html/html_media.asp)
-            image_filetypes='gif'.split()
+    from IPython.display import Image, display, HTML
 
-            assert filetype in video_filetypes+image_filetypes,'Invalid filetype: '+repr(video)+', video must be one of these types: '+str(video_filetypes+image_filetypes).replace("'",'')
+    filetype = filetype.strip('.').lower()
+    image_filetypes = 'gif png'.split()
+    video_filetypes = 'mp4 avi'.split()
 
-            if filetype in video_filetypes:
-                from IPython.display import Video,display_html
-                if is_valid_url(video):
-                    display_html(Video(url=video))
-                else:
-                    display_html(Video(data=video))
-            else:
-                assert filetype in image_filetypes
-                from IPython.display import Image,display_html
-                if is_valid_url(video):
-                    display_html(Image(url=video))
-                else:
-                    display_html(Image(data=video))
+    try:
+        if isinstance(video, str):
+            assert file_exists(video), 'rp.display_video_in_notebook: Video file {0} does not exist'.format(video)
+            temp_path = video
         else:
-            raise FileNotFoundError(video)
-    else:
-        display_embedded_video_in_notebook(video)
+            temp_path = temporary_file_path(filetype)
+            save_video(video, temp_path, framerate=framerate)
 
-def display_embedded_video_in_notebook(video,framerate:int=30,filetype:str='gif'):
-    """
-    This will embed a video into the jupyter notebook you're using
-    Warning: This function is still experimental, and sometimes the videos are messed up a bit
-    Warning: This can make your notebooks very large, so please be careful to only use small videos with this function
-    """
-    assert running_in_jupyter_notebook(),'display_embedded_video_in_notebook: This function only works in a jupyter notebook, such as Google Colab or Jupyter Lab'
-    
-    video_filetypes='webm mp4 ogg'.split() #These are the only video filetypes officially supported by the HTML standard (see https://www.w3schools.com/html/html_media.asp)
-    image_filetypes='gif'.split()
-    assert filetype in video_filetypes+image_filetypes,'Invalid filetype: '+repr(filetype)+', please choose from '+str(video_filetypes+image_filetypes).replace("'",'')
-    
-    from IPython.display import HTML, display_html
-    from base64 import b64encode
+        if filetype in image_filetypes:
+            if embed:
+                image_hex = file_to_base64(temp_path)
+                display_object = HTML('<img src="data:image/{0};base64,{1}">'.format(filetype, image_hex))
+            else:
+                display_object = Image(filename=temp_path)
+        elif filetype in video_filetypes:
+            if embed:
+                video_hex = file_to_base64(temp_path)
+                display_object = HTML('<video controls><source src="data:video/{0};base64,{1}" type="video/{0}"></video>'.format(filetype, video_hex))
+            else:
+                display_object = HTML('<video controls><source src="{0}" type="video/{1}"></video>'.format(temp_path, filetype))
+        else:
+            raise ValueError("rp.display_video_in_notebook: Unsupported filetype: {0}. Supported filetypes are {1}".format(filetype, ', '.join(image_filetypes + video_filetypes)))
 
-    
-    video_encoded = b64encode(encode_video_to_bytes(video,filetype,framerate=framerate)).decode()
-    
-    if filetype in video_filetypes:
-        html = '<video controls alt="test" src="data:video/{0};base64,{1}">'.format(filetype, video_encoded)
-    else:
-        assert filetype in image_filetypes
-        html = video_tag = '<img src="data:image/{0};base64,{1}" />'.format(filetype, video_encoded)
-    
-    display_html(html,raw=True)
+        return display(display_object)
+
+    finally:
+        if not isinstance(video, str) and embed and file_exists(temp_path):
+            delete_file(temp_path)
+
+# def display_embedded_video_in_notebook(video,framerate:int=30,filetype:str='gif'):
+#     """
+#     This will embed a video into the jupyter notebook you're using
+#     Warning: This function is still experimental, and sometimes the videos are messed up a bit
+#     Warning: This can make your notebooks very large, so please be careful to only use small videos with this function
+#     """
+#     assert running_in_jupyter_notebook(),'display_embedded_video_in_notebook: This function only works in a jupyter notebook, such as Google Colab or Jupyter Lab'
+#     
+#     video_filetypes='webm mp4 ogg'.split() #These are the only video filetypes officially supported by the HTML standard (see https://www.w3schools.com/html/html_media.asp)
+#     image_filetypes='gif'.split()
+#     assert filetype in video_filetypes+image_filetypes,'Invalid filetype: '+repr(filetype)+', please choose from '+str(video_filetypes+image_filetypes).replace("'",'')
+#     
+#     from IPython.display import HTML, display_html
+#     from base64 import b64encode
+#
+#     
+#     video_encoded = b64encode(encode_video_to_bytes(video,filetype,framerate=framerate)).decode()
+#     
+#     if filetype in video_filetypes:
+#         html = '<video controls alt="test" src="data:video/{0};base64,{1}">'.format(filetype, video_encoded)
+#     else:
+#         assert filetype in image_filetypes
+#         html = video_tag = '<img src="data:image/{0};base64,{1}" />'.format(filetype, video_encoded)
+#     
+#     display_html(html,raw=True)
 
 
 def _display_downloadable_image_in_notebook_via_ipython(image, file_name:str):
@@ -9248,16 +9441,20 @@ def append_line_to_file(line:str,file_path:str):
             file.close()
     return file_path
 
-def load_json(path, *, use_cache=False):
+def _as_easydict(x):
     pip_import('easydict') #I might make this a pip requirement of rp...its so useful!
+    from easydict import EasyDict
+    return EasyDict(x)
+
+
+def load_json(path, *, use_cache=False):
     text=text_file_to_string(path, use_cache=use_cache)
     import json
     out = json.loads(text)
     if not isinstance(out, dict):
         return out
 
-    from easydict import EasyDict
-    return EasyDict(out)
+    return _as_easydict(out)
 
 def load_jsons(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False, lazy=False):
     """
@@ -9293,10 +9490,12 @@ def load_yaml_file(path, use_cache=False):
         ans = {'max_iter': 300000, 'batch_size': 5, 'image_save_iter': 250, ...(etc)... }
     """
     pip_import('yaml')
+    from easydict import EasyDict
     import yaml
     assert file_exists(path)
     text=text_file_to_string(path, use_cache=use_cache)
     data=yaml.safe_load(text)
+    data=_as_easydict(data)
     return data
 
 load_yaml = load_yaml_file #Alias
@@ -9313,8 +9512,10 @@ def load_yaml_files(*paths, use_cache=False, strict=True, num_threads=None, show
     return load_files(load_file, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
 
 def parse_yaml(string):
+    pip_import('yaml')
     from yaml import safe_load
     output = safe_load(string)
+    output = _as_easydict(output)
     return output
 
 def parse_dyaml(code:str)->dict:
@@ -18822,10 +19023,30 @@ def timeout(f,t):
         return f()
     except TimeoutException:
         return "[Timed out]"# continue the for loop if function A takes more than 5 second
-try:
+
+def save_animated_png(frames, path=None,*,framerate=None):
+    if path is None:
+        path = get_unique_copy_path("video.png")
+    path = with_file_extension(path ,'png')
+        
+    if not framerate:
+        delay=None
+    else:
+        #Delay in millis between frames
+        delay=int(1000*(1/framerate))
+
+    pip_import('numpngw') 
     from numpngw import write_apng as save_animated_png#Takes numpy ndarray as input
-except:
-    pass
+    #Another option: https://github.com/eight04/pyAPNG
+
+    frames = as_byte_images(frames)
+
+    save_animated_png(path, frames, delay=delay)
+
+    return path
+
+save_video_png = save_animated_png
+
 #region Wrappers for psutil
 def battery_percentage()->float:
     try:
@@ -22384,6 +22605,8 @@ def as_rgba_float_color(color,clamp=True):
     """
     assert isinstance(color, tuple) or is_number(color) or isinstance(color,str)
     if isinstance(color,str):
+        if color.strip().lower() in 'transparent invisible'.split():
+            return (0,0,0,0)
         color=color_name_to_float_color(color)
     if is_number(color):
         color = (color, ) * 3
@@ -22680,7 +22903,7 @@ def download_google_font(font_name, *, skip_existing=True):
                 f.write(response.content)
                 paths.append(path)
 
-            print('Downloaded {}, {} of {} fonts.'.format(font_name, index + 1, len(urls)))
+            print('rp.download_google_font: Downloaded {}, {} of {} fonts.'.format(font_name, index + 1, len(urls)))
 
         return paths
 
@@ -22704,7 +22927,7 @@ def download_google_font(font_name, *, skip_existing=True):
 
         # extract the urls from the content
         urls = get_urls(content)
-        print('Fetched {} urls.'.format(len(urls)))
+        print('rp.download_google_font: Fetched {} urls.'.format(len(urls)))
 
         # download the font files
         paths = fetch_data(urls)
@@ -25826,8 +26049,10 @@ def _get_default_video_path(extension='mp4'):
 class VideoWriterMP4:
     #Todo: If this ever gets fucky, try https://github.com/imageio/imageio-ffmpeg - it looks pretty good!
 
-    def __init__(self, path=None, framerate=60, video_bitrate='medium', height=None, width=None):
+    def __init__(self, path=None, framerate=60, video_bitrate='medium', height=None, width=None, silent=False):
         # Originally from: https://github.com/kkroening/ffmpeg-python/issues/246
+
+        self.silent=silent
 
         if path is None: path=_get_default_video_path()
         if not has_file_extension(path) or get_file_extension(path).lower()!='mp4': path+='.mp4'
@@ -25884,20 +26109,23 @@ class VideoWriterMP4:
                 width-=1
 
             self.process = (
-                ffmpeg
-                    .input('pipe:',
-                           format='rawvideo',
-                           pix_fmt='rgb24',
-                           s='{}x{}'.format(width, height),
-                           r=self.framerate,
-                           )
-                    .output(self.path, pix_fmt='yuv420p',
-                            vcodec=self.vcodec,
-                            video_bitrate=self.video_bitrate,    
-                            #Interstingly, this is not where the framerate should go, based on my experiments...
-                            )
-                    .overwrite_output()
-                    .run_async(pipe_stdin=True)
+                ffmpeg.input(
+                    "pipe:",
+                    format="rawvideo",
+                    pix_fmt="rgb24",
+                    s="{}x{}".format(width, height),
+                    r=self.framerate,
+                    **(dict(loglevel="quiet") if self.silent else dict())
+                )
+                .output(
+                    self.path,
+                    pix_fmt="yuv420p",
+                    vcodec=self.vcodec,
+                    video_bitrate=self.video_bitrate,
+                    # Interstingly, this is not where the framerate should go, based on my experiments...
+                )
+                .overwrite_output()
+                .run_async(pipe_stdin=True)
             )
 
             self.height = height
@@ -25918,7 +26146,7 @@ class VideoWriterMP4:
         self.process.wait()
         self.finished=True
         
-def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', height=None, width=None):
+def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', height=None, width=None, silent=False):
     """
     frames: a list of images as defined by rp.is_image(). Saves an .mp4 file at the path
         - frames can also contain strings, if those strings are image file paths
@@ -25944,7 +26172,7 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
         if height is None: height=max_height
         if width  is None: width =max_width 
     
-    writer = VideoWriterMP4(path, framerate, video_bitrate=video_bitrate, height=height, width=width)
+    writer = VideoWriterMP4(path, framerate, video_bitrate=video_bitrate, height=height, width=width, silent=silent)
 
     #Make frames speficiable as a glob, folder path, list of images, or list of image paths
     def load_frame(frame):
@@ -26068,6 +26296,9 @@ def save_video_gif(video, path=None, *, framerate=30):
 
     frames = map(as_pil_image, video)
     frame_one = next(frames)
+
+    rp.make_directory(rp.get_path_parent(path))
+
     frame_one.save(
         path,
         format="GIF",
@@ -26079,6 +26310,8 @@ def save_video_gif(video, path=None, *, framerate=30):
 
     return path
 
+save_animated_gif = save_video_gif
+
 def save_video(images, path, *, framerate=60):
     """
     #TODO: add options for sound and framerate. Possibly quality options but probably not (that should be delegated to a function meant for a specific format)
@@ -26086,14 +26319,12 @@ def save_video(images, path, *, framerate=60):
     #Note that the file extension used in path decides the kind of video that will be exported.
     #For example, save_video(images,'video.mp4') saves an mp4 file whilst save_video(images,'video.avi') saves an avi file
     """
-    assert get_file_extension(path) in 'mp4 avi'.split(), 'This function currently supports .mp4 and .avi files'
+    assert get_file_extension(path) in 'mp4 avi gif png'.split(), 'This function currently supports .mp4, .avi, .png and .gif files'
 
-    if path.endswith('.mp4'):
-        return save_video_mp4(images,path,framerate=framerate)
-    if path.endswith('.avi'):
-        return save_video_avi(images,path,framerate=framerate)
-    if path.endswith('.gif'):
-        return save_video_gif(images,path,framerate=framerate)
+    if path.endswith('.mp4'): return save_video_mp4(images,path,framerate=framerate, silent=True)
+    if path.endswith('.avi'): return save_video_avi(images,path,framerate=framerate)
+    if path.endswith('.png'): return save_video_png(images,path,framerate=framerate)
+    if path.endswith('.gif'): return save_video_gif(images,path,framerate=framerate)
 
 
     assert False, 'Below this line mightn not work. Until further notice, please specify .avi or .mp4 in the path argument'
@@ -26744,6 +26975,8 @@ def take_directory(path):
 
 def make_directories(*paths):
     paths=detuple(paths)
+    if isinstance(paths, str):
+        paths=[paths]
     for path in paths:
         make_directory(path)
 make_folders=make_directories
@@ -27002,6 +27235,93 @@ def get_cutscene_frame_numbers(video_path,*,use_cache=False):
     output = [x[1].frame_num for x in scene_list]
     _get_cutscene_frame_numbers_cache[video_path]=output#The output of this is so small that it's probably ok to store it even if use_cache is False. It's unlikely our memory will run out because of this...
     return output
+
+def remove_duplicate_frames(video, *, lazy=False, show_progress=False, as_indices=False):
+    """
+    Remove duplicate frames from a video represented as a NumPy array in THWC format
+    or from a generator of frames.
+
+    Parameters:
+    - video: np.ndarray of shape (T, H, W, C) or generator of frames
+    - lazy: bool, if True, returns a generator yielding frames one by one,
+            if False, returns the frames as a NumPy array.
+    - show_progress: If True, will show the ETA for calculation
+    - as_indices: If True, returns a series of integers indicating the frame numbers
+                  (as opposed to returning the frames themselves)
+
+    Returns:
+    - unique_video: generator of frames (if lazy=True)
+                    np.ndarray of shape (T_unique, H, W, C) (if lazy=False)
+                    OR, a generator/numpy array of indices
+                    
+    https://chatgpt.com/share/66f333ff-3418-8006-bdc1-f0636ad5907c
+    """
+
+    pip_import("numpy")
+    pip_import("cv2")
+    pip_import("skimage")
+
+    import numpy as np
+    import cv2
+    from skimage.metrics import structural_similarity as ssim
+
+    # Threshold for SSIM similarity
+    ssim_threshold = 0.99  # Adjust ssim_threshold as needed
+
+    def preprocess_frame(frame):
+        frame = as_byte_image(frame)
+        if not is_grayscale_image(frame):
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        frame = resize_image_to_fit(
+            frame,
+            height=256,
+            width=256,
+            allow_growth=False,
+            interp="area",
+        )
+        return frame
+
+    def sim_score(frame_a, frame_b):
+        # Compute SSIM between two frames
+        score, _ = ssim(frame_a, frame_b, full=True)
+        return score
+
+    def helper():
+        video_iter = enumerate(iter(video))
+
+        try:
+            index, frame = next(video_iter)
+            frame_a = preprocess_frame(frame)
+        except StopIteration:
+            return  # Empty video
+
+        # Always yield the first frame
+        if as_indices: yield index
+        else         : yield frame
+        frame_b = frame_a
+
+        for index, frame in video_iter:
+            frame_a = preprocess_frame(frame)
+            score = sim_score(frame_a, frame_b)
+            if score < ssim_threshold:
+
+                # New unique frame
+                if as_indices: yield index
+                else         : yield frame
+                frame_b = frame_a
+
+            else:
+                # Duplicate frame detected, skip
+                pass
+
+    if show_progress:
+        video=eta(video, title='rp.remove_duplicate_frames')
+
+    output = helper()
+    if not lazy:
+        output = np.array(list(output))
+    return output
+
 
 def send_text_message(message,number):
     """
@@ -30252,26 +30572,36 @@ refresher:
 # < RP Lazygit Config End >
 
 """
-    
-    return append_line_to_file(config_lines,path)
+
+    if file_exists(path) and config_lines.strip() not in load_text_file(path):
+        append_line_to_file(config_lines,path)
+
+    return path
 
 def _install_lazygit(force=False):
     #https://github.com/jesseduffield/lazygit/tree/master?tab=readme-ov-file#installation
     
-    if 'lazygit' in get_system_commands() and not force:
-        print('lazygit is already installed. Not installing because force==False.')
-        return
-    
-    if currently_running_mac():
-        os.system('brew install jesseduffield/lazygit/lazygit')
-    elif currently_running_linux():
-        os.system("""LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
-curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz"
-tar xf lazygit.tar.gz lazygit
-sudo install lazygit /usr/local/bin""")
-    elif currently_running_windows():
-        #Untested
-        os.system("""winget install -e --id=JesseDuffield.lazygit""")
+    with SetCurrentDirectoryTemporarily(make_directory(temporary_file_path())):
+        if 'lazygit' in get_system_commands() and not force:
+            print('lazygit is already installed. Not installing because force==False.')
+            return
+        
+        if currently_running_mac():
+            os.system('brew install jesseduffield/lazygit/lazygit')
+        elif currently_running_linux():
+            os.system(
+                unindent(
+                """
+                LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
+                curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz"
+                tar xf lazygit.tar.gz lazygit
+                sudo install lazygit /usr/local/bin
+                """
+                )
+            )
+        elif currently_running_windows():
+            #Untested
+            os.system("""winget install -e --id=JesseDuffield.lazygit""")
         
     
     
@@ -32146,6 +32476,9 @@ def file_to_bytes(path: str):
         data = out.read()
     return data
 
+def file_to_base64(path: str):
+    return bytes_to_base64(file_to_bytes(path))
+
 def file_to_object(path:str):
     return bytes_to_object(file_to_bytes(path))
 
@@ -33143,6 +33476,221 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
     out = rearrange(out, "(h w) c -> c h w", h=out_height, w=out_width)
 
     return out
+
+def accumulate_flows(*flows,reduce=True,reverse=False):
+    """
+    Accumulates a sequence of flows into a single flow or a sequence of accumulated flows.
+
+    A flow is a 2HW aka [XY]HW tensor, either torch or numpy
+    And therefore, flows is its plural: T2HW aka T[XY]HW
+
+    Parameters
+    ----------
+    flows : numpy.ndarray or torch.Tensor or list of numpy.ndarray or list of torch.Tensor
+        A 4D tensor in T2HW aka T[XY]HW form, representing a sequence of flows.
+        Each flow is a 2D tensor of shape (2, H, W), where the first dimension
+        represents the x and y components of the flow vectors.
+
+        The function supports the following input formats:
+        - numpy.ndarray or torch.Tensor: shape (T, 2, H, W).
+        - list of numpy.ndarray or torch.Tensor: A list, each of shape (2, H, W).
+
+    reduce : bool, optional
+        If True (default), returns a single accumulated flow of shape (2, H, W).
+        If False, returns a sequence of accumulated flows of shape (T, 2, H, W).
+
+    reverse : bool, optional
+        False by default
+        If True, calculates the reverse cumulative flow. Useful for remap operations. See cv_optical_flow's docstring for a realtime example of this.
+        Definition:
+            accumulate_flows(flows, reverse=True) ==== -accumulate_flows(-flows[::-1])
+
+    Returns
+    -------
+    numpy.ndarray or torch.Tensor
+        If `reduce` is True, returns a single accumulated flow in 2HW aka [XY]HW form,
+        If `reduce` is False, returns a sequence of accumulated flows in T2HW aka T[XY]HW form,
+        The output type/dtype/device format matches the input flows with the same height/width as the inputs
+
+    NOTES:
+        The math behind this can be tricky if accumulating for a remap operation! Please see the real-life example in this docstring.
+        There's really only one correct way to do it, and you have to understand it.
+
+    EXAMPLE:
+        (See rp.cv_optical_flow's docstring's example for a realtime webcam demo!)
+
+    EXAMPLE (shapes):
+        >>> flows = np.random.rand(5, 2, 100, 100)  # 5 flows of shape (2, H, W)
+        >>> accumulated_flow = accumulate_flows(flows)
+        >>> accumulated_flow.shape
+        (2, 100, 100)
+
+        >>> flows = [torch.rand(2, 100, 100) for _ in range(5)]  # 5 flows of shape (2, H, W)
+        >>> accumulated_flows = accumulate_flows(flows, reduce=False)
+        >>> accumulated_flows.shape
+        torch.Size([5, 2, 100, 100])
+        
+    EXAMPLE (example with random warpage):
+        >>> original_image = load_image(
+        ...     "https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png",
+        ...     use_cache=True,
+        ... )
+        ... original_image = cv_resize_image(original_image, 2)
+        ... original_image = as_rgba_image(original_image)
+        ... 
+        ... seed = 10
+        ... random.seed(seed)
+        ... np.random.seed(seed)
+        ... flow_field = np.random.randn(*original_image.shape)
+        ... flow_field = cv_gauss_blur(flow_field, 400)
+        ... flow_field *= 400
+        ... display_image(full_range(flow_field))
+        ... 
+        ... flow_field = flow_field[:, :, :2].transpose(2, 0, 1)
+        ... 
+        ... cumulative_flow = flow_field
+        ... 
+        ... nearest_iteratively_warped_image = original_image
+        ... bilinear_iteratively_warped_image = original_image
+        ... single_warp_image = original_image
+        ... output_frames = []
+        ... for _ in eta(range(300)):
+        ...     bilinear_iteratively_warped_image = cv_remap_image(bilinear_iteratively_warped_image, *flow_field, relative=True, interp="bilinear")
+        ...     nearest_iteratively_warped_image = cv_remap_image(nearest_iteratively_warped_image, *flow_field, relative=True, interp="nearest")
+        ...     single_warp_image = cv_remap_image(original_image, *cumulative_flow, relative=True)
+        ...     cumulative_flow = accumulate_flows(cumulative_flow, flow_field)
+        ...     frame = horizontally_concatenated_images(
+        ...         labeled_images(
+        ...             bordered_images_solid_color(
+        ...                 with_alpha_checkerboards(
+        ...                     cv_resize_images(
+        ...                         [bilinear_iteratively_warped_image, nearest_iteratively_warped_image, single_warp_image],
+        ...                         size=0.5,
+        ...                     ),
+        ...                     tile_size=32,
+        ...                     first_color=0.1,
+        ...                     second_color=0.2,
+        ...                 ),
+        ...                 color=(0, 0, 0, 1),
+        ...                 thickness=8,
+        ...             ),
+        ...             ["Bilinear Interp\nIteratively Warped Image", "Nearest-Neighbor\nIteratively Warped Image", "Accumulated Flow\nSingle Warp"],
+        ...             font="G:Zilla Slab",
+        ...             size=30,
+        ...             size_by_lines=True,
+        ...         )
+        ...     )
+        ...     output_frames.append(frame)
+        ...     display_image(frame)
+        ... output_video = video_with_progress_bar(output_frames)
+        ... ans = printed(save_video_mp4(output_video, "accumulate_flow_demo.mp4"))
+
+    EXAMPLE (real-world video, needs GPU to run though. Run in a jupyter notebook.):
+        >>> import rp
+        ... from icecream import ic
+        ... from rp import *
+        ... import rp.git.CommonSource.noise_warp as nw
+        ... from IPython.display import clear_output
+        ... rp.git_import("CommonSource")
+        ... 
+        ... video=rp.load_video(
+        ...     rp.download_url_to_cache(
+        ...         "https://warpyournoise.github.io/docs/assets/videos/DeepFloyd/carturn_st_oilpaint_input.mp4"
+        ...     ),
+        ...     use_cache=False,
+        ... )
+        ... 
+        ... if not 'o' in vars():
+        ...     o=nw.get_noise_from_video(video) #Calculte flows, this function happens to do that for us.
+        ...     clear_output()
+        ... 
+        ... first_frame = o.down_video_frames[0]
+        ... flows = o.numpy_flows.astype(float)
+        ... iter_frames=[first_frame]
+        ... warp_frames=[first_frame]
+        ... cum_flow = np.zeros_like(flows[0])
+        ... for i, flow in enumerate(rp.eta(flows)):
+        ...     #UNCOMMENT ONE OF THE NEXT TWO SECTIONS
+        ...     #Note how cum_flow has to be calculated differently!
+        ... 
+        ...     ##HOW TO USE FORWARD ACCUMULATION (for scatter add)
+        ...     #cum_flow = rp.accumulate_flows(cum_flow, flow)
+        ...     ##cum_flow = rp.accumulate_flows(flows[:i+1]) #Equivalent but slower than the above
+        ...     #iter_frame = rp.as_numpy_image(rp.torch_scatter_add_image(rp.as_torch_image(iter_frames[-1]),*torch.tensor(flow    ),relative=True,interp='round'))
+        ...     #warp_frame = rp.as_numpy_image(rp.torch_scatter_add_image(rp.as_torch_image(first_frame    ),*torch.tensor(cum_flow),relative=True,interp='round'))
+        ... 
+        ...     #HOW TO USE BACKWARD ACCUMULATION (for remap)
+        ...     cum_flow = rp.accumulate_flows(-flow, cum_flow) #We need to reverse the args and negate them, because we're mapping backwards from this frame to the first frame
+        ...     # cum_flow = rp.accumulate_flows(-flows[:i+1][::-1]) #Equivalent to the above, but slower
+        ...     iter_frame = rp.cv_remap_image(iter_frames[-1],*-flow    ,relative=True,interp='bilinear')
+        ...     warp_frame = rp.cv_remap_image(first_frame    ,*cum_flow,relative=True,interp='bilinear')
+        ...     
+        ...     iter_frames.append(iter_frame)
+        ...     warp_frames.append(warp_frame)
+        ... 
+        ... preview_video = rp.video_with_progress_bar(
+        ...     rp.tiled_videos(
+        ...         rp.labeled_videos(
+        ...             [iter_frames, warp_frames, video],
+        ...             [
+        ...                 "Iteratively Warped Image\nBilinear Interp",
+        ...                 "Accumulated Flow\nSingle Image Warp",
+        ...                 "Original Video",
+        ...             ],
+        ...             font="G:Zilla Slab",
+        ...             size_by_lines=True,
+        ...         )
+        ...     ),
+        ...     size=5,
+        ...         bar_color='light blue',
+        ... )
+        ... 
+        ... # rp.display_image_slideshow(preview_video)
+        ... rp.display_video_in_notebook(preview_video, filetype='gif', framerate=30)
+    """
+
+    flows=detuple(flows)
+
+    assert len(flows)>=1, 'rp.accumulate_flows: should have at least 1 flow so we can infer the shape and type, but len(flows)=='+str(len(flows))
+
+    if reverse:
+        #Use reverse flow
+        return -accumulate_flows([-f for f in flows][::-1])
+
+    if is_numpy_array(flows):
+        assert flows.ndim==4, 'rp.accumulate_flows: flows should be in T2HW form, but its shape is '+str(flows.shape)
+        out_flows = []
+        ox, oy = flows[0]
+        for fx, fy in flows[1:]:
+            _x = cv_remap_image(fx, ox, oy, relative=True, interp="bilinear")
+            _y = cv_remap_image(fy, ox, oy, relative=True, interp="bilinear")
+            ox = ox + _x
+            oy = oy + _y
+            if not reduce: os.append(np.stack((ox, oy)))
+        if reduce: return np.stack((ox, oy))  #In  [XY]HW form
+        else:      return np.stack(os)        #In T[XY]HW form
+        
+    elif is_torch_tensor(flows):
+        assert flows.ndim==4, 'rp.accumulate_flows: flows should be in T2HW form, but its shape is '+str(flows.shape)
+        import torch
+        out_flows = []
+        o = flows[0]
+        for f in flows[1:]:
+            o = o + torch_remap_image(f, *o, relative=True, interp='bilinear')
+            if not reduce: out_flows.append(o.clone())
+        if reduce: return o                      #In  [XY]HW form
+        else:      return torch.stack(out_flows) #In T[XY]HW form
+        
+    elif all(map(is_numpy_array,flows)):
+        flows=as_numpy_array(flows)
+        return accumulate_flows(flows)
+        
+    elif all(map(is_torch_tensor,flows)):
+        import torch
+        return accumulate_flows(torch.stack(flows))
+    
+    else:
+        assert False, 'All flows should be either torch tensors or all numpy arrays, not a mix of both.'
 
 
 def resize_images_to_hold(*images, height: int = None, width: int = None, interp='auto', allow_shrink=True):
@@ -35208,7 +35756,160 @@ def get_optical_flow_via_pyflow(image_from, image_to):
 
     return flow
 
-def optical_flow_to_image(dx, dy, *, mode='saturation'):
+import cv2
+import numpy as np
+
+def cv_optical_flow(frame_a, frame_b, algorithm="DenseRLOF"):
+    """
+    Calculate the optical flow between two frames using the specified algorithm.
+
+    Args:
+        frame_a (np.ndarray, PIL.Image): The first frame.
+        frame_b (np.ndarray, PIL.Image): The second frame.
+        algorithm (str): The optical flow algorithm to use.
+            Supported algorithms: "DenseRLOF", "Farneback", "DualTVL1", "PCAFlow", "DeepFlow", "SparseToDense".
+            Default is "DenseRLOF".
+
+    Returns:
+        numpy.ndarray: The computed optical flow with shape (2, height, width).
+
+    Raises:
+        ValueError: If an unsupported optical flow algorithm is specified.
+        
+    EXAMPLE (can run on macbook):
+        >>> #UNCOMMENT IF YOU WANT TO USE WEBCAM
+        ... get_frame = lambda: as_rgba_image(as_grayscale_image(as_rgba_image(cv_resize_image(load_image_from_webcam(), 1 / 8))))
+        ... 
+        ... #UNCOMMENT IF YOU WANT TO USE A VIDEO INPUT
+        ... video=load_video('/Users/ryan/Desktop/Screenshots/cat_on_grass.mov')
+        ... video=remove_duplicate_frames(video,lazy=True)
+        ... video=iter(video)
+        ... get_frame=lambda:resize_image_to_fit(next(video),height=256)
+        ... 
+        ... frame_a = get_frame()
+        ... 
+        ... frames = []
+        ... flows = []
+        ... prev_frame = frame_a
+        ... 
+        ... vis_frames=[]
+        ... 
+        ... i=0
+        ... 
+        ... 
+        ... try:
+        ...     while True:
+        ... 
+        ...         frame_b = get_frame()
+        ... 
+        ...         #UNCOMMENT ONE OF THESE ALGORITHMS
+        ...         flow = cv_optical_flow(frame_a, frame_b, algorithm="DenseRLOF") #Best, Slowest
+        ...         #flow = cv_optical_flow(frame_a, frame_b, algorithm="DeepFlow")
+        ...         #flow = cv_optical_flow(frame_a, frame_b,algorithm='Farneback') #Fastest, Worst
+        ...         #flow = cv_optical_flow(frame_a, frame_b, algorithm="SparseToDense")
+        ...         #flow = cv_optical_flow(frame_a, frame_b, algorithm="PCAFlow")
+        ...         #flow = cv_optical_flow(frame_a, frame_b, algorithm="DualTVL1")
+        ... 
+        ...         frames.append(frame_a)
+        ...         flows.append(flow)
+        ... 
+        ...         N = 30
+        ... 
+        ...         i+=1
+        ...         i%=N
+        ... 
+        ...         if not i%N:
+        ...             #REset iter frame
+        ...             prev_frame=frames[-1]
+        ... 
+        ...         flow_vis = optical_flow_to_image(*flow,sensitivity=.02)
+        ... 
+        ...         frames = frames[-N:]
+        ...         flows = flows[-N:]
+        ...         cum_flow = accumulate_flows(flows, reverse=True)
+        ...         warped_frame = cv_remap_image(frames[0], *-cum_flow, relative=True)
+        ...         iter_warped_frame = cv_remap_image(prev_frame, *-flows[-1], relative=True)
+        ...         prev_frame = iter_warped_frame
+        ...         vis_frame = with_alpha_checkerboard(
+        ...             image_with_progress_bar(
+        ...                 labeled_image(
+        ...                     tiled_images(
+        ...                         labeled_images(
+        ...                             [warped_frame, frame_a, iter_warped_frame, flow_vis],
+        ...                             [
+        ...                                 "Accumulated Flow",
+        ...                                 "Current Frame",
+        ...                                 "Iterative Warp",
+        ...                                 "Flow Visualization",
+        ...                             ],
+        ...                             font="Futura",
+        ...                         ),
+        ...                         border_thickness=0,
+        ...                     ),
+        ...                     f"Frame {i}",
+        ...                     font="Futura",
+        ...                 ),
+        ...                 progress=i / (N - 1),
+        ...                 size=5,
+        ...             )
+        ...         )
+        ... 
+        ...         vis_frames.append(vis_frame)    
+        ...         display_image(vis_frame)
+        ... 
+        ...         frame_a = frame_b
+        ... except StopIteration:
+        ...     pass
+        ... 
+        ... 
+        ... display_video(video_with_progress_bar(vis_frames,bar_color='cyan'),loop=True)
+    """
+    frame_a = as_rgb_image(as_byte_image(frame_a))
+    frame_b = as_rgb_image(as_byte_image(frame_b))
+    assert frame_a.shape == frame_b.shape
+
+    # Convert PIL images to OpenCV format
+    cv_frame_a = cv2.cvtColor(np.array(frame_a), cv2.COLOR_RGB2BGR)
+    cv_frame_b = cv2.cvtColor(np.array(frame_b), cv2.COLOR_RGB2BGR)
+
+    algorithms = {
+        "DenseRLOF": lambda: cv2.optflow.DenseRLOFOpticalFlow_create(),
+        "Farneback": lambda: cv2.calcOpticalFlowFarneback,
+        "DualTVL1": lambda: cv2.optflow.DualTVL1OpticalFlow_create(),
+        "PCAFlow": lambda: cv2.optflow.createOptFlow_PCAFlow(),
+        "DeepFlow": lambda: cv2.optflow.createOptFlow_DeepFlow(),
+        "SparseToDense": lambda: cv2.optflow.createOptFlow_SparseToDense()
+    }
+
+    if algorithm not in algorithms:
+        raise ValueError("Unsupported optical flow algorithm: {}. "
+                         "Supported algorithms are: {}."
+                         .format(algorithm, ", ".join(algorithms.keys())))
+
+    if algorithm in ["Farneback", "DualTVL1", "DeepFlow", "SparseToDense"]:
+        #These flow algorithms operate in grayscale only
+        cv_frame_a = cv2.cvtColor(cv_frame_a, cv2.COLOR_BGR2GRAY)
+        cv_frame_b = cv2.cvtColor(cv_frame_b, cv2.COLOR_BGR2GRAY)
+
+    if algorithm == "Farneback":
+        #For some reason Farneback needs more parameters
+        params = dict(
+            pyr_scale=0.5,
+            levels=3,
+            winsize=15,
+            iterations=3,
+            poly_n=5,
+            poly_sigma=1.2,
+            flags=0
+        )
+        flow = algorithms[algorithm]()(cv_frame_a, cv_frame_b, None, **params)
+    else:
+        flow = algorithms[algorithm]().calc(cv_frame_a, cv_frame_b, None)
+
+    flow = np.transpose(flow, (2, 0, 1))
+    return flow
+
+def optical_flow_to_image(dx, dy, *, mode='saturation', sensitivity=None):
     """
     Visualize optical flow as an RGB image - and return the image.
     
@@ -35221,6 +35922,8 @@ def optical_flow_to_image(dx, dy, *, mode='saturation'):
        mode (str, optional): The visualization mode. Can be:
            - 'saturation': The saturation represents the magnitude. Default.
            - 'brightness': The brightness represents the magnitude.
+       sensitivity (float, optional): If not specified, flow magnitudes are normalized 
+           Otherwise, set this to the max flow magnitude you expect to see.
 
        TODO: Use floating-point HSV precision, and a custom mag factor
        mag_factor (float, optional): the magnitude will be scaled by this number if specified,
@@ -35252,9 +35955,21 @@ def optical_flow_to_image(dx, dy, *, mode='saturation'):
     hsv = np.zeros((*dx.shape, 3), dtype=np.uint8)
     hsv[:] = 255
     mag, ang = cv2.cartToPolar(dx, dy)
+
+    if sensitivity is None:
+        norm_mag = cv2.sensitivity(mag, None, 0, 255, cv2.NORM_MINMAX)
+    elif is_number(sensitivity):
+        norm_mag = mag
+        norm_mag = mag / sensitivity
+        norm_mag = np.clip(norm_mag, 0, 255)
+        norm_mag = norm_mag.astype(np.uint8)
+    else:
+        assert False, sensitivity
+        
+
+
     hsv[..., 0] = ang * 180 / np.pi / 2
-    hsv[..., {'brightness': 2, 'saturation': 1}[mode]] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
-       
+    hsv[..., {'brightness': 2, 'saturation': 1}[mode]] = norm_mag       
     rgb = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
     
     return rgb
@@ -38104,7 +38819,9 @@ known_pypi_module_package_names={
     'xontrib': 'xonsh',
     'yapftests': 'yapf',
     'yaml':'PyYAML',
-    'zalgo_text': 'zalgo-text'
+    'zalgo_text': 'zalgo-text',
+
+    'hitherdither' : "git+https://www.github.com/hbldh/hitherdither",
 }
 
 
