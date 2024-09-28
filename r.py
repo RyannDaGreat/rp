@@ -15715,6 +15715,7 @@ def pseudo_terminal(
         FD
         AFD (FDA)
         FDT
+        FDTA
         FD SEL (FDS)
         LS SEL (LSS)
         LS REL (LSR)
@@ -18114,6 +18115,17 @@ def pseudo_terminal(
                             result=repr(result)
                             user_message=result
 
+                        elif user_message=='FDTA':
+                            fansi_print("FDT aka FinD Text ans --> Grep with FZF on all files listed in ans",'blue','bold')
+
+                            ans_val = get_ans()
+                            if isinstance(ans_val, str):
+                                ans_val = ans_val.splitlines()
+
+                            result=rp.r._fzf_multi_grep(text_files=ans_val)
+                            result=repr(result)
+                            user_message=result
+
                         elif user_message=='LS FZF' or user_message=='LSZ' or user_message=='LSQ' or user_message=='LS QUE':
                             #TODO: LSQ could be made obsolete if there was some way to sort the results of LSZ
                             #However, I don't know how to do this
@@ -19041,6 +19053,7 @@ def save_animated_png(frames, path=None,*,framerate=None):
 
     frames = as_byte_images(frames)
 
+    make_directory(get_path_parent(path))
     save_animated_png(path, frames, delay=delay)
 
     return path
@@ -22602,12 +22615,249 @@ def _slow_pil_text_to_image(
 def as_rgba_float_color(color,clamp=True):
     """
     TODO: use this all over RP!
+
+    EXAMPLE:
+
+        >>> colors = '''
+        ... //Generating all unique color combinations of two words or less:
+        ... //import itertools;ans=line_join(unique(list(r._rp_colors)+[' '.join(x) for x in itertools.product(*[list(r._rp_colors)]*2)],key=as_rgba_float_color))
+        ... red
+        ... green
+        ... blue
+        ... cyan
+        ... magenta
+        ... yellow
+        ... white
+        ... black
+        ... grey
+        ... orange
+        ... hotpink
+        ... purple
+        ... chartreuse
+        ... maroon
+        ... navy
+        ... olive
+        ... teal
+        ... silver
+        ... red blue
+        ... red white
+        ... red grey
+        ... red orange
+        ... red hotpink
+        ... red purple
+        ... red chartreuse
+        ... red maroon
+        ... red navy
+        ... red olive
+        ... red teal
+        ... red silver
+        ... green cyan
+        ... green white
+        ... green black
+        ... green grey
+        ... green orange
+        ... green hotpink
+        ... green purple
+        ... green chartreuse
+        ... green maroon
+        ... green navy
+        ... green olive
+        ... green teal
+        ... green silver
+        ... blue cyan
+        ... blue magenta
+        ... blue white
+        ... blue grey
+        ... blue orange
+        ... blue purple
+        ... blue chartreuse
+        ... blue maroon
+        ... blue navy
+        ... blue olive
+        ... blue teal
+        ... blue silver
+        ... cyan white
+        ... cyan grey
+        ... cyan orange
+        ... cyan hotpink
+        ... cyan purple
+        ... cyan chartreuse
+        ... cyan navy
+        ... cyan olive
+        ... cyan teal
+        ... cyan silver
+        ... magenta white
+        ... magenta grey
+        ... magenta orange
+        ... magenta hotpink
+        ... magenta purple
+        ... magenta chartreuse
+        ... magenta maroon
+        ... magenta olive
+        ... magenta teal
+        ... magenta silver
+        ... yellow white
+        ... yellow grey
+        ... yellow orange
+        ... yellow hotpink
+        ... yellow purple
+        ... yellow chartreuse
+        ... yellow olive
+        ... yellow teal
+        ... yellow silver
+        ... white grey
+        ... white orange
+        ... white hotpink
+        ... white purple
+        ... white chartreuse
+        ... white olive
+        ... white teal
+        ... white silver
+        ... black grey
+        ... black orange
+        ... black purple
+        ... black maroon
+        ... black navy
+        ... black olive
+        ... black teal
+        ... black silver
+        ... grey orange
+        ... grey purple
+        ... grey silver
+        ... orange hotpink
+        ... orange purple
+        ... orange silver
+        ... hotpink purple
+        ... hotpink maroon
+        ... hotpink silver
+        ... purple chartreuse
+        ... purple maroon
+        ... purple navy
+        ... purple olive
+        ... purple teal
+        ... purple silver
+        ... chartreuse navy
+        ... chartreuse silver
+        ... maroon navy
+        ... maroon silver
+        ... navy teal
+        ... navy silver
+        ... olive silver
+        ... teal silver
+        ... 
+        ... //Some others for demonstration purposes
+        ... dark green
+        ... green
+        ... light green
+        ... magenta
+        ... red magenta
+        ... blue magenta
+        ... red blue
+        ... light red
+        ... blue green
+        ... blue cyan
+        ... light blue cyan
+        ... light blue
+        ... light light blue
+        ... light light light blue
+        ... red green
+        ... light red green
+        ... magenta cyan
+        ... cyan
+        ... cyan orange
+        ... orange
+        ... yellow
+        ... light purple
+        ... purple
+        ... dark purple
+        ... blue purple
+        ... purple
+        ... red purple
+        ... red yellow
+        ... orange
+        ... yellow orange
+        ... 
+        ... lime
+        ... green
+        ... yellow green
+        ... 
+        ... light hot pink
+        ... hot pink
+        ... dark hot pink
+        ... 
+        ... pink
+        ... light light dark red
+        ... light red
+        ... 
+        ... yellow cyan 
+        ... yellow yellow cyan
+        ... 
+        ... dark gray orange
+        ... 
+        ... //Transparency / Translucency
+        ... transparent orange
+        ... translucent red
+        ... translucent red yellow
+        ... translucent navy green
+        ... translucent brown
+        ... transparent dark green
+        ... transparent black
+        ... 
+        ... //Hex Codes
+        ... #007FFF
+        ... FF0077
+        ... abcdef
+        ... 
+        ... //Hex Codes with Translucency
+        ... translucent 123456
+        ... 
+        ... 
+        ... '''.strip().splitlines()
+        ... colors = [x for x in colors if x.strip() and not x.startswith('//')]
+        ... images = crop_images_to_max_size(
+        ...     [
+        ...         cv_resize_image(
+        ...             pil_text_to_image(
+        ...                 " " + color_name + " ",
+        ...                 font="G:Zilla Slab",
+        ...                 size=256,
+        ...                 background_color='transparent white',
+        ...             ),
+        ...             1 / 8,
+        ...         )
+        ...         for color_name in colors
+        ...     ]
+        ... )
+        ... images = [
+        ...     blend_images(name, with_drop_shadow(image), 1)
+        ...     for name, image in zip(colors, images)
+        ... ]
+        ... out_image=with_alpha_checkerboard(tiled_images(images, border_thickness=0, length=4,),tile_size=32)
+        ... display_image(out_image)
+        ... print("SAVED",save_image(out_image,'color_chart.png'))
+
     """
     assert isinstance(color, tuple) or is_number(color) or isinstance(color,str)
     if isinstance(color,str):
         if color.strip().lower() in 'transparent invisible'.split():
             return (0,0,0,0)
-        color=color_name_to_float_color(color)
+    
+        if 'transparent' in color:
+            alpha=0
+            color = color.replace('transparent','').strip()
+        elif 'translucent' in color:
+            alpha=.5
+            color = color.replace('translucent','').strip()
+        else:
+            alpha=1
+
+        try:
+            color=hex_color_to_float_color(color)
+        except ValueError:
+            color=color_name_to_float_color(color)
+
+        color = color + (alpha,)
+
     if is_number(color):
         color = (color, ) * 3
     if len(color) == 3:
@@ -23374,6 +23624,77 @@ def get_all_image_files(*args,**kwargs):
         }
     )
     return list(filter(is_image_file,file_paths))
+
+def get_all_runnable_python_files(
+    folder=".",
+    *,
+    recursive=True,
+    explore_symlinks=False,
+    ignore_permission_errors=True,
+    include_hidden=False,
+    lazy=False,
+):
+    """
+    Retrieve all runnable Python files from a specified folder.
+
+    A runnable Python file is defined as a file with a '.py' or '.rpy' extension
+    that contains an 'if __name__ == "__main__":' block.
+
+    EXAMPLE:
+        Was helpful when I wanted to find the "torchrun" command's main file:
+            First ran get_all_runnable_python_files() in torch's directory,
+            followed by FDTA in pseudo_terminal to search for 'torchrun'
+
+    Args:
+        folder (str, optional): The folder to search for runnable Python files.
+            Defaults to the current directory (".").
+        recursive (bool, optional): Whether to search subdirectories recursively.
+            Defaults to True.
+        explore_symlinks (bool, optional): Whether to follow symbolic links during
+            the search. Defaults to False.
+        ignore_permission_errors (bool, optional): Whether to ignore permission
+            errors when accessing files or directories. Defaults to True.
+        include_hidden (bool, optional): Whether to include hidden files and
+            directories in the search. Defaults to False.
+        lazy (bool, optional): Whether to return a lazy generator instead of a
+            list of files. Defaults to False.
+
+    Returns:
+        list or generator: A list or lazy generator of runnable Python files,
+            depending on the `lazy` argument.
+    """
+    import re
+
+    file_extensions = [".py", ".rpy"]
+
+    def _has_if_name_main(code):
+        pattern = r"\nif\s+\_\_name\_\_\s*==\s*['\"]{1,3}\_\_main\_\_['\"]{1,3}\s*:"
+        matches = re.finditer(pattern, code, re.IGNORECASE | re.MULTILINE)
+        output = [match.group(0) for match in matches]
+        output = bool(output)
+        return output
+
+    files = (
+        x
+        for x in _get_all_paths_fast(
+            include_folders=False,
+            include_files=True,
+            lazy=True,
+            recursive=recursive,
+            ignore_permission_errors=ignore_permission_errors,
+            explore_symlinks=explore_symlinks,
+            include_hidden=include_hidden,
+        )
+        if ends_with_any(x, file_extensions)
+    )
+
+    files = (x for x in files if _has_if_name_main(load_text_file(x)))
+
+    if not lazy:
+        files = list(files)
+
+    return files
+
 
 def get_all_folders(*args,**kwargs):
     return get_all_paths(*args,**{'include_folders':True,'include_files':False,**kwargs})
@@ -24620,7 +24941,7 @@ def hex_color_to_byte_color(hex_color:str):
     """
     if len(hex_color)==len('#ABCDEF'):
         hex_color=hex_color[1:]
-    assert len(hex_color)==len('ABCDEF'), 'Hex colors must be RGB'
+    if not len(hex_color)==len('ABCDEF'): raise ValueError('Hex colors must be RGB')
     r=int(hex_color[0:2],16)
     g=int(hex_color[2:4],16)
     b=int(hex_color[4:6],16)
@@ -24671,23 +24992,64 @@ _rp_colors = dict(
     grey=(0.5, 0.5, 0.5),
     gray=(0.5, 0.5, 0.5),
     orange=(1.0, 0.5, 0.0),
-    purple=(1.0, 0.0, 0.5),
+    hotpink=(1.0, 0.0, 0.5),
+    purple=(.5, 0.0, 0.75),
     # CSS3 Weird Names
     aqua=(0.0, 1.0, 1.0),
     lime=(0.0, 1.0, 0.0),
     fuchsia=(1.0, 0.0, 1.0),
     # CSS3 Names with perfect fractions
     chartreuse=(0.5, 1.0, 0.0),
-    darkblue=(0.0, 0.0, 0.5),
-    darkcyan=(0.0, 0.5, 0.5),
-    darkmagenta=(0.5, 0.0, 0.5),
-    darkred=(0.5, 0.0, 0.0),
     maroon=(0.5, 0.0, 0.0),
     navy=(0.0, 0.0, 0.5),
     olive=(0.5, 0.5, 0.0),
     teal=(0.0, 0.5, 0.5),
     silver=(0.8, 0.8, 0.8),
+    dark=(0.0,0.0,0.0),
+    light=(1.0,1.0,1.0),
 )
+
+@memoized
+def _get_rp_color(name):
+    """
+    Allows mixing of colors, like "blue green", "dark gray" and "light light red"
+    "lightred" is equivalent to "light red" etc
+    """
+    import re
+
+    def blend_colors(color_a, color_b):
+        ra,ga,ba=color_a
+        rb,gb,bb=color_b
+        return ((ra+rb)/2,(ga+gb)/2,(ba+bb)/2)
+    
+    color_names = sorted(_rp_colors.keys(), key=len, reverse=True)
+    color_regex = re.compile('|'.join(color_names))
+    
+    color = None
+    color_names = []
+    start_index = 0
+    while True:
+        match = color_regex.search(name, start_index)
+        if not match:
+            break
+        
+        color_name = match.group()
+        color_names.append(color_name)
+        start_index = match.end()
+    
+    if not color_names:
+        raise ValueError("Unknown color: {}".format(name))
+    
+    if start_index != len(name):
+        raise ValueError("Invalid color name: {}".format(name))
+    
+    for color_name in color_names[::-1]:
+        if color is None:
+            color = _rp_colors[color_name]
+        else:
+            color = blend_colors(color, _rp_colors[color_name])
+    
+    return color
 
 def color_name_to_float_color(color_name: str):
     """
@@ -24700,11 +25062,15 @@ def color_name_to_float_color(color_name: str):
     color_name = color_name.lower()
     color_name = color_name.replace("_", "")
     color_name = color_name.replace(" ", "")
+    
+    try:
+        return _get_rp_color(color_name)
+    except ValueError:
+        pass
 
-    if color_name in _rp_colors:
-        return _rp_colors[color_name]
+    try:
+        #It's ok! Try using CSS colors instead
 
-    else:
         # Use CSS3 webcolors
         # There are only 147 webcolors - we can probably inline this
         pip_import("webcolors")
@@ -24713,6 +25079,11 @@ def color_name_to_float_color(color_name: str):
         hex_color = webcolors.name_to_hex(color_name)
         float_color = hex_color_to_float_color(hex_color)
         return float_color
+    except ValueError:
+        #We failed to get it from CSS3 too!
+        pass
+
+    raise ValueError("rp.color_name_to_float_color: Unrecognized color name in either RP's color system or CSS3: "+repr(color_name))
 
 def color_name_to_byte_color(color_name):
     return float_color_to_byte_color(color_name_to_float_color(color_name))
@@ -25667,6 +26038,8 @@ def download_youtube_video(url_or_id: str,
     Downloads a YouTube video based on the given URL or video ID. The function can selectively download video only, 
     audio only, or both depending on the parameters. All downloads are currently as mp4 files.
 
+    NOTE: If it doesn't work, try "pip install pytubefix --upgrade"
+
     If need_audio is True, we might only download the audio file (or might download a video with audio)
     If need_video is True, we might download a video without audio (potentially at much higher resolution)
     If both are True, it tends to only download at 360p (aka video height=360).
@@ -26052,15 +26425,14 @@ class VideoWriterMP4:
     def __init__(self, path=None, framerate=60, video_bitrate='medium', height=None, width=None, silent=False):
         # Originally from: https://github.com/kkroening/ffmpeg-python/issues/246
 
+        _ensure_ffmpeg_installed()
+
         self.silent=silent
 
         if path is None: path=_get_default_video_path()
         if not has_file_extension(path) or get_file_extension(path).lower()!='mp4': path+='.mp4'
 
         rp.pip_import('ffmpeg', 'ffmpeg-python')
-        
-        if not 'ffmpeg' in get_system_commands():
-            print('WARNING: Please make sure ffmpeg is installed!')
 
         if isinstance(video_bitrate,str) and video_bitrate in 'low medium high max':
             video_bitrate = {'low':100000,'medium':1000000,'high':10000000,'max':10000000000}[video_bitrate]
@@ -26199,92 +26571,16 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
     return writer.path
 
 
-
-#def save_video_mp4(frames, path, framerate=60, *, video_bitrate='medium', vcodec='libx264'):
-#    # frames: a list of images as defined by rp.is_image(). Saves an .mp4 file at the path
-#    # Note that frames can also be a generator, as opposed to a numpy array.
-#    # This can let you save larger videos that would otherwise make your computer run out of memory.
-#    #
-#    #EXAMPLE BITRATES (used for the Sunkist soda example):
-#    # 100000    : ( 345KB) is decent, and very compressed. It starts out a bit mushy though
-#    # 1000000   : ( 3.3MB) I believe this is close to ffmpeg's default rate. It looks okay, but it does look a tiny bit mushy
-#    # 10000000  : (32.7MB)
-#    # 100000000 : (93.0MB)
-#    # 1000000000: (93.0MB) It seems to be the maximum size
-    
-#    if video_bitrate in 'small medium large max':
-#        video_bitrate = {'small':100000,'medium':1000000,'large':10000000,'max':10000000000}[video_bitrate]
-
-#    assert isinstance(video_bitrate,int)
-
-#    # Originally from: https://github.com/kkroening/ffmpeg-python/issues/246
-#    assert path.endswith('.mp4')
-#    rp.pip_import('ffmpeg','ffmpeg-python')
-#    rp.pip_import('more_itertools','more-itertools')
-#    import ffmpeg
-#    import numpy as np
-#    from more_itertools import peekable
-    
-#    frames=peekable(frames)
-#    first_frame=frames.peek()
-#    assert is_image(first_frame)
-#    height,width=get_image_dimensions(first_frame)
-
-#    #Make sure the height and width are even. If it isn't, ffmpeg will throw a fit:
-#    #     ...   [libx264 @ 0x55e695b389c0] width not divisible by 2 (611x550)    ...
-#    if width%2:
-#        width-=1
-#    if height%2:
-#        height-=1
-    
-#    def prepare_frame(frame):
-#        assert is_image(frame)
-#        frame=rp.as_rgb_image(frame)
-#        frame=rp.as_byte_image(frame)
-#        frame=rp.crop_image(frame,height,width)
-#        return frame
-
-#    process = (
-#        ffmpeg
-#            .input('pipe:',
-#                   format='rawvideo',
-#                   pix_fmt='rgb24',
-#                   s='{}x{}'.format(width, height),
-#                   r=framerate,
-#                   )
-#            .output(path, pix_fmt='yuv420p',
-#                    vcodec=vcodec,
-#                    video_bitrate=video_bitrate,    
-#                    #Interstingly, this is not where the framerate should go, based on my experiments...
-#                    )
-#            .overwrite_output()
-#            .run_async(pipe_stdin=True)
-#    )
-    
-#    for i,frame in enumerate(frames):
-#        frame=prepare_frame(frame)
-#        process.stdin.write(
-#            frame
-#                .astype(np.uint8)
-#                .tobytes()
-#        )
-        
-#    process.stdin.close()
-#    process.wait()
-    
-#    return path
-
-def save_video_gif(video, path=None, *, framerate=30):
+def save_video_gif_via_pil(video, path=None, *, framerate=30):
     """
     Save a video to a GIF with given path and framerate.
     Returns the path of the new GIF.
 
-    Right now framerate only seems to be accurate for low framerates.
-    Todo: Fix that.
+    TODO: Support higher quality dithering via adapting VideoWriterMP4 and convert_to_gif_via_ffmpeg together somehow
     """
 
     if isinstance(video, str):
-        assert is_video_file(video)
+        assert is_video_file(video) or ends_with_any(video, '.gif', '.png')
         video=load_video_stream(video)
 
     if path is None:
@@ -26310,7 +26606,131 @@ def save_video_gif(video, path=None, *, framerate=30):
 
     return path
 
-save_animated_gif = save_video_gif
+save_animated_gif = save_video_gif = save_animated_gif_via_pil = save_video_gif_via_pil
+
+#COMMENTED OUT UNTIL I CAN GUARANTEE EVERY FRAME IN THE INPUT IS INCLUDED IN THE OUTPUT REGARDLESS OF FRAMERATE
+# def save_animated_gif_via_ffmpeg(video, path=None, *, silent=False, custom_palette=True, framerate=30):
+#     """
+#     TODO: This is currently jank; dont use temp files and avoid MP4 artifacts.
+#     This saves higher quality GIF's than save_animated_gif_via_pil because it uses dithering
+#     """
+#
+#     if path is None:
+#         path = get_unique_copy_path('video.gif')
+#     path = with_file_extension(path ,'gif')
+#
+#     temp_mp4=temporary_file_path('mp4')
+#     try:
+#         if isinstance(video, str):
+#             mp4_path = video
+#         else:
+#             mp4_path = save_video_mp4(video, temp_mp4, silent=silent)
+#
+#         gif_path = convert_to_gif_via_ffmpeg(mp4_path, path, silent=silent, custom_palette=custom_palette, framerate=framerate)
+#     finally:
+#         if path_exists(temp_mp4):
+#             delete_file(temp_mp4)
+#
+#     return gif_path
+
+
+
+def _ensure_ffmpeg_installed():
+    if "ffmpeg" not in get_system_commands():
+        assert False, "Please install ffmpeg!"
+
+def convert_to_gif_via_ffmpeg(
+    video_path,
+    output_path=None,
+    *,
+    framerate=None,
+    custom_palette=True,
+    silent=False,
+):
+    """
+    Converts a video file to a GIF using FFmpeg.
+    It does a really good job - with dithering! If you set custom_palette=False, the colors will be worse but it will be sometimes more than 2x smaller.
+    In any case it will still use dithering! Unlike the save_animated_gif_via_pil function - which, unless pre-dithered, will not dither your images
+
+    TODO: Investigate the framerate arg. It sometimes skips frames! And doesn't always seem to give the framerate I ask of it.
+
+    Args:
+        video_path (str): The path to the input video file.
+        output_path (str, optional): The path where the output GIF will be saved. If not provided, 
+            a unique output path will be generated based on the input video's path with the '.gif' extension.
+        framerate (int, optional): The desired framerate for the GIF. Default is None, meaning it will inherit the input video file's framerate.
+        custom_palette (bool, optional): Whether to use a custom palette for higher quality but larger file size.
+            If True, a temporary palette file will be generated and used for the GIF conversion.
+            If False, the GIF will be converted without using a custom palette, resulting in a smaller file size
+            but potentially lower quality. Default is True.
+        silent (bool, optional): Whether to suppress FFmpeg output. If True, FFmpeg will run in quiet mode.
+            Default is False.
+
+    Returns:
+        str: The path to the generated GIF file.
+
+    EXAMPLE:
+        >>> video_file = download_url_to_cache("https://www.shutterstock.com/shutterstock/videos/1094782389/preview/stock-footage-cute-black-and-white-border-collie-dog-touch-owner-hand-by-paw-give-high-five-to-woman-attractive.webm")
+        ... print(convert_to_gif_via_ffmpeg(video_file,'doggy.gif'))  #18MB
+        ... print(convert_to_gif_via_ffmpeg(video_file,'doggy_without_custom_palette.gif',custom_palette=False)) #6MB - smaller but visible dithering artifacts
+
+    Learned how to do this from here: https://steemit.com/programming/@makerhacks/how-to-get-higher-quality-gifs-with-ffmpeg
+
+    Note: FFMPEG might choose the frame delays on a per-frame basis, making it jerky if viewed at a low framerate! You can fix this with 
+        rp.save_animated_gif(rp.convert_to_gif_via_ffmpeg(video), framerate=12)
+        Because save_animated_gif will preserve dithering (it just doesn't make dithering)
+
+    """
+
+    import os
+    import subprocess
+    
+    assert isinstance(video_path,str)
+    assert number_of_lines(video_path)==1
+    assert path_exists(video_path), 'r._convert_to_gif_via_ffmpeg: Input file does not exist'
+    assert framerate is None or isinstance(framerate, int) and framerate>=1, framerate
+
+    _ensure_ffmpeg_installed()
+
+    if output_path is None:
+        output_path = with_file_extension(video_path, "gif", replace=True)
+        output_path = get_unique_copy_path(output_path)
+
+    input_framerate = get_video_file_framerate(video_path)
+
+    maybe_silent = ["-loglevel", "quiet"] if silent else []
+    maybe_framerate = ["-r", str(input_framerate)]
+
+    if custom_palette:
+        # Generate a temporary palette file
+        palette_file = temporary_file_path("png")
+        try:
+            # Generate the palette using FFmpeg
+            subprocess.call(["ffmpeg", "-y", "-i", video_path, "-vf", "palettegen", palette_file] + maybe_silent)
+            # Convert the video to GIF using the generated palette
+            subprocess.call(["ffmpeg", "-y", "-i", video_path, "-i", palette_file, "-lavfi", "paletteuse", ]+maybe_framerate+[output_path] + maybe_silent)
+        finally:
+            # Remove the temporary palette file
+            if os.path.exists(palette_file):
+                os.remove(palette_file)
+    else:
+        # Convert the video to GIF without using a custom palette
+        subprocess.call(["ffmpeg", "-y", "-i", video_path, ]+maybe_framerate+[ output_path] + maybe_silent)
+
+    if framerate is not None:
+        #As stated in the note, when framerates are slow the per-frame delays become more noticeable and makes the video appear jerky
+        #This is a slow fix...but it does in fact fix the problem! TODO: Directly modify the delays in the GIF instead - that should be faster
+        if not silent:
+            print("Setting the framerate to %i..."%framerate)
+            temp_path = temporary_file_path('gif')
+            move_file(output_path, temp_path)
+            try:
+                output_path = save_animated_gif(temp_path, output_path, framerate=framerate)
+            finally:
+                delete_file(temp_path)
+
+    return output_path
+
 
 def save_video(images, path, *, framerate=60):
     """
@@ -26402,7 +26822,7 @@ def add_audio_to_video_file(video_path, audio_path, output_path=None):
     """
     import subprocess
     
-    assert 'ffmpeg' in get_system_commands(), 'Please install ffmpeg'    
+    _ensure_ffmpeg_installed()
 
     if output_path is None:
         output_path = get_unique_copy_path(
@@ -26456,10 +26876,14 @@ def change_video_file_framerate(video_path, new_framerate, output_path=None):
     Note: FFmpeg must be installed and accessible from the command line for this function to work.
     References:
         https://superuser.com/questions/1088382/change-framerate-in-ffmpeg-without-reencoding
+
+    Notes:
+        Confirmed to work with the following filetypes. Might work with more! Didn't test them all yet.
+            MP4, GIF
     """
     import subprocess
     
-    assert 'ffmpeg' in get_system_commands(), 'Please install ffmpeg'    
+    _ensure_ffmpeg_installed()
     
     if output_path is None:
         output_path = get_unique_copy_path(
@@ -30555,23 +30979,21 @@ def _load_ryan_lazygit_config():
     path=get_absolute_path(path)
     make_directory(get_path_parent(path))
     
-    config_lines="""
-        
-# < RP Lazygit Config Start >
-#DEFAULTS: https://github.com/jesseduffield/lazygit/blob/master/docs/Config.md
-keybinding:
-  universal:
-    quit: '<c-d>'
-    quit-alt1: '<c-d>' # alternative/alias of quit
-    # return: 'q' # return to previous menu, will quit if there's nowhere to return
-    return: '<c-c>' # return to previous menu, will quit if there's nowhere to return
-    scrollDownMain-alt2: null #NOT <c-d>
-refresher:
-  refreshInterval: 60 # Save battery life...
-  # fetchInterval: 60 # re-fetch interval in seconds
-# < RP Lazygit Config End >
-
-"""
+    config_lines=unindent("""
+        # < RP Lazygit Config Start >
+        #DEFAULTS: https://github.com/jesseduffield/lazygit/blob/master/docs/Config.md
+        keybinding:
+          universal:
+            quit: '<c-d>'
+            quit-alt1: '<c-d>' # alternative/alias of quit
+            # return: 'q' # return to previous menu, will quit if there's nowhere to return
+            return: '<c-c>' # return to previous menu, will quit if there's nowhere to return
+            scrollDownMain-alt2: null #NOT <c-d>
+        refresher:
+          refreshInterval: 60 # Save battery life...
+          # fetchInterval: 60 # re-fetch interval in seconds
+        # < RP Lazygit Config End >
+    """).strip()
 
     if file_exists(path) and config_lines.strip() not in load_text_file(path):
         append_line_to_file(config_lines,path)
@@ -34154,6 +34576,7 @@ def _get_all_paths_fast(
     include_symlink_folders = include_folders if include_symlink_folders is None else include_symlink_folders 
 
     def should_include(x:_PathInfo):
+        is_hidden = x.name.startswith('.')
         return (include_hidden or not is_hidden) and (
                include_folders         and x.is_folder and not x.is_symlink
             or include_files           and x.is_file   and not x.is_symlink
@@ -35485,7 +35908,7 @@ def _fdt_for_command_line():
         pass
 
 
-def _fzf_multi_grep(extensions='',print_instructions=True):
+def _fzf_multi_grep(extensions='',print_instructions=True,text_files=None):
     pip_import('iterfzf')
 
     heap=_MinFileSizeHeap()
@@ -35534,16 +35957,19 @@ def _fzf_multi_grep(extensions='',print_instructions=True):
             return False
         return True
         
-    def text_files_walk():
-        root='.'
-        return map(
-            get_relative_path,
-            filter(
-                should_read,
-                files_walk(root),
-            ),
-        )
-    
+    if text_files is None:
+        def text_files_walk():
+            root='.'
+            return map(
+                get_relative_path,
+                filter(
+                    should_read,
+                    files_walk(root),
+                ),
+            )
+    else:
+        text_files_walk = lambda: text_files
+        
     def text_lines_walk():
         import multiprocessing.pool,itertools
 
@@ -35756,9 +36182,6 @@ def get_optical_flow_via_pyflow(image_from, image_to):
 
     return flow
 
-import cv2
-import numpy as np
-
 def cv_optical_flow(frame_a, frame_b, algorithm="DenseRLOF"):
     """
     Calculate the optical flow between two frames using the specified algorithm.
@@ -35864,6 +36287,12 @@ def cv_optical_flow(frame_a, frame_b, algorithm="DenseRLOF"):
         ... 
         ... display_video(video_with_progress_bar(vis_frames,bar_color='cyan'),loop=True)
     """
+    pip_import("cv2")
+    pip_import("numpy")
+
+    import cv2
+    import numpy as np
+
     frame_a = as_rgb_image(as_byte_image(frame_a))
     frame_b = as_rgb_image(as_byte_image(frame_b))
     assert frame_a.shape == frame_b.shape
