@@ -2831,11 +2831,27 @@ def image_to_all_normalized_xy_rgb_training_pairs(image):
 # endregion
 
 
-def xy_float_images(height=256,width=256):
+def xy_float_images(
+    height=256,
+    width=256,
+    *,
+    min_x=0,
+    max_x=1,
+    min_y=0,
+    max_y=1
+):
     """
     Returns a pair of grayscale images: x, y
     Where they increase from 0 to 1 on that axis
     
+    Args:
+        height (int): Height of the output images.
+        width (int): Width of the output images.
+        min_x, max_x, min_y, max_y (float, optional): The ranges of x and y in the output. Defaults to between 0 and 1.
+    
+    Returns:
+        np.ndarray: A tensor of shape (2, height, width) representing the x and y images
+
     EXAMPLES:
          >>> #Radius example
          >>> distance = (((2*xy_float_images()-1)**2).sum(0))**.5
@@ -2849,10 +2865,61 @@ def xy_float_images(height=256,width=256):
          >>>    display_image(2*full_range(rotated**5)-1)
     """
     x, y = np.meshgrid(
-        np.linspace(0, 1, num=width),
-        np.linspace(0, 1, num=height),
+        np.linspace(min_x, max_x, num=width ),
+        np.linspace(min_y, max_y, num=height),
     )
     return np.stack([x,y])
+
+def xy_torch_matrices(
+    height=256,
+    width=256,
+    *,
+    dtype=None,
+    device=None,
+    min_x=0,
+    max_x=1,
+    min_y=0,
+    max_y=1
+):
+    """
+    Sister function of xy_float_images, but this one uses torch tensors
+
+    Returns a pair of matrices: x, y
+    Where they increase from 0 to 1 on that axis
+    
+    Args:
+        height (int): Height of the output images.
+        width (int): Width of the output images.
+        dtype (torch.dtype, optional): Data type of the output tensors. Defaults to None, corresponding to torch.float32
+        device (torch.device, optional): Device to create the output tensors on. Defaults to None, corresponding to "cpu"
+        min_x, max_x, min_y, max_y (float, optional): The ranges of x and y in the output. Defaults to between 0 and 1.
+    
+    Returns:
+        torch.Tensor: A tensor of shape (2, height, width) representing the x and y images.
+    
+    EXAMPLES:
+         >>> #Radius example
+         >>> distance = (((2*xy_torch_matrices()-1)**2).sum(0)).sqrt()
+         >>> display_image(distance)
+         
+         >>> #Animation example
+         >>> for angle in range(360):
+         >>>    angle*=np.pi*2/360
+         >>>    x,y=2 * xy_torch_matrices(height=256,width=256) - 1
+         >>>    rotated=x*np.cos(angle)+y*np.sin(angle)
+         >>>    display_image(2*full_range(rotated**5)-1)
+    """
+    pip_import('torch')
+    import torch
+
+    if dtype  is None: dtype  = torch.float32
+    if device is None: device = "cpu"
+
+    y, x = torch.meshgrid(torch.linspace(min_y, max_y, height, dtype=dtype, device=device),
+                          torch.linspace(min_x, max_x, width , dtype=dtype, device=device),
+                          indexing="ij", #We have to add this for new torch versions
+                          )
+    return torch.stack([x, y])
 
 
 def _is_instance_of_module_class(x, module_name: str, class_name: str) -> bool:
@@ -15059,7 +15126,7 @@ def _convert_powerpoint_file(path,message=None):
 
 
 def _write_default_gitignore():
-    types_to_ignore='pyc swp un~'.split()
+    types_to_ignore='pyc swp un~ DS_Store'.split()
     types_to_ignore=['*.'+x for x in types_to_ignore]
 
     new_lines = (
@@ -15068,8 +15135,19 @@ def _write_default_gitignore():
         + ["#<RP Default Gitignore End>"]
     )
 
-    file = append_line_to_file(line_join(new_lines),'.gitignore')
-    fansi_print("Wrote lines to "+file,'green','bold')
+    new_text = "\n" + line_join(new_lines) + "\n\n"
+
+    git_repo = get_parent_folder(get_git_repo_root())
+    file = path_join(git_repo, '.gitignore')
+
+    file = '.gitignore'
+
+    if new_text.strip() not in load_text_file(file):
+        append_line_to_file(new_text,file)
+        fansi_print("Wrote lines to "+file,'green','bold')
+    else:
+        fansi_print("Nothing written, "+file+" already has rp's list "+file,'green','bold')
+
     return file
     
 
@@ -16095,9 +16173,9 @@ def pseudo_terminal(
         GOOP $open_google_search_in_web_browser($string_from_clipboard())
 
         SMI $os.system("nvidia-smi");
-        NVT $os.system("nvtop");#sudo_apt_install_nvtop
+        NVT $r._ensure_nvtop_installed();$os.system("nvtop");#sudo_apt_install_nvtop
         NVI $pip_import('nvitop');$pip_import('nvitop.__main__').main()
-        ZSH $os.system("zsh");
+        ZSH $r._ensure_zsh_installed();$os.system("zsh");
         BOP TOP
 
         bashtop $r._run_bashtop() #Good where BOP doesn't work and MON is too basic
@@ -16269,6 +16347,10 @@ def pseudo_terminal(
         QVH  $r._input_select_multiple_history($pterm_history_filename) #Query VHISTORY
 
         GITIGNORE $r._write_default_gitignore()
+        GITIGN    $r._write_default_gitignore()
+        IGN       $r._write_default_gitignore()
+        IGNORE    $r._write_default_gitignore()
+        GIG       $r._write_default_gitignore()
 
         PPTA $r._convert_powerpoint_file(ans)
         PPT $r._convert_powerpoint_file($input_select_file(file_extension_filter='pptx'),message='Select a powerpoint file')
@@ -23320,7 +23402,7 @@ def with_file_extensions(*paths,extension:str=None,replace=False):
 
     return [with_file_extension(path, extension, replace=replace) for path in paths]
 
-def with_file_name(path:str,name:str):
+def with_file_name(path:str,name:str,keep_extension=True):
     """
     Returns the path with a new file name, keeping the old file extension
     If the file extension in 'name' is specified though, it will keep the new extension
@@ -23337,7 +23419,8 @@ def with_file_name(path:str,name:str):
     extension=get_file_extension(file_name) if not has_file_extension(name) else get_file_extension(name)
     file_name=strip_file_extension(file_name)
     file_name=name
-    file_name=with_file_extension(file_name,extension)
+    if keep_extension:
+        file_name=with_file_extension(file_name,extension)
     return path_join(parent_folder,file_name)
 
 def with_folder_name(path:str, name:str):
@@ -26637,7 +26720,16 @@ save_animated_gif = save_video_gif = save_animated_gif_via_pil = save_video_gif_
 
 def _ensure_ffmpeg_installed():
     if "ffmpeg" not in get_system_commands():
-        assert False, "Please install ffmpeg!"
+        assert False, "Please install ffmpeg! sudo apt install ffmpeg"
+
+def _ensure_nvtop_installed():
+    if "nvtop" not in get_system_commands():
+        assert False, "Please install nvtop! sudo apt install nvtop"
+
+def _ensure_zsh_installed():
+    if "zsh" not in get_system_commands():
+        assert False, "Please install zsh! sudo apt install zsh"
+
 
 def convert_to_gif_via_ffmpeg(
     video_path,
@@ -33742,9 +33834,9 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
     Args:
         image (torch.Tensor): Input image tensor of shape [C, H, W], where C is the number of channels (e.g., 3 for RGB, 4 for RGBA),
                               H is the height, and W is the width of the image.
-        x (torch.Tensor): X-coordinate tensor of shape [H_out, W_out] specifying the x-coordinates for scatter adding,
-                          where H_out is the output height and W_out is the output width.
-        y (torch.Tensor): Y-coordinate tensor of shape [H_out, W_out] specifying the y-coordinates for scatter adding.
+        x (torch.Tensor): X-coordinate tensor of shape [H_in, W_in] specifying the x-coordinates for scatter adding,
+                          where H_in is the input height and W_in is the input width.
+        y (torch.Tensor): Y-coordinate tensor of shape [H_in, W_in] specifying the y-coordinates for scatter adding.
         relative (bool, optional): If True, treat x and y as deltas (dx and dy) and perform relative scatter adding. Default is False.
         interp (str, optional): Specifies how to handle fractional coordinates. Can be one of 'bilinear' (the slowest one), 'floor' (the fastest one), 'ceil', or 'round'. Default is 'floor'.
         height (int, optional): The output height. If not specified, it is inferred from the input image height.
@@ -33757,7 +33849,8 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
             - H_out is the output height.
             - W_out is the output width.
 
-    Example:
+    EXAMPLE (image warping):
+
         >>> def demo_torch_scatter_add_image(interp,normalize=False,):
         ...     import torch
         ...
@@ -33800,6 +33893,114 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
         ... demo_torch_scatter_add_image('floor')
         ... demo_torch_scatter_add_image('floor',normalize=True)
         ... demo_torch_scatter_add_image('bilinear',normalize=True)
+
+    EXAMPLE (image resizing):
+
+        >>> def demo_torch_scatter_add_image_resizing(interp,normalize=False,):
+        ...     import torch
+        ... 
+        ...     url = "https://content.whrb.org/files/3916/1997/2511/Lindsey_Stirling_2021_by_F._Scott_Schafer.png"
+        ...     image=load_image(url)
+        ...     image=resize_image_to_fit(image,height=256,width=256)
+        ...     image=as_torch_image(image)
+        ...     num_frames=300
+        ...     
+        ...     old_height, old_width = get_image_dimensions(image)
+        ...     
+        ...     def get_frames():
+        ...         for frame in range(num_frames):
+        ...             new_width =3*frame+10
+        ...             new_height=3*frame+10
+        ...         
+        ...             x, y = xy_torch_matrices(
+        ...                 old_height,
+        ...                 old_width,
+        ...                 max_x=new_width,
+        ...                 max_y=new_height,
+        ...             )
+        ...             
+        ...             resized_image = torch_scatter_add_image(
+        ...                 image,
+        ...                 x,
+        ...                 y,
+        ...                 height=new_height,
+        ...                 width=new_width,
+        ...                 interp=interp,
+        ...                 prepend_ones=True,
+        ...             )
+        ...             
+        ...             total, resized_image = resized_image[0],resized_image[1:]
+        ...             
+        ...             if normalize:
+        ...                 resized_image/=total
+        ... 
+        ...             #Create the preview image
+        ...             resized_image=as_numpy_image(resized_image)
+        ...             resized_image=bordered_image_solid_color(resized_image,color='red')
+        ...             resized_image=crop_image(resized_image,height=500,width=500)
+        ...             resized_image = labeled_image(
+        ...                 resized_image,
+        ...                 f"{interp} normalize={normalize} {(new_width,new_height)}",
+        ...                 font="G:Quicksand",
+        ...             )
+        ... 
+        ...             # Append the current frame to the list of frames
+        ...             yield resized_image
+        ... 
+        ...     display_video(get_frames(),framerate=60)
+        ... 
+        ... demo_torch_scatter_add_image_resizing('bilinear',normalize=True)
+        ... demo_torch_scatter_add_image_resizing('floor',normalize=False)
+        ... demo_torch_scatter_add_image_resizing('floor',normalize=True)
+        ... demo_torch_scatter_add_image_resizing('bilinear',normalize=False)
+
+    EXAMPLE (noise warping):
+
+        >>> def resize_noise(noise, new_height, new_width):
+        ...     #Can resize gaussian noise, adjusting for variance and preventing cross-correlation
+        ...     
+        ...     C, old_height, old_width = noise.shape
+        ... 
+        ...     x, y = xy_torch_matrices(
+        ...         old_height,
+        ...         old_width,
+        ...         max_x=new_width,
+        ...         max_y=new_height,
+        ...     )
+        ... 
+        ...     resized = torch_scatter_add_image(
+        ...         noise,
+        ...         x,
+        ...         y,
+        ...         height=new_height,
+        ...         width=new_width,
+        ...         interp='round',
+        ...         #interp='bilinear', #This introduces cross correlation! Can't use this for noise warping.
+        ...         prepend_ones=True
+        ...     )
+        ... 
+        ...     total, resized = resized[:1], resized[1:]
+        ... 
+        ...     adjusted = resized / total**.5
+        ... 
+        ...     return adjusted
+        ... 
+        ... import torch
+        ... frames=[]
+        ... base_noise=torch.randn(3,512,512)
+        ... for size in resize_list(range(10,1024),512):
+        ...     new_noise=resize_noise(base_noise,size,size)
+        ...     
+        ...     frame=as_numpy_image(new_noise)/5+.5
+        ...     frame=bordered_image_solid_color(frame,'red')
+        ...     frame=crop_image(frame,height=1024,width=1024)
+        ...     frame=labeled_image(frame,f"size={size}, mean={float(new_noise.mean()):.2} std={float(new_noise.std()):.2}")
+        ...     frames.append(frame)
+        ...     display_image(frame)
+        ...     
+        ... ans=printed(save_video_mp4(frames,video_bitrate='max'))
+        ... display_video(frames,loop=True)
+
     """
 
     assert rp.r.is_torch_image(image), "image must be a torch tensor with shape [C, H, W]"
@@ -33825,6 +34026,8 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
 
     in_c, in_height, in_width = image.shape
     out_height, out_width = x.shape
+
+    assert y.shape == x.shape == (in_height, in_width), "x and y should have the same height and width as the input image, aka {} but x.shape=={} and y.shape=={}".format((in_height, in_width),x.shape,y.shape)
     
     # If we don't specify the output width and height in args, copy the height and width of the input image
     out_width = width if width is not None else in_width
@@ -33840,7 +34043,7 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
         for X, Y, W in zip(*get_bilinear_weights(x, y)):
             components.append(
                 torch_scatter_add_image(
-                    image,
+                    image * W[None],
                     X,
                     Y,
                     relative=relative,
@@ -33848,7 +34051,7 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
                     height=height,
                     width=width,
                     prepend_ones=False,
-                ) * W
+                )
             )
         return sum(components)
     if interp == 'round':
