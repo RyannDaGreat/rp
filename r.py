@@ -23715,7 +23715,7 @@ def get_all_runnable_python_files(
     explore_symlinks=False,
     ignore_permission_errors=True,
     include_hidden=False,
-    lazy=False,
+    lazy=False
 ):
     """
     Retrieve all runnable Python files from a specified folder.
@@ -26737,7 +26737,7 @@ def convert_to_gif_via_ffmpeg(
     *,
     framerate=None,
     custom_palette=True,
-    silent=False,
+    silent=False
 ):
     """
     Converts a video file to a GIF using FFmpeg.
