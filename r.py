@@ -28,7 +28,7 @@ import warnings
 import pickle
 import tempfile
 import contextlib
-
+from itertools import product as cartesian_product
 
 # Places I want to access no matter where I launch r.py
 # sys.path.append('/Users/Ryan/PycharmProjects/RyanBStandards_Python3.5')
@@ -2179,7 +2179,7 @@ def crop_image_to_square(image, *, origin="center", grow=False, copy=True):
     else:
         size = min(get_image_dimensions(image))
         
-    image = crop_image(image, height=size, width=size, origin=origini, copy=copy)
+    image = crop_image(image, height=size, width=size, origin=origin, copy=copy)
     
     return image
 
@@ -10807,10 +10807,12 @@ def play_chord(*semitones:list,t=1,block=True,sampler=triangle_tone_sampler):
     play_sound_from_samples(full_range(min=-1,x=sum(sampler(semitone_to_hz(x),T=t)for x in semitones)),blocking=block)
 # endregion
 
-from itertools import product as cartesian_product
-def mini_editor(out: str = "",namespace=(),message=""):  # Has syntax highlighting. Creates a curses pocket-universe where you can edit text, and then press fn+enter to enter the results. It's like like a normal input() except multiline and editable.
-    # message=message or "Enter text here and then press fn+enter to exit. Supported controls: Arrow keys, backspace, delete, tab, shift+tab, enter"
-    # Please note: You must be using a REAL terminal to run this! Just using pycharm's "run" is not sufficient. Using apple's terminal app, for example, IS however.
+def mini_editor(out: str = "",namespace=(),message=""): 
+    """
+    Has syntax highlighting. Creates a curses pocket-universe where you can edit text, and then press fn+enter to enter the results. It's like like a normal input() except multiline and editable.
+    message=message or "Enter text here and then press fn+enter to exit. Supported controls: Arrow keys, backspace, delete, tab, shift+tab, enter"
+    Please note: You must be using a REAL terminal to run this! Just using pycharm's "run" is not sufficient. Using apple's terminal app, for example, IS however.
+    """
     import curses
     stdscr=curses.initscr()
 
@@ -11102,8 +11104,10 @@ def clip_string_width(x: str,max_width=None,max_wraps_per_line=1,clipped_suffix=
     return '\n'.join((y[:max_width - len(clipped_suffix)] + clipped_suffix) if len(y) > max_width else y for y in x.split('\n'))
 
 def properties_to_xml(src_path,target_path):  # Found this during my 219 hw4 assignment when trying to quickly convert a .properties file to an xml file to get more credit
-    # SOURCE: https://www.mkyong.com/java/how-to-store-properties-into-xml-file/
-    # Their code was broken so I had to fix it. It works now.
+    """
+    SOURCE: https://www.mkyong.com/java/how-to-store-properties-into-xml-file/
+    Their code was broken so I had to fix it. It works now.
+    """
     src=open(src_path)
     target=open(target_path,'w')
     target.write('<?xml version="1.0" encoding="utf-8" standalone="no"?>\n')
@@ -11195,21 +11199,25 @@ def split_including_delimiters(input: str, delimiter: str):
     return output
 
 def split_letters_from_digits(s: str) -> list:
-    # Splits letters from numbers into a list from a string.
-    # EXAMPLE: "ads325asd234" -> ['ads', '325', 'asd', '234']
-    # SOURCE: http://stackoverflow.com/questions/28290492/python-splitting-numbers-and-letters-into-sub-strings-with-regular-expression
+    """
+    Splits letters from numbers into a list from a string.
+    EXAMPLE: "ads325asd234" -> ['ads', '325', 'asd', '234']
+    SOURCE: http://stackoverflow.com/questions/28290492/python-splitting-numbers-and-letters-into-sub-strings-with-regular-expression
+    """
     import re
     return re.findall(r'[A-Za-z]+|\d+',s)
 
 def split_camel_case(s: str) -> list:
-    # Split camel case names into lists. Example: camel_case_split("HelloWorld")==["Hello","World"]
+    """ Split camel case names into lists. Example: camel_case_split("HelloWorld")==["Hello","World"] """
     from re import finditer
     matches=finditer('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)',s)
     return [m.group(0) for m in matches]
 
 def split_python_tokens(code: str):
-    #Should return a list of all the individual python tokens, INCLUDING whitespace and newlines etc
-    #When summed together, the token-strings returned by this function should equal the original inputted string
+    """
+    Should return a list of all the individual python tokens, INCLUDING whitespace and newlines etc
+    When summed together, the token-strings returned by this function should equal the original inputted string
+    """
     pip_import('pygments')
 
     from pygments.lexers import Python3Lexer
@@ -11298,7 +11306,9 @@ def print_stack_trace(error:BaseException=None,full_traceback: bool = True,heade
     #                                       └                                                                                                                                                                                                ┘
 
 def print_highlighted_stack_trace(error:BaseException=None):
-    #Uses pygments to print a stack trace with syntax highlighting
+    """
+    Uses pygments to print a stack trace with syntax highlighting
+    """
     from traceback import format_exception
     from pygments import highlight
     from pygments.lexers import Python3TracebackLexer
@@ -11415,7 +11425,9 @@ def perpendicular_bisector_function(x0,y0,x1,y1):
     return linear_function
 
 def harmonic_analysis_via_least_squares(wave,harmonics:int):
-    #My attempt to analyze frequencies by taking the least-squares fit of a bunch of sinusoids to a signal instead of using the fourier transform. It had interesting results, but it's not nearly as fast as a FFT.
+    """
+    My attempt to analyze frequencies by taking the least-squares fit of a bunch of sinusoids to a signal instead of using the fourier transform. It had interesting results, but it's not nearly as fast as a FFT.
+    """
     prod=np.matmul
     inv=np.linalg.inv
     b=wave  # In terms of linear algebra in Ax~=b
@@ -11430,8 +11442,10 @@ def harmonic_analysis_via_least_squares(wave,harmonics:int):
     return np.asarray([amplitudes,phases])  # https://www.desmos.com/calculator/fnlwi71n9x
 
 def cluster_by_key(iterable,key,as_dict=False)->list:
-    #Iterable is a list of values
-    #Key is a function that takes a value from iterable and returns a hashable
+    """
+    Iterable is a list of values
+    Key is a function that takes a value from iterable and returns a hashable
+    """
     assert callable(key)
     assert is_iterable(iterable)
     from collections import OrderedDict
@@ -11659,8 +11673,10 @@ def lrstrip_all_lines(s:str):
 random_unicode_hash=lambda l:int_list_to_string([randint(0x110000-1)for x in range(l)])
 
 def search_replace_simul(s:str,replacements:dict):
-    #Attempts to make multiple simultaneous string .replace() at the same time
-    #WARNING: This method is NOT perfect, and sometimes makes errors. TODO: Fix it for all input cases
+    """
+    Attempts to make multiple simultaneous string .replace() at the same time
+    WARNING: This method is NOT perfect, and sometimes makes errors. TODO: Fix it for all input cases
+    """
 
     if not replacements:
         return s
@@ -11973,15 +11989,20 @@ def _fix_CERTIFICATE_VERIFY_FAILED_errors():
 
 
 def random_namespace_hash(n:int=10,chars_to_choose_from:str="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"):
-    # >>> random_namespace_hash(10)
-    # ans=DZC7B8GV74
+    """
+    EXAMPLE:
+        >>> random_namespace_hash(10)
+        ans=DZC7B8GV74
+    """
     out=''
     for n in [None]*n:
         out+=random_element(chars_to_choose_from)
     return out
 
 def latex_image(equation: str):
-    # Returns an rgba image with the rendered latex string on it in numpy form
+    """
+    Returns an rgba image with the rendered latex string on it in numpy form
+    """
     import os,requests
     def formula_as_file(formula,file,negate=False):  # Got this code off the web somewhere but i dont remember where now
         tfile=file
@@ -14004,8 +14025,10 @@ def number_of_lines(string):
     return len(line_split(string))
 
 def number_of_lines_in_terminal(string):
-    #Gets the number of lines a string would appear to have when printed in a terminal, assuming the terminal wraps strings
-    #For example, the string '*'*1000 is technically only one line, but when printed print('*'*1000) might look like several lines in a terminal
+    """
+    Gets the number of lines a string would appear to have when printed in a terminal, assuming the terminal wraps strings
+    For example, the string '*'*1000 is technically only one line, but when printed print('*'*1000) might look like several lines in a terminal
+    """
     if not currently_in_a_tty():
         #Perhaps just return 1 if we're not in a TTY? Some places, like jupyter notebooks, don't wrap lines
         #For now, we'll ignore this edge case. In the future this block might return something different.
@@ -15126,7 +15149,7 @@ def _convert_powerpoint_file(path,message=None):
 
 
 def _write_default_gitignore():
-    types_to_ignore='pyc swp un~ DS_Store'.split()
+    types_to_ignore='pyc swo swp un~ DS_Store'.split()
     types_to_ignore=['*.'+x for x in types_to_ignore]
 
     new_lines = (
@@ -22290,6 +22313,7 @@ def labeled_image(image,
         text (str): The text to be added as the label.
         size (int or float): The size of the label. If an integer, it represents the height of the label in pixels.
                              If a float, it represents the proportion of the label height relative to the image height.
+                             If size < 0, will overlay the label over the image. Best with translucent background_color such as "translucent green"
                              Default is 15.
         position (str): The position of the label relative to the image. Can be 'top', 'bottom', 'left', or 'right'.
                         Default is 'top'.
@@ -22447,22 +22471,31 @@ def labeled_image(image,
         else:
             assert isinstance(size,int)
             height=size
+
+        image_height, image_width=get_image_dimensions(image)
             
+        if height < 0:
+            #Overlay the label over the image
+            height = abs(height)
+            height = min(height, image_height)
+            overlay = uniform_float_color_image(image_height - height, image_width, background_color[:3]+(0,))
+            overlay = gather_args_call(labeled_image, overlay, size=height)
+            return blend_images(image, overlay)
+
         height=max(height,1)         #Label height in pixels
-        width=get_image_width(image) #Label width in pixels
         
         label=_labeled_image_text_to_image(text,align=align,font=font)
 
         label=resize_image_to_fit(label, height=height)
-        if get_image_width(label)>width:
-            label=cv_resize_image(label,width/get_image_width(label))
+        if get_image_width(label)>image_width:
+            label=cv_resize_image(label,image_width/get_image_width(label))
             
         label=as_rgb_image(label)
         
         label=crop_image(label,height=height,origin='center')
-        label=crop_image(label,width=width,origin={'left'  :'top left'    ,
-                                                   'right' :'bottom right',
-                                                   'center':'center'      ,}[align])
+        label=crop_image(label,width=image_width,origin={'left'  :'top left'    ,
+                                                         'right' :'bottom right',
+                                                         'center':'center'      ,}[align])
 
         #Apply colors to label
         #We need to turn the RGB byte color into RGBA float color.
@@ -22919,7 +22952,7 @@ def as_rgba_float_color(color,clamp=True):
         ... print("SAVED",save_image(out_image,'color_chart.png'))
 
     """
-    assert isinstance(color, tuple) or is_number(color) or isinstance(color,str)
+    assert isinstance(color, (tuple, list, str)) or is_number(color)
     if isinstance(color,str):
         if color.strip().lower() in 'transparent invisible'.split():
             return (0,0,0,0)
@@ -29710,7 +29743,7 @@ def download_url_to_cache(url, cache_dir=None, skip_existing=True, hash_func=Non
     Downloads a file from a specified URL into a caching directory, creating a filename based on a hash of the URL. 
 
     Args:
-        url (str): The URL of the file to be downloaded.
+        url (str): The URL of the file to be downloaded. It can also be a file path, to cache things from NFS etc.
         cache_dir (str, optional): The directory to store the cached files. If None, uses the system's temporary directory.
         skip_existing (bool): If True, skips downloading files that already exist in the cache directory.
 
@@ -29720,11 +29753,63 @@ def download_url_to_cache(url, cache_dir=None, skip_existing=True, hash_func=Non
     Notes:
         - Use `get_cache_file_path` to retrieve the path to a cached file without downloading it.
     """
-    return download_url(
-        url,
-        get_cache_file_path(url, cache_dir=cache_dir, hash_func=hash_func),
-        skip_existing=skip_existing,
+    assert isinstance(url, str)
+
+    cache_path = get_cache_file_path(url, cache_dir=cache_dir, hash_func=hash_func)
+
+    if is_valid_url(url):
+        return download_url(
+            url,
+            cache_path,
+            skip_existing=skip_existing,
+        )
+    elif file_exists(url):
+        #Can also be useful for getting things off NFS for faster loading
+        if not skip_existing or not file_exists(cache_path):
+            import shutil
+            shutil.copy(
+                url,
+                cache_path,
+            )
+        return cache_path
+    else:
+        raise ValueError("rp.download_url_to_cache: url=%s is neither a valid url nor an existing path"%url)
+
+download_file_to_cache = download_url_to_cache
+
+def download_urls_to_cache(
+    *urls,
+    cache_dir=None,
+    skip_existing=True,
+    hash_func=None,
+
+    lazy=False,
+    num_threads=None,
+    buffer_limit=None,
+    strict=True,
+    show_progress=False
+):
+    """ Plural of rp.download_url_to_cache """
+    urls = detuple(urls)
+
+    def download(url):
+        return download_url_to_cache(
+            url,
+            cache_dir=cache_dir,
+            skip_existing=skip_existing,
+            hash_func=hash_func,
+        )
+
+    return load_files(
+        download,
+        urls,
+        lazy=lazy,
+        buffer_limit=buffer_limit,
+        show_progress=show_progress,
+        strict=strict,
     )
+
+download_files_to_cache = download_urls_to_cache
 
 def get_cache_file_path(url, *, cache_dir=None, file_extension=None, hash_func=None):
     """
@@ -29744,14 +29829,14 @@ def get_cache_file_path(url, *, cache_dir=None, file_extension=None, hash_func=N
 
     Example:
         >>> get_cache_file_path("example_data", cache_dir="/tmp", file_extension=".txt")
-        '/tmp/rp_cachefile_<hashcode>.txt'
+        '/tmp/rp_cache_<hashcode>.txt'
 
         >>> #Load the image from a url, caching it to your harddrive for extra speed - persistently between python processes
         >>> image = load_image(download_url_to_cache('https://picsum.photos/seed/picsum/536/354'))
 
     Examples (hash_func):
         >>> print(download_url_to_cache('https://picsum.photos/seed/picsum/536/354'))
-        /var/folders/pm/461ntwb12b7bbqcjw1s6t0kw0000gn/T/rp_cachefile_d4a556ad5dd6bb4c43fc2d2eb08194d9b888fb7eb3e58b5473e7a46059b4217f
+        /var/folders/pm/461ntwb12b7bbqcjw1s6t0kw0000gn/T/rp_cache_d4a556ad5dd6bb4c43fc2d2eb08194d9b888fb7eb3e58b5473e7a46059b4217f
         >>> print(download_url_to_cache('https://picsum.photos/seed/picsum/536/354',hash_func=get_file_name))
         /var/folders/pm/461ntwb12b7bbqcjw1s6t0kw0000gn/T/354
         >>> print(download_url_to_cache('https://picsum.photos/seed/picsum/536/354',hash_func=get_parent_folder))
@@ -29794,8 +29879,9 @@ def get_cache_file_path(url, *, cache_dir=None, file_extension=None, hash_func=N
 
 
     if hash_func is None:
-        prefix = 'rp_cachefile_'
+        prefix = 'rp_cache_'
         hashcode = get_sha256_hash(url.encode() if isinstance(url, str) else object_to_bytes(url))
+        hashcode = hashcode[:16] #This should be more than long enough
         filename = prefix+str(hashcode)
     else:
         hashcode = hash_func(url)
@@ -33957,6 +34043,7 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
     EXAMPLE (noise warping):
 
         >>> def resize_noise(noise, new_height, new_width):
+        ...     #I'm putting this in rp.git_import('CommonSource').noise_warp
         ...     #Can resize gaussian noise, adjusting for variance and preventing cross-correlation
         ...     
         ...     C, old_height, old_width = noise.shape
@@ -36448,7 +36535,7 @@ def cv_optical_flow(frame_a, frame_b, algorithm="DenseRLOF"):
         ...             #REset iter frame
         ...             prev_frame=frames[-1]
         ... 
-        ...         flow_vis = optical_flow_to_image(*flow,sensitivity=.02)
+        ...         flow_vis = optical_flow_to_image(*flow,sensitivity=1/.02)
         ... 
         ...         frames = frames[-N:]
         ...         flows = flows[-N:]
@@ -36554,8 +36641,9 @@ def optical_flow_to_image(dx, dy, *, mode='saturation', sensitivity=None):
        mode (str, optional): The visualization mode. Can be:
            - 'saturation': The saturation represents the magnitude. Default.
            - 'brightness': The brightness represents the magnitude.
-       sensitivity (float, optional): If not specified, flow magnitudes are normalized 
-           Otherwise, set this to the max flow magnitude you expect to see.
+       sensitivity (float, optional): If not specified, flow magnitudes are normalized at every frame
+           Otherwise, the flow magnitudes are multiplied by this amount before visualizing
+           (If you expect a max magnitude of 5 for example, you should set sensitivity=1/5)
 
        TODO: Use floating-point HSV precision, and a custom mag factor
        mag_factor (float, optional): the magnitude will be scaled by this number if specified,
@@ -36589,10 +36677,10 @@ def optical_flow_to_image(dx, dy, *, mode='saturation', sensitivity=None):
     mag, ang = cv2.cartToPolar(dx, dy)
 
     if sensitivity is None:
-        norm_mag = cv2.sensitivity(mag, None, 0, 255, cv2.NORM_MINMAX)
+        norm_mag = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
     elif is_number(sensitivity):
         norm_mag = mag
-        norm_mag = mag / sensitivity
+        norm_mag = sensitivity / mag
         norm_mag = np.clip(norm_mag, 0, 255)
         norm_mag = norm_mag.astype(np.uint8)
     else:
