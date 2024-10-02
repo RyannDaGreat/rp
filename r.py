@@ -1976,7 +1976,8 @@ def get_progress_bar_image(
     height=10,
     width=100,
     bar_color="white",
-    background_color="black"
+    background_color="black",
+    reverse=False
 ):
     """
     Generate a rectangular RGBA progress bar image.
@@ -2018,6 +2019,10 @@ def get_progress_bar_image(
         alpha[:, bar_floor] = bar_remainder
 
     bar_image = blend_images(background_color, bar_color, alpha)
+
+    if reverse:
+        bar_image = horizontally_flipped_image(bar_image)
+
     return bar_image
 
 
@@ -2027,7 +2032,9 @@ def image_with_progress_bar(
     *,
     size=10,
     bar_color="white",
-    background_color="black"
+    background_color="black",
+    position='top',
+    reverse=False
 ):
     """
     Adds a progress bar to an image.
@@ -2056,12 +2063,52 @@ def image_with_progress_bar(
 
     """
 
-    width = get_image_width(image)
-    height = size
+    assert isinstance(position, str)
+    assert is_number(size)
 
-    progress_bar_image = gather_args_call(get_progress_bar_image)
+    if size==0:
+        return as_numpy_image(image, copy=True)
 
-    return vertically_concatenated_images(progress_bar_image, image)
+    if position in ['top', 'bottom']:
+        bar_width = get_image_width(image)
+        bar_height = size
+
+        progress_bar_image = gather_args_call(
+            get_progress_bar_image,
+            height=abs(bar_height),
+            width=bar_width,
+        )
+
+        images = progress_bar_image, image
+
+        if bar_height>0:
+            if position=='top':
+                return vertically_concatenated_images(images)
+            else:
+                return vertically_concatenated_images(images[::-1])
+        else:
+            #Overlay the bar over the image
+            images = crop_images_to_max_size(
+                images,
+                origin={
+                    "top": "top left",
+                    "bottom": "bottom right",
+                }[position],
+            )
+            return blend_images(*images[::-1])
+
+    elif position=='left':
+        image = rotate_image(image, 90)
+        image = gather_args_call(image_with_progress_bar, position='top', reverse=not reverse)
+        image = rotate_image(image, -90)
+        return image
+    elif position=='right':
+        image = rotate_image(image, 90)
+        image = gather_args_call(image_with_progress_bar, position='bottom', reverse=not reverse)
+        image = rotate_image(image, -90)
+        return image
+    else:
+        assert False, 'rp.image_with_progress_bar: position should be "top", "bottom", "left" or "right", not '+repr(position)
 
 
 def video_with_progress_bar(
@@ -2070,6 +2117,8 @@ def video_with_progress_bar(
     size=10,
     bar_color="white",
     background_color="black",
+    reverse=False,
+    position='top',
     lazy=False
 ):
     """
@@ -2086,10 +2135,79 @@ def video_with_progress_bar(
        ...         lazy=True,
        ...     )
        ... )
+
+    EXAMPLE (slightly crazier):
+
+        >>> video = load_video(
+        ...     "https://www.shutterstock.com/shutterstock/videos/1056263531/preview/stock-footage-cctv-ai-facial-recognition-camera-zoom-in-recognizes-person-elevated-security-camera-surveillance.webm",
+        ...     use_cache=True,
+        ... )
+        ... video=resize_list(video,30)
+        ... video=resize_images_to_hold(video,height=256)
+        ... video = video_with_progress_bar(
+        ...     video,
+        ...     position="right",
+        ...     size=-20,
+        ...     background_color="translucent orange",
+        ...     lazy=True,
+        ... )
+        ... video = video_with_progress_bar(
+        ...     video,
+        ...     position="right",
+        ...     size=-5,
+        ...     background_color="green",
+        ...     bar_color='translucent black',
+        ...     lazy=True,
+        ...     reverse=True
+        ... )
+        ... video = video_with_progress_bar(
+        ...     video,
+        ...     position="top",
+        ...     bar_color="white",
+        ...     background_color="translucent black",
+        ...     size=10,
+        ...     lazy=True,
+        ... )
+        ... video = video_with_progress_bar(
+        ...     video,
+        ...     position="bottom",
+        ...     lazy=True,
+        ... )
+        ... video = video_with_progress_bar(
+        ...     video,
+        ...     position="left",
+        ...     bar_color='white',
+        ...     reverse=False,
+        ...     lazy=True,
+        ... )
+        ... video = video_with_progress_bar(
+        ...     video,
+        ...     position="left",
+        ...     bar_color='blue white',
+        ...     reverse=True,
+        ...     lazy=True,
+        ... )
+        ... video = video_with_progress_bar(
+        ...     video,
+        ...     position="left",
+        ...     bar_color='blue blue white',
+        ...     reverse=False,
+        ...     lazy=True,
+        ... )
+        ... video = video_with_progress_bar(
+        ...     video,
+        ...     position="left",
+        ...     bar_color='blue blue blue white',
+        ...     reverse=True,
+        ...     lazy=True,
+        ... )
+        ... 
+        ... display_video(with_alpha_checkerboards(video,lazy=True),loop=True)
+
     """
     
     def helper():
-        nonlocal size, bar_color, background_color
+        nonlocal size, bar_color, background_color, position, reverse
         length = len(video)
         for index, image in enumerate(video):
             progress = index / (length - 1)
@@ -2098,7 +2216,12 @@ def video_with_progress_bar(
 
     output = helper()
 
-    if not lazy:
+    if lazy:
+        if hasattr(video, '__len__'):
+            length = len(video)
+            output = IteratorWithLen(output, length)
+
+    else:
         output = list(output)
 
     return output
@@ -2870,6 +2993,7 @@ def xy_float_images(
     )
     return np.stack([x,y])
 
+_xy_torch_matrices_cache={}
 def xy_torch_matrices(
     height=256,
     width=256,
@@ -2879,7 +3003,8 @@ def xy_torch_matrices(
     min_x=0,
     max_x=1,
     min_y=0,
-    max_y=1
+    max_y=1,
+    use_cache=False
 ):
     """
     Sister function of xy_float_images, but this one uses torch tensors
@@ -2893,6 +3018,7 @@ def xy_torch_matrices(
         dtype (torch.dtype, optional): Data type of the output tensors. Defaults to None, corresponding to torch.float32
         device (torch.device, optional): Device to create the output tensors on. Defaults to None, corresponding to "cpu"
         min_x, max_x, min_y, max_y (float, optional): The ranges of x and y in the output. Defaults to between 0 and 1.
+        use_cache: Useful when bottlenecked by excessive CPU/GPU transfers (seeing a lot of Tensor.to's in the profiler)
     
     Returns:
         torch.Tensor: A tensor of shape (2, height, width) representing the x and y images.
@@ -2909,6 +3035,15 @@ def xy_torch_matrices(
          >>>    rotated=x*np.cos(angle)+y*np.sin(angle)
          >>>    display_image(2*full_range(rotated**5)-1)
     """
+
+    if use_cache:
+        #Prevent excessive transfers between CPU and GPU
+        kwargs = gather_vars('height width dtype device min_x max_x min_y max_y')
+        kwargs_hash = handy_hash(kwargs)
+        if args_hash not in _xy_torch_matrices_cache:
+            _xy_torch_matrices_cache[args_hash] = xy_torch_matrices(**kwargs)
+        return _xy_torch_matrices_cache[args_hash]
+
     pip_import('torch')
     import torch
 
@@ -2920,7 +3055,6 @@ def xy_torch_matrices(
                           indexing="ij", #We have to add this for new torch versions
                           )
     return torch.stack([x, y])
-
 
 def _is_instance_of_module_class(x, module_name: str, class_name: str) -> bool:
     """
@@ -5386,6 +5520,24 @@ def display_video(video,framerate=30,*,loop=False):
     Example: display_video('https://www.youtube.com/watch?v=jvipPYFebWc')
     TODO: Implement loop for jupyter
     """
+
+    def loop_wrapper(video):
+        if hasattr(video, '__getitem__') and hasattr(video, '__len__'):
+            length = len(video)
+            index = 0
+            while True:
+                index +=1
+                yield video[index % length]
+        else:
+            seen_frames = []
+            for frame in video:
+                yield frame
+                seen_frames.append(frame)
+            while True:
+                yield from seen_frames
+
+
+
     if running_in_jupyter_notebook():
         display_video_in_notebook(video,framerate=framerate)
     else:
@@ -5398,16 +5550,21 @@ def display_video(video,framerate=30,*,loop=False):
                 assert is_video_file(video),repr(video)+' is not a video file'
             video=load_video_stream(video)
 
-        for _ in range(9999999999999999999 if loop else 1):
-            
-            time_start=gtoc()
-            time_per_frame=1/framerate
+        if loop:
+            video = loop_wrapper(video)
 
-            for i, frame in enumerate(video):
+        time_start=gtoc()
+        time_per_frame=1/framerate
+
+        for i, frame in enumerate(video):
+            try:
                 time_before_display = gtoc()
                 display_image(frame)
                 time_after_display = gtoc()
                 sleep(max(0, time_per_frame - (time_after_display - time_before_display)))
+            except KeyboardInterrupt:
+                fansi_print("rp.display_video: Received KeyboardInterrupt - stopping playback", 'cyan', 'bold')
+                break
 
 # def display_video_in_notebook(video,framerate=30):
 #     """
@@ -5810,11 +5967,11 @@ def with_alpha_checkerboard(image, *, tile_size=8, first_color=1.0, second_color
     )
     return blend_images(checkers, image)
 
-def with_alpha_checkerboards(*images, tile_size=8, first_color=1.0, second_color=.75):
+def with_alpha_checkerboards(*images, tile_size=8, first_color=1.0, second_color=.75, lazy=False):
     """ Plural of rp.with_alpha_checkerboard """
     images = detuple(images)
     is_numpy = is_numpy_array(images)
-    output = [
+    output = (
         with_alpha_checkerboard(
             image,
             tile_size=tile_size,
@@ -5822,8 +5979,10 @@ def with_alpha_checkerboards(*images, tile_size=8, first_color=1.0, second_color
             second_color=second_color,
         )
         for image in images
-    ]
-    if is_numpy:
+    )
+    if not lazy:
+        output = list(output)
+    if is_numpy and not lazy:
         #In future: Optimize
         output = as_numpy_array(output)
     return output
@@ -24761,6 +24920,10 @@ def is_image(image):
     It can also be a PIL image
     """
     try:
+        if is_torch_tensor(image):
+            return False
+        if is_pil_image(image):
+            return True
         image=as_numpy_array(image)
     except Exception:
         return False
@@ -33542,7 +33705,7 @@ def torch_resize_image(image, size, interp="auto", *, copy=True):
 
     return out
 
-def torch_remap_image(image, x, y, *, relative=False, interp='bilinear', add_alpha_mask=False):
+def torch_remap_image(image, x, y, *, relative=False, interp='bilinear', add_alpha_mask=False, use_cached_meshgrid=False):
     """
     Remap an image tensor using the given x and y coordinate tensors.
     Out-of-bounds regions will be given 0's
@@ -33684,12 +33847,11 @@ def torch_remap_image(image, x, y, *, relative=False, interp='bilinear', add_alp
     if relative:
         assert in_height == out_height, "For relative warping, input and output heights must match, but got in_height={} and out_height={}".format(in_height, out_height)
         assert in_width  == out_width , "For relative warping, input and output widths must match, but got in_width={} and out_width={}".format(in_width, out_width)
-        in_y, in_x = torch.meshgrid(torch.arange(in_height), torch.arange(in_width))
-        x = x + rearrange(in_x, "h w -> 1 h w").to(image.device)
-        y = y + rearrange(in_y, "h w -> 1 h w").to(image.device)
-    else:
-        x = rearrange(x, "h w -> 1 h w")
-        y = rearrange(y, "h w -> 1 h w")
+        x = x + torch.arange(in_width , device=x.device, dtype=x.dtype)
+        y = y + torch.arange(in_height, device=y.device, dtype=y.dtype)[:,None]
+
+    x = rearrange(x, "h w -> 1 h w")
+    y = rearrange(y, "h w -> 1 h w")
 
     # Normalize coordinates to [-1, 1] range - which F.grid_sample requires
     x = (x / (in_width - 1)) * 2 - 1
@@ -34090,14 +34252,14 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
 
     """
 
-    assert rp.r.is_torch_image(image), "image must be a torch tensor with shape [C, H, W]"
-    assert is_torch_tensor(x) and is_a_matrix(x), "x must be a torch tensor with shape [H_out, W_out]"
-    assert is_torch_tensor(y) and is_a_matrix(y), "y must be a torch tensor with shape [H_out, W_out]"
+    assert rp.r.is_torch_image(image), "image must be a torch tensor with shape [C, H, W], but got image with type {}".format(type(image))
+    assert is_torch_tensor(x) and is_a_matrix(x), "x must be a torch matrix, but got x with type {} and shape {}".format(type(x), x.shape)
+    assert is_torch_tensor(y) and is_a_matrix(y), "y must be a torch matrix, but got y with type {} and shape {}".format(type(y), y.shape)
     assert x.shape == y.shape, "x and y must have the same shape, but got x.shape={} and y.shape={}".format(x.shape, y.shape)
-    assert image.device==x.device==y.device, "all inputs must be on the same device"
-    assert interp in ['floor', 'ceil', 'round', 'bilinear'], "interp must be one of 'floor', 'ceil', 'round', or 'bilinear'"
-    assert height is None or (isinstance(height, int) and height > 0), "height must be a positive integer"
-    assert width is None or (isinstance(width, int) and width > 0), "width must be a positive integer"
+    assert image.device==x.device==y.device, "all inputs must be on the same device, but got image.device={}, x.device={}, and y.device={}".format(image.device, x.device, y.device)
+    assert interp in ['floor', 'ceil', 'round', 'bilinear'], "interp must be one of 'floor', 'ceil', 'round', or 'bilinear', but got {}".format(interp)
+    assert height is None or (isinstance(height, int) and height > 0), "height must be a positive integer or None, but got {}".format(height)
+    assert width is None or (isinstance(width, int) and width > 0), "width must be a positive integer or None, but got {}".format(width)
 
     pip_import('einops')
     pip_import('torch')
@@ -34158,13 +34320,8 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
     if relative:
         assert in_height == out_height, "For relative scatter adding, input and output heights must match, but got in_height={} and out_height={}".format(in_height, out_height)
         assert in_width == out_width, "For relative scatter adding, input and output widths must match, but got in_width={} and out_width={}".format(in_width, out_width)
-        in_y, in_x = torch.meshgrid(
-            torch.arange(in_height, device=image.device),
-            torch.arange(in_width, device=image.device),
-        )
-        x += in_x
-        y += in_y
-            
+        x = x + torch.arange(in_width , device=x.device, dtype=x.dtype)
+        y = y + torch.arange(in_height, device=y.device, dtype=y.dtype)[:,None]
 
     # Initialize the output tensor with zeros
     out = torch.zeros((out_height * out_width, in_c), dtype=image.dtype, device=image.device)
@@ -34298,67 +34455,199 @@ def accumulate_flows(*flows,reduce=True,reverse=False):
         ... ans = printed(save_video_mp4(output_video, "accumulate_flow_demo.mp4"))
 
     EXAMPLE (real-world video, needs GPU to run though. Run in a jupyter notebook.):
-        >>> import rp
-        ... from icecream import ic
-        ... from rp import *
+
+        >>> from rp import *
+        ... import torch
+        ... git_import('CommonSource')
         ... import rp.git.CommonSource.noise_warp as nw
-        ... from IPython.display import clear_output
-        ... rp.git_import("CommonSource")
         ... 
-        ... video=rp.load_video(
-        ...     rp.download_url_to_cache(
-        ...         "https://warpyournoise.github.io/docs/assets/videos/DeepFloyd/carturn_st_oilpaint_input.mp4"
-        ...     ),
-        ...     use_cache=False,
-        ... )
+        ... #UNCOMMENT IF YOU WANT TO USE WEBCAM
+        ... get_frame = lambda: as_rgba_image(as_rgba_image(cv_resize_image(load_image_from_webcam(), 1 / 8)))
         ... 
-        ... if not 'o' in vars():
-        ...     o=nw.get_noise_from_video(video) #Calculte flows, this function happens to do that for us.
-        ...     clear_output()
+        ... #UNCOMMENT IF YOU WANT TO USE A VIDEO INPUT
+        ... #video_path='/Users/ryan/Desktop/Screenshots/cat_on_grass.mov'
+        ... #video_path='/Users/ryan/Downloads/kevin_spin_square.mp4'
+        ... #video_path='/Users/ryan/Downloads/bear_video.mp4'
+        ... video_path='https://warpyournoise.github.io/docs/assets/videos/DeepFloyd/carturn_st_oilpaint_input.mp4'
+        ... ################
+        ... video=load_video(video_path,use_cache=False)
+        ... video=remove_duplicate_frames(video,lazy=False)
+        ... video=resize_list_to_fit(video,max_length=100)
+        ... video=iter(video)
+        ... get_frame=lambda:as_rgba_image(resize_image_to_fit(next(video),height=256))
         ... 
-        ... first_frame = o.down_video_frames[0]
-        ... flows = o.numpy_flows.astype(float)
-        ... iter_frames=[first_frame]
-        ... warp_frames=[first_frame]
-        ... cum_flow = np.zeros_like(flows[0])
-        ... for i, flow in enumerate(rp.eta(flows)):
-        ...     #UNCOMMENT ONE OF THE NEXT TWO SECTIONS
-        ...     #Note how cum_flow has to be calculated differently!
         ... 
-        ...     ##HOW TO USE FORWARD ACCUMULATION (for scatter add)
-        ...     #cum_flow = rp.accumulate_flows(cum_flow, flow)
-        ...     ##cum_flow = rp.accumulate_flows(flows[:i+1]) #Equivalent but slower than the above
-        ...     #iter_frame = rp.as_numpy_image(rp.torch_scatter_add_image(rp.as_torch_image(iter_frames[-1]),*torch.tensor(flow    ),relative=True,interp='round'))
-        ...     #warp_frame = rp.as_numpy_image(rp.torch_scatter_add_image(rp.as_torch_image(first_frame    ),*torch.tensor(cum_flow),relative=True,interp='round'))
+        ... frame_a = get_frame()
         ... 
-        ...     #HOW TO USE BACKWARD ACCUMULATION (for remap)
-        ...     cum_flow = rp.accumulate_flows(-flow, cum_flow) #We need to reverse the args and negate them, because we're mapping backwards from this frame to the first frame
-        ...     # cum_flow = rp.accumulate_flows(-flows[:i+1][::-1]) #Equivalent to the above, but slower
-        ...     iter_frame = rp.cv_remap_image(iter_frames[-1],*-flow    ,relative=True,interp='bilinear')
-        ...     warp_frame = rp.cv_remap_image(first_frame    ,*cum_flow,relative=True,interp='bilinear')
-        ...     
-        ...     iter_frames.append(iter_frame)
-        ...     warp_frames.append(warp_frame)
+        ... frames = []
+        ... flows = []
+        ... prev_frame = frame_a
         ... 
-        ... preview_video = rp.video_with_progress_bar(
-        ...     rp.tiled_videos(
-        ...         rp.labeled_videos(
-        ...             [iter_frames, warp_frames, video],
-        ...             [
-        ...                 "Iteratively Warped Image\nBilinear Interp",
-        ...                 "Accumulated Flow\nSingle Image Warp",
-        ...                 "Original Video",
-        ...             ],
-        ...             font="G:Zilla Slab",
-        ...             size_by_lines=True,
+        ... vis_frames=[]
+        ... 
+        ... i=0
+        ... 
+        ... orig_noise = torch.randn_like(as_torch_image(frame_a))
+        ... 
+        ... try:
+        ...     while True:
+        ...         
+        ...         #DECIDE WHICH FLOW TO USE HERE
+        ...         REVERSE_FLOW=True  #Calculates flow from b to a, better for remap
+        ...         #REVERSE_FLOW=False #Calculates flow from a to b, better for scatter add
+        ... 
+        ...         frame_b = get_frame()
+        ... 
+        ...         #UNCOMMENT ONE OF THESE ALGORITHMS
+        ...         if REVERSE_FLOW:frame_a, frame_b = frame_b, frame_a
+        ...         flow = cv_optical_flow(frame_b, frame_a, algorithm="DenseRLOF") #Best, Slowest
+        ...         #flow = cv_optical_flow(frame_a, frame_b, algorithm="DeepFlow")
+        ...         #flow = cv_optical_flow(frame_a, frame_b,algorithm='Farneback') #Fastest, Worst
+        ...         #flow = cv_optical_flow(frame_a, frame_b, algorithm="SparseToDense")
+        ...         #flow = cv_optical_flow(frame_a, frame_b, algorithm="PCAFlow")
+        ...         #flow = cv_optical_flow(frame_a, frame_b, algorithm="DualTVL1")
+        ...         if REVERSE_FLOW:frame_a, frame_b = frame_b, frame_a
+        ... 
+        ...         N = 100
+        ...         
+        ...         if not i%N:
+        ...             #REset iter frame
+        ...             prev_frame=frame_a
+        ...             flows = []
+        ...             frames = []
+        ... 
+        ...         frames.append(frame_a)
+        ...         flows.append(flow)
+        ... 
+        ...         i+=1
+        ...         i%=N
+        ... 
+        ...         flow_vis = optical_flow_to_image(*flow,sensitivity=.3,mode='brightness')
+        ... 
+        ...         frames = frames[-N:]
+        ...         flows = flows[-N:]
+        ...         cum_flow = accumulate_flows(
+        ...             (1 if REVERSE_FLOW else -1) * as_numpy_array(flows),
+        ...             reverse=True,
         ...         )
-        ...     ),
+        ...         warped_frame = cv_remap_image(frames[0], *-cum_flow, relative=True)
+        ...         
+        ...         iter_warped_frame = cv_remap_image(prev_frame, *(-1 if REVERSE_FLOW else 1) * flows[-1], relative=True)
+        ...         
+        ...         prev_frame = iter_warped_frame
+        ... 
+        ...         scatter_flow = torch.tensor(
+        ...             accumulate_flows(
+        ...                 (1 if REVERSE_FLOW else -1) * as_numpy_array(flows),
+        ...                 reverse=False,
+        ...             )
+        ...         )
+        ...         scattered = torch_scatter_add_image(
+        ...             as_torch_image(frames[0]),
+        ...             *scatter_flow,
+        ...             relative=True,
+        ...             prepend_ones=True,
+        ...             interp="bilinear",
+        ...         )
+        ...         scatter_sum = scattered[0]
+        ...         scattered = scattered[1:] / (scatter_sum+.001)
+        ...         scattered = as_numpy_image(scattered)
+        ... 
+        ...         NOISE_SCALE=4
+        ...         scattered_noise = torch_scatter_add_image(
+        ...             orig_noise[:3],
+        ...             *scatter_flow,
+        ...             relative=True,
+        ...             interp="round",
+        ...             prepend_ones=True,
+        ...         )
+        ...         scatter_noise_sum = scattered_noise[0]
+        ...         scattered_noise= scattered_noise[1:]
+        ...         
+        ...         scattered_noise_before_downscaling = scattered_noise
+        ...         scattered_noise_before_downscaling = scattered_noise_before_downscaling / (scatter_noise_sum**.5+.001)
+        ...         scattered_noise_before_downscaling = as_numpy_image(scattered_noise_before_downscaling) / 5 + .5
+        ...         scattered_noise_before_downscaling = with_alpha_channel(
+        ...             scattered_noise_before_downscaling, as_numpy_array(scatter_noise_sum > 0)
+        ...         )
+        ...         
+        ...         scattered_noise = torch_resize_image(
+        ...             nw.resize_noise(
+        ...                 scattered_noise,
+        ...                 size=1/NOISE_SCALE,
+        ...                 alpha = scatter_noise_sum,
+        ...             ),
+        ...             size=get_image_dimensions(frame_a),
+        ...             interp="nearest",
+        ...         )
+        ...         scattered_noise = as_numpy_image(scattered_noise) / 5 + .5
+        ...         scatter_noise_sum=as_numpy_array(scatter_noise_sum)
+        ...         scatter_noise_sum=cv_resize_image(scatter_noise_sum,1/NOISE_SCALE)
+        ...         scatter_noise_sum=cv_resize_image(scatter_noise_sum,get_image_dimensions(frame_a),interp='nearest')
+        ...         scattered_noise=with_alpha_channel(scattered_noise,as_numpy_array(scatter_noise_sum>0))
+        ...         
+        ...         vis_frame = with_alpha_checkerboard(
+        ...             image_with_progress_bar(
+        ...                 labeled_image(
+        ...                     tiled_images(
+        ...                         labeled_images(
+        ...                             [
+        ...                                 frames[0],
+        ...                                 frame_a,
+        ...                                 warped_frame,
+        ...                                 iter_warped_frame,
+        ...                                 flow_vis,
+        ...                                 scattered,
+        ...                                 scattered_noise_before_downscaling,
+        ...                                 scattered_noise,
+        ...                             ],
+        ...                             [
+        ...                                 "Original Frame",
+        ...                                 "Current Frame",
+        ...                                 "Accumulated Flow Warp",
+        ...                                 "Iterative Warp",
+        ...                                 "Flow Visualization",
+        ...                                 "Accumulated Scatter Add",
+        ...                                 "Accumulated Scatter Noise",
+        ...                                 "Accumulated Scatter Noise (Downscaled)",
+        ...                             ],
+        ...                             font="Futura",
+        ...                         ),
+        ...                         border_thickness=0,
+        ...                         length=4,
+        ...                     ),
+        ...                     f"Frame {i}",
+        ...                     font="Futura",
+        ...                 ),
+        ...                 progress=i / (N - 1),
+        ...                 size=5,
+        ...             ),
+        ...             first_color=0.1,
+        ...             second_color=0.2,
+        ...         )
+        ... 
+        ...         vis_frames.append(vis_frame)    
+        ...         display_image(vis_frame)
+        ... 
+        ...         frame_a = frame_b
+        ... 
+        ... except StopIteration:
+        ...     pass
+        ... 
+        ... 
+        ... final_video = video_with_progress_bar(
+        ...     vis_frames,
+        ...     bar_color="cyan",
         ...     size=5,
-        ...         bar_color='light blue',
         ... )
         ... 
-        ... # rp.display_image_slideshow(preview_video)
-        ... rp.display_video_in_notebook(preview_video, filetype='gif', framerate=30)
+        ... display_video(
+        ...     final_video,
+        ...     loop=True,
+        ... )
+        ... 
+        ... ans = save_video_mp4(final_video, video_bitrate='max')
+
     """
 
     flows=detuple(flows)
@@ -36490,14 +36779,20 @@ def cv_optical_flow(frame_a, frame_b, algorithm="DenseRLOF"):
         ValueError: If an unsupported optical flow algorithm is specified.
         
     EXAMPLE (can run on macbook):
-        >>> #UNCOMMENT IF YOU WANT TO USE WEBCAM
-        ... get_frame = lambda: as_rgba_image(as_grayscale_image(as_rgba_image(cv_resize_image(load_image_from_webcam(), 1 / 8))))
+
+        >>> import torch
+        ... from rp import *
+        ... 
+        ... #UNCOMMENT IF YOU WANT TO USE WEBCAM
+        ... get_frame = lambda: as_rgba_image(as_rgba_image(cv_resize_image(load_image_from_webcam(), 1 / 8)))
         ... 
         ... #UNCOMMENT IF YOU WANT TO USE A VIDEO INPUT
-        ... video=load_video('/Users/ryan/Desktop/Screenshots/cat_on_grass.mov')
+        ... #video=load_video('/Users/ryan/Desktop/Screenshots/cat_on_grass.mov',use_cache=True)
+        ... video=load_video('https://warpyournoise.github.io/docs/assets/videos/DeepFloyd/carturn_st_oilpaint_input.mp4',use_cache=True)
         ... video=remove_duplicate_frames(video,lazy=True)
         ... video=iter(video)
-        ... get_frame=lambda:resize_image_to_fit(next(video),height=256)
+        ... get_frame=lambda:as_rgba_image(resize_image_to_fit(next(video),height=256))
+        ... 
         ... 
         ... frame_a = get_frame()
         ... 
@@ -36509,51 +36804,105 @@ def cv_optical_flow(frame_a, frame_b, algorithm="DenseRLOF"):
         ... 
         ... i=0
         ... 
+        ... orig_noise = torch.randn_like(as_torch_image(frame_a))
         ... 
         ... try:
         ...     while True:
+        ...         
+        ...         #DECIDE WHICH FLOW TO USE HERE
+        ...         REVERSE_FLOW=True  #Calculates flow from b to a, better for remap
+        ...         REVERSE_FLOW=False #Calculates flow from a to b, better for scatter add
+        ...         
         ... 
         ...         frame_b = get_frame()
         ... 
         ...         #UNCOMMENT ONE OF THESE ALGORITHMS
-        ...         flow = cv_optical_flow(frame_a, frame_b, algorithm="DenseRLOF") #Best, Slowest
+        ...         if REVERSE_FLOW:frame_a, frame_b = frame_b, frame_a
+        ...         flow = cv_optical_flow(frame_b, frame_a, algorithm="DenseRLOF") #Best, Slowest
         ...         #flow = cv_optical_flow(frame_a, frame_b, algorithm="DeepFlow")
         ...         #flow = cv_optical_flow(frame_a, frame_b,algorithm='Farneback') #Fastest, Worst
         ...         #flow = cv_optical_flow(frame_a, frame_b, algorithm="SparseToDense")
         ...         #flow = cv_optical_flow(frame_a, frame_b, algorithm="PCAFlow")
         ...         #flow = cv_optical_flow(frame_a, frame_b, algorithm="DualTVL1")
+        ...         if REVERSE_FLOW:frame_a, frame_b = frame_b, frame_a
+        ... 
+        ...         N = 30
+        ...         
+        ...         if not i%N:
+        ...             #REset iter frame
+        ...             prev_frame=frame_a
+        ...             flows = []
+        ...             frames = []
         ... 
         ...         frames.append(frame_a)
         ...         flows.append(flow)
         ... 
-        ...         N = 30
-        ... 
         ...         i+=1
         ...         i%=N
         ... 
-        ...         if not i%N:
-        ...             #REset iter frame
-        ...             prev_frame=frames[-1]
-        ... 
-        ...         flow_vis = optical_flow_to_image(*flow,sensitivity=1/.02)
+        ...         flow_vis = optical_flow_to_image(*flow,sensitivity=None)
         ... 
         ...         frames = frames[-N:]
         ...         flows = flows[-N:]
-        ...         cum_flow = accumulate_flows(flows, reverse=True)
+        ...         cum_flow = accumulate_flows(
+        ...             (1 if REVERSE_FLOW else -1) * as_numpy_array(flows),
+        ...             reverse=True,
+        ...         )
         ...         warped_frame = cv_remap_image(frames[0], *-cum_flow, relative=True)
-        ...         iter_warped_frame = cv_remap_image(prev_frame, *-flows[-1], relative=True)
+        ...         
+        ...         iter_warped_frame = cv_remap_image(prev_frame, *(-1 if REVERSE_FLOW else 1) * flows[-1], relative=True)
+        ...         
         ...         prev_frame = iter_warped_frame
+        ... 
+        ...         scatter_flow = torch.tensor(
+        ...             accumulate_flows(
+        ...                 (1 if REVERSE_FLOW else -1) * as_numpy_array(flows),
+        ...                 reverse=False,
+        ...             )
+        ...         )
+        ...         scattered = torch_scatter_add_image(
+        ...             as_torch_image(frames[0]),
+        ...             *scatter_flow,
+        ...             relative=True,
+        ...             prepend_ones=True,
+        ...             interp="bilinear",
+        ...         )
+        ...         scatter_sum = scattered[0]
+        ...         scattered = scattered[1:] / (scatter_sum+.001)
+        ...         scattered = as_numpy_image(scattered)
+        ... 
+        ...         scattered_noise = torch_scatter_add_image(
+        ...             orig_noise[:3],
+        ...             *scatter_flow,
+        ...             relative=True,
+        ...             interp="round",
+        ...             prepend_ones=True,
+        ...         )
+        ...         scatter_noise_sum = scattered_noise[0]
+        ...         scattered_noise= scattered_noise[1:] / (scatter_noise_sum**.5+.001)
+        ...         scattered_noise = as_numpy_image(scattered_noise) / 5 + .5
+        ...         scattered_noise=with_alpha_channel(scattered_noise,as_numpy_array(scatter_noise_sum>0))
+        ...         
         ...         vis_frame = with_alpha_checkerboard(
         ...             image_with_progress_bar(
         ...                 labeled_image(
         ...                     tiled_images(
         ...                         labeled_images(
-        ...                             [warped_frame, frame_a, iter_warped_frame, flow_vis],
+        ...                             [
+        ...                                 warped_frame,
+        ...                                 frame_a,
+        ...                                 iter_warped_frame,
+        ...                                 flow_vis,
+        ...                                 scattered,
+        ...                                 scattered_noise,
+        ...                             ],
         ...                             [
         ...                                 "Accumulated Flow",
         ...                                 "Current Frame",
         ...                                 "Iterative Warp",
         ...                                 "Flow Visualization",
+        ...                                 "Accumulated Scatter Add",
+        ...                                 "Accumulated Scatter Noise",
         ...                             ],
         ...                             font="Futura",
         ...                         ),
@@ -36564,18 +36913,29 @@ def cv_optical_flow(frame_a, frame_b, algorithm="DenseRLOF"):
         ...                 ),
         ...                 progress=i / (N - 1),
         ...                 size=5,
-        ...             )
+        ...             ),
+        ...             first_color=0.1,
+        ...             second_color=0.2,
         ...         )
         ... 
         ...         vis_frames.append(vis_frame)    
         ...         display_image(vis_frame)
         ... 
         ...         frame_a = frame_b
+        ... 
         ... except StopIteration:
         ...     pass
         ... 
         ... 
-        ... display_video(video_with_progress_bar(vis_frames,bar_color='cyan'),loop=True)
+        ... display_video(
+        ...     video_with_progress_bar(
+        ...         vis_frames,
+        ...         bar_color="cyan",
+        ...         size=5,
+        ...     ),
+        ...     loop=True,
+        ... )
+
     """
     pip_import("cv2")
     pip_import("numpy")
@@ -36680,8 +37040,9 @@ def optical_flow_to_image(dx, dy, *, mode='saturation', sensitivity=None):
         norm_mag = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
     elif is_number(sensitivity):
         norm_mag = mag
-        norm_mag = sensitivity / mag
-        norm_mag = np.clip(norm_mag, 0, 255)
+        norm_mag = sensitivity * mag
+        norm_mag = np.tanh(norm_mag) #Soft clip it between 0 and 1
+        norm_mag = np.clip(norm_mag * 255, 0, 255)
         norm_mag = norm_mag.astype(np.uint8)
     else:
         assert False, sensitivity
