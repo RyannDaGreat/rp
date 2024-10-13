@@ -1217,6 +1217,79 @@ def _fansi_highlight_path(path,color='cyan'):
     return fansi('/','blue','bold').join(fansi(x,color) for x in path)
     return fansi('/',color,'bold').join(fansi(x,color) for x in path)
 
+
+def fansi_pygments(
+    code,
+    language=None,
+    *,
+    style=None,
+    color_mode=None
+):
+    """
+    Highlight code using pygments and return a string with ANSI escape codes for colors.
+    If language is not provided, it will attempt to autodetect the language.
+    The style parameter allows specifying a color scheme for the highlighting.
+    The color_mode parameter specifies the color mode for the output (basic, 256, or truecolor).
+    """
+    
+    pip_import("pygments")
+    from pygments import highlight
+    from pygments.lexers import get_lexer_by_name
+    from pygments.formatters import Terminal256Formatter, TerminalTrueColorFormatter, TerminalFormatter
+    from pygments.lexers import guess_lexer
+    from pygments.styles import get_style_by_name, get_all_styles
+    from pygments.lexers import get_all_lexers
+
+    #Handle defaults
+    if currently_running_windows():
+        if color_mode is None: color_mode = 'basic'
+        if style is None:style='default'
+    else:
+        if color_mode is None:color_mode='256'
+        if style is None:style='monokai'
+
+    if language:
+        try:
+            lexer = get_lexer_by_name(language)
+        except:
+            available_languages = [lexer[0] for lexer in get_all_lexers()]
+            raise ValueError("Invalid language '{}' specified. Available languages: {}".format(language, ', '.join(available_languages)))
+    else:
+        lexer = guess_lexer(code)
+    
+    try:
+        style = get_style_by_name(style)
+    except:
+        available_style = list(get_all_styles())
+        raise ValueError("Invalid color style '{}' specified. Available style: {}".format(style, ', '.join(available_style)))
+    
+    if color_mode == 'basic':
+        formatter = TerminalFormatter()
+    elif color_mode == '256':
+        formatter = Terminal256Formatter(style=style)
+    elif color_mode == 'true':
+        formatter = TerminalTrueColorFormatter(style=style)
+    else:
+        raise ValueError("Invalid color mode '{}' specified. Available modes: basic, 256, true".format(color_mode))
+    
+    highlighted_code = highlight(code, lexer, formatter)
+    return highlighted_code
+
+def fansi_pygments_demo(code=None):
+    """ Displays all themes for fansi_pygments """
+    if code is None:
+        code=unindent("""
+        @decorator
+        def f(x, *y):
+            print("HELLO", 1+2.3 <= [])
+        """).strip()
+    pip_import('pygments')
+    from pygments.styles import  get_all_styles
+    for style in get_all_styles():
+        print(style.center(string_width(code)+10,'·'))
+        print(fansi_pygments(code,'python',style=style))
+
+
 # endregion
 # region  Copy/Paste: ［string_to_clipboard，string_from_clipboard］
 _local_clipboard_string=''#if we can't access a system OS clipboard, try and fake it with a local clipboard istead. Of course, you need to use the string_to_clipboard and clipboard_to_string functions to make this work, but that's ok
@@ -2988,8 +3061,8 @@ def xy_float_images(
          >>>    display_image(2*full_range(rotated**5)-1)
     """
     x, y = np.meshgrid(
-        np.linspace(min_x, max_x, num=width ),
-        np.linspace(min_y, max_y, num=height),
+        np.linspace(min_x, max_x, num=width ,device=device),
+        np.linspace(min_y, max_y, num=height,device=device),
     )
     return np.stack([x,y])
 
@@ -3301,7 +3374,7 @@ def random_batch(full_list,batch_size: int = None,*,retain_order: bool = False):
     #       b ≣ len ⨀ a b
 
     # Check if the input is a pandas DataFrame by class name and presence of .iloc
-    if full_list.__class__.__name__ == 'DataFrame' and hasattr(full_list, 'iloc'):
+    if _is_pandas_dataframe(full_list) or _is_pandas_iloc_iterable(full_list):
         if batch_size is None:
             batch_size = len(full_list)
         assert 0 <= batch_size <= len(full_list), "batch_size must be between 0 and the number of rows in the DataFrame"
@@ -4575,10 +4648,14 @@ def save_image_to_imgur(image):
             if file_exists(temp_image_path):
                 delete_file(temp_image_path)
                 
-def save_image_jpg(image,path,*,quality=100,add_extension=True):
+def save_image_jpg(image,path=None,*,quality=100,add_extension=True):
     """
     If add_extension is True, will add a '.jpg' or '.jpeg' extension to path IFF it doesn't allready end with such an extension (AKA 'a/b/c.jpg' -> 'a/b/c.jpg' BUT 'a/b/c.png' -> 'a/b/c.png.jpg')
     """
+
+    if path is None:
+        path=get_unique_copy_path('image.jpg')
+
     make_directory(get_parent_folder(path)) #Make sure the directory exists
     image=np.asarray(image)
     image=as_rgb_image(image)
@@ -9709,6 +9786,110 @@ def save_json(data,path,*,pretty=False,default=None):
 
     return string_to_text_file(path,text)
 
+_load_tsv_cache={}
+def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False):
+    """
+    Read a TSV file with optional progress tracking and flexible header handling.
+
+    By default tries to be robust - skipping all bad lines.
+
+    Parameters:
+        file_path (str): Path to the TSV file.
+        show_progress (bool): Whether to display a progress bar. Default is True.
+        header (str, int, list, or None): Header row handling.
+            - 0 (default): Use the first row as column names.
+            - None: Use no column names, only integer indices.
+            - List: Use the provided list as column names, assuming no header row in the file.
+            - str:  Like list, but uses str.split so you can specify headers like 'col1 col2name whatIcall_Col3' etc
+        use_cache: If True, will cache the result so you only have to load from drive once
+
+    Returns:
+        pandas.DataFrame: The loaded TSV data as a DataFrame.
+
+    EXAMPLE:
+
+        >>> load_tsv('urls_oct6.tsv', header='id size url title', use_cache=True, show_progress=True)
+        ... ans =              id          size                             url                                              title
+        ...       0       2RH8A49  7.088479e+08  https://video-previews.cont...    Joyful Excitement Dancing Woman Meme Expression
+        ...       1       7LDJAUA  2.877922e+08  https://video-previews.cont...  funny robot in the background , children's bac...
+        ...       2       DEOXGE2  1.256278e+09  https://video-previews.cont...              Hemp Extract in Hands Selective Focus
+        ...       3       TY3VY9R  4.071201e+08  https://video-previews.cont...  Coconut palmtrees  on the most beautiful tropi...
+        ...       4       S2HJ9Q2  2.214383e+08  https://video-previews.cont...                           Osteoporosis Diagnostics
+        ...       ...         ...           ...                             ...                                                ...
+        ...       699921  D58D677  1.960837e+07  https://video-previews.cont...  Scientist in PPE suit conducts research on the...
+        ...       699922  BG9G364  5.516978e+08  https://video-previews.cont...  Professional Fishing Vessel, Shooting From Dro...
+        ...       699923  PPEF3XB  2.731540e+07  https://video-previews.cont...  Rehabilitation Center for Bears in the Carpath...
+        ...       699924  HQWAGMQ  1.771674e+09  https://video-previews.cont...  Desperate Stressful Arabic Hispanic Businessma...
+        ...       699925  T686L7K  2.834678e+09  https://video-previews.cont...                     Dandelion Yellow Flowers Field
+        ... 
+        ...       [699926 rows x 4 columns]
+
+    """
+
+    #Future Parameters:
+    #    mode (str): File reading mode. Use 'robust' to skip bad lines. Default is 'robust'.
+    mode = 'robust'
+
+    pip_import("pandas")
+    import pandas as pd
+    import csv
+
+    if use_cache:
+        args_hash = handy_hash((file_path, header))
+        if args_hash not in _load_tsv_cache:
+            value = gather_args_call(load_tsv, use_cache=False)
+            _load_tsv_cache[args_hash]=value
+        return _load_tsv_cache[args_hash]
+    
+    chunk_size = 1000
+
+    if isinstance(header,str):
+        header=header.strip().split()
+
+    kwargs = {
+        "sep": "\t",
+        "chunksize": chunk_size,
+        "header": header if isinstance(header, int) else None,
+        "names": header if isinstance(header, list) else None,
+    }
+
+    if mode == "robust":
+        kwargs.update({"quoting": csv.QUOTE_NONE, "on_bad_lines": "skip"})
+        
+
+    iterator = pd.read_csv(file_path, **kwargs)
+
+    if show_progress:
+        pip_import("tqdm")
+        from tqdm import tqdm
+
+        total_lines = number_of_lines_in_file(file_path)
+        if isinstance(header, int):
+            total_lines -= 1
+            
+        iterator = tqdm(iterator, total=total_lines // chunk_size)
+
+    df = pd.concat(iterator, ignore_index=True)
+
+    if show_progress:
+        _erase_terminal_line()
+
+    def fix_dataframe_nans(dataframe):
+        """
+        Replace NaNs with empty strings in DataFrame columns that are otherwise entirely strings,
+        improving performance by using pandas type detection.
+        I use this in load_tsv because otherwise empty strings in a tsv line like "\t\t\t" might be interpereted as NaN's instead of strings
+        """
+        for column in dataframe.columns:
+            # Use pandas API to check if the column's data type is 'string'
+            if pd.api.types.is_string_dtype(dataframe[column]):
+                dataframe[column] = dataframe[column].fillna('')
+        return dataframe
+    df = fix_dataframe_nans(df)
+
+    return df
+
+
 def load_yaml_file(path, use_cache=False):
     """
     EXAMPLE:
@@ -13169,6 +13350,14 @@ def vim(file_or_object=None,line_number=None):
         path=file_or_object
         path=get_absolute_path(path)
         args.append(path)
+    elif isinstance(file_or_object, list):
+        #Can specify a list of objects or files and vim will edit all at once
+        for path in file_or_object:
+            if isinstance(path, str):
+                path = get_absolute_path(path)
+            else:
+                path=get_source_file(file_or_object)
+            args.append(path)
     elif file_or_object is None:
         path=None
         pass
@@ -14994,7 +15183,9 @@ def _view_interactive_json(data):
     try:
         import json
 
-        json.dumps(data)
+        if not isinstance(data, str):
+            json.dumps(data)
+
         _view_json_via_jtree(data)
     except Exception:
         _view_with_pyfx(data)
@@ -15322,9 +15513,7 @@ def _write_default_gitignore():
     git_repo = get_parent_folder(get_git_repo_root())
     file = path_join(git_repo, '.gitignore')
 
-    file = '.gitignore'
-
-    if new_text.strip() not in load_text_file(file):
+    if not file_exists(file) or new_text.strip() not in load_text_file(file):
         append_line_to_file(new_text,file)
         fansi_print("Wrote lines to "+file,'green','bold')
     else:
@@ -16343,6 +16532,8 @@ def pseudo_terminal(
 
         quit() RETURN
         exit() RETURN
+
+        RETK $fansi_print("RETK: Killing this process forcefully!", 'cyan', 'bold'); $kill_process($get_process_id())
 
         DKH DISKH
          KH DISKH
@@ -18060,6 +18251,8 @@ def pseudo_terminal(
                                 #     user_message="""ans=__import__("rp").load_json(%s)"""%repr(file_name)
                                 elif file_name.endswith('.yaml'):
                                     user_message="""ans=__import__("rp").load_yaml(%s)"""%repr(file_name)
+                                elif file_name.endswith('.tsv'):
+                                    user_message="""ans=__import__("rp").load_tsv(%s,show_progress=True)"""%repr(file_name)
                                 elif is_image_file(file_name):
                                     user_message='ans=__import__("rp").load_image(%s)'%repr(file_name)
                                 elif is_video_file(file_name):
@@ -22672,7 +22865,7 @@ def labeled_image(image,
         
     assert False,'This line should be unreachable'
 
-def labeled_images(images,labels,*args,**kwargs):
+def labeled_images(images,labels,show_progress=False,lazy=False,*args,**kwargs):
     """
     The plural of labeled_image
     See rp.labeled_image's documentation
@@ -22681,6 +22874,7 @@ def labeled_images(images,labels,*args,**kwargs):
     assert is_iterable(labels)
     assert is_iterable(images)
 
+    #TODO: Make it lazier
     images=list(images)
 
     if isinstance(labels,str):
@@ -22689,9 +22883,15 @@ def labeled_images(images,labels,*args,**kwargs):
         labels=list(labels)
 
     assert len(images)==len(labels)
-    return [labeled_image(image,label,*args,**kwargs) for image,label in zip(images,labels)]
 
-def labeled_videos(videos,labels,*args,**kwargs):
+    output = (labeled_image(image,label,*args,**kwargs) for image,label in zip(images,labels))
+
+    output = IteratorWithLen(output, len(images))
+    if show_progress: output = eta(output, title = 'rp.'+get_current_function_name())
+    if not lazy: output = list(output)
+    return output
+
+def labeled_videos(videos,labels,show_progress=False,lazy=False,*args,**kwargs):
     """
     The plural of labeled_images
     See rp.labeled_image's documentation
@@ -22699,6 +22899,7 @@ def labeled_videos(videos,labels,*args,**kwargs):
     """
     assert is_iterable(labels)
     assert is_iterable(videos)
+
 
     if not is_numpy_array(videos) and not is_torch_tensor(videos):
         videos=list(videos)
@@ -22709,7 +22910,13 @@ def labeled_videos(videos,labels,*args,**kwargs):
         labels=list(labels)
 
     assert len(videos)==len(labels)
-    return [labeled_images(video,label,*args,**kwargs) for video,label in zip(videos,labels)]
+
+    output = (labeled_images(video,label,*args,**kwargs) for video,label in zip(videos,labels))
+
+    output = IteratorWithLen(output, len(videos))
+    if show_progress: output = eta(output, title = 'rp.'+get_current_function_name())
+    if not lazy: output = list(output)
+    return output
 
 
 @memoized
@@ -24682,18 +24889,20 @@ def tiled_images(
         output=bordered_image_solid_color(output,color=border_color,thickness=border_thickness,bottom=0,right=0)
     return output
 
-def tiled_videos(videos, *, show_progress=False, **kwargs):
+def tiled_videos(videos, *, show_progress=False, border_thickness=0, **kwargs):
     """
     Tiles videos together. 
     Uses same args and kwargs as rp.tiled_images - see its docstring for what they do
     Assumes videos are in BTI form, where I is image (so I is like HWC or CHW or PIL etc)
     
     Todo: Also support lazy
-    Todo: Heavily optimize! Right now faster when border_thickness=0
+    Todo: Heavily optimize! Right now faster when border_thickness=0, so that's the default value
     Todo: Add examples to docstring
     """
 
     from copy import copy
+
+    if show_progress in ['eta', True]: show_progress='eta:rp.'+get_current_function_name()
 
     if not len(videos):
         #If the videos have no length...whatever. Return nothingness.
@@ -24709,7 +24918,11 @@ def tiled_videos(videos, *, show_progress=False, **kwargs):
 
     for time in times:
         tiles = [video[time] for video in videos]
-        out_frame = tiled_images(tiles, **kwargs)
+        out_frame = tiled_images(
+            tiles,
+            border_thickness=border_thickness,
+            **kwargs,
+        )
         out_frames.append(out_frame)
     
     if len(set(x.shape for x in out_frames))==1:
@@ -26552,6 +26765,45 @@ def load_video_stream(path, *, start_frame=0, with_length=True):
 
     return frame_iterator
 
+def load_video_streams(
+    *paths,
+    start_frame=0,
+    with_length=True,
+    transpose=False,
+
+    show_progress=True,
+    use_cache=False,
+    num_threads=None,
+    strict=True,
+    lazy=False,
+    buffer_limit=None
+):
+    """ Plural of load_video_stream """
+
+    paths = detuple(paths)
+
+    if not is_iterable(start_frame):
+        #Allow broadcasting start_frame
+        start_frame = [start_frame] * len(paths)
+
+    assert len(start_frame)==len(paths), 'Must specify start_frame for each video'
+
+    def load(i):
+        return load_video_stream(paths[i], start_frame=start_frame[i], with_length=with_length)
+
+    streams = gather_args_call(load_files, load, range(len(paths)))
+        
+    if transpose:
+        streams = zip(*streams)
+
+        lengths = [(len(x) if hasattr(x, '__len__') else None) for x in streams]
+
+        if all(isinstance(l, int) for l in lengths):
+            length = min(lengths) #This is the way we handle it right now, might insert blank frames later
+
+            streams = IteratorWithLen(streams, length)
+
+    return streams
 
 _load_video_cache = {}
 def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cache=False):
@@ -26652,6 +26904,8 @@ def load_videos(
     """
     #I don't know if there's much advantage in doing this in parallel...but we'll try...
 
+    if show_progress in ['eta', True]: show_progress='eta:rp.load_videos'
+
     paths = detuple(paths)
     paths = rp_iglob(paths)
 
@@ -26701,12 +26955,12 @@ def _get_default_video_path(extension='mp4'):
 class VideoWriterMP4:
     #Todo: If this ever gets fucky, try https://github.com/imageio/imageio-ffmpeg - it looks pretty good!
 
-    def __init__(self, path=None, framerate=60, video_bitrate='medium', height=None, width=None, silent=False):
+    def __init__(self, path=None, framerate=60, video_bitrate='medium', height=None, width=None, show_progress=True):
         # Originally from: https://github.com/kkroening/ffmpeg-python/issues/246
 
         _ensure_ffmpeg_installed()
 
-        self.silent=silent
+        self.show_progress=show_progress
 
         if path is None: path=_get_default_video_path()
         if not has_file_extension(path) or get_file_extension(path).lower()!='mp4': path+='.mp4'
@@ -26766,7 +27020,7 @@ class VideoWriterMP4:
                     pix_fmt="rgb24",
                     s="{}x{}".format(width, height),
                     r=self.framerate,
-                    **(dict(loglevel="quiet") if self.silent else dict())
+                    **(dict(loglevel="quiet") if not self.show_progress else dict())
                 )
                 .output(
                     self.path,
@@ -26797,7 +27051,7 @@ class VideoWriterMP4:
         self.process.wait()
         self.finished=True
         
-def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', height=None, width=None, silent=False):
+def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', height=None, width=None, show_progress=True):
     """
     frames: a list of images as defined by rp.is_image(). Saves an .mp4 file at the path
         - frames can also contain strings, if those strings are image file paths
@@ -26823,7 +27077,7 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
         if height is None: height=max_height
         if width  is None: width =max_width 
     
-    writer = VideoWriterMP4(path, framerate, video_bitrate=video_bitrate, height=height, width=width, silent=silent)
+    writer = VideoWriterMP4(path, framerate, video_bitrate=video_bitrate, height=height, width=width, show_progress=show_progress)
 
     #Make frames speficiable as a glob, folder path, list of images, or list of image paths
     def load_frame(frame):
@@ -26933,7 +27187,7 @@ def convert_to_gif_via_ffmpeg(
     *,
     framerate=None,
     custom_palette=True,
-    silent=False
+    show_progress=True
 ):
     """
     Converts a video file to a GIF using FFmpeg.
@@ -26951,7 +27205,7 @@ def convert_to_gif_via_ffmpeg(
             If True, a temporary palette file will be generated and used for the GIF conversion.
             If False, the GIF will be converted without using a custom palette, resulting in a smaller file size
             but potentially lower quality. Default is True.
-        silent (bool, optional): Whether to suppress FFmpeg output. If True, FFmpeg will run in quiet mode.
+        show_progress (bool, optional): Whether to suppress FFmpeg output. If False, FFmpeg will run in quiet mode.
             Default is False.
 
     Returns:
@@ -26986,7 +27240,7 @@ def convert_to_gif_via_ffmpeg(
 
     input_framerate = get_video_file_framerate(video_path)
 
-    maybe_silent = ["-loglevel", "quiet"] if silent else []
+    maybe_silent = ["-loglevel", "quiet"] if not show_progress else []
     maybe_framerate = ["-r", str(input_framerate)]
 
     if custom_palette:
@@ -27008,7 +27262,7 @@ def convert_to_gif_via_ffmpeg(
     if framerate is not None:
         #As stated in the note, when framerates are slow the per-frame delays become more noticeable and makes the video appear jerky
         #This is a slow fix...but it does in fact fix the problem! TODO: Directly modify the delays in the GIF instead - that should be faster
-        if not silent:
+        if show_progress:
             print("Setting the framerate to %i..."%framerate)
             temp_path = temporary_file_path('gif')
             move_file(output_path, temp_path)
@@ -27029,7 +27283,7 @@ def save_video(images, path, *, framerate=60):
     """
     assert get_file_extension(path) in 'mp4 avi gif png'.split(), 'This function currently supports .mp4, .avi, .png and .gif files'
 
-    if path.endswith('.mp4'): return save_video_mp4(images,path,framerate=framerate, silent=True)
+    if path.endswith('.mp4'): return save_video_mp4(images,path,framerate=framerate, show_progress=False)
     if path.endswith('.avi'): return save_video_avi(images,path,framerate=framerate)
     if path.endswith('.png'): return save_video_png(images,path,framerate=framerate)
     if path.endswith('.gif'): return save_video_gif(images,path,framerate=framerate)
@@ -29955,6 +30209,8 @@ def download_urls_to_cache(
     """ Plural of rp.download_url_to_cache """
     urls = detuple(urls)
 
+    if show_progress in ['eta', True]: show_progress='eta:rp.download_urls_to_cache'
+
     def download(url):
         return download_url_to_cache(
             url,
@@ -30059,8 +30315,7 @@ def get_cache_file_paths(urls, *, cache_dir=None, file_extension=None, hash_func
     """Plural of get_cache_file_path, supporting a `lazy` option"""
     func = gather_args_wrap(get_cache_file_path)
     out = map(func, urls)
-    if not lazy:
-        out = list(out)
+    if not lazy: out = list(out)
     return out
 
 def debug(level=0):
@@ -33628,13 +33883,70 @@ def cv_resize_image(image, size, interp="auto", *, alpha_weighted=False, copy=Tr
     
     return out
 
-def cv_resize_images(*images, size, interp='auto', alpha_weighted=False):
+def cv_resize_images(
+    *images,
+    size,
+    interp="auto",
+    alpha_weighted=False,
+    show_progress=False,
+    lazy=False
+):
+
     images=detuple(images)
     assert all(is_image(x) for x in images), 'Not all given images satisfy rp.is_image'
-    images=[cv_resize_image(image, size, interp) for image in images]
+
+    as_numpy = is_numpy_array(images)
+
+    images=(cv_resize_image(image, size, interp) for image in images)
+
+    if show_progress: images = eta(images, title='cv_resize_images')
+    if not lazy: 
+        images=list(images)
+        if as_numpy:
+            #If the input was a numpy array, convert the output to that too
+            if show_progress: print(end="resize_images: Converting to numpy array...")
+            images = as_numpy_array(images)
+            if show_progress: print(end="done!")
+
     return images
 
 resize_images = cv_resize_images  # For now, they will be the same thing
+
+def resize_videos(
+    *videos,
+    size,
+    interp="auto",
+    alpha_weighted=False,
+    show_progress=False,
+    lazy=False
+    ):
+
+    videos=detuple(videos)
+
+    as_numpy = is_numpy_array(videos)
+
+    output = (
+        resize_images(
+            video,
+            size=size,
+            interp=interp,
+            alpha_weighted=alpha_weighted,
+            show_progress=False,
+            lazy=False,
+        )
+        for video in videos
+    )
+    
+    if show_progress: videos = eta(videos, title='resize_videos')
+    if not lazy: 
+        output=list(output)
+        if as_numpy:
+            #If the input was a numpy array, convert the output to that too
+            if show_progress: print(end="resize_videos: Converting to numpy array...")
+            output = as_numpy_array(output)
+            if show_progress: print(end="done!")
+
+    return output
     
 def torch_resize_image(image, size, interp="auto", *, copy=True):
     """
@@ -37698,6 +38010,48 @@ def _autoformat_python_code_via_black(code:str):
     import black
     return black.format_str(code,mode=black.Mode(line_length=1000))
 
+autoformat_python_via_black = _autoformat_python_code_via_black #Legacy compatibility
+
+def autoformat_html_via_bs4(code: str) -> str:
+    """Given a string of HTML, autoformats it"""
+    pip_import('bs4')
+    from bs4 import BeautifulSoup
+    
+    soup = BeautifulSoup(code, 'html.parser')
+
+    formatted_code = soup.prettify()
+
+    return formatted_code
+
+autoformat_html = autoformat_html_via_bs4
+
+
+def autoformat_json(data, indent=4):
+    """
+    Formats a JSON string with specified indentation.
+
+    Parameters:
+    - data (str, object): The JSON string or json-like object to format.
+    - indent (int or str, optional): The number of spaces used for indentation or a specific string.
+                                     Default is 4 (which means four spaces).
+                                     Can be specified as '\t' for tab or any other string.
+
+    Returns:
+    - str: A nicely formatted JSON string.
+
+    Raises:
+    - TypeError: If the input is not a string.
+    - ValueError: If the input string is not valid JSON and cannot be parsed.
+    """
+    import json
+    
+    try:
+        if isinstance(data, str):
+            data = json.loads(data)
+        
+        return json.dumps(data, indent=indent)
+    except json.JSONDecodeError as e:
+        raise ValueError("rp.autoformat_json: Failed to parse JSON.") from e
 
 
 def as_numpy_images(images,copy=True):
@@ -38343,9 +38697,19 @@ def resize_list(array:list, length: int):
     else:
         return [array[i] for i in indices]
 
+def resize_lists(*arrays:list, length:int):
+    """ Plural of rp.resize_list """
+    arrays = detuple(arrays)
+    as_numpy = is_numpy_array(arrays)
+
+    output = [resize_list(array, length) for array in arrays]
+
+    if as_numpy: output = as_numpy_array(output)
+    return output
 
 def resize_lists_to_max_len(*lists):
     lists=detuple(lists)
+    if is_numpy_array(lists): return lists.copy() #Shortcut!
     length=max(map(len,lists))
     return [resize_list(l,length) for l in lists]
 
