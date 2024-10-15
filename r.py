@@ -4461,7 +4461,8 @@ def save_image(image,file_name=None,add_png_extension: bool = True):
     Provide several fallbacks to saving an image file
     """
     if file_name==None:
-        file_name=temporary_file_path('png')
+        # file_name=temporary_file_path('png')
+        file_name=get_unique_copy_path('image.png')
 
     if file_name.startswith('~'):
         file_name=get_absolute_path(file_name)
@@ -8973,6 +8974,10 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
             neednewline=True
             if hasattr(object,'dtype'):
                 print(col(tab + "DTYPE: ")+repr(object.dtype),flush=False,end='')
+            if is_numpy_array(object):
+                print(col(tab + "MEMORY: ")+human_readable_file_size(object.size*object.dtype.itemsize),flush=False,end='')
+            if is_torch_tensor(object):
+                print(col(tab + "MEMORY: ")+human_readable_file_size(object.numel()*object.itemsize),flush=False,end='')
             if hasattr(object,'device'):
                 try: print(col(tab + "DEVICE: ")+str(object.device),flush=False,end='')
                 except Exception: pass
@@ -9744,10 +9749,10 @@ def append_line_to_file(line:str,file_path:str):
             file.close()
     return file_path
 
-def _as_easydict(x):
+def as_easydict(*args, **kwargs):
     pip_import('easydict') #I might make this a pip requirement of rp...its so useful!
     from easydict import EasyDict
-    return EasyDict(x)
+    return EasyDict(*args, **kwargs)
 
 
 def load_json(path, *, use_cache=False):
@@ -9757,7 +9762,7 @@ def load_json(path, *, use_cache=False):
     if not isinstance(out, dict):
         return out
 
-    return _as_easydict(out)
+    return as_easydict(out)
 
 def load_jsons(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False, lazy=False):
     """
@@ -9787,7 +9792,7 @@ def save_json(data,path,*,pretty=False,default=None):
     return string_to_text_file(path,text)
 
 _load_tsv_cache={}
-def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False):
+def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False, sep="\t"):
     """
     Read a TSV file with optional progress tracking and flexible header handling.
 
@@ -9834,11 +9839,8 @@ def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False):
     import pandas as pd
     import csv
 
-    if use_cache:
-        args_hash = handy_hash((file_path, header))
-        if args_hash not in _load_tsv_cache:
-            value = gather_args_call(load_tsv, use_cache=False)
-            _load_tsv_cache[args_hash]=value
+    args_hash = handy_hash((file_path, header))
+    if use_cache and args_hash in _load_tsv_cache:
         return _load_tsv_cache[args_hash]
     
     chunk_size = 1000
@@ -9847,7 +9849,7 @@ def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False):
         header=header.strip().split()
 
     kwargs = {
-        "sep": "\t",
+        "sep": sep,
         "chunksize": chunk_size,
         "header": header if isinstance(header, int) else None,
         "names": header if isinstance(header, list) else None,
@@ -9874,18 +9876,88 @@ def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False):
     if show_progress:
         _erase_terminal_line()
 
-    def fix_dataframe_nans(dataframe):
-        """
-        Replace NaNs with empty strings in DataFrame columns that are otherwise entirely strings,
-        improving performance by using pandas type detection.
-        I use this in load_tsv because otherwise empty strings in a tsv line like "\t\t\t" might be interpereted as NaN's instead of strings
-        """
-        for column in dataframe.columns:
-            # Use pandas API to check if the column's data type is 'string'
-            if pd.api.types.is_string_dtype(dataframe[column]):
-                dataframe[column] = dataframe[column].fillna('')
-        return dataframe
-    df = fix_dataframe_nans(df)
+    # def fix_dataframe_nans(dataframe):
+    #     """
+    #     Replace NaNs with empty strings in DataFrame columns that are otherwise entirely strings,
+    #     improving performance by using pandas type detection.
+    #     I use this in load_tsv because otherwise empty strings in a tsv line like "\t\t\t" might be interpereted as NaN's instead of strings
+    #     """
+    #     for column in dataframe.columns:
+    #         # Use pandas API to check if the column's data type is 'string'
+    #         if pd.api.types.is_string_dtype(dataframe[column]):
+    #             dataframe[column] = dataframe[column].fillna('')
+    #     return dataframe
+    # df = fix_dataframe_nans(df)
+
+    if use_cache:
+        _load_tsv_cache[args_hash]=df
+
+    return df
+
+
+_load_parquet_cache={}
+def load_parquet(file_path, *, show_progress=False, use_cache=False):
+    """
+    Read a Parquet file with optional progress tracking.
+
+    Parameters:
+        file_path (str): Path to the Parquet file.
+        show_progress (bool): Whether to display a progress bar. Default is True.
+        use_cache: If True, will cache the result so you only have to load from drive once
+
+    Returns:
+        pandas.DataFrame: The loaded Parquet data as a DataFrame.
+
+    EXAMPLE:
+
+        >>> load_parquet('data.parquet', use_cache=True, show_progress=True)
+        ... ans =              id          size                             url                                              title  
+        ...       0       2RH8A49  7.088479e+08  https://video-previews.cont...    Joyful Excitement Dancing Woman Meme Expression
+        ...       1       7LDJAUA  2.877922e+08  https://video-previews.cont...  funny robot in the background , children's bac...
+        ...       2       DEOXGE2  1.256278e+09  https://video-previews.cont...              Hemp Extract in Hands Selective Focus
+        ...       3       TY3VY9R  4.071201e+08  https://video-previews.cont...  Coconut palmtrees  on the most beautiful tropi...
+        ...       4       S2HJ9Q2  2.214383e+08  https://video-previews.cont...                           Osteoporosis Diagnostics
+        ...       ...         ...           ...                             ...                                                ...
+        ...       699921  D58D677  1.960837e+07  https://video-previews.cont...  Scientist in PPE suit conducts research on the...
+        ...       699922  BG9G364  5.516978e+08  https://video-previews.cont...  Professional Fishing Vessel, Shooting From Dro...
+        ...       699923  PPEF3XB  2.731540e+07  https://video-previews.cont...  Rehabilitation Center for Bears in the Carpath... 
+        ...       699924  HQWAGMQ  1.771674e+09  https://video-previews.cont...  Desperate Stressful Arabic Hispanic Businessma...
+        ...       699925  T686L7K  2.834678e+09  https://video-previews.cont...                     Dandelion Yellow Flowers Field
+        ...
+        ...       [699926 rows x 4 columns]
+
+    """
+
+    pip_import("pandas")
+    pip_import("pyarrow")
+    
+    import pandas as pd
+    import pyarrow.parquet as pq
+
+    if use_cache:
+        args_hash = handy_hash((file_path))
+        if args_hash not in _load_parquet_cache:
+            value = gather_args_call(load_parquet, use_cache=False)
+            _load_parquet_cache[args_hash] = value
+        return _load_parquet_cache[args_hash]
+
+    parquet_file = pq.ParquetFile(file_path)
+    num_row_groups = parquet_file.num_row_groups
+
+    dfs = []
+    indices = range(num_row_groups)
+
+    if show_progress:
+        pip_import("tqdm")
+        from tqdm import tqdm
+        #indices = eta(indices)
+        indices = tqdm(indices)
+
+    for i in indices:
+        df = parquet_file.read_row_group(i, use_threads=True).to_pandas()
+        dfs.append(df)
+
+    df = pd.concat(dfs, ignore_index=True)
 
     return df
 
@@ -9902,7 +9974,7 @@ def load_yaml_file(path, use_cache=False):
     assert file_exists(path)
     text=text_file_to_string(path, use_cache=use_cache)
     data=yaml.safe_load(text)
-    data=_as_easydict(data)
+    data=as_easydict(data)
     return data
 
 load_yaml = load_yaml_file #Alias
@@ -9922,7 +9994,7 @@ def parse_yaml(string):
     pip_import('yaml')
     from yaml import safe_load
     output = safe_load(string)
-    output = _as_easydict(output)
+    output = as_easydict(output)
     return output
 
 def parse_dyaml(code:str)->dict:
@@ -16081,6 +16153,7 @@ def pseudo_terminal(
         ?p
         ?c ?+c ?c+ ?cp
         ?i
+        ?vd
 
         <Others>
         RETURN  (RET)
@@ -16091,6 +16164,7 @@ def pseudo_terminal(
         TOP
         TAB
         TABA
+        VDA
         MONITOR
         UPDATE
         ANS PRINT ON   (APON)
@@ -16454,6 +16528,8 @@ def pseudo_terminal(
         # GO GC
 
         MON MONITOR
+
+        VD VDA
 
         TRAD treealldir
         TRD treedir
@@ -16871,7 +16947,7 @@ def pseudo_terminal(
                         split=user_message.split('/')
                         left=''.join(split[:-1])
                         right=split[-1]
-                        if right in 'p e s v t h c r i j c+ +c cp lj'.split():
+                        if right in 'p e s v t h c r i j c+ +c cp lj vd'.split():
                             #/p --> ?p   /e --> ?e   /t --> ?t   /s ---> ?s    /v --> ?v     /h --> ?h     /c --> ?c     /r --> ?r    /i --> ?i     /cp --> ?cp
                             if not right in scope():
                                 user_message=left+'?'+right
@@ -17653,6 +17729,7 @@ def pseudo_terminal(
                         string=line_join(map(str,value))
                         print(string)
                         _maybe_display_string_in_pager(string)
+
                     elif user_message=='?t' or user_message=='TABA':
                         if user_message=='TABA':
                             if _get_pterm_verbose(): fansi_print("TABA (TAB ans) is an alias for ?t","blue",'bold',)
@@ -17663,6 +17740,20 @@ def pseudo_terminal(
                         if _get_pterm_verbose(): fansi_print("t --> Table Viewer --> Running view_table(%s):"%user_message,"blue",'bold')
                         value=eval(user_message,scope())
                         view_table(value)
+
+                    elif user_message=='?vd' or user_message=='VDA':
+                        if user_message=='VDA':
+                            if _get_pterm_verbose(): fansi_print("VDA aka launch_visidata(ans) is an alias for ?vd","blue",'bold',)
+                        if _get_pterm_verbose(): fansi_print("?vd --> Visidata --> Running launch_visidata(ans):","blue",'bold')
+                        new_value=launch_visidata(get_ans())
+                        set_ans(new_value)
+                    elif user_message.endswith('?vd') and not '\n' in user_message:
+                        user_message=user_message[:-2]
+                        if _get_pterm_verbose(): fansi_print("?vd --> Visidata --> Running launch_visidata(%s):"%user_message,"blue",'bold')
+                        value=eval(user_message,scope())
+                        new_value=launch_visidata(value)
+                        set_ans(new_value)
+
                     elif user_message=='?p':
                         if _get_pterm_verbose(): fansi_print("?p --> Pretty Print --> Running pretty_print(ans,with_lines=False):","blue",'bold')
                         pterm_pretty_print(get_ans(),with_lines=False)
@@ -19903,6 +19994,103 @@ def pretty_print(x,with_lines=False):
     if with_lines:
         string=pretty_lines(string)
     print(fansi_syntax_highlighting(string,style_overrides={'operator':('\033[0;34m','\033[0m'),'string':('\033[0;35m','\033[0m')}))
+
+def dict_repr(x, *, align_equals=True):
+    """
+    EXAMPLE:
+        >>> x = {
+        ...     "instance_data_root": "/root/CleanCode/Github/CogVideo/finetune/datasets/Disney-VideoGeneration-Dataset",
+        ...     "dataset_name": None,
+        ...     "dataset_config_name": None,
+        ...     "caption_column": "prompts.txt",
+        ...     "video_column": "videos.txt",
+        ...     "height": 480,
+        ...     "width": 720,
+        ...     "fps": 8,
+        ...     "max_num_frames": 49,
+        ...     "skip_frames_start": 0,
+        ...     "skip_frames_end": 0,
+        ...     "cache_dir": "~/.cache",
+        ...     "id_token": None,
+        ... }
+        ... 
+        ... print(dict_repr(x),align_equals=True)
+        ... 
+        ... #RESULTS:
+        ... #    dict(
+        ... #         instance_data_root  = '/root/CleanCode/Github/CogVideo/finetune/datasets/Disney-VideoGeneration-Dataset',
+        ... #         dataset_name        = None,
+        ... #         dataset_config_name = None,
+        ... #         caption_column      = 'prompts.txt',
+        ... #         video_column        = 'videos.txt',
+        ... #         height              = 480,
+        ... #         width               = 720,
+        ... #         fps                 = 8,
+        ... #         max_num_frames      = 49,
+        ... #         skip_frames_start   = 0,
+        ... #         skip_frames_end     = 0,
+        ... #         cache_dir           = '~/.cache',
+        ... #         id_token            = None,
+        ... #    )
+    """
+    lines = ["dict("]
+    keys = list(x.keys())
+    values = list(x.values())
+
+    assert all(isinstance(key, str) for key in keys)
+
+    max_key_length = max(map(len, keys))
+
+    for key, value in x.items():
+        assert isinstance(key, str)
+        indent = "     "
+        equals = " = "
+        if align_equals:
+            equals = equals.rjust(max_key_length - len(key) + len(equals))
+        new_line = indent + key + equals + repr(value) + ","
+        lines.append(new_line)
+    lines.append(")")
+
+    return line_join(lines)
+
+def multiline_repr(string):
+    """Like repr for strings - except it uses multiline strings with triple quotes"""
+    string=str(string)
+    
+    if '"""' not in string:
+        return '"""'+string+'"""'
+    elif "'''" not in string:
+        return "'''"+string+"'''"
+    else:
+        string = string.replace('"""',r'\"\"\"')
+        return multiline_repr(string)
+
+def as_example_comment(code,*,indent=' '*8):
+    '''
+    Takes code and makes it suitable for using in docstrings
+    EXAMPLE:
+        >>> print(as_example_comment("""def as_example_comment(code,*,indent=' '*8):
+        ...     code=code.strip()
+        ...     code=code.splitlines()
+        ...     code[1:]=[indent+'... '+line for line in code[1:]]
+        ...     code[0] = indent+'>>> '+code[0]
+        ...     return line_join(code)
+        ... """))
+        ... #CONSOLE OUTPUT:
+        ... #        >>> as_example_comment("""def as_example_comment(code,*,indent=' '*8):
+        ... #        ...     code=code.strip()
+        ... #        ...     code=code.splitlines()
+        ... #        ...     code[1:]=[indent+'... '+line for line in code[1:]]
+        ... #        ...     code[0] = indent+'>>> '+code[0]
+        ... #        ...     return line_join(code)
+        ... #        ... """)
+    '''
+    code=str(code)
+    code=code.strip()
+    code=code.splitlines()
+    code[1:]=[indent+'... '+line for line in code[1:]]
+    code[0] = indent+'>>> '+code[0]
+    return line_join(code)
 
 def string_transpose(x,fill=' '):
     ''' >>> string_transpose("Hello\nWorld")
@@ -22871,8 +23059,8 @@ def labeled_images(images,labels,show_progress=False,lazy=False,*args,**kwargs):
     See rp.labeled_image's documentation
     TODO: Optimize this when video is numpy array
     """
-    assert is_iterable(labels)
-    assert is_iterable(images)
+    assert is_iterable(labels), type(labels)
+    assert is_iterable(images), type(images)
 
     #TODO: Make it lazier
     images=list(images)
@@ -22897,8 +23085,8 @@ def labeled_videos(videos,labels,show_progress=False,lazy=False,*args,**kwargs):
     See rp.labeled_image's documentation
     TODO: Optimize this when videos are numpy arrays
     """
-    assert is_iterable(labels)
-    assert is_iterable(videos)
+    assert is_iterable(labels), type(labels)
+    assert is_iterable(videos), type(images)
 
 
     if not is_numpy_array(videos) and not is_torch_tensor(videos):
@@ -22909,7 +23097,7 @@ def labeled_videos(videos,labels,show_progress=False,lazy=False,*args,**kwargs):
     else:    
         labels=list(labels)
 
-    assert len(videos)==len(labels)
+    assert len(videos)==len(labels), (len(videos), len(labels))
 
     output = (labeled_images(video,label,*args,**kwargs) for video,label in zip(videos,labels))
 
@@ -22921,7 +23109,7 @@ def labeled_videos(videos,labels,show_progress=False,lazy=False,*args,**kwargs):
 
 @memoized
 def _cv_char_to_image(char: str, width=None, height=None, **kwargs):
-    assert len(char) == 1
+    assert len(char) == 1, len(char)
     output = cv_text_to_image(char, **kwargs)
     if width is not None or height is not None:
         output = crop_image(output, height, width, origin="center")
@@ -23025,8 +23213,8 @@ def _single_line_cv_text_to_image(text,*,scale,font,thickness,color,tight_fit,ba
     #EXAMPLE:
     #    display_image(cv_text_to_image('HELLO WORLD! '))
     #This is a helper function for cv_text_to_image, which can handle multi-line text
-    assert isinstance(text,str)
-    assert isinstance(font,int)
+    assert isinstance(text,str), type(text)
+    assert isinstance(font,int), type(font)
     cv2=pip_import('cv2')
     dims=cv2.getTextSize(text,font,scale,thickness)[0][::-1] #The dimensions of the output image
     #UPDATE: added the *2 in dims[0]*2 below to prevent the lowercase letter y's tail from being cut off
@@ -27227,9 +27415,9 @@ def convert_to_gif_via_ffmpeg(
     import os
     import subprocess
     
-    assert isinstance(video_path,str)
-    assert number_of_lines(video_path)==1
-    assert path_exists(video_path), 'r._convert_to_gif_via_ffmpeg: Input file does not exist'
+    assert isinstance(video_path,str), type(video_path)
+    assert number_of_lines(video_path)==1, number_of_lines(video_path)
+    assert path_exists(video_path), 'r._convert_to_gif_via_ffmpeg: Input file does not exist: '+str(video_path)[:1000]
     assert framerate is None or isinstance(framerate, int) and framerate>=1, framerate
 
     _ensure_ffmpeg_installed()
@@ -27237,6 +27425,8 @@ def convert_to_gif_via_ffmpeg(
     if output_path is None:
         output_path = with_file_extension(video_path, "gif", replace=True)
         output_path = get_unique_copy_path(output_path)
+
+    make_folder(get_path_parent(output_path))
 
     input_framerate = get_video_file_framerate(video_path)
 
@@ -30007,6 +30197,124 @@ def inverse_norm_cdf(p,mean=0,std=1):
     z=norm.ppf(p)#The z-score. https://bytes.com/topic/python/answers/478142-scipy-numpy-inverse-cumulative-normal
     x=z*std+mean
     return x
+
+def s3_list_objects(s3url, *, recursive=True, include_metadata=False, lazy=False, show_progress=False):
+    """
+    Generator function to list S3 objects at a given S3 URL.
+
+    Parameters:
+    - s3url (str): The S3 URL in the format s3://bucket-name/path/to/prefix
+    - recursive (bool): If True, list all objects under the prefix recursively.
+                        If False, list only the objects directly under the prefix.
+    - include_metadata (bool): If True, yield EasyDict objects with metadata.
+    - lazy (bool): If True, return a generator that yields objects on-demand.
+                   If False, return a list of all objects.
+    - show_progress (bool): If True, print each object key or prefix as it's yielded.
+
+    Returns:
+    - If lazy=True and include_metadata=False:
+        - Generator[str]: A generator that yields the key of each object as a string.
+    - If lazy=True and include_metadata=True:
+        - Generator[EasyDict]: A generator that yields an EasyDict for each object with the following keys:
+            - key (str): The object key.
+            - last_modified (datetime): The last modified timestamp of the object.
+            - etag (str): The ETag of the object.
+            - size (int): The size of the object in bytes.
+            - storage_class (str): The storage class of the object.
+            - prefix (str): The prefix (for common prefixes if not recursive).
+    - If lazy=False and include_metadata=False:
+        - List[str]: A list of object keys as strings.
+    - If lazy=False and include_metadata=True:
+        - List[EasyDict]: A list of EasyDicts with the same keys as described above.
+
+    If show_progress=True, each object key or prefix will be printed as it's yielded,
+    in addition to being yielded or returned in the list.
+    """
+
+    pip_import("boto3")
+    pip_import("urllib")
+    pip_import("easydict")
+
+    import boto3
+    from urllib.parse import urlparse
+    from easydict import EasyDict
+    
+    def helper():
+    
+        # Initialize the S3 client
+        s3_client = boto3.client('s3')
+
+        # Parse the S3 URL to extract bucket name and prefix
+        parsed_url = urlparse(s3url)
+        if parsed_url.scheme != 's3':
+            raise ValueError("The URL must start with 's3://'")
+
+        bucket_name = parsed_url.netloc
+        prefix = parsed_url.path.lstrip('/')
+
+        # Set up pagination to handle large result sets
+        paginator = s3_client.get_paginator('list_objects_v2')
+
+        # If not recursive, use delimiter to prevent listing subfolders
+        pagination_params = {
+            'Bucket': bucket_name,
+            'Prefix': prefix,
+        }
+
+        if not recursive:
+            pagination_params['Delimiter'] = '/'
+
+        # Paginate through the objects
+        for page in paginator.paginate(**pagination_params):
+
+            # List objects
+            if 'Contents' in page:
+                for obj in page['Contents']:
+                    if include_metadata:
+                        # Map the S3 object dictionary to an EasyDict with friendly attribute names
+                        metadata = EasyDict({
+                            'key': obj.get('Key'),
+                            'last_modified': obj.get('LastModified'),
+                            'etag': obj.get('ETag'),
+                            'size': obj.get('Size'),
+                            'storage_class': obj.get('StorageClass'),
+                        })
+                        yield metadata
+                    else:
+                        yield obj['Key']
+
+            # List common prefixes (subdirectories) if not recursive
+            if not recursive and 'CommonPrefixes' in page:
+                for cp in page['CommonPrefixes']:
+                    if include_metadata:
+                        # For directories, we can provide minimal metadata
+                        metadata = EasyDict({
+                            'prefix': cp.get('Prefix'),
+                        })
+                        yield metadata
+                    else:
+                        yield cp['Prefix']
+
+    def printed_generator(iterator):
+        for value in iterator:
+
+            if isinstance(value, str):
+                print(value)
+            else:
+                print(value.key)
+
+            yield value
+
+    output = helper()
+
+    if show_progress:
+        output = printed_generator(output)
+
+    if not lazy:
+        output = list(output)
+
+    return output
+
 
 def is_s3_url(url):
     "Returns true if the given string is an Amazon S3 URL"
@@ -33774,6 +34082,54 @@ def view_table(data):
     finally:
         if file_exists(temp_file):
             delete_file(temp_file)
+
+def launch_visidata(target):
+    """
+    Launches VisiData to view and potentially edit a file or data object. 
+    Useful for manually editing DataFrame or numpy arrays, or inspecting them statistically
+
+    Parameters:
+        - target (str or data object): The file path or data object (e.g., numpy array, pandas DataFrame) to view.
+              Some known supported filetypes: .tsv, .csv, .parquet, .json (and more)
+              Some known supported datatypes: np.ndarray, pd.DataFrame, list of lists
+
+    Behavior:
+        - If `target` is a string representing a file path and the file exists, VisiData opens the file directly.
+        - If `target` is a data object, it is first converted into a pandas DataFrame, then saved to a temporary CSV file which VisiData opens.
+
+    Important:
+        - Changes made in VisiData can be saved back to the original DataFrame or file by pressing Ctrl+S before exiting VisiData.
+        - The function returns the path to the file if `target` was a file path, or the modified DataFrame if `target` was a data object.
+
+    Returns:
+        - str or pandas.DataFrame: Depending on whether the target was a file path or a data object, either the file path or the modified DataFrame is returned.
+
+    EXAMPLE:
+        >>> ans = launch_visidata(np.random.randn(16,16))
+    """
+    
+    pip_import("visidata")
+    vd = sys.executable + " -m visidata "
+    if isinstance(target, str) and file_exists(target):
+        os.system(vd + shlex.quote(target))
+        return target
+    else:
+        temp_path = temporary_file_path("csv")
+        pip_import("pandas")
+        import pandas as pd
+
+        dataframe = pd.DataFrame(target)
+
+        try:
+            dataframe.to_csv(temp_path, index=False)
+            os.system(vd + shlex.quote(temp_path))
+            output = pd.read_csv(temp_path)
+        finally:
+            if file_exists(temp_path):
+                delete_file(temp_path)
+
+        return output
+
 
 #Pseudo-terminal HISTORY files
 # pterm_history_folder=path_join(get_parent_directory(__file__),'pterm_history')
