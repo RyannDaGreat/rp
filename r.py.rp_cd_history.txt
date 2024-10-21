@@ -96,6 +96,6 @@
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
-/Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
+/Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp

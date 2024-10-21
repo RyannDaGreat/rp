@@ -28,6 +28,8 @@ import warnings
 import pickle
 import tempfile
 import contextlib
+import random
+import re
 from itertools import product as cartesian_product
 
 # Places I want to access no matter where I launch r.py
@@ -233,6 +235,7 @@ def lazy_par_map(func, *iterables, num_threads=None, buffer_limit=None):
                 
             while yield_index in results:
                 yield results[yield_index]
+                del results[yield_index] #Don't leak memory!
                 yield_index+=1
             
                 
@@ -3061,8 +3064,8 @@ def xy_float_images(
          >>>    display_image(2*full_range(rotated**5)-1)
     """
     x, y = np.meshgrid(
-        np.linspace(min_x, max_x, num=width ,device=device),
-        np.linspace(min_y, max_y, num=height,device=device),
+        np.linspace(min_x, max_x, num=width ),
+        np.linspace(min_y, max_y, num=height),
     )
     return np.stack([x,y])
 
@@ -3177,19 +3180,47 @@ def _is_easydict(x) -> bool:
     return _is_instance_of_module_class(x, 'easydict', 'EasyDict')
 # region Randomness:［random_index，random_element，random_permutation，randint，random_float，random_chance，random_batch，shuffled，random_parallel_batch］
 
-import random
-def random_index(array_length_or_array_itself):
-    if isinstance(array_length_or_array_itself, dict):
-        return random_element(list(array_length_or_array_itself))
 
-    # Basically a random integer generator suited for generating array indices.
-    # Returns a random integer ∈ ℤ ⋂ [0‚array_length)
-    if isinstance(array_length_or_array_itself,int):
-        assert array_length_or_array_itself != 0
-        from random import randrange #randrange(0,x) ==== randint(0,x-1)
-        return randint(0,array_length_or_array_itself - 1)
-    else:
-        return random_index(len(array_length_or_array_itself))
+
+
+def random_index(arr_or_len):
+    """
+    Returns a random index for a given array or array length.
+
+    If the input is a dictionary or a subclass of dict, it returns a random element from the list of values.
+    If the input is an integer, it returns a random integer between 0 (inclusive) and the input (exclusive).
+    If the input is an array-like object with a __len__ method, it returns a random index within the array.
+
+    :param arr_or_len: The array, array length, or dict-like object.
+    :return: A random index or element.
+    """
+    from random import randint
+    
+    if isinstance(arr_or_len, dict) or issubclass(type(arr_or_len), dict):
+        return random_element(list(arr_or_len.values()))
+
+    if isinstance(arr_or_len, int):
+        assert arr_or_len != 0, "Array length cannot be zero."
+        return randint(0, arr_or_len - 1)
+    
+    if has_len(arr_or_len):
+        return random_index(len(arr_or_len))
+    
+    raise TypeError("Input must be an integer, an array with a len, or dict-like object but got type "+str(type(arr_or_len)))
+
+    #OLD VERSION: Works perfectly fine, I just wanted to make the code a bit cleaner to read
+    # def random_index(array_length_or_array_itself):
+    #     if isinstance(array_length_or_array_itself, dict):
+    #         return random_element(list(array_length_or_array_itself))
+    #     # Basically a random integer generator suited for generating array indices.
+    #     # Returns a random integer ∈ ℤ ⋂ [0‚array_length)
+    #     if isinstance(array_length_or_array_itself,int):
+    #         assert array_length_or_array_itself != 0
+    #         from random import randrange #randrange(0,x) ==== randint(0,x-1)
+    #         return randint(0,array_length_or_array_itself - 1)
+    #     else:
+    #         return random_index(len(array_length_or_array_itself))
+
 
 def random_element(x):
     """
@@ -8247,7 +8278,27 @@ def list_to_index_dict(l: list) -> dict:
     """ ['a','b','c'] ⟶ {0: 'a', 1: 'b', 2: 'c'} """
     return {i:v for i,v in enumerate(l)}
 
-def invert_dict(d: dict,bijection=True) -> dict:
+def invert_dict(d: dict, bijection=True) -> dict:
+    """
+    Inverts a dictionary, reversing the mapping of keys to values.
+
+    Args:
+        d (dict): The dictionary to invert.
+        bijection (bool, optional): If True, assumes the dictionary is a bijection (one-to-one mapping)
+            and inverts it directly. If False, handles non-bijective dictionaries by grouping keys with
+            the same value into tuples. Defaults to True.
+
+    Returns:
+        dict: The inverted dictionary.
+
+    Examples:
+        >>> invert_dict({0: 'a', 1: 'b', 2: 'c'})
+        {'a': 0, 'b': 1, 'c': 2}
+        
+        >>> invert_dict({0: 'a', 1: 'a', 2: 'b'}, bijection=False)
+        {'a': (0, 1), 'b': (2,)}
+    """
+
     if bijection:
         # {0: 'a', 1: 'b', 2: 'c'} ⟶ {'c': 2, 'b': 1, 'a': 0}
         return {v:k for v,k in zip(d.values(),d.keys())}
@@ -9732,6 +9783,8 @@ def load_text_files(*paths, use_cache=False, strict=True, num_threads=None, show
     Please see load_files and rp_iglob for more information
     Yields the strings as a generator
     """
+    if folder_exists(detuple(paths)):
+        paths = detuple(paths)+'/*'
     paths = rp_iglob(paths)
     load_file = lambda path: text_file_to_string(path, use_cache=use_cache)
     if show_progress in ['eta',True]: show_progress='eta:Loading text files'
@@ -12411,6 +12464,67 @@ def random_namespace_hash(n:int=10,chars_to_choose_from:str="abcdefghijklmnopqrs
         out+=random_element(chars_to_choose_from)
     return out
 
+def random_passphrase():
+    """
+    Generates an easy-to-spell easy-to-remember passphrase
+
+    EXAMPLE:
+        >>> for _ in range(10): print(random_passphrase())
+        happy_hug
+        help_dart
+        crave_crib
+        cozy_drone
+        shush_chump
+        enter_ivory
+        equal_essay
+        react_morse
+        curvy_koala
+        blog_lid
+    """
+    #TODO: Upgrade this to more words
+    
+    prefixes="""agile ahead ajar alien alive alone amend ample amuse argue arise ashen avert avoid baggy baked balmy bask bleak bless blog blunt boned bony botch both bring brisk broke busy calm carve chief chomp
+        civil clad clap clean clink clump come cozy crave crisp cure curvy cushy darn debug dense dice dizzy drab dried droop drown dusk dwell early eject elope elude emit enter equal erase erupt etch evade
+        even evict false fax fend flaky flame fray fresh fried froth glad gooey grasp greet halt happy harm hasty heap hefty help humid hurt icy juicy lance late lazy legal lend lurk marry mousy musky nag
+        near neat nutty outer petty plead plus poach polar prank pry quiet quote rant react relax repel rich rigid ripen ritzy romp same savor scoff scowl send shady shaky shine shout showy shun shush sift
+        skew sleek slurp snort speak spend spew spoof spool stark stuck swear swim tacky task thank thud tint try tutor tweak twine twirl uncut undo unify untie utter vocal wavy widen wipe wired wiry yelp zoom
+        """.split()
+
+    nouns="""acid acorn acre affix aged agent aging agony aide aids aim alarm alias alibi aloe aloha amino angel anger angle ankle apple april apron area arena armor army aroma array arson art atlas atom attic
+        audio award axis bacon badge bagel baker banjo barge barn bash basil batch bath baton blade blank blast blaze blend blimp blink bloat blob blot blush boast boat body boil bolt bonus book booth boss
+        boxer breed bribe brick bride brim brink broad broil brook broom brush buck bud buggy bulge bulk bully bunch bunny bunt bush bust buzz cable cache cadet cage cake cameo canal candy cane canon cape
+        card cargo carol carry case cash cause cedar chain chair chant chaos charm chase cheek cheer chef chess chest chew chili chill chip chop chow chuck chump chunk churn chute cider cinch city claim clamp
+        clash clasp class claw clay clear cleat cleft clerk click cling clip cloak clock clone cloud coach coast coat cod coil coke cola cold colt coma comma cone cope copy coral cork cost cot couch cough
+        cover craft cramp crane crank crate crawl crazy crepe crib crook crop cross crowd crown crumb crush crust cub cult cupid curl curry curse curve cut cycle dab dad daily dairy daisy dance dandy dart
+        dash data date dawn deaf deal dean debit debt decal decay deck decoy deed delay denim dent depth desk dial diary dig dill dime diner disco dish disk ditch dock dodge doll dome donor dose dot dove down
+        dowry doze drama draw dress drift drill drive drone drove drum dry duck duct dug duke dust duty dwarf eagle earth easel east ebony echo edge eel elbow elder elf elk elm elves empty emu entry envoy
+        error essay evil exit fable fact fade fall fancy fang feast feed femur fence ferry fetch fever fiber fifth fifty film filth final finch fit five flag flap flask flick fling flint flip flirt float
+        flock flop floss foam foe fog foil folk food fool found fox frail frame frill frisk front frost frown fruit gag gala game gap gas gear gecko geek gem genre gift gig given giver glass glide gloss glove
+        glow glue goal going golf gong good goofy gore gown grab grain grant grape graph grass grave gravy gray green grid grief grill grip grit groom grope growl grub grunt guide gulf gulp guru gut guy habit
+        half halo hash hatch hate haven hazel heat heave hedge hub hug hula hull hunk hunt hurry hush hut ice icing icon igloo image ion iron islam issue item ivory ivy jab jam jazz jeep jelly jet job jog
+        jolly jolt joy judge juice july jump juror jury keep keg kick kilt king kite kitty kiwi knee koala ladle lady lair lake land lapel large lash lasso last latch left lemon lens lent level lever lid life
+        lift lilac lily limb line lint lion lip list liver lunch lung lurch lure lying lyric mace maker malt mama mango manor map march mash match mate mocha mold moody morse motor motto mount mouse mouth
+        move movie mud mug mulch mule mull mummy mural muse music mute nacho nail name nanny nap navy neon nerd nest net niece ninth oak oasis oat ocean oil old olive omen onion opal open opera otter ounce
+        oven owl ozone pace pagan palm panic paper park party pasta patch path patio payer pecan penny pep perch perm pest petal plank plant plaza plot plow pluck plug pod poem poet point poise poker polka
+        polo pond pony poppy pork poser pouch pound pout power press print prior prism prize probe prong proof props prude prune pug pull pulp pulse punch punk pupil puppy purr purse push putt quack quill
+        quilt quota race rack radar radio raft rage raid rail rake rally ramp ranch range rank rash raven reach ream rebel relay relic reply rerun reset rhyme rice ride rinse riot rise risk rival river roast
+        robe robin rock rogue roman rope rover royal ruby rug ruin rule rush rust rut sage saint salad salon salsa salt satin sauna sax say scale scam scan scare scarf scold scoop scope score scout scrap
+        scrub scuff sect sedan self sepia serve set seven shade shaft shape share sharp shed sheep sheet shelf shell ship shirt shock shop shore shove shred shrug shy silk silly silo sip siren sixth size
+        skate skid skier skip skirt skit sky slab slack slain slam slang slash slate sled sleep sleet slice slick sling slip slit slob slot slug slum slush small smash smell smile smirk smog snap snare snarl
+        sneak sneer sniff snore snout snub snuff speed spill spoil spoke spoon sport spot spout spray spree spur squad squat squid stack staff stage stain stall stamp stand start state steam steep stem step
+        stew stick sting stir stock stole stomp stool stoop stop storm stout stove straw stray strut stud stuff stump stunt suds sugar sulk surf sushi swab swan swarm sway sweat sweep swell swing swipe swoop
+        syrup taco tag take tall talon tamer tank taper taps tart taste thaw theme thigh thing think thong thorn throb thumb thump tiara tidy tiger tile tilt trace track trade train trait trap trash tray
+        treat tree trek trial tribe trick trio trout truck trump trunk tug tulip turf tusk tutu tweet twins twist uncle union unit upper user usher value vapor vegan venue verse vest veto vice video view
+        virus visa visor vixen voice void volt voter vowel wad wafer wages wagon wake walk wand wasp watch water wheat whiff whole whoop wick widow width wife wilt wimp wind wing wink wise wish wok wolf wool
+        word work worry wound wrath wreck wrist xerox yahoo yam yard year yeast yield yo-yo yodel yoga zebra zero zone
+        """.split()
+    
+    noun = random_element(nouns)
+    prefix = random_element(prefixes)
+        
+    return prefix+'_'+noun
+
+
 def latex_image(equation: str):
     """
     Returns an rgba image with the rendered latex string on it in numpy form
@@ -12893,7 +13007,7 @@ default_python_input_eventloop = None  # Singleton for python_input
 #     # print_stack_trace(re)
 #     # print("THE DEMON SCREAMS")
 
-def split_into_sublists(l,sublist_len:int,strict=False,keep_remainder=True):
+def split_into_sublists(l, sublist_len: int, *, strict=False, keep_remainder=True):
     """
     If strict: sublist_len MUST evenly divide len(l)
     It will return a list of tuples, unless l is a string, in which case it will return a list of strings
@@ -12926,7 +13040,44 @@ def split_into_sublists(l,sublist_len:int,strict=False,keep_remainder=True):
 
     return output
 
-def join_with_separator(iterable, separator, *, lazy=False):
+
+def split_into_subdicts(d, subdict_size: int, strict=False, keep_remainder=True):
+    """
+    Splits a dictionary into a list of subdictionaries based on the specified subdict size.
+    
+    If strict: subdict_size MUST evenly divide len(d)
+    keep_remainder is not applicable if strict
+    if not keep_remainder and subdict_size DOES NOT evenly divide len(d), we can be sure that all subdictionaries in the output are of size subdict_size, even though the total number of elements in the output is less than in d.
+    
+    EXAMPLES:
+    >>> split_into_subdicts({'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 5, 'f': 6}, 2)
+    [{'a': 1, 'b': 2}, {'c': 3, 'd': 4}, {'e': 5, 'f': 6}]
+    
+    >>> split_into_subdicts({'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 5}, 3)
+    [{'a': 1, 'b': 2, 'c': 3}, {'d': 4, 'e': 5}]
+    
+    >>> split_into_subdicts({'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 5}, 3, strict=True)
+    AssertionError: len(d)==5 and subdict_size==3: strict mode is turned on but the subdict size doesn't divide the dictionary evenly. len(d)%subdict_size==2!=0
+    
+    >>> split_into_subdicts({'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 5}, 3, keep_remainder=False)
+    [{'a': 1, 'b': 2, 'c': 3}]
+    """
+    assert isinstance(subdict_size, int), 'subdict_size should be an integer, but got type ' + repr(type(subdict_size))
+    if strict:
+        assert not len(d) % subdict_size, 'len(d)==' + str(len(d)) + ' and subdict_size==' + str(subdict_size) + ': strict mode is turned on but the subdict size doesn\'t divide the dictionary evenly. len(d)%subdict_size==' + str(len(d) % subdict_size) + '!=0'
+    
+    output = []
+    items = list(d.items())
+    for i in range(0, len(items), subdict_size):
+        subdict = dict(items[i:i+subdict_size])
+        output.append(subdict)
+    
+    if not keep_remainder and len(d) % subdict_size != 0:
+        output = output[:-1]
+    
+    return output
+
+def join_with_separator(iterable, separator, *, lazy=False, expand_separator=False):
     """
     Intersperse a separator between elements of an iterable.
 
@@ -12934,6 +13085,8 @@ def join_with_separator(iterable, separator, *, lazy=False):
         iterable (iterable): The iterable to intersperse.
         separator: The separator to intersperse between elements.
         lazy (bool, optional): If True, return a generator. If False, return a list. Defaults to False.
+        expand_separator (bool, optional): If True, the separator is expanded into its individual elements
+            and interspersed between the elements of the iterable. Defaults to False.
 
     Returns:
         list or generator: A list or generator with the separator interspersed between elements.
@@ -12950,12 +13103,19 @@ def join_with_separator(iterable, separator, *, lazy=False):
         >>> gen = join_with_separator([1, 2, 3, 4, 5], None, lazy=True)
         >>> list(gen)
         [1, None, 2, None, 3, None, 4, None, 5]
+        >>> join_with_separator(['a', 'b', 'c'], '...')
+        ['a', '...', 'b', '...', 'c']
+        >>> join_with_separator(['a', 'b', 'c'], '...', expand_separator=True)
+        ['a', '.', '.', '.', 'b', '.', '.', '.', 'c']
     """
     
     def generator():
         for index, value in enumerate(iterable):
             if index:
-                yield separator
+                if expand_separator:
+                    yield from separator
+                else:
+                    yield separator
             yield value
 
     output = generator()
@@ -12965,7 +13125,7 @@ def join_with_separator(iterable, separator, *, lazy=False):
         
     return output
 
-def rotate_image(image,angle_in_degrees,interp='bilinear'):
+def rotate_image(image, angle_in_degrees, interp="bilinear"):
     """
     Returns a rotated image by angle_in_degrees, clockwise
     The output image size is usually not the same as the input size, unless the angle is 180 (or in the case of a square image, 90, 180, or 270)
@@ -19995,7 +20155,7 @@ def pretty_print(x,with_lines=False):
         string=pretty_lines(string)
     print(fansi_syntax_highlighting(string,style_overrides={'operator':('\033[0;34m','\033[0m'),'string':('\033[0;35m','\033[0m')}))
 
-def dict_repr(x, *, align_equals=True):
+def repr_dict(x, *, align_equals=True):
     """
     EXAMPLE:
         >>> x = {
@@ -20053,17 +20213,27 @@ def dict_repr(x, *, align_equals=True):
 
     return line_join(lines)
 
-def multiline_repr(string):
+def repr_multiline(string):
     """Like repr for strings - except it uses multiline strings with triple quotes"""
+    #TODO: Make sure it works for escaped invisible characters like \u0000 etc...right now it doesnt do that....
+
     string=str(string)
     
     if '"""' not in string:
-        return '"""'+string+'"""'
+        string = '"""'+string+'"""'
     elif "'''" not in string:
-        return "'''"+string+"'''"
+        string = "'''"+string+"'''"
     else:
         string = string.replace('"""',r'\"\"\"')
-        return multiline_repr(string)
+        string = repr_multiline(string)
+
+    if '\\' in string:
+        string = 'r'+string
+
+    return string
+
+def has_len(x):
+    return hasattr(x,'__len__')
 
 def as_example_comment(code,*,indent=' '*8):
     '''
@@ -21098,6 +21268,97 @@ def cv_line_graph(
         cv2.line(graph, (bar_x, 0), (bar_x, height), color=vertical_bar_color, thickness=bar_thickness)
 
     return graph
+
+def rgb_histogram_image(histograms, *, width=256, height=128, yscale=1, smoothing=0):
+    """
+    Takes an image, or its color histograms
+    Returns an image with RGB graphs of the colors in that image on a black background
+
+    EXAMPLE:
+
+        >>> while True:
+        ...     wc = load_image_from_webcam()
+        ...     wc = resize_image_to_fit(wc, height=256)
+        ...     width = get_image_width(wc)
+        ...     display_image(
+        ...         vertically_concatenated_images(
+        ...             wc, rgb_histogram_image(wc, width=width),
+        ...         )
+        ...     )
+
+    """
+
+    if is_image(histograms):
+        histograms = as_rgb_image(histograms)
+        histograms = byte_image_histogram(histograms)
+    
+    assert histograms.shape==(3,256)
+
+    histograms = histograms / histograms.sum()
+
+    histograms *= height * yscale
+
+    rh,gh,bh=histograms    
+
+    rh = circ_gauss_blur(rh, smoothing)
+    gh = circ_gauss_blur(gh, smoothing)
+    bh = circ_gauss_blur(bh, smoothing)
+ 
+    red_graph = cv_line_graph(
+        rh,
+        width=width,
+        height=height,
+        background_color=(0, 0, 0, 0),
+        line_color=float_color_to_byte_color(as_rgba_float_color("red orange")),
+        y_max=1,
+        y_min=0,
+    )
+    green_graph = cv_line_graph(
+        gh,
+        width=width,
+        height=height,
+        background_color=(0, 0, 0, 0),
+        line_color=float_color_to_byte_color(as_rgba_float_color("green")),
+        y_max=1,
+        y_min=0,
+    )
+    blue_graph = cv_line_graph(
+        bh,
+        width=width,
+        height=height,
+        background_color=(0, 0, 0, 0),
+        line_color=float_color_to_byte_color(as_rgba_float_color("blue cyan")),
+        y_max=1,
+        y_min=0,
+    )
+
+    red_graph  =as_float_image(red_graph)
+    green_graph=as_float_image(green_graph)
+    blue_graph =as_float_image(blue_graph)
+    
+    output = red_graph+green_graph+blue_graph
+    output = as_rgb_image(output)
+    return output
+
+def byte_image_histogram(image):
+    """
+    Given an image, returns a matrix with shape (num_channels, 256)
+    """
+    import numpy as np
+    
+    image=as_byte_image(image)
+
+    if is_grayscale_image(image):
+        image=image[:,:,None]
+
+    num_channels=image.shape[-1]
+    
+    histogram = np.zeros((num_channels, 256), dtype=int)
+
+    for i in range(num_channels):  # 0: Red, 1: Green, 2: Blue
+        histogram[i], _ = np.histogram(image[:, :, i], bins=256, range=(0, 255))
+
+    return histogram
 
 
 
@@ -25514,12 +25775,12 @@ def _images_conversion(func, images, *, copy_check ,copy=True):
                 #BHW matrices turn into RGB tensors
                 # return ... Fill this in. Duplicate the grayscale along all RGB channels
                 pass #Not implemented yet
-            assert len(images.shape)==4 #BHWC
+            assert len(images.shape)==4, images.shape #BHWC
             C=images.shape[3]
             if C==3:
                 return images.copy()
             else:
-                assert C==4
+                assert C==4, C
                 return images[:,:,:,:3]
 
         elif func==as_rgba_image:
@@ -25527,19 +25788,19 @@ def _images_conversion(func, images, *, copy_check ,copy=True):
                 #BHW matrices turn into RGB tensors
                 # return ... Fill this in. Alpha channel is 1 if floating point else 255 if uint8 else True if bool, the other 3 are duplciated from the grayscale matrices...
                 pass #Not implemented yet
-            assert len(images.shape)==4 #BHWC
+            assert len(images.shape)==4, images.shape #BHWC
             C=images.shape[3]
             if C==3:
                 # return ... add a 4th channel 
                 pass #Not implemented yet
             else:
-                assert C==4
+                assert C==4, C
                 return images.copy()
 
         elif func==as_grayscale_image:
             if len(images.shape)==3: #Given grayscale images
                 return images.copy()
-            assert len(images.shape)==4 #BHWC
+            assert len(images.shape)==4, images.shape #BHWC
             #Average the RGB channels and turn back to uint8 or float or binary...
             pass #Not implemented yet
 
@@ -25737,7 +25998,7 @@ def color_name_to_float_color(color_name: str):
     EXAMPLE:
         assert color_name_to_float_color('green') == (0., 1., 0.)
     """
-    assert isinstance(color_name, str)
+    assert isinstance(color_name, str), type(color_name)
     color_name = color_name.strip()
     color_name = color_name.lower()
     color_name = color_name.replace("_", "")
@@ -25791,7 +26052,7 @@ def get_color_brightness(color):
 
 def get_image_dimensions(image):
     """ Return (height,width) of an image """
-    assert is_image(image) or is_torch_image(image)
+    assert is_image(image) or is_torch_image(image), type(image)
     return get_image_height(image),get_image_width(image)
 
 #def get_images_dimensions(*images):
@@ -25816,7 +26077,7 @@ def get_image_height(image):
     Return the image's height measured in pixels
     """
     if is_torch_image(image): return image.shape[1] #Assumes a CHW image
-    assert is_image(image)
+    assert is_image(image), type(image)
     if is_pil_image(image):return image.height
     return image.shape[0]
 
@@ -25825,7 +26086,7 @@ def get_image_width(image):
     Return the image's width measured in pixels
     """
     if is_torch_image(image): return image.shape[2] #Assumes a CHW image
-    assert is_image(image)
+    assert is_image(image), type(image)
     if is_pil_image(image):return image.width
     return image.shape[1]
 
@@ -28280,8 +28541,8 @@ def get_unique_copy_path(path: str, *, suffix: str = "_copy%i") -> str:
     "/home/user/hello_backup1.txt"
     """
 
-    assert isinstance(path, str)
-    assert isinstance(suffix, str)
+    assert isinstance(path, str), type(path)
+    assert isinstance(suffix, str), type(suffix)
 
     # assert suffix.count("%i") == 1 #This error was written wrong in the case we do %03i etc - let the string formatter handle it
     try:
@@ -29027,7 +29288,6 @@ def simple_boxed_string(string,align='center',chars='│─┐┌└┘'):
         bottom_right_fill=chars[5])
 
 try:
-    import re
     _strip_ansi_escapes=re.compile(r'(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]')
 except Exception:pass
 def strip_ansi_escapes(string):
@@ -29948,6 +30208,142 @@ def unicode_loading_bar(n,chars='▏▎▍▌▋▊▉█'):
     output+=chars[n%size]
     return output
 
+def get_box_char_bar_graph(values, min_val=None, max_val=None, num_lines=1):
+    """
+    Generate a bar graph using box characters based on the provided values.
+
+    Args:
+        values (list): A list of numeric values to be plotted in the bar graph.
+        min_val (float, optional): The minimum value for scaling the graph. If not provided, the minimum value from the input values will be used.
+        max_val (float, optional): The maximum value for scaling the graph. If not provided, the maximum value from the input values will be used.
+        num_lines (int, optional): The number of lines (height) of the bar graph. Default is 1.
+
+    Returns:
+        str: A string representation of the bar graph using box characters.
+
+
+    EXAMPLE:
+        >>> values = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+        ... print(get_box_char_bar_graph(values, num_lines=1))
+        ... #PRINTS OUT THIS:
+        ... #  ▁▂▃▄▅▆▇█▇▆▅▄▃▂▁
+    
+
+    EXAMPLE:
+        >>> for theta in range(360*100):
+        ...     theta*=tau/360
+        ...     _erase_terminal_line()
+        ...     print(get_box_char_bar_graph(np.sin(np.linspace(0, theta * 1.2**tau, 36)) + 1))
+        ...     sleep(1/360)
+        ... #PRINTS SOMETHING LIKE THIS:
+        ... #▃▄▅▅▆▆▇▇▇▇█▇▇▇▇▆▆▅▅▄▄▃▂▂▁▁         ▁
+        ... #▃▅▆▇▇█▇▇▆▅▄▂▁     ▁▂▃▅▆▇▇▇▇▇▆▅▄▂▁
+        ... #▄▅▇▇▇▆▅▃▁   ▁▃▅▆▇▇▇▅▄▂   ▁▂▄▆▇█▇▆▄▂▁
+        ... #▃▆▇▇▆▄▁  ▁▃▆▇▇▆▄▁  ▁▃▆▇▇▆▄▁  ▁▃▆▇█▆▄
+        ... #▃▆█▆▄▁ ▁▃▆▇▆▄▁ ▁▃▆▇▆▄▁ ▁▃▆▇▆▄▁ ▁▃▆▇▆
+        ... #▄▇▇▅▁ ▁▅▇▇▄  ▂▆█▆▂  ▃▇▇▅▁ ▁▅▇▇▄  ▂▆▇
+        ... #▄▇▇▃ ▁▅▇▆▂ ▂▆▇▅▁ ▃▇▇▄  ▄▇▆▂ ▁▅█▆▁ ▂▆
+        ... #▄█▆▁ ▃▇▆▁ ▃▇▆▁ ▃▇▆▁ ▃▇▆▁ ▃▇▆▁ ▃▇▆▁ ▃    
+
+
+    EXAMPLE:
+        >>> def color_demo(duration=20):
+        ... 
+        ...     def animate_sine_wave(frequency, amplitude, phase, num_points, num_lines):
+        ...         values = [amplitude * math.sin(2 * math.pi * frequency * x / num_points + phase) for x in range(num_points)]
+        ...         graph = get_box_char_bar_graph(values, min_val=-1, max_val=1, num_lines=num_lines)
+        ...         return graph
+        ... 
+        ... 
+        ...     start_time = time.time()
+        ...     end_time = start_time + duration
+        ... 
+        ...     colors = ["red", "green", "yellow", "blue"]
+        ... 
+        ...     while time.time() < end_time:
+        ...         frequency = (math.sin(time.time() - start_time) + 1) * 2 + 0.5
+        ...         amplitude = (math.cos(time.time() - start_time) + 1) * 0.5 + 0.5
+        ...         phase = (time.time() - start_time) * 0.5
+        ... 
+        ... 
+        ...         num_points=120
+        ...         num_lines=40
+        ...         concatenated_graphs = vertically_concatenated_strings(
+        ...             horizontally_concatenated_strings([fansi(animate_sine_wave(frequency, amplitude, phase, num_points=num_points, num_lines=num_lines), c1, None, c2) for c1, c2 in [["green", "blue"], ["red", "yellow"]]]),
+        ...             horizontally_concatenated_strings([fansi(animate_sine_wave(frequency, amplitude, phase, num_points=num_points, num_lines=num_lines), c1, None, c2) for c1, c2 in [["black", "gray"], ["cyan", "magenta"]]]),
+        ...         )
+        ... 
+        ...         os.system("cls" if os.name == "nt" else "clear")
+        ...         print(concatenated_graphs)
+        ...         time.sleep(1/60)
+        ... 
+        ... color_demo()
+        ... #WILL PRINT SOMETHING LIKE THIS:
+        ... #                                            ▁▃▅▆▇██████▇▅▄▂
+        ... #                                         ▁▄▆████████████████▅▃
+        ... #                                       ▂▆█████████████████████▇▄▁
+        ... #                                     ▃▇██████████████████████████▅▁
+        ... #                                   ▂▇██████████████████████████████▅
+        ... #                                 ▁▆██████████████████████████████████▄
+        ... #                                ▄█████████████████████████████████████▇▂
+        ... #                              ▂▇████████████████████████████████████████▅
+        ... #                             ▅████████████████████████████████████████████▂
+        ... #                           ▂▇██████████████████████████████████████████████▅
+        ... #                          ▄█████████████████████████████████████████████████▇▂
+        ... #                        ▁▇████████████████████████████████████████████████████▄
+        ... #                       ▃███████████████████████████████████████████████████████▆
+        ... #                      ▅██████████████████████████████████████████████████████████▃
+        ... #                    ▂█████████████████████████████████████████████████████████████▅
+        ... #                   ▄███████████████████████████████████████████████████████████████▇▂
+        ... #                 ▁▇██████████████████████████████████████████████████████████████████▄
+        ... #                ▄█████████████████████████████████████████████████████████████████████▇▁
+        ... #              ▁▆████████████████████████████████████████████████████████████████████████▄
+        ... #             ▄███████████████████████████████████████████████████████████████████████████▇▂
+        ... #           ▂▇██████████████████████████████████████████████████████████████████████████████▅
+        ... #         ▂▆██████████████████████████████████████████████████████████████████████████████████▄
+        ... #       ▁▅██████████████████████████████████████████████████████████████████████████████████████▃
+        ... #     ▂▆██████████████████████████████████████████████████████████████████████████████████████████▄▁
+        ... #  ▁▄▇██████████████████████████████████████████████████████████████████████████████████████████████▅▃                 ▂▅█
+        ... # ▇████████████████████████████████████████████████████████████████████████████████████████████████████▆▄▂▁        ▂▄▅████
+        ... # ██████████████████████████████████████████████████████████████████████████████████████████████████████████▇▆▆▆▇▇████████
+        ... # ████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+        ... # ████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+        ... # ████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+        ... # ████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+        ... # ████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+        ... # ████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████
+        
+    """
+    import math
+    import os
+    import time
+
+    if not len(values):
+        return ""
+
+    if min_val is None:
+        min_val = min(values)
+    if max_val is None:
+        max_val = max(values)
+
+    box_chars = " ▁▂▃▄▅▆▇█"
+    num_boxes = len(box_chars) - 1
+
+    lines = []
+    for value in values:
+        if value <= min_val:
+            lines.append(" " * num_lines)
+        elif value >= max_val:
+            lines.append("█" * num_lines)
+        else:
+            normalized_value = (value - min_val) / (max_val - min_val)
+            full_boxes = int(normalized_value * num_lines)
+            remainder = normalized_value * num_lines - full_boxes
+            lines.append(" " * (num_lines - full_boxes - 1) + box_chars[int(remainder * num_boxes)] + "█" * full_boxes)
+
+    return string_transpose("\n".join(lines))
+
+
 def get_scope(frames_back=0):
     """
     Get the scope of n levels up from the current stack frame
@@ -30140,11 +30536,9 @@ def mean(*x):
     """
     x=detuple(x)
     try:
-        from numpy import mean
-        return mean(x)
+        return x.mean(0)
     except Exception:
-        from statistics import mean
-        return mean(x)
+        return sum(x)/len(x)
 
 def median(*x):
     """
@@ -32450,7 +32844,7 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
 
     assert isinstance(windows, dict), "Internal assertion"
     assert all(isinstance(k, str) for k in windows.keys()), "All window names must be strings"
-    assert all(is_listlike(v) or isinstance(v, str) for v in windows.values()), "All window commands must be strings (for single pane) or lists of strings (for multiple panes). Strings can be multiline for multiple commands"
+    assert all(is_listlike(v) or isinstance(v, str) for v in windows.values()), "All window commands must be strings (for single pane) or lists of strings (for multiple panes). Strings can be multiline for multiple commands. Value %s: "%windows.values() + str(windows.values())
 
     def process_command(command):
         if not command:
@@ -33797,16 +34191,33 @@ def bytes_to_file(data: bytes, path: str = None):
         return helper()
 
 
-def file_to_bytes(path: str):
+_file_to_bytes_cache={}
+def file_to_bytes(path: str, use_cache=False):
+    if use_cache and path in _file_to_bytes_cache:
+        return _file_to_bytes_cache[path]
+
     with open(path, 'rb') as out:
         data = out.read()
+
+    if use_cache:
+        _file_to_bytes_cache[path]=_file_to_bytes_cache
+
     return data
 
-def file_to_base64(path: str):
-    return bytes_to_base64(file_to_bytes(path))
+def file_to_base64(path: str, use_cache=False):
+    return bytes_to_base64(file_to_bytes(path, use_cache))
 
-def file_to_object(path:str):
-    return bytes_to_object(file_to_bytes(path))
+_file_to_object_cache={}
+def file_to_object(path:str, use_cache=False):
+    if use_cache and path in _file_to_object_cache:
+        return _file_to_object_cache[path]
+
+    output = bytes_to_object(file_to_bytes(path))
+    
+    if use_cache:
+        _file_to_object_cache[path]=_file_to_object_cache
+        
+    return output
 
 def object_to_file(object,path:str):
     return bytes_to_file(object_to_bytes(object),path)
