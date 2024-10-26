@@ -11045,6 +11045,16 @@ def sync_sorted(*lists_in_descending_sorting_priority, key=None, reversed=False)
     return tuple(list(sorted_list) for sorted_list in sorted_separate_lists)
 sync_sort=sync_sorted#For backwards compatiability
 
+def by_number(x):
+    """ 
+    Used as a key for sorting 
+    Example: paths=sorted(paths, key=by_number)
+    """
+    return (len(x), x)
+
+def sorted_by_number(x, *, reverse=False):
+    return sorted(x, key=by_number, reverse=reverse)
+
 # def sync_sorted(*lists_in_descending_sorting_priority,key=identity):
 #         # Sorts main_list and reorders all *lists_in_descending_sorting_priority the same way, in sync with main_list
 #         return tuple(zip(*sorted(zip(*lists_in_descending_sorting_priority),key=lambda x:tuple(map(key,x)))))
@@ -13041,6 +13051,47 @@ def split_into_sublists(l, sublist_len: int, *, strict=False, keep_remainder=Tru
     return output
 
 
+def split_into_n_sublists(l, n):
+    """
+    Splits the input sequence `l` into `n` sublists as evenly as possible.
+    Supports any sequence `l` that implements slicing.
+
+    Parameters:
+    l (sequence): The sequence to be split.
+    n (int): The number of sublists to split `l` into.
+
+    Returns:
+    list: A list containing `n` sublists.
+
+    Raises:
+    ValueError: If `n` is not a positive integer.
+
+    Examples:
+    >>> split_into_n_sublists([1, 2, 3, 4, 5], 3)
+    [[1, 2], [3, 4], [5]]
+
+    >>> split_into_n_sublists([1, 2, 3, 4, 5, 6], 4)
+    [[1, 2], [3, 4], [5], [6]]
+
+    >>> split_into_n_sublists([1, 2, 3, 4, 5], 10)
+    [[1], [], [2], [], [3], [], [4], [], [5], []]
+
+    >>> split_into_n_sublists([], 3)
+    [[], [], []]
+    """
+
+    if n <= 0:
+        raise ValueError("rp.split_into_n_sublists: n must be greater than 0 but n is "+str(n))
+
+    if isinstance(l, str):
+        return ''.join(split_into_n_sublists(list(l), n))
+
+    L = len(l)
+    indices = [int(i * L / n) for i in range(n + 1)]
+    return [l[indices[i]:indices[i + 1]] for i in range(n)]
+
+
+
 def split_into_subdicts(d, subdict_size: int, strict=False, keep_remainder=True):
     """
     Splits a dictionary into a list of subdictionaries based on the specified subdict size.
@@ -13062,20 +13113,53 @@ def split_into_subdicts(d, subdict_size: int, strict=False, keep_remainder=True)
     >>> split_into_subdicts({'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 5}, 3, keep_remainder=False)
     [{'a': 1, 'b': 2, 'c': 3}]
     """
+
+
     assert isinstance(subdict_size, int), 'subdict_size should be an integer, but got type ' + repr(type(subdict_size))
     if strict:
         assert not len(d) % subdict_size, 'len(d)==' + str(len(d)) + ' and subdict_size==' + str(subdict_size) + ': strict mode is turned on but the subdict size doesn\'t divide the dictionary evenly. len(d)%subdict_size==' + str(len(d) % subdict_size) + '!=0'
     
-    output = []
-    items = list(d.items())
-    for i in range(0, len(items), subdict_size):
-        subdict = dict(items[i:i+subdict_size])
-        output.append(subdict)
+    keys = list(d)
+    key_sublists = split_into_sublists(keys, subdict_size, strict=strict, keep_remainder=keep_remainder)
+
+    return [{key:d[key] for key in key_sublist} for key_sublist in key_sublists]
+
+
+def split_into_n_subdicts(d, n):
+    """
+    Splits a dictionary into a list of n subdictionaries as evenly as possible.
     
-    if not keep_remainder and len(d) % subdict_size != 0:
-        output = output[:-1]
+    Parameters:
+    d (dict): The dictionary to be split.
+    n (int): The number of subdictionaries to split `d` into.
+
+    Returns:
+    list: A list containing `n` subdictionaries.
+
+    Raises:
+    ValueError: If `n` is not a positive integer.
+
+    Examples:
+    >>> split_into_n_subdicts({'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 5}, 3)
+    [{'a': 1, 'b': 2}, {'c': 3}, {'d': 4, 'e': 5}]
     
-    return output
+    >>> split_into_n_subdicts({'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 5, 'f': 6}, 4)  
+    [{'a': 1}, {'b': 2, 'c': 3}, {'d': 4}, {'e': 5, 'f': 6}]
+
+    >>> split_into_n_subdicts({'a': 1, 'b': 2, 'c': 3}, 5)
+    [{'a': 1}, {}, {'b': 2}, {}, {'c': 3}]
+
+    >>> split_into_n_subdicts({}, 3)
+    [{}, {}, {}]
+    """
+
+    if n <= 0:
+        raise ValueError("rp.split_into_n_subdicts: n must be greater than 0, but n is "+str(n))
+
+    keys = list(d)
+    keys_sublists = split_into_n_sublists(keys, n)
+
+    return [{key:d[key] for key in key_sublist} for key_sublist in keys_sublists]
 
 def join_with_separator(iterable, separator, *, lazy=False, expand_separator=False):
     """
@@ -16662,6 +16746,8 @@ def pseudo_terminal(
         RA     RUNA
         EA     RUNA
 
+        CPR $check_pip_requirements()
+
         BAA  $os.system('bash '+str(ans))
         ZSHA $os.system('bash '+str(ans))
 
@@ -20155,7 +20241,7 @@ def pretty_print(x,with_lines=False):
         string=pretty_lines(string)
     print(fansi_syntax_highlighting(string,style_overrides={'operator':('\033[0;34m','\033[0m'),'string':('\033[0;35m','\033[0m')}))
 
-def repr_dict(x, *, align_equals=True):
+def repr_kwargs_dict(x, *, align_equals=True):
     """
     EXAMPLE:
         >>> x = {
@@ -20298,6 +20384,23 @@ def print_to_string(f,*args,**kwargs):
     f(*args,**kwargs)
     sys.stdout.write=temp
     return out
+
+def print_lines(*args, flush=False):
+    """
+    Shorthand for print(line_join(args)) 
+
+    EXAMPLE:
+        >>> print_lines(1,2,3,4,5)
+        1
+        2
+        3
+        4
+        5
+    """
+    args=detuple(args)
+    if isinstance(args, str):
+        args=[args]
+    print(line_join(map(str,args)),flush=flush)
 
 def reduced_row_echelon_form(M):
     pip_import('sympy')
@@ -23547,6 +23650,11 @@ def as_rgba_float_color(color,clamp=True):
     TODO: use this all over RP!
 
     EXAMPLE:
+
+        >>> as_rgba_float_color(1)
+        ans = (1, 1, 1, 1)
+        >>> as_rgba_float_color((1,.5,0))
+        ans = (1, 0.5, 0, 1)
 
         >>> colors = '''
         ... //Generating all unique color combinations of two words or less:
@@ -30525,6 +30633,9 @@ def open_file_with_default_application(path):
 
 def mean(*x):
     """
+    A super basic mean calculator
+    Works with any datatype that supports + and /
+
     EXAMPLES:
      >>> mean(1,2,3)
      >>> mean(1,2,3)
@@ -30535,10 +30646,7 @@ def mean(*x):
     ans = 3.0
     """
     x=detuple(x)
-    try:
-        return x.mean(0)
-    except Exception:
-        return sum(x)/len(x)
+    return sum(x)/len(x)
 
 def median(*x):
     """
@@ -38779,6 +38887,90 @@ def _autoformat_python_code_via_black(code:str):
 
 autoformat_python_via_black = _autoformat_python_code_via_black #Legacy compatibility
 
+
+def autoformat_python_via_black_macchiato(python_code_snippet: str, max_line_length=None) -> str:
+    """
+    Format a Python code snippet using the black macchiato tool.
+    
+    Args:
+    python_code_snippet (str): A string containing the Python code to format.
+
+    Returns:
+    str: The formatted Python code.
+    
+    EXAMPLES:
+
+        >>> #The regular black formatter can't handle indented or partial code
+        >>> autoformat_python_via_black("    def f(a,b,c,):")
+        ERROR: black.parsing.InvalidInput: Cannot parse: 2:0: <line number missing in source>
+
+        >>> #...but black macchiato can!
+        >>> print(autoformat_python_via_black_macchiato("def f(a,b,c,):"))
+        def f(
+            a,
+            b,
+            c,
+        ):
+
+        >>> print(autoformat_python_via_black_macchiato("def f(a,b,c):"))
+        def f(a, b, c):
+
+        >>> print(autoformat_python_via_black_macchiato("def f(a,b,c):pass"))
+        def f(a, b, c):
+            pass
+
+        >>> #Note how that indent is propagated throughout the code!
+        >>> print(autoformat_python_via_black_macchiato("    def f(a,b,c):pass"))
+            def f(a, b, c):
+                pass
+
+        >>> print(autoformat_python_via_black_macchiato("[1,2,3]"))
+        [1, 2, 3]
+
+        >>> print(autoformat_python_via_black_macchiato("[1,2,3,]"))
+        [
+            1,
+            2,
+            3,
+        ]
+
+        >>> print(autoformat_python_via_black_macchiato("    [1,2,3,]"))
+            [
+                1,
+                2,
+                3,
+            ]
+
+    """
+    pip_import('macchiato')
+    import macchiato
+    import io
+
+    black_args = []
+
+    if max_line_length is not None:
+        assert isinstance(max_line_length, int)
+        black_args += ["--line-length", str(max_line_length)]
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        with SetCurrentDirectoryTemporarily(temp_dir):
+            #black-macchiato, internally, creates a temp file in the current directory no matter where you are.
+            #This can cause read/write permission errors on a mac when in the / directory
+            #Also, network storage can slow it down. So, instead, we go to a temporary directory local to the current machine.
+            #This makes it more robust and faster.
+
+            input_file = io.StringIO(python_code_snippet)
+            output_file = io.StringIO()
+            
+            # Use the macchiato function to format the code
+            exit_code = macchiato.macchiato(input_file, output_file, args=black_args)
+            
+            if exit_code != 0:
+                raise ValueError("rp.autoformat_python_via_black_macchiato: Formatting failed with exit code:", exit_code)
+            
+            return output_file.getvalue()
+
+
 def autoformat_html_via_bs4(code: str) -> str:
     """Given a string of HTML, autoformats it"""
     pip_import('bs4')
@@ -41172,6 +41364,96 @@ def git_import(repo,token=None):
     except ImportError:
         fansi_print('rp_git_import: Failed to import repo='+repr(repo), 'red', 'bold')
         raise
+
+def check_pip_requirements(file='requirements.txt'):
+    """
+    Test availability of required packages from given requirements file.
+    
+    EXAMPLE:
+
+         >>> check_pip_requirements()
+         ... # PRINTED OUTPUT:
+         ... #                     Requirements from requirements.txt
+         ... #   ┏━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
+         ... #   ┃ Line ┃ Requirement           ┃ Status           ┃ Installed Version ┃
+         ... #   ┡━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
+         ... #   │ 1    │ accelerate            │ Satisfied        │ 0.29.2            │
+         ... #   │ 10   │ pandas                │ Satisfied        │ 2.2.2             │
+         ... #   │ 14   │ sentencepiece>=0.2.0  │ Satisfied        │ 0.2.0             │
+         ... #   │ 2    │ bitsandbytes          │ Satisfied        │ 0.43.1            │
+         ... #   │ 8    │ decord>=0.6.0         │ Satisfied        │ 0.6.0             │
+         ... #   │ 9    │ wandb                 │ Satisfied        │ 0.17.1            │
+         ... #   │ 11   │ torch>=2.4.0          │ Version Conflict │ 2.0.1             │
+         ... #   │ 12   │ torchvision>=0.19.0   │ Version Conflict │ 0.15.2            │
+         ... #   │ 15   │ imageio-ffmpeg>=0.5.1 │ Version Conflict │ 0.4.2             │
+         ... #   │ 16   │ numpy>=1.26.4         │ Version Conflict │ 1.24.4            │
+         ... #   │ 3    │ diffusers>=0.30.3     │ Version Conflict │ 0.30.0.dev0       │
+         ... #   │ 4    │ transformers>=4.45.2  │ Version Conflict │ 4.42.4            │
+         ... #   │ 7    │ peft>=0.12.0          │ Version Conflict │ 0.11.1            │
+         ... #   │ 13   │ torchao>=0.5.0        │ Missing          │                   │
+         ... #   │ 5    │ huggingface_hub       │ Missing          │                   │
+         ... #   │ 6    │ hf_transfer>=0.1.8    │ Missing          │                   │
+         ... #   └──────┴───────────────────────┴──────────────────┴───────────────────┘
+
+    """
+    pip_import('rich')
+
+    assert file_exists(file), 'check_pip_requirements: requirements file not found: '+str(file)
+
+    import pkg_resources
+    from pip._internal.req.req_file import parse_requirements
+    from pip._internal.req.constructors import install_req_from_parsed_requirement
+    from pip._internal.network.session import PipSession
+    from rich.console import Console
+    from rich.table import Table
+
+    session = PipSession()
+    requirements = list(parse_requirements(file, session))
+
+    table = Table(title="Requirements from "+str(file))
+    table.add_column("Line", style="cyan")
+    table.add_column("Requirement", style="magenta")
+    table.add_column("Status", style="bold")
+    table.add_column("Installed Version", style="green")
+
+    satisfied = []
+    conflicted = []
+    missing = []
+
+    installed_packages = {pkg.key: pkg.version for pkg in pkg_resources.working_set}
+
+    for requirement in requirements:
+        req_to_install = install_req_from_parsed_requirement(requirement)
+        package_name = req_to_install.name
+        req = req_to_install.req
+
+        line_number = requirement.comes_from.split("line ")[1].split(")")[0] if requirement.comes_from else ""
+
+        if package_name in installed_packages:
+            installed_version = installed_packages[package_name]
+            if req_to_install.specifier.contains(installed_version):
+                satisfied.append((line_number, str(req), installed_version))
+            else:
+                conflicted.append((line_number, str(req), installed_version))
+        else:
+            missing.append((line_number, str(req)))
+
+    for item in sorted(satisfied, key=lambda x: x[0]):
+        table.add_row(str(item[0]), item[1], '[green]Satisfied[/green]', item[2])
+
+    for item in sorted(conflicted, key=lambda x: x[0]):
+        table.add_row(str(item[0]), item[1], '[yellow]Version Conflict[/yellow]', item[2])
+
+    for item in sorted(missing, key=lambda x: x[0]):
+        table.add_row(str(item[0]), item[1], '[red]Missing[/red]', '')
+
+    console = Console()
+    console.print(table)
+
+    if not conflicted and not missing:
+        console.print("[bold green]All required packages are already installed[/bold green]")
+
+
 
 def get_mask_iou(*masks):
     """Calculates the IOU (intersection over union) of multiple binary masks"""
