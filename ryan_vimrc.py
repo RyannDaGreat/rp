@@ -69,10 +69,10 @@
 " gv   reselects your last visual-mode selection. Useful for repeating > and < from visual mode
 " ^x^f when in insert mode, will autocomplete file paths (^x is for selecting a type of autocompletion, ^f is for files)
 " ^v   starts visual block mode. Then, use I to insert text.
+" :only   closes all other windows in the current tab
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-
 
 " Allow backspace to delete over everything in insert mode, solving the issue where
 " backspace only deletes characters typed in the current insert mode session on macOS
@@ -583,11 +583,15 @@ function RyanHighlightDefaults()
     :hi clear Conceal
     :hi Conceal ctermfg=237
 
+    :hi DiffAdd ctermfg=111 ctermbg=236 cterm=reverse
+    :hi DiffChange ctermfg=188 ctermbg=236 cterm=reverse
+    :hi DiffDelete ctermfg=222 ctermbg=236 cterm=reverse
+    :hi DiffText ctermfg=145 ctermbg=236 cterm=reverse
+
 endfunction
 
 " fh = Fansi Highlight
 nnoremap fh :call<space>Fansi()<cr>:colorscheme<cr>
-
 
 
 " Instead of having to type :q! have vim ask us 'Would you like to save? Yes or no'
@@ -793,6 +797,12 @@ set shortmess-=S "Show the count of the search like item 5/10 etc https://stacko
 Plugin 'simeji/winresizer' "Use control+e to resize windows
 
 " KEY MAPPINGS:
+    "Vimdiff mappings: d> and d<
+        
+        "Get or put diff hunks with d< and d>
+        autocmd VimEnter * if &diff | execute 'nnoremap <silent> d> :if winnr() == 1 <Bar> diffput <Bar> else <Bar> diffget <Bar> endif<CR>' | endif
+        autocmd VimEnter * if &diff | execute 'nnoremap <silent> d< :if winnr() == 1 <Bar> diffget <Bar> else <Bar> diffput <Bar> endif<CR>' | endif
+
     " Shifting lines   https://chat.openai.com/share/05160497-c34c-426f-b9f6-8cf10aec09f5
         " Normal Mode: Move current line down with Ctrl-j
         nnoremap <C-j> :m .+1<CR>==
@@ -1052,6 +1062,11 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         ""AUTORELOAD:  :set autoread     :set noautoread
         "    Plugin 'chrisbra/vim-autoread'
         "    :set noautoread
+
+        "AUTOREAD:
+        " https://superuser.com/questions/181377/auto-reloading-a-file-in-vim-as-soon-as-it-changes-on-disk
+        set autoread                                                                                                                                                                                    
+        au CursorHold * checktime  
         
         "VIM SURROUND:
             " Add parenthesis or quotes around stuff
@@ -1665,7 +1680,42 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
                 :hi Folded ctermbg=black cterm=italic
                 :hi StatusLine ctermfg=white "selected status line
                 :hi StatusLineNC ctermfg=blue  "unselected status line
+                let g:xtabline_settings.indicators = {
+                            \ 'modified': '[+]',
+                            \ 'pinned': '[📌]',
+                            \}
+
+                let g:xtabline_settings.icons = {
+                            \'pin': '📌',
+                            \'star': '★',
+                            \'book': '📖',
+                            \'lock': '🔒',
+                            \'hammer': '🔨',
+                            \'tick': '✔',
+                            \'cross': '✖',
+                            \'warning': '⚠',
+                            \'menu': '☰',
+                            \'apple': '🍎',
+                            \'linux': '🐧',
+                            \'windows': '⌘',
+                            \'git': '',
+                            \'palette': '🎨',
+                            \'lens': '🔍',
+                            \'flag': '🏁',
+                            \'flag2': '🍋',
+                            \'ico': '🦄',
+                            \'train': '🚂',
+                            \'gear': '⚙️',
+                            \'fire': '🔥',
+                            \'snowflake': '❄️',
+                            \'huggingface': '🤗',
+                            \'robot': '🤖',
+                            \'videogame': '👾',
+                            \'clock': '🕓',
+                            \}
             endfunction
+
+
             
             " This is the solution suggested to me by the author: https://github.com/mg979/vim-xtabline/issues/34
             " To use it, run :XTabTheme custom_theme
@@ -2047,3 +2097,16 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
 "Plugin 'prabirshrestha/asyncomplete.vim'
 " Plugin 'preservim/vim-wordchipper'
 
+
+" Always show status bar and tab bar in vimdiff
+autocmd VimEnter * if &diff | set laststatus=2 showtabline=2 | endif
+
+
+"After absolutely everything else if not in vimdiff mode:
+"    If multiple files specified in the vim command like 'vim file1 file2 file3' then open them as tabs not just buffers
+function! OpenTabsLater(timer_id)
+    if argc() > 1 && !&diff
+        tab all
+    endif
+endfunction
+autocmd VimEnter * call timer_start(100, 'OpenTabsLater')
