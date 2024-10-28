@@ -30,7 +30,7 @@ import tempfile
 import contextlib
 import random
 import re
-from itertools import product as cartesian_product
+from itertools import product as cartesian_product, combinations as all_combinations
 
 # Places I want to access no matter where I launch r.py
 # sys.path.append('/Users/Ryan/PycharmProjects/RyanBStandards_Python3.5')
@@ -789,10 +789,10 @@ def terminal_supports_unicode():
 
 
 def fansi_is_enabled():
-    #Returns true IFF fansi is enabled
+    """ Returns true IFF fansi is enabled """
     return not _disable_fansi
 def fansi_is_disabled():
-    #Returns true IFF fansi is disabled
+    """ Returns true IFF fansi is disabled """
     return _disable_fansi
 _disable_fansi=False
 def disable_fansi():
@@ -821,7 +821,194 @@ def without_fansi():
     finally:
         _disable_fansi=old_disable_fansi
 
-def fansi(text_string,text_color=None,style=None,background_color=None,*,per_line=True):
+
+def fansi(text_string="", text_color=None, style=None, background_color=None, *, per_line=True, reset=True):
+    """
+    'fansi' is a pun, referring to ANSI and fancy
+    Uses ANSI formatting to give the terminal styled color outputs.
+
+    The 'per_line' option applies fansi to each line separately, which is useful for multi-line strings. It is enabled by default.
+
+    STYLES:
+                                                               Alacritty   Terminal.app   Wezterm 
+        - 'normal': No styling (default)                     |  yes      |    yes       |   yes   |
+        - 'bold': Bold text                                  |  yes      |    yes       |   yes   |
+        - 'faded': Faint text                                |  yes      |    yes       |   yes   |
+        - 'italic': Italic text                              |  yes      |    yes       |   yes   |
+        - 'underlined': Underlined text                      |  yes      |    yes       |   yes   |
+        - 'blinking': Blinking text                          |       no  |    yes       |   yes   |
+        - 'invert': Swap foreground and background colors    |  yes      |    yes       |   yes   |
+        - 'hide': Hidden text (useful for passwords)         |  yes      |    yes       |   yes   |
+        - 'strike': Strikethrough text                       |  yes      |         no   |   yes   |
+        - 'super': Superscript text                          |       no  |         no   |   yes   |
+        - 'sub': Subscript text                              |       no  |         no   |   yes   |
+
+    COLORS:
+        The basic color options for text_color and background_color are:
+            - 'black': ANSI color 0
+            - 'red': ANSI color 1 
+            - 'green': ANSI color 2
+            - 'yellow': ANSI color 3
+            - 'blue': ANSI color 4
+            - 'magenta': ANSI color 5
+            - 'cyan': ANSI color 6 
+            - 'gray'/'grey': ANSI color 7
+            - 'white': ANSI color 8
+        If text_color or background_color is given as an integer, it will be interpreted as a 256-color code.
+        Any color compatible with rp.as_rgba_float_color will work too, and will be mapped to the nearest 256-color code.
+        See the below example!
+
+    EXAMPLES:
+
+        >>> #Adding styles together via setting reset=False
+        ... print(
+        ...     fansi("hello ", "red", "sub", reset=False)
+        ...     + fansi("underline ", "green", "underlined", reset=False)
+        ...     + fansi("blinking ", "blue", "blinking", reset=False)
+        ...     + fansi("italic ", "yellow", "italic", reset=False)
+        ...     + fansi("strike ", "cyan", "strike", reset=False)
+        ...     + fansi("bold ", "magenta", "bold", reset=False)
+        ...     + fansi("invert ", "orange", "invert", reset=False)
+        ...     + fansi(reset=True)
+        ...     + "After reset..."
+        ...     + fansi("All at once!", 'hot pink', 'underlined blinking italic strike bold super')
+        ... )
+
+        >>> #Adding styles together in a single call 
+        ... for style_a, style_b in all_combinations("normal bold italic underlined invert strike".split(), 2):
+        ...         print(fansi("\tCombined Style: " + style_a + " " + style_b, style=style_a + " " + style_b))
+        
+        >>> #An overview of what you can do with fansi
+        ... fansi_print("Fansi Styles:", style="underlined")
+        ... for style in 'normal bold faded italic underlined blinking invert hide strike'.split():
+        ...     print(fansi("\tStyle: "+style, style=style))
+        ... 
+        ... fansi_print("Traditional Terminal Colors", style="underlined")
+        ... for color in "black red green yellow blue magenta cyan gray".split():
+        ...     for style in [None, "bold"]:
+        ...         print(fansi("\t█████ " + color + " " + str(style), color, style))
+        ... 
+        ... fansi_print("Ansi256 Terminal Colors", style="underlined")
+        ... print("\tPerfect RGB matches")
+        ... for color in ["green green", "blue blue", "red red", "yellow yellow", "cyan cyan", "magenta magenta", "gray gray", "black black", "white white"]:
+        ...     print(fansi("\t█████ " + str(color) + " ", color))
+        ... 
+        ... print("\tSpecial color names")
+        ... for color in ["green cyan", "blue cyan", "navy blue", "hot pink"]:
+        ...     print(fansi("\t█████ " + str(color) + " ", color))
+        ... 
+        ... print("\tHex codes")
+        ... for color in ["#0055AB"]:
+        ...     print(fansi("\t█████ " + str(color) + " ", color))
+        ... 
+        ... print("\tGrayscale floats")
+        ... for color in [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]:
+        ...     print(fansi("\t█████ " + str(color) + " ", color))
+        ... 
+        ... print("\tAnsi256 integer color codes")
+        ... for color in [12, 34, 56, 78, 90]:
+        ...     print(fansi("\t█████ " + str(color) + " ", color))
+        ... 
+        ... print("\tRGB float tuples")
+        ... for color in [random_rgb_float_color() for _ in range(10)]:
+        ...     print(fansi("\t█████ " + str(color) + " ", color))
+        ...
+        ... fansi_print("Background Colors:", style="underlined")
+        ... for color in ["green cyan", "blue cyan", "navy blue", "hot pink"]:
+        ...     print(fansi("\tXXXXX " + str(color) + " ", background_color=color))
+        
+    """
+    # Ensure text_string is a string
+    text_string = str(text_string)
+
+    # Handle per_line option
+    if per_line and text_string:
+        lines = text_string.splitlines(keepends=True)
+        lines = [fansi(line, text_color, style, background_color, per_line=False, reset=reset) for line in lines]
+        return ''.join(lines)
+
+    # Check if ANSI formatting is disabled
+    if globals().get('_disable_fansi', False):
+        return text_string
+
+    # Check if terminal supports ANSI codes
+    if not terminal_supports_ansi():
+        return text_string
+
+    # Define color and style mappings
+    color_codes = {'black': 0, 'red': 1, 'green': 2, 'yellow': 3,
+                   'blue': 4, 'magenta': 5, 'cyan': 6, 'gray': 7, 'grey': 7}
+    styles = {
+        "normal": 0,
+        "bold": 1,
+        "faded": 2,
+        "italic": 3,
+        "underlined": 4,
+        "blinking": 5,
+        "invert": 7,
+        "hide": 8,
+        "strike": 9,
+        "sub": 74,
+        "super": 73,
+    }
+    #To see all styles supported for your terminal:
+    #   >>> for style in range(100):  print(fansi('Hello World! '+str(style),style=style))
+    #   ... #Reference: https://en.wikipedia.org/wiki/ANSI_escape_code
+
+    legacy_styles = {'outlined':7} #Older versions of RP used these keys instead
+    styles.update(legacy_styles)
+
+    format_codes = []
+
+    # Convert style from string to code
+    if isinstance(style, str):
+        for style_lower in style.lower().split():
+            if style_lower in styles:
+                style = styles[style_lower]
+
+                #You can try a custom integer and see what happens in your terminal! Not all terminals respond the same to style codes - some implement more than others.
+                #For example, terminal.app doesn't support 'strike' but does support 'blinking', which Alacritty doesn't
+                format_codes.append(str(style))
+            else:
+                print("ERROR: fansi: Invalid style '{}'. Valid options are: {}".format(style, list(styles.keys())))
+                style = None
+
+    if isinstance(text_color, str):
+        text_color = text_color.lower()
+
+    # Handle text_color
+    if text_color is not None:
+        if text_color in color_codes:
+            color_code = color_codes[text_color] + 30
+            format_codes.append(str(color_code))
+        else:
+            try:
+                color_code = text_color if isinstance(text_color, int) else float_color_to_ansi256(text_color)
+                format_codes.append('38;5;'+str(color_code))
+            except Exception:    
+                print("ERROR: fansi: Invalid text_color '%s'. Valid options are: %s, or any RGB float color compatible with rp.as_rgb_float_color" % (text_color, list(color_codes.keys())))
+
+    # Handle background_color
+    if background_color is not None:
+        if background_color in color_codes:
+            bg_color_code = color_codes[background_color] + 40
+            format_codes.append(str(bg_color_code))
+        else:
+            try:
+                bg_color_code = background_color if isinstance(background_color, int) else float_color_to_ansi256(background_color)
+                format_codes.append('48;5;'+str(bg_color_code))
+            except Exception:
+                print("ERROR: fansi: Invalid background_color '%s'. Valid options are: %s, or any RGB float color compatible with rp.as_rgb_float_color" % (background_color, list(color_codes.keys())))
+
+    # Apply ANSI formatting
+    format_sequence = ';'.join(format_codes)
+    output = "\x1b[{}m{}".format(format_sequence, text_string)
+    if reset:
+        output += '\x1b[0m'
+    return output
+
+
+def _legacy_fansi(text_string,text_color=None,style=None,background_color=None,*,per_line=True):
     """
     TODO: Fix bug: PROBLEM is that '\n' not in fansi('Hello\n','gray')
     This function uses ANSI escape sequnces to make colored text in a terminal.
@@ -839,6 +1026,7 @@ def fansi(text_string,text_color=None,style=None,background_color=None,*,per_lin
     To undo the effect of this function on a string (aka to un-format a string) use rp.strip_ansi_escapes()  (see its documentation for more details)
     EXAMPLE: print(fansi('ERROR:','red','bold')+fansi(" ATE TOO MANY APPLES!!!",'blue','underlined','yellow'))
     """
+    #This function was replaced by fansi at 12:00AM Oct28 2024 - and now has better color functionality and cleaner code!
     text_string=str(text_string)
     if per_line:
         lines=line_split(text_string)
@@ -892,16 +1080,30 @@ def fansi(text_string,text_color=None,style=None,background_color=None,*,per_lin
 # from random import randint
 # print(seq([lambda old:old+fansi(chr(randint(0,30000)),randint(0,7),randint(0,7),randint(0,7))]*100,''))
 # endregion
-def fansi_print(text_string: object,text_color: object = None,style: object = None,background_color: object = None,new_line=True) -> object:
-    #This function prints colored text in a terminal.
-    #It can also print bolded, underlined, or highlighted text.
-    #It uses ANSI escape sequences to do this...
-    #    ...and so calling it 'fansi' is a pun on 'fancy' and 'ansi'
-    # Example: print(fansi('ERROR:','red','bold')+fansi(" ATE TOO MANY APPLES!!!",'blue','underlined','yellow'))
-    print(fansi(text_string,text_color=text_color,style=style,background_color=background_color),end='\n' if new_line else'',flush=True)
+def fansi_print(text_string: object,text_color: object = None,style: object = None,background_color: object = None,new_line=True,reset=True) -> object:
+    """
+    This function prints colored text in a terminal.
+    It can also print bolded, underlined, or highlighted text.
+    It uses ANSI escape sequences to do this...
+       ...and so calling it 'fansi' is a pun on 'fancy' and 'ansi'
+    Example: print(fansi('ERROR:','red','bold')+fansi(" ATE TOO MANY APPLES!!!",'blue','underlined','yellow'))
+    """
+    print(
+        fansi(
+            text_string,
+            text_color=text_color,
+            style=style,
+            background_color=background_color,
+            reset=reset,
+        ),
+        end="\n" if new_line else "",
+        flush=True,
+    )
 # noinspection PyShadowingBuiltins
 def print_fansi_reference_table() -> None:
-    # prints table of formatted text format options for fansi. For reference
+    """
+    prints table of formatted text format options for fansi. For reference
+    """
     for style in range(8):
         for fg in range(30,38):
             s1=''
@@ -1214,11 +1416,15 @@ def fansi_syntax_highlighting(code: str,
         return code  # Failed to highlight code, presumably because of an import error.
 
 
-def _fansi_highlight_path(path,color='cyan'):
+def fansi_highlight_path(path):
+    """ Syntax-highlights a path like "/path/to/thing/" - it colors the /'s differently from the rest. Returns a string with ansi escapes for printing in a terminal. """
+    color='cyan'
     path=strip_ansi_escapes(path)
     path=path.split('/')
     return fansi('/','blue','bold').join(fansi(x,color) for x in path)
     return fansi('/',color,'bold').join(fansi(x,color) for x in path)
+
+_fansi_highlight_path = fansi_highlight_path
 
 
 def fansi_pygments(
@@ -1400,7 +1606,7 @@ def string_from_clipboard():
 
 #   print("Result = "+str(pseudo_terminal()))
 # endregion
-# region 2d Methods:［width，height，rgb_to_grayscale，gauss_blur，flat_circle_kernel，med_filter，med_filter，med_filter，grid2d，grid2d_map，resize_image］
+# region 2d Methods:［width，height，_rgb_to_grayscale，gauss_blur，flat_circle_kernel，med_filter，med_filter，med_filter，grid2d，grid2d_map，resize_image］
 # noinspection PyShadowingNames
 
 #The following functions are very, very deprecated. Please don't use them.
@@ -1409,11 +1615,13 @@ def string_from_clipboard():
 # def height(image) -> int:
 #     return len(image[0])
 
-def rgb_to_grayscale(image):  # A demonstrative implementation of this pair
-    # Takes an image with multiple color channels
-    # Takes a 3d tensor as an input (X,Y,RGB)
-    # Outputs a matrix (X,Y ⋀ Grayscale value)
-    # Calculated by taking the average of the three channels.
+def _rgb_to_grayscale(image):  # A demonstrative implementation of this pair
+    """
+    Takes an image with multiple color channels
+    Takes a 3d tensor as an input (X,Y,RGB)
+    Outputs a matrix (X,Y ⋀ Grayscale value)
+    Calculated by taking the average of the three channels.
+    """
     try:
         image=as_numpy_array(image)
         assert image.ndim==3 #HWC
@@ -1489,6 +1697,7 @@ def gauss_blur(image,σ,single_channel: bool = False,mode: str = 'reflect',shutu
     #     # endregion
 _flat_circle_kernel_cache={}
 def flat_circle_kernel(diameter):
+    """ Returns a binary grayscale image (aka boolean matrix) with a circle in the middle with the given diameter """
     if diameter not in _flat_circle_kernel_cache:
         d=int(diameter)
         v=np.linspace(-1,1,d) ** 2
@@ -3290,22 +3499,28 @@ def random_choice(*choices):
     return random_element(choices)
 
 def random_permutation(n) -> list or str:
-    # Either n is an integer (as a length) OR n is an iterable
+    """
+    Either n is an integer (as a length) OR n is an iterable
+    """
     if is_iterable(n):  # random_permutation([1,2,3,4,5]) ⟶ [3, 2, 4, 5, 1]
         return shuffled(n)
     return list(np.random.permutation(n))  # random_permutation(5) ⟶ [3, 2, 1, 4, 0]
 
 def is_a_permutation(permutation):
-    # A permutation is a list of ints ranging from 0 to len(permutation)-1
-    # It's used to specify a reordering of an array
+    """
+    A permutation is a list of ints ranging from 0 to len(permutation)-1
+    It's used to specify a reordering of an array
+    """
     return set(range(len(permutation))) == set(permutation)
 
 def inverse_permutation(permutation):
-    # Returns the 'undo' of a given permutation
-    #EXAMPLE:
-    #    a=list(range(100))
-    #    p=random_permutation(100)
-    #    assert a==gather(p,inverse_permutation(p))
+    """
+    Returns the 'undo' of a given permutation
+    EXAMPLE:
+       a=list(range(100))
+       p=random_permutation(100)
+       assert a==gather(p,inverse_permutation(p))
+    """
     assert is_a_permutation(permutation)
     # Create an empty list of the same length as the permutation
     inverse = [0] * len(permutation)
@@ -3317,16 +3532,20 @@ def inverse_permutation(permutation):
 
 
 def randint(a_inclusive,b_inclusive=0):
-    # If both a and b are specified, the range is inclusive, choose from range［a，b] ⋂ ℤ
-    # Otherwise, if only a is specified, choose random element from the range ［a，b) ⋂ ℤ
+    """
+    If both a and b are specified, the range is inclusive, choose from range［a，b] ⋂ ℤ
+    Otherwise, if only a is specified, choose random element from the range ［a，b) ⋂ ℤ
+    """
     from random import randint
     return randint(min([a_inclusive,b_inclusive]),max([a_inclusive,b_inclusive]))
 random_int=randint
 
 def randints(N,a_inclusive=99,b_inclusive=0):
-    # Generate N random integers
-    # Example: randints(10)   ====   [9, 36, 82, 49, 13, 9, 62, 81, 80, 66]
-    # This function exists for convenience when using pseudo_terminal (wasn't really meant for use in long-term code, though it totally could be)
+    """
+    Generate N random integers
+    Example: randints(10)   ====   [9, 36, 82, 49, 13, 9, 62, 81, 80, 66]
+    This function exists for convenience when using pseudo_terminal (wasn't really meant for use in long-term code, though it totally could be)
+    """
     assert N>=0 and N==int(N),'Cannot have a non-counting-number length: N='+repr(N)
     out=[randint(a_inclusive,b_inclusive) for _ in range(N)]
     try:out=np.asarray(out)#Do this IFF we have numpy for convenience's sake
@@ -3335,19 +3554,21 @@ def randints(N,a_inclusive=99,b_inclusive=0):
 random_ints=randints
 
 def randint_complex(*args,**kwargs):
-    #Arguments passed to this function are passed to 'randint'
-    #The only difference between this function and randints is that this also generates a complex component
-    #EXAMPLE:
-    #  >>> randints_complex(100)
-    # ans = 56.+64.j
-    #  >>> randint_complex(1)
-    # ans = (1+1j)
-    #  >>> randint_complex(1)
-    # ans = 0j
-    #  >>> randint_complex(1)
-    # ans = (1+0j)
-    #  >>> randint_complex(1)
-    # ans = 0j
+    """
+    Arguments passed to this function are passed to 'randint'
+    The only difference between this function and randints is that this also generates a complex component
+    EXAMPLE:
+     >>> randints_complex(100)
+    ans = 56.+64.j
+     >>> randint_complex(1)
+    ans = (1+1j)
+     >>> randint_complex(1)
+    ans = 0j
+     >>> randint_complex(1)
+    ans = (1+0j)
+     >>> randint_complex(1)
+    ans = 0j
+    """
     return randint(*args,**kwargs)+randint(*args,**kwargs)*1j
 random_int_complex=randint_complex
 
@@ -3368,9 +3589,11 @@ def random_float_complex(exclusive_max: float = 1,inclusive_min=0) -> float:
     return random_float(exclusive_max=exclusive_max,inclusive_min=inclusive_min)+1j*random_float(exclusive_max=exclusive_max,inclusive_min=inclusive_min)
 
 def random_floats(N,exclusive_max=1,inclusive_min=0):
-    # Generate N uniformly distributed random floats
-    # Example: random_floats(10)   ====   [0.547 0.516 0.421 0.698 0.732 0.885 0.947 0.668 0.857 0.237]
-    # This function exists for convenience when using pseudo_terminal (wasn't really meant for use in long-term code, though it totally could be)
+    """
+    Generate N uniformly distributed random floats
+    Example: random_floats(10)   ====   [0.547 0.516 0.421 0.698 0.732 0.885 0.947 0.668 0.857 0.237]
+    This function exists for convenience when using pseudo_terminal (wasn't really meant for use in long-term code, though it totally could be)
+    """
     assert N>=0 and N==int(N),'Cannot have a non-counting-number length: N='+repr(N)
     inclusive_min,exclusive_max=sorted([inclusive_min,exclusive_max])
     try:return (np.random.rand(N))*(exclusive_max-inclusive_min)+inclusive_min#Do this IFF we have numpy for convenience's sake
@@ -3378,19 +3601,21 @@ def random_floats(N,exclusive_max=1,inclusive_min=0):
     return [random_float(a_inclusive,b_inclusive) for _ in range(N)]
 
 def random_floats_complex(*args,**kwargs):
-    #Arguments passed to this function are passed to 'random_floats'
-    #The only difference between this function and randints is that this also generates a complex component
-    #EXAMPLE:
-    # >>> random_floats_complex(10)
-    #ans = [0.611+0.569j 0.371+0.036j 0.469+0.336j 0.615+0.069j 0.329+0.16j  0.896+0.22j  0.22 +0.668j 0.901+0.741j 0.827+0.937j 0.619+0.513j]
-    # >>> random_floats_complex(10,-1)
-    #ans = [-0.504-0.998j -0.668-0.345j -0.104-0.952j -0.532-0.019j -0.949-0.488j -0.02 -0.82j  -0.805-0.194j -0.021-0.287j -0.708-0.231j -0.152-0.159j]
-    # >>> random_floats_complex(10,-1,0)
-    #ans = [-0.433-0.792j -0.71 -0.633j -0.395-0.383j -0.782-0.336j -0.176-0.176j -0.78 -0.16j  -0.505-0.978j -0.199-0.963j -0.98 -0.456j -0.231-0.775j]
-    # >>> random_floats_complex(10,-1,1)
-    #ans = [-0.139-0.101j  0.84 -0.259j  0.347+0.632j -0.362+0.036j  0.002-0.942j -0.685+0.176j  0.852-0.988j  0.188-0.134j  0.011-0.434j -0.578-0.883j]
-    # >>> random_floats_complex(10,0,100)
-    #ans = [40.909+10.029j 51.376+61.357j 15.713+25.714j 99.301+76.956j  5.253+21.822j  8.723+75.36j  15.964+85.891j 20.968+12.191j 37.997+92.09j  87.132+89.107j]
+    """
+    Arguments passed to this function are passed to 'random_floats'
+    The only difference between this function and randints is that this also generates a complex component
+    EXAMPLE:
+    >>> random_floats_complex(10)
+    ans = [0.611+0.569j 0.371+0.036j 0.469+0.336j 0.615+0.069j 0.329+0.16j  0.896+0.22j  0.22 +0.668j 0.901+0.741j 0.827+0.937j 0.619+0.513j]
+    >>> random_floats_complex(10,-1)
+    ans = [-0.504-0.998j -0.668-0.345j -0.104-0.952j -0.532-0.019j -0.949-0.488j -0.02 -0.82j  -0.805-0.194j -0.021-0.287j -0.708-0.231j -0.152-0.159j]
+    >>> random_floats_complex(10,-1,0)
+    ans = [-0.433-0.792j -0.71 -0.633j -0.395-0.383j -0.782-0.336j -0.176-0.176j -0.78 -0.16j  -0.505-0.978j -0.199-0.963j -0.98 -0.456j -0.231-0.775j]
+    >>> random_floats_complex(10,-1,1)
+    ans = [-0.139-0.101j  0.84 -0.259j  0.347+0.632j -0.362+0.036j  0.002-0.942j -0.685+0.176j  0.852-0.988j  0.188-0.134j  0.011-0.434j -0.578-0.883j]
+    >>> random_floats_complex(10,0,100)
+    ans = [40.909+10.029j 51.376+61.357j 15.713+25.714j 99.301+76.956j  5.253+21.822j  8.723+75.36j  15.964+85.891j 20.968+12.191j 37.997+92.09j  87.132+89.107j]
+    """
 
     return random_floats(*args,**kwargs)+random_floats(*args,**kwargs)*1j
 
@@ -3398,11 +3623,45 @@ def random_chance(probability: float = .5) -> bool:
     return random_float() < probability
 
 def random_batch(full_list,batch_size: int = None,*,retain_order: bool = False):
-    # Input conditions, assertions and rCode algebra:
-    # rCode: Let ⨀ ≣ random_batch ∴
-    #       ⨀ a None b ≣ ⨀ a len a b
-    #       list a ≣ ⨀ a None True
-    #       b ≣ len ⨀ a b
+    """
+    Given an input list, torch tensor, numpy array, dict, etc - get a random subset with a given batch_size.
+    If retain_order is True, will keep the original order. 
+    Will not choose the same index twice.
+    Batch size must be >=0 but <= the length of the input array
+    If a dict is given, a dict will be outputted.
+    If a numpy array is given, a numpy array will be outputted (it's fast).
+    Same for torch tensors.
+    If batch_size is not specified, it will use the full length of the input (basically acting like shuffle).
+
+    EXAMPLES:
+        >>> random_batch({1:2,3:4,5:6,7:8},2)                   --> {5: 6, 3: 4}
+        >>> random_batch({1:2,3:4,5:6,7:8},2)                   --> {3: 4, 7: 8}
+        >>> random_batch({1:2,3:4,5:6,7:8},2)                   --> {3: 4, 1: 2}
+        >>> random_batch({1:2,3:4,5:6,7:8},2)                   --> {5: 6, 7: 8}
+        >>> random_batch({1:2,3:4,5:6,7:8},3,retain_order=True) --> {3: 4, 5: 6, 7: 8}
+        >>> random_batch({1:2,3:4,5:6,7:8},3,retain_order=True) --> {1: 2, 5: 6, 7: 8}
+        >>> random_batch([1,2,3,4,5],3,retain_order=True)       --> [3, 4, 5]
+        >>> random_batch([1,2,3,4,5],3,retain_order=True)       --> [1, 2, 4]
+        >>> random_batch([1,2,3,4,5],3,retain_order=False)      --> [5, 2, 1]
+        >>> random_batch([1,2,3,4,5],3,retain_order=False)      --> [2, 4, 1]
+        >>> random_batch((1,2,3,4,5),3,retain_order=False)      --> [3, 2, 5]
+        >>> random_batch({1,2,3,4,5},3,retain_order=False)      --> [4, 3, 2]
+        >>> random_batch([1,2,3,4,5],retain_order=False)        --> [4, 2, 5, 3, 1]
+        >>> random_batch([1,2,3,4,5],retain_order=True)         --> [1, 2, 3, 4, 5]
+        >>> random_batch([1,2,3,4,5],retain_order=True)         --> [1, 2, 3, 4, 5]
+        >>> random_batch([1,2,3,4,5],0)                         --> []
+        >>> random_batch(np.arange(5),3)                        --> [2 3 4]
+        >>> random_batch(np.arange(5),3)                        --> [3 2 1]
+        >>> random_batch(torch.arange(5),3)                     --> tensor([2, 1, 3])
+        >>> random_batch(torch.arange(5),3)                     --> tensor([4, 3, 2])
+
+
+    Input conditions, assertions and rCode algebra:
+    rCode: Let ⨀ ≣ random_batch ∴
+          ⨀ a None b ≣ ⨀ a len a b
+          list a ≣ ⨀ a None True
+          b ≣ len ⨀ a b
+    """
 
     # Check if the input is a pandas DataFrame by class name and presence of .iloc
     if _is_pandas_dataframe(full_list) or _is_pandas_iloc_iterable(full_list):
@@ -3530,6 +3789,7 @@ def random_batch_with_replacement(full_list, batch_size: int = None, method: str
     return output
 
 def random_substring(string:str,length:int=None):
+    """ Gets a random substring with a given length """
     if length is None:
         #If length isn't given, choose a random length
         length=random_int(0,len(string))
@@ -3541,7 +3801,7 @@ def random_substring(string:str,length:int=None):
     return string[index:index+length]
 
 def shuffled(l):
-    # Shuffle a list
+    """ Randomly shuffle a copy of a list and return it """
     if isinstance(l,str):  # random_permutation("ABCDE") ⟶ 'EDBCA' special case: if its a string we want a string output, so we can jumble letters in words etc.
         return ''.join(shuffled(list(l)))
     return random_batch(l)  # Due to an r-code identity in random_batch
@@ -3713,7 +3973,7 @@ def run_as_new_process(func,*args,**kwargs):
 
 # endregion
 def is_valid_url(url:str)->bool:
-    #Return true iff the url string is syntactically valid
+    """ Return true iff the url string is syntactically valid """
     from urllib.parse import urlparse
     if not isinstance(url,str):
         return False
@@ -9777,6 +10037,10 @@ def text_file_to_string(file_path: str,use_cache=False) -> str:
 #Yes. This is a welcome alias.
 load_text_file = text_file_to_string
 
+def load_file_lines(file_path, use_cache=False):
+    """ Returns all the lines in a file """
+    return line_split(text_file_to_string(file_path, use_cache))
+
 def load_text_files(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False, lazy=False):
     """
     Plural of text_file_to_string
@@ -10256,6 +10520,7 @@ def parse_dyaml(code:str)->dict:
     return parse_dyaml(code)
 
 def load_dyaml_file(path:str)->dict:
+    """ Load a dyaml file (a yaml file with some additional syntax features I added). Stands for "Delta Yaml" """
     assert file_exists(path)
     code=text_file_to_string(path)
     return parse_dyaml(code)
@@ -10264,8 +10529,7 @@ def touch_file(path):
     """Equivalent to the 'touch' command - creates a file if it doesnt exist and if it does updates its date_modified"""
 
     parent = get_parent_folder(path)
-    if not folder_exists(parent):
-        make_folder(parent)
+    make_folder(parent)
 
     from pathlib import Path
     Path(path).touch()
@@ -10345,7 +10609,7 @@ def _initialize_static_matlab_session():
     matlab_start=_static_matlab_session.start
 # noinspection PyUnresolvedReferences
 def matlab(*code,**assignments):  # Please note: you can create simultaneous MATLAB sessions by using the matlab_session method!
-    # This method seriously bends over-back to make using matlab in python more convenient. You don't even have to create a new session when using this method, it takes care of that for you ya lazy bastard! (Talking about myself apparently...)
+    """ This method seriously bends over-back to make using matlab in python more convenient. You don't even have to create a new session when using this method, it takes care of that for you ya lazy bastard! (Talking about myself apparently...) """
     global _static_matlab_session,matlab_disable_stdout,matlab_enable_stdout,matlab_reboot,matlab_stop,matlab_start
     if _static_matlab_session is None:
         fansi_print("r.matlab: Initializing the static matlab session...",None,'bold')
@@ -10604,7 +10868,9 @@ def space_split(x: str) -> list:
     """ Please don't use this - it's old and made it before I knew python well. Just use x.split().  """
     return list(filter(lambda y:y != '',x.split(" ")))  # Splits things by spaces but doesn't allow empty parts
 def deepcopy_multiply(iterable,factor: int):
-    # Used for multiplying lists without copying their addresses
+    """
+    Used for multiplying lists without copying their addresses
+    """
     out=[]
     from copy import deepcopy
     for i in range(factor):
@@ -10739,7 +11005,7 @@ def blob_coords(image,small_end_radius=10,big_start_radius=50):
     # small_end_radius is the 'wholeness' that we look for. Without it we might-as-well pickthe global max pixel we start with, which is kinda junky.
     assert big_start_radius >= small_end_radius
     if len(image.shape) == 3:
-        image=tofloat(rgb_to_grayscale(image))
+        image=tofloat(_rgb_to_grayscale(image))
     def global_max(image):
         # Finds max-valued coordinates. Randomly chooses if multiple equal maximums. Assumes image is SINGLE CHANNEL!!
         assert isinstance(image,np.ndarray)
@@ -10781,8 +11047,10 @@ def blob_coords(image,small_end_radius=10,big_start_radius=50):
     return x,y
 
 def tofloat(ndarray):
-    # Things like np.int16 or np.int64 will all be scaled down by their max values; resulting in
-    # elements that in sound files would be floats ∈ [-1,1] and in images [0,255] ⟶ [0-1]
+    """
+    Things like np.int16 or np.int64 will all be scaled down by their max values; resulting in
+    elements that in sound files would be floats ∈ [-1,1] and in images [0,255] ⟶ [0-1]
+    """
     return np.ndarray.astype(ndarray,float) / np.iinfo(ndarray.dtype).max
 
 def get_plt():
@@ -10793,8 +11061,10 @@ def get_plt():
     return plt
 
 def display_dot(x,y=None,color='red',size=3,shape='o',block=False):
-    #Used to be called 'dot', in-case any of my old code breaks...
-    #EXAMPLE: for theta in np.linspace(0,tau): display_dot(np.sin(theta),np.cos(theta));sleep(.1)
+    """
+    Used to be called 'dot', in-case any of my old code breaks...
+    EXAMPLE: for theta in np.linspace(0,tau): display_dot(np.sin(theta),np.cos(theta));sleep(.1)
+    """
     if y is None:
         x,y=as_points_array([x])[0]
     plt=get_plt()
@@ -10802,27 +11072,32 @@ def display_dot(x,y=None,color='red',size=3,shape='o',block=False):
     display_update(block=block)
 
 def display_path(path,*,color=None,alpha=1,marker=None,linestyle=None,block=False,**kwargs):
-    #If color is None, will plot as a different color every time
+    """
+    Displays a 'path' aka a series of 2d vectors
+    If color is None, will plot as a different color every time
+    """
     x, y = as_points_array(path).T #Get the x, y values of the path as two lists
     import matplotlib.pyplot as plt
     plt.plot(x, y,color=color,alpha=alpha,marker=marker,linestyle=linestyle,**kwargs)
     update_display(block)
 
 def _translate_offline(text,to_language='ru'):
-    #This method was made private because right now it only supports russian and nearby countries lol...this function is currently too niche to be exposed as a general translation function...
-    # ka Georgian
-    # sr Serbian
-    # mn Mongolian
-    # el Greek
-    # bg Bulgarian
-    # mk Macedonian
-    # ru Russian
-    # hy Armenian
-    # l1 Latin1Supplement
-    # uk Ukrainia
-    #TODO: Refine this
-    #This runs much faster than google...but I can't vouch for its quality
-    #Correction: this runs INSANELY fast - translating every line in RP to russian in just .6 seconds!
+    """
+    This method was made private because right now it only supports russian and nearby countries lol...this function is currently too niche to be exposed as a general translation function...
+    ka Georgian
+    sr Serbian
+    mn Mongolian
+    el Greek
+    bg Bulgarian
+    mk Macedonian
+    ru Russian
+    hy Armenian
+    l1 Latin1Supplement
+    uk Ukrainia
+    TODO: Refine this
+    This runs much faster than google...but I can't vouch for its quality
+    Correction: this runs INSANELY fast - translating every line in RP to russian in just .6 seconds!
+    """
     pip_import('transliterate')
     from transliterate import translit, get_available_language_codes
 
@@ -11054,6 +11329,9 @@ def by_number(x):
 
 def sorted_by_number(x, *, reverse=False):
     return sorted(x, key=by_number, reverse=reverse)
+
+def sorted_by_len(x, *, reverse=False):
+    return sorted(x, key=len, reverse=reverse)
 
 # def sync_sorted(*lists_in_descending_sorting_priority,key=identity):
 #         # Sorts main_list and reorders all *lists_in_descending_sorting_priority the same way, in sync with main_list
@@ -11574,7 +11852,8 @@ def is_namespaceable(c: str) -> bool:  # If character can be used as the first o
 def is_literal(c: str) -> bool:  # If character can be used as the first of a python variable's name
     return c==":" or (is_namespaceable(c) or c.isalnum())and not c.lstrip().rstrip() in ['False','def','if','raise','None','del','import','return','True','elif','in','try','and','else','is','while','as','except','lambda','with','assert','finally','nonlocal','yield','break','for','not','class','from','or','continue','global','pass']
 
-def clip_string_width(x: str,max_width=None,max_wraps_per_line=1,clipped_suffix='…'):  # clip to terminal size. works with multi lines at once.
+def clip_string_width(x: str,max_width=None,max_wraps_per_line=1,clipped_suffix='…'):  
+    """ clip to terminal size. works with multi lines at once. """
     max_width=(max_width or get_terminal_width()) * max_wraps_per_line
     return '\n'.join((y[:max_width - len(clipped_suffix)] + clipped_suffix) if len(y) > max_width else y for y in x.split('\n'))
 
@@ -11795,7 +12074,8 @@ def print_highlighted_stack_trace(error:BaseException=None):
     # highlighted_error_string=highlight(error_string, Python3TracebackLexer(), TerminalTrueColorFormatter())
     print(highlighted_error_string)    
 
-def print_rich_stack_trace(error=None, extra_lines=5, show_locals=False):
+def print_rich_stack_trace(error=None, *, extra_lines=5, show_locals=False):
+    """ Use the 'rich' library to print a stack trace """
     if error is None: error=get_current_exception()
     assert isinstance(error, BaseException)
     pip_import("rich")
@@ -11836,8 +12116,10 @@ def _get_stack_trace_string(exc):
 #endregion
 
 def audio_stretch(mono_audio, new_number_of_samples):# Does not take into account the last bit of looping audio
-    # >>> audio_stretch([1,10],10)
-    # ans = [1,2,3,4,5,6,7,8,9,10]
+    """
+    >>> audio_stretch([1,10],10)
+    ans = [1,2,3,4,5,6,7,8,9,10]
+    """
     return [ linterp(mono_audio,x) for x in np.linspace(0,len(mono_audio)-1,new_number_of_samples)]
 
 def cartesian_to_polar(x, y, ϴ_unit=τ)->tuple:
@@ -16704,6 +16986,13 @@ def pseudo_terminal(
         D` CD ~
         CD` CD ~
 
+        +PA  str(ans)+$string_from_clipboard()
+        PPA  str(ans)+$string_from_clipboard()
+        +PAL str(ans)+'\\n'+$string_from_clipboard()
+        PPAL str(ans)+'\\n'+$string_from_clipboard()
+        PLA  str(ans)+'\\n'+$string_from_clipboard()
+        PAL  str(ans)+'\\n'+$string_from_clipboard()
+
         PF PROF
         PO PROF
         POD PROF DEEP
@@ -17030,7 +17319,7 @@ def pseudo_terminal(
         RCLAHF $os.system($printed("rclone copy --progress --transfers 128 --metadata %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself! The 'F' stands for fast, which is because this skips checksums - it wont overwrite any files ever!
         RCLAH $os.system($printed("rclone copy --checksum --progress --transfers 128 --metadata %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself!
 
-        WEV from rp.web_evaluator import Client, run_server
+        WEV import rp.web_evaluator as wev
 
         DR $r._display_columns(dir(),'dir():')
         DUSHA $fansi_print($human_readable_file_size(sum($get_file_size(x,False)for x in $enlist(ans))),'cyan','bold')
@@ -20402,6 +20691,31 @@ def print_lines(*args, flush=False):
         args=[args]
     print(line_join(map(str,args)),flush=flush)
 
+def fansi_print_lines(*args, text_color=None, background_color=None, style=None, reset=True):
+    """
+    Shorthand for print(line_join(args)) 
+
+    EXAMPLE:
+        >>> print_lines(1,2,3,4,5)
+        1
+        2
+        3
+        4
+        5
+    """
+    args=detuple(args)
+    if isinstance(args, str):
+        args=[args]
+    print(
+        fansi(
+            line_join(map(str, args)),
+            text_color=None,
+            background_color=None,
+            style=None,
+            reset=reset,
+        )
+    )
+
 def reduced_row_echelon_form(M):
     pip_import('sympy')
     import sympy
@@ -21139,7 +21453,9 @@ def cv_closest_contour_point(contour,x,y):
     return tuple(points[index])
 
 def cv_closest_contour(contours,x,y):
-    #Return the contour with a point closest to x,y
+    """
+    Return the contour with a point closest to x,y
+    """
     cv2=pip_import('cv2')
     assert len(contours)!=0,'cv_closest_contour: error: There are no contours to pick from because len(contours)==0'
     def distance(contour):
@@ -21147,7 +21463,9 @@ def cv_closest_contour(contours,x,y):
     return min(contours,key=distance)
 
 def cv_draw_contours(image,contours,color=(255,255,255),width=1,*,fill=False,antialias=True,copy=True):
-    #TODO: Important: This must somehow preserve whether the contour is closed or not??
+    """
+    TODO: Important: This must somehow preserve whether the contour is closed or not??
+    """
     cv2=pip_import('cv2')
     contours=list(map(as_cv_contour,contours))
     image,kwargs=_cv_helper(image=image,copy=copy,antialias=antialias)
@@ -23574,9 +23892,11 @@ def cv_text_to_image(text,
     return grid_concatenated_images([[x] for x in images], origin=origin)
 
 def _single_line_cv_text_to_image(text,*,scale,font,thickness,color,tight_fit,background_color):
-    #EXAMPLE:
-    #    display_image(cv_text_to_image('HELLO WORLD! '))
-    #This is a helper function for cv_text_to_image, which can handle multi-line text
+    """
+    EXAMPLE:
+       display_image(cv_text_to_image('HELLO WORLD! '))
+    This is a helper function for cv_text_to_image, which can handle multi-line text
+    """
     assert isinstance(text,str), type(text)
     assert isinstance(font,int), type(font)
     cv2=pip_import('cv2')
@@ -23603,8 +23923,10 @@ def _slow_pil_text_to_image(
     color=(255, 255, 255, 255), #Is a byte color
     background_color=(0, 0, 0, 0)  #Is a byte color
 ):
-    # Works well! But is SO FUCKING SLOW on its own...by putting characters together and concating them we can do better...
-    # CONTEXT: https://chatgpt.com/share/a7f61066-b6dd-41e4-a28f-b9ccc84aa632
+    """
+    Works well! But is SO FUCKING SLOW on its own...by putting characters together and concating them we can do better...
+    CONTEXT: https://chatgpt.com/share/a7f61066-b6dd-41e4-a28f-b9ccc84aa632
+    """
 
     pip_import("PIL")
     from PIL import Image, ImageDraw, ImageFont
@@ -23904,6 +24226,11 @@ def as_rgba_float_color(color,clamp=True):
     if clamp:
         color = tuple(max(0,min(1,x)) for x in color)
     return color
+
+def as_rgb_float_color(color, clamp=True):
+    """ The RGB counterpart to as_rgba_float_color. See rp.as_rgba_float_color for full documentation! """
+    return as_rgba_float_color(color, clamp=clamp)[:3]
+    
 
 def pil_text_to_image(
     text,
@@ -25662,9 +25989,11 @@ def _get_byte_to_binary_grayscale_image_floyd_steinburg_dithering_function():
     return dithering_gray
 
 def _binary_floyd_steinburg_dithering(image):
-    #Takes an image and returns a dithered binary image
-    #I chose not to expose this method right now outside of rp (aka the _ in _binary_flo...) because the name is ugly, but it will be going into as_binary_image.
-    #Warning: Using the PROF with numba results in a seg-fault!
+    """
+    Takes an image and returns a dithered binary image
+    I chose not to expose this method right now outside of rp (aka the _ in _binary_flo...) because the name is ugly, but it will be going into as_binary_image.
+    Warning: Using the PROF with numba results in a seg-fault!
+    """
     assert is_image(image)
 
     if is_binary_image(image):
@@ -25731,7 +26060,7 @@ def _grayscale_image_to_grayscale_image(image):return as_numpy_array(image).copy
 def _grayscale_image_to_rgb_image      (image):return grayscale_to_rgb(image)
 def _grayscale_image_to_rgba_image     (image):return _rgb_image_to_rgba_image(_grayscale_image_to_rgb_image(image))
 
-def _rgb_image_to_grayscale_image      (image):return rgb_to_grayscale(image)
+def _rgb_image_to_grayscale_image      (image):return _rgb_to_grayscale(image)
 def _rgb_image_to_rgb_image            (image):return as_numpy_array(image).copy()
 def _rgb_image_to_rgba_image           (image):
     # assert False,'_rgb_image_to_rgba_image: Please fix me Im broken?!'
@@ -25746,6 +26075,7 @@ def _rgba_image_to_rgb_image           (image):return as_numpy_array(image)[:,:,
 def _rgba_image_to_rgba_image          (image):return as_numpy_array(image).copy()
 
 def as_grayscale_image(image,*,copy=True):
+    """ Returns a 2-dimensional numpy array in HW form (height, width) """
     assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
     if is_grayscale_image(image):return _grayscale_image_to_grayscale_image(image) if copy else image
     if is_rgb_image      (image):return       _rgb_image_to_grayscale_image(image)
@@ -25753,6 +26083,7 @@ def as_grayscale_image(image,*,copy=True):
     assert False,'This line should be impossible to reach because is_image(image).'
 
 def as_rgb_image(image,*,copy=True):
+    """ Returns a 3-dimensional numpy array in HW3 form (height, width, channels) """
     assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
     if is_grayscale_image(image):return _grayscale_image_to_rgb_image(image)
     if is_rgb_image      (image):return       _rgb_image_to_rgb_image(image) if copy else image
@@ -25760,6 +26091,7 @@ def as_rgb_image(image,*,copy=True):
     assert False,'This line should be impossible to reach because is_image(image).'
 
 def as_rgba_image(image,*,copy=True):
+    """ Returns a 3-dimensional numpy array in HW4 form (height, width, channels) """
     assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
     if is_grayscale_image(image):return _grayscale_image_to_rgba_image(image)
     if is_rgb_image      (image):return       _rgb_image_to_rgba_image(image)
@@ -25768,27 +26100,35 @@ def as_rgba_image(image,*,copy=True):
 
 # Channel dtype conversions:
 def is_float_image(image):
-    #A float image is made with floating-point real values between 0 and 1
-    # https://stackoverflow.com/questions/37726830/how-to-determine-if-a-number-is-any-type-of-int-core-or-numpy-signed-or-not?noredirect=1&lq=1
+    """
+    A float image is made with floating-point real values between 0 and 1
+    https://stackoverflow.com/questions/37726830/how-to-determine-if-a-number-is-any-type-of-int-core-or-numpy-signed-or-not?noredirect=1&lq=1
+    """
     if is_torch_tensor(image): return False
     image=np.asarray(image)
     return np.issubdtype(image.dtype,np.floating)
 
 def is_byte_image(image):
-    #A byte image is made of unsigned bytes (aka np.uint8)
-    #Return true if the datatype is an integer between 0 and 255
+    """
+    A byte image is made of unsigned bytes (aka np.uint8)
+    Return true if the datatype is an integer between 0 and 255
+    """
     if is_torch_tensor(image): return False
     image=np.asarray(image)
     return image.dtype==np.uint8
 
 def is_binary_image(image):
-    #A binary image is made of boolean values (AKA true or false)
+    """
+    A binary image is made of boolean values (AKA true or false)
+    """
     if is_torch_tensor(image): return False
     image=np.asarray(image)
     return image.dtype==bool
 
 def _clamp_float_image(image):
-    #Take some floating image and make sure that it has no negative numbers or numbers >1
+    """
+    Take some floating image and make sure that it has no negative numbers or numbers >1
+    """
     assert is_float_image(image)
     image=np.minimum(image,1)
     image=np.maximum(image,0)
@@ -25806,6 +26146,7 @@ def _binary_image_to_binary_image(image):return image.copy()
 
 _channel_conversion_error_message='The given input image has an unrecognized dtype (there are no converters for it)'
 def as_float_image(image,*,copy=True):
+    """ Returns a numpy array with floating point values (usually between 0 and 1) """
     assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
     if is_float_image (image):return  _float_image_to_float_image(image) if copy else image
     if is_byte_image  (image):return   _byte_image_to_float_image(image)
@@ -25813,6 +26154,7 @@ def as_float_image(image,*,copy=True):
     assert False,_channel_conversion_error_message
 
 def as_byte_image(image,*,copy=True):
+    """ Returns a numpy array with dtype np.uint8 """
     assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
     if is_float_image (image):return  _float_image_to_byte_image(image)
     if is_byte_image  (image):return   _byte_image_to_byte_image(image) if copy else image
@@ -25820,7 +26162,10 @@ def as_byte_image(image,*,copy=True):
     assert False,_channel_conversion_error_message
 
 def as_binary_image(image,dither=False,*,copy=True):
-    # EXAMPLE of 'dither': while True: display_image(as_binary_image(load_image_from_webcam(),dither=True))
+    """
+    Returns a nummpy array with dtype bool
+    EXAMPLE of 'dither': while True: display_image(as_binary_image(load_image_from_webcam(),dither=True))
+    """
     assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
 
     if dither:
@@ -26800,11 +27145,13 @@ def rinsp_search(root,query,depth=10):
 #     return out
 
 def as_numpy_array(x):
-    #Will convert x into type np.ndarray
-    #This should convert anything that can be converted into a numpy array
-    #Should work for torch tensors, python lists of numbers, etc.
-    #In particular, this works even if a torch tensor is on a GPU
-    #Will necessarily make a copy of x so you dont have to worry about mutations etc
+    """
+    Will convert x into type np.ndarray
+    This should convert anything that can be converted into a numpy array
+    Should work for torch tensors, python lists of numbers, etc.
+    In particular, this works even if a torch tensor is on a GPU
+    Will necessarily make a copy of x so you dont have to worry about mutations etc
+    """
     try:return np.asarray(x)#For numpy arrays and python lists (and anything else that work with np.asarray)
     except Exception:pass
     try:return x.detach().cpu().numpy()#For pytorch. We're not doing an isinstance check of type pytorch tensor becuse that involves importing pytorch, which might be slow. Try catch is faster here.
@@ -27243,7 +27590,7 @@ def get_video_file_duration(path,use_cache=True):
 
 _get_video_file_framerate_cache={}
 def get_video_file_framerate(path, use_cache=True):
-
+    """ Given a (str) path to a video file, returns a number (framerate) """
     path = get_absolute_path(path) #Important for caching
     if use_cache and path in _get_video_file_framerate_cache:
         return _get_video_file_framerate_cache[path]
@@ -27478,7 +27825,9 @@ def load_videos(
     return gather_args_call(load_files, load, paths)
 
 def save_video_avi(frames,path:str=None,framerate:int=30):
-    #Saves the frames of the video to an .avi file
+    """
+    Saves the frames of the video to an .avi file
+    """
 
     pip_import('cv2')
     import cv2
@@ -27832,6 +28181,44 @@ def convert_to_gif_via_ffmpeg(
 
     return output_path
 
+def convert_to_gifs_via_ffmpeg(
+    video_paths,
+    output_paths=None,
+    *,
+    framerates=None,
+    custom_palette=True,
+    
+    show_progress=True,
+    num_threads=None
+):
+    """ Plural of convert_to_gif_via_ffmpeg. Arguments are broadcastable. """
+    def run(bundle):
+        return convert_to_gif_via_ffmpeg(
+            video_path=bundle.video_paths,
+            output_path=bundle.output_paths,
+            framerate=bundle.framerates,
+            custom_palette=custom_palette,
+            show_progress=False,
+        )
+    
+    bundles = broadcast_kwargs(
+        gather_vars(
+            "video_paths",
+            "output_paths",
+            "framerates",
+            "custom_palette",
+        )
+    )
+
+    if show_progress is True:
+        show_progress='eta:rp.convert_to_gif_via_ffmpeg'
+
+    return load_files(
+        run,
+        bundles,
+        show_progress=show_progress,
+        num_threads=num_threads,
+    )
 
 def save_video(images, path, *, framerate=60):
     """
@@ -29529,9 +29916,12 @@ def pad_string_to_dims(string,*,height,width,fill=' '):
     return bordered_string(string,fill=fill,left=left,right=right,top=top,bottom=bottom)
 
 def prime_number_generator():
-    #Returns a generator that returns the sequence of primes
-    #If you have numba, it will run very very very fast
-    #TODO: Add caching and optional starting points. Add an is_prime function
+    """
+    Returns a generator that returns the sequence of primes
+    If you have numba, it will run very very very fast
+
+    TODO: Add caching and optional starting points. Add an is_prime function
+    """
     p=[]
     try:
         #The fast, numba-accelerated version
@@ -29561,8 +29951,12 @@ def prime_number_generator():
     return primes()
 
 def edit_distance(string_from, string_to):
-    #There are faster implementations. I just took this from stackoverflow. This might be improved (use libraries that implement this in c) in the future if I feel the need for better performance
-    #CODE FROM:  https://stackoverflow.com/questions/2460177/edit-distance-in-python
+    """
+    Returns the levenshtein_distance between two strings
+
+    There are faster implementations. I just took this from stackoverflow. This might be improved (use libraries that implement this in c) in the future if I feel the need for better performance
+    CODE FROM:  https://stackoverflow.com/questions/2460177/edit-distance-in-python
+    """
     s1,s2=string_from,string_to
     m=len(s1)+1
     n=len(s2)+1
@@ -29577,10 +29971,12 @@ def edit_distance(string_from, string_to):
 levenshtein_distance=edit_distance#Synonyms, for now...
 
 def edit_image_in_terminal(image):
-    #Silly function that launches mspaint on an image in the terminal
-    #Not very practical but fun
-    #This function isn't written well at the moment - if the saved image > 500kb it breaks becuase of a built-in parameter in textual_paint
-    #You can change that variable in their source code
+    """
+    Silly (but really fun) function that launches mspaint on an image in the terminal
+    Not very practical but fun
+    This function isn't written well at the moment - if the saved image > 500kb it breaks becuase of a built-in parameter in textual_paint
+    You can change that variable in their source code
+    """
     pip_import('textual_paint','textual-paint')
     assert currently_in_a_tty()
     assert isinstance(image,str) or is_image(image)
@@ -29602,12 +29998,14 @@ def edit_image_in_terminal(image):
     
     
 class Timeout:  
-    #TODO: Make this work on windows (I won't think it will work on anything but UNIX because of the signal handling)
-    # https://stackoverflow.com/questions/2281850/timeout-function-if-it-takes-too-long-to-finish
-    # Use this function to prevent a block of code from taking too long to run, else throw a TimeoutError
-    #EXAMPLE:
-    #   with timeout(seconds=3):
-    #       time.sleep(4)
+    """
+    TODO: Make this work on windows (I won't think it will work on anything but UNIX because of the signal handling)
+    https://stackoverflow.com/questions/2281850/timeout-function-if-it-takes-too-long-to-finish
+    Use this function to prevent a block of code from taking too long to run, else throw a TimeoutError
+    EXAMPLE:
+      with timeout(seconds=3):
+          time.sleep(4)
+    """
     def __init__(self, seconds=1, error_message='Timeout'):
         self.seconds = seconds
         self.error_message = error_message
@@ -29624,10 +30022,12 @@ class Timeout:
 class TimeoutError(Exception):
     pass
 def timeout(*timeout_args,**timeout_kwargs):
-    #A timeout decorator that uses the Timeout class
-    #To see documentation for this function's arguments, see the Timeout class's documentation
+    """
+    A timeout decorator that uses the Timeout class
+    To see documentation for this function's arguments, see the Timeout class's documentation
 
-    #region Argument Validation
+    """
+    # region Argument Validation
     assert not (len(timeout_args)==1 and callable(timeout_args[0])),'\'timeout\' is a decorator function. To use it as a decorator you must first pass it arguments.\nExample:\n\tGood:\n\t\t@timeout(1)\n\t\tdef f():pass\n\tBad:\n\t\t@timeout\n\t\tdef f():pass'
     try:
         with Timeout(*timeout_args,**timeout_kwargs):
@@ -34173,9 +34573,66 @@ def with_image_brightness(image, brightness):
     return rgb
 
 
+def hsv_to_rgb_float_color(*hsv):
+    """
+    Converts a floating point HSV color to an RGB one
+    hsv_to_rgb_float_color(h,s,v) ==== hsv_to_rgb_float_color((h,s,v))
+    """
+    import colorsys
+
+    hsv = detuple(hsv)
+    return colorsys.hsv_to_rgb(*hsv)
+
+
+def float_color_to_ansi256(*color):
+    """
+    Convert RGB values (0.0 to 1.0) to the nearest ANSI 256-color code
+    Returns an integer
+
+    float_color_to_ansi256(r,g,b) ==== hsv_to_rgb_float_color((r,g,b))
+
+    EXAMPLE:
+        >>> for grid_row in np.arange(8):
+        ...     for grid_col in np.arange(8):
+        ...         brightness = grid_row / 7
+        ...         saturation = grid_col / 7
+        ...         for color_row in np.arange(8):
+        ...             for color_col in np.arange(8):
+        ...                 hue = (color_row * 8 + color_col) / 63
+        ...                 r, g, b = hsv_to_rgb_float_color(hue, saturation, brightness)
+        ...                 ansi_code = float_color_to_ansi256((r, g, b))
+        ...                 print(f"\033[48;5;{ansi_code}m  \033[0m", end="")
+        ...             print(end="  ")
+        ...         print()
+        ...     print()
+
+    """
+    color = detuple(color)
+    color = as_rgb_float_color(color)
+    r, g, b = color
+
+    if r == g == b:
+        if r < 0.02:
+            return 16  # Black
+        if r > 0.98:
+            return 231  # White
+        gray_level = int(r * 24)
+        return 232 + gray_level  # Grayscale between black and white
+    else:
+        # Color cube approximation
+        r = int(r * 5)
+        g = int(g * 5)
+        b = int(b * 5)
+        return 16 + 36 * r + 6 * g + b
+
+
+
 def get_rgb_byte_color_identity_mapping_image():
-    #Save this image, and color-grade it. Then the new image can be used as a map!
-    #TODO: When rgb_mapping_cube_to_image is fast, this can be simplified to rgb_mapping_cube_to_image(get_rgb_byte_color_identity_mapping_cube())
+    """
+    Save this image, and color-grade it. Then the new image can be used as a map!
+    Originally made for color grading via superkelight at the Adobe 2023 internship MAGICK project.
+    """
+    # TODO: When rgb_mapping_cube_to_image is fast, this can be simplified to rgb_mapping_cube_to_image(get_rgb_byte_color_identity_mapping_cube())
 
     # Creating a meshgrid for x and y coordinates
     x, y = np.meshgrid(np.arange(4096), np.arange(4096))
@@ -34372,10 +34829,12 @@ def _call_from_base64_string(base64_string):
 
 
 def _launch_ranger():
-    #Ranger is a curses-based file manager with Vim keybindings
-    #It's really useful for quickly/visually browsing through files and directories!
-    #Whatsmore, is that we can launch it in this process - which is what we'll do.
-    #Currently this method is private, as I can't think of a reason to use it outside of pseudo_terminal and I don't want to clutter rp's namespace more
+    """
+    Ranger is a curses-based file manager with Vim keybindings
+    It's really useful for quickly/visually browsing through files and directories!
+    Whatsmore, is that we can launch it in this process - which is what we'll do.
+    Currently this method is private, as I can't think of a reason to use it outside of pseudo_terminal and I don't want to clutter rp's namespace more
+    """
 
     old_dir=get_current_directory()
 
@@ -34668,8 +35127,10 @@ def _write_to_pterm_hist(entry):
     _pterm_hist_file.write('\n'+entry)
     
 def _prepare_cv_image(image):
-    #OpenCV is a bit finicky sometimes
-    #Apart from just as_float_image, there are some other requirements
+    """
+    OpenCV is a bit finicky sometimes
+    Apart from just as_float_image, there are some other requirements
+    """
     assert is_image(image)
 
     if is_pil_image(image):
@@ -39104,6 +39565,7 @@ def as_torch_images(images):
         raise TypeError('Unsupported image datatype: %s'%type(images))
 
 def as_torch_image(image):
+    """ Converts an image to a floating point torch tensor in CHW form """
     if is_torch_tensor(image):
         return image.clone()
     elif is_pil_image(image):
@@ -39114,8 +39576,10 @@ def as_torch_image(image):
         assert False,'Unsupported image type: '+str(type(image))
 
 class ImageDataset:
-    #This class is meant to be used with Pytorch dataloaders
+    """
+    This class is meant to be used with Pytorch dataloaders
     #TODO: Possibly migrate this to a new torch submodule of rp to avoid cluttering this namespace
+    """
 
     def __init__(self,
                  files:str,
@@ -39528,7 +39992,7 @@ class IteratorWithLen:
     
 @memoized
 def get_all_ttf_fonts():
-    #Returns a list of paths to all .ttf fonts on this computer
+    """ Returns a list of paths to all .ttf fonts on this computer """
     if currently_running_mac():
         #https://apple.stackexchange.com/questions/35852/list-of-activated-fonts-with-shell-command-in-os-x
         out=[]
@@ -39553,6 +40017,7 @@ def get_all_ttf_fonts():
         assert False,'Unsupported operating system: not mac, windows or linux'
 
 class DictReader:
+    """ Like a read-only EasyDict - with a super simple implementation """
     #Note: This class is similar in functionality to the python libraries "easydict" and "addict". You can find them on pypi.
     #This class, however, is read-only right now.
 
@@ -39898,6 +40363,136 @@ def list_dict_transpose(data):
         
 dict_list_transpose = list_dict_transpose #Same thing
 
+def broadcast_lists(*lists, strict=True):
+    """
+    Broadcasts multiple lists to the same length, and turns non-lists into lists
+
+    Args:
+        *lists: The sequence of values to broadcast. Each argument can be a list or a non-list value.
+        strict (bool): If True, enforce that all non-scalar lists must have the same length or throw an error.
+
+    Returns:
+        list: A list of lists, where each list has been broadcasted to the same length.
+
+    Raises:
+        ValueError: If strict is True and non-scalar lists have different lengths.
+    
+    EXAMPLE:
+        >>> broadcast_lists(5,6)                 --> [[5], [6]]
+        >>> broadcast_lists([1],5)               --> [[1], [5]]
+        >>> broadcast_lists([1,2,3],[5])         --> [[1, 2, 3], [5, 5, 5]]
+        >>> broadcast_lists([1,2,3], 5 )         --> [[1, 2, 3], [5, 5, 5]]
+        >>> broadcast_lists([1,2,3],[4,5,6],'X') --> [[1, 2, 3], [4, 5, 6], ['X', 'X', 'X']]
+        >>> broadcast_lists([1,2,3],[])
+        ERROR: ValueError: Error: All lists must have the same length or be scalars. Lengths provided: [3, 0]
+        >>> broadcast_lists([1,2,3],[1,2])
+        ERROR: ValueError: Error: All lists must have the same length or be scalars. Lengths provided: [3, 2]
+
+    """
+    lists=detuple(lists)    
+
+    if not is_iterable(lists):
+        #If you try calling broadcast_lists(123)
+        raise ValueError("r.broadcast_lists: Right now if you only provide one argument, it must be iterable. It was not. It was type "+str(type(lists)))
+
+    processed_lists = []
+    for i, e in enumerate(lists):
+        if not isinstance(e, list):
+            processed_lists.append([e])
+        else:
+            processed_lists.append(e)
+
+    lengths = [len(l) for l in processed_lists]
+    broadcast_length = max(lengths)
+
+    if strict:
+        unique_lengths = set(lengths)
+        # Allow lengths of one (scalar values) or one common length
+        valid_lengths = {1, broadcast_length} if broadcast_length != 1 else {1}
+        if not unique_lengths.issubset(valid_lengths):
+            error_msg = "Error: All lists must have the same length or be scalars. Lengths provided: " + str(lengths)
+            raise ValueError(error_msg)
+
+    output = []
+    for l in processed_lists:
+        if len(l) == 1:
+            broadcasted_list = l * broadcast_length
+        else:
+            broadcasted_list = l
+        output.append(broadcasted_list)
+
+    return output
+
+def broadcast_kwargs(kwargs):
+    """
+    Broadcasts a dict of lists to the same length, and turns non-lists into lists.
+    Closely related to rp.broadcast_lists
+
+    Args:
+        kwargs: The keyword arguments to broadcast. Each value can be a list or a non-list value.
+
+    Returns:
+        dict: A list of EasyDict each with the broadcasted kwargs
+
+    EXAMPLE:
+        >>> broadcast_kwargs(dict(a=5    ,b=6        )) --> [{'b':  6 , 'a': 5}]
+        >>> broadcast_kwargs(dict(a= 1   ,b=['x','y'])) --> [{'b': 'x', 'a': 1}, {'b': 'y', 'a': 1}]
+        >>> broadcast_kwargs(dict(a=[1,2],b=['x','y'])) --> [{'b': 'x', 'a': 1}, {'b': 'y', 'a': 2}]
+        >>> broadcast_kwargs(dict(a=5    ,b=[1,2,3]  )) --> [{'b':  1 , 'a': 5}, {'b':  2 , 'a': 5}, {'b': 3, 'a': 5}]
+    
+    EXAMPLE:
+        >>> def print_things(text, periods):
+        ...     for kwargs in broadcast_kwargs(gather_vars("text periods")):
+        ...         print(kwargs.text, "." * kwargs.periods)
+        >>> print_things('Hello',3)
+        Hello ...
+        >>> print_things('Hello',[1,2,3])
+        Hello .
+        Hello ..
+        Hello ...
+        >>> print_things(['Hello','World'],[1,2])
+        Hello .
+        World ..
+        >>> print_things(['Hello','World'],3)
+        Hello ...
+        World ...
+        >>> print_things(list('Hello'),6)
+        H ......
+        e ......
+        l ......
+        l ......
+        o ......
+        >>> print_things('World',list(range(5)))
+        World
+        World .
+        World ..
+        World ...
+        World ....
+        >>> print_things(list('World'),list(range(5)))
+        W
+        o .
+        r ..
+        l ...
+        d ....
+
+    """
+    keys = list(kwargs.keys())
+    values = list(kwargs.values())
+    
+    broadcasted_lists = broadcast_lists(*values)
+    
+    output = {key: value for key, value in zip(keys, broadcasted_lists)}
+    output = as_easydict(output)
+    
+    # >>> list_dict_transpose({'a': [1, 2, 3], 'b': [4, 5, 6], 'c': ['X', 'X', 'X']}) -->
+    # ...     [
+    # ...         {"c": "X", "b": 4, "a": 1},
+    # ...         {"c": "X", "b": 5, "a": 2},
+    # ...         {"c": "X", "b": 6, "a": 3},
+    # ...     ]
+    output = list_dict_transpose(output)
+        
+    return output
 
 def dict_walk(d):
     """
@@ -40205,6 +40800,7 @@ get_num_gpus = get_gpu_count
 
 
 def get_all_gpu_ids():
+    """ If you are on a device with GPU's, returns [0, 1, 2, ... (num gpus - 1) ] """
     return list(range(get_gpu_count()))
 
 
