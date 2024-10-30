@@ -821,13 +821,13 @@ def without_fansi():
     finally:
         _disable_fansi=old_disable_fansi
 
-
-def fansi(text_string="", text_color=None, style=None, background_color=None, *, per_line=True, reset=True):
+def fansi(text_string="", text_color=None, style=None, background_color=None, *, per_line=True, reset=True, truecolor=False):
     """
     'fansi' is a pun, referring to ANSI and fancy
     Uses ANSI formatting to give the terminal styled color outputs.
 
     The 'per_line' option applies fansi to each line separately, which is useful for multi-line strings. It is enabled by default.
+    The 'truecolor' option enables 24-bit truecolor support if the terminal supports it. It is disabled by default.
 
     STYLES:
                                                                Alacritty   Terminal.app   Wezterm 
@@ -854,9 +854,11 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
             - 'cyan': ANSI color 6 
             - 'gray'/'grey': ANSI color 7
             - 'white': ANSI color 8
-        If text_color or background_color is given as an integer, it will be interpreted as a 256-color code.
-        Any color compatible with rp.as_rgba_float_color will work too, and will be mapped to the nearest 256-color code.
-        See the below example!
+        Any other colors will be displayed in either 256-color form, or 24-bit color form if truecolor==True
+            If text_color or background_color is given as an integer, it will be interpreted as a 256-color code.
+            Any color compatible with rp.as_rgba_float_color will work too, and will be mapped to the nearest 256-color code.
+            If truecolor=True, assumes terminal has 24-bit color support. Otherwise, 256 color support will be assumed.
+            See the below example!
 
     EXAMPLES:
 
@@ -873,6 +875,18 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
         ...     + "After reset..."
         ...     + fansi("All at once!", 'hot pink', 'underlined blinking italic strike bold super')
         ... )
+
+        >>> #Display an image (display_image_in_terminal_color is faster - but this is to show how fansi works)
+        ... for truecolor in [True,False]:
+        ...     image=load_image('https://images.unsplash.com/photo-1507146426996-ef05306b995a?fm=jpg&q=60&w=3000&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8cHVwcHl8ZW58MHx8MHx8fDA%3D')
+        ...     image=resize_image_to_fit(image,100,100)
+        ...     string=""
+        ...     for row in image:
+        ...         for pixel in row:
+        ...             string+=fansi('██',text_color=tuple(pixel/255),truecolor=truecolor)
+        ...         string+='\n'
+        ...     print('truecolor = ',truecolor)
+        ...     print(string)
 
         >>> #Adding styles together in a single call 
         ... for style_a, style_b in all_combinations("normal bold italic underlined invert strike".split(), 2):
@@ -909,9 +923,9 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
         ... for color in [12, 34, 56, 78, 90]:
         ...     print(fansi("\t█████ " + str(color) + " ", color))
         ... 
-        ... print("\tRGB float tuples")
+        ... print("\tRGB float tuples (truecolor=True)")
         ... for color in [random_rgb_float_color() for _ in range(10)]:
-        ...     print(fansi("\t█████ " + str(color) + " ", color))
+        ...     print(fansi("\t█████ " + str(color) + " ", color, truecolor=True))
         ...
         ... fansi_print("Background Colors:", style="underlined")
         ... for color in ["green cyan", "blue cyan", "navy blue", "hot pink"]:
@@ -924,7 +938,7 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
     # Handle per_line option
     if per_line and text_string:
         lines = text_string.splitlines(keepends=True)
-        lines = [fansi(line, text_color, style, background_color, per_line=False, reset=reset) for line in lines]
+        lines = [fansi(line, text_color, style, background_color, per_line=False, reset=reset, truecolor=truecolor) for line in lines]
         return ''.join(lines)
 
     # Check if ANSI formatting is disabled
@@ -978,25 +992,35 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
 
     # Handle text_color
     if text_color is not None:
-        if text_color in color_codes:
+        if isinstance(text_color,str) and text_color in color_codes:
             color_code = color_codes[text_color] + 30
             format_codes.append(str(color_code))
         else:
             try:
-                color_code = text_color if isinstance(text_color, int) else float_color_to_ansi256(text_color)
-                format_codes.append('38;5;'+str(color_code))
+                text_color=as_rgb_float_color(text_color)
+                if truecolor and not isinstance(text_color,int):
+                    r, g, b = float_color_to_byte_color(text_color)
+                    format_codes.append('38;2;%i;%i;%i'%(r,g,b))
+                else:
+                    color_code = text_color if isinstance(text_color, int) else float_color_to_ansi256(text_color)
+                    format_codes.append('38;5;'+str(color_code))
             except Exception:    
                 print("ERROR: fansi: Invalid text_color '%s'. Valid options are: %s, or any RGB float color compatible with rp.as_rgb_float_color" % (text_color, list(color_codes.keys())))
 
     # Handle background_color
     if background_color is not None:
-        if background_color in color_codes:
+        if isinstance(background_color,str) and background_color in color_codes:
             bg_color_code = color_codes[background_color] + 40
             format_codes.append(str(bg_color_code))
         else:
             try:
-                bg_color_code = background_color if isinstance(background_color, int) else float_color_to_ansi256(background_color)
-                format_codes.append('48;5;'+str(bg_color_code))
+                background_color=as_rgb_float_color(background_color)
+                if truecolor and not isinstance(background_color,int):
+                    r, g, b = float_color_to_byte_color(background_color)
+                    format_codes.append('48;2;%i;%i;%i'%(r,g,b))
+                else:
+                    color_code = background_color if isinstance(background_color, int) else float_color_to_ansi256(background_color)
+                    format_codes.append('48;5;'+str(color_code))
             except Exception:
                 print("ERROR: fansi: Invalid background_color '%s'. Valid options are: %s, or any RGB float color compatible with rp.as_rgb_float_color" % (background_color, list(color_codes.keys())))
 
@@ -1006,6 +1030,8 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
     if reset:
         output += '\x1b[0m'
     return output
+
+
 
 
 def _legacy_fansi(text_string,text_color=None,style=None,background_color=None,*,per_line=True):
@@ -29786,8 +29812,12 @@ try:
     _strip_ansi_escapes=re.compile(r'(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]')
 except Exception:pass
 def strip_ansi_escapes(string):
-    #Undoes anything fansi might do to a string
-    #Code from https://www.tutorialspoint.com/How-can-I-remove-the-ANSI-escape-sequences-from-a-string-in-python#targetText=You%20can%20use%20regexes%20to,%5B%40-~%5D'.
+    """
+    Undoes anything fansi might do to a string
+    Code from https://www.tutorialspoint.com/How-can-I-remove-the-ANSI-escape-sequences-from-a-string-in-python#targetText=You%20can%20use%20regexes%20to,%5B%40-~%5D'.
+    EXAMPLE:
+        assert strip_ansi_escapes(fansi("A",'red'))=='A'
+    """
     try:
         return _strip_ansi_escapes.sub('',string)
     except NameError:
@@ -31917,6 +31947,7 @@ def path_intersections(path_a,path_b):
     return np.unique(output)
 
 def path_intersects_point(path,point)->bool:
+    """ Return true if a 2d point "point" lies along a path of 2d points "path" """
     return paths_intersect([point],path)
 
 def longest_common_prefix(a,b):
@@ -37103,13 +37134,16 @@ extract_rgb_channels=extract_image_channels
 extract_rgba_channels=extract_image_channels
 
 def extract_alpha_channel(image):
+    """ Gets teh alpha channel of a given image, returned as grayscale image (i.e. numpy matrix) """
     image=as_rgba_image(image)
     return image[:,:,3]
 
 get_alpha_channel=get_image_alpha=extract_alpha_channel #Uncomment this if you think it would make the code nicer!
 
 def apply_image_function_per_channel(image,function):
-    #Apply a grayscale funcion on every image channel individually
+    """
+    Apply a grayscale funcion on every image channel individually
+    """
     assert is_image(image)
     if is_grayscale_image(image):
         return function(image)
@@ -37147,6 +37181,7 @@ def with_alpha_channel(image, alpha, copy=True):
 with_image_alpha=with_alpha_channel #You can uncomment this if you ever think it will enhance readability along with the functions with_image_green and with_image_hue etc
 
 def with_image_rgb(image, rgb, copy=True):
+    """ Counterpart to with_alpha_channel - sets the RGB channels of a potentially RGBA image and returns the modified image """
     return with_image_alpha(rgb, get_image_alpha(image), copy=copy)
 
 pterm=pseudo_terminal#Just a shortcut. Not to be used in code; just Colab etc where I don't want to type pseudo_terminal. What?? Don't look at me like that - I'm lazy lol
@@ -39475,6 +39510,7 @@ def autoformat_json(data, indent=4):
 
 
 def as_numpy_images(images,copy=True):
+    """ Will convert an array of images to BHWC np.ndarray form if it isn't already - supports BCHW torch tensors, PIL images, list of numpy images, etc """
     if _is_numpy_array(images):
         if copy:
             return images.copy()
@@ -39496,6 +39532,7 @@ def as_numpy_images(images,copy=True):
             raise TypeError('Unsupported image datatype: %s of %s'%(type(images),repr(set(map(type,images)))))
 
 def as_pil_image(image):
+    """ Will convert an a PIL images if it isn't already - supports BCHW torch tensors, numpy images, etc """
     assert is_image(image), 'as_pil_image: Input is not an image as defined by rp.is_image'
 
     if is_pil_image(image):
@@ -39523,7 +39560,12 @@ def as_pil_image(image):
 
     return fromarray(image)
 
+def as_pil_images(images):
+    """ Will convert an array of images to PIL images if it isn't already - supports BCHW torch tensors, PIL images, list of numpy images, etc """
+    return [as_pil_image(x) for x in images]
+
 def as_numpy_image(image,*,copy=True):
+    """ Will convert an image to HWC np.ndarray form if it isn't already - supports CHW torch tensors, PIL images etc """
     if isinstance(image,np.ndarray):
         if copy:
             return image.copy()
@@ -39539,6 +39581,7 @@ def as_numpy_image(image,*,copy=True):
         assert False,'Unsupported image type: '+str(type(image))
     
 def as_torch_images(images):
+    """ Plural of rp.as_torch_image """
     if _is_numpy_array(images) or all(is_image(x) for x in images):
 
         #Convert to floating point, because that will happen anyway...
