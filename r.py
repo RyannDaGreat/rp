@@ -28,6 +28,7 @@ import warnings
 import pickle
 import tempfile
 import contextlib
+import math
 import random
 import re
 from itertools import product as cartesian_product, combinations as all_combinations
@@ -45,7 +46,20 @@ def entuple(x):
         return x
     return x,
 def detuple(x):
-    # For pesky petty things. Code is simpler than explanation here.
+    """ 
+    For pesky petty things. Code is simpler than explanation here. 
+    Primarily used for allowing functions to take either one iterable argument OR a vararg list of items
+    Used commonly throughout RP's library functions to make them more convenient to use.
+
+    EXAMPLE:
+
+        >>> def print_sum(*x):
+        ...     x = detuple(x)
+        ...     print(sum(x))
+        ... print_sum(1,2,3,4,5)   #Prints 15
+        ... print_sum([1,2,3,4,5]) #Prints 15
+
+    """
     try:
         if len(x) == 1:
             return x[0]
@@ -55,13 +69,13 @@ def detuple(x):
 # endregion
 # region ［enlist， delist］
 def enlist(x):
-    # For pesky petty things.
+    """ For pesky petty things. Code is simpler than explanation here. """
     if isinstance(x,list):
         return x
     return [x]
 
 def delist(x):
-    # For pesky petty things. Code is simpler than explanation here.
+    """ For pesky petty things. Code is simpler than explanation here. """
     try:
         if len(x) == 1:
             return x[0]
@@ -279,6 +293,9 @@ def identity(*args):
       identity(2) == 2
       identity('Hello World!') == 'Hello World!'
       identity(1,2,3) == (1,2,3)  #When given multiple args, returns a tuple
+
+    Better than "lambda x:x" because it shows up in stack traces as "identity" instead of an anonymous lambda function.
+    Makes your life easier by making debugging easier. Used throughout RP's library functions.
     """
     return detuple(args)
 # endregion
@@ -396,21 +413,25 @@ def ptoctic(label='') -> None:
     print(label,end='')
     ptoc()
     tic()
-# ⁠⁠⁠⁠                                        ⎧                                      ⎫
-# ⁠⁠⁠⁠                                        ⎪     ⎧                               ⎫⎪
-# ⁠⁠⁠⁠                                        ⎪     ⎪⎧                         ⎫    ⎪⎪
+#                                         ⎧                                      ⎫
+#                                         ⎪     ⎧                               ⎫⎪
+#                                         ⎪     ⎪⎧                         ⎫    ⎪⎪
 _milli_micro_nano_converter=lambda s,n:int(round((s() if callable(s) else s) * n))
-# ⁠⁠⁠⁠                                        ⎪     ⎪⎩                         ⎭    ⎪⎪
-# ⁠⁠⁠⁠                                        ⎪     ⎩                               ⎭⎪
-# ⁠⁠⁠⁠                                        ⎩                                      ⎭
+#                                         ⎪     ⎪⎩                         ⎭    ⎪⎪
+#                                         ⎪     ⎩                               ⎭⎪
+#                                         ⎩                                      ⎭
 # You can do millis(tic()) ⟵ Will probably be about 0， millis(toc)， millis(1315)， millis() ⟵ Gets global time by default
 def seconds(seconds=gtoc) -> int:
+    """ Return seconds since common epoch (rounded to the nearest integer) """
     return _milli_micro_nano_converter(seconds,10 ** 0)
 def millis(seconds=gtoc) -> int:
+    """ Return milliseconds since common epoch (rounded to the nearest integer) """
     return _milli_micro_nano_converter(seconds,10 ** 3)
 def micros(seconds=gtoc) -> int:
+    """ Return microseconds since common epoch (rounded to the nearest integer) """
     return _milli_micro_nano_converter(seconds,10 ** 6)
 def nanos(seconds=gtoc) -> int:
+    """ Return nanoseconds since common epoch (rounded to the nearest integer) """
     return _milli_micro_nano_converter(seconds,10 ** 9)
 
 # endregion
@@ -1106,7 +1127,7 @@ def _legacy_fansi(text_string,text_color=None,style=None,background_color=None,*
 # from random import randint
 # print(seq([lambda old:old+fansi(chr(randint(0,30000)),randint(0,7),randint(0,7),randint(0,7))]*100,''))
 # endregion
-def fansi_print(text_string: object,text_color: object = None,style: object = None,background_color: object = None,new_line=True,reset=True) -> object:
+def fansi_print(text_string: object,text_color: object = None,style: object = None,background_color: object = None,new_line=True,reset=True,truecolor=True) -> object:
     """
     This function prints colored text in a terminal.
     It can also print bolded, underlined, or highlighted text.
@@ -1121,6 +1142,7 @@ def fansi_print(text_string: object,text_color: object = None,style: object = No
             style=style,
             background_color=background_color,
             reset=reset,
+            truecolor=truecolor,
         ),
         end="\n" if new_line else "",
         flush=True,
@@ -1143,12 +1165,14 @@ def print_fansi_reference_table() -> None:
         os.system('bash -c \'for i in {0..255}; do  printf "\\x1b[38;5;${i}mcolor%-5i\\x1b[0m" $i ; if ! (( ($i + 1 ) % 8 )); then echo ; fi ; done\'')
 
 def _old_fansi_syntax_highlighting(code: str,namespace=(),style_overrides={}):
-    # PLEASE NOTE THAT I DID NOT WRITE SOME OF THIS CODE!!! IT CAME FROM https://github.com/akheron/cpython/blob/master/Tools/scripts/highlight.py
-    # Assumes code was written in python.
-    # Method mainly intended for rinsp.
-    # I put it in the r class for convenience.
-    # Works when I paste methods in but doesn't seem to play nicely with rinsp. I don't know why yet.
-    # See the highlight_sourse_in_ansi module for more stuff including HTML highlighting etc.
+    """
+    PLEASE NOTE THAT I DID NOT WRITE SOME OF THIS CODE!!! IT CAME FROM https://github.com/akheron/cpython/blob/master/Tools/scripts/highlight.py
+    Assumes code was written in python.
+    Method mainly intended for rinsp.
+    I put it in the r class for convenience.
+    Works when I paste methods in but doesn't seem to play nicely with rinsp. I don't know why yet.
+    See the highlight_sourse_in_ansi module for more stuff including HTML highlighting etc.
+    """
     default_ansi={
         'comment':('\033[0;31m','\033[0m'),
         'string':('\033[0;32m','\033[0m'),
@@ -1234,31 +1258,34 @@ def fansi_syntax_highlighting(code: str,
                               show_line_numbers:bool=False,
                               lazy:bool=False,
                               ):
+    """ Apply syntax highlighting to 'code', a given string of python code. Returns an ANSI-styled string for printing in a terminal. Provides extra arguments such as including line numbers, line wrapping stuff, custom styling via style_overrides, and lazy for processing super large amounts of code without having to wait for it to all finish.
+        
+    TODO: Because of the way it was programmed, it now included an extraneous new empty line on the top of the output. Feel free to remove that later brutishly lol (just lob it off the final output)
+    If lazy==True, this function returns a generator of strings that should be printed sequentially without new lines
+    If line_wrap_width is an int, it will wrap the whole output to that width - this is suprisingly tricky to do because of the ansi escape codes
+    show_line_numbers, if true, will also display a line number gutter on the side
+
+    EXAMPLE USING LAZY:
+       #Lazy can make syntax highlighting of things like rp start instantly
+       code=get_source_code(r)
+       for chunk in fansi_syntax_highlighting(code,lazy=True,show_line_numbers=True,line_wrap_width=get_terminal_width()):
+           print(end=chunk)
+       print()
+    The result is that it has a shorter delay to start ; but it also might take longer in total
+
+    EXAMPLE:
+       print(fansi_syntax_highlighting(get_source_code(load_image),line_wrap_width=30,show_line_numbers=False))
+
+    PLEASE NOTE THAT I DID NOT WRITE SOME OF THIS CODE!!! IT CAME FROM https://github.com/akheron/cpython/blob/master/Tools/scripts/highlight.py
+    Assumes code was written in python.
+    Method mainly intended for rinsp.
+    I put it in the r class for convenience.
+    Works when I paste methods in but doesn't seem to play nicely with rinsp. I don't know why yet.
+    See the highlight_sourse_in_ansi module for more stuff including HTML highlighting etc.
+    """
+
     if not lazy and not show_line_numbers and not line_wrap_width:
         return _old_fansi_syntax_highlighting(code,namespace,style_overrides) #This one is less glitchy. Use it when we can until the new one is fixed.
-        
-    #TODO: Because of the way it was programmed, it now included an extraneous new empty line on the top of the output. Feel free to remove that later brutishly lol (just lob it off the final output)
-    #If lazy==True, this function returns a generator of strings that should be printed sequentially without new lines
-    #If line_wrap_width is an int, it will wrap the whole output to that width - this is suprisingly tricky to do because of the ansi escape codes
-    #show_line_numbers, if true, will also display a line number gutter on the side
-    #
-    #EXAMPLE USING LAZY:
-    #    #Lazy can make syntax highlighting of things like rp start instantly
-    #    code=get_source_code(r)
-    #    for chunk in fansi_syntax_highlighting(code,lazy=True,show_line_numbers=True,line_wrap_width=get_terminal_width()):
-    #        print(end=chunk)
-    #    print()
-    #The result is that it has a shorter delay to start ; but it also might take longer in total
-    #
-    #EXAMPLE:
-    #    print(fansi_syntax_highlighting(get_source_code(load_image),line_wrap_width=30,show_line_numbers=False))
-    #
-    # PLEASE NOTE THAT I DID NOT WRITE SOME OF THIS CODE!!! IT CAME FROM https://github.com/akheron/cpython/blob/master/Tools/scripts/highlight.py
-    # Assumes code was written in python.
-    # Method mainly intended for rinsp.
-    # I put it in the r class for convenience.
-    # Works when I paste methods in but doesn't seem to play nicely with rinsp. I don't know why yet.
-    # See the highlight_sourse_in_ansi module for more stuff including HTML highlighting etc.
     default_ansi={
         'comment':('\033[0;31m','\033[0m'),
         'string':('\033[0;32m','\033[0m'),
@@ -1762,17 +1789,25 @@ def gaussian_kernel(size=21, sigma=3,dim=2):
 
 def get_max_image_dimensions(*images):
     """ Given a set of images, return the maximum height and width seen across all of them """
-    if len(images)==1: images=images[0]
+    images = detuple(images)
+
+    if is_numpy_array(images) or is_torch_tensor(images): return get_image_dimensions(images[0]) #Efficiency shortcut: if given video is a tensor, all heights and widths will be the same
+
     heights=[get_image_height(x) for x in images]
     widths =[get_image_width (x) for x in images]
     return max(heights),max(widths)
 
 def get_min_image_dimensions(*images):
     """ Given a set of images, return the minimum height and width seen across all of them """
-    if len(images)==1: images=images[0]
+    images = detuple(images)
+
+    if is_numpy_array(images) or is_torch_tensor(images): return get_image_dimensions(images[0]) #Efficiency shortcut: if given video is a tensor, all heights and widths will be the same
+
     heights=[get_image_height(x) for x in images]
     widths =[get_image_width (x) for x in images]
     return min(heights),min(widths)
+
+get_video_dimensions = get_max_image_dimensions
 
 def uniform_float_color_image(height:int,width:int,color:tuple=(0,0,0,0)):
     """
@@ -1996,6 +2031,14 @@ def blend_images(bot, top, alpha=1, mode="normal"):
     output[:,:,3]=output_alpha
     
     return output
+
+# def blend_videos(bot, top, alpha=1, mode="normal", *, show_progress=False):
+#     is_numpy
+#     bot, top = trim_videos_to_max_length(bot, top)
+#     is_numpy = is_numpy_array(bot) and is_numpy_array(top) and get_video_dimensions(bot)==get_video_dimensions(top)
+#     return 
+
+
 
 def overlay_images(*images,mode='normal'):
     """
@@ -2537,6 +2580,65 @@ def video_with_progress_bar(
 
     return output
 
+def _get_executable(name, download_urls, executable_name):
+    download_dir = make_directory(path_join(_rp_downloads_folder, name))
+    url = (
+        download_urls["macos"]
+        if currently_running_mac()
+        else download_urls["linux"]
+        if currently_running_linux()
+        else download_urls["windows"]
+    )
+    zip_file = download_url(url, download_dir, skip_existing=True)
+    folder = strip_file_extension(zip_file)
+    if not folder_exists(folder):
+        unzip_to_folder(zip_file)
+    assert folder_exists(folder)
+    executable = path_join(folder, executable_name)
+    assert file_exists(executable), executable
+    return executable
+
+
+def _get_rife_executable():
+    """Returns the path to the rife-ncnn-vulkan executable or if it doesn't exist in rp downloads it"""
+    rife_download_urls = dict(
+        # https://github.com/nihui/rife-ncnn-vulkan/releases
+        macos="https://github.com/nihui/rife-ncnn-vulkan/releases/download/20221029/rife-ncnn-vulkan-20221029-macos.zip",
+        linux="https://github.com/nihui/rife-ncnn-vulkan/releases/download/20221029/rife-ncnn-vulkan-20221029-ubuntu.zip",
+        windows="https://github.com/nihui/rife-ncnn-vulkan/releases/download/20221029/rife-ncnn-vulkan-20221029-windows.zip",
+    )
+    return _get_executable("rife", rife_download_urls, "rife-ncnn-vulkan")
+
+
+def _get_esrgan_executable():
+    """Returns the path to the realesrgan-ncnn-vulkan executable or if it doesn't exist in rp downloads it"""
+    #TODO: Make a function to use this on images
+    esrgan_download_urls = dict(
+        # https://github.com/xinntao/Real-ESRGAN/releases/tag/v0.2.5.0
+        macos="https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-macos.zip",
+        linux="https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip",
+        windows="https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-windows.zip",
+    )
+    return _get_executable("esrgan", esrgan_download_urls, "realesrgan-ncnn-vulkan")
+
+def slowmo_video_via_rife(video):
+    """ Doubles the framerate of a given video. Can be a list of images as defined by rp.is_image, or a numpy array etc. Anything compatible with save_image."""
+    rife_executable = _get_rife_executable()
+    input_dir = make_directory(temporary_file_path())
+    output_dir = make_directory(temporary_file_path())
+    try:
+        save_images(video, input_dir, show_progress=True)
+        command=shlex.quote(rife_executable) + " -i " + shlex.quote(input_dir) + " -o " + shlex.quote(output_dir)
+        fansi_print(command, 'yellow')
+        os.system(command)
+        new_video = load_images(output_dir, show_progress=True)
+        new_video = as_numpy_array(new_video)
+    finally:
+        if folder_exists(input_dir ): delete_folder(input_dir )
+        if folder_exists(output_dir): delete_folder(output_dir)
+    return new_video
+
+
 
 def _crop_images_to_max_or_min_size(*images,origin='top left',criterion=max,copy=True,do_height=True,do_width=True):
     
@@ -2588,15 +2690,19 @@ def crop_images_to_min_size(*images,origin='top left',copy=True):
     return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=min,copy=copy)
 
 def crop_images_to_max_height(*images,origin='top left',copy=True):
+    """ Crop all given images to the maximum height of all given images using the same extra args as seen in rp.crop_image """
     return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=max,copy=copy,do_width=False)
 
 def crop_images_to_max_width(*images,origin='top left',copy=True):
+    """ Crop all given images to the maximum width of all given images using the same extra args as seen in rp.crop_image """
     return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=max,copy=copy,do_height=False)
 
 def crop_images_to_min_height(*images,origin='top left',copy=True):
+    """ Crop all given images to the minimum height of all given images using the same extra args as seen in rp.crop_image """
     return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=min,copy=copy,do_width=False)
 
 def crop_images_to_min_width(*images,origin='top left',copy=True):
+    """ Crop all given images to the minimum width of all given images using the same extra args as seen in rp.crop_image """
     return _crop_images_to_max_or_min_size(*images,origin=origin,criterion=min,copy=copy,do_height=False)
 
 def crop_image_to_square(image, *, origin="center", grow=False, copy=True):
@@ -4381,6 +4487,10 @@ def load_image_from_file(file_name):
         try             :return load_openexr_image(file_name)
         except Exception:pass
 
+    if get_file_extension(file_name).upper()=='HEIC':
+        #Apple photo format - the PIL function can do this
+        return _load_image_from_file_via_PIL(file_name)
+
     try               :return _load_image_from_file_via_imageio(file_name)#Imageio will not forget the alpha channel when loading png files
     except Exception  :pass #Don't cry over spilled milk...if imageio didn't work we'll try the other libraries.
     try               :return _load_image_from_file_via_scipy  (file_name)#Expecting that scipy.misc.imread doesn't exist on the interpereter for whatever reason
@@ -4391,7 +4501,21 @@ def load_image_from_file(file_name):
     except Exception  :raise
     # assert False,'rp.load_image_from_file: Failed to load image file: '+repr(file_name)
 
+_init_pillow_heif_called=False
+def _init_pillow_heif():
+    global _init_pillow_heif_called
+
+    if not _init_pillow_heif_called:
+        #https://stackoverflow.com/questions/54395735/how-to-work-with-heic-image-file-types-in-python
+        pip_import('pillow_heif')
+        import pillow_heif
+        pillow_heif.register_heif_opener()
+        _init_pillow_heif_called = True
+
 def _load_image_from_file_via_PIL(file_name):
+    if file_name.upper().endswith('.HEIC'):
+        _init_pillow_heif()
+
     pip_import('PIL')
     from PIL import Image
     out = as_numpy_array(Image.open(file_name))
@@ -4399,9 +4523,11 @@ def _load_image_from_file_via_PIL(file_name):
     return out
 
 def _load_image_from_file_via_imageio(file_name):
-    #NOTE if this method fails try the following function:
-    # imageio.plugins.freeimage.download() #https://github.com/imageio/imageio/issues/334 #This helps when it fails. I don't know why it sometimes fails and sometimes doesn't...
-    #NOTE that even though this made it not crash, it's still sometimes reading exr files wrong...depending on the computer....
+    """
+    NOTE if this method fails try the following function:
+    imageio.plugins.freeimage.download() #https://github.com/imageio/imageio/issues/334 #This helps when it fails. I don't know why it sometimes fails and sometimes doesn't...
+    NOTE that even though this made it not crash, it's still sometimes reading exr files wrong...depending on the computer....
+    """
     pip_import('imageio')
     from imageio import imread
     return imread(file_name)
@@ -5125,6 +5251,8 @@ def convert_image_file(
 
     if delete_original and file_exists(output) and file_exists(input_file):
         delete_file(input_file)
+
+    return output
 
     
 
@@ -6034,9 +6162,9 @@ def display_video_in_notebook(video, filetype='gif', *, framerate=60):
         elif filetype in video_filetypes:
             if embed:
                 video_hex = file_to_base64(temp_path)
-                display_object = HTML('<video controls><source src="data:video/{0};base64,{1}" type="video/{0}"></video>'.format(filetype, video_hex))
+                display_object = HTML('<video loop autoplay controls><source src="data:video/{0};base64,{1}" type="video/{0}"></video>'.format(filetype, video_hex))
             else:
-                display_object = HTML('<video controls><source src="{0}" type="video/{1}"></video>'.format(temp_path, filetype))
+                display_object = HTML('<video loop autoplay controls><source src="{0}" type="video/{1}"></video>'.format(temp_path, filetype))
         else:
             raise ValueError("rp.display_video_in_notebook: Unsupported filetype: {0}. Supported filetypes are {1}".format(filetype, ', '.join(image_filetypes + video_filetypes)))
 
@@ -7275,35 +7403,70 @@ def iblend(z,𝓍,𝓎):  # iblend≣inverse blend. Solves for α， given 𝓏�
 def interp(x,x0,x1,y0,y1):  # 2 point interpolation
     return (x - x0) / (x1 - x0) * (y1 - y0) + y0  # https://www.desmos.com/calculator/bqpv7tfvpy
 
-def linterp(values:list,index:float,*,cyclic=False,blend_func=blend):# Where l is a list or vector etc
+def linterp(values: list, index: float, *, cyclic=False, blend_func=blend):
     """
-    Linearly inerpolation between different values with fractional indices
+    Linearly interpolates between different values with fractional indices.
     This is written in pure python, so any values that implement addition, subtraction and multiplication will work
-       (This includes floats, vectors, and even images)
+    (This includes floats, vectors, and even images)
     Note that linterp(values,some_integer) == values[some_integer] for any valid integer some_integer
+    # Where l is a list or vector etc
+
+    Args:
+        values (list): A list of values to interpolate between. These values should support addition, subtraction, 
+                       and scalar multiplication.
+        index (float): The fractional index at which to interpolate. If cyclic=False, index should be in the range 
+                       [0, len(values)-1]. If cyclic=True, index can be any real number and will be wrapped around 
+                       to fall within the valid range.
+        cyclic (bool, optional): If True, the interpolation will treat the values list as cyclic, wrapping around 
+                                 from the last element back to the first. Default is False.
+        blend_func (function, optional): The function used to blend between two adjacent values. Default is the 
+                                         blend function, which performs a linear interpolation.
+                                         
+    Returns:
+        The interpolated value at the specified index. The type of the returned value will match the type of the 
+        elements in the values list.
+        
+    Raises:
+        AssertionError: If index is not a number or values is not an iterable.
+        IndexError: If index is out of bounds and cyclic is False.
+        
+    Mathematically, the interpolation is performed as follows:
+        - If index is an integer i, the function returns values[i].
+        - If cyclic is False:
+            - The function calculates the two integer indices x0 and x1 that surround index, such that 
+              x0 <= index <= x1.
+            - The interpolated value is then calculated as:
+              blend_func(values[x0], values[x1], (index - x0) / (x1 - x0))
+        - If cyclic is True:
+            - The index is first wrapped around to the range [0, len(values)] using modular arithmetic.
+            - The interpolation is then performed as in the non-cyclic case, but with the values list treated as 
+              cyclic (i.e., values[-1] is followed by values[0]).
+
     EXAMPLE: INTERPOLATING VECTORS
-         ➤ as_numpy_array([ linterp( as_numpy_array([[0,1], [0,0], [1,0]]), index)   for   index   in   [0, .5, 1, 1.5, 2] ])
+         >>> as_numpy_array([ linterp( as_numpy_array([[0,1], [0,0], [1,0]]), index)   for   index   in   [0, .5, 1, 1.5, 2] ])
          ans = [[0.  1. ]
                 [0.  0.5]
                 [0.  0. ]
                 [0.5 0. ]
                 [1.  0. ]]
-    
+
     EXAMPLE: INTERPOLATING IMAGES
-        mountain=load_image('https://cdn.britannica.com/67/19367-050-885866B4/Valley-Taurus-Mountains-Turkey.jpg')
-        chicago=load_image('https://pbs.twimg.com/media/EeqFCjvWkAI-rv_.jpg')
-        doggy=load_image('https://s3-prod.dogtopia.com/wp-content/uploads/sites/142/2016/05/small-dog-at-doggy-daycare-birmingham-570x380.jpg')
-        images=[resize_image(image,(256,256)) for image in [mountain,chicago,doggy]]
-    With cyclic=True, it will loop through the images
-        for index in np.linspace(0,10,num=100):
-            frame=linterp(images,index,cyclic=True)
-            display_image(frame)
-            sleep(1/30)
-    With cyclic=False, it will play the animation only once
-        for index in np.linspace(0,2,num=100):
-            frame=linterp(images,index,cyclic=False)
-            display_image(frame)
-            sleep(1/30)
+        >>> mountain=load_image('https://cdn.britannica.com/67/19367-050-885866B4/Valley-Taurus-Mountains-Turkey.jpg')
+        ... chicago=load_image('https://pbs.twimg.com/media/EeqFCjvWkAI-rv_.jpg')
+        ... doggy=load_image('https://s3-prod.dogtopia.com/wp-content/uploads/sites/142/2016/05/small-dog-at-doggy-daycare-birmingham-570x380.jpg')
+        ... images=[resize_image(image,(256,256)) for image in [mountain,chicago,doggy]]
+
+        With cyclic=True, it will loop through the images
+        >>> for index in np.linspace(0,10,num=100):
+        ...     frame=linterp(images,index,cyclic=True)
+        ...     display_image(frame)
+        ...     sleep(1/30)
+
+        With cyclic=False, it will play the animation only once
+        >>> for index in np.linspace(0,2,num=100):
+        ...    frame=linterp(images,index,cyclic=False)
+        ...    display_image(frame)
+        ...    sleep(1/30)
     """
 
     assert is_number(index),'The \'index\' parameter should be a single number (which can be a float, but doesnt have to be), but got type '+str(type(index))
@@ -7373,6 +7536,9 @@ def gather(iterable,*indices,as_dict=False):
     # indices ∈ list of integers
     """
     indices=detuple(indices)
+    if isinstance(indices,str):
+        #Dont treat each char of a string a key thats weird
+        indices=[indices]
     # indices=delist(indices)
     assert is_iterable(iterable),"The 'iterable' parameter you fed in is not an iterable!"
     assert is_iterable(indices),"You need to feed in a list of indices, not just a single index.  indices == " + str(indices)
@@ -10747,10 +10913,11 @@ def get_my_local_ip_address() -> str:
         s.close()
 get_my_ip=get_my_local_ip_address #Legacy: Some of my old code might depend on this function. It's deprecated because it's a bad name
 def get_my_mac_address()->str:
-    #EXAMPLE:
-    #     >> get_my_mac_address()
-    #    ans = 28:cf:e9:17:d9:a5
-    #
+    """
+    EXAMPLE:
+        >> get_my_mac_address()
+       ans = 28:cf:e9:17:d9:a5
+    """
     if currently_running_linux():
         #If we're running linux, this solution works - and we don't have to pip install get-mac
         #    (pip install get-mac     also works, but this saves you the trouble of installing another package)
@@ -11860,11 +12027,14 @@ def get_terminal_size():
 
 
 def get_terminal_width():
+    """ Attempts to return the width of the current TTY in characters - otherwise it will return 80 by default """
     return get_terminal_size()[0]
 def get_terminal_height():
+    """ Attempts to return the height of the current TTY in characters - otherwise it will return 25 by default """
     return get_terminal_size()[1]
 
-def is_namespaceable(c: str) -> bool:  # If character can be used as the first of a python variable's name
+def is_namespaceable(c: str) -> bool:  
+    """ Returns True if the given string can be used as a python variable name """
     return str.isidentifier(c) or c==''#Maintaining original functionality but doing it much much faster
     import re
     try:
@@ -11875,7 +12045,8 @@ def is_namespaceable(c: str) -> bool:  # If character can be used as the first o
     except Exception:
         return False
 
-def is_literal(c: str) -> bool:  # If character can be used as the first of a python variable's name
+def is_literal(c: str) -> bool:  
+    """ If character can be used as the first of a python variable's name """
     return c==":" or (is_namespaceable(c) or c.isalnum())and not c.lstrip().rstrip() in ['False','def','if','raise','None','del','import','return','True','elif','in','try','and','else','is','while','as','except','lambda','with','assert','finally','nonlocal','yield','break','for','not','class','from','or','continue','global','pass']
 
 def clip_string_width(x: str,max_width=None,max_wraps_per_line=1,clipped_suffix='…'):  
@@ -12586,9 +12757,14 @@ def load_gist(gist_url:str):
     # return response_json['files'][file_name]['content']
     
 def shorten_github_url(url,title=None):
-    #Uses git.io to shorten a url
-    #This method specifically only works for Github URL's; it doesn't work for anything else
-    #If title is specified, it will try to get you a particular name for your url (such as git.io/labinacube)
+    """
+    Doesn't work anymore! git.io was discontinued for some god forsaken reason :(
+    Use rp.shorten_url instead (for backwards compatibility, this function now simply calls that)
+
+    Uses git.io to shorten a url
+    This method specifically only works for Github URL's; it doesn't work for anything else
+    If title is specified, it will try to get you a particular name for your url (such as git.io/labinacube)
+    """
 
     return shorten_url(url) # git.io was discontinued :(
 
@@ -12608,6 +12784,7 @@ def shorten_github_url(url,title=None):
         return r    
     # print(out)
     return out
+
 #def post_gist(content:str,
 #              file_name:str='',
 #              description:str='',
@@ -12913,7 +13090,7 @@ def display_image_in_terminal(image,dither=True,auto_resize=True,bordered=False)
                 c.set(y,x)
     print(c.frame())
 
-def display_image_in_terminal_color(image):
+def display_image_in_terminal_color(image,*,truecolor=True):
     """
     Will attempt to draw a color image in the terminal
     This is slower than display_image_in_terminal, and relies on both unicode and terminal colors
@@ -12941,10 +13118,11 @@ def display_image_in_terminal_color(image):
         if width!=get_image_width(image):
             image=(cv_resize_image if USE_OPENCV else resize_image)(image,(height,width))
         save_image(image,temp_file)
-        subprocess.run([sys.executable,'-m','timg','-s',str(width),temp_file])
+        subprocess.run([sys.executable,'-m','timg']+['-m','a8h']*(not truecolor)+['-s',str(width),temp_file])
     finally:
         if file_exists(temp_file):
             delete_file(temp_file)
+
 
 def display_image_in_terminal_imgcat(image):
     """
@@ -12984,6 +13162,7 @@ def display_image_in_terminal_imgcat(image):
     imgcat.imgcat(image)
         
 def auto_canny(image,sigma=0.33,lower=None,upper=None):
+    """ Takes an image, returns the canny-edges of it (a binary matrix) """
     pip_import('cv2')
     cv2=pip_import('cv2')
     image=as_numpy_image(image,copy=False)
@@ -13555,6 +13734,52 @@ def rotate_image(image, angle_in_degrees, interp="bilinear"):
     rgb=rotate(as_rgb_image(image,copy=False))
     return with_alpha_channel(rgb,alpha,copy=False)
 
+def rotate_images(*images, angle, interp='bilinear', show_progress=False, lazy=False):
+    """ 
+    Plural of rotate_image. Arguments are broadcastable. 
+    Angles are measured in degrees!
+
+    EXAMPLE:
+
+        >>> url = "https://hips.hearstapps.com/hmg-prod/images/dog-puppy-on-garden-royalty-free-image-1586966191.jpg?crop=0.752xw:1.00xh;0.175xw,0&resize=1200:*"
+        ... image = load_image(url, use_cache=True)
+        ... image = resize_image_to_fit(image, height=256, width=256)
+        ... display_video(
+        ...     crop_images_to_max_size(
+        ...         rotate_images(image, angle=range(360), show_progress=True),
+        ...         origin="center",
+        ...     ),
+        ...     loop=True,
+        ... )
+
+    """
+
+    images = detuple(images)
+
+    #Prepare for list-based broadcasting. Todo: Make it possible for the broadcasted args to be lazy too!
+    if is_image(images)           : images = [images]
+    if is_iterable(angle)         : angle = list(angle)
+    if not isinstance(interp, str): interp = list(interp)
+
+    kwarg_sets = broadcast_kwargs(
+        dict(
+            image=images,
+            angle_in_degrees=angle,
+            interp=interp,
+        )
+    )
+
+    if show_progress:
+        kwarg_sets = eta(kwarg_sets, title='rp.rotate_images')
+
+    output = (rotate_image(**kwarg_set) for kwarg_set in kwarg_sets)
+
+    if not lazy:
+        output = list(output)
+    
+    return output
+
+
 def _rotate_rgb_image(image, angle_in_degrees, interp='bilinear'):
     """
     Will return an RGB image, not an RGBA one
@@ -13622,14 +13847,22 @@ def open_url_in_web_browser(url:str):
     open(url)
 
 def google_search_url(query:str)->None:
-    #Returns the URL for google-searching the given query
+    """
+    Returns the URL for google-searching the given query
+
+    EXAMPLE:
+        >>> google_search_url('What is a dog?')
+        https://www.google.com/search?q=What%20is%20a%20dog%3F
+    """
     query=str(query)
     import urllib.parse
     url='https://www.google.com/search?q='+urllib.parse.quote(query)
     return url
 
 def open_google_search_in_web_browser(query:str):
-    #Opens up the web browser to a google search of a given query
+    """
+    Opens up the web browser to a google search of a given query
+    """
     url=google_search_url(query)
     open_url_in_web_browser(url)
     return url
@@ -13644,7 +13877,9 @@ def reload_module(module):
     importlib.reload(module)
 
 def reload_rp():
-    #If rp changes mid-notebook, here's a convenient way to reload it
+    """
+    If rp changes mid-notebook, here's a convenient way to reload it
+    """
     import rp
     reload_module(rp)
     import rp
@@ -13721,12 +13956,14 @@ class eta:
 
 # @memoized
 def get_all_submodule_names(module):
-    #Takes a module and returns a list of strings.
-    #Example:
-    #    >>> all_submodule_names(np)
-    #    ans = ['numpy.core', 'numpy.fft', 'numpy.linalg', 'numpy.compat', 'numpy.conftest', ...(etc)... ]
-    #This function is NOT recursive
-    #This function IS safe to run (unlike get_all_submodules)
+    """
+    Takes a module and returns a list of strings.
+    Example:
+       >>> all_submodule_names(np)
+       ans = ['numpy.core', 'numpy.fft', 'numpy.linalg', 'numpy.compat', 'numpy.conftest', ...(etc)... ]
+    This function is NOT recursive
+    This function IS safe to run (unlike get_all_submodules)
+    """
     import types,pkgutil
     assert isinstance(module,types.ModuleType),'This function accepts a module as an input, but you gave it type '+repr(type(module))
 
@@ -14031,6 +14268,8 @@ def xo(file_or_object):
         xo.main([file_or_object])
     except Exception:
         print("Failed to start exofrills editor")
+del xo #I don't ever use this lol. Undelete this if I encounter any code that needs it.
+
 # endregion
 
 def graph_resistance_distance(n, d, x, y):
@@ -14380,12 +14619,14 @@ def exeval(code:str, scope=None):
     return result
 
 def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,ipython=False):
-    # Evaluate or execute within descending hierarchy of dicts
-    # merged_dict=merged_dicts(*reversed(dicts))# # Will merge them in descending priority of dicts' namespaces
-    # region HOPEFULLY just a temporary patch
-    # assert len(dicts)<=1
-    # if len(dicts)<=1:
-    # print("exeval")
+    """
+    Evaluate or execute within descending hierarchy of dicts
+    merged_dict=merged_dicts(*reversed(dicts))# # Will merge them in descending priority of dicts' namespaces
+    region HOPEFULLY just a temporary patch
+    assert len(dicts)<=1
+    if len(dicts)<=1:
+    print("exeval")
+    """
     if len(dicts)==0:
       dicts=[get_scope(1)]
     merged_dict=dicts[0]
@@ -14455,8 +14696,10 @@ _PROF_DEEP=True
 #     pass
 
 def dec2bin(f):
-    # Works with fractions
-    # SOURCE: http://code.activestate.com/recipes/577488-decimal-to-binary-conversion/
+    """
+    Works with fractions
+    SOURCE: http://code.activestate.com/recipes/577488-decimal-to-binary-conversion/
+    """
     import math
     if f >= 1:
         g = int(math.log(float(f), 2))
@@ -15069,7 +15312,9 @@ def _all_files_listed_in_exception_traceback(exception:BaseException)->list:
     return out
 
 def read_symlink(path:str):
-    #Returns the path a symlink points to
+    """
+    Returns the path a symlink points to
+    """
     assert isinstance(path,str)
     assert is_symlink(path), 'Not a symlink: '+path
     if path.endswith('/'):
@@ -15144,7 +15389,9 @@ def make_symlink(original_path,symlink_path='.'):
     return symlink_path
 
 def is_symbolic_link(path:str):
-    #Returns whether or not a given path is a symbolic link
+    """
+    Returns whether or not a given path is a symbolic link
+    """
     from pathlib import Path
     if not isinstance(path,str):
         return False
@@ -15157,7 +15404,9 @@ def is_symbolic_link(path:str):
 is_symlink=is_symbolic_link
 
 def symlink_move(from_path,to_path):
-    #Move a file or folder, but leave a symlink behind so that programs that try to access the original file aren't affected
+    """
+    Move a file or folder, but leave a symlink behind so that programs that try to access the original file aren't affected
+    """
     from_path=get_absolute_path(from_path)
     to_path=get_absolute_path(to_path)
 
@@ -16185,6 +16434,7 @@ def pseudo_terminal(
     rprc="",
     level_title=""
 ):
+  """An interactive terminal session, powered by RP """
   with _PtermLevelTitleContext(level_title):
     try:
         import signal
@@ -17016,8 +17266,9 @@ def pseudo_terminal(
         PPA  str(ans)+$string_from_clipboard()
         +PAL str(ans)+'\\n'+$string_from_clipboard()
         PPAL str(ans)+'\\n'+$string_from_clipboard()
-        PLA  str(ans)+'\\n'+$string_from_clipboard()
+        PPLA str(ans)+'\\n'+$string_from_clipboard()
         PAL  str(ans)+'\\n'+$string_from_clipboard()
+        PLA  str(ans)+'\\n'+$string_from_clipboard()
 
         PF PROF
         PO PROF
@@ -17311,7 +17562,7 @@ def pseudo_terminal(
 
         BLA $r._autoformat_python_code_via_black(str(ans))
         SIM $r.sort_imports_via_isort(ans)
-        CBP ans=$string_from_clipboard();ans=$r._autoformat_python_code_via_black(ans);$string_to_clipboard(ans)
+        CBP ans=$string_from_clipboard();ans=$r.autoformat_python_via_black_macchiato(ans);$string_to_clipboard(ans)
         CSP ans=$string_from_clipboard();ans=$sort_imports_via_isort(ans);$string_to_clipboard(ans)
         RMS $r._removestar(ans)
 
@@ -21569,10 +21820,10 @@ def cv_line_graph(
     y_max=None,
     x_min=None,
     x_max=None,
-    background_color=(255, 255, 255, 0),
-    line_color=(0, 0, 0, 255),
+    background_color=(1, 1, 1, 0),
+    line_color=(0, 0, 0, 1),
     vertical_bar_x=None,
-    vertical_bar_color=(255, 0, 0, 255),
+    vertical_bar_color=(1, 0, 0, 1),
     antialias=True,
     thickness=1,
     vertical_bar_thickness=None
@@ -21673,6 +21924,10 @@ def cv_line_graph(
         ... mouse_graph_demo()
 
     """
+
+    background_color   = float_color_to_byte_color(as_rgba_float_color(background_color))
+    line_color         = float_color_to_byte_color(as_rgba_float_color(line_color))
+    vertical_bar_color = float_color_to_byte_color(as_rgba_float_color(vertical_bar_color))
 
     #Ensure things are installed
     rp.pip_import('cv2')
@@ -26529,10 +26784,14 @@ def get_color_brightness(color):
     hue=colorsys.rgb_to_hsv(*color)[2]
     return hue
 
-def get_image_dimensions(image):
+def get_image_dimensions(image, *, as_dict=False):
     """ Return (height,width) of an image """
     assert is_image(image) or is_torch_image(image), type(image)
-    return get_image_height(image),get_image_width(image)
+    height, width =  get_image_height(image),get_image_width(image)
+    if as_dict:
+        return gather_vars('height width')
+    else:
+        return height, width
 
 #def get_images_dimensions(*images):
 #    """ Return [(height,width), ...] for all given images """
@@ -26570,9 +26829,13 @@ def get_image_width(image):
     return image.shape[1]
 
 def get_video_height(video):
+    if is_numpy_array (video) and video.ndim==4:return video.shape[ 1] #THWC form
+    if is_torch_tensor(video) and video.ndim==4:return video.shape[-2] #TCHW form
     return max(map(get_image_height, video))
 
 def get_video_width(video):
+    if is_numpy_array (video) and video.ndim==4:return video.shape[ 2] #THWC form
+    if is_torch_tensor(video) and video.ndim==4:return video.shape[-1] #TCHW form
     return max(map(get_image_width, video))
 
 #TODO: Finish color conversions
@@ -26664,7 +26927,9 @@ def get_notebook_path():
 #get_current_notebook_directory=get_current_notebook_folder
 
 def running_in_google_colab():
-    #Return true iff this function is called from google colab
+    """
+    Return true iff this function is called from google colab
+    """
     import sys
     return 'google.colab' in sys.modules
   
@@ -26676,8 +26941,10 @@ def _is_python_exe_root(root):
         return get_path_parent(exe)==path_join(root,'bin') and get_file_name(exe) in 'python python3'.split()
 
 def running_in_ssh():
-    #Returns True iff this Python session was started over SSH
-    #https://stackoverflow.com/questions/35352921/how-to-check-if-python-script-is-being-called-remotely-via-ssh
+    """
+    Returns True iff this Python session was started over SSH
+    https://stackoverflow.com/questions/35352921/how-to-check-if-python-script-is-being-called-remotely-via-ssh
+    """
     return 'SSH_CLIENT' in os.environ or 'SSH_TTY' in os.environ or 'SSH_CONNECTION' in os.environ
 
 def running_in_mamba():
@@ -27180,7 +27447,9 @@ def as_numpy_array(x):
     """
     try:return np.asarray(x)#For numpy arrays and python lists (and anything else that work with np.asarray)
     except Exception:pass
-    try:return x.detach().cpu().numpy()#For pytorch. We're not doing an isinstance check of type pytorch tensor becuse that involves importing pytorch, which might be slow. Try catch is faster here.
+    try:
+        if '16' in str(x.dtype):x=x.float() #Numpy screws up with floa16
+        return x.detach().cpu().numpy()#For pytorch. We're not doing an isinstance check of type pytorch tensor becuse that involves importing pytorch, which might be slow. Try catch is faster here.
     except Exception:pass
     assert False,'as_numpy_array: Error: Could not convert x into a numpy array. type(x)='+repr(type(x))+' and x='+repr(x)
 
@@ -27195,8 +27464,10 @@ def input_multiline():
     return line_join(lines)
 
 def input_conditional(question,condition=lambda answer:True,on_fail=lambda answer: print('Please try again. Invalid input: '+repr(answer)),prompt=' > '):
-    #Keeps asking the user for a console input until they satisfy the condition with their answer.
-    #Example: ans=input_conditional('Please enter yes or no.', lambda x: x.lower() in {'yes','no'},)
+    """
+    Keeps asking the user for a console input until they satisfy the condition with their answer.
+    Example: ans=input_conditional('Please enter yes or no.', lambda x: x.lower() in {'yes','no'},)
+    """
     assert isinstance(question,str),'The "question" should be a string'
     assert callable(condition),'"condition" should be a boolean function of the users input'
     assert callable(on_fail),'"on_fail" should be a void function of the users input'
@@ -27210,9 +27481,11 @@ def input_conditional(question,condition=lambda answer:True,on_fail=lambda answe
         on_fail(answer)
 
 def input_yes_no(question):
-    #A boolean function of the user's console input
-    #The user must say y, ye, yes, n or no to continue
-    #Example: input_yes_no('Are you feeling well today?')
+    """
+    A boolean function of the user's console input
+    The user must say y, ye, yes, n or no to continue
+    Example: input_yes_no('Are you feeling well today?')
+    """
     return 'yes'.startswith(input_conditional(question+'\nPlease enter yes or no.', lambda x: x.lower() in {'y','ye','yes','n','no'}).lower())
 
 
@@ -27233,7 +27506,7 @@ def input_integer(minimum=None,maximum=None):
             print("That input isn't an integer. "+cond_question)
         elif maximum is not None and int(string)>maximum:
             print("That integer is too large. "+cond_question)
-        elif minimum is not None and int(string)<maximum:
+        elif minimum is not None and int(string)<minimum:
             print("That integer is too small. "+cond_question)
 
     if   minimum is     None and maximum is     None: 
@@ -27573,11 +27846,13 @@ def download_youtube_video(url_or_id: str,
 
 @memoized
 def _get_youtube_video_data_via_embeddify(url):
-    #See https://pypi.org/project/embeddify/
-    #Uses a specification called 'oembed', which lets us get info such as title/author etc without an api key (it's perfectly legal, and an intended use-case by google)
-    #EXAMPLE:
-    #     >>> _get_youtube_video_data_via_embeddify('https://www.youtube.com/watch?v=2wii8hfNkzE')
-    #    ans = {'title': 'Day9] Daily #596   Rigged Games Funday Monday P1', 'width': 560, 'version': '1.0', 'type': 'video', 'height': 315, 'provider_url': 'https://www.youtube.com/', 'author_name': 'Day9TV', 'thumbnail_url': 'https://i.ytimg.com/vi/2wii8hfNkzE/hqdefault.jpg', 'author_url': 'https://www.youtube.com/user/day9tv', 'provider_name': 'YouTube', 'thumbnail_width': 480, 'thumbnail_height': 360, 'html': '<iframe width="560" height="315" src="https://www.youtube.com/embed/2wii8hfNkzE?feature=oembed" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'}
+    """
+    See https://pypi.org/project/embeddify/
+    Uses a specification called 'oembed', which lets us get info such as title/author etc without an api key (it's perfectly legal, and an intended use-case by google)
+    EXAMPLE:
+        >>> _get_youtube_video_data_via_embeddify('https://www.youtube.com/watch?v=2wii8hfNkzE')
+       ans = {'title': 'Day9] Daily #596   Rigged Games Funday Monday P1', 'width': 560, 'version': '1.0', 'type': 'video', 'height': 315, 'provider_url': 'https://www.youtube.com/', 'author_name': 'Day9TV', 'thumbnail_url': 'https://i.ytimg.com/vi/2wii8hfNkzE/hqdefault.jpg', 'author_url': 'https://www.youtube.com/user/day9tv', 'provider_name': 'YouTube', 'thumbnail_width': 480, 'thumbnail_height': 360, 'html': '<iframe width="560" height="315" src="https://www.youtube.com/embed/2wii8hfNkzE?feature=oembed" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'}
+    """
     assert isinstance(url,str), 'Need url string, but got type '+str(type(url))
     assert is_valid_url(url), 'Not a valid url: '+repr(url)
     pip_import('embeddify')
@@ -28211,7 +28486,7 @@ def convert_to_gifs_via_ffmpeg(
     video_paths,
     output_paths=None,
     *,
-    framerates=None,
+    framerate=None,
     custom_palette=True,
     
     show_progress=True,
@@ -28222,16 +28497,18 @@ def convert_to_gifs_via_ffmpeg(
         return convert_to_gif_via_ffmpeg(
             video_path=bundle.video_paths,
             output_path=bundle.output_paths,
-            framerate=bundle.framerates,
+            framerate=bundle.framerate,
             custom_palette=custom_palette,
             show_progress=False,
         )
+
+    video_paths = rp_glob(video_paths)
     
     bundles = broadcast_kwargs(
         gather_vars(
             "video_paths",
             "output_paths",
-            "framerates",
+            "framerate",
             "custom_palette",
         )
     )
@@ -28901,7 +29178,13 @@ def make_directory(path):
             assert cursor.is_dir(),'make_directory: failed to make directory at path '+repr(path)+' because '+repr(cursor)+' is the path of an existing file that is not a directory'
             cursor=cursor.parent
         for directory in reversed(need_to_make):
-            directory.mkdir()
+            try:
+                directory.mkdir()
+            except FileExistsError:
+                if is_a_folder(directory):
+                    break
+                else:
+                    raise
         return str(path)
 make_folder=make_directory
 
@@ -29368,6 +29651,136 @@ def shift_image(image,x=0,y=0,*,allow_growth=True):
     return image
 
 
+
+def roll_image(image, dx=0, dy=0, interp='nearest'):
+    """
+    Shifts/rolls an image by the specified displacement in x and y directions.
+
+    NOTE:
+        It uses image coordinates, so a positive dx moves the image to the right
+        But a positive dy moves the image down!
+    
+    This function supports different interpolation methods for non-integer shifts:
+    - 'nearest': Uses the nearest integer shift
+    - 'bilinear': Uses bilinear interpolation for sub-pixel accuracy
+    - 'round': Rounds displacement to nearest integer
+    - 'floor': Floors displacement to integer
+    - 'ceil': Ceils displacement to integer
+    
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input image in HWC format (Height x Width x Channels)
+    dx : float
+        Displacement in x direction (positive moves right)
+    dy : float
+        Displacement in y direction (positive moves down)
+    interp : str, optional
+        Interpolation method ('nearest', 'bilinear', 'round', 'floor', 'ceil')
+        Default is 'nearest'
+        
+    Returns
+    -------
+    numpy.ndarray
+        Shifted image with same shape as input. If using bilinear, output will be floating point.
+        
+    EXAMPLE:
+
+        #Circular Movement Demo
+        >>> import numpy as np
+        ... import math
+        ... 
+        ... # Load the puppy image
+        ... image = load_image('https://images.unsplash.com/photo-1507146426996-ef05306b995a?fm=jpg&q=60&w=3000&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8cHVwcHl8ZW58MHx8MHx8fDA%3D',use_cache=True)
+        ... image=resize_image_to_fit(image,512,512)
+        ... 
+        ... image=as_float_image(image)
+        ... # Create 40 frames of circular motion
+        ... radius = 50
+        ... num_frames = 40
+        ... 
+        ... # Generate circular pattern using parametric equations
+        ... t = np.linspace(0, 2*np.pi, num_frames, endpoint=False)
+        ... dx = radius * np.cos(t)
+        ... dy = radius * np.sin(t)
+        ... 
+        ... # Display each frame
+        ... for x, y in zip(dx, dy):
+        ...     rolled_image = roll_image(image, dx=x, dy=y, interp='bilinear')
+        ...     rp.display_image(rolled_image)
+
+        #Interpolation vs Rounding Demo
+        >>> def get_animation():
+        ...     image = load_image("https://picsum.photos/seed/picsum/536/354", use_cache=True)
+        ...     image = resize_image_to_fit(image, 100, 100)
+        ...     for x in range(200):
+        ...         x /= 5  # Fractional shifting
+        ...         interps = ["bilinear", "round"]
+        ...         yield (
+        ...             cv_resize_image(
+        ...                 labeled_image(
+        ...                     vertically_concatenated_images(
+        ...                         labeled_images(
+        ...                             [roll_image(image, dx=x, interp=interp) for interp in interps],
+        ...                             interps,
+        ...                         )
+        ...                     ),
+        ...                     f"X Shift = {x}",
+        ...                 ),
+        ...                 4,
+        ...                 interp="nearest",
+        ...             )
+        ...         )
+        ... display_video(get_animation(),loop=True)
+
+    """
+
+    import numpy as np
+    import math
+
+    if interp == 'bilinear':
+        image = as_float_image(image)
+    
+        # Get weights for a single pixel shift (0,0)
+        X, Y, W = get_bilinear_weights(np.array([dx]), np.array([dy]))
+        
+        # X and Y contain the 4 integer coordinates for each point
+        # W contains the corresponding weights
+        # Reshape from (4,1) to (4,) for easy indexing
+        X = X.reshape(-1)
+        Y = Y.reshape(-1)
+        W = W.reshape(-1)
+        
+        # Call roll_image recursively for each of the 4 corner points
+        # and combine them using the weights
+        result = (
+            W[0] * roll_image(image, dx=X[0], dy=Y[0], interp='nearest') +
+            W[1] * roll_image(image, dx=X[1], dy=Y[1], interp='nearest') +
+            W[2] * roll_image(image, dx=X[2], dy=Y[2], interp='nearest') +
+            W[3] * roll_image(image, dx=X[3], dy=Y[3], interp='nearest')
+        )
+        
+        return result
+    
+    elif interp == 'round':
+        dx = round(dx)
+        dy = round(dy)
+    elif interp == 'floor' or interp=='nearest': 
+        dx = int(dx)
+        dy = int(dy)
+    elif interp == 'ceil':
+        dx = int(math.ceil(dx))
+        dy = int(math.ceil(dy))
+    else:
+        raise ValueError("rp.roll_image: Invalid interp="+str(interp))
+
+    image = as_numpy_image(image)  # Assume the image is now a float tensor in HWC form
+    image = np.roll(image, dy, 0)
+    image = np.roll(image, dx, 1)
+    return image
+
+
+
 def crop_image(image, height: int = None, width: int = None, origin=None, copy=False):
     """
     Returns a cropped image to the specified width and height
@@ -29463,7 +29876,37 @@ def crop_images(images, height:int = None, width:int=None, origin='top left'):
 def crop_image_zeros(image,*,output='image'):
     """
     Given some big image that is surrounded by black, or 0-alpha transparency, crop out that excess region
-    TODO: Give examples
+    Crops out black or fully transparent (0-alpha) regions from the borders of an image.
+    
+    This function removes excess black borders or regions of zero-alpha transparency around an image, reducing it to only the visible content. It can return either the cropped image or the bounding coordinates of the cropped area.
+
+    Parameters:
+        image : ndarray
+            The input image to crop, which can be grayscale, RGB, or RGBA.
+        output : str, optional
+            Specifies the type of output to return. If 'image' (default), returns the cropped image.
+            If 'bounds', returns a tuple of bounding box coordinates (top, bottom, left, right).
+
+    Returns:
+        cropped_image : ndarray
+            The cropped image, returned if output is 'image'.
+        bounds : tuple of int
+            A tuple (top, bottom, left, right) defining the bounding box coordinates, returned if output is 'bounds'.
+
+    Examples:
+        >>> import numpy as np
+        >>> image = np.array([[0, 0, 0, 0],
+                              [0, 255, 255, 0],
+                              [0, 255, 255, 0],
+                              [0, 0, 0, 0]], dtype=np.uint8)
+        >>> cropped_image = crop_image_zeros(image, output='image')
+        >>> print(cropped_image)
+        [[255 255]
+         [255 255]]
+         
+        >>> bounds = crop_image_zeros(image, output='bounds')
+        >>> print(bounds)
+        (1, 3, 1, 3)  # Top, Bottom, Left, Right
     """
     assert output in 'image bounds'.split(),'output is a string indicating what the output type is - it can be either image or bounds but you gave type '+str(type(output))+' '+str(output)
     assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
@@ -29644,7 +30087,9 @@ def horizontally_concatenated_strings(*strings,rectangularize=False,fillchar=' '
             lines=line_split(make_string_rectangular(line_join(lines),align='left',fillchar=fillchar))
     return line_join(lines)
 def vertically_concatenated_strings(*strings):
-    #Pretty obvious what this does tbh, I dont see good reason for documenation here
+    """
+    Pretty obvious what this does tbh, I dont see good reason for documenation here
+    """
     strings=delist(detuple(strings))
     return line_join(strings)
 
@@ -29826,8 +30271,10 @@ def strip_ansi_escapes(string):
 
 
 def visible_string_length(string):
-    #Give the visible string length when printed into a terminal.
-    #Ignores ansi escape seqences and zero-width characters
+    """
+    Give the visible string length when printed into a terminal.
+    Ignores ansi escape seqences and zero-width characters
+    """
     try:string=strip_ansi_escapes(string)
     except AssertionError:pass
     try:
@@ -29843,6 +30290,7 @@ def visible_string_length(string):
 
 def string_width(string):
     return max(map(visible_string_length,line_split(string)),default=0)
+
 def string_height(string):
     return number_of_lines(string)
 
@@ -31432,7 +31880,7 @@ def download_url_to_cache(url, cache_dir=None, skip_existing=True, hash_func=Non
     else:
         raise ValueError("rp.download_url_to_cache: url=%s is neither a valid url nor an existing path"%url)
 
-download_file_to_cache = download_url_to_cache
+download_to_cache = download_file_to_cache = download_url_to_cache
 
 def download_urls_to_cache(
     *urls,
@@ -31829,7 +32277,9 @@ def graham_scan(path):
     #   display_polygon(convex_hull,alpha=.25)
 
 def convex_hull(points):
-    #Only 2d convex hulls are supported at the moment, sorry...
+    """
+    Only 2d convex hulls are supported at the moment, sorry...
+    """
     return graham_scan(points)
 
 def _point_on_edge(point,edge):
@@ -33206,6 +33656,72 @@ def tmux_kill_sessions(*session_names,strict=False):
     for session_name in session_names:
         tmux_kill_session(session_name)
 
+
+def tmux_type_in_all_panes(keystrokes: str, *, session: str = None, window: str = None):
+    """
+    Sends keystrokes to all panes within a specified Tmux session and window. If no session or window is specified,
+    the current active session and window are used. If only a session is specified, it targets the default window in that session.
+    If only a window is specified, it targets that window in the current session.
+
+    Args:
+        keystrokes (str): The keystrokes to send.
+        session (str, optional): The target session name or ID (defaults to the current session).
+        window (str, optional): The target window within the session (defaults to the current window).
+    """
+    import subprocess
+
+    # Construct the target specifier
+    target = ''
+    if session and window:
+        target = session + ':' + window
+    elif session:
+        target = session + ':'  # Targeting default window in specified session
+    elif window:
+        target = ':' + window  # Targeting specified window in the current session
+
+    # Commands to run
+    commands = [
+        ["tmux", "set-window-option", "-t", target, "synchronize-panes", "on"],
+        ["tmux", "send-keys", "-t", target, keystrokes],
+        ["tmux", "set-window-option", "-t", target, "synchronize-panes", "off"]
+    ]
+
+    # Execute the commands
+    for command in commands:
+        subprocess.run(command, check=True)
+
+def tmux_reset_all_panes(*, session: str = None, window: str = None):
+    """
+    Resets all panes within a specified Tmux session and window. If no session or window is specified,
+    the current active session and window are used. If only a session is specified, it targets the default window in that session.
+    If only a window is specified, it targets that window in the current session.
+    Args:
+        session (str, optional): The target session name or ID (defaults to the current session).
+        window (str, optional): The target window within the session (defaults to the current window).
+    """
+    import subprocess
+    
+    # Construct the target specifier
+    target = ''
+    if session and window:
+        target = session + ':' + window
+    elif session:
+        target = session + ':'  # Targeting default window in specified session
+    elif window:
+        target = ':' + window  # Targeting specified window in the current session
+    
+    # Commands to run
+    commands = [
+        ["tmux", "set-window-option", "-t", target, "synchronize-panes", "on"],
+        ["tmux", "send-keys", "-t", target, "clear", "Enter"],
+        ["tmux", "send-keys", "-t", target, "C-l"],
+        ["tmux", "set-window-option", "-t", target, "synchronize-panes", "off"]
+    ]
+    
+    # Execute the commands
+    for command in commands:
+        subprocess.run(command, check=True)
+
 def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None):
     """
     Creates a yaml file to be loaded by tmuxp. See https://github.com/tmux-python/tmuxp
@@ -33751,36 +34267,40 @@ def extract_zip_file(zip_file_path,folder_path=None,*,treat_as=None):
 unzip_to_folder=extract_zip_file
 
 def _extract_archive_via_pyunpack(archive_path, folder_path):
-    #This function is used to unpack more than just .zip files.
-    #It can unpack .rar files, .tar files, .7z files - etc!
-    #On linux, you might have to apt-install a package to get this function to work
-    #For example: 'apt install patool', 'apt install rar', etc
-    #SUPPORTED FILETYPES:
-    # 7z       (.7z)
-    # ACE      (.ace)
-    # ALZIP    (.alz)
-    # AR       (.a)
-    # ARC      (.arc)
-    # ARJ      (.arj)
-    # BZIP2    (.bz2)
-    # CAB      (.cab)
-    # compress (.Z)
-    # CPIO     (.cpio)
-    # DEB      (.deb)
-    # DMS      (.dms)
-    # GZIP     (.gz)
-    # LRZIP    (.lrz)
-    # LZH      (.lha .lzh)
-    # LZIP     (.lz)
-    # LZMA     (.lzma)
-    # LZOP     (.lzo)
-    # RPM      (.rpm)
-    # RAR      (.rar)
-    # RZIP     (.rz)
-    # TAR      (.tar)
-    # XZ       (.xz)
-    # ZIP      (.zip .jar)
-    # ZOO      (.zoo)
+    """
+    This function is used to unpack more than just .zip files.
+    It can unpack .rar files, .tar files, .7z files - etc!
+    On linux, you might have to apt-install a package to get this function to work
+    For example: 'apt install patool', 'apt install rar', etc
+
+    SUPPORTED FILETYPES:
+        7z       (.7z)
+        ACE      (.ace)
+        ALZIP    (.alz)
+        AR       (.a)
+        ARC      (.arc)
+        ARJ      (.arj)
+        BZIP2    (.bz2)
+        CAB      (.cab)
+        compress (.Z)
+        CPIO     (.cpio)
+        DEB      (.deb)
+        DMS      (.dms)
+        GZIP     (.gz)
+        LRZIP    (.lrz)
+        LZH      (.lha .lzh)
+        LZIP     (.lz)
+        LZMA     (.lzma)
+        LZOP     (.lzo)
+        RPM      (.rpm)
+        RAR      (.rar)
+        RZIP     (.rz)
+        TAR      (.tar)
+        XZ       (.xz)
+        ZIP      (.zip .jar)
+        ZOO      (.zoo)
+
+    """
 
     pip_import('pyunpack')
 
@@ -35692,6 +36212,29 @@ def get_identity_uv_map(height=256,width=256,uv_form='xy'):
     return output
 
 
+#Math functions that work across libraries
+def _ceil(x):
+    """ Works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.ceil(x).astype(int)
+    if is_torch_tensor(x):return x.ceil().long()
+    return math.ceil(x)
+
+def _floor(x):
+    """ Works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.floor(x).astype(int)
+    if is_torch_tensor(x):return x.floor().long()
+    return math.floor(x)
+
+def _randn_like(x):
+    """ Works across libraries - such as numpy, torch """
+    if is_numpy_array(x):
+        return np.random.randn(*x.shape)
+    elif is_torch_tensor:
+        import torch
+        return torch.randn_like(x)
+    else:
+        raise ValueError(get_current_function_name() + " does not support type "+str(type(tensor)))
+
 def get_bilinear_weights(x, y):
     """
     Calculate bilinear interpolation weights for a set of (x, y) coordinates.
@@ -35732,10 +36275,10 @@ def get_bilinear_weights(x, y):
     C=Qx*Qy #Weight for floor(x),floor(x)
     D=Qx*Ry #Weight for floor(x), ceil(y)
 
-    Cx = x.ceil().long()
-    Cy = y.ceil().long()
-    Fx = x.floor().long()
-    Fy = y.floor().long()
+    Cx = _ceil(x)
+    Cy = _ceil(y)
+    Fx = _floor(x)
+    Fy = _floor(y)
 
     stack = pip_import('torch').stack if is_torch_tensor(x) else np.stack
     
@@ -35928,6 +36471,7 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
         ...     
         ... ans=printed(save_video_mp4(frames,video_bitrate='max'))
         ... display_video(frames,loop=True)
+
 
     """
 
@@ -36133,7 +36677,7 @@ def accumulate_flows(*flows,reduce=True,reverse=False):
         ... output_video = video_with_progress_bar(output_frames)
         ... ans = printed(save_video_mp4(output_video, "accumulate_flow_demo.mp4"))
 
-    EXAMPLE (real-world video, needs GPU to run though. Run in a jupyter notebook.):
+    EXAMPLE (particle flow noise warping - can run on a laptop)
 
         >>> from rp import *
         ... import torch
@@ -36166,7 +36710,7 @@ def accumulate_flows(*flows,reduce=True,reverse=False):
         ... 
         ... i=0
         ... 
-        ... orig_noise = torch.randn_like(as_torch_image(frame_a))
+        ... orig_noise = torch.(as_torch_image(frame_a))
         ... 
         ... try:
         ...     while True:
@@ -36209,6 +36753,10 @@ def accumulate_flows(*flows,reduce=True,reverse=False):
         ...             (1 if REVERSE_FLOW else -1) * as_numpy_array(flows),
         ...             reverse=True,
         ...         )
+        ... 
+        ...         def cv_remap_image(image,x,y,*args,**kwargs):
+        ...             return as_numpy_image(torch_remap_image(as_torch_image(image),torch.tensor(x),torch.tensor(y),*args,**kwargs))
+        ... 
         ...         warped_frame = cv_remap_image(frames[0], *-cum_flow, relative=True)
         ...         
         ...         iter_warped_frame = cv_remap_image(prev_frame, *(-1 if REVERSE_FLOW else 1) * flows[-1], relative=True)
@@ -36373,12 +36921,7 @@ def accumulate_flows(*flows,reduce=True,reverse=False):
         assert False, 'All flows should be either torch tensors or all numpy arrays, not a mix of both.'
 
 
-def resize_images_to_hold(*images, height: int = None, width: int = None, interp='auto', allow_shrink=True):
-    """ Plural of resize_image_to_hold """
-    images=detuple(images)
-    return [resize_image_to_hold(x,height,width,interp=interp,allow_shrink=allow_shrink) for x in images]
-
-def resize_image_to_hold(image, height: int = None, width: int = None, *, interp='auto', allow_shrink=True):
+def resize_image_to_hold(image, height: int = None, width: int = None, interp='auto', *, allow_shrink=True):
     """
     Resizes an image so that the specified bounding box can fit entirely inside the image, while maintaining the
     aspect ratio of the input image.
@@ -36436,8 +36979,8 @@ def resize_image_to_fit(
     image,
     height: int = None,
     width: int = None,
-    *,
     interp="auto",
+    *,
     allow_growth=True,
     alpha_weighted=False
 ):
@@ -36473,16 +37016,53 @@ def resize_image_to_fit(
         
     return rp.cv_resize_image(image, scale, interp=interp, alpha_weighted=alpha_weighted)
 
+def resize_images_to_hold(
+    *images,
+    height: int = None,
+    width: int = None,
+    interp="auto",
+    allow_shrink=True,
+    alpha_weighted=False,
+    show_progress=False,
+    lazy=False,
+):
+    """ Plural of resize_image_to_hold """
+    images = detuple(images)
+
+    output = (
+        resize_image_to_hold(
+            x,
+            height,
+            width,
+            interp=interp,
+            allow_shrink=allow_shrink,
+            alpha_weighted=alpha_weighted,
+        )
+        for x in images
+    )
+
+    if show_progress:
+        output = eta(output, title=get_current_function_name())
+
+    if not lazy:
+        output = list(output)
+
+    return output
+
 def resize_images_to_fit(
     *images,
     height: int = None,
     width: int = None,
     interp="auto",
     allow_growth=True,
-    alpha_weighted=False
+    alpha_weighted=False,
+    show_progress=False,
+    lazy=False,
 ):
-    images=detuple(images)
-    return [
+    """ Plural of resize_image_to_fit """
+    images = detuple(images)
+
+    output = (
         resize_image_to_fit(
             x,
             height,
@@ -36492,7 +37072,121 @@ def resize_images_to_fit(
             alpha_weighted=alpha_weighted,
         )
         for x in images
-    ]
+    )
+
+    if show_progress:
+        output = eta(output, title=get_current_function_name())
+
+    if not lazy:
+        output = list(output)
+
+    return output
+
+
+def resize_video_to_hold(
+    video,
+    height: int = None,
+    width: int = None,
+    interp="auto",
+    *,
+    allow_shrink=True,
+    alpha_weighted=False,
+    show_progress=False,
+):
+    """ Almost the same as resize_images_to_hold - but height and width and interp can be args and returns numpy arrays if input video is a numpy array too """
+    output = gather_args_call(resize_images_to_hold, images)
+
+    if is_numpy_array(video): output = as_numpy_array(output)
+
+    return output
+
+
+
+def resize_video_to_fit(
+    video,
+    height: int = None,
+    width: int = None,
+    interp="auto",
+    *,
+    allow_growth=True,
+    alpha_weighted=False,
+    show_progress=False,
+):
+    """ Almost the same as resize_images_to_fit - but height and width and interp can be args and returns numpy arrays if input video is a numpy array too """
+    output = gather_args_call(resize_images_to_fit, images)
+
+    if is_numpy_array(video): output = as_numpy_array(output)
+
+    return output
+
+
+def resize_videos_to_fit(
+    *videos,
+    height: int = None,
+    width: int = None,
+    interp="auto",
+    allow_growth=True,
+    alpha_weighted=False,
+    show_progress=False,
+    lazy=False,
+):
+    """ Plural of resize_image_to_fit """
+    #CODE IS NEAR DUPLICATE OF RESIZE_IMAGES TO FIT!!!
+    videos = detuple(videos)
+
+    output = (
+        resize_video_to_fit(
+            x,
+            height,
+            width,
+            interp=interp,
+            allow_growth=allow_growth,
+            alpha_weighted=alpha_weighted,
+        )
+        for x in videos
+    )
+
+    if show_progress:
+        output = eta(output, title=get_current_function_name())
+
+    if not lazy:
+        output = list(output)
+
+    return output
+
+def resize_videos_to_hold(
+    *videos,
+    height: int = None,
+    width: int = None,
+    interp="auto",
+    allow_shrink=True,
+    alpha_weighted=False,
+    show_progress=False,
+    lazy=False,
+):
+    """ Plural of resize_image_to_hold """
+    #CODE IS NEAR DUPLICATE OF RESIZE_IMAGES TO FIT!!!
+    videos = detuple(videos)
+
+    output = (
+        resize_video_to_hold(
+            x,
+            height,
+            width,
+            interp=interp,
+            allow_shrink=allow_shrink,
+            alpha_weighted=alpha_weighted,
+        )
+        for x in videos
+    )
+
+    if show_progress:
+        output = eta(output, title=get_current_function_name())
+
+    if not lazy:
+        output = list(output)
+
+    return output
 
 def resize_images_to_max_size(*images, interp="bilinear", alpha_weighted=False):
     """
@@ -36960,8 +37654,10 @@ def breadth_first_path_iterator(root='.'):
     #    dirs = nextDirs
 
 def gpt3(text:str):
-    #Use GPT3 to write some text
-    #https://deepai.org/machine-learning-model/text-generator
+    """
+    Use GPT3 to write some text
+    https://deepai.org/machine-learning-model/text-generator
+    """
     pip_import('requests')
     import requests
     assert isinstance(text,str),'Text must be a string'
@@ -37716,7 +38412,7 @@ def zip_folder_to_bytes(folder_path:str):
     return data
     
 class _BundledPath:
-    #A class used internally by rp for web_copy_path and web_paste_path
+    """ A class used internally by rp for web_copy_path and web_paste_path """
     def __init__(self,is_file,data,path):
         self.is_file=is_file
         self.is_folder=not is_file
@@ -37724,6 +38420,7 @@ class _BundledPath:
         self.path=path
 
 def web_paste_path(path=None,*,ask_to_replace=True):
+    """ FP (file paste) """
     data=web_paste()
     try:
         data=bytes_to_object(data)
@@ -37768,6 +38465,7 @@ def web_paste_path(path=None,*,ask_to_replace=True):
     return path
 
 def web_copy_path(path:str=None):
+    """ FC (file copy) """
     if path is None:
         path=input_select_path(message='Select a file or folder for web_copy_path:')
         path=get_relative_path(path)
@@ -40414,6 +41112,9 @@ def broadcast_lists(*lists, strict=True):
         *lists: The sequence of values to broadcast. Each argument can be a list or a non-list value.
         strict (bool): If True, enforce that all non-scalar lists must have the same length or throw an error.
 
+    Some exceptions to the rules:
+        - range(...) objects are treated as lists!
+
     Returns:
         list: A list of lists, where each list has been broadcasted to the same length.
 
@@ -40440,6 +41141,11 @@ def broadcast_lists(*lists, strict=True):
 
     processed_lists = []
     for i, e in enumerate(lists):
+
+        #Types that get treated as lists!
+        if isinstance(e, range):
+            e = list(e)
+
         if not isinstance(e, list):
             processed_lists.append([e])
         else:
@@ -40470,6 +41176,9 @@ def broadcast_kwargs(kwargs):
     """
     Broadcasts a dict of lists to the same length, and turns non-lists into lists.
     Closely related to rp.broadcast_lists
+
+    Make it possible for the broadcasted args to be lazy too! We're going to have to give a way to broadcast non-lists...
+
 
     Args:
         kwargs: The keyword arguments to broadcast. Each value can be a list or a non-list value.
@@ -41146,6 +41855,7 @@ def print_gpu_summary(
     from rich.console import Console
     from collections import defaultdict
     from rich.table import Table
+    import rich
 
     console = Console(record=True)
     console.begin_capture()
@@ -41226,7 +41936,7 @@ def print_gpu_summary(
     if silent:
         return output
     else:
-        print(output)
+        rich.print(table)
 
 
 def print_notebook_gpu_summary():
@@ -41795,6 +42505,7 @@ known_pypi_module_package_names={
     'past': 'future',
     'pasta': 'google-pasta',
     'piglet': 'piglet-templates',
+    'pillow_heif': 'pillow-heif',
     'pl_bolts': 'pytorch-lightning-bolts',
     'pl_examples': 'pytorch-lightning',
     'plotlywidget': 'plotly',
