@@ -2951,7 +2951,7 @@ def trim_video(video,length:int,copy=True):
     if isinstance(video,list):
         if not length:
             return []
-        return video+extra_frames
+        return list(video)+list(extra_frames)
         
     elif isinstance(video,np.ndarray):
         return np.concatenate((video,np.asarray(extra_frames)))
@@ -9967,6 +9967,10 @@ def load_image_from_webcam(webcam_index: int = 0,
     img=cv_bgr_rgb_swap(img)
 
     return img
+
+def load_webcam_stream():
+    while True:
+        yield load_image_from_webcam()
 
 def load_image_from_screenshot():
     """
@@ -17368,6 +17372,9 @@ def pseudo_terminal(
         RVN  RYAN VIMRC NO
         RRNG  RYAN RANGERRC
 
+        strip ans.strip()
+        sp    ans.strip()
+
         RZG  $r._load_ryan_lazygit_config()
 
         VIMPROF $r._profile_vim_startup_plugins()
@@ -17450,7 +17457,7 @@ def pseudo_terminal(
 
         NB  $extract_code_from_ipynb()
         NBA  $extract_code_from_ipynb(ans)
-        NBC  $r._clear_jupyter_notebook_outputs()
+        NBC  $r.clear_jupyter_notebook_outputs()
         NBCA $r._nbca(ans) # Clear a notebook
         NBCH $r._nbca($get_all_files(file_extension_filter='ipynb')) #Clear all notebooks in the current directory
         NBCHY $r._nbca($get_all_files(file_extension_filter='ipynb',sort_by='size')[::-1], auto_yes=True) #Clear all notebooks in the current directory without confirmation
@@ -17536,6 +17543,7 @@ def pseudo_terminal(
         LJ LINE JOIN ANS
         AJ JSON ANS
         JA JSON ANS
+        LJEA [$line_join(x) for x in ans] #Line Join Each Ans
         CJ ",".join(map(str,ans))
 
         FN $r._get_function_names(ans)
@@ -21803,6 +21811,7 @@ def cv_contour_area(contour):#,closed=False):
 
 def cv_draw_circle(image,x,y,radius=5,color=(255,255,255),*,antialias=True,copy=True):
     if is_binary_image(image):image=rp.as_rgb_image(image)
+    image = as_byte_image(image)
     x=int(x)
     y=int(y)
     cv2=pip_import('cv2')
@@ -24042,7 +24051,7 @@ def labeled_images(images,labels,show_progress=False,lazy=False,*args,**kwargs):
     if not lazy: output = list(output)
     return output
 
-def labeled_videos(videos,labels,show_progress=False,lazy=False,*args,**kwargs):
+def labeled_videos(videos,labels,show_progress=False,lazy=False,lazy_frames=False,*args,**kwargs):
     """
     The plural of labeled_images
     See rp.labeled_image's documentation
@@ -24062,7 +24071,7 @@ def labeled_videos(videos,labels,show_progress=False,lazy=False,*args,**kwargs):
 
     assert len(videos)==len(labels), (len(videos), len(labels))
 
-    output = (labeled_images(video,label,*args,**kwargs) for video,label in zip(videos,labels))
+    output = (labeled_images(video,label,lazy=lazy_frames,*args,**kwargs) for video,label in zip(videos,labels))
 
     output = IteratorWithLen(output, len(videos))
     if show_progress: output = eta(output, title = 'rp.'+get_current_function_name())
@@ -26682,9 +26691,10 @@ _rp_colors = dict(
     silver=(0.8, 0.8, 0.8),
     dark=(0.0,0.0,0.0),
     light=(1.0,1.0,1.0),
+    random=lambda:random_rgb_float_color(),
 )
 
-@memoized
+_cached_rp_colors={}
 def _get_rp_color(name):
     """
     Allows mixing of colors, like "blue green", "dark gray" and "light light red"
@@ -26692,7 +26702,12 @@ def _get_rp_color(name):
     """
     import re
 
+    if name in _cached_rp_colors:
+        return _cached_rp_colors[name]
+
     def blend_colors(color_a, color_b):
+        if callable(color_a):color_a=color_a()
+        if callable(color_b):color_b=color_b()
         ra,ga,ba=color_a
         rb,gb,bb=color_b
         return ((ra+rb)/2,(ga+gb)/2,(ba+bb)/2)
@@ -26721,8 +26736,13 @@ def _get_rp_color(name):
     for color_name in color_names[::-1]:
         if color is None:
             color = _rp_colors[color_name]
+            if callable(color):
+                color=color()
         else:
             color = blend_colors(color, _rp_colors[color_name])
+
+    if not 'random' in name:
+        _cached_rp_colors[name]=color
     
     return color
 
@@ -27450,7 +27470,7 @@ def as_numpy_array(x):
     try:
         if '16' in str(x.dtype):x=x.float() #Numpy screws up with floa16
         return x.detach().cpu().numpy()#For pytorch. We're not doing an isinstance check of type pytorch tensor becuse that involves importing pytorch, which might be slow. Try catch is faster here.
-    except Exception:pass
+    except Exception:raise
     assert False,'as_numpy_array: Error: Could not convert x into a numpy array. type(x)='+repr(type(x))+' and x='+repr(x)
 
 def input_multiline():
@@ -33690,7 +33710,8 @@ def tmux_type_in_all_panes(keystrokes: str, *, session: str = None, window: str 
     for command in commands:
         subprocess.run(command, check=True)
 
-def tmux_reset_all_panes(*, session: str = None, window: str = None):
+#Keeping this function private until it works perfectly!
+def _tmux_reset_all_panes(*, session: str = None, window: str = None):
     """
     Resets all panes within a specified Tmux session and window. If no session or window is specified,
     the current active session and window are used. If only a session is specified, it targets the default window in that session.
@@ -35786,7 +35807,7 @@ def cv_resize_images(
 
     images=(cv_resize_image(image, size, interp) for image in images)
 
-    if show_progress: images = eta(images, title='cv_resize_images')
+    if show_progress: images = eta(images, title='rp.cv_resize_images')
     if not lazy: 
         images=list(images)
         if as_numpy:
@@ -35805,7 +35826,8 @@ def resize_videos(
     interp="auto",
     alpha_weighted=False,
     show_progress=False,
-    lazy=False
+    lazy=False,
+    lazy_frames=False
     ):
 
     videos=detuple(videos)
@@ -35819,7 +35841,7 @@ def resize_videos(
             interp=interp,
             alpha_weighted=alpha_weighted,
             show_progress=False,
-            lazy=False,
+            lazy=lazy_frames,
         )
         for video in videos
     )
@@ -37024,7 +37046,7 @@ def resize_images_to_hold(
     allow_shrink=True,
     alpha_weighted=False,
     show_progress=False,
-    lazy=False,
+    lazy=False
 ):
     """ Plural of resize_image_to_hold """
     images = detuple(images)
@@ -37057,7 +37079,7 @@ def resize_images_to_fit(
     allow_growth=True,
     alpha_weighted=False,
     show_progress=False,
-    lazy=False,
+    lazy=False
 ):
     """ Plural of resize_image_to_fit """
     images = detuple(images)
@@ -37091,7 +37113,7 @@ def resize_video_to_hold(
     *,
     allow_shrink=True,
     alpha_weighted=False,
-    show_progress=False,
+    show_progress=False
 ):
     """ Almost the same as resize_images_to_hold - but height and width and interp can be args and returns numpy arrays if input video is a numpy array too """
     output = gather_args_call(resize_images_to_hold, images)
@@ -37110,7 +37132,7 @@ def resize_video_to_fit(
     *,
     allow_growth=True,
     alpha_weighted=False,
-    show_progress=False,
+    show_progress=False
 ):
     """ Almost the same as resize_images_to_fit - but height and width and interp can be args and returns numpy arrays if input video is a numpy array too """
     output = gather_args_call(resize_images_to_fit, images)
@@ -37129,6 +37151,7 @@ def resize_videos_to_fit(
     alpha_weighted=False,
     show_progress=False,
     lazy=False,
+    lazy_frames=False
 ):
     """ Plural of resize_image_to_fit """
     #CODE IS NEAR DUPLICATE OF RESIZE_IMAGES TO FIT!!!
@@ -37142,6 +37165,7 @@ def resize_videos_to_fit(
             interp=interp,
             allow_growth=allow_growth,
             alpha_weighted=alpha_weighted,
+            lazy=lazy_frames,
         )
         for x in videos
     )
@@ -37163,6 +37187,7 @@ def resize_videos_to_hold(
     alpha_weighted=False,
     show_progress=False,
     lazy=False,
+    lazy_frames=False
 ):
     """ Plural of resize_image_to_hold """
     #CODE IS NEAR DUPLICATE OF RESIZE_IMAGES TO FIT!!!
@@ -37176,6 +37201,7 @@ def resize_videos_to_hold(
             interp=interp,
             allow_shrink=allow_shrink,
             alpha_weighted=alpha_weighted,
+            lazy=lazy_frames,
         )
         for x in videos
     )
@@ -39027,6 +39053,130 @@ def unwarped_perspective_image(image, from_points, to_points=None, height:int=No
 _rp_folder = get_parent_folder(__file__)
 _rp_downloads_folder = path_join(_rp_folder, "downloads")
 
+def _pip_import_depth_pro(autoyes=False):
+    try:
+        import depth_pro
+
+        return depth_pro
+    except ImportError:
+        if (
+            autoyes
+            or rp.r._pip_import_autoyes
+            or input_yes_no("Would you like to install ml_depth_pro?")
+        ):
+            with SetCurrentDirectoryTemporarily(rp.r._rp_downloads_folder):
+                ml_depth_pro_repo_path = git_clone(
+                    "https://github.com/apple/ml-depth-pro"
+                )
+                with SetCurrentDirectoryTemporarily(ml_depth_pro_repo_path):
+                    # Download models and install package
+                    command = (
+                        "bash get_pretrained_models.sh && "
+                        + shlex.quote(sys.executable)
+                        + " -m pip install -e ."
+                    )
+                    os.system(command)
+
+                    # Needed the first time it installs
+                    sys.path.append(
+                        path_join(rp.r._rp_downloads_folder, "ml-depth-pro", "src")
+                    )
+
+                    fansi_print("RUNNING COMMAND: " + command, "cyan", "bold")
+            import depth_pro
+
+            return depth_pro
+        else:
+            raise
+
+
+@memoized
+def _get_depth_pro_model(device=None):
+    _pip_import_depth_pro()
+    pip_import("PIL")
+
+    from PIL import Image
+    import depth_pro
+
+    depth_pro_repo_path = path_join(rp.r._rp_downloads_folder, "ml-depth-pro")
+    with SetCurrentDirectoryTemporarily(depth_pro_repo_path):
+        # This has to be done in the install directory...
+        rp.fansi_print(
+            "rp: Loading ml_depth_pro model to device=%s..." % repr(device),
+            "green",
+            "bold",
+            new_line=False,
+        )
+        model, transform = depth_pro.create_model_and_transforms()
+
+    # Load model and preprocessing transform
+    model.eval()
+
+    if device is not None:
+        model = model.to(device)
+
+    rp.fansi_print("done!", "green", "bold", new_line=True)
+
+    return model, transform
+
+
+def run_depth_pro(image, *, focal_length=None, device=None):
+    """
+    Estimate depth from a single RGB image using the DepthPro model.
+
+    DepthPro is Apple's monocular depth estimation model released in late 2024.
+    It can run on macOS and Linux. Windows compatibility is untested.
+
+    Args:
+        image (str, PIL.Image, torch.Tensor): Input RGB image. Can be a file path, URL, HWC numpy array,
+            PIL Image, or CHW PyTorch tensor. If a PyTorch tensor is provided, the `device` 
+            argument will default to the tensor's device if not explicitly specified.
+        focal_length (float, optional): Focal length of the camera in pixels. If not 
+            provided, the model will estimate the focal length.
+        device (str, optional): PyTorch device to run the model on. Defaults to None,
+            which will use the CPU. If `image` is a PyTorch tensor and `device` is 
+            not specified, the tensor's device will be used.
+
+    Returns:
+        easydict.EasyDict: A dictionary containing:
+            - depth (numpy.ndarray): Estimated depth map in pixels.
+            - focal_length (float): Estimated or provided focal length in pixels.
+
+    """
+
+    model, transform = _get_depth_pro_model(device)
+
+    import depth_pro
+
+    if is_torch_image(image) and device is None:
+        device = image.device
+        image = as_numpy_image(image)
+
+    if is_valid_url(image):
+        image = load_image(image)
+
+    if isinstance(image, str):
+        image, _, f_px = depth_pro.load_rgb(image)
+    else:
+        assert is_image(image)
+        # Load and preprocess an image.
+        image = as_rgb_image(image)
+        image = as_byte_image(image)
+        f_px = None
+
+    image = transform(image)
+    prediction = model.infer(image, f_px=f_px)
+
+    depth = prediction["depth"]  # Depth in [m].
+    depth = as_numpy_array(depth)
+
+    focal_length = prediction["focallength_px"]  # Focal length in pixels.
+    focal_length = float(focal_length)
+
+    return gather_vars("depth focal_length")
+
+
+
 def _pip_import_pyflow():
     """
     This function attempts to import the 'pyflow' module. If the import fails, 
@@ -39369,6 +39519,32 @@ def cv_optical_flow(frame_a, frame_b, algorithm="DenseRLOF"):
     flow = np.transpose(flow, (2, 0, 1))
     return flow
 
+def calculate_flows(video, flow_func=cv_optical_flow, *, show_progress=False, lazy=False):
+    if show_progress:
+        assert has_len(video), 'Cannot show progress because video doesnt have a length, type(video)='+str(type(video))
+        length=len(video)
+        
+    def helper():
+        video_iter=iter(video)
+        image=next(video_iter)
+        for new_image in video:
+            flow=flow_func(image,new_image)
+            image=new_image
+            yield flow
+
+    output=helper()
+    
+    if show_progress:
+        output=IteratorWithLen(output,length)
+        output=eta(output,title='rp.calculate_flows')
+            
+    if not lazy:
+        output=list(output)
+    
+    return output
+
+
+
 def optical_flow_to_image(dx, dy, *, mode='saturation', sensitivity=None):
     """
     Visualize optical flow as an RGB image - and return the image.
@@ -39436,6 +39612,84 @@ def optical_flow_to_image(dx, dy, *, mode='saturation', sensitivity=None):
     
     return rgb
 
+def optical_flow_to_arrow_grid(dx, dy, *, step=16, color=(0,1,0), background=None):
+    """
+    Visualize optical flow as a grid of arrows on an optional background image.
+
+    Args:
+        dx (numpy.ndarray): The x-component of the optical flow.
+        dy (numpy.ndarray): The y-component of the optical flow.
+        step (int, optional): Spacing between arrows in the grid. Default is 16 pixels.
+        color (tuple, optional): Color of the arrows as (B, G, R). Default is green.
+        background (numpy.ndarray, optional): Background image (height x width x channels) 
+            on which the flow will be drawn. If not provided, a black background is used.
+
+    Returns:
+        numpy.ndarray: An image with arrows drawn to represent the optical flow.
+    
+    Raises:
+        AssertionError: If dx and dy are not numpy arrays or if they do not have the same shape.
+        
+    EXAMPLE:
+
+        >>> def next_image():
+        ...     while true:
+        ...         out=load_image_from_webcam()
+        ...         out=cv_resize_image(out,.25)
+        ...         yield out
+        ...
+        ... images=next_image()
+        ... image=next(images)
+        ...
+        ... while true:
+        ...     new_image=next(images)
+        ...     flow=cv_optical_flow(image,new_image)
+        ...     arrows_image = draw_flow_grid(*flow,background=image)
+        ...     display_image(arrows_image)
+        ...     image=new_image
+
+        >>> def stream():
+        ...     while True:
+        ...         image=load_image_from_webcam()
+        ...         image=resize_image_to_fit(image,256,256)
+        ...         yield image
+        ... for x in calculate_flows(
+        ...     stream(),
+        ...     lazy=True,
+        ... ):
+        ...     display_image(
+        ...         optical_flow_to_arrow_grid(
+        ...             *x * 3, step=32, color="black", background=optical_flow_to_image(*x,sensitivity=.1)
+        ...         )
+        ...     )
+
+    """
+    pip_import('numpy')
+    pip_import('cv2')
+
+    import numpy as np
+    import cv2
+
+    color = as_rgb_float_color(color)
+    color = float_color_to_byte_color(color)
+
+    assert isinstance(dx, np.ndarray) and isinstance(dy, np.ndarray), "dx and dy must be numpy arrays"
+    assert dx.shape == dy.shape, "dx and dy must have the same shape"
+
+    if background is not None:
+        assert isinstance(background, np.ndarray), "Background must be a numpy array"
+        assert background.ndim == 3 and background.shape[2] == 3, "Background must be a color image (HWC format)"
+        img = background.copy()
+    else:
+        height, width = dx.shape
+        img = np.zeros((height, width, 3), dtype=np.uint8)
+
+    for y in range(0, img.shape[0], step):
+        for x in range(0, img.shape[1], step):
+            endx, endy = int(x + dx[y, x]), int(y + dy[y, x])
+            cv2.arrowedLine(img, (x, y), (endx, endy), color, thickness=1, line_type=cv2.LINE_AA, tipLength=0.3)
+
+    return img
 
 def cv_remap_image(image, x, y, *, relative=False, interp = 'bilinear'):
     """
@@ -39673,7 +39927,7 @@ def _nbca(paths,auto_yes=False,parallel=False):
     def do_path(x):
         try:
             if file_exists(x) and x.endswith('.ipynb'):
-                _clear_jupyter_notebook_outputs(x,auto_yes=auto_yes)
+                clear_jupyter_notebook_outputs(x,auto_yes=auto_yes)
             else:
                 print(fansi("r.nbca: Skipping; not a ipynb file:",'yellow'),x)
         except Exception as e:
@@ -39684,11 +39938,13 @@ def _nbca(paths,auto_yes=False,parallel=False):
     else:
         par_map(do_path,paths)
 
-def _clear_jupyter_notebook_outputs(path:str=None, auto_yes=False):
-    #TODO: Look at https://pypi.org/project/nbstripout/ -- this removes metadata, and might allow us to git commit WITHOUT wiping??
-    #This clears all outputs of a jupyter notebook file
-    #This is useful when the file gets so large it crashes the web browser (storing too many images in it etc)
-    #Source: https://stackoverflow.com/questions/28908319/how-to-clear-an-ipython-notebooks-output-in-all-cells-from-the-linux-terminal
+def clear_jupyter_notebook_outputs(path:str=None, auto_yes=False):
+    """
+    This clears all outputs of a jupyter notebook file
+    This is useful when the file gets so large it crashes the web browser (storing too many images in it etc)
+    Source: https://stackoverflow.com/questions/28908319/how-to-clear-an-ipython-notebooks-output-in-all-cells-from-the-linux-terminal
+    """
+    # TODO: Look at https://pypi.org/project/nbstripout/ -- this removes metadata, and might allow us to git commit WITHOUT wiping??
     if path is None:
         path=input_select_file(file_extension_filter='ipynb')
     path=get_absolute_path(path)
@@ -39918,6 +40174,41 @@ def histogram_via_bokeh(values, bins:int=50, *,
     finally:
         curdoc().theme = old_theme
 
+def get_git_branch(path='.') -> str:
+    """
+    Gets the current git branch name.
+
+    Args:
+        path (str): The path to the git repository. Defaults to the current directory.
+
+    Returns:
+        str: The name of the current git branch, or None if not in a git repository.
+    """
+    import subprocess
+    path = get_git_repo_root(path)
+    try:
+        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=path).decode('utf-8').strip()
+        return branch
+    except subprocess.CalledProcessError:
+        return None
+
+def get_git_is_dirty(path='.') -> bool:
+    """
+    Checks if the git repository has uncommitted changes.
+
+    Args:
+        path (str): The path to the git repository. Defaults to the current directory.
+
+    Returns:
+        bool: True if there are uncommitted changes, False otherwise.
+    """
+    import subprocess
+    path = get_git_repo_root(path)
+    try:
+        subprocess.check_call(["git", "diff", "--quiet", "HEAD"], cwd=path)
+        return False
+    except subprocess.CalledProcessError:
+        return True
 
 def get_git_remote_url(repo='.'):
     assert folder_exists(repo)
