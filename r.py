@@ -35797,6 +35797,7 @@ def cv_resize_images(
     interp="auto",
     alpha_weighted=False,
     show_progress=False,
+    copy=True,
     lazy=False
 ):
 
@@ -35805,7 +35806,7 @@ def cv_resize_images(
 
     as_numpy = is_numpy_array(images)
 
-    images=(cv_resize_image(image, size, interp) for image in images)
+    images=(cv_resize_image(image, size, interp, copy=copy) for image in images)
 
     if show_progress: images = eta(images, title='rp.cv_resize_images')
     if not lazy: 
@@ -36943,7 +36944,7 @@ def accumulate_flows(*flows,reduce=True,reverse=False):
         assert False, 'All flows should be either torch tensors or all numpy arrays, not a mix of both.'
 
 
-def resize_image_to_hold(image, height: int = None, width: int = None, interp='auto', *, allow_shrink=True):
+def resize_image_to_hold(image, height: int = None, width: int = None, interp='auto', *, allow_shrink=True, alpha_weighted=False):
     """
     Resizes an image so that the specified bounding box can fit entirely inside the image, while maintaining the
     aspect ratio of the input image.
@@ -36995,7 +36996,7 @@ def resize_image_to_hold(image, height: int = None, width: int = None, interp='a
 
     assert scale > 0, 'Invalid arguments resulted in a scale of 0.'
 
-    return rp.cv_resize_image(image, scale, interp=interp)
+    return rp.cv_resize_image(image, scale, interp=interp, alpha_weighted=alpha_weighted)
 
 def resize_image_to_fit(
     image,
