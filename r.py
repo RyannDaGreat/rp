@@ -4336,6 +4336,31 @@ def load_image_from_clipboard():
     delete_file(path)
     return ans
 
+def copy_image_to_clipboard(image):
+    """
+    Takes an image or a path/url to an image and copies that image to your system clipboard. If you're using Ubuntu, you must install xclip. 
+
+    Note that it only operates on RGB Jpg images right now - so alpha channels will be discarded. In the future, this will be fixed and ideally we will save png images by default.
+
+    EXAMPLE:
+        >>> ans = get_youtube_video_thumbnail('https://www.youtube.com/watch?v=iu54gTucsiE')
+        ... copy_image_to_clipboard(ans)
+        ... #Try pasting into photoshop or something
+
+    """
+    pip_import('pyjpgclipboard')
+    
+    if isinstance(image,str):
+        image=load_image(image)
+    
+    temp_image_path=temporary_file_path('jpg')
+    try:
+        save_image_jpg(image,temp_image_path)
+        import pyjpgclipboard
+        pyjpgclipboard.clipboard_load_jpg(temp_image_path)
+    finally:
+        squelch_call(delete_file,temp_image_path)
+            
 
 
 def load_image(location,*,use_cache=False):
@@ -5883,8 +5908,10 @@ def play_sound_from_samples(samples,samplerate=None,blocking=False,loop=False,**
         Audio(samples,rate=samplerate,autoplay=True)
 
 def play_sound_file(path):
-    # THIS Function is an abstraction of playing sound files. Just plug in whatever method works on your computer into this one to make it work
-    # NOTE: These functions should all run on separate threads from the main thread by default!
+    """
+    THIS Function is an abstraction of playing sound files. Just plug in whatever method works on your computer into this one to make it work
+    NOTE: These functions should all run on separate threads from the main thread by default!
+    """
     try:
         if currently_running_linux():
             samples,samplerate=load_sound_file(path,samplerate=True)
@@ -5948,19 +5975,19 @@ def stop_sound():
     """
     try:
         shell_command("killall afplay")  # Used with 'play_sound_file_via_afplay' on macs.
-    except Exception:
+    except ImportError:
         pass
     # try:run_as_new_thread(shell_command,"killall com.apple.speech.speechsynthesisd")# ⟵ Works when I enter the command in terminal, but doesn't work when called from python! It'_s not very important atm though, so I'm not gonna waste time over it.
     # except Exception:pass
     try:
         import sounddevice
         sounddevice.stop()
-    except Exception:
+    except ImportError:
         pass
     try:
         import pygame
         pygame.mixer.stop()
-    except Exception:
+    except ImportError:
         pass
 
 _default_wav_output_path='r.mp3_to_wav_temp.wav'  # Expect this file to be routinely overwritten.
@@ -5971,7 +5998,7 @@ def mp3_to_wav(mp3_file_path: str,wav_output_path: str = _default_wav_output_pat
     Saves a new wav file derived from the mp3 file you gave it.
     shell_command('lame --decode '+mp3_file_path+" "+wav_output_path)# From https://gist.github.com/kscottz/5898352
     """
-    shell_command('lame ' + str(samplerate or default_samplerate) + ' -V 0 -h --decode ' + mp3_file_path + " " + wav_output_path)  # From https://gist.github.com/kscottz/5898352
+    shell_command('lame ' + str(samplerate or default_samplerate) + ' -V 0 -h --decode ' + shlex.quote(mp3_file_path) + " " + shlex.quote(wav_output_path))  # From https://gist.github.com/kscottz/5898352
     return wav_output_path
 # endregionx
 # region  Matplotlib: ［display_image，brutish_display_image，display_color_255，display_grayscale_image，line_graph，block，clf］
@@ -9603,6 +9630,12 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
         if symlink_is_broken(object):
             print(tab+tab+col("(symlink is broken)"))
 
+    def is_dictlike(x):
+        return issubclass(type(x),dict)
+    if is_dictlike(object) and all((isinstance(x, str) and not " " in x) for x in object):
+        print(col(tab + 'KEYS (%i): '%len(object)) + ' '.join(object))
+        
+
     if isinstance(object,str) and path_exists(object):
         stats=[]
         def append_stat(title,stat=''):
@@ -9628,7 +9661,6 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
             pass
         print(col(tab + '     '.join(stats)))
 
-        
 
 
     def errortext(x):
@@ -13953,6 +13985,9 @@ class eta:
             self(i)
             yield e
         self(i+1)
+
+    def __len__(self):
+        return len(self.elements)
             
 
 
@@ -14183,6 +14218,11 @@ def _static_calldefs(modpath):
 
 def _get_object_lineno(obj):
     #TODO: Make this still work even if the source file was changed (right now, if you use VIMORE and then edit the file then use VIMORE again, it will bring you to the wrong place the second time because of how python works)
+
+    #If a function is wrapped, don't show us the wrapper idc about that
+    while hasattr(obj, '__wrapped__'):
+        obj = obj.__wrapped__
+
     try:
         # functions just 
         lineno = obj.__code__.co_firstlineno
@@ -17541,8 +17581,9 @@ def pseudo_terminal(
         CDR   $r._pterm_cd($random_element([x for x in $os.scandir() if x.is_dir(follow_symlinks=False)]))
 
         LJ LINE JOIN ANS
-        AJ JSON ANS
-        JA JSON ANS
+        AJ  JSON ANS
+        JA  JSON ANS
+        JEA JSON ANS
         LJEA [$line_join(x) for x in ans] #Line Join Each Ans
         CJ ",".join(map(str,ans))
 
@@ -18349,8 +18390,14 @@ def pseudo_terminal(
 
                     elif user_message == "COPY":
                         from rp import string_to_clipboard as copy
-                        fansi_print("COPY --> r.string_to_clipboard(str(ans))","blue")
-                        copy(str(get_ans()))
+                        if is_image(get_ans()):
+                            #Can copy images to clipboard
+                            fansi_print("COPY --> r.copy_image_to_clipboard(ans)","blue")
+                            copy_image_to_clipboard(get_ans())
+                        else:
+                            #Can copy text to clipboard
+                            fansi_print("COPY --> r.string_to_clipboard(str(ans))","blue")
+                            copy(str(get_ans()))
 
                     elif user_message == "VARS":
                         if _get_pterm_verbose(): fansi_print("VARS --> ans = user_created_variables (AKA all the names you created in this pseudo_terminal session):","blue")
@@ -22505,7 +22552,7 @@ def is_transparent_image(image):
     Equivalent to the slower:
         return (as_rgba_image(image)!=as_rgba_image(as_rgb_image(image))).all()
     """
-    return is_image(image) and is_opaque_image(image)
+    return is_image(image) and not is_opaque_image(image)
 
 def _alpha_weighted_rgba_image_func(func, image, *args, **kwargs):
     """
@@ -27738,6 +27785,52 @@ def get_youtube_video_url(url_or_id):
 def _is_youtube_video_url(url):
     return url.startswith("https://www.youtube.com/watch?v=") and is_valid_url(url)
 
+@memoized
+def get_youtube_video_transcript(url_or_id: str):
+    """
+    Returns the captions/subtitles for a YouTube video based on the given URL or video ID.
+
+    NOTE: If it doesn't work, try "pip install pytubefix --upgrade"
+
+    Parameters:
+        - url_or_id (str): The YouTube video URL or video ID.
+
+    Returns:
+        - str: The transcript
+
+    """
+
+    assert isinstance(url_or_id, str), type(url_or_id)
+
+    # Common logic invariant to external libraries:
+    url = get_youtube_video_url(url_or_id)
+    if not _is_youtube_video_url(url):
+        raise ValueError("get_youtube_video_transcript: Invalid youtube id or url: "+url_or_id)
+
+    # Logic specific to pytubefix:
+    pip_import("pytubefix")
+    from pytubefix import YouTube
+
+    yt = YouTube(url)
+
+
+    #Find some english captions
+    for caption_language in ["a.en", 'en-US']:
+        if caption_language in yt.captions:
+            caption = yt.captions[caption_language]
+            break
+
+    if not 'caption' in locals():
+        raise ValueError("Captions for language '{}' not found. Available languages: {}".format(caption_language, list(yt.captions.keys())))
+
+    captions_text = caption.generate_srt_captions().splitlines()[2::4]
+    captions_text = "\n".join(captions_text)
+
+    return captions_text
+
+#Maybe uncomment in the future
+# get_youtube_video_captions = get_youtube_video_subtitles = get_youtube_video_transcript
+
 def download_youtube_video(url_or_id: str,
                            path=None,
                            *,
@@ -27892,6 +27985,28 @@ def get_youtube_video_title(url_or_id):
     url = get_youtube_video_url(url_or_id)
     return _get_youtube_video_data_via_embeddify(url)['title']
 
+
+_get_youtube_video_thumbnail_cache={}
+def get_youtube_video_thumbnail(url_or_id,*,use_cache=False,output='image'):
+    """
+    Returns the thumbnail of a youtube video, either as a url or an image
+    EXAMPLE:
+        >>> display_image(get_youtube_video_thumbnail('https://www.youtube.com/watch?v=rWwfyzX2OeM'))
+    """
+    assert isinstance(output,str),'get_youtube_video_thumbnail: output arg should be a string but got type '+str(type(output))
+    assert output in ['image','url'], 'get_youtube_video_thumbnail: output arg should be either "url" or "image" but it was '+str(output)
+    video_url = get_youtube_video_url(url_or_id)
+    
+    if use_cache:
+        if video_url not in  _get_youtube_video_thumbnail_cache:
+            _get_youtube_video_thumbnail_cache[video_url] = get_youtube_video_thumbnail(video_url, use_cache=False)
+        return _get_youtube_video_thumbnail_cache[video_url]
+    
+    thumbnail_url = _get_youtube_video_data_via_embeddify(video_url)['thumbnail_url']
+    
+    thumbnail_image = load_image(thumbnail_url, use_cache=use_cache)
+    return thumbnail_image
+    
 def _get_video_file_duration_via_moviepy(path):
     #https://stackoverflow.com/questions/3844430/how-to-get-the-duration-of-a-video-in-python
     #pip install moviepy
@@ -28293,6 +28408,7 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
      100000000 : (93.0MB)
      1000000000: (93.0MB) It seems to be the maximum size
     """
+    assert not isinstance(frames, str), 'The first argument should be the sequence of video frames, not the path!'
     
     height = None if height is None else height
     width  = None if width  is None else width 
@@ -28550,6 +28666,8 @@ def save_video(images, path, *, framerate=60):
     #Note that the file extension used in path decides the kind of video that will be exported.
     #For example, save_video(images,'video.mp4') saves an mp4 file whilst save_video(images,'video.avi') saves an avi file
     """
+    assert not isinstance(images, str), 'The first argument should be the sequence of video frames, not the path!'
+
     assert get_file_extension(path) in 'mp4 avi gif png'.split(), 'This function currently supports .mp4, .avi, .png and .gif files'
 
     if path.endswith('.mp4'): return save_video_mp4(images,path,framerate=framerate, show_progress=False)
@@ -29103,6 +29221,7 @@ def copy_paths(
         lazy=lazy,
     )
 
+_url_prefixes = 'https:// http:// s3:// sftp:// ftp:// file:// ws://'.split()
 
 def get_path_parent(path_or_url:str, levels=1):
     """
@@ -29116,7 +29235,7 @@ def get_path_parent(path_or_url:str, levels=1):
         >>> get_path_parent('/aps/asda/sokd.asd')                -> '/aps/asda'
         >>> get_path_parent('http://www.example.com/path/to')    -> 'http://www.example.com/path'
         >>> get_path_parent('http://www.example.com/?query')     -> 'http://www.example.com/'
-        >>> get_path_parent('http://www.example.com/')           -> 'http://www.example.com/'
+        # >>> get_path_parent('http://www.example.com/')           -> 'http://www.example.com/'
         >>> get_path_parent('s3://bucket/key/to/object')         -> 's3://bucket/key/to'
 
     Examples:
@@ -29160,10 +29279,19 @@ def get_path_parent(path_or_url:str, levels=1):
     parsed = urlparse(path_or_url)
     
     # Check if it's a URL (based on the presence of a scheme)
-    if parsed.scheme and \
-       not (currently_running_windows() and parsed.scheme.isalpha() and len(parsed.scheme)==1): #make sure "c:\\things\\stuff" isn't interpereted as a network path...
-        path_parent = '/'.join(parsed.path.rstrip('/').split('/')[:-1]) or '/'
-        return urlunparse((parsed.scheme, parsed.netloc, path_parent, parsed.params, parsed.query, parsed.fragment))
+    # WARNING: This caused confusion with a simple URI like mail: which doesn't have a :// in it - when I had a filename on my filesystem like "file:thing.txt" 
+    # if parsed.scheme and \
+    #    not (currently_running_windows() and parsed.scheme.isalpha() and len(parsed.scheme)==1): #make sure "c:\\things\\stuff" isn't interpereted as a network path...
+    #     path_parent = '/'.join(parsed.path.rstrip('/').split('/')[:-1]) or '/'
+    #     return urlunparse((parsed.scheme, parsed.netloc, path_parent, parsed.params, parsed.query, parsed.fragment))
+
+    #Handle URL's
+    if starts_with_any(path_or_url, _url_prefixes):
+        prefix = starts_with_any(path_or_url, _url_prefixes, return_match=True)
+        suffix = path_or_url[len(prefix):]
+        suffix = '/'.join(suffix.split('/')[:-1])
+        return prefix + suffix
+
     else:  # It's a filesystem path
         import pathlib
         return str(pathlib.Path(path_or_url).parent)
@@ -29305,6 +29433,22 @@ joined_paths=path_join#Synonyms for whatever comes into my head at the moment wh
 
 
 def path_split(path):
+    """
+    EXAMPLE:
+        >>> path_split('https://claude.ai/chat/6b1ff843-1c6c-4e34-8c9f-21bd83bc0315')
+        ans = ['https://', 'claude.ai', 'chat', '6b1ff843-1c6c-4e34-8c9f-21bd83bc0315']
+        >>> path_join(ans)
+        ans = https://claude.ai/chat/6b1ff843-1c6c-4e34-8c9f-21bd83bc0315
+        >>> path_split('/opt/homebrew/lib/python3.10/site-packages/rp')
+        ans = ['/', 'opt', 'homebrew', 'lib', 'python3.10', 'site-packages', 'rp']
+        >>> path_join(ans)
+        ans = /opt/homebrew/lib/python3.10/site-packages/rp
+    """
+    if starts_with_any(path, _url_prefixes):
+        #Its a URL
+        prefix = starts_with_any(path, _url_prefixes, return_match=True)
+        return [prefix]+path[len(prefix):].split('/')
+
     assert isinstance(path,str)
     sep='\\' if currently_running_windows() else '/'
     out=path.split(sep)
@@ -29827,6 +29971,7 @@ def crop_image(image, height: int = None, width: int = None, origin=None, copy=F
     if origin is None: origin = 'top left'
 
     assert is_image(image)
+    image = as_numpy_image(image)
     image_width  = get_image_width (image)
     image_height = get_image_height(image)
     assert (image_height, image_width) == image.shape[:2]
@@ -37726,6 +37871,50 @@ def deepgenx(code:str)->str:
     ans = line_join(ans)
     return code+ans
 
+def _get_openai_api_key(key=None):
+    if key is not None:
+        return key
+    elif 'OPENAI_API_KEY' in os.environ:
+        return os.environ['OPENAI_API_KEY']
+    else:
+        #Right now this library is very niche and not well known. This has $100 of credit. When it runs out, it runs out lol.
+        #Please be frugal. Don't be an ass.
+        return base64_to_bytes('c2stcHJvai1YUC1RcE9ZSHdqN2E0WkZIajNtdF81bUxFSkV4Y1V5RUl6QmJqeWJpenhrZ01Uajg1cnB2NDgxSnQ0dGIwcUlZRS1fTVFMVnFRbVQzQmxia0ZKQTZWajZSM1B0Wl9kbHBWR2JuOUQtbUtEWlJfQ2dhZ0xZNWU3bXZMTTlpXzVwSDNsR2ZYRGZqelU4YXFYS1VxVmVIM2lfRXdZQUE=').decode()
+    
+
+def _run_openai_llm(message,model,api_key=None):
+    pip_import('openai')
+    
+    import os
+    from openai import OpenAI
+
+    api_key=_get_openai_api_key(api_key)
+    client = OpenAI(
+        api_key=api_key
+    )
+
+    chat_completion = client.chat.completions.create(
+        messages=[
+            {
+                "role": "user",
+                "content": message,
+            }
+        ],
+        model="gpt-4o",
+    )
+    
+    return chat_completion.choices[0].message.content
+
+def run_llm_api(message,model='gpt-4o-mini',api_key=None):
+    assert isinstance(message,str),type(message)
+    assert isinstance(model,str),type(model)
+    
+    if model in ['gpt-4o','gpt-4','gpt-4o-mini','gpt-4-turbo']:
+        return _run_openai_llm(message,model,api_key)
+    else:
+        raise ValueError('Model not supported: '+str(model))
+
+
 def minify_python_code(code:str):
     pip_import('python_minifier','python-minifier')
     import python_minifier
@@ -39065,7 +39254,7 @@ def _pip_import_depth_pro(autoyes=False):
             or rp.r._pip_import_autoyes
             or input_yes_no("Would you like to install ml_depth_pro?")
         ):
-            with SetCurrentDirectoryTemporarily(rp.r._rp_downloads_folder):
+            with SetCurrentDirectoryTemporarily(make_directory(rp.r._rp_downloads_folder)):
                 ml_depth_pro_repo_path = git_clone(
                     "https://github.com/apple/ml-depth-pro"
                 )
@@ -39093,13 +39282,14 @@ def _pip_import_depth_pro(autoyes=False):
 
 @memoized
 def _get_depth_pro_model(device=None):
+    #TODO: Make this work even if depth_pro is already installed elsewhere! Like with Wendy!
     _pip_import_depth_pro()
     pip_import("PIL")
 
     from PIL import Image
     import depth_pro
 
-    depth_pro_repo_path = path_join(rp.r._rp_downloads_folder, "ml-depth-pro")
+    depth_pro_repo_path = path_join(rp.r._rp_downloads_folder, "ml-depth-pro") #IF THIS DOESNT EXIST: TODO, DOWNLAOD MODELS HERE IT EVEN IF WE DONT PIP INSTALL 
     with SetCurrentDirectoryTemporarily(depth_pro_repo_path):
         # This has to be done in the install directory...
         rp.fansi_print(
@@ -41538,7 +41728,7 @@ def broadcast_kwargs(kwargs):
         
     return output
 
-def dict_walk(d):
+def dict_walk(d, ):
     """
     Recursively yield paths and values from a dictionary, including paths to empty dictionaries.
 
@@ -41548,39 +41738,69 @@ def dict_walk(d):
 
     Args:
         d (dict): The dictionary to traverse.
+        types (list of types): The types of objects we should traverse
 
     Yields:
         tuple: A tuple (path, item), where 'path' is a tuple of keys and 'item' is the value or 
         an empty dictionary at that path.
 
     Example:
-        data = {
-            "a": 1,
-            "b": {
-                "c": 2,
-                "d": {
-                    "e": 3,
-                    "f": {}
-                }
-            }
-        }
-        
-        for path, value in dict_walk(data):
-            print(f"Path: {path}, Value: {value}")
+        >>> data = {
+        ...     "a": 1,
+        ...     "b": {
+        ...         "c": 2,
+        ...         "d": {
+        ...             "e": 3,
+        ...             "f": {}
+        ...         }
+        ...     }
+        ... }
+        ... 
+        ... for path, value in dict_walk(data):
+        ...     print(f"Path: {path}, Value: {value}")
+        ... 
+        ... # Output:
+        ... # Path: ('a',), Value: 1
+        ... # Path: ('b', 'c'), Value: 2
+        ... # Path: ('b', 'd', 'e'), Value: 3
+        ... # Path: ('b', 'd', 'f'), Value: {}
 
-        # Output:
-        # Path: ('a',), Value: 1
-        # Path: ('b', 'c'), Value: 2
-        # Path: ('b', 'd', 'e'), Value: 3
-        # Path: ('b', 'd', 'f'), Value: {}
+    Example (lists are treated as dicts with int keys):
+        >>> data = {
+        ...     "a": [
+        ...         {"b": 1},
+        ...         {"c": 2},
+        ...     ],
+        ... }
+        ... 
+        ... for path, value in dict_walk(data):
+        ...     print(f"Path: {path}, Value: {value}")
+        ... 
+        ... # Output:
+        ... # Path: ('a', 0, 'b'), Value: 1
+        ... # Path: ('a', 1, 'c'), Value: 2
+
     """
+
+    types=[dict,list]
+    def should_traverse(value):
+        return any(issubclass(type(value), x) for x in types)
+
     def walk(current_dict, current_path):
+
+        #Make sure its traversed correctly
+        assert should_traverse(current_dict), 'rp.dict_walk: Input type %s is not one of the travesable types %s'%(type(d), types)
+        if not issubclass(type(current_dict), dict):
+            #Traverse it like a dict
+            current_dict = list_to_index_dict(current_dict)
+        current_dict = dict(current_dict)
+
         if not current_dict:  # Check if the dictionary is empty
             yield (current_path, current_dict)
 
         for key, value in current_dict.items():
             new_path = current_path + (key,)
-            if isinstance(value, dict):
+            if should_traverse(value):
                 yield from walk(value, new_path)
             else:
                 yield (new_path, value)
