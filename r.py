@@ -28583,7 +28583,7 @@ def convert_to_gif_via_ffmpeg(
 
     make_folder(get_path_parent(output_path))
 
-    input_framerate = get_video_file_framerate(video_path)
+    input_framerate = framerate or get_video_file_framerate(video_path)
 
     maybe_silent = ["-loglevel", "quiet"] if not show_progress else []
     maybe_framerate = ["-r", str(input_framerate)]
@@ -31865,7 +31865,7 @@ def is_s3_url(url):
     "Returns true if the given string is an Amazon S3 URL"
     return isinstance(url,str) and url.startswith('s3://')
 
-def download_url(url, path=None, *, skip_existing=False):
+def download_url(url, path=None, *, skip_existing=False, show_progress=False):
     """
     Works with both HTTP and Aws S3 Urls
     Download a file from a url and return the path it downloaded to. It no path is specified, it will choose one for you and return it (as a string)
@@ -31885,8 +31885,8 @@ def download_url(url, path=None, *, skip_existing=False):
 
         #Create the parent directory of the destination if it doesn't already exist
         root = get_path_parent(path)
-        if make_directory and not path_exists(root):
-            rp.make_directory(root)
+        if not path_exists(root):
+            make_directory(root)
 
     if skip_existing and path_exists(path):
         #Don't download anything - skip it if it already exists
@@ -31903,16 +31903,24 @@ def download_url(url, path=None, *, skip_existing=False):
         return path
 
     elif _is_youtube_video_url(url):
-        return download_youtube_video(url, path, skip_existing=skip_existing, show_progress=False)
-        
+        return download_youtube_video(url, path, skip_existing=skip_existing, show_progress=show_progress)
+
     elif is_valid_url(url):
         pip_import('requests')
         import requests
-
-        response = requests.get(url)
-
+        response = requests.get(url, stream=True)
+        total_size = int(response.headers.get('content-length', 0))
+        chunk_size = 1024**2  # 1 MB per iteration
         with open(path, 'wb') as file:
-            file.write(response.content)
+            iterator = response.iter_content(chunk_size)
+            
+            if show_progress:
+                pip_import('tqdm')
+                from tqdm import tqdm
+                iterator=tqdm(iterator, total=total_size // chunk_size, unit='MB')
+            
+            for data in iterator:
+                file.write(data)
 
         return path
 
