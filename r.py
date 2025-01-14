@@ -32,6 +32,10 @@ import math
 import random
 import re
 from itertools import product as cartesian_product, combinations as all_combinations
+from functools import lru_cache
+from multiprocessing.dummy import Pool as ThreadPool  # ⟵ par_map uses ThreadPool. We import it now so we don't have to later, when we use par_map.
+from contextlib import contextmanager
+from math import factorial
 
 # Places I want to access no matter where I launch r.py
 # sys.path.append('/Users/Ryan/PycharmProjects/RyanBStandards_Python3.5')
@@ -122,7 +126,6 @@ def scoop(funcⵓscoopˏnew,list_in,init_value=None):
 def seq_map(func,*iterables):
     # Like par_map, this def features non-lazy evaluation! (Unlike python's map function, which does not. Proof: map(print,['hello']) does not print anything, but [*map(print,['hello'])] does.)
     return list(map(func,*iterables))  # Basically it's exactly like python's built-in map function, except it forces it to evaluate everything inside it before it returns the output.
-from multiprocessing.dummy import Pool as ThreadPool  # ⟵ par_map uses ThreadPool. We import it now so we don't have to later, when we use par_map.
 
 
 
@@ -823,7 +826,6 @@ def enable_fansi():
     global _disable_fansi
     _disable_fansi=False
 
-from contextlib import contextmanager
 @contextmanager
 def without_fansi():
     """
@@ -1644,6 +1646,69 @@ def string_from_clipboard():
     except Exception:
         return _get_local_clipboard_string()
         fansi_print("string_from_clipboard: error: failed to get a string from clipboard",'red')
+
+def accumulate_clipboard_text(*, wipe=False, unique=False):
+    """
+    Automatically accumulates and combines text copied to the clipboard.
+
+    This function continuously monitors your clipboard for any new text that you copy.
+    Run this function, then start copying text using your system clipboard. The copied text will get longer and longer.
+
+    Whenever you copy a piece of text, it will be automatically added to a running collection
+    of text items. All the accumulated text items will be combined together and copied back
+    to your clipboard, allowing you to easily collect and combine multiple pieces of text.
+
+    Parameters:
+        wipe (bool, optional): If True, will clear your clipboard before running.
+        unique (bool, optional): If set to True, duplicate items will be ignored.
+                                 Defaults to False.
+
+    Returns:
+        list: A list containing all the accumulated text items.
+
+    Notes:
+        - The function will continue running until you manually interrupt it using Ctrl+C (KeyboardInterrupt).
+        - The accumulated text items will be combined using a newline character as the separator.
+        - Each time a new text item is added, the updated collection will be copied back to your clipboard.
+        - Upon exiting, the function will print a message indicating that it is terminating.
+
+    Example:
+        >>> accumulation = run_clipboard_text_accumulator(unique=True)
+        # Start the clipboard text accumulator
+        # Copy various pieces of text to accumulate them
+        # Press Ctrl+C to stop the accumulator
+        # The accumulated text will be available on your clipboard, with duplicates removed
+        # The function will return a list containing all the accumulated text items
+
+    """
+    if wipe:    
+        string_to_clipboard('')
+
+    accumulation = []
+    separator = "\n"
+
+    def get_accumulation_string():
+        items = accumulation
+        return separator.join(items)
+
+    colors = ["yellow", "green"]
+    try:
+        while True:
+            cum = get_accumulation_string()
+            clip = string_from_clipboard()
+            if clip != cum:
+                if not unique or clip not in accumulation:
+                    accumulation.append(clip)
+                cum = get_accumulation_string()
+                string_to_clipboard(cum)
+                
+                # sleep(.1) #We might need this if it breaks in the future if system lags...so far so good though.
+                
+                fansi_print(clip, colors[len(accumulation) % len(colors)])
+    except KeyboardInterrupt:
+        fansi_print("rp.run_clipboard_text_accumulator: Exiting", "cyan", "bold")
+    return accumulation
+
 # endregion
 # region pseudo_terminal
 # EXAMPLE CODE TO USE pseudo_terminal:
@@ -2579,6 +2644,14 @@ def video_with_progress_bar(
         output = list(output)
 
     return output
+
+def boomerang_video(video):
+    if isinstance(video,str):
+        video=load_video(video)
+    new_video=list(video)[:-1]+list(video)[::-1][:-1]
+    return new_video
+    
+
 
 def _get_executable(name, download_urls, executable_name):
     download_dir = make_directory(path_join(_rp_downloads_folder, name))
@@ -5144,6 +5217,16 @@ def save_image_jpg(image,path=None,*,quality=100,add_extension=True):
         
     none= Image.fromarray(image).save(path, "JPEG", quality=quality, optimize=False, progressive=True,**extra_kwargs)
     return path
+
+def save_image_jxl(image, path=None, quality=100, add_extension=True):
+
+    assert 0<=quality<=100,'JpgXL quality is measured in percent. Set to 100 for lossless.'
+
+    if quality==100: kwargs = dict(lossless=True)
+    else:            kwargs = dict(quality=quality)
+
+    pip_import("pillow_jxl", "pillow-jpegxl-plugin")
+
 
 def save_openexr_image(image, file_path):
     """
@@ -9625,6 +9708,10 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
         except TypeError as e:
             print(col(tab + 'FILE: ') + str(e))
 
+    if isinstance(object, int) and process_exists(object):
+        print_process_info(object)
+
+ 
     if is_symlink(object):
         print(col(tab + 'SYMLINK --> '+read_symlink(object)))
         if symlink_is_broken(object):
@@ -16466,6 +16553,7 @@ class _PtermLevelTitleContext:
             rp.r._set_session_title(self.old_title)
 
 
+_user_created_var_names=set()
 _cd_history=[]
 def pseudo_terminal(
     *dicts,
@@ -16790,7 +16878,8 @@ def pseudo_terminal(
         _tictoc=False
         _profiler=False
         _use_ipython_exeval=False
-        user_created_var_names=set()
+        global _user_created_var_names
+        _user_created_var_names=set()
         allow_keyboard_interrupt_return=False
         use_modifier=True# Can be toggled with pseudo_terminal keyword commands, enumerated via 'HELP'
         error=None# For MORE
@@ -17024,6 +17113,7 @@ def pseudo_terminal(
         RANT
         FORK
         WANS
+        WANS+
         ARG
         VIM
         VIMH
@@ -17458,6 +17548,15 @@ def pseudo_terminal(
         AW  APWD
 
         WA WANS
+        WAP WANS+
+
+        VSS $repr_vars(*$r._iterfzf($r._user_created_var_names,multi=True)) #VS Select
+        VSM $repr_vars(*$r._iterfzf($r._user_created_var_names,multi=True)) #VS Select
+        VSR                        $repr_vars(*$r._user_created_var_names) #VS Repr
+        CVSR  $string_to_clipboard($repr_vars(*$r._user_created_var_names)) #Copy VS Repr
+        COVSR $string_to_clipboard($repr_vars(*$r._user_created_var_names)) #Copy VS Repr
+        CVS   $string_to_clipboard($repr_vars(*$r._user_created_var_names)) #Copy VS Repr
+
 
         AFD FDA
 
@@ -17560,8 +17659,9 @@ def pseudo_terminal(
         MPH  $r._cpah($string_from_clipboard(),$move_path)
 
         GCLP $git_clone($string_from_clipboard())
-        GCLA $git_clone(ans)
+        GCLA $git_clone(ans,show_progress=True)
         GURL $get_git_remote_url()
+        SURL $shorten_url(ans)
         REPO $get_path_parent($get_git_repo_root($get_absolute_path('.')))
         UG   $r._pterm_cd($get_path_parent($get_git_repo_root($get_absolute_path('.'))))
         GU   $r._pterm_cd($get_path_parent($get_git_repo_root($get_absolute_path('.'))))
@@ -17719,7 +17819,7 @@ def pseudo_terminal(
             import rp.r_iterm_comm
             rp.r_iterm_comm.globa=scope()#prime it and get it ready to go (before I had to enter some valid command like '1' etc to get autocomplete working at 100%)
             while True:
-                rp.r_iterm_comm.rp_pt_user_created_var_names[:]=list(user_created_var_names)
+                rp.r_iterm_comm.rp_pt_user_created_var_names[:]=list(_user_created_var_names)
                 try:
                     # region Get user_message, xor exit with second keyboard interrupt
                     try:
@@ -17753,7 +17853,7 @@ def pseudo_terminal(
                             finally:
                                 sys.stdout.write=temp
                         rp.r_iterm_comm.rp_evaluator=try_eval
-                        rp.r_iterm_comm.rp_VARS_display=str(' '.join(sorted(list(user_created_var_names))))
+                        rp.r_iterm_comm.rp_VARS_display=str(' '.join(sorted(list(_user_created_var_names))))
                         # endregion
                         import gc as garbage_collector
                         if do_garbage_collection_before_input:
@@ -17795,7 +17895,7 @@ def pseudo_terminal(
                             allow_keyboard_interrupt_return=True
                             raise
                     # endregion
-                    user_created_var_names&=set(scope())# Make sure that the only variables in this list actually exist. For example, if we use 'del' in pseudo_terminal, ∄ code to remove it from this list (apart from this line of course)
+                    _user_created_var_names&=set(scope())# Make sure that the only variables in this list actually exist. For example, if we use 'del' in pseudo_terminal, ∄ code to remove it from this list (apart from this line of course)
                     # region Non-exevaluable Terminal Commands (Ignore user_message)
                     _update_cd_history()
 
@@ -18402,7 +18502,7 @@ def pseudo_terminal(
                     elif user_message == "VARS":
                         if _get_pterm_verbose(): fansi_print("VARS --> ans = user_created_variables (AKA all the names you created in this pseudo_terminal session):","blue")
                         if _get_pterm_verbose(): fansi_print("  • NOTE: ∃ delete_vars(ans) and globalize_vars(ans)","blue")
-                        set_ans(user_created_var_names,save_history=True)
+                        set_ans(_user_created_var_names,save_history=True)
 
                     elif user_message == "WCOPY":
                         from rp import string_to_clipboard as copy
@@ -18871,6 +18971,18 @@ def pseudo_terminal(
                             else:
                                 string_to_text_file(path,str(get_ans()))
                                 fansi_print("WANS: Wrote text file to "+path,'blue','bold')
+                            set_ans(path)
+                    
+                    elif user_message=='WANS+':
+                        fansi_print("WANS+ -> Append ans as a line to a file","blue",'bold')
+                        path=input(fansi("(Enter blank path to select and overwrite an existing file)\nPath: ",'blue','bold'))
+                        if not path:
+                            path=input_select_file(message='WANS: Select a file to overwrite')
+                        if path is None:
+                            fansi_print("WANS cancelled",'red')
+                        else:
+                            sans=str(get_ans())
+                            append_line_to_file(sans,path)
                             set_ans(path)
 
 
@@ -20250,7 +20362,7 @@ def pseudo_terminal(
                                     set_ans(result,save_history=save_history,snapshot=False)# snapshot=False beacause we've already taken a snapshot! Only saves history if ans changed, though. If it didn't, you'll see yellow text instead of green text
                                     if user_message.lstrip().rstrip()!='ans':# Don't record 'ans=ans'; that's useless. Thus, we can view 'ans' without clogging up successful_command_history
                                         add_to_successful_command_history("ans="+user_message)# ans_history is only changed if there is a change to ans, but command history is always updated UNLESS user_message=='ans' (having "ans=ans" isn't useful to have in history)
-                                user_created_var_names=user_created_var_names|(set(scope())-scope_before)
+                                _user_created_var_names=_user_created_var_names|(set(scope())-scope_before)
                                 break
                             # endregion
                             # region  Try to fix user_input, or not use modifier etc
@@ -20939,6 +21051,88 @@ def repr_multiline(string):
 
     return string
 
+def repr_vars(*vars, sort=True, frames_back=0):
+    """
+    Returns the string representation of specified variables.
+    Imperfectly implemented right now. Still useful though.
+
+    Args:
+        *vars: Variable names as strings, or a single string with space-separated names.
+        sort (bool, optional): Whether to sort the output. Defaults to True.
+
+    Returns:
+        str: A string containing the variable names, values, and import statements.
+
+    Example:
+        >>> repr_vars('names folder load_image r rp badvar numpyarray')
+        ans =
+        import rp
+        import rp.r
+        from __main__ import repr_vars
+        from rp.r import load_image
+        folder = '/Users/ryan/Downloads/InitFrame/AnyV2V'
+        names = ['Ours', 'Motion Clone', 'AnyV2V']
+        #EVAL ERROR: numpyarray
+        #NOT FOUND: badvar
+    """
+    import inspect 
+    vars = detuple(vars)
+    if isinstance(vars, str):
+        names = vars.split()
+    else:
+        names = vars
+    assert all(isinstance(x, str) for x in vars), "vars is not iterable of str"
+    vals = gather_vars(names, frames_back=2+frames_back, skip_missing=True)
+    output = []
+    for v in names:
+
+        if v in vals:
+            val = vals[v]
+            if inspect.isfunction(val) or inspect.isclass(val) or inspect.ismodule(val):
+                if val.__name__ == "builtins":
+                    output += ["import builtins"]
+                elif val.__name__ == "inspect":
+                    output += ["import inspect"]
+                else:
+                    module_name = getattr(val, "__module__", None)
+                    obj_name = val.__name__
+                    if module_name == 'rp.r' and not hasattr(rp.r,v):
+                        #It was created in pseudo terminal
+                        source_code = get_source_code(val)
+                        if starts_with_any(source_code, 'def ','class ') and is_valid_python_syntax(source_code):
+                            output+=[source_code]
+                            continue
+                    if module_name is not None:
+                        output += ["from "+module_name+" import "+obj_name]
+                    else:
+                        output += ["import "+obj_name]
+            else:
+                r = repr(val)
+                try:
+                    if eval(r) == val:
+                        output += [v + " = " + r]
+                    else:
+                        output += ["#USELESS REPR: " + v]
+                except Exception:
+                    output += ["#EVAL ERROR: " + v]
+                    pass
+        else:
+            output += ["#NOT FOUND: " + v]
+
+    if sort:
+        output = set(output)
+
+        defs         = {line for line in output if line.startswith("def ")   }; output -= defs
+        classes      = {line for line in output if line.startswith("class ") }; output -= classes
+        imports      = {line for line in output if line.startswith("import ")}; output -= imports
+        from_imports = {line for line in output if line.startswith("from ")  }; output -= from_imports
+        assignments  = {line for line in output if " = " in line             }; output -= assignments
+        comments     = {line for line in output if line.startswith("#")      }; output -= comments
+
+        output = sorted(imports) + sorted(from_imports) + sorted(classes) + sorted(defs) + sorted(assignments) + sorted(comments)
+
+    return "\n" + line_join(output)
+
 def has_len(x):
     return hasattr(x,'__len__')
 
@@ -21271,7 +21465,6 @@ def product(*i):#redefined from earlier in r.py, but it does the same thing. It'
     from functools import reduce
     return reduce(lambda x,y:x*y,i,1)
 
-from math import factorial
 def ncr(n, r):
     """ choose r objects from n """
     from functools import reduce
@@ -21794,10 +21987,13 @@ def cv_closest_contour(contours,x,y):
         return cv_distance_to_contour(contour,x,y)
     return min(contours,key=distance)
 
-def cv_draw_contours(image,contours,color=(255,255,255),width=1,*,fill=False,antialias=True,copy=True):
+def cv_draw_contours(image,contours,color='white',width=1,*,fill=False,antialias=True,copy=True):
     """
     TODO: Important: This must somehow preserve whether the contour is closed or not??
     """
+    color=as_rgb_float_color(color)
+    color=float_color_to_byte_color(color)
+    
     cv2=pip_import('cv2')
     contours=list(map(as_cv_contour,contours))
     image,kwargs=_cv_helper(image=image,copy=copy,antialias=antialias)
@@ -21812,7 +22008,7 @@ def cv_draw_rectangle(image,
                       *,
                       start_point:tuple,
                       end_point:tuple,
-                      color=(255, 255, 255),
+                      color='white',
                       thickness=1,
                       copy=True,
                       antialias=True):
@@ -21829,6 +22025,9 @@ def cv_draw_rectangle(image,
            display_image(image)
     """
 
+    color=as_rgb_float_color(color)
+    color=float_color_to_byte_color(color)
+    
     #Input assertions:
     assert isinstance(start_point,tuple) and len(start_point)==2
     assert isinstance(end_point  ,tuple) and len(end_point  )==2
@@ -21856,15 +22055,47 @@ def cv_contour_area(contour):#,closed=False):
     contour=as_cv_contour(contour)
     return cv2.contourArea(contour)
 
-def cv_draw_circle(image,x,y,radius=5,color=(255,255,255),*,antialias=True,copy=True):
-    if is_binary_image(image):image=rp.as_rgb_image(image)
+# def cv_draw_circle(image,x,y,radius=5,color=(255,255,255),*,antialias=True,copy=True):
+#     if is_binary_image(image):image=rp.as_rgb_image(image)
+#     image = as_byte_image(image)
+#     x=int(x)
+#     y=int(y)
+#     cv2=pip_import('cv2')
+#     image,kwargs=_cv_helper(image=image,copy=copy,antialias=antialias)
+#     cv2.circle(image,(x,y),radius,color,-1,**kwargs)
+#     return image
+
+def cv_draw_circle(
+    image,
+    x,
+    y,
+    radius=5,
+    
+    color='white',
+    *,
+    antialias=True,
+    copy=True
+):
+    "Draws a filled circle with center x,y on a given image. If copy=False, it will mutate the original image."
+    
+    cv2 = pip_import("cv2")
+    
+    color=as_rgb_float_color(color)
+    color=float_color_to_byte_color(color)
+    
+    if is_binary_image(image):
+        image = rp.as_rgb_image(image)
     image = as_byte_image(image)
-    x=int(x)
-    y=int(y)
-    cv2=pip_import('cv2')
-    image,kwargs=_cv_helper(image=image,copy=copy,antialias=antialias)
-    cv2.circle(image,(x,y),radius,color,-1,**kwargs)
+
+    radius = int(radius)        
+    x      = int(x)
+    y      = int(y)
+    
+    image, kwargs = _cv_helper(image=image, copy=copy, antialias=antialias)
+    
+    cv2.circle(image, (x, y), radius, color, -1, **kwargs)
     return image
+
 
 def cv_line_graph(
     y_values,
@@ -24534,7 +24765,13 @@ def as_rgba_float_color(color,clamp=True):
         ... print("SAVED",save_image(out_image,'color_chart.png'))
 
     """
+
+    if is_numpy_array(color) or is_torch_tensor(color):
+        assert color.shape in [(), (3,), (4,)]
+        color = tuple(color)
+
     assert isinstance(color, (tuple, list, str)) or is_number(color)
+
     if isinstance(color,str):
         if color.strip().lower() in 'transparent invisible'.split():
             return (0,0,0,0)
@@ -27005,7 +27242,7 @@ def _is_python_exe_root(root):
     if currently_running_windows():
         return exe==path_join(root,'python.exe')
     else: 
-        return get_path_parent(exe)==path_join(root,'bin') and get_file_name(exe) in 'python python3'.split()
+        return get_path_parent(exe)==path_join(root,'bin') and 'python' in get_file_name(exe).lower() # python python3 python3.10
 
 def running_in_ssh():
     """
@@ -27841,10 +28078,11 @@ def download_youtube_video(url_or_id: str,
                            resolution_preference=max,
                            skip_existing=False,
                            show_progress=True,
-                           overwrite=False):
+                           overwrite=False,
+                           filetype='mp4'):
     """
     Downloads a YouTube video based on the given URL or video ID. The function can selectively download video only, 
-    audio only, or both depending on the parameters. All downloads are currently as mp4 files.
+    audio only, or both depending on the parameters. All downloads are currently as mp4 or webm files.
 
     NOTE: If it doesn't work, try "pip install pytubefix --upgrade"
 
@@ -27855,12 +28093,16 @@ def download_youtube_video(url_or_id: str,
     Parameters:
         - url_or_id (str): The YouTube video URL or video ID.
         - path (str, optional): The destination path where the video/audio will be saved. If not provided,
-                                The path will be:    ./<YouTubeVideo Title>.mp4
+                                The path will be:    ./<YouTubeVideo Title>.mp4   or   .webm
                                 Where <YouTubeVideo Title> is the video title as displayed on the website
-                                Right now it must be an mp4 file if specified manually!
+                                Right now it must be an mp4 or webm file if specified manually, according to the filetype arg!
         - need_video (bool, optional): If set to True, downloads the video track. Defaults to True.
         - need_audio (bool, optional): If set to True, downloads the audio track. If False and `need_video` is True,
                                        downloads video only without audio. Defaults to True.
+                                       NOTE: Setting this to False allows for higher resolution videos! This is because 
+                                           YouTube normally streams both separately, and the ones that have both tend to be smaller files. 
+                                           If you need high resolution and audio, I reccomend using rp.add_audio_to_video_file and using this function twice:
+                                           once for audio-only and once for video-only, and use that function to patch the audio into the video-only file.
         - max_resolution (int, optional): The maximum resolution allowed for the video. Defaults to None. Only matters if need_video
         - min_resolution (int, optional): The minimum resolution required for the video. Defaults to None. Only matters if need_video
         - resolution_preference (callable, optional): A function to determine the preferred resolution from available options. Only matters if need_video
@@ -27869,12 +28111,12 @@ def download_youtube_video(url_or_id: str,
                                                       These correspond to 144p, 240p, 360p etc - and refer to the minimum(height, width) of a video
                                                       In other words, 720P for a vertical video means the video has 720-pixel width, and 720p for a landscape video means it has 720-pixel height
                                                       Defaults to max, which selects the highest available resolution.
-                                                      
         - skip_existing (bool, optional): If set to True, skips downloading if the file already exists at the destination path. Defaults to False.
         - show_progress (bool, optional): If set to True, will show download progress over time. Defaults to True.
         - overwrite (bool, optional): If set to True, overwrites the existing file at the destination path. Defaults to False.
                                       If False, and the output path already exists, it will create a new non-conflicting path
                                       like some_video_copy.mp4 or some_video_copy2.mp4 etc
+        - filetype (str, optional): Specifies the type of video file we will attempt to download. Can be either 'mp4' or 'webm'
 
     Returns:
         - str: The path to the downloaded MP4 file (which might contain just video, just audio or both)
@@ -27916,9 +28158,10 @@ def download_youtube_video(url_or_id: str,
     #Common logic invariant to external libraries:
     url = get_youtube_video_url(url_or_id)
     assert need_video or need_audio, 'Cannot have no audio and no video'
+    assert filetype in ['mp4', 'webm'], 'filetype='+str(filetype)+' but should be either "mp4" or "webm"'
     if path is None:
         path = get_youtube_video_title(url)
-    path = with_file_extension(path, 'mp4')
+    path = with_file_extension(path, filetype)
     if path_exists(path):
         if skip_existing:
             return path
@@ -27926,17 +28169,23 @@ def download_youtube_video(url_or_id: str,
             delete_file(path)
         else:
             path=get_unique_copy_path(path)
-    assert get_file_extension(path) == 'mp4' 
+    assert get_file_extension(path) == filetype 
 
     #Logic that's specific to pytubefix:
     pip_import('pytubefix')
     from pytubefix import YouTube
     from pytubefix.cli import on_progress
     yt = YouTube(url, on_progress_callback = on_progress if show_progress else None)
+    ys = yt.streams
+    if need_audio:
+        ys = ys.filter(progressive=True)
+        print(ys)
     if need_video:
-        
+        ys = ys.filter(mime_type='video/'+filetype)
+        print(ys)
+        #
         #Allow us to choose the resolution of the video we load - we might want to avoid loading giant videos for example
-        resolutions=set(int(x.resolution[:-1])for x in yt.streams if x.resolution if not None) #Like {360, 1080, 720, 360, 144}
+        resolutions=set(int(x.resolution[:-1])for x in ys if x.resolution if not None) #Like {360, 1080, 720, 360, 144}
         original_resolutions = sorted(resolutions)
         if min_resolution is not None:resolutions={x for x in resolutions if x>=min_resolution}
         if max_resolution is not None:resolutions={x for x in resolutions if x<=max_resolution}
@@ -27944,18 +28193,20 @@ def download_youtube_video(url_or_id: str,
         assert len(resolutions), 'No resolutions fit between given min_resolution=%s and max_resolution=%s. Available resolutions for %s are: %s'%(min_resolution, max_resolution, url, original_resolutions)
         preferred_resolution=resolution_preference(resolutions) #Choosing the best resoltion
         best_resolution=str(max(resolutions))+'p' # Like "720p"
-        
-        ys = yt.streams.filter(mime_type='video/mp4', resolution=best_resolution).get_highest_resolution(progressive=need_audio)
+        #
+        ys = ys.filter(resolution=best_resolution).get_highest_resolution()
+        print(ys)
     else:
-        ys = yt.streams.filter(mime_type='audio/mp4').get_audio_only()
+        ys = yt.streams.filter(mime_type='audio/'+filetype).get_audio_only()
 
-    assert ys is not None, 'Could not find an MP4 youtube video that satisfied the given contsraints (url=%s, need_audio=%s, need_video=%s, max_resolution=%s, min_resolution=%s). Try relaxing a contstraint, such as not requiring audio or not requiring video etc.'%(repr(url),need_audio, need_video, max_resolution, min_resolution)
+    assert ys is not None, 'Could not find a youtube video that satisfied the given contsraints (url=%s, need_audio=%s, need_video=%s, max_resolution=%s, min_resolution=%s, filetype=%s). Try relaxing a contstraint, such as not requiring audio, not requiring video or using a different filetype etc.'%(repr(url),need_audio, need_video, max_resolution, min_resolution, repr(filetype)) + '\nAvailable Options:\n'+'\n'.join('    '+str(x) for x in yt.streams)
     out_path = ys.download(output_path=get_parent_directory(path),filename=get_file_name(path))
         
     #Common logic invariant to external libraries:
     assert file_exists(out_path)
-    assert get_file_extension(out_path)=='mp4', 'For simplicity I would like this function to only return mp4 files. Is this possible?'+ out_path
+    assert get_file_extension(out_path)==filetype, 'For simplicity I would like this function to only return mp4 or webm files. Is this possible?'+ out_path
     return out_path
+
 
 @memoized
 def _get_youtube_video_data_via_embeddify(url):
@@ -28025,7 +28276,7 @@ def get_video_file_duration(path,use_cache=True):
     return out
 
 _get_video_file_framerate_cache={}
-def get_video_file_framerate(path, use_cache=True):
+def _get_video_file_framerate_via_moviepy(path, use_cache=True):
     """ Given a (str) path to a video file, returns a number (framerate) """
     path = get_absolute_path(path) #Important for caching
     if use_cache and path in _get_video_file_framerate_cache:
@@ -28039,6 +28290,55 @@ def get_video_file_framerate(path, use_cache=True):
 
     _get_video_file_framerate_cache[path] = framerate
     return framerate
+
+def _get_video_file_framerate_via_ffprobe(path, use_cache=True):
+    """ 
+    Slower than _get_video_file_framerate_via_moviepy but no extra python dependencies
+    Given a (str) path to a video file, returns a number (framerate)
+    """
+    import subprocess
+    import json
+
+    if not 'ffprobe' in get_system_commands():    
+        _ensure_ffmpeg_installed()
+        raise RuntimeError('rp.get_video_file_framerate: Please install ffmpeg! Unable to find the ffprobe command')
+
+    path = get_absolute_path(path)  # Important for caching
+    if use_cache and path in _get_video_file_framerate_cache:
+        return _get_video_file_framerate_cache[path]
+
+    # Use ffprobe to get the video framerate
+    command = [
+        "ffprobe",
+        "-v", "quiet",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=avg_frame_rate",
+        "-of", "json",
+        path
+    ]
+    output = subprocess.check_output(command).decode("utf-8")
+    data = json.loads(output)
+
+    # Parse the framerate from the ffprobe output
+    framerate_str = data["streams"][0]["avg_frame_rate"]
+    numerator, denominator = map(int, framerate_str.split("/"))
+    framerate = numerator / denominator
+
+    _get_video_file_framerate_cache[path] = framerate
+    return framerate
+
+def get_video_file_framerate(path, use_cache=True):
+    """ Given a (str) path to a video file, returns a number (framerate) """
+    try:
+        pip_import('moviepy')
+
+        #Ning had some error where the following line failed, but Yuancheng's didnt...
+        from moviepy.editor import VideoFileClip
+
+        return _get_video_file_framerate_via_moviepy(path, use_cache)
+    except Exception:
+        return _get_video_file_framerate_via_ffprobe(path, use_cache)
+
 
 #UNCOMMENT ONCE I USE SMART_OPEN SOMEWHERE
 # def _smart_open(path, mode="rb"):
@@ -28583,7 +28883,7 @@ def convert_to_gif_via_ffmpeg(
 
     make_folder(get_path_parent(output_path))
 
-    input_framerate = framerate or get_video_file_framerate(video_path)
+    input_framerate = get_video_file_framerate(video_path)
 
     maybe_silent = ["-loglevel", "quiet"] if not show_progress else []
     maybe_framerate = ["-r", str(input_framerate)]
@@ -32015,7 +32315,7 @@ class _MaybeTemporarilyDownloadVideo:
             except FileNotFoundError:
                 pass
 
-def download_url_to_cache(url, cache_dir=None, skip_existing=True, hash_func=None):
+def download_url_to_cache(url, cache_dir=None, skip_existing=True, hash_func=None, show_progress=False):
     """
     Like download_url, except you only specify the output diectory - the filename will be chosen for you based on hashing the url.
     Downloads a file from a specified URL into a caching directory, creating a filename based on a hash of the URL. 
@@ -32024,6 +32324,8 @@ def download_url_to_cache(url, cache_dir=None, skip_existing=True, hash_func=Non
         url (str): The URL of the file to be downloaded. It can also be a file path, to cache things from NFS etc.
         cache_dir (str, optional): The directory to store the cached files. If None, uses the system's temporary directory.
         skip_existing (bool): If True, skips downloading files that already exist in the cache directory.
+        hash_func (func, optional)
+        show_progress (bool, optional)
 
     Returns:
         str: The full path to the downloaded or existing cached file.
@@ -32040,6 +32342,7 @@ def download_url_to_cache(url, cache_dir=None, skip_existing=True, hash_func=Non
             url,
             cache_path,
             skip_existing=skip_existing,
+            show_progress=show_progress,
         )
     elif file_exists(url):
         #Can also be useful for getting things off NFS for faster loading
@@ -33379,7 +33682,6 @@ def _set_ryan_tmux_conf():
         # set -g default-terminal "xterm"  #Supports: Truecolor, mouse dragging, Pudb 256 colors does NOT work, 
         set -g default-terminal "${TERM}" #Automatically choose: https://www.reddit.com/r/neovim/comments/11usepy/how_to_properly_set_tmux_truecolor_capability/
         #The above made mouse, truecolor, 256 color, pudb 256 color, and mouse drag work in both local AND nested tmux. WHY isn't this the default?
-k>
         #TRUECOLOR SUPPORT!!!
         #NOTE: If you're using MOSH, you won't get 24 bit color support (aka truecolor support). The code exists in the mosh github repo, but the last release was in 2015...(as of 2022 writing this, it was 7 years ago...)
         #To get 24 bit color support in mosh you have to build it yourself! I PROMISE IT'S NOT THAT BAD (it's really quick)! https://github.com/mobile-shell/mosh/wiki/Build-Instructions
@@ -39252,6 +39554,12 @@ _rp_folder = get_parent_folder(__file__)
 _rp_downloads_folder = path_join(_rp_folder, "downloads")
 
 def _pip_import_depth_pro(autoyes=False):
+
+    # Needed the first time it installs
+    ml_depth_pro_repo_path = path_join(rp.r._rp_downloads_folder, "ml-depth-pro", "src")
+    if ml_depth_pro_repo_path not in sys.path:
+        sys.path.append(ml_depth_pro_repo_path)
+
     try:
         import depth_pro
 
@@ -39263,9 +39571,15 @@ def _pip_import_depth_pro(autoyes=False):
             or input_yes_no("Would you like to install ml_depth_pro?")
         ):
             with SetCurrentDirectoryTemporarily(make_directory(rp.r._rp_downloads_folder)):
-                ml_depth_pro_repo_path = git_clone(
+                if folder_exists('ml-depth-pro'):
+                    fansi_print("Failed to import depth_pro: You might have to delete the repo at "+ml_depth_pro_repo_path+" and try this function again if its corrupted.",'red','bold')
+
+                cloned_ml_depth_pro_repo_path = git_clone(
                     "https://github.com/apple/ml-depth-pro"
                 )
+
+                assert ml_depth_pro_repo_path == cloned_ml_depth_pro_repo_path
+
                 with SetCurrentDirectoryTemporarily(ml_depth_pro_repo_path):
                     # Download models and install package
                     command = (
@@ -39275,12 +39589,8 @@ def _pip_import_depth_pro(autoyes=False):
                     )
                     os.system(command)
 
-                    # Needed the first time it installs
-                    sys.path.append(
-                        path_join(rp.r._rp_downloads_folder, "ml-depth-pro", "src")
-                    )
-
                     fansi_print("RUNNING COMMAND: " + command, "cyan", "bold")
+
             import depth_pro
 
             return depth_pro
@@ -39343,6 +39653,10 @@ def run_depth_pro(image, *, focal_length=None, device=None):
 
     """
 
+    pip_import('pillow_heif')
+    pip_import('timm')
+
+
     model, transform = _get_depth_pro_model(device)
 
     import depth_pro
@@ -39363,7 +39677,7 @@ def run_depth_pro(image, *, focal_length=None, device=None):
         image = as_byte_image(image)
         f_px = None
 
-    image = transform(image)
+    image = transform(image).to(device)
     prediction = model.infer(image, f_px=f_px)
 
     depth = prediction["depth"]  # Depth in [m].
@@ -39375,6 +39689,134 @@ def run_depth_pro(image, *, focal_length=None, device=None):
     return gather_vars("depth focal_length")
 
 
+@memoized
+def _get_cotracker_model(device=None):
+    """
+    Loads and caches the CoTracker model.
+    
+    Args:
+        device: The torch device to load the model onto. If None, uses current device.
+    
+    Returns:
+        The loaded CoTracker model
+    """
+    import torch
+    cotracker = torch.hub.load("facebookresearch/co-tracker", "cotracker3_offline")
+    if device is not None:
+        cotracker = cotracker.to(device)
+    return cotracker
+
+def run_cotracker(
+    video,
+    *,
+    device=None,
+    queries=None,
+    segm_mask=None,
+    grid_size=0,
+    grid_query_frame=0,
+    backward_tracking=False
+):
+    """
+    Runs the CoTracker model on a video for object tracking.
+    CoTracker3 is a transformer-based model that can track any point in a video,
+    with functionality similar to optical flow but for longer sequences.
+    
+    Args:
+        video: Input video as either a file path, numpy array, or torch tensor.
+              Should be in format T×H×W×C for numpy array.
+        device: Torch device to run inference on
+        queries: Query points of shape (N, 3) in format (t, x, y) for frame index
+                and pixel coordinates. Used for tracking specific points.
+        segm_mask: Segmentation mask of shape (H, W). Can be used with grid_size
+                  to compute tracks only within the mask.
+        grid_size: Size M for an N=M×M grid of tracking points on a frame. Set >0 to use
+                  grid-based tracking.
+        grid_query_frame: Frame index to start tracking from (default: 0)
+        backward_tracking: Reverses the video and tracks points in reverse
+    
+    Returns:
+        tuple: (pred_tracks, pred_visibility) where:
+            - pred_tracks has shape (T, N, 2) containing x,y coordinates
+            - pred_visibility has shape (T, N) indicating point visibility
+    
+    Track Modes:
+        1. Grid tracking: Set grid_size > 0 to track NxN points from grid_query_frame
+        2. Query tracking: Provide queries tensor to track specific points
+        3. Dense tracking: Leave queries=None to compute dense tracks from grid_query_frame
+    
+    EXAMPLE:
+        >>> video = load_video(
+        ...     "https://github.com/facebookresearch/co-tracker/raw/refs/heads/main/assets/apple.mp4",
+        ...     use_cache=True,
+        ... )
+        ...
+        ... #Cotracker
+        ... tracks, visibility = run_cotracker(
+        ...     video, 
+        ...     device="cuda", 
+        ...     grid_size=10, # Track 10x10 grid of points
+        ... )
+        ... 
+        ... #Visualization
+        ... colors = [random_rgb_float_color() for _ in tracks[0]]
+        ... new_video = []
+        ... for frame_number in range(len(video)):
+        ...     frame = video[frame_number]
+        ...     track = tracks[frame_number]
+        ...     for color, (x, y) in zip(colors, track):
+        ...         frame = cv_draw_circle(
+        ...             frame,
+        ...             x,
+        ...             y,
+        ...             radius=5,
+        ...             color=color,
+        ...             antialias=True,
+        ...             copy=False,
+        ...         )
+        ...     new_video.append(frame)
+        ... fansi_print("SAVED " + save_video_mp4(new_video), "blue cyan", "bold")
+
+    """
+    import torch
+
+    pip_import('einops')
+    from einops import rearrange
+    
+    if isinstance(video, str):
+        video = load_video(video)
+        video = as_rgb_images(video)
+    
+    if not isinstance(video, torch.Tensor):
+        video = torch.tensor(video)
+        assert video.ndim == 4, video.ndim              #    T, H, W, C
+        video = rearrange(video, 'T H W C -> 1 T C H W')# B, T, C, H, W
+        video = video.float()
+    
+    cotracker = _get_cotracker_model(device)
+    
+    if device is not None:
+        video = video.to(device)
+        if queries is not None:
+            queries = rearrange(queries, "N TXY -> 1 N TXY") # B N 3
+            queries = queries.to(device)
+        if segm_mask is not None:
+            queries = rearrange(queries, "H W -> 1 1 H W") # B 1 H W
+            segm_mask = segm_mask.to(device)
+    
+    pred_tracks, pred_visibility = cotracker(
+        video,
+        queries=queries,
+        segm_mask=segm_mask,
+        grid_size=grid_size,
+        grid_query_frame=grid_query_frame,
+        backward_tracking=backward_tracking
+    )
+
+    #Batch size is 1
+    pred_tracks     = rearrange(pred_tracks    , '1 T N XY -> T N XY')
+    pred_visibility = rearrange(pred_visibility, '1 T N    -> T N   ')
+    
+    return pred_tracks, pred_visibility
 
 def _pip_import_pyflow():
     """
@@ -40469,7 +40911,7 @@ def get_git_repo_root(folder='.', use_cache=False):
     assert output, 'Is not a git repo: '+str(folder)
     return output
 
-def git_clone(url,path=None):
+def git_clone(url,path=None,show_progress=False):
     def get_repo_name_from_url(url):
         #Url should look like: https://github.com/gabrielloye/RNN-walkthrough/
         assert is_valid_url(url)
@@ -40482,10 +40924,16 @@ def git_clone(url,path=None):
     if path is None:
         path=get_repo_name_from_url(url)
         path=get_absolute_path(path)
-    pip_import('git')
-    import git
-    git.Repo.clone_from(url,path)
-    return path
+
+    if show_progress:
+        command='git clone '+shlex.quote(url)+' '+shlex.quote(path)
+        print(command)
+        os.system(command)  
+    else:
+        pip_import('git')
+        import git
+        git.Repo.clone_from(url,path)
+        return path
 
 def get_git_info(folder='.'):
     pip_import('git')
@@ -42008,7 +42456,6 @@ def get_used_ram() -> int:
     return get_total_ram() - get_free_ram()
 
 
-from functools import lru_cache
 @lru_cache(maxsize=None)
 def _init_nvml():
     pip_import("py3nvml")
@@ -42660,6 +43107,74 @@ def _get_all_notebook_sessions_via_ipybname():
     return all_sessions
 
 
+
+def print_process_info(pid):
+
+    pip_import('psutil')
+    pip_import('rich')
+
+    import psutil
+    from rich.console import Console
+    from rich.table import Table
+    from rich import box
+    from rich.syntax import Syntax
+    from datetime import datetime
+
+    try:
+        # Get the process by PID
+        process = psutil.Process(pid)
+
+        # Gather process information
+        user = process.username()
+        command = " ".join(process.cmdline())
+        start_time = format_date(datetime.fromtimestamp(process.create_time()))
+        running_time = datetime.now() - datetime.fromtimestamp(process.create_time())
+        memory_usage = human_readable_file_size(process.memory_info().rss)
+        cpu_usage = "{:.2f}%".format(process.cpu_percent(interval=1.0))
+        num_threads = process.num_threads()
+        status = process.status()
+
+        # Get parent process information
+        parent_pid = process.ppid()
+        try:
+            parent_process = psutil.Process(parent_pid)
+            parent_info = "{} (PID: {}, Status: {})".format(parent_process.name(), parent_pid, parent_process.status())
+        except psutil.NoSuchProcess:
+            parent_info = "{} (No longer running)".format(parent_pid)
+
+        # Get subprocess IDs (child processes)
+        subprocesses = process.children(recursive=True)
+        subprocess_ids = ", ".join(str(child.pid) for child in subprocesses) if subprocesses else "None"
+
+        # Create a Rich table to display the information
+        table = Table(title="Process Information for PID {}".format(pid), box=box.ROUNDED, show_header=False)
+        table.add_column("Key", style="bold cyan")
+        table.add_column("Value", style="magenta")
+
+        # Add rows to the table
+        table.add_row("User", user)
+        table.add_row("Command", Syntax(command, "bash", theme="monokai"))
+        table.add_row("Status", status)
+        table.add_row("PID", str(pid))
+        table.add_row("Parent Process", parent_info)
+        table.add_row("Subprocess IDs", subprocess_ids)
+        table.add_row("Start Time", start_time)
+        table.add_row("Running Time", str(running_time))
+        table.add_row("Memory Usage", memory_usage)
+        table.add_row("CPU Usage", cpu_usage)
+        table.add_row("Number of Threads", str(num_threads))
+
+        # Print the table
+        console = Console()
+        console.print(table)
+        print(command)
+
+    except psutil.NoSuchProcess:
+        console = Console()
+        console.print("[bold red]No process found with PID {}[/]".format(pid))
+    except Exception as e:
+        console = Console()
+        console.print("[bold red]An error occurred: {}[/]".format(e))
 
 
 
