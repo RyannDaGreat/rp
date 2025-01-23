@@ -5021,7 +5021,13 @@ def save_image(image,file_name=None,add_png_extension: bool = True):
     elif get_file_extension(file_name)=='jpg':
         try:
             #Try to save using this jpg-specific method - it guarentees 100% quality
-            return save_image_jpg(image,file_name)
+            return save_image_jpg(image, file_name, quality=100)
+        except Exception:
+            #Use some other method to save it
+            pass
+    elif get_file_extension(file_name)=='jxl':
+        try:
+            return save_image_jxl(image, file_name, quality=100)
         except Exception:
             #Use some other method to save it
             pass
@@ -5218,15 +5224,71 @@ def save_image_jpg(image,path=None,*,quality=100,add_extension=True):
     none= Image.fromarray(image).save(path, "JPEG", quality=quality, optimize=False, progressive=True,**extra_kwargs)
     return path
 
-def save_image_jxl(image, path=None, quality=100, add_extension=True):
-
-    assert 0<=quality<=100,'JpgXL quality is measured in percent. Set to 100 for lossless.'
-
-    if quality==100: kwargs = dict(lossless=True)
-    else:            kwargs = dict(quality=quality)
-
+def save_image_jxl(image, path=None, *, quality=100, add_extension=True):
+    """
+    Save image in JPEG XL format. Set quality=100 for lossless compression.
+    If add_extension is True, adds '.jxl' extension if not already present.
+    
+    EXAMPLE (Comparison video between JPG and JXL quality):
+        
+        >>> emma='https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pages/images/emma.png?raw=true'
+        ... emma=load_image(emma,use_cache=True)
+        ... emma=full_range(emma)
+        ... display_image(emma)
+        ... 
+        ... dir=make_directory('jxl_jpg_comparisons')
+        ... r._pterm_cd(dir)
+        ... 
+        ... comparisons=[]
+        ... 
+        ... for quality in [1,2,5,10,20,30,50,70,80,90,95,97,99,100]:
+        ...     print(quality)
+        ... 
+        ...     jpg=save_image_jpg(emma,path=str(quality),quality=quality)
+        ...     jxl=save_image_jxl(emma,path=str(quality),quality=quality)
+        ...     
+        ...     jpg_size=get_file_size(jpg,human_readable=True)
+        ...     jxl_size=get_file_size(jxl,human_readable=True)
+        ...     
+        ...     jxl=load_image(jxl,use_cache=True)
+        ...     jpg=load_image(jpg,use_cache=True)
+        ...     
+        ...     jpg=labeled_image(jpg,'JPG: '+jpg_size,font='G:Hind')
+        ...     jxl=labeled_image(jxl,'JXL: '+jxl_size,font='G:Hind')
+        ... 
+        ...     comparison=horizontally_concatenated_images(jpg,jxl)
+        ...     comparison=labeled_image(comparison,'JPG / JXL: Quality = '+str(quality)+"%",font='G:Hind',size=30)
+        ...     comparisons.append(comparison)
+        ... 
+        ... mp4=save_video_mp4(comparisons,framerate=2,video_bitrate='max')
+        ... final_grid=tiled_images(comparisons)
+        ... png=save_image(final_grid,'comparison_grid.png')
+        ... 
+        ... open_file_with_default_application(mp4)
+        
+    """
     pip_import("pillow_jxl", "pillow-jpegxl-plugin")
+    pip_import('PIL')
+    from PIL import Image
 
+    if path is None:
+        path = get_unique_copy_path('image.jxl')
+    
+    make_directory(get_parent_folder(path))
+    image = np.asarray(image)
+    image = as_rgb_image(image)
+    image = as_byte_image(image)
+    
+    assert 0 <= quality <= 100, 'JpgXL quality is measured in percent'
+    if is_image(image):
+        image = as_rgb_image(image)
+    
+    if add_extension and not get_file_extension(path).lower() == 'jxl':
+        path += '.jxl'
+
+    kwargs = dict(lossless=True) if quality == 100 else dict(quality=quality)
+    none = Image.fromarray(image).save(path, "JXL", **kwargs)
+    return path
 
 def save_openexr_image(image, file_path):
     """
