@@ -8786,7 +8786,7 @@ def rebind_globals_to_module(module, *, monkey_patch=False):
     return decorator
 
 
-def _filter_dict_via_fzf(input_dict):
+def _filter_dict_via_fzf(input_dict,*,preview=None):
     """Uses fzf to select a subset of a dict and returns that dict."""
     #Refactored using GPT4 from a mess: https://chat.openai.com/share/66251028-75eb-4c55-960c-1e7477e34060
 
@@ -8820,7 +8820,10 @@ def _filter_dict_via_fzf(input_dict):
     display_lines = display_str.splitlines()
 
     # Use fzf to select lines
-    selected_lines = _iterfzf(display_lines, multi=True, exact=True)
+    selected_lines = _iterfzf(display_lines, multi=True, exact=True, preview=preview)
+    if selected_lines is None:
+        fansi_print("r._ISM: Canceled!",'cyan','bold')
+        selected_lines=[]
     selected_indices = [display_lines.index(line) for line in selected_lines]
 
     if selected_indices is None:
@@ -11294,8 +11297,10 @@ def get_system_commands():
 
 _get_sys_commands_cache=set()
 def _get_cached_system_commands():
-    #Meant for internal use in pterm! Both kibble and autocomplete.
-    #rp.get_system_commands can take .05 seconds to complete. Do it in a separate thread upon request.
+    """
+    Meant for internal use in pterm! Both kibble and autocomplete.
+    rp.get_system_commands can take .05 seconds to complete. Do it in a separate thread upon request.
+    """
     global _get_sys_commands_cache
 
     import rp
@@ -11312,6 +11317,39 @@ def _get_cached_system_commands():
         rp.run_as_new_thread(update_sys_commands)
 
     return _get_sys_commands_cache
+
+def add_to_env_path(path):
+    """
+    Adds a directory to the system's PATH environment variable.
+
+    Appends path to $PATH using ':' for Unix, ';' for Windows
+
+    If the provided `path` is a file, its parent directory is added to the PATH instead. 
+
+    Args:
+        path (str): The file or directory path to add to the PATH environment variable. Must be a string.
+
+    Raises:
+        TypeError: If `path` is not a string.
+    """
+    if not isinstance(path, str):
+        raise TypeError("Path must be a string but got "+repr(type(path)))
+
+    if not path:
+        return
+
+    if os.path.isfile(path):
+        path = os.path.dirname(path)
+
+    current_path = os.environ.get("PATH", "")
+
+    if path not in current_path.split(os.pathsep):
+
+        if current_path:
+            os.environ["PATH"] += os.pathsep + path
+        else:
+            os.environ["PATH"] = path
+
 
 def printed(message,value_to_be_returned=None,end='\n'):  # For debugging...perhaps this is obsolete now that I have pseudo_terminal though.
     print(str(value_to_be_returned if value_to_be_returned is not None else message),end=end)
@@ -13152,7 +13190,7 @@ def latex_image(equation: str):
         tfile=file
         if negate:
             tfile='tmp.png'
-        r=requests.get('http://latex.codecogs.com/png.latex?\dpi{300} \huge %s' % formula)
+        r=requests.get(r'http://latex.codecogs.com/png.latex?\dpi{300} \huge %s' % formula)
         f=open(tfile,'wb')
         f.write(r.content)
         f.close()
@@ -13345,7 +13383,7 @@ def _cv_skeletonize(img):
 
 # noinspection PyTypeChecker
 def print_latex_image(latex: str):
-    """
+    r"""
      >>> print_latex_image("\sum_{n=3}^7x^2")
      ⠀⠀⠀⠀⠠⠟⢉⠟
      ⠀⠀⠀⠀⠀⠀⡏
@@ -16140,22 +16178,61 @@ def _view_image_via_textual_imageview(image):
             _view_image_via_textual_imageview(path)
         finally:
             delete_file(path)
-def _ISM(ans):
-    #Input Select Multi
-    #TODO make it for things other than lists of strings, like lists of ints. To do this make it into a line-numbered string dict -> values then use those values to look up keys ->  get answer. Better yet create a fzf wrapper for this task - to select non-string things!
+def _ISM(ans,*,preview:str=None):
+    """
+    Input Select Multi
+    TODO make it for things other than lists of strings, like lists of ints. To do this make it into a line-numbered string dict -> values then use those values to look up keys ->  get answer. Better yet create a fzf wrapper for this task - to select non-string things!
+    """
+
     try:
         ans=dict(ans)
     except Exception:
         pass
 
     if isinstance(ans,dict):
-        return _filter_dict_via_fzf(ans)
+        return _filter_dict_via_fzf(ans,preview=preview)
     else:
         if isinstance(ans,str):
             ans=line_split(ans)
             ans=ans[::-1] #Let us see the string properly
-            return line_join(_ISM(ans))
-        return _iterfzf(ans,multi=True,exact=True)
+            return line_join(_ISM(ans,preview=preview))
+        return _iterfzf(ans,multi=True,exact=True,preview=preview)
+
+_which_cache={}
+def _shell_which(cmd):
+        
+    def update(cmd):
+        output=shell_command('which '+cmd)
+        _which_cache[cmd]=output
+    
+    if cmd in _which_cache:
+        run_as_new_thread(update,cmd)
+        return _which_cache[cmd]
+    else:
+        update(cmd)
+        return _which_cache[cmd]
+_whiches_cache=None
+def _whiches():
+    global _whiches_cache
+
+    def refresh(show_progress=False):
+        global _whiches_cache
+        keys = get_system_commands()
+        values = load_files(_shell_which, keys, show_progress=show_progress)
+        _whiches_cache =  {k:v for k,v in zip(keys,values)}
+
+    if _whiches_cache is None:
+        refresh(show_progress='eta:r._whiches')
+
+    else:
+        run_as_new_thread(refresh)
+
+    return _whiches_cache
+def _ism_whiches():
+    "A real which hunt if I do say so myself!"
+    return _ISM(_whiches())
+
+
 
 def _view_with_pyfx(data):
     from rp.libs.pyfx.app import PyfxApp
@@ -16257,7 +16334,7 @@ def _input_select_multiple_history_multiline(history_filename=history_filename,o
                 preview_width),
             ) #
         else:
-            lines=_iterfzf(lines,multi=True,exact=True,preview='echo {} | nl -b a -v 0 -s\\|\ \  | fold -w %i'%preview_width) #
+            lines=_iterfzf(lines,multi=True,exact=True,preview=r'echo {} | nl -b a -v 0 -s\\|\ \  | fold -w %i'%preview_width) #
         # lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | nl -v 0 | fold -w %i'%preview_width) #Have line numbers Start from 0
     else:
         assert old_code is not None
@@ -17615,6 +17692,10 @@ def pseudo_terminal(
 
         ISENV $r._ISM($os.environ) #Input Select (multiple) Environment (variables)
         ENV   $r._ISM($os.environ) #Input Select (multiple) Environment (variables)
+        ENP   $r._ISM({x:y for x,y in $os.environ.items() if ':' in y},preview="""echo {} | cut -d'|' -f2- | cut -c2- | tr ':' '\\n'""") #Input Select (multiple) Environment (variables) with preview for when split by : like on PATH
+        ENVP  $r._ISM({x:y for x,y in $os.environ.items() if ':' in y},preview="""echo {} | cut -d'|' -f2- | cut -c2- | tr ':' '\\n'""") #Input Select (multiple) Environment (variables) with preview for when split by : like on PATH
+        WHI   $r._ism_whiches() #Investigate 'which x' for every system command x
+        WHICH $r._ism_whiches() #Investigate 'which x' for every system command x
 
         GSC   $r._ISM($get_system_commands())
         SCO   $r._ISM($get_system_commands())
@@ -20249,11 +20330,11 @@ def pseudo_terminal(
                         else:
                             if user_message.startswith("!!"):# For shell commands
                                 user_message="ans=__import__('rp').shell_command("+repr(user_message[2:])+")"
-                                fansi_print("Transformed command into " + repr(user_message),'magenta')
+                                # fansi_print("Transformed command into " + repr(user_message),'magenta')
                             elif user_message.startswith("!"):# For shell commands
                                 # user_message="from rp import shell_command;ans=shell_command("+repr(user_message[1:])+",True)"#Disabled because we no longer guarentee that rp is imported
                                 user_message="import os;os.system("+repr(user_message[1:])+")"
-                                fansi_print("Transformed command into " + repr(user_message) ,'magenta')
+                                # fansi_print("Transformed command into " + repr(user_message) ,'magenta')
                             if True and len(user_message.split("\n")) == 1 and not enable_ptpython:  # If we only have 1 line: no pasting BUT ONLY USE THIS IF WE DONT HAVE ptpython because sometimes this code is a bit glitchy and its unnessecary if we have ptpython
                                 _thing=space_split(user_message)
                                 if len(_thing) > 1:
@@ -21740,7 +21821,7 @@ def powerset(iterable,reverse=False):
     return chain.from_iterable(combinations(s, r) for r in order)
 
 def print_fix(ans):
-    """
+    r"""
     Meant to use this command in the pseudoterminal: `print_fix\py
     Turn all python2 print statements (without the parenthesis) into python3-style statements
     Example: print_fix('if True:\n\tprint 5')    ====    'if True:\n\tprint(5)'
@@ -24815,7 +24896,7 @@ def pil_text_to_image(
     color=(1, 1, 1, 1), #Is a float color
     background_color=(0, 0, 0, 0) #Is a float color
 ):
-    """
+    r"""
     Uses PIL as an alternative backend to cv_text_to_image
     Returns an image with the given text and size and font etc
 
@@ -27230,12 +27311,50 @@ def get_notebook_path():
 #    return get_parent_folder(get_current_notebook_path())
 #get_current_notebook_directory=get_current_notebook_folder
 
+def launch_terminal_in_colab(height='400',fullscreen=False):
+    """
+    Launches a full terminal right inside of google colab, right in the notebook itself!
+    Note: You might want to set TERM=xterm-color and some other environment variables
+    Based on https://colab.sandbox.google.com/gist/afvanwoudenberg/904ae132a578fb61f8bd1149b0dc6b53/terminal.ipynb#scrollTo=UpsaRfQ7vQaW
+    """
+
+    height=400 #It didn't seem 
+    width='100%'
+    port=8000
+
+    assert running_in_google_colab()
+    from google.colab.output import serve_kernel_port_as_window
+    from google.colab.output import serve_kernel_port_as_iframe
+
+    if 'shellinaboxd' not in get_system_commands():
+        print('Installing shellinabox...')
+        os.system('apt install shellinabox &> /dev/null')
+
+    os.system(r'nohup shellinaboxd --disable-ssl --no-beep --port=8000 --css /etc/shellinabox/options-enabled/00_White\ On\ Black.css -s "/:root:root:/root:/bin/bash -c bash -i" &> /dev/null &')
+    os.system('yes | /usr/local/sbin/unminimize &> /dev/null')
+
+    if fullscreen:
+        serve_kernel_port_as_window(port)
+    else:
+        serve_kernel_port_as_iframe(port)
+
 def running_in_google_colab():
     """
     Return true iff this function is called from google colab
     """
     import sys
     return 'google.colab' in sys.modules
+
+@memoized
+def get_cloud_provider():
+    """ WARNING: This can be slow if there's actually no cloud! Like, on a laptop, this can take a while... """
+    pip_import('cloud_detect','cloud-detect')
+    import cloud_detect
+    return cloud_detect.provider(timeout=1)
+
+def running_in_gcp():
+    return get_cloud_provider()=='gcp'
+
   
 def _is_python_exe_root(root):
     exe=sys.executable
@@ -32395,7 +32514,7 @@ def download_urls_to_cache(
 download_files_to_cache = download_urls_to_cache
 
 def get_cache_file_path(url, *, cache_dir=None, file_extension=None, hash_func=None):
-    """
+    r"""
     Computes a cache file path for the provided input
     It is a pure function, and uses no system calls - making it fast
     By default, uses your system's temporarily file path as your cache directory (as opposed to any network storage)
@@ -33581,7 +33700,7 @@ def _sort_imports_via_isort(code):
 sort_imports_via_isort = _sort_imports_via_isort
 
 def _set_ryan_tmux_conf():
-    conf='''
+    conf=r'''
 #Ryan Burgert's Tmux config
 #Main changes:
 #   * Note: These shortcuts are all preceded by Control+B
@@ -33736,7 +33855,7 @@ def _load_ryan_lazygit_config():
     elif currently_running_unix():
         path='~/.config/lazygit/config.yml'
     else:
-        path='%LOCALAPPDATA%\lazygit\config.yml'
+        path=r'%LOCALAPPDATA%\lazygit\config.yml'
     
     path=get_absolute_path(path)
     make_directory(get_path_parent(path))
@@ -33775,7 +33894,7 @@ def _install_lazygit(force=False):
         elif currently_running_linux():
             os.system(
                 unindent(
-                """
+                r"""
                 LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
                 curl -Lo lazygit.tar.gz "https://github.com/jesseduffield/lazygit/releases/latest/download/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz"
                 tar xf lazygit.tar.gz lazygit
@@ -34703,41 +34822,47 @@ def make_zip_file_from_folder(src_folder:str=None, dst_zip_file:str=None)->str:
         
     return dst_zip_file
 
-def extract_zip_file(zip_file_path,folder_path=None,*,treat_as=None):
+def extract_zip_file(zip_file_path, folder_path=None, *, treat_as=None):
     """
-    Extracts a zip file to a specified folder. If the folder doesn't exist, it is created.
+    Extracts a zip or tar file to a specified folder. If the folder doesn't exist, it is created.
 
     Parameters:
-        - zip_file_path (str): The path to the zip file to extract.
+        - zip_file_path (str): The path to the zip or tar file to extract.
         - folder_path (str, optional): The destination folder path for extracted contents. If not provided, 
           extracts to a new folder next to the zip file, with the same name as the file.
-        - treat_as (str, optional): If specified as 'zip', treats the file at zip_file_path as a zip file,
+        - treat_as (str, optional): If specified as 'zip' or 'tar', treats the file at zip_file_path as a zip or tar file,
           useful for files like .pptx that are zip archives but have a different extension.
 
     Returns:
         The path to the folder where files were extracted.
     """
 
-    assert treat_as in [None, 'zip'], 'Currently treat_as only supports .zip files' #TODO: Expand this functionality to .rar files etc with pyunpack
+    assert treat_as in [None, 'zip', 'tar'], 'Currently treat_as only supports .zip and .tar files' #TODO: Expand this functionality to .rar files etc with pyunpack
 
-    if folder_path==None:
-        #By default, extract path/to/thing.zip to a new folder called path/to/thing
-        folder_path=strip_file_extension(zip_file_path)
-    assert isinstance(zip_file_path,str)
-    assert isinstance(folder_path,str)
+    if folder_path is None:
+        # By default, extract path/to/thing.zip to a new folder called path/to/thing
+        folder_path = strip_file_extension(zip_file_path)
+    
+    assert isinstance(zip_file_path, str)
+    assert isinstance(folder_path, str)
     make_directory(folder_path)
     assert folder_exists(folder_path)
 
-    if get_file_extension(zip_file_path)=='zip' or treat_as=='zip':
-        #If we're just unpacking a zip file, we don't need pyunpack (a pypi package that's used for .rar files, .7z files etc)
+    if get_file_extension(zip_file_path) == 'zip' or treat_as == 'zip':
+        # If we're just unpacking a zip file, we don't need pyunpack
         import zipfile
         with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
             zip_ref.extractall(folder_path)
+    elif get_file_extension(zip_file_path) == 'tar' or treat_as == 'tar':
+        # If it's a tar file, use tarfile to extract it
+        import tarfile
+        with tarfile.open(zip_file_path, 'r') as tar_ref:
+            tar_ref.extractall(folder_path)
     else:
-        #If it's not a zip file, don't give up. We can still unzip rar, jar, 7z, and other filetypes with the help of pyunpack
+        # If it's not a zip or tar file, don't give up. We can still unzip rar, jar, 7z, and other filetypes with the help of pyunpack
         _extract_archive_via_pyunpack(zip_file_path, folder_path)
 
-    _maybe_unbury_folder(folder_path) #If it created something like unzipped_folder/unzipped_folder/contents make it into unzipped_folder/contents instead
+    _maybe_unbury_folder(folder_path)  # If it created something like unzipped_folder/unzipped_folder/contents make it into unzipped_folder/contents instead
 
     return folder_path
 unzip_to_folder=extract_zip_file
@@ -34779,6 +34904,7 @@ def _extract_archive_via_pyunpack(archive_path, folder_path):
     """
 
     pip_import('pyunpack')
+    pip_import('patool')
 
     filetype=get_file_extension(archive_path)
     supported_filetypes='zip jar rar tar gz 7z deb ace alz a arc arj bz2 cab Z cpio dms lrz lha lzh lz lzma lzo rpm rz xz zoo'.lower().split()
@@ -35723,7 +35849,7 @@ def zalgo_text(text:str,amount:int=1):
     return z.zalgofy(text)
 
 def big_ascii_text(text:str,*,font='standard'):
-    """
+    r"""
     Returns big ascii art text!
     EXAMPLE:
      ➤ big_ascii_text('Hello World!')
