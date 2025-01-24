@@ -2993,7 +2993,7 @@ def get_center_crop_bounds(image_dimensions, crop_dimensions):
 
     return tuple(bounds)
 
-def trim_video(video,length:int,copy=True):
+def trim_video(video,length:int,copy=True,mode='extend'):
     """
     This function takes a video and a length, and returns a video with that length
     If the desired length is longer than the video, additional blank frames will be added to the end
@@ -3018,7 +3018,13 @@ def trim_video(video,length:int,copy=True):
     assert is_image(last_frame)
 
     # extra_frames=np.asarray([np.zeros_like(last_frame)]*number_of_extra_frames)
-    zero_frame = np.zeros_like(last_frame)
+    if mode=='zeros':
+        zero_frame = np.zeros_like(last_frame)
+    elif mode=='extend':
+        zero_frame = last_frame
+    else:
+        assert False,'Invalid mode: '+mode
+
     extra_frames = np.repeat(zero_frame[None], number_of_extra_frames, axis=0)
 
     if isinstance(video,list):
@@ -17787,6 +17793,7 @@ def pseudo_terminal(
         # CPAH $copy_path(ans,'.')
         CAH  $r._cpah(ans)
         CPAH $r._cpah(ans)
+        HLAH $r._cpah(ans,method=make_hardlink)#HardLink Ans Here
         # CPPH $copy_path($string_from_clipboard(),'.')
         # CPH  $copy_path($string_from_clipboard(),'.')
         CPPH $r._cpah($string_from_clipboard())
@@ -27556,7 +27563,7 @@ def split_tensor_into_regions(tensor,*counts,flat=True,strict=False):
     out=tensor.reshape(new_shape).transpose(transpose_axes)
 
     if flat:
-        out=out.reshape(*(np.product(out.shape[:len(counts)]),*out.shape[len(counts):]))
+        out=out.reshape(*(np.prod(out.shape[:len(counts)]),*out.shape[len(counts):]))
 
     return out
 
@@ -27932,6 +27939,12 @@ def as_numpy_array(x):
     """
     try:return np.asarray(x)#For numpy arrays and python lists (and anything else that work with np.asarray)
     except Exception:pass
+
+    if isinstance(x, list):
+        #as_numpy_array fixed for lists of torch tensors
+        #Recrsively turn lists of torch tensors or numpy arrays etc into numpy-array compatible elements
+        return np.asarray([as_numpy_array(y) for y in x])
+
     try:
         if '16' in str(x.dtype):x=x.float() #Numpy screws up with floa16
         return x.detach().cpu().numpy()#For pytorch. We're not doing an isinstance check of type pytorch tensor becuse that involves importing pytorch, which might be slow. Try catch is faster here.
@@ -28994,7 +29007,10 @@ save_animated_gif = save_video_gif = save_animated_gif_via_pil = save_video_gif_
 
 def _ensure_ffmpeg_installed():
     if "ffmpeg" not in get_system_commands():
-        assert False, "Please install ffmpeg! sudo apt install ffmpeg"
+        if   currently_running_windows(): print("Please install ffmpeg! https://www.ffmpeg.org/download.html") #TODO: Accurately detect if FFMPEG is installed on Windows
+        elif currently_running_linux  (): assert False, "Please install ffmpeg! sudo apt install ffmpeg"
+        elif currently_running_mac    (): assert False, "Please install ffmpeg! brew install ffmpeg"
+        else:                             assert False, "Please install ffmpeg!"
 
 def _ensure_nvtop_installed():
     if "nvtop" not in get_system_commands():
@@ -35409,18 +35425,12 @@ def _hsv_to_rgb_via_numba(hsv_image):
 
     for x in range(hsv_image.shape[0]):
         for y in range(hsv_image.shape[1]):
-            if i[x, y] == 0:
-                rgb_image[x, y] = v[x, y], t[x, y], p[x, y]
-            elif i[x, y] == 1:
-                rgb_image[x, y] = q[x, y], v[x, y], p[x, y]
-            elif i[x, y] == 2:
-                rgb_image[x, y] = p[x, y], v[x, y], t[x, y]
-            elif i[x, y] == 3:
-                rgb_image[x, y] = p[x, y], q[x, y], v[x, y]
-            elif i[x, y] == 4:
-                rgb_image[x, y] = t[x, y], p[x, y], v[x, y]
-            elif i[x, y] == 5:
-                rgb_image[x, y] = v[x, y], p[x, y], q[x, y]
+            if   i[x, y] == 0: rgb_image[x, y] = v[x, y], t[x, y], p[x, y]
+            elif i[x, y] == 1: rgb_image[x, y] = q[x, y], v[x, y], p[x, y]
+            elif i[x, y] == 2: rgb_image[x, y] = p[x, y], v[x, y], t[x, y]
+            elif i[x, y] == 3: rgb_image[x, y] = p[x, y], q[x, y], v[x, y]
+            elif i[x, y] == 4: rgb_image[x, y] = t[x, y], p[x, y], v[x, y]
+            elif i[x, y] == 5: rgb_image[x, y] = v[x, y], p[x, y], q[x, y]
 
     return rgb_image
 
@@ -35481,14 +35491,10 @@ def _rgb_to_hsv_via_numba(rgb_image):
             s[x, y] = 0 if max_val == 0 else delta / max_val
             
             if max_val == r[x, y]:
-                if g[x, y] >= b[x, y]:
-                    h[x, y] = 60 * (g[x, y] - b[x, y]) / delta if delta != 0 else 0
-                else:
-                    h[x, y] = 60 * (g[x, y] - b[x, y]) / delta + 360 if delta != 0 else 0
-            elif max_val == g[x, y]:
-                h[x, y] = 60 * (b[x, y] - r[x, y]) / delta + 120
-            elif max_val == b[x, y]:
-                h[x, y] = 60 * (r[x, y] - g[x, y]) / delta + 240
+                if g[x, y] >= b[x, y]: h[x, y] = 60 * (g[x, y] - b[x, y]) / delta       if delta != 0 else 0
+                else                 : h[x, y] = 60 * (g[x, y] - b[x, y]) / delta + 360 if delta != 0 else 0
+            elif max_val == g[x, y]:   h[x, y] = 60 * (b[x, y] - r[x, y]) / delta + 120
+            elif max_val == b[x, y]:   h[x, y] = 60 * (r[x, y] - g[x, y]) / delta + 240
     
     h /= 360  # Normalize to [0, 1]
 
@@ -40349,6 +40355,10 @@ def cv_optical_flow(frame_a, frame_b, algorithm="DenseRLOF"):
     return flow
 
 def calculate_flows(video, flow_func=cv_optical_flow, *, show_progress=False, lazy=False):
+    """
+    Calculates optical flow for a whole video, given a video and a function that computes flow(prev_frame, next_frame)
+    Returns an iterable of optical flows, and if not lazy it has length len(video)-1
+    """
     if show_progress:
         assert has_len(video), 'Cannot show progress because video doesnt have a length, type(video)='+str(type(video))
         length=len(video)
@@ -40356,7 +40366,7 @@ def calculate_flows(video, flow_func=cv_optical_flow, *, show_progress=False, la
     def helper():
         video_iter=iter(video)
         image=next(video_iter)
-        for new_image in video:
+        for new_image in video_iter:
             flow=flow_func(image,new_image)
             image=new_image
             yield flow
