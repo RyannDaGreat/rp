@@ -11318,24 +11318,26 @@ def shell_command(command: str,as_subprocess=False,return_printed_stuff_as_strin
             from os import system
             system(command)
 
-def get_system_commands():
+def get_system_commands(*,use_cache=False):
     """
     Retrieve a list of executable commands available in the system's PATH.
     
     The function returns a list of command names that are executable by the os.system().
-    It has been confirmed to work on UNIX-like systems (Mac and Linux).
-    Note: This function has not yet been tested on Windows
+    It has been tested to work on UNIX-like systems (Mac and Linux) and Windows.
+
+    If use_cache is True, it might be out of date since the last call! But it will eventually update, usually in under a second
 
     Returns:
         A list of strings representing the command names
 
     Example:
-        get_system_commands() --> ["ls", "pwd", "python3.8", "man", ... ]
+        get_system_commands() --> ["ls", "pwd", "python3.8", "man", ... ] (on Unix)
+                                   ["cmd.exe", "notepad.exe", "python.exe", ... ] (on Windows)
     """
-    
-    if currently_running_windows(): return [] #Don't crash rp for now. I'll test this some other time.
-    assert not currently_running_windows(), 'r.get_system_commands has not been tested on Windows yet. Feel free to add that!'
 
+    if use_cache:
+        return _get_cached_system_commands()
+    
     import os
     import subprocess
 
@@ -11346,22 +11348,30 @@ def get_system_commands():
 
     for path in paths:
         if os.path.isdir(path):
-            entries= os.scandir(path)
+            entries = os.listdir(path)
             for entry in entries:
+                entry_path = os.path.join(path, entry)
                 try:
                     # Check if the entry is a file and it's executable
-                    if entry.is_file() and os.access(entry.path, os.X_OK):
-                        commands.add(entry.name)
+                    if os.path.isfile(entry_path):
+                        # On Windows, check if the file has an executable extension
+                        if os.name == 'nt':
+                            filename, ext = os.path.splitext(entry)
+                            if ext.lower() in ['.exe', '.bat', '.cmd']:
+                                commands.add(entry)    #EXAMPLE: "ffmpeg.exe"
+                                commands.add(filename) #EXAMPLE: "ffmpeg"    Can be executed without extension as well
+                        # On Unix, check if the file has executable permissions
+                        else:
+                            if os.access(entry_path, os.X_OK):
+                                commands.add(entry)
                 except Exception:
                     # Permission errors - ignore them
                     pass
                     
     # Turn the set into a list by sorting it in a convenient way to view
-    commands=sorted(commands)
-    commands=sorted(commands,key=len)
-
+    commands = sorted(commands)
+    commands = sorted(commands, key=len)
     return commands
-
 
 _get_sys_commands_cache=set()
 def _get_cached_system_commands():
@@ -29007,9 +29017,9 @@ save_animated_gif = save_video_gif = save_animated_gif_via_pil = save_video_gif_
 
 def _ensure_ffmpeg_installed():
     if "ffmpeg" not in get_system_commands():
-        if   currently_running_windows(): print("Please install ffmpeg! https://www.ffmpeg.org/download.html") #TODO: Accurately detect if FFMPEG is installed on Windows
-        elif currently_running_linux  (): assert False, "Please install ffmpeg! sudo apt install ffmpeg"
-        elif currently_running_mac    (): assert False, "Please install ffmpeg! brew install ffmpeg"
+        if   currently_running_windows(): assert False, "Please install ffmpeg! https://www.ffmpeg.org/download.html"
+        elif currently_running_linux  (): assert False, "Please install ffmpeg! >>> sudo apt install ffmpeg"
+        elif currently_running_mac    (): assert False, "Please install ffmpeg! >>> brew install ffmpeg #get brew at https://brew.sh"
         else:                             assert False, "Please install ffmpeg!"
 
 def _ensure_nvtop_installed():
