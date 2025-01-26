@@ -5025,18 +5025,18 @@ def save_image(image,file_name=None,add_png_extension: bool = True):
         return file_name
 
     elif get_file_extension(file_name)=='jpg':
-        try:
-            #Try to save using this jpg-specific method - it guarentees 100% quality
-            return save_image_jpg(image, file_name, quality=100)
-        except Exception:
-            #Use some other method to save it
-            pass
+        #Try to save using this jpg-specific method - it guarentees 100% quality
+        try: return save_image_jpg(image, file_name, quality=100)
+        except Exception: pass
     elif get_file_extension(file_name)=='jxl':
-        try:
-            return save_image_jxl(image, file_name, quality=100)
-        except Exception:
-            #Use some other method to save it
-            pass
+        try: return save_image_jxl(image, file_name, quality=100)
+        except Exception: pass
+    elif get_file_extension(file_name)=='avif':
+        try: return save_image_avif(image, file_name, quality=100)
+        except Exception: pass
+    elif get_file_extension(file_name)=='webp':
+        try: return save_image_webp(image, file_name, quality=100)
+        except Exception: pass
     else:
         #Suppress any warnings about losing data when coming from a float_image...that's a given, considering that png's only have one byte per color channel...
         image=as_byte_image(image)
@@ -5211,7 +5211,7 @@ def save_image_jpg(image,path=None,*,quality=100,add_extension=True):
         path=get_unique_copy_path('image.jpg')
 
     make_directory(get_parent_folder(path)) #Make sure the directory exists
-    image=np.asarray(image)
+    image=as_numpy_image(image)
     image=as_rgb_image(image)
     image=as_byte_image(image)
     assert 0<=quality<=100,'Jpg quality is measured in percent'
@@ -5230,6 +5230,60 @@ def save_image_jpg(image,path=None,*,quality=100,add_extension=True):
     none= Image.fromarray(image).save(path, "JPEG", quality=quality, optimize=False, progressive=True,**extra_kwargs)
     return path
 
+def save_image_webp(image, path=None, *, quality=100, add_extension=True):
+    """
+    Save image in WebP format. Set lossless=True for lossless compression, False for lossy.
+    If add_extension is True, adds '.webp' extension if not already present.
+    """
+
+    image = as_numpy_image(image)
+    if is_grayscale_image(image):
+        image = as_rgb_image(image)
+    image = as_byte_image(image)
+
+    if path is None:
+        path = get_unique_copy_path('image.webp')
+
+    make_directory(get_parent_folder(path))  
+
+    assert 0 <= quality <= 100, 'WebP quality is measured in percent'
+
+    if add_extension and not get_file_extension(path).lower() == 'webp':
+        path += '.webp'
+
+    kwargs = dict(lossless=quality==100, quality=quality)
+    as_pil_image(image).save(path, "WEBP", **kwargs)
+
+    return path
+
+
+def save_image_avif(image, path=None, *, quality=100, add_extension=True):
+    """
+    Save image in AVIF format. Set lossless=True for lossless compression, False for lossy.
+    If add_extension is True, adds '.avif' extension if not already present.
+    """
+    pip_import("pillow_avif", "pillow-avif-plugin")
+
+    image = as_numpy_image(image)
+    if is_grayscale_image(image):
+        image = as_rgb_image(image)
+    image = as_byte_image(image)
+
+    if path is None:
+        path = get_unique_copy_path('image.avif')
+
+    make_directory(get_parent_folder(path))  
+
+    assert 0 <= quality <= 100, 'AVIF quality is measured in percent'
+
+    if add_extension and not get_file_extension(path).lower() == 'avif':
+        path += '.avif'
+
+    kwargs = dict(lossless=quality==100, quality=quality)
+    as_pil_image(image).save(path, "AVIF", **kwargs)
+
+    return path
+
 def save_image_jxl(image, path=None, *, quality=100, add_extension=True):
     """
     Save image in JPEG XL format. Set quality=100 for lossless compression.
@@ -5237,64 +5291,149 @@ def save_image_jxl(image, path=None, *, quality=100, add_extension=True):
     
     EXAMPLE (Comparison video between JPG and JXL quality):
         
-        >>> emma='https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pages/images/emma.png?raw=true'
-        ... emma=load_image(emma,use_cache=True)
-        ... emma=full_range(emma)
-        ... display_image(emma)
+        >>> emma = load_image('https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pages/images/emma.png?raw=true', use_cache=True)
+        ... text_image = load_image('https://lh3.googleusercontent.com/EE9uifZsj9rVE4PDHKRx4jaTYUymIDItRbgxCNzKc7o14NJijwvj2uhSC7oKByRfxEF1SRqMUVispOb3W6r340P4KA=w640-h400-e365-rj-sc0x00ffffff',use_cache=True)
+        ... text_image=resize_image_to_fit(text_image,width=get_image_width(emma))
+        ... emma=vertically_concatenated_images(emma,text_image)
+        ... emma = full_range(emma)
         ... 
-        ... dir=make_directory('jxl_jpg_comparisons')
+        ... dir = make_directory('jxl_jpg_webp_avif_comparisons')
         ... r._pterm_cd(dir)
         ... 
-        ... comparisons=[]
+        ... jpg_sizes = []
+        ... jxl_sizes = []
+        ... wep_sizes = []
+        ... avf_sizes = []
         ... 
-        ... for quality in [1,2,5,10,20,30,50,70,80,90,95,97,99,100]:
-        ...     print(quality)
+        ... jpg_paths = []
+        ... jxl_paths = []
+        ... wep_paths = []
+        ... avf_paths = []
         ... 
-        ...     jpg=save_image_jpg(emma,path=str(quality),quality=quality)
-        ...     jxl=save_image_jxl(emma,path=str(quality),quality=quality)
-        ...     
-        ...     jpg_size=get_file_size(jpg,human_readable=True)
-        ...     jxl_size=get_file_size(jxl,human_readable=True)
-        ...     
-        ...     jxl=load_image(jxl,use_cache=True)
-        ...     jpg=load_image(jpg,use_cache=True)
-        ...     
-        ...     jpg=labeled_image(jpg,'JPG: '+jpg_size,font='G:Hind')
-        ...     jxl=labeled_image(jxl,'JXL: '+jxl_size,font='G:Hind')
+        ... qualities = [1,2,3,4,5,6,7,8,9,10,20,30,40,50,60,70,80,90,91,92,93,94,95,96,97,98,99,100]
         ... 
-        ...     comparison=horizontally_concatenated_images(jpg,jxl)
-        ...     comparison=labeled_image(comparison,'JPG / JXL: Quality = '+str(quality)+"%",font='G:Hind',size=30)
+        ... for quality in eta(qualities, title='Saving Images'):
+        ...     jpg_path = save_image_jpg (emma, path=f'{quality}', quality=quality)
+        ...     jxl_path = save_image_jxl (emma, path=f'{quality}', quality=quality)
+        ...     wep_path = save_image_webp(emma, path=f'{quality}', quality=quality)
+        ...     avf_path = save_image_avif(emma, path=f'{quality}', quality=quality)
+        ...     
+        ...     jpg_paths += [jpg_path]
+        ...     jxl_paths += [jxl_path]
+        ...     wep_paths += [wep_path]
+        ...     avf_paths += [avf_path]
+        ... 
+        ...     jpg_sizes.append(get_file_size(jpg_path))
+        ...     jxl_sizes.append(get_file_size(jxl_path))
+        ...     wep_sizes.append(get_file_size(wep_path))
+        ...     avf_sizes.append(get_file_size(avf_path))
+        ... 
+        ... #########
+        ... 
+        ... comparisons = []
+        ... 
+        ... jpg_index=len(qualities)-1
+        ... jxl_index=len(qualities)-1
+        ... wep_index=len(qualities)-1
+        ... avf_index=len(qualities)-1
+        ... 
+        ... while jpg_index>=0 and jxl_index>=0 and wep_index>=0 and avf_index>=0:
+        ... 
+        ...     print(jpg_index,jxl_index,wep_index,avf_index)
+        ...     #Making sure we're always comparing near-equal filesizes
+        ...     #We keep popping the largest file of the 4 types
+        ... 
+        ...     jpg_size = jpg_sizes[jpg_index]
+        ...     jxl_size = jxl_sizes[jxl_index]
+        ...     wep_size = wep_sizes[wep_index]
+        ...     avf_size = avf_sizes[avf_index]
+        ... 
+        ...     jpg_path = jpg_paths[jpg_index]
+        ...     jxl_path = jxl_paths[jxl_index]
+        ...     wep_path = wep_paths[wep_index]
+        ...     avf_path = avf_paths[avf_index]
+        ... 
+        ...     jpg_img = load_image(jpg_path, use_cache=True)
+        ...     jxl_img = load_image(jxl_path, use_cache=True)
+        ...     wep_img = load_image(wep_path, use_cache=True)
+        ...     avf_img = load_image(avf_path, use_cache=True)
+        ... 
+        ...     jpg_img = labeled_image(jpg_img,  f'JPG\n{jpg_path}\n{human_readable_file_size(jpg_size)}', font='G:Hind', size=20, size_by_lines=True)
+        ...     jxl_img = labeled_image(jxl_img,  f'JXL\n{jxl_path}\n{human_readable_file_size(jxl_size)}', font='G:Hind', size=20, size_by_lines=True) 
+        ...     wep_img = labeled_image(wep_img, f'WEBP\n{wep_path}\n{human_readable_file_size(wep_size)}', font='G:Hind', size=20, size_by_lines=True)
+        ...     avf_img = labeled_image(avf_img, f'AVIF\n{avf_path}\n{human_readable_file_size(avf_size)}', font='G:Hind', size=20, size_by_lines=True)
+        ...     
+        ...     comparison = tiled_images([jpg_img, jxl_img, wep_img, avf_img], border_color='red')
         ...     comparisons.append(comparison)
         ... 
-        ... mp4=save_video_mp4(comparisons,framerate=2,video_bitrate='max')
-        ... final_grid=tiled_images(comparisons)
-        ... png=save_image(final_grid,'comparison_grid.png')
+        ...     display_image(comparison)
         ... 
+        ...     size_max = max(jpg_size, jxl_size, wep_size, avf_size)
+        ...     
+        ...     if jpg_size == size_max: jpg_index-=1
+        ...     if jxl_size == size_max: jxl_index-=1
+        ...     if wep_size == size_max: wep_index-=1
+        ...     if avf_size == size_max: avf_index-=1
+        ...         
+        ... mp4 = save_video_mp4(comparisons, framerate=60, video_bitrate='max') 
         ... open_file_with_default_application(mp4)
+        ... 
+        ... #final_grid = tiled_images(comparisons)
+        ... #png = save_image(final_grid, 'comparison_grid.png')
         
     """
     pip_import("pillow_jxl", "pillow-jpegxl-plugin")
-    pip_import('PIL')
-    from PIL import Image
+
+    image = as_numpy_image(image)
+    if is_grayscale_image(image):
+        image = as_rgb_image(image)
+    image = as_byte_image(image)
 
     if path is None:
         path = get_unique_copy_path('image.jxl')
     
     make_directory(get_parent_folder(path))
-    image = np.asarray(image)
-    image = as_rgb_image(image)
-    image = as_byte_image(image)
     
     assert 0 <= quality <= 100, 'JpgXL quality is measured in percent'
-    if is_image(image):
-        image = as_rgb_image(image)
     
     if add_extension and not get_file_extension(path).lower() == 'jxl':
         path += '.jxl'
 
     kwargs = dict(lossless=True) if quality == 100 else dict(quality=quality)
-    none = Image.fromarray(image).save(path, "JXL", **kwargs)
+    as_pil_image(image).save(path, "JXL", **kwargs)
+
     return path
+
+def save_animated_webp(video, path=None, *, framerate=60, quality=100, loop=True, add_extension=True):
+    """
+    Save an animated video in WebP format.
+    If add_extension is True, adds '.webp' extension if not already present.
+    """
+    if path is None:
+        path = get_unique_copy_path('video.webp')
+
+    make_directory(get_parent_folder(path))
+
+    assert 0 <= quality <= 100, 'WebP quality is measured in percent'
+
+    if add_extension and not get_file_extension(path).lower() == 'webp':
+        path += '.webp'
+   
+    video = as_rgba_images(video) 
+    video = as_byte_images(video)
+    video = as_pil_images(video)
+    
+    kwargs = dict(
+        save_all=True,
+        append_images=video[1:],
+        duration=1000 // framerate,
+        loop=0 if loop else 1,
+        quality=quality,
+    )
+    video[0].save(path, "WEBP", **kwargs)
+    
+    return path
+save_video_webp=save_animated_webp
 
 def save_openexr_image(image, file_path):
     """
@@ -29177,10 +29316,11 @@ def save_video(images, path, *, framerate=60):
 
     assert get_file_extension(path) in 'mp4 avi gif png'.split(), 'This function currently supports .mp4, .avi, .png and .gif files'
 
-    if path.endswith('.mp4'): return save_video_mp4(images,path,framerate=framerate, show_progress=False)
-    if path.endswith('.avi'): return save_video_avi(images,path,framerate=framerate)
-    if path.endswith('.png'): return save_video_png(images,path,framerate=framerate)
-    if path.endswith('.gif'): return save_video_gif(images,path,framerate=framerate)
+    if path.endswith('.mp4') : return save_video_mp4(images,path,framerate=framerate, show_progress=False)
+    if path.endswith('.avi') : return save_video_avi(images,path,framerate=framerate)
+    if path.endswith('.png') : return save_video_png(images,path,framerate=framerate)
+    if path.endswith('.gif') : return save_video_gif(images,path,framerate=framerate)
+    if path.endswith('.webp'): return save_video_webp(images,path,framerate=framerate)
 
 
     assert False, 'Below this line mightn not work. Until further notice, please specify .avi or .mp4 in the path argument'
@@ -29820,7 +29960,7 @@ def make_directory(path):
     """
     try:
         if not directory_exists(path):
-            os.mkdir(path)
+            os.makedirs(path,exist_ok=True)
         return path
     except OSError:
         from pathlib import Path

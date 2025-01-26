@@ -2071,6 +2071,7 @@ def handle_character(buffer,char,event=None):
                 'mv' :'!mv',
                 'cp' :'!cp -r',
                 'cpr':'!cp -r',
+                'rmrf':'!rm -rf',
 
                 #Danger!
                 'rm':'!rm',
