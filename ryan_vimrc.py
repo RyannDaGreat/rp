@@ -1155,6 +1155,9 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             "    let g:python_highlight_file_headers_as_comments=0 "Highlight shebang and coding headers as comments
             "    Plugin 'vim-python/python-syntax'
             
+            " DOCKERFILE SYNTAX HIGHLIGHTING:
+                Plugin 'ekalinin/Dockerfile.vim'
+            
             " LANGUAGE SWITCHING:
                 " fh - changes color theme. Already accounted for elsewhere
                 nnoremap <leader>sss :set filetype=
@@ -1271,15 +1274,15 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             "         <tab>  completes with previous searches
             "
             "     In search results box:
+            "         s      does the replacement
+            "         u      undoes the replacement
+            "
             "         q      exits searching mode
             "         <cr>   goes to that code
             "
             "         F      toggles all lines for replacement
             "         t      toggles whether to replace that line
             "         i x    on/off line for replacement respectively
-            "
-            "         s      does the replacement
-            "         u      undoes the replacement
             "
             "         Folds-per-file:
             "             zc zo
