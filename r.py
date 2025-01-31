@@ -16828,7 +16828,7 @@ def _add_pterm_prefix_shortcut(shortcut:str,replacement:str):
     assert isinstance(replacement,str)
     
     import rp.r_iterm_comm as ric
-    ric.kibble_shortcuts[shortcut]=replcaement
+    ric.kibble_shortcuts[shortcut]=replacement
 
 def _get_pterm_verbose():
     return False
@@ -33800,11 +33800,11 @@ __import__("sys").path.append(__import__("os").getcwd())
 #__import__("rp").r._pip_import_autoyes=True
 #__import__("rp").r._pip_install_needs_sudo=False
 
-## Import the rp library's whole namespace. It's not nessecary, but it exposes a lot of useful functions without
-#from rp import *
-
 ## Set the terminal's cursor to the shape of a line, instead of a block. I personally prefer this, but I've commented out because I don't know if you'd like it.
-#set_cursor_to_bar()
+#__import__('rp').set_cursor_to_bar()
+
+## Custom command prefix shortcuts
+#__import__('rp').r._add_pterm_prefix_shortcut("fu","!!fileutil")
 
 #Added protected folders to CDH and CDC.
 #When you add a directory to this list, if any file inside it doesn't exist but the prefix also doesn't exist, it will be shown as blue when running CDH and it won't be deleted during CDH CLEAN.
@@ -33812,6 +33812,9 @@ __import__("sys").path.append(__import__("os").getcwd())
 __import__("rp").cdc_protected_prefixes+=[
    # '/Users/ryan/sshfs/' 
 ]
+
+## Import the rp library's whole namespace. It's not nessecary, but it exposes a lot of useful functions without
+#from rp import *
 
 """%rprc_file_path
 
