@@ -2127,6 +2127,12 @@ def handle_character(buffer,char,event=None):
                 'torchrun':'PYM torch.distributed.run',
             })
 
+            import rp.r_iterm_comm as ric
+            if hasattr(ric,'kibble_shortcuts'):
+                kibble_shortcuts=ric.kibble_shortcuts
+                if isinstance(kibble_shortcuts, dict):
+                    shortcuts.update(ric.kibble_shortcuts)
+
             for item in 'import w'.split():
                 #There are some programs we don't want to complete...yes, these are real programs you can enounter in bash...
                 if item in shortcuts:

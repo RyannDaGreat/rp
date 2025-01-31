@@ -25,3 +25,4 @@ options={
 	'top_space':0,
 	'min_bot_space':15,
 }
+kibble_shortcuts={}

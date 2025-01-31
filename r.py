@@ -16819,6 +16819,16 @@ def _write_default_gitignore():
 
     return file
     
+def _add_pterm_prefix_shortcut(shortcut:str,replacement:str):
+    """
+    When using pterm, you can type commands like 'pi ' --> 'PIP install '
+    This lets you add custom ones from your rprc file, like _add_prefix_shortcut('fu','!fileutil')
+    """
+    assert isinstance(shortcut,str)
+    assert isinstance(replacement,str)
+    
+    import rp.r_iterm_comm as ric
+    ric.kibble_shortcuts[shortcut]=replcaement
 
 def _get_pterm_verbose():
     return False
@@ -16846,7 +16856,7 @@ class _PtermLevelTitleContext:
         if self.should_do:
             rp.r._set_session_title(self.old_title)
 
-
+ 
 _user_created_var_names=set()
 _cd_history=[]
 def pseudo_terminal(
@@ -17874,8 +17884,8 @@ def pseudo_terminal(
         GOOP $open_google_search_in_web_browser($string_from_clipboard())
 
         SMI $os.system("nvidia-smi");
-        NVT $r._ensure_nvtop_installed();$os.system("nvtop");#sudo_apt_install_nvtop
         NVI $pip_import('nvitop');$pip_import('nvitop.__main__').main()
+        NVT $r._ensure_nvtop_installed();$os.system("nvtop");#sudo_apt_install_nvtop
         ZSH $r._ensure_zsh_installed();$os.system("zsh");
         BOP TOP
 
