@@ -17974,7 +17974,7 @@ def pseudo_terminal(
     
         RF    $random_element([x for x in $os.scandir() if not x.is_dir(follow_symlinks=False)]).name
         RD    $random_element([x for x in $os.scandir() if x.is_dir(follow_symlinks=False)]).name
-        RE    $random_element(ans)
+        RE    ($random_element(ans.splitlines()) if isinstance(ans,str) else $random_element(ans))
 
         RDA   $r._pterm_cd($random_element([x for x in $os.scandir() if x.is_dir(follow_symlinks=False)]))   # RD then DA
         CDR   $r._pterm_cd($random_element([x for x in $os.scandir() if x.is_dir(follow_symlinks=False)]))
