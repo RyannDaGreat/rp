@@ -377,7 +377,18 @@ class PythonCompleter(Completer):
             import os
             from rp import is_a_file
             import rp
-            yield from yield_from_candidates(*pathsmod(os.scandir(get_path_before_cursor()), priority= lambda x: x.is_dir())) #Put directories last but do include them
+            from rp import printed
+
+            after_cmd = '' if len(before.split())<2 else before.split()[1] #If we use a . in the command prioritize hidden path autocompletions 
+
+            yield from yield_from_candidates(
+                *pathsmod(
+                    os.scandir(get_path_before_cursor()),
+                    priority=lambda x: (
+                        x.is_dir() + (2 * x.path[len("./") :].startswith(".")) * (not after_cmd.startswith('.'))
+                    ),
+                )
+            )  # Put directories last but do include them
             return 
         if re.fullmatch(r'.*\`\w*',before_line)\
             or (before_line.startswith('RUN ') and not ('\n' in before) and not after):#not after and not '\n' in before and re.fullmatch(before_line):

@@ -16799,6 +16799,7 @@ def _ric_current_candidate_fuzzy_matches(query):
         
 
 def _pterm_cd(dir,repeat=1):
+    dir=os.path.expanduser(dir)
     pwd=get_current_directory()
     if _cd_history and _cd_history[-1]!=pwd:
         _cd_history.append(pwd)
@@ -16880,6 +16881,19 @@ def _add_pterm_prefix_shortcut(shortcut:str,replacement:str):
     
     import rp.r_iterm_comm as ric
     ric.kibble_shortcuts[shortcut]=replacement
+
+def _add_pterm_command_shortcuts(shortcuts:str):
+    """ 
+    EXAMPLE: 
+        >>> _add_pterm_command_shortcuts('''
+        >>>     CLC $r._pterm_cd("~/CleanCode")
+        >>>     RZG $os.system(f"cd {$get_path_parent($get_module_path(rp)} ; lazygit")
+        >>> ''')
+    """
+    shortcuts=shortcuts.splitlines()
+    import rp.r_iterm_comm as ric
+    ric.additional_command_shortcuts+=shortcuts
+
 
 def _get_pterm_verbose():
     return False
@@ -18154,12 +18168,18 @@ def pseudo_terminal(
 
         HOSTLAB !python -m jupyter lab --ip 0.0.0.0 --port 5678 --NotebookApp.password='' --NotebookApp.token='' --allow-root
 
-        '''.replace('$',rp_import)
+        '''
+
         # SA string_to_text_file(input("Filename:"),str(ans))#SaveAnsToFile
         # BB set_current_directory(r._get_cd_history()[-2]);fansi_print('BB-->CDH1-->'+get_current_directory(),'blue','bold')#Use_BB_instead_of_CDH_<enter>_1_<enter>_to_save_time_when_starting_rp
         #Note: \x20 is the space character
         command_shortcuts=line_split(command_shortcuts_string)
+        
+        import rp.r_iterm_comm as ric
+        if hasattr(ric,'additional_command_shortcuts'):
+            command_shortcuts+=list(ric.additional_command_shortcuts)
 
+        command_shortcuts = [x.replace('$',rp_import) for x in command_shortcuts]
         
         command_shortcuts=list(map(str.strip,command_shortcuts))
         command_shortcuts=[x for x in command_shortcuts if not x.startswith('#')]
@@ -29880,6 +29900,28 @@ def copy_directory(from_path, to_path, *, extract=False, follow_symlinks=False):
 
 copy_folder=copy_directory
 
+_home_directory=None
+def get_home_directory():
+    """
+    Returns the ~ directory - aka the user's home directory.
+    Works cross-platform.
+    """
+    import os
+
+    global _home_directory
+
+    if _home_directory is None:
+        if 'HOME' in os.environ:
+            _home_directory = os.environ['HOME']
+        elif 'USERPROFILE' in os.environ:  # For Windows
+            _home_directory = os.environ['USERPROFILE']
+        else:
+            _home_directory = os.path.expanduser("~")  # Often works, but can be unreliable in some edge cases.
+
+    return _home_directory
+
+
+
 def copy_file(from_path,to_path):
     "Copy a single file from from_path to to_path, where to_path is either a folder or a file that will be overridden"
     assert file_exists(from_path),'copy_file copies a file from from_path to to_path, but from_path='+repr(from_path)+' is not a file'
@@ -33913,6 +33955,12 @@ __import__("sys").path.append(__import__("os").getcwd())
 
 ## Custom command prefix shortcuts
 #__import__('rp').r._add_pterm_prefix_shortcut("fu","!!fileutil")
+
+## Custom pterm commands
+# _add_pterm_command_shortcuts('''
+#     CLC $r._pterm_cd("~/CleanCode")
+#     RZG $os.system(f"cd {$get_path_parent($get_module_path(rp)} ; lazygit")
+# ''')
 
 #Added protected folders to CDH and CDC.
 #When you add a directory to this list, if any file inside it doesn't exist but the prefix also doesn't exist, it will be shown as blue when running CDH and it won't be deleted during CDH CLEAN.

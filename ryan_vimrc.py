@@ -951,6 +951,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             autocmd FileType python vnoremap <buffer> <Esc>l :BlackMacchiato<cr>
         "RPY FILES:
             autocmd BufRead,BufNewFile *.rpy          set filetype=python "Treat .rpy files as python files
+            autocmd BufRead,BufNewFile *.rprc          set filetype=python "Treat .rprc files as python files
             autocmd BufRead,BufNewFile *ryan_vimrc.py set filetype=vim    "Treat ryan_vimrc.py as a vimrc
         "OUTLINER: \jo
             " Add an outliner for python so we can quickly jump between functions and classes
