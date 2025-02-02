@@ -26,3 +26,4 @@ options={
 	'min_bot_space':15,
 }
 kibble_shortcuts={}
+additional_command_shortcuts=[]

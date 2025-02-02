@@ -379,13 +379,14 @@ class PythonCompleter(Completer):
             import rp
             from rp import printed
 
-            after_cmd = '' if len(before.split())<2 else before.split()[1] #If we use a . in the command prioritize hidden path autocompletions 
+            #THIS WORKS but it interferes with pterm getting the completions for completing LSS without tab
+            # after_cmd = '' if len(before.split())<2 else before.split()[1] #If we use a . in the command prioritize hidden path autocompletions 
 
             yield from yield_from_candidates(
                 *pathsmod(
                     os.scandir(get_path_before_cursor()),
                     priority=lambda x: (
-                        x.is_dir() + (2 * x.path[len("./") :].startswith(".")) * (not after_cmd.startswith('.'))
+                        x.is_dir() #  + (2 * x.path[len("./") :].startswith(".")) * (not after_cmd.startswith('.'))  #Also commented out because it interferes with enter-completions from pterm LSS
                     ),
                 )
             )  # Put directories last but do include them
