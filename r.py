@@ -33957,10 +33957,10 @@ __import__("sys").path.append(__import__("os").getcwd())
 #__import__('rp').r._add_pterm_prefix_shortcut("fu","!!fileutil")
 
 ## Custom pterm commands
-# _add_pterm_command_shortcuts('''
+#__import__('rp').r._add_pterm_command_shortcuts('''
 #     CLC $r._pterm_cd("~/CleanCode")
 #     RZG $os.system(f"cd {$get_path_parent($get_module_path(rp)} ; lazygit")
-# ''')
+#''')
 
 #Added protected folders to CDH and CDC.
 #When you add a directory to this list, if any file inside it doesn't exist but the prefix also doesn't exist, it will be shown as blue when running CDH and it won't be deleted during CDH CLEAN.
