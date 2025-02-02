@@ -2062,7 +2062,7 @@ def handle_character(buffer,char,event=None):
             return True
 
         if not after and char==' ' and before.replace('_','').isalpha():
-            autocaps = 'cd py pym apy apym acat cat vim tab fd rn run ccat ncat pip take mkdir cdu lss lsr'.split()
+            autocaps = 'cd py pym apy apym acat cat vim tab fd rn run ccat ncat pip take mkdir cdu lss lsr fdt'.split()
 
             import rp
             shortcuts = {c:'!'+c for c in rp.r._get_cached_system_commands()}
@@ -2072,6 +2072,10 @@ def handle_character(buffer,char,event=None):
                 'cp' :'!cp -r',
                 'cpr':'!cp -r',
                 'rmrf':'!rm -rf',
+
+                'l':'LSS',
+                'a':'ACAT',
+                'fc':'FCOPY',
 
                 #Danger!
                 'rm':'!rm',

@@ -7886,7 +7886,7 @@ def pop_gather(x,*indices):
 def gather_vars(*var_names, frames_back=1, skip_missing=False):
     """
     TODO: Elaborate on frames_back = ... functionality for getting ALL frames back - we want a min_frames_back and max_frames_back
-    Better yet use slice objects, and gather_args_wrapper(func)[2:]() lets us specify the frames_back via slices
+    Better yet use slice objects, and gather_args_wrap(func)[2:]() lets us specify the frames_back via slices
     Also perhaps we would have [2,...,callable] or even [2,...,func_name,...func_name] -- or something likke that....its complicated :( 
 
 
@@ -8204,9 +8204,9 @@ def gather_args(func, *args, frames_back=1, **kwargs):
             args, kwargs = gather_args(f)
             print(f(*args,**kwargs))
 
-        #With our sister function, gather_args_wrapper:
+        #With our sister function, gather_args_wrap:
         def g(a,b,c,d,e,f,g):
-            print(gather_args_wrapper(f)())
+            print(gather_args_wrap(f)())
 
         #With our other sister function, gather_args_call:
         def g(a,b,c,d,e,f,g):
@@ -8476,7 +8476,7 @@ def gather_args_call(func, *args, frames_back=1, **kwargs):
     out_args, out_kwargs = gather_args(func, *args, frames_back=frames_back+1, **kwargs)
     return func(*out_args, **out_kwargs)
 
-def gather_args_wrapper(func, *, frames_back=1):
+def gather_args_wrap(func, *, frames_back=1):
     """
     Decorates the given function to use arguments gathered from the current scope, using rp.gather_args
     The arguments will be gathered from the scope where the function is called, not where it is wrapped.
@@ -8493,7 +8493,7 @@ def gather_args_wrapper(func, *, frames_back=1):
     TODO: Make gather_args_call implemented with gather_args_wrap, not the other way around - that way we can still use the frames_back argument in gather_args_wrap
 
     Example:
-        >>> @gather_args_wrapper
+        >>> @gather_args_wrap
         ... def example_func(a, b, c):
         ...     print(f"a={a}, b={b}, c={c}")
         ...
@@ -8514,7 +8514,7 @@ def gather_args_wrapper(func, *, frames_back=1):
 
 def gather_args_bind(func, *args, frames_back=1, **kwargs):
     """
-    Like gather_args_wrapper, but binds the values in the namespace upon creation.
+    Like gather_args_wrap, but binds the values in the namespace upon creation.
     Here's an example to show the difference:
 
     TODO: Use inspect.signature instead of inspect.getfullargspec, because getfullargspec is old - and functools.wrap doesn't change those signatures
@@ -8526,7 +8526,7 @@ def gather_args_bind(func, *args, frames_back=1, **kwargs):
             x=1
             y=2
             b=gather_args_bind(f)
-            w=gather_args_wrapper(f)
+            w=gather_args_wrap(f)
         >>> b()
         1 2
         >>> w()
@@ -8564,7 +8564,7 @@ def gather_args_bind(func, *args, frames_back=1, **kwargs):
             u=444
            
             b=gather_args_bind(f)
-            w=gather_args_wrapper(f)
+            w=gather_args_wrap(f)
         >>> w()
         ERROR: AssertionError: Missing variables for function call: v, x, z
         >>> b()
@@ -16593,7 +16593,52 @@ def _input_select_multiple_history_multiline(history_filename=history_filename,o
     # if fansi_is_enabled():
     #     out=strip_ansi_escapes(out)
 
+    out = out.splitlines()
+    if len(out)>1 and out[1].startswith('!'):
+        #If selecting a ! command put the ! before the date
+        if True:
+            #DELETE THE DATE
+            out=out[1:]
+        else:
+            #KEEP THE DATE
+            out[0]='!'+out[0]
+            out[1]=out[1][1:]
+    out=line_join(out)
+
+
     return out
+
+def _autocomplete_lss_name(lss_name,command_name=None):
+    """ 
+    If there's an autocomplete thing in prompt-toolkit autocompletions thats a path return it otherwise dont change the input 
+    That way, 'LSS co' --> 'LSS CogVideoX'
+    """
+    if command_name is not None:
+        lss_name=lss_name[len(command_name+' '):]
+    import rp.r_iterm_comm as ric
+    if (
+        ric.current_candidates
+        and fuzzy_string_match(
+            lss_name, ric.current_candidates[0], case_sensitive=False
+        )
+        and not path_exists(lss_name)
+    ):
+        #Don't need tab to autocomplete these paths, which is why it's fast...
+        candidate_0 = ric.current_candidates[0]
+        candidate_0 = candidate_0.strip('/').strip('\\')
+        if path_exists(candidate_0):
+            if candidate_0 != lss_name and command_name is not None:
+                fansi_print(
+                    command_name
+                    + ": Completed "
+                    + repr(lss_name)
+                    + " to "
+                    + repr(candidate_0),
+                    "blue",
+                )
+            lss_name = candidate_0
+
+    return lss_name
 
 def _input_select_multiple_history(history_filename=history_filename):
     history=text_file_to_string(history_filename)
@@ -16603,6 +16648,12 @@ def _input_select_multiple_history(history_filename=history_filename):
     lines=_iterfzf(lines,multi=True,exact=True,preview='echo {} | fold -w %i'%preview_width)
 
     lines=[('#' if x.startswith('#') else '')+x[1:] for x in lines]
+
+    # if len(lines)>1 and lines[1].startswith('!'):
+    #     #If selecting a ! command put the ! before the date
+    #     lines[0]='!'+lines[0]
+    #     lines[1]=lines[1][1:]
+
     out=line_join(lines)
 
     return out
@@ -19373,9 +19424,14 @@ def pseudo_terminal(
                             finally:
                                 delete_file(temp)
 
-                        elif user_message=='FCOPY':
+                        elif user_message=='FCOPY' or user_message.startswith('FCOPY '):
                             fansi_print("FCOPY --> Web File Copy --> rp.web_copy_path() --> Copying a file or folder to the internet","blue",'bold')
-                            path=input_select_path()
+
+                            if user_message.startswith('FCOPY '):
+                                path = _autocomplete_lss_name(user_message,command_name='FCOPY')
+                            else:
+                                path=input_select_path()
+
                             from time import time
                             start_time=time()
                             fansi_print("    ...please wait, communicating with "+repr(_web_clipboard_url)+"...","blue",new_line=False)
@@ -19615,7 +19671,11 @@ def pseudo_terminal(
                                 fansi_print('ACAT --> ans CAT --> Copies a file\'s contents to ans --> Please select a file!','blue','bold')
                                 user_message='CCAT '+input_select_file()
 
+                            if user_message.startswith('ACAT '):
+                                user_message = 'ACAT '+_autocomplete_lss_name(user_message,command_name='ACAT')
+
                             file_name=user_message[user_message.find(' '):].strip()
+
                             if file_name.startswith('~'):file_name=get_absolute_path(file_name)
                             try:
                                 fansi_print("ACAT: Copying to your ans the contents of "+repr(file_name),"blue",'bold')
@@ -19913,14 +19973,8 @@ def pseudo_terminal(
                         elif user_message=='LS SEL' or user_message=='LSS' or user_message in ['LS REL','LSR'] or starts_with_any(user_message, "LSS ", 'LSR ') and not '\n' in user_message:
                             if starts_with_any(user_message, "LSS ", "LSR "):
                                 command_name = user_message[:len("LSS")]
-                                lss_name = user_message[len("LSS "):]
-                                import rp.r_iterm_comm as ric
-                                if not path_exists(lss_name) and ric.current_candidates and fuzzy_string_match(lss_name, ric.current_candidates[0], case_sensitive=False):
-                                    #Don't need tab to autocomplete these paths, which is why it's fast...
-                                    candidate_0 = ric.current_candidates[0]
-                                    new_lss_name = candidate_0.strip('/').strip('\\')
-                                    fansi_print(command_name+": Completed "+repr(lss_name)+" to "+repr(new_lss_name), 'blue')
-                                    lss_name=new_lss_name
+
+                                lss_name =_autocomplete_lss_name(user_message,command_name=command_name)
 
                                 if command_name=='LSR':
                                     user_message = repr(lss_name)
@@ -19948,6 +20002,13 @@ def pseudo_terminal(
                             fansi_print("FDT aka FinD Text --> Grep with FZF",'blue','bold')
                             fansi_print("    (Reminder) PWD: "+_fansi_highlight_path(get_current_directory()),"blue",'bold')
                             result=rp.r._fzf_multi_grep()
+                            result=repr(result)
+                            user_message=result
+                        
+                        elif user_message.startswith('FDT '):
+                            fansi_print("FDT <filetypes>  aka FinD Text --> Grep with FZF (example: 'FDT py txt yaml' searches only those filetypes)",'blue','bold')
+                            fansi_print("    (Reminder) PWD: "+_fansi_highlight_path(get_current_directory()),"blue",'bold')
+                            result=rp.r._fzf_multi_grep(user_message[len('FDT '):])
                             result=repr(result)
                             user_message=result
 
@@ -20088,7 +20149,10 @@ def pseudo_terminal(
                                 path=input_select_path() 
                             else:
                                 path=user_message[len('VIM '):]
-                            vim(path)
+
+                                path=_autocomplete_lss_name(user_message,command_name='VIM')
+
+                            vim(path.split())
                             user_message='ans = '+repr(path)+" # VIM"
                     
                         elif user_message == 'TAB' or user_message.count('\n')==0 and user_message.startswith('TAB '):
@@ -20096,7 +20160,7 @@ def pseudo_terminal(
                             if user_message=='TAB':
                                 path=input_select_path() 
                             else:
-                                path=user_message[len('TAB '):]
+                                path=_autocomplete_lss_name(user_message,command_name='TAB')
                             pip_import('tabview')
                             import tabview
                             # tabview.tabview.view(path)
@@ -20108,7 +20172,8 @@ def pseudo_terminal(
 
                         elif user_message.startswith('RN ') or user_message=='RN':
                             fansi_print("RN --> Renames a file or folder",'blue','bold')
-                            path=input_select_path(message='Please select the file or folder to be renamed')
+                            if user_message=='RN': path=input_select_path(message='Please select the file or folder to be renamed')
+                            else:                  path=_autocomplete_lss_name(user_message,command_name='RN')
 
                             print('Renaming %s'%fansi(get_file_name(path),'green','bold'))
                             print('Please input the new name of the %s'%('file' if is_a_file(path) else 'folder'))
@@ -31948,6 +32013,26 @@ def mouse_middle_release():
 
 #endregion
 
+def get_monitor_resolution():
+    """
+    Returns the resolution of the primarty monitor as (height, width)
+    """
+    pip_import('screeninfo')
+    from screeninfo import get_monitors
+    for m in get_monitors():
+        if m.is_primary:
+            return m.height, m.width
+    assert False, 'There should be at least one primary monitor.'
+
+def get_number_of_monitors():
+    """
+    Returns an int: the number of monitors attached to this computer.
+    """
+    pip_import('screeninfo')
+    from screeninfo import get_monitors
+    return len(get_monitors())
+
+
 # def captured_stdout_as_string(callable):
 #THIS IS COMMENTED OUT. IT WORKS TECHNICALLY, BUT ITS WAY TOO MESSY. It would be better to make it into a generator that yields each character then returns the output of callable.
 #     #Takes a callable, returns a string containing the stdout of that callable
@@ -32522,7 +32607,7 @@ def is_s3_url(url):
     "Returns true if the given string is an Amazon S3 URL"
     return isinstance(url,str) and url.startswith('s3://')
 
-def download_url(url, path=None, *, skip_existing=False, show_progress=False):
+def download_url(url, path=None, *, skip_existing=False, show_progress=False, timeout=None):
     """
     Works with both HTTP and Aws S3 Urls
     Download a file from a url and return the path it downloaded to. It no path is specified, it will choose one for you and return it (as a string)
@@ -32531,6 +32616,7 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False):
     """
     assert isinstance(url,str),'url should be a string, but got type '+repr(type(url))
     assert path is None or isinstance(path,str),'path should be either None or a string, but got type '+repr(type(path))
+    assert timeout is None or isinstance(timeout, (int, float)), 'timeout should be a number or None, but got type ' + repr(type(timeout))
 
     if is_a_folder(path):
         root = path
@@ -32553,19 +32639,36 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False):
         import subprocess
 
         try:
-            subprocess.check_call(['aws', 's3', 'cp', url, path, '--quiet'])
+            aws_args = ['aws', 's3', 'cp', url, path, '--quiet']
+            if timeout:
+                aws_args.extend(['--cli-connect-timeout', str(timeout)]) # Add timeout for s3 cli
+                aws_args.extend(['--cli-read-timeout', str(timeout)]) # Add timeout for s3 cli
+            subprocess.check_call(aws_args)
+        except subprocess.TimeoutExpired:
+            raise TimeoutError("rp.download_url timed out downloading s3 url %s to path %s"%(url,path))  # Removed after {timeout} seconds as timeout is optional
         except subprocess.CalledProcessError as e:
             raise Exception("rp.download_url failed to download s3 url %s to path %s: "%(url,path) + str(e))
 
         return path
 
     elif _is_youtube_video_url(url):
-        return download_youtube_video(url, path, skip_existing=skip_existing, show_progress=show_progress)
+        return download_youtube_video(url, path, skip_existing=skip_existing, show_progress=show_progress, timeout=timeout) # Pass timeout to youtube download
 
     elif is_valid_url(url):
         pip_import('requests')
         import requests
-        response = requests.get(url, stream=True)
+
+        try:
+            request_kwargs = {'stream': True}
+            if timeout:
+                request_kwargs['timeout'] = timeout
+            response = requests.get(url, **request_kwargs)
+            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+        except requests.exceptions.Timeout:
+            raise TimeoutError("rp.download_url timed out downloading url {}".format(url)) # Removed after {timeout} seconds as timeout is optional
+        except requests.exceptions.RequestException as e:
+             raise Exception("rp.download_url failed to download url {}: {}".format(url, e))
+
         total_size = int(response.headers.get('content-length', 0))
         chunk_size = 1024**2  # 1 MB per iteration
         with open(path, 'wb') as file:
@@ -32592,7 +32695,8 @@ def download_urls(
     num_threads=None,
     show_progress=False,
     buffer_limit=None,
-    lazy=False
+    lazy=False,
+    timeout=None
 ):
     """
     Plural of download_url
@@ -32603,6 +32707,7 @@ def download_urls(
         url = url,
         path = url_to_path(url),
         skip_existing = skip_existing,
+        timeout=timeout,
     )
     if show_progress in ['eta',True]: show_progress='eta:Downloading URLs'
 
@@ -32672,7 +32777,7 @@ class _MaybeTemporarilyDownloadVideo:
             except FileNotFoundError:
                 pass
 
-def download_url_to_cache(url, cache_dir=None, skip_existing=True, hash_func=None, show_progress=False):
+def download_url_to_cache(url, cache_dir=None, skip_existing=True, hash_func=None, show_progress=False, timeout=None):
     """
     Like download_url, except you only specify the output diectory - the filename will be chosen for you based on hashing the url.
     Downloads a file from a specified URL into a caching directory, creating a filename based on a hash of the URL. 
@@ -32700,6 +32805,7 @@ def download_url_to_cache(url, cache_dir=None, skip_existing=True, hash_func=Non
             cache_path,
             skip_existing=skip_existing,
             show_progress=show_progress,
+            timeout=timeout,
         )
     elif file_exists(url):
         #Can also be useful for getting things off NFS for faster loading
@@ -32725,7 +32831,8 @@ def download_urls_to_cache(
     num_threads=None,
     buffer_limit=None,
     strict=True,
-    show_progress=False
+    show_progress=False,
+    timeout=None
 ):
     """ Plural of rp.download_url_to_cache """
     urls = detuple(urls)
@@ -32738,6 +32845,7 @@ def download_urls_to_cache(
             cache_dir=cache_dir,
             skip_existing=skip_existing,
             hash_func=hash_func,
+            timeout=timeout,
         )
 
     return load_files(
@@ -39850,7 +39958,6 @@ def _fzf_multi_grep(extensions='',print_instructions=True,text_files=None):
     return output
     
 
-fdt=_fzf_multi_grep
 
 
 def unwarped_perspective_image(image, from_points, to_points=None, height:int=None, width:int=None):
@@ -41273,6 +41380,12 @@ def get_git_repo_root(folder='.', use_cache=False):
     return output
 
 def git_clone(url,path=None,show_progress=False):
+    """ Git clones the url and returns the path to its root """
+
+    if url.startswith('https://github.com/'):
+        # https://github.com/fperazzi/davis-2017/tree/main --> https://github.com/fperazzi/davis-2017
+        url = path_join(path_split(url)[:4])
+
     def get_repo_name_from_url(url):
         #Url should look like: https://github.com/gabrielloye/RNN-walkthrough/
         assert is_valid_url(url)
@@ -41282,6 +41395,7 @@ def git_clone(url,path=None,show_progress=False):
         url=url.split('/')
         url=url[-1]
         return url
+
     if path is None:
         path=get_repo_name_from_url(url)
         path=get_absolute_path(path)
@@ -41290,6 +41404,7 @@ def git_clone(url,path=None,show_progress=False):
         command='git clone '+shlex.quote(url)+' '+shlex.quote(path)
         print(command)
         os.system(command)  
+        return path
     else:
         pip_import('git')
         import git
