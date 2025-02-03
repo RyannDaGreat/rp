@@ -29032,6 +29032,31 @@ def save_video_avi(frames,path:str=None,framerate:int=30):
 def _get_default_video_path(extension='mp4'):
     return get_unique_copy_path('video.'+extension)
 
+_named_video_bitrates = {
+    "low"    : 100000,
+    "medium" : 1000000,
+    "high"   : 10000000,
+    "max"    : 10000000000,
+}
+_named_video_qualities = {
+    "low"    : 10,
+    "medium" : 50,
+    "high"   : 95,
+    "max"    : 100,
+}
+def _as_video_bitrate(video_bitrate:str) -> int:
+    """ As a bitrate """
+    if video_bitrate in _named_video_bitrates:
+        video_bitrate = _named_video_bitrates[video_bitrate]
+    return video_bitrate
+def _as_video_quality(video_quality:str) -> int:
+    """ As a percent """
+    if video_quality in _named_video_qualities:
+        video_quality = _named_video_qualities[video_quality]
+    if video_quality > 100:
+        video_quality = 100
+    return video_quality
+
 class VideoWriterMP4:
     #Todo: If this ever gets fucky, try https://github.com/imageio/imageio-ffmpeg - it looks pretty good!
 
@@ -29047,8 +29072,7 @@ class VideoWriterMP4:
 
         rp.pip_import('ffmpeg', 'ffmpeg-python')
 
-        if isinstance(video_bitrate,str) and video_bitrate in 'low medium high max':
-            video_bitrate = {'low':100000,'medium':1000000,'high':10000000,'max':10000000000}[video_bitrate]
+        video_bitrate = _as_video_bitrate(video_bitrate)
 
         assert path.endswith('.mp4')
         assert isinstance(video_bitrate,int)
@@ -29131,23 +29155,136 @@ class VideoWriterMP4:
         self.process.wait()
         self.finished=True
         
-def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', height=None, width=None, show_progress=True):
+
+def _cv_save_video_mp4(
+    video,
+    path,
+    *,
+    framerate,
+    show_progress
+):
+    pip_import("cv2")
+    import cv2
+
+    video = as_rgb_images(video)
+    video = as_byte_images(video)
+    video = as_numpy_array(video)
+
+    if path is None:
+        path = get_unique_copy_path('video.mp4')
+
+    if not has_file_extension(path):
+        path = with_file_extension(path, 'mp4')
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    _, h, w, c = video.shape
+    video_writer = cv2.VideoWriter(path, fourcc, fps=framerate, frameSize=(w, h))
+
+    video_iter = video
+    if show_progress:
+        video_iter = eta(video_iter, title='rp.r.'+get_current_function_name())
+
+    for frame in video_iter:
+        frame = cv_rgb_bgr_swap(frame)
+        video_writer.write(img)
+
+    return path
+
+def _cv_save_video_mp4(
+    video,
+    path,
+    *,
+    framerate,
+    show_progress,
+    quality
+):
+    """ 
+    Uses quality instead of bitrate because of how opencv works: https://docs.opencv.org/3.4/d4/d15/group__videoio__flags__base.html#gga41c5cfa7859ae542b71b1d33bbd4d2b4ace3320e146f4f95f3d58b32b0e1237b1 
+    NOTE: This quality parameter...doesn't seem to do anything. So it will be hidden in save_video_mp4's docstring for now.
+    """
+    pip_import("cv2")
+    import cv2
+
+    video = as_rgb_images(video)
+    video = as_byte_images(video)
+    video = as_numpy_array(video)
+
+    quality = _as_video_quality(quality)
+
+    if path is None:
+        path = get_unique_copy_path('video.mp4')
+
+    if not has_file_extension(path):
+        path = with_file_extension(path, 'mp4')
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    _, h, w, c = video.shape
+    video_writer = cv2.VideoWriter(path, fourcc, framerate, (w, h))
+
+    # Set quality if provided (in percent)
+    if quality is not None:
+        video_writer.set(cv2.VIDEOWRITER_PROP_QUALITY, quality)
+
+    video_iter = video
+    if show_progress:
+        video_iter = eta(video_iter, title='rp.r.'+get_current_function_name())
+
+    for frame in video_iter:
+        frame = cv_rgb_bgr_swap(frame)
+        video_writer.write(frame)  # Fixed typo: 'img' -> 'frame'
+
+    video_writer.release()  # Ensure proper file closure
+
+    return path
+
+_save_video_mp4_default_backend = 'ffmpeg'
+
+def set_save_video_mp4_default_backend(backend):
+    assert backend in ('ffmpeg', 'opencv'), backend
+    global _save_video_mp4_default_backend
+    _save_video_mp4_default_backend = backend
+
+def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', height=None, width=None, show_progress=True, backend=None):
     """
     frames: a list of images as defined by rp.is_image(). Saves an .mp4 file at the path
         - frames can also contain strings, if those strings are image file paths
         - frames can also be a glob or a folder of images, and if so they will be sorted by number
     Note that frames can also be a generator, as opposed to a numpy array.
     This can let you save larger videos that would otherwise make your computer run out of memory.
+
+    frames: the video
+    path: the path to save the video to. Defaults to 'video.mp4'
+    video_bitrate: controls the quality of the output. If your backend is opencv, this parameter has no effect!
+    height, width: If frames have various sizes, and are given as a generator, use this to set the height and width or else it will use the first frame's height and width
+    show_progress: Whether to show the saving progress
+    backend: Defaults to 'ffmpeg'. Can also be 'opencv' if you can't install 'ffmpeg' for some reason
+
+    If you can't install ffmpeg, please set the backend to 'opencv'
+    If you need this to be the default, call rp.r.set_save_video_mp4_default_backend('opencv') instead of 'ffmpeg', the default
     
     EXAMPLE BITRATES (used for the Sunkist soda example):
-     100000    : ( 345KB) is decent, and very compressed. It starts out a bit mushy though
-     1000000   : ( 3.3MB) I believe this is close to ffmpeg's default rate. It looks okay, but it does look a tiny bit mushy
-     10000000  : (32.7MB)
-     100000000 : (93.0MB)
-     1000000000: (93.0MB) It seems to be the maximum size
+     10^5: 100000    : ( 345KB) is decent, and very compressed. It starts out a bit mushy though
+     10^6: 1000000   : ( 3.3MB) I believe this is close to ffmpeg's default rate. It looks okay, but it does look a tiny bit mushy
+     10^7: 10000000  : (32.7MB)
+     10^8: 100000000 : (93.0MB)
+     10^9: 1000000000: (93.0MB) It seems to be the maximum size
     """
+
+    if backend is None:
+        backend = _save_video_mp4_default_backend
+
+    assert backend in ('ffmpeg', 'cv2'), backend
     assert not isinstance(frames, str), 'The first argument should be the sequence of video frames, not the path!'
-    
+
+    if backend=='cv2':
+        return _cv_save_video_mp4(
+            frames,
+            path,
+            framerate=framerate,
+            show_progress=show_progress,
+            quality=video_bitrate, #Included for future updates of CV2...but right now it's inert. This parameter has no effect on the saved videos.
+        )
+
     height = None if height is None else height
     width  = None if width  is None else width 
     

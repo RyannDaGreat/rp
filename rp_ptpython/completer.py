@@ -320,6 +320,12 @@ class PythonCompleter(Completer):
             return path_before_cursor
 
 
+        def scandir_path_before_cursor():
+            try:
+                return os.scandir(get_path_before_cursor())
+            except Exception:
+                #Please ignore for  now
+                pass
                 
         if starts_with_any(before_line,'CDH ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
@@ -334,12 +340,12 @@ class PythonCompleter(Completer):
             import rp
             import os
             from rp import is_a_directory
-            yield from yield_from_candidates(*pathsmod(x for x in os.scandir(get_path_before_cursor()) if x.is_dir()))
+            yield from yield_from_candidates(*pathsmod(x for x in scandir_path_before_cursor() if x.is_dir()))
             return 
         if starts_with_any(before_line,'TAKE ','MKDIR ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
             from rp import is_a_directory
-            yield from yield_from_candidates(*pathsmod(os.scandir(get_path_before_cursor()), priority= lambda x:not x.is_dir()))
+            yield from yield_from_candidates(*pathsmod(scandir_path_before_cursor(), priority= lambda x:not x.is_dir()))
             return 
         if starts_with_any(before_line,'PYM ','APYM ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             def get_module_names():
@@ -371,7 +377,7 @@ class PythonCompleter(Completer):
             return 
         if starts_with_any(before_line,'RN ','RM ','VIM ','OPEN ','FD ','WANS ','MV ','PIP ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
-            yield from yield_from_candidates(*pathsmod(os.scandir(get_path_before_cursor())))
+            yield from yield_from_candidates(*pathsmod(scandir_path_before_cursor()))
             return 
         if re.fullmatch(r'(CAT |NCAT |CCAT |OPEN |ACAT |TAB |RUN |PY |APY |PYM |APYM |LSS |LSR |FCOPY ).*',before) and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
@@ -384,7 +390,7 @@ class PythonCompleter(Completer):
 
             yield from yield_from_candidates(
                 *pathsmod(
-                    os.scandir(get_path_before_cursor()),
+                    scandir_path_before_cursor(),
                     priority=lambda x: (
                         x.is_dir() #  + (2 * x.path[len("./") :].startswith(".")) * (not after_cmd.startswith('.'))  #Also commented out because it interferes with enter-completions from pterm LSS
                     ),
