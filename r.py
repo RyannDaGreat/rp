@@ -29270,6 +29270,12 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
      10^9: 1000000000: (93.0MB) It seems to be the maximum size
     """
 
+    if backend=='ffmpeg':
+        try:
+            _ensure_ffmpeg_installed()
+        except Exception as e:
+            raise RuntimeError("save_video_mp4: Can't use backend=='ffmpeg' because ffmpeg is not installed. Consider setting backend=='cv2' instead?") from e
+
     if backend is None:
         backend = _save_video_mp4_default_backend
 
