@@ -42260,7 +42260,7 @@ def _waste_gpu(gpu_id):
     vram = get_free_vram(gpu_id)  # Measured in bytes
     vram = int(vram * 0.9)  # Proportion of VRAM to waste
 
-    fansi_print(f"Attempting to waste {human_readable_file_size(vram)} on GPU #{gpu_id}",'cyan cyan blue','bold')
+    fansi_print("Attempting to waste " + human_readable_file_size(vram) + " on GPU #" + str(gpu_id),'cyan cyan blue','bold')
 
     matrix_vram = vram
     matrix_vram = matrix_vram // 2  # Make extra room to hold the temp matrix
@@ -42269,7 +42269,7 @@ def _waste_gpu(gpu_id):
     matrix = torch.ones(
         (matrix_size, matrix_size),
         dtype=torch.float32,
-        device=f"cuda:{gpu_id}",
+        device="cuda:"+str(gpu_id),
     )
 
     while True:
