@@ -14713,7 +14713,7 @@ def is_valid_python_syntax(code,mode='exec'):
         valid = False
     return valid
 
-def _is_valid_exeval_python_syntax(code, mode):
+def _is_valid_exeval_python_syntax(code, mode='exec'):
     code, _ = _parse_exeval_code(code)
     return is_valid_python_syntax(code)
 
@@ -16849,7 +16849,7 @@ def _convert_powerpoint_file(path,message=None):
 
 
 def _write_default_gitignore():
-    types_to_ignore='pyc swo swp un~ DS_Store'.split()
+    types_to_ignore='pyc swo swp swn un~ DS_Store'.split()
     types_to_ignore=['*.'+x for x in types_to_ignore]
 
     new_lines = (
@@ -24696,6 +24696,15 @@ def labeled_image(image,
             return vertically_concatenated_images(image,label)
         
     assert False,'This line should be unreachable'
+
+def _images_are_all_same_size(images):
+    """ TODO: Use this for video processing functions instead of using for loops to check if image sizes are the same... """
+    if is_numpy_array(images):
+        return True
+    if is_torch_tensor(images):
+        return True
+    sizes = [get_image_dimensions(x) for x in images]
+    return len(set(sizes))==1
 
 def labeled_images(images,labels,show_progress=False,lazy=False,*args,**kwargs):
     """
@@ -41570,37 +41579,96 @@ def get_git_repo_root(folder='.', use_cache=False):
     assert output, 'Is not a git repo: '+str(folder)
     return output
 
-def git_clone(url,path=None,show_progress=False):
-    """ Git clones the url and returns the path to its root """
-
+def _distill_github_url(url):
+    """
+    https://github.com/fperazzi/davis-2017/tree/main --> https://github.com/fperazzi/davis-2017
+    """
     if url.startswith('https://github.com/'):
-        # https://github.com/fperazzi/davis-2017/tree/main --> https://github.com/fperazzi/davis-2017
         url = path_join(path_split(url)[:4])
+    return url
 
-    def get_repo_name_from_url(url):
-        #Url should look like: https://github.com/gabrielloye/RNN-walkthrough/
-        assert is_valid_url(url)
-        url=url.strip()
-        if url.endswith('/'):
-            url=url[:-1]
-        url=url.split('/')
-        url=url[-1]
-        return url
+def _get_repo_name_from_url(url):
+    """
+    Url should look like: https://github.com/gabrielloye/RNN-walkthrough/
+    https://github.com/gabrielloye/RNN-walkthrough/ --> RNN-walkthrough
+    """
+    url = _distill_github_url(url)
+    assert is_valid_url(url)
+    url=url.strip()
+    if url.endswith('/'):
+        url=url[:-1]
+    url=url.split('/')
+    url=url[-1]
+    return url
+
+#OLD VERSION:
+# def git_clone(url,path=None,*,show_progress=False):
+#     """ Git clones the url and returns the path to its root """
+#
+#     url = _distill_github_url(url)
+#
+#     if path is None:
+#         path=_get_repo_name_from_url(url)
+#         path=get_absolute_path(path)
+#
+#     command='git clone '+shlex.quote(url)+' '+shlex.quote(path)
+#
+#     if show_progress:
+#         print(command)
+#     else:
+#         command+=' > /dev/null'
+#
+#     os.system(command)  
+#     return path
+#
+#     #OLD VERSION:
+#     # pip_import('git')
+#     # import git
+#     # git.Repo.clone_from(url,path)
+#     # return path
+
+def git_clone(url, path=None, *, depth=None, branch=None, single_branch=False, show_progress=False):
+    """
+    Git clones the repo at the given url to the specified path.
+    
+    :param url: URL of the Git repository to clone
+    :param path: Local path to clone into (defaults to repo name)
+    :param depth: Create a shallow clone with history truncated to the specified number of commits
+    :param branch: Clone a specific branch instead of the default (usually master/main) 
+    :param single_branch: Clone only the specified branch, not all branches
+    :param show_progress: Print the git clone command before executing
+    :return: Path to the cloned repo
+    """
+    url = _distill_github_url(url)
 
     if path is None:
-        path=get_repo_name_from_url(url)
-        path=get_absolute_path(path)
+        path = _get_repo_name_from_url(url)
+        path = get_absolute_path(path)
 
-    if show_progress:
-        command='git clone '+shlex.quote(url)+' '+shlex.quote(path)
-        print(command)
-        os.system(command)  
-        return path
-    else:
-        pip_import('git')
-        import git
-        git.Repo.clone_from(url,path)
-        return path
+    command = 'git clone ' + shlex.quote(url) + ' ' + shlex.quote(path)
+    
+    if depth  is not None: command += ' --depth ' + str(depth)
+    if branch is not None: command += ' --branch ' + shlex.quote(branch)
+    if single_branch:      command += ' --single-branch'
+
+    if show_progress: print(command)
+    else            : command += ' > /dev/null'
+
+    os.system(command)
+    return path
+
+def git_pull(path='.', *, branch=None, show_progress=False):
+    """Git pulls the latest changes from the remote repository."""
+    path = get_absolute_path(path)
+    
+    command = 'cd ' + shlex.quote(path) + ' && git pull'
+    
+    if branch is not None: command += ' --branch ' + shlex.quote(branch)
+
+    if show_progress: print(command)
+    else            : command += ' > /dev/null'
+        
+    os.system(command)
 
 def get_git_info(folder='.'):
     pip_import('git')
@@ -42186,6 +42254,39 @@ def _torch_device_to_index(device):
             "_torch_device_to_index: Can't make sense of the input, which is of type "+str(type(device))
         )
 
+def _waste_gpu(gpu_id):
+    import torch
+
+    vram = get_free_vram(gpu_id)  # Measured in bytes
+    vram = int(vram * 0.9)  # Proportion of VRAM to waste
+
+    fansi_print(f"Attempting to waste {human_readable_file_size(vram)} on GPU #{gpu_id}",'cyan cyan blue','bold')
+
+    matrix_vram = vram
+    matrix_vram = matrix_vram // 2  # Make extra room to hold the temp matrix
+    matrix_vram //= 4  # Using 32 bit floats
+    matrix_size = int(matrix_vram**0.5)
+    matrix = torch.ones(
+        (matrix_size, matrix_size),
+        dtype=torch.float32,
+        device=f"cuda:{gpu_id}",
+    )
+
+    while True:
+        (matrix @ matrix).cpu()
+
+def waste_all_gpus():
+    """Keeps all GPU's busy on a system, using as much VRAM as possible. Used for stress-testing. Should take minimal CPU."""
+
+    for gpu_id in get_all_gpu_ids():
+        run_as_new_thread(_waste_gpu, gpu_id)
+
+    while True:
+        fansi_print(
+            get_current_function_name() + ": " + format_current_date(), "blue cyan"
+        )
+        print_gpu_summary()
+        sleep(1)
 
 def set_cuda_visible_devices(*devices):
     """
@@ -44386,14 +44487,24 @@ def pip_import(module_name,package_name=None,*,auto_yes=False):
 
 _rp_git_token=None #Set in RPRC
 _rp_git_dir=path_join(get_parent_directory(__file__),'git')
-def git_import(repo,token=None):
+def git_import(repo,token=None,*,pull=False):
+    """
+    Attempts to import a module from rp.git.some_module_name
+    If it doesn't exist, it will try to clone it.
+    If only the repo name is given, like "CommonSource", it tries to clone from https://github.com/RyannDaGreat/CommonSource (defaults to RyannDaGreat)
+    If pull is True, it will attempt to update the module by running "git pull" in it. Use this if you suspect a module might be out of date.
+    """
     assert isinstance(repo,str)
     assert token is None or isinstance(token,str)
     
     module_name = repo #For now these are the same, might diverge in the future if I want other peoples repos
     module = 'rp.git.'+module_name
-    
-    
+    path = path_join(_rp_git_dir, module_name)
+
+    if folder_exists(path):
+        if pull:
+            git_pull(path)
+
     try:
         return __import__(module)
     except ImportError:
@@ -44407,7 +44518,6 @@ def git_import(repo,token=None):
     else:
         url = "https://api:%s@github.com/RyannDaGreat/%s.git"%(token,repo)
         
-    path = path_join(_rp_git_dir, module_name)
     fansi_print('rp_git_import: Attempting to git clone new module %s at %s to %s'%(module, url, path), 'cyan')
     git_clone(url,path)
     
