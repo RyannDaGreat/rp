@@ -17727,6 +17727,27 @@ def pseudo_terminal(
         19U $r._pterm_cd('../../../../../../../../../../../../../../../../../../..')
         20U $r._pterm_cd('../../../../../../../../../../../../../../../../../../../..')
 
+        B CDB
+        BB CDBCDB
+        BBB CDBCDBCDB
+        BBBB CDBCDBCDBCDB
+        BBBBB CDBCDBCDBCDBCDB
+        BBBBBB CDBCDBCDBCDBCDBCDB
+        BBBBBBB CDBCDBCDBCDBCDBCDBCDB
+        BBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDB
+        BBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDB
+        BBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
+        BBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
+        BBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
+        BBBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
+        BBBBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
+        BBBBBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
+        BBBBBBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
+        BBBBBBBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
+        BBBBBBBBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
+        BBBBBBBBBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
+        BBBBBBBBBBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
+
         WCIJ1  web_copy(encode_image_to_bytes(ans,'jpeg',quality=10))
         WCIJ2  web_copy(encode_image_to_bytes(ans,'jpeg',quality=20))
         WCIJ3  web_copy(encode_image_to_bytes(ans,'jpeg',quality=30))
@@ -20398,6 +20419,7 @@ def pseudo_terminal(
                             or user_message == "CDA"
                             or user_message in "CDZ"
                             or user_message == "CDQ"
+                            or user_message.replace('CDB','')=='' and user_message
                         ):
                             if not is_valid_python_syntax(user_message) and folder_exists(user_message):
                                 #Pasting a folder path and entering CD's to it
@@ -20486,22 +20508,25 @@ def pseudo_terminal(
                                     fansi_print("CDP (aka CD PASTE) aborted: Path Directory %s doesn't exist"%repr(new_dir),'red','underlined')
                                     continue
                             #This was disabled because I was too lazy to finish it properly. But it would be nice to implement this in the future
-                            elif user_message=='CDB':
-                                #Means CD Back
-                                if _get_pterm_verbose(): fansi_print("CDB --> CD Back (CD to the previous directory in your history)",'blue',)
-                                #fansi_print("    Old Directory: "+get_current_directory(),'blue')
-                                # if _cd_history:
-                                #     _cd_history.pop()
-                                cdh=_get_cd_history()
-                                if _cd_history:
-                                    new_dir=_cd_history[-1]
-                                    _cd_history.pop()
-                                elif len(cdh)>=2:
-                                    if _get_pterm_verbose():     fansi_print("    (Empty CD history for this session; going to previous CDH directory)",'blue')
-                                    new_dir=cdh[-2]
-                                else:
-                                    fansi_print("    (Cannot CDB because the CD history is empty)",'red')
-                                    cancel=True
+                            elif user_message.startswith('CDB'):
+                                while user_message.startswith('CDB'):
+                                    user_message=user_message[len('CDB'):]
+
+                                    #Means CD Back
+                                    if _get_pterm_verbose(): fansi_print("CDB --> CD Back (CD to the previous directory in your history)",'blue',)
+                                    #fansi_print("    Old Directory: "+get_current_directory(),'blue')
+                                    # if _cd_history:
+                                    #     _cd_history.pop()
+                                    cdh=_get_cd_history()
+                                    if _cd_history:
+                                        new_dir=_cd_history[-1]
+                                        _cd_history.pop()
+                                    elif len(cdh)>=2:
+                                        if _get_pterm_verbose():     fansi_print("    (Empty CD history for this session; going to previous CDH directory)",'blue')
+                                        new_dir=cdh[-2]
+                                    else:
+                                        fansi_print("    (Cannot CDB because the CD history is empty)",'red')
+                                        cancel=True
                             else:
                                 new_dir=user_message[2:].strip()
                             if cancel:
