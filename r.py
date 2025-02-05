@@ -13769,27 +13769,39 @@ def _add_to_cd_history(path:str):
             if e not in o:
                 o.append(e)
         return o[::-1] 
-    entries=_get_cd_history()
-    entries.append(path)
-    entries=unique(entries)
-    string_to_text_file(_cd_history_path,line_join(entries))
 
+    # #OLD
+    # string_to_text_file(_cd_history_path,line_join(entries))
+
+    #NEW (SEPARATE THREAD)
+    import rp.prompt_toolkit.history as h
+    @h.run_task
+    def task():
+        entries=_get_cd_history()
+        entries.append(path)
+        entries=unique(entries)
+        string_to_text_file(_cd_history_path,line_join(entries))
+
+_last_dir=None
 def _update_cd_history():
     # print()
     # print("OLD HISTORY")
     # fansi_print(text_file_to_string(_cd_history_path),'magenta')
     # fansi_print(_get_cd_history(),'magenta')
-    try:
-        _add_to_cd_history(get_current_directory())
-        from rp.rp_ptpython.completer import get_all_importable_module_names
-        get_all_importable_module_names()#Refresh
-    except FileNotFoundError:
-        #This will happen if the folder we're currently working in is deleted. Just skip updating the history...
-        pass
-    # print("NEW HISTORY")
-    # fansi_print(text_file_to_string(_cd_history_path),'magenta')
-    # fansi_print(_get_cd_history(),'magenta')
-    # print()
+    global _last_dir
+    if _last_dir!=get_current_directory():
+        _last_dir=get_current_directory()
+        try:
+            _add_to_cd_history(get_current_directory())
+            from rp.rp_ptpython.completer import get_all_importable_module_names
+            get_all_importable_module_names()#Refresh
+        except FileNotFoundError:
+            #This will happen if the folder we're currently working in is deleted. Just skip updating the history...
+            pass
+        # print("NEW HISTORY")
+        # fansi_print(text_file_to_string(_cd_history_path),'magenta')
+        # fansi_print(_get_cd_history(),'magenta')
+        # print()
 
 cdc_protected_prefixes=[]
 def _cdh_folder_is_protected(x):
@@ -17727,27 +17739,6 @@ def pseudo_terminal(
         19U $r._pterm_cd('../../../../../../../../../../../../../../../../../../..')
         20U $r._pterm_cd('../../../../../../../../../../../../../../../../../../../..')
 
-        B CDB
-        BB CDBCDB
-        BBB CDBCDBCDB
-        BBBB CDBCDBCDBCDB
-        BBBBB CDBCDBCDBCDBCDB
-        BBBBBB CDBCDBCDBCDBCDBCDB
-        BBBBBBB CDBCDBCDBCDBCDBCDBCDB
-        BBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDB
-        BBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDB
-        BBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
-        BBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
-        BBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
-        BBBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
-        BBBBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
-        BBBBBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
-        BBBBBBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
-        BBBBBBBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
-        BBBBBBBBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
-        BBBBBBBBBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
-        BBBBBBBBBBBBBBBBBBBB CDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDBCDB
-
         WCIJ1  web_copy(encode_image_to_bytes(ans,'jpeg',quality=10))
         WCIJ2  web_copy(encode_image_to_bytes(ans,'jpeg',quality=20))
         WCIJ3  web_copy(encode_image_to_bytes(ans,'jpeg',quality=30))
@@ -18223,6 +18214,7 @@ def pseudo_terminal(
                 rp.r_iterm_comm.rp_pt_user_created_var_names[:]=list(_user_created_var_names)
                 try:
                     # region Get user_message, xor exit with second keyboard interrupt
+                    _update_cd_history()
                     try:
                         def evaluable_part(cmd:str):
                             # DOesn't take into account the ';' character
@@ -20419,7 +20411,6 @@ def pseudo_terminal(
                             or user_message == "CDA"
                             or user_message in "CDZ"
                             or user_message == "CDQ"
-                            or user_message.replace('CDB','')=='' and user_message
                         ):
                             if not is_valid_python_syntax(user_message) and folder_exists(user_message):
                                 #Pasting a folder path and entering CD's to it
@@ -20508,25 +20499,22 @@ def pseudo_terminal(
                                     fansi_print("CDP (aka CD PASTE) aborted: Path Directory %s doesn't exist"%repr(new_dir),'red','underlined')
                                     continue
                             #This was disabled because I was too lazy to finish it properly. But it would be nice to implement this in the future
-                            elif user_message.startswith('CDB'):
-                                while user_message.startswith('CDB'):
-                                    user_message=user_message[len('CDB'):]
-
-                                    #Means CD Back
-                                    if _get_pterm_verbose(): fansi_print("CDB --> CD Back (CD to the previous directory in your history)",'blue',)
-                                    #fansi_print("    Old Directory: "+get_current_directory(),'blue')
-                                    # if _cd_history:
-                                    #     _cd_history.pop()
-                                    cdh=_get_cd_history()
-                                    if _cd_history:
-                                        new_dir=_cd_history[-1]
-                                        _cd_history.pop()
-                                    elif len(cdh)>=2:
-                                        if _get_pterm_verbose():     fansi_print("    (Empty CD history for this session; going to previous CDH directory)",'blue')
-                                        new_dir=cdh[-2]
-                                    else:
-                                        fansi_print("    (Cannot CDB because the CD history is empty)",'red')
-                                        cancel=True
+                            elif user_message=='CDB':
+                                #Means CD Back
+                                if _get_pterm_verbose(): fansi_print("CDB --> CD Back (CD to the previous directory in your history)",'blue',)
+                                #fansi_print("    Old Directory: "+get_current_directory(),'blue')
+                                # if _cd_history:
+                                #     _cd_history.pop()
+                                cdh=_get_cd_history()
+                                if _cd_history:
+                                    new_dir=_cd_history[-1]
+                                    _cd_history.pop()
+                                elif len(cdh)>=2:
+                                    if _get_pterm_verbose():     fansi_print("    (Empty CD history for this session; going to previous CDH directory)",'blue')
+                                    new_dir=cdh[-2]
+                                else:
+                                    fansi_print("    (Cannot CDB because the CD history is empty)",'red')
+                                    cancel=True
                             else:
                                 new_dir=user_message[2:].strip()
                             if cancel:
@@ -29933,27 +29921,37 @@ def delete_path(path,*,permanent=True):
     else:
         assert False, "This should be impossible...it appears that path %s exists but is neither a file nor a folder."%path
 
-def _delete_paths_helper(*paths,permanent=True,delete_function=delete_path):
+def _delete_paths_helper(*paths,permanent=True,delete_function=delete_path,strict):
     """
     EXAMPLE:  delete_paths( 'a.jpg','b.jpg' )
     EXAMPLE:  delete_paths(['a.jpg','b.jpg'])
     EXAMPLE:  delete_paths(('a.jpg','b.jpg'))
     """
+    output = []
     paths=detuple(paths)
     if isinstance(paths,str):
         paths=[paths] #if we gave a single path as an argument, turn it into a list so we can iterate over it...
     for path in paths:
         if isinstance(path,str):
-            delete_function(path,permanent=permanent)
+            try:
+                delete_function(path,permanent=permanent)
+                output.append(path)
+            except Exception:
+                if strict:
+                    raise
+                else:
+                    if strict is None:
+                        output.append(None)
+    return output
 
-def delete_paths(*paths,permanent=True):
-    _delete_paths_helper(*paths,permanent=permanent,delete_function=delete_path)
+def delete_paths(*paths,permanent=True,strict=True):
+    return _delete_paths_helper(*paths,permanent=permanent,delete_function=delete_path,strict=strict)
 
-def delete_files(*paths,permanent=True):
-    _delete_paths_helper(*paths,permanent=permanent,delete_function=delete_file)
+def delete_files(*paths,permanent=True,strict=True):
+    return _delete_paths_helper(*paths,permanent=permanent,delete_function=delete_file,strict=strict)
 
-def delete_folders(*paths,permanent=True):
-    _delete_paths_helper(*paths,permanent=permanent,delete_function=delete_folders)
+def delete_folders(*paths,permanent=True,strict=True):
+    return _delete_paths_helper(*paths,permanent=permanent,delete_function=delete_folders,strict=strict)
 delete_directories=delete_folders
 
 def copy_path(from_path,to_path,*,extract=False):

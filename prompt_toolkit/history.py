@@ -46,6 +46,30 @@ class History(with_metaclass(ABCMeta, object)):
 
     __nonzero__ = __bool__  # For Python 2.
 
+suppress_history_errors=False
+_tasks=[]
+_loop_started=False
+def run_task(task):
+    """ This function is also used by the r.py history functions! Such as cd history """ 
+    global _loop_started, _tasks
+    _tasks.append(task)
+    import rp
+    if not _loop_started:
+        _loop_started=True
+        @rp.run_as_new_thread
+        def history_task_thread():
+            while True:
+                import time
+                time.sleep(.1)
+                while _tasks:
+                    task = _tasks.pop(0)
+                    try:
+                        task()
+                    except Exception as e:
+                        if not suppress_history_errors:
+                            import rp
+                            rp.fansi_print('rp.prompt_toolkit.history.run_task: Running '+str(task)+': ERROR: '+str(e)+'\n    - Run rp.prompt_toolkit.history.suppress_history_errors=True to suppress this','red','bold')
+
 
 class InMemoryHistory(History):
     """
@@ -131,14 +155,16 @@ class FileHistory(History):
     def append(self, string):
         self.strings.append(string)
 
-        # Save to file.
-        with open(self.filename, 'ab') as f:
-            def write(t):
-                f.write(t.encode('utf-8'))
-            
-            write('\n# %s\n' % datetime.datetime.now())
-            for line in string.split('\n'):
-                write('+%s\n' % line)
+        def task():
+            # Save to file.
+            with open(self.filename, 'ab') as f:
+                def write(t):
+                    f.write(t.encode('utf-8'))
+                
+                write('\n# %s\n' % datetime.datetime.now())
+                for line in string.split('\n'):
+                    write('+%s\n' % line)
+        run_task(task)
 
     def get_all_metadata(self):
         #Get all history metadata fresh from the file
