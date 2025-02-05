@@ -71,7 +71,6 @@
 /Users/Ryan/PycharmProjects/QuickPython/rp/libs/pyflann
 /Users/Ryan/PycharmProjects/QuickPython/rp/libs/parso
 /Users/Ryan/PycharmProjects/QuickPython/rp/libs
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/prompt_toolkit
 /Users/Ryan/Documents
 /Users/Ryan/Documents/Adobe Scripts
 /Users
@@ -98,6 +97,7 @@
 /Users/Ryan/PycharmProjects/QuickPython/rp.egg-info
 /Users/Ryan/PycharmProjects/QuickPython/rp
 /Users/Ryan/PycharmProjects/QuickPython
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
-/Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
+/Users/Ryan
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/prompt_toolkit
