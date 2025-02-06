@@ -5014,9 +5014,8 @@ def save_image(image,file_name=None,add_png_extension: bool = True):
     if file_name.startswith('~'):
         file_name=get_absolute_path(file_name)
 
-    if not folder_exists(get_parent_folder(file_name)):
-        #If the specified path's folders don't exist, make them. Don't whine and throw errors.
-        make_directory(get_parent_folder(file_name))
+    #If the specified path's folders don't exist, make them. Don't whine and throw errors.
+    make_parent_directory(file_name)
     
     if get_file_extension(file_name)=='exr':
         #Note that exr filetypes must have a float32 dtype
@@ -5210,7 +5209,7 @@ def save_image_jpg(image,path=None,*,quality=100,add_extension=True):
     if path is None:
         path=get_unique_copy_path('image.jpg')
 
-    make_directory(get_parent_folder(path)) #Make sure the directory exists
+    make_parent_directory(path) #Make sure the directory exists
     image=as_numpy_image(image)
     image=as_rgb_image(image)
     image=as_byte_image(image)
@@ -5244,7 +5243,7 @@ def save_image_webp(image, path=None, *, quality=100, add_extension=True):
     if path is None:
         path = get_unique_copy_path('image.webp')
 
-    make_directory(get_parent_folder(path))  
+    make_parent_directory(path)
 
     assert 0 <= quality <= 100, 'WebP quality is measured in percent'
 
@@ -5272,7 +5271,7 @@ def save_image_avif(image, path=None, *, quality=100, add_extension=True):
     if path is None:
         path = get_unique_copy_path('image.avif')
 
-    make_directory(get_parent_folder(path))  
+    make_parent_directory(path)
 
     assert 0 <= quality <= 100, 'AVIF quality is measured in percent'
 
@@ -5392,7 +5391,7 @@ def save_image_jxl(image, path=None, *, quality=100, add_extension=True):
     if path is None:
         path = get_unique_copy_path('image.jxl')
     
-    make_directory(get_parent_folder(path))
+    make_parent_directory(path)
     
     assert 0 <= quality <= 100, 'JpgXL quality is measured in percent'
     
@@ -5412,7 +5411,7 @@ def save_animated_webp(video, path=None, *, framerate=60, quality=100, loop=True
     if path is None:
         path = get_unique_copy_path('video.webp')
 
-    make_directory(get_parent_folder(path))
+    make_parent_directory(path)
 
     assert 0 <= quality <= 100, 'WebP quality is measured in percent'
 
@@ -19800,7 +19799,7 @@ def pseudo_terminal(
                             fansi_print("RYAN PUDBRC: Setting PUDB's shell to pseudo_terminal",'blue','bold')
 
                             pudb_config_file_path=get_absolute_path('~/.config/pudb/pudb.cfg')
-                            make_directory(get_parent_folder(pudb_config_file_path))
+                            make_parent_directory(pudb_config_file_path)
                             if not file_exists(pudb_config_file_path):
                                 pudb_config=line_join([
                                   '[pudb]',
@@ -21012,7 +21011,7 @@ def save_animated_png(frames, path=None,*,framerate=None):
 
     frames = as_byte_images(frames)
 
-    make_directory(get_path_parent(path))
+    make_parent_directory(path)
     save_animated_png(path, frames, delay=delay)
 
     return path
@@ -26605,8 +26604,9 @@ def horizontally_concatenated_images(*image_list,origin=None):
         image_converter = _common_image_converter(image_list)
 
         image_list=[image_converter(image,copy=False) for image in image_list]
-        max_height=max(img.shape[0]for img in image_list)
+        max_height=max(get_image_height(img) for img in image_list)
         def heightify(img):
+            img=as_numpy_image(img)
             s=list(img.shape)
             if s[0]==max_height:
                 return img #Don't copy - its slow.
@@ -29148,8 +29148,7 @@ class VideoWriterMP4:
         assert not self.finished
 
         assert not is_a_folder(self.path)
-        if not path_exists(get_parent_directory(self.path)):
-            make_directory(get_parent_directory(self.path))
+        make_parent_directory(self.path)
 
         if not self.started:
             self.started = True
@@ -29264,6 +29263,9 @@ def _cv_save_video_mp4(
     if not has_file_extension(path):
         path = with_file_extension(path, 'mp4')
 
+    if not folder_exists(get_parent_folder(path)):
+        make_parent_directory(path)
+
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     _, h, w, c = video.shape
     video_writer = cv2.VideoWriter(path, fourcc, framerate, (w, h))
@@ -29317,14 +29319,14 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
      10^9: 1000000000: (93.0MB) It seems to be the maximum size
     """
 
+    if backend is None:
+        backend = _save_video_mp4_default_backend
+
     if backend=='ffmpeg':
         try:
             _ensure_ffmpeg_installed()
         except Exception as e:
             raise RuntimeError("save_video_mp4: Can't use backend=='ffmpeg' because ffmpeg is not installed. Consider setting backend=='cv2' instead? Or, if you can't change this argument, you can try running rp.r.set_save_video_mp4_default_backend('cv2')") from e
-
-    if backend is None:
-        backend = _save_video_mp4_default_backend
 
     assert backend in ('ffmpeg', 'cv2'), backend
     assert not isinstance(frames, str), 'The first argument should be the sequence of video frames, not the path!'
@@ -29512,7 +29514,7 @@ def convert_to_gif_via_ffmpeg(
         output_path = with_file_extension(video_path, "gif", replace=True)
         output_path = get_unique_copy_path(output_path)
 
-    make_folder(get_path_parent(output_path))
+    make_parent_folder(output_path)
 
     input_framerate = get_video_file_framerate(video_path)
 
@@ -29825,7 +29827,7 @@ def move_path(from_path,to_path):
     otherwise just rename the path
     """
     
-    make_directory(get_parent_directory(to_path))#Make sure it has somewhere to go. If the destination folder doesn't already exist, create it.
+    make_parent_directory(to_path)#Make sure it has somewhere to go. If the destination folder doesn't already exist, create it.
     if is_a_directory(to_path):
         new_path=path_join(to_path,get_file_name(from_path))
     else:
@@ -30299,6 +30301,10 @@ def make_directory(path):
                     raise
         return str(path)
 make_folder=make_directory
+
+def make_parent_directory(path):
+    return make_directory(get_parent_directory(path))
+make_parent_folder=make_parent_directory
 
 def take_directory(path):
     "ZSH's take command combined mkdir with cd"
@@ -34455,7 +34461,7 @@ def _load_ryan_lazygit_config():
         path=r'%LOCALAPPDATA%\lazygit\config.yml'
     
     path=get_absolute_path(path)
-    make_directory(get_path_parent(path))
+    make_parent_directory(path)
     
     config_lines=unindent("""
         # < RP Lazygit Config Start >
@@ -36492,7 +36498,7 @@ def bytes_to_file(data: bytes, path: str = None):
         return helper()
     except FileNotFoundError:
         #Faster than checking for folder exists every time
-        make_directory(get_parent_directory(path))
+        make_parent_directory(path)
         return helper()
 
 
