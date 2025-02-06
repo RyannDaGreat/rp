@@ -122,7 +122,7 @@ class Evaluation:
             rp.print_stack_trace()
 
             #Add the stack trace into the error
-            stack_trace = traceback.format_exc()
+            stack_trace = '[WEB_EVALUATOR EVALUATION ERROR]\n'+traceback.format_exc()
             error.args = (stack_trace,) + error.args[1:]
 
             self.error = error
@@ -1191,6 +1191,9 @@ def run_delegation_server(server_port=None,
     if roster    is None: roster    = ClientRoster()
     if delegator is None: delegator = ClientDelegator()
     if server_port is None: server_port = DEFAULT_DELEGATION_SERVER_PORT
+
+    if rp.get_port_is_taken(server_port):
+        raise RuntimeError("rp.web_evaluator.run_delegation_server: port %i is already taken!" % server_port)
 
     stop_refreshing = False
 
