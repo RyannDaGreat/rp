@@ -22656,6 +22656,10 @@ def cv_line_graph(
     import cv2
     import math
 
+    if len(y_values)==1 and x_values is None:
+        #If given a single value make it a line
+        y_values=[y_values[0]]*2
+    
     # Convert input values to numpy arrays
     y_values = np.array(y_values, dtype=np.float32)
     x_values = np.array(x_values, dtype=np.float32) if x_values is not None else np.arange(len(y_values), dtype=np.float32)
@@ -22664,14 +22668,19 @@ def cv_line_graph(
     height = height or int(np.ptp(y_values))
     width = width or len(y_values)
 
+    # Create the output image with the specified background color
+    graph = np.full((height, width, 4), background_color, dtype=np.uint8)
+
+    assert len(y_values)==len(x_values), (len(x_values), len(y_values))
+    if not len(y_values):
+        #No plotting!
+        return graph
+
     # Determine the range of the axes if not provided
     y_min = y_min if y_min is not None else np.min(y_values)
     y_max = y_max if y_max is not None else np.max(y_values)
     x_min = x_min if x_min is not None else np.min(x_values)
     x_max = x_max if x_max is not None else np.max(x_values)
-
-    # Create the output image with the specified background color
-    graph = np.full((height, width, 4), background_color, dtype=np.uint8)
 
     # Map the data points to pixel coordinates
     x = ((x_values - x_min) / (x_max - x_min + 1e-10) * width ).astype(int)
@@ -24544,7 +24553,7 @@ def labeled_image(image,
         flip_text (bool): Whether to flip the label text upside down. Default is False. Can be useful when position in ['left', 'right']
         size_by_lines (bool): If True, the `size` argument is multiplied by the number of lines in the text, so it can grow accordingly
                               Good in combination with wrap_string_to_width
-        font (int, str, optional): Can be an int between 0 and 8 (to use opencv) or a string (to use PIL) such as "Menlo", "Times New Roman", "Courier", "Futura", "Comic Sans", "Calibri" etc (get a bit list of available fonts with rp.get_all_ttf_fonts() )
+        font (int, str, optional): Can be an int between 0 and 8 (to use opencv) or a string (to use PIL) such as "Menlo", "Times New Roman", "Courier", "Futura", "Comic Sans", "Calibri" etc (get a bit list of available fonts with rp.get_system_fonts() )
 
     Returns:
         numpy.ndarray: The image with the label added.
@@ -25246,6 +25255,37 @@ def as_rgb_float_color(color, clamp=True):
     return as_rgba_float_color(color, clamp=clamp)[:3]
     
 
+_ryan_fonts = {
+    "R:Futura"      : "https://github.com/Eyeline-Research/Go-with-the-Flow/raw/refs/heads/website/fonts/Futura.ttc",
+    ###
+    "R:Helvetica"   : "https://github.com/RyannDaGreat/Images/blob/master/fonts/Helvetica.ttc", 
+    "R:Monaco"      : "https://github.com/RyannDaGreat/Images/blob/master/fonts/Monaco.ttf", 
+    "R:Menlo"       : "https://github.com/RyannDaGreat/Images/blob/master/fonts/Menlo.ttc", 
+    "R:Optima"      : "https://github.com/RyannDaGreat/Images/blob/master/fonts/Optima.ttc", 
+    "R:Palatino"    : "https://github.com/RyannDaGreat/Images/blob/master/fonts/Palatino.ttc", 
+}
+
+def _get_font_path(font):
+    if isinstance(font,str):
+
+        if font.startswith("G:"):
+            #"G:Quicksand" or "G:Zilla Slab" from google fonts
+            font = download_google_font(font[len("G:"):])
+        elif font in _ryan_fonts:
+            # Starts with R: by convention
+            # "R:Futura" from _ryan_fonts
+            font = _ryan_fonts[font]
+
+        if is_valid_url(font):
+            #A proper URL
+            font = download_font(font)
+        else:
+            #Just return the font as is. It's actually ok if its not a path, as long as it's a system font, like "Arial" etc
+            pass
+
+        return font
+
+@lru_cache(maxsize=128)
 def pil_text_to_image(
     text,
     *,
@@ -25268,7 +25308,7 @@ def pil_text_to_image(
     This function uses _slow_pil_text_to_image - and somehow concatting letters is faster than using pil natively ¯\_(ツ)_/¯
     
     EXAMPLE:
-        >>> for font in ["Menlo", "Times New Roman", "Courier", "Futura", "Comic Sans", "Calibri"]:
+        >>> for font in ["Menlo", "Times New Roman", "Courier", "Futura", "Comic Sans", "Calibri"] + list(r._ryan_fonts):
         ...     color = random_rgb_float_color()
         ...     display_alpha_image(
         ...         with_drop_shadow(
@@ -25293,7 +25333,7 @@ def pil_text_to_image(
         ...             ),
         ...     )
 
-        >>> fonts = get_all_ttf_fonts()
+        >>> fonts = get_system_fonts()
         ... fonts = random_batch(fonts, 5)
         ... for _ in range(100):
         ...     text = "Hello World!"
@@ -25308,11 +25348,7 @@ def pil_text_to_image(
         ...     display_image(horizontally_concatenated_images(letters, origin="center"))
     """
     
-    if isinstance(font,str):
-        if font.startswith("G:"):
-            font = download_google_font(font[len("G:"):])
-        elif is_valid_url(font):
-            font = download_font(font)
+    font = _get_font_path(font)
 
     text = str(text)
     assert align in ["left", "right", "center"]
@@ -25563,7 +25599,7 @@ def download_google_font(font_name, *, skip_existing=True):
 
         return paths
 
-    fonts_folder = path_join(rp.r._rp_downloads_folder, "google_fonts",font_name)
+    fonts_folder = path_join(_google_fonts_download_folder,font_name)
 
     if folder_exists(fonts_folder):
         paths = get_all_files(fonts_folder)
@@ -25599,6 +25635,21 @@ def download_google_fonts(*font_names,skip_existing=True):
     font_names=detuple(font_names)
     return [download_google_font(font_name,skip_existing=skip_existing) for font_name in font_names]
 
+def get_downloaded_fonts():
+    """ Returns a list of font files downloaded by rp """
+    def get(x):
+        try:
+            return _get_all_paths_fast(
+                x,
+                recursive=True,
+                include_folders=False,
+                include_files=True,
+                include_hidden=False,
+            )
+        except FileNotFoundError:
+            return []
+    return get(_fonts_download_folder) + get(_google_fonts_download_folder)
+
 def _get_file_path(path_or_url):
     """If given a url, get a file path that can be used for things"""
     #TODO: Use this to make strip_file_extension etc work for URL's as well
@@ -25608,7 +25659,6 @@ def _get_file_path(path_or_url):
         parsed_url = urlparse(path_or_url)
         return parsed_url.path
     return path_or_url
-
 
 def strip_file_extension(file_path):
     """
@@ -39081,15 +39131,18 @@ def extract_alpha_channel(image):
 
 get_alpha_channel=get_image_alpha=extract_alpha_channel #Uncomment this if you think it would make the code nicer!
 
-def apply_image_function_per_channel(image,function):
+def apply_image_function_per_channel(function,image,*args,**kwargs):
     """
-    Apply a grayscale funcion on every image channel individually
+    Apply a grayscale function on every image channel individually
+    Calls the function with any additional args and kwargs you give it, too 
+    EXAMPLE: Low Rank Webcam Demo: https://gist.github.com/SqrtRyan/c33e4e40ccf74714a20c229a13c717fe
     """
+    assert callable(function),type(function)
     assert is_image(image)
     if is_grayscale_image(image):
-        return function(image)
+        return function(image, *args, **kwargs)
     channels=extract_image_channels(image)
-    return compose_image_from_channels(*(function(channel) for channel in channels))
+    return compose_image_from_channels(*(function(channel,*args,**kwargs) for channel in channels))
 
 def with_alpha_channel(image, alpha, copy=True):
     """
@@ -40270,6 +40323,9 @@ def unwarped_perspective_image(image, from_points, to_points=None, height:int=No
 
 _rp_folder = get_parent_folder(__file__)
 _rp_downloads_folder = path_join(_rp_folder, "downloads")
+_google_fonts_download_folder = _rp_downloads_folder + "/google_fonts"
+_fonts_download_folder        = _rp_downloads_folder + "/fonts"
+
 
 def _pip_import_depth_pro(autoyes=False):
 
@@ -41633,13 +41689,21 @@ def get_git_repo_root(folder='.', use_cache=False):
     assert output, 'Is not a git repo: '+str(folder)
     return output
 
+
 def _distill_github_url(url):
     """
+    Distills a GitHub URL to its base repository URL.
+
     https://github.com/fperazzi/davis-2017/tree/main --> https://github.com/fperazzi/davis-2017
+    https://github.com/AeroScripts/repo_name?tab=readme-ov-file --> https://github.com/AeroScripts/repo_name
     """
-    if url.startswith('https://github.com/'):
-        url = path_join(path_split(url)[:4])
-    return url
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    if parsed.netloc == "github.com":
+        path_parts = parsed.path.split("/")
+        if len(path_parts) >= 3:  # Ensure at least user/repo
+            return "https://github.com/" + path_parts[1] + "/" + path_parts[2]
+    return url  # Return original URL if not a valid GitHub URL or doesn't match expected format.
 
 def _get_repo_name_from_url(url):
     """
@@ -42492,17 +42556,36 @@ class IteratorWithLen:
         return self._length
     
 @memoized
-def get_all_ttf_fonts():
-    """ Returns a list of paths to all .ttf fonts on this computer """
+def get_system_fonts(filetypes="ttf ttc otf"):
+    import os
+    """ Returns a list of paths to all fonts of specified types on this computer """
     if currently_running_mac():
-        #https://apple.stackexchange.com/questions/35852/list-of-activated-fonts-with-shell-command-in-os-x
         out=[]
-        out+=['/System/Library/Fonts/'+x for x in shell_command('ls -R /System/Library/Fonts | grep ttf').splitlines()]
-        out+=['/Library/Fonts/'       +x for x in shell_command('ls -R /Library/Fonts | grep ttf'       ).splitlines()]
-        out+=['~/Library/Fonts/'      +x for x in shell_command('ls -R ~/Library/Fonts | grep ttf'      ).splitlines()]
-        out=[get_absolute_path(x) for x in out]
-        out=[x for x in out if file_exists(x)]
-        return list(out)
+        extensions_list = filetypes.lower().split() # Convert to lowercase for case-insensitive matching and split into list
+
+        locations = [
+            '/System/Library/Fonts',
+            '/Library/Fonts',
+            '~/Library/Fonts'
+        ]
+
+        for location in locations:
+            full_location = os.path.expanduser(location) # Expand ~ to user home
+            all_paths = _get_all_paths_fast(full_location, recursive=True) # Get all paths recursively
+
+            def filter_by_extension(path):
+                if not extensions_list: # If no extensions specified, include all files (or filter based on some default font-like extensions if desired)
+                    return True # Keep all if no extension filter
+
+                return any(path.lower().endswith("." + ext) for ext in extensions_list) # Check if path ends with any of the specified extensions
+
+            filtered_paths = filter(filter_by_extension, all_paths) # Apply the filter
+            out.extend(filtered_paths) # Add filtered paths to the output list
+
+
+        # Potentially add Network fonts, but less common for standard fonts, and could be slow in some network environments.
+        # out+=['/Network/Library/Fonts/'+x for x in shell_command('ls -R /Network/Library/Fonts | grep -i ttf').splitlines()]
+        return out
     elif currently_running_linux():
         #https://askubuntu.com/questions/552979/how-can-i-determine-which-fonts-are-installed-from-the-command-line-and-what-is
         ans=shell_command('fc-list')
