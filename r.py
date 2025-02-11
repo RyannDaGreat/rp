@@ -372,7 +372,7 @@ def summation(x,start=None):
     #     out+=y
     # return out
 
-def unique(iterable, key=identity):
+def unique(iterable, *, key=identity, lazy=False):
     """
     Removes duplicates but preserves order
     Works with things that aren't conventionally hashable, like numpy arrays
@@ -386,12 +386,17 @@ def unique(iterable, key=identity):
         >>> list(unique('alpha beta delta alpha'.split(),key=len))
        ans = ['alpha', 'beta']
     """
-    seen = set()
-    for item in iterable:
-        tag = handy_hash(key(item))
-        if tag not in seen:
-            seen.add(tag)
-            yield item
+    def helper():
+        seen = set()
+        for item in iterable:
+            tag = handy_hash(key(item))
+            if tag not in seen:
+                seen.add(tag)
+                yield item
+    output = helper()
+    if not lazy:
+        output = list(output)
+    return output
     
 # endregion
 # endregion
@@ -8721,10 +8726,10 @@ def get_current_function(frames_back=0):
 def get_current_function_name(frames_back=0):
     return get_current_function(frames_back+1).__name__
 
-def gather_args_recursive_call(*args, frames_back=1, **kwargs):
+def gather_args_recursive_call(*args, frames_back=0, **kwargs):
     frames_back+=1
     function=get_current_function(frames_back)
-    return gather_args_call(function,*args,frames_back=frames_back,**kwargs)
+    return gather_args_call(function,*args,frames_back=frames_back+1,**kwargs)
 
 def replace_if_none(value):
     """
@@ -25308,7 +25313,7 @@ def pil_text_to_image(
     This function uses _slow_pil_text_to_image - and somehow concatting letters is faster than using pil natively ¯\_(ツ)_/¯
     
     EXAMPLE:
-        >>> for font in ["Menlo", "Times New Roman", "Courier", "Futura", "Comic Sans", "Calibri"] + list(r._ryan_fonts):
+        >>> for font in ["Menlo", "Times New Roman", "Courier", "Futura", "Comic Sans MS", "Calibri"] + list(r._ryan_fonts):
         ...     color = random_rgb_float_color()
         ...     display_alpha_image(
         ...         with_drop_shadow(
@@ -42106,6 +42111,50 @@ def as_torch_image(image):
         return as_torch_images(image[None])[0]
     else:
         assert False,'Unsupported image type: '+str(type(image))
+
+_load_safetensors_cache={}
+def load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, use_cache=False):
+    """
+    Loads tensors from a .safetensors file.
+
+    Args:
+        path (str): Path to .safetensors file.
+        device (str, optional): Device (cpu, cuda, etc.). Defaults to 'cpu'.
+        show_progress (bool, optional): Show progress bar. Defaults to False.
+        verbose (bool, optional): Print tensor names. Defaults to False.
+
+    Returns:
+        easydict: Easydict of tensors.
+        
+    Reference: https://huggingface.co/docs/safetensors/en/index
+    """
+
+    pip_import("safetensors")
+    from safetensors import safe_open
+
+    # Handle Cache
+    cache_key = path, device
+    cache = _load_safetensors_cache
+    if use_cache:
+        if cache_key not in cache:
+            cache[cache_key] = gather_args_recursive_call(use_cache=False)
+        return cache[cache_key]
+    elif cache_key in cache:
+        del cache[cache_key]
+
+    # Load Safetensors file
+    tensors = {}
+    with safe_open(path, framework="pt", device=device) as f:
+        keys = f.keys()
+        if show_progress:
+            keys = rp.eta(keys, title="rp.load_safetensors")
+        for k in f.keys():
+            if verbose:
+                print("    - " + str(k))
+            tensors[k] = f.get_tensor(k)
+    tensors = as_easydict(tensors)
+    return tensors
+
 
 class ImageDataset:
     """
