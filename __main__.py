@@ -2,6 +2,7 @@ import sys
 import rp
 
 default_scope = rp.r.__dict__
+default_scope['r'] = rp.r
 
 def arg_eval(code):
     if not rp.is_namespaceable(code) and rp.r._is_valid_exeval_python_syntax(code) or code in default_scope:
