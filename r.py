@@ -6481,7 +6481,37 @@ def display_video(video,framerate=30,*,loop=False):
 #     else:
 #         display_embedded_video_in_notebook(video)
 
-def display_video_in_notebook(video, filetype='gif', *, framerate=60):
+def _make_video_dimensions_even(video):
+    """ 
+    Make the video have an even height and width. Used for saving MP4's. 
+    Without this, if a video with odd height or odd width is displayed with mediapy, it renders as a black rectangle.
+    If you download that video, it can be viewed with more niche video viewers like Videoloupe, but it cannot be viewed in Vivaldi
+    """
+    video = rp.crop_images_to_max_size(video)
+    height, width = rp.get_video_dimensions(video)
+    if height%2 or width%2:
+        #Can't display an MP4 video with odd height or width!
+        new_height = math.ceil(height/2)*2
+        new_width  = math.ceil(width /2)*2
+        video = rp.crop_images(video, new_height, new_width)
+    return video
+
+
+def _display_video_via_mediapy(video, framerate):
+    """ Use mediapy to display a video in a Jupyter notebook """
+    rp.pip_import('mediapy')
+    import mediapy
+
+    #Prepare the video
+    video = rp.as_numpy_images(video)
+    video = rp.as_rgb_images(video)
+    video = rp.as_byte_images(video)
+    video = _make_video_dimensions_even(video)
+
+    return mediapy.show_video(video, fps=framerate)
+
+
+def display_video_in_notebook(video, filetype='mp4', *, framerate=60):
     """
     Display a video or image in a Jupyter notebook.
 
@@ -6507,12 +6537,10 @@ def display_video_in_notebook(video, filetype='gif', *, framerate=60):
 
     if filetype=='mp4':
         try:
-            pip_import('mediapy')
+            return _display_video_via_mediapy(video, framerate)
         except ImportError:
             #If we don't import mediapy, it's ok! We have a fallback, seen below.
             pass
-        import mediapy
-        return mediapy.show_video(video, fps=framerate)
 
     try:
         if isinstance(video, str):
