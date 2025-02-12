@@ -849,6 +849,43 @@ def without_fansi():
     finally:
         _disable_fansi=old_disable_fansi
 
+_fansi_styles = {
+    "normal": 0,
+    "bold": 1,
+    "faded": 2,
+    "italic": 3,
+    "underlined": 4,
+    "blinking": 5,
+    "invert": 7,
+    "hide": 8,
+    "strike": 9,
+    "sub": 74,
+    "super": 73,
+}
+
+def _transform_fansi_arg(spec):
+    """ Allow for 'yellow green underlined on blue bold' """
+    spec = spec.lower()
+    style = []
+    color = []
+    background = []
+    on = False
+    for x in spec.split():
+        if x == 'on':
+            on = True
+        elif x in _fansi_styles:
+            style.append(x)
+        elif on:
+            background.append(x)
+        else:
+            color.append(x)
+
+    style = ' '.join(style) or None
+    color = ' '.join(color) or None
+    background = ' '.join(background) or None
+
+    return color, style, background
+
 def fansi(text_string="", text_color=None, style=None, background_color=None, *, per_line=True, reset=True, truecolor=False):
     """
     'fansi' is a pun, referring to ANSI and fancy
@@ -889,6 +926,16 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
             See the below example!
 
     EXAMPLES:
+
+        >>> #Shorthand: You can combine multiple styles together, foreground and background separated by 'on'!
+        ... fansi_print("HELLO WORLD!",'bold yellow green on red')
+        ... fansi_print("HELLO WORLD!",'bold yellow green on red red underlined blinking')
+        ... fansi_print("HELLO WORLD!",'yellow on white')
+        ... fansi_print("HELLO WORLD!",'bold green')
+        ... fansi_print("HELLO WORLD!",'on blue cyan')
+        ... fansi_print("HELLO WORLD!",'on blue cyan bold')
+        ... fansi_print("HELLO WORLD!",'on bold')
+        ... fansi_print("HELLO WORLD!",'bold')
 
         >>> #Adding styles together via setting reset=False
         ... print(
@@ -960,6 +1007,10 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
         ...     print(fansi("\tXXXXX " + str(color) + " ", background_color=color))
         
     """
+
+    if isinstance(text_color, str) and style is None and background_color is None:
+        text_color, style, background_color = _transform_fansi_arg(text_color)
+
     # Ensure text_string is a string
     text_string = str(text_string)
 
@@ -980,19 +1031,7 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
     # Define color and style mappings
     color_codes = {'black': 0, 'red': 1, 'green': 2, 'yellow': 3,
                    'blue': 4, 'magenta': 5, 'cyan': 6, 'gray': 7, 'grey': 7}
-    styles = {
-        "normal": 0,
-        "bold": 1,
-        "faded": 2,
-        "italic": 3,
-        "underlined": 4,
-        "blinking": 5,
-        "invert": 7,
-        "hide": 8,
-        "strike": 9,
-        "sub": 74,
-        "super": 73,
-    }
+    styles = _fansi_styles
     #To see all styles supported for your terminal:
     #   >>> for style in range(100):  print(fansi('Hello World! '+str(style),style=style))
     #   ... #Reference: https://en.wikipedia.org/wiki/ANSI_escape_code
@@ -6466,6 +6505,15 @@ def display_video_in_notebook(video, filetype='gif', *, framerate=60):
     image_filetypes = 'gif png'.split()
     video_filetypes = 'mp4 avi'.split()
 
+    if filetype=='mp4':
+        try:
+            pip_import('mediapy')
+        except ImportError:
+            #If we don't import mediapy, it's ok! We have a fallback, seen below.
+            pass
+        import mediapy
+        return mediapy.show_video(video, fps=framerate)
+
     try:
         if isinstance(video, str):
             assert file_exists(video), 'rp.display_video_in_notebook: Video file {0} does not exist'.format(video)
@@ -10225,14 +10273,16 @@ def _cv_initialize_cameras():
     fansi_print("\rr._cv_initialize_cameras: Initialization complete!",'green')
 
 def _cv_print_cam_props(index=0):
-    #Prints available opencv camera properties for a given camera index
-    #EXAMPLE:
-    #     >>> print_cam_info(1)
-    #    CAP_PROP_BACKEND        1200.0
-    #    CAP_PROP_FORMAT 16.0
-    #    CAP_PROP_FPS    5.0
-    #    CAP_PROP_FRAME_HEIGHT   1080.0
-    #    CAP_PROP_FRAME_WIDTH    1920.0
+    """
+    Prints available opencv camera properties for a given camera index
+    EXAMPLE:
+        >>> print_cam_info(1)
+       CAP_PROP_BACKEND        1200.0
+       CAP_PROP_FORMAT 16.0
+       CAP_PROP_FPS    5.0
+       CAP_PROP_FRAME_HEIGHT   1080.0
+       CAP_PROP_FRAME_WIDTH    1920.0
+    """
     import cv2
     cap = cv2.VideoCapture(index)
     props=[x for x in dir(cv2) if  x.startswith('CAP_PROP_')]
@@ -11438,28 +11488,53 @@ def get_nested_value(list_to_be_accessed,*address_int_list,ignore_errors: bool =
             else:
                 raise IndexError
     return list_to_be_accessed
-def shell_command(command: str,as_subprocess=False,return_printed_stuff_as_string: bool = True) -> str or None:
-    # region OLD VERSION: had an argument called return_printed_stuff_as_string, which I never really used as False, and run_as_subprocess when True might not return a string anyay. If I recall correctly, I implemented return_printed_stuff_as_string simply because it was sometimes annoying to see the output when using pseudo_terminal
-    #       def shell_command(command: str,return_printed_stuff_as_string: bool = True,run_as_subprocess=False) -> str or None:
-    #           if return_printed_stuff_as_string:
-    #               return (lambda ans:ans[ans.find('\n') + 1:][::-1])(os.popen(command).read()[::-1])  # EX: print(shell_command("pwd")) <-- Gets the current directory
-    #           from os import system
-    #           system(command)
-    # endregion
-    if as_subprocess:
-        from subprocess import run
-        if return_printed_stuff_as_string:
-            stdout=run(command,shell=True).stdout
-            if stdout is not None:
-                return (lambda ans:ans[ans.find('\n') + 1:][::-1])(stdout[::-1])  # EX: print(shell_command("pwd")) <-- Gets the current directory
-        else:
-            run(command)
-    else:
-        if return_printed_stuff_as_string:
-            return (lambda ans:ans[ans.find('\n') + 1:][::-1])(os.popen(command).read()[::-1])  # EX: print(shell_command("pwd")) <-- Gets the current directory
-        else:
-            from os import system
-            system(command)
+
+# def shell_command(command: str,as_subprocess=False,return_printed_stuff_as_string: bool = True) -> str or None:
+#     # region OLD VERSION: had an argument called return_printed_stuff_as_string, which I never really used as False, and run_as_subprocess when True might not return a string anyay. If I recall correctly, I implemented return_printed_stuff_as_string simply because it was sometimes annoying to see the output when using pseudo_terminal
+#     #       def shell_command(command: str,return_printed_stuff_as_string: bool = True,run_as_subprocess=False) -> str or None:
+#     #           if return_printed_stuff_as_string:
+#     #               return (lambda ans:ans[ans.find('\n') + 1:][::-1])(os.popen(command).read()[::-1])  # EX: print(shell_command("pwd")) <-- Gets the current directory
+#     #           from os import system
+#     #           system(command)
+#     # endregion
+#     if as_subprocess:
+#         from subprocess import run
+#         if return_printed_stuff_as_string:
+#             stdout=run(command,shell=True).stdout
+#             if stdout is not None:
+#                 return (lambda ans:ans[ans.find('\n') + 1:][::-1])(stdout[::-1])  # EX: print(shell_command("pwd")) <-- Gets the current directory
+#         else:
+#             run(command)
+#     else:
+#         if return_printed_stuff_as_string:
+#             return (lambda ans:ans[ans.find('\n') + 1:][::-1])(os.popen(command).read()[::-1])  # EX: print(shell_command("pwd")) <-- Gets the current directory
+#         else:
+#             from os import system
+#             system(command)
+
+def shell_command(command: str, stdin: str = None) -> str:
+    """
+    Execute a shell command and return its output.
+
+    Args:
+        command (str): The shell command to execute
+        stdin (str): Optional string to pipe into stdin
+
+    Returns:
+        (str) The command's stdout
+    """
+    from subprocess import run
+
+    result = run(command, shell=True, capture_output=True, text=True, input=stdin)
+
+    output = result.stdout
+    
+    if output.endswith('\n'):
+        #Commands like "pwd" have a \n at the end. Annoying!
+        output = output[:-1]
+
+    return output
+
 
 def get_system_commands(*,use_cache=False):
     """
@@ -14279,7 +14354,7 @@ def reload_rp():
     import rp
     return rp
     
-def _eta(total_n,min_interval=.3,title="r.eta"):
+def _eta(total_n,*,min_interval=.3,title="r.eta"):
     """
     Example:
         >>> a = eta(2000,title='test')
@@ -14323,7 +14398,7 @@ class eta:
         ...     sleep(.1)
     """
 
-    def __init__(self, x, min_interval=.3,title="r.eta"):
+    def __init__(self, x, title='r.eta', min_interval=.3):
         assert isinstance(x, int) or hasattr(x, '__len__')
 
         if hasattr(x, '__len__'):
@@ -14333,7 +14408,7 @@ class eta:
             assert is_number(x)
             self.elements = range(x)
 
-        self.display_eta = _eta(x, min_interval, title)
+        self.display_eta = _eta(x, title=title, min_interval=min_interval)
 
     def __call__(self, n, print_out=True):
         self.display_eta(n, print_out)
@@ -15713,17 +15788,34 @@ def _all_files_listed_in_exception_traceback(exception:BaseException)->list:
             pass
     return out
 
-def read_symlink(path:str):
+
+def read_symlink(path: str, *, recursive=False):
     """
-    Returns the path a symlink points to
+    Resolves the path of a symlink up to a specified number of levels.
+
+    Args:
+        path: Path to the symlink.
+        levels: Maximum levels to resolve (int >= 0), None for full resolution.
+        strict: If True, raise AssertionError if not a symlink or OSError during resolution.
+
+    Returns:
+        Resolved path string.
+
+    Raises:
+        AssertionError: If strict=True and initial path is not a symlink, or levels < 0.
+        OSError: If strict=True and OS error during symlink resolution.
     """
-    assert isinstance(path,str)
-    assert is_symlink(path), 'Not a symlink: '+path
-    if path.endswith('/'):
-        # turn 'folder/' into 'folder'
-        path=path[:-1]
-    import os
-    return os.readlink(path)
+    assert isinstance(path, str)
+    if strict and not is_symlink(path): raise AssertionError('Not a symlink: ' + path)
+
+    path = path.rstrip('/')
+    path = os.readlink(path).decode()
+
+    if recursive:
+        while is_a_symlink(path):
+            path = os.readlink(path).decode()
+
+    return path
 
 def symlink_is_broken(path:str):
     assert is_symlink(path)
@@ -19538,7 +19630,7 @@ def pseudo_terminal(
 
                             values=eval(user_message,scope())
 
-                            if is_iterable(values):
+                            if isinstance(values,(tuple,list)):
                                 fansi_print("?c --> Getting source code --> ans = rp.get_source_code(%s)..."%user_message,"blue",'bold')
                             else:
                                 fansi_print("?c --> Getting source code --> ans = line_join(map(rp.get_source_code,%s))..."%user_message,"blue",'bold')
@@ -21849,13 +21941,15 @@ def circular_auto_correlate(a):
     return circular_cross_correlate(a,a)
 circ_auto_corr=circular_auto_correlate
 def circular_gaussian_blur(vector,sigma=1):
+    """
+     >>> circ_gauss_blur([1,0,0,0,0,0])
+    ans = [0.4   0.095 0.005 0.005 0.095 0.4  ]
+     >>> circ_gauss_blur([1,0,0,0,0])
+    ans = [0.403 0.244 0.054 0.054 0.244]
+    """
     vector=np.asarray(vector)
     assert len(vector.shape)==1,'Right now input must be a vector. This may change in the future.'
     if sigma==0:return np.copy(vector)
-    #  >>> circ_gauss_blur([1,0,0,0,0,0])
-    # ans = [0.4   0.095 0.005 0.005 0.095 0.4  ]
-    #  >>> circ_gauss_blur([1,0,0,0,0])
-    # ans = [0.403 0.244 0.054 0.054 0.244]
     kernel=gaussian_kernel(size=len(vector),sigma=sigma,dim=1)
     kernel=np.roll(kernel,int(np.ceil(len(kernel)/2)))#Shift it over so that the blur doesn't shift the original vector
     assert len(kernel)==len(vector),'Internal logic assertion to circular_gaussian_blur'
@@ -22076,7 +22170,7 @@ def ring_terminal_bell():
 
 
 def _pterm():
-    #This is what gets run when we run rp from the command line
+    """ This is what gets run when we run rp from the command line """
     try:
         pseudo_terminal(locals(),globals(),rprc=_get_ryan_rprc_path())
     finally:
@@ -25754,14 +25848,24 @@ def with_file_extensions(*paths,extension:str=None,replace=False):
 
     return [with_file_extension(path, extension, replace=replace) for path in paths]
 
-def with_file_name(path:str,name:str,keep_extension=True):
+def with_file_name(path:str,name:str,*,keep_extension=True):
     """
     Returns the path with a new file name, keeping the old file extension
     If the file extension in 'name' is specified though, it will keep the new extension
 
     EXAMPLE:
-        >>> with_file_name('some/parent/folder/file.txt','untitled')
+       >>> with_file_name('some/parent/folder/file.txt','untitled')
        ans = some/parent/folder/untitled.txt
+       >>> with_file_name('Hello.com','Berty',keep_extension=True)
+       ans = Berty.com
+       >>> with_file_name('./Hello.com','Berty',keep_extension=True)
+       ans = ./Berty.com
+       >>> with_file_name('./Hello.com','Berty',keep_extension=False)
+       ans = ./Berty
+       >>> with_file_name('.Hello.com','Berty',keep_extension=False)
+       ans = Berty
+       >>> with_file_name('.Hello.com','Berty',keep_extension=True)
+       ans = Berty.com
    """
 
     parent_folder=get_parent_folder(path)
@@ -25773,7 +25877,13 @@ def with_file_name(path:str,name:str,keep_extension=True):
     file_name=name
     if keep_extension:
         file_name=with_file_extension(file_name,extension)
-    return path_join(parent_folder,file_name)
+    output = path_join(parent_folder,file_name)
+
+    if output.startswith('./') and not path.startswith('./'):
+        output = output[len('./'):]
+
+    return output
+
 
 def with_folder_name(path:str, name:str):
     """
@@ -25802,19 +25912,67 @@ def get_path_names(*paths, include_file_extensions=True):
     return [get_path_name(path, include_file_extensions) for path in detuple(paths)]
 get_folder_names=get_directory_names=get_file_names=get_path_names
 
-def get_relative_path(path,root_directory=None):
+def get_relative_path(path,root=None):
     """
     Take an absolute path, and turn it into a relative path starting from root_directory
     root_directory's default is get_current_directory()
     """
-    if root_directory is None:
-        root_directory=get_current_directory()
-    assert isinstance(root_directory,str),'root_directory must be a string representing the root path to compare the given path against'
-    return os.path.relpath(path,root_directory)
+    if root is None:
+        root=get_current_directory()
+    assert isinstance(root,str),'root must be a string representing the root path to compare the given path against'
+    return os.path.relpath(path,root)
 
-def get_relative_paths(*paths, root_directory=None):
-    "Plural of get_relative_path"
-    return [get_relative_path(path, root_directory) for path in detuple(paths)]
+def get_relative_paths(*paths, root=None):
+    """
+    Plural of get_relative_path
+    Supports broadcasting (see examples) - it can take multiple paths and/or multiple roots
+
+    EXAMPLES:
+
+        >>> get_relative_paths('A/B/C','D/E/F',root=['A/B/C','D'])
+        ['.', 'E/F']
+
+        >>> #Basic usage with single path and root
+        >>> get_relative_paths('/a/b/c', root='/a/b')
+        ['c']
+
+        >>> # Broadcasting root to multiple paths
+        >>> get_relative_paths('/x/y/z', '/x/y/w', root='/x/y')
+        ['z', 'w']
+
+        >>> # Element-wise root for multiple paths
+        >>> get_relative_paths('/p/q/r', '/s/t/u', root=['/p/q', '/s/t'])
+        ['r', 'u']
+
+        >>> # Paths as tuples input
+        >>> get_relative_paths(['/m/n/o', '/m/n/p'], root='/m/n')
+        ['o', 'p']
+
+        >>> # Single path as string input
+        >>> get_relative_paths('/u/v/w', root='/u/v')
+        ['w']
+
+        >>> # More complex nested paths
+        >>> get_relative_paths('/alpha/beta/gamma/delta/epsilon', '/alpha/beta/foo/bar', root=['/alpha/beta/gamma', '/alpha/beta'])
+        ['delta/epsilon', 'foo/bar']
+
+    """
+
+    paths = detuple(paths)
+    if isinstance(paths, str):
+        paths = [paths]
+    else:
+        paths = list(paths)
+
+    roots = root
+    if isinstance(roots, str) or roots is None:
+        roots = [roots]
+    else:
+        roots = list(roots)
+
+    paths, roots = broadcast_lists(paths, roots)
+
+    return [get_relative_path(path, root) for root, path in zip(roots, paths)]
 
 def get_absolute_path(path,*,physical=True):
     """
@@ -29860,14 +30018,19 @@ def path_exists(path):
     return file_exists(path) or directory_exists(path)
 # is_a_path=path_exists #Can be confused with complex vector paths etc, and also this isn't that descriptive...don't want code to be dependent on this synonym...
 
-def rename_path(path,new_name):
+def rename_path(path,new_name,*,keep_extension=False):
     """
     EXAMPLE:
        rename_path("apple/bananna/cherry.jpg","coconut.png")
            is equivalent to (in bash)
        mv .apple/bananna/cherry.jpg apple/bananna/coconut.png
     """
-    new_path=os.path.join(get_path_parent(path),new_name)
+
+    if keep_extension and has_file_extension(path):
+        new_path = with_file_name(path, new_name, keep_extension=keep_extension)
+    else:
+        new_path=os.path.join(get_path_parent(path),new_name)
+
     os.rename(path,new_path)
     return new_path
 
@@ -29985,6 +30148,11 @@ def delete_folder(path,*,recursive=True,permanent=True):
         pip_import('send2trash')
         import send2trash  
         send2trash.send2trash(path)  
+
+def delete_symlink(path):
+    assert is_symlink(path)
+    delete_file(path)
+
 delete_directory=delete_folder
 
 def delete_path(path,*,permanent=True):
@@ -42442,10 +42610,16 @@ def _waste_gpu(gpu_id):
     while True:
         (matrix @ matrix).cpu()
 
-def waste_all_gpus():
-    """Keeps all GPU's busy on a system, using as much VRAM as possible. Used for stress-testing. Should take minimal CPU."""
+def waste_gpus(*gpu_ids):
+    """
+    Keeps all GPU's busy on a system, using as much VRAM as possible. Used for stress-testing. Should take minimal CPU.
+    Alternatively, if you only want to waste certain GPU's, pass them in as args like waste_gpus(2,3,4) to leave 0 and 1 empty
+    """
 
-    for gpu_id in get_all_gpu_ids():
+    if not gpu_ids:
+        gpu_ids = get_all_gpu_ids()
+    
+    for gpu_id in gpu_ids:
         run_as_new_thread(_waste_gpu, gpu_id)
 
     while True:
