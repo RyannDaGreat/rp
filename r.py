@@ -15817,31 +15817,30 @@ def _all_files_listed_in_exception_traceback(exception:BaseException)->list:
     return out
 
 
-def read_symlink(path: str, *, recursive=False):
+def read_symlink(path: str, *, recursive=False, strict=False):
     """
     Resolves the path of a symlink up to a specified number of levels.
 
     Args:
         path: Path to the symlink.
-        levels: Maximum levels to resolve (int >= 0), None for full resolution.
-        strict: If True, raise AssertionError if not a symlink or OSError during resolution.
+        recursive: If True, will keep resolving symlinks until it hits a non-symlink
+        strict: If True, raises error if given path is not a symlink. Else, returns original path on error.
 
     Returns:
         Resolved path string.
 
     Raises:
-        AssertionError: If strict=True and initial path is not a symlink, or levels < 0.
-        OSError: If strict=True and OS error during symlink resolution.
+        Exception: If strict=True and initial path is not a symlink
     """
     assert isinstance(path, str)
     if strict and not is_symlink(path): raise AssertionError('Not a symlink: ' + path)
 
     path = path.rstrip('/')
-    path = os.readlink(path).decode()
+    path = os.readlink(path)
 
     if recursive:
         while is_a_symlink(path):
-            path = os.readlink(path).decode()
+            path = os.readlink(path)
 
     return path
 
@@ -15893,7 +15892,27 @@ def replace_symlinks_with_hardlinks(
     return load_files(replace_symlink_with_hardlink, symlink_paths, lazy=lazy, strict=strict, show_progress=show_progress, num_threads=num_threads)
 
 
-def make_symlink(original_path,symlink_path='.'):
+def make_symlink(original_path, symlink_path=".", *, relative=False, replace=False, strict=True):
+    """
+    Creates a symbolic link.
+
+    Creates a symlink at `symlink_path` pointing to `original_path`.
+
+    Args:
+        original_path: Path to the original file/directory.
+        symlink_path: Path for the symlink (default: current directory).
+            If a folder, symlink is created inside it with original's name.
+        relative: Use a relative symlink, correctly pointing to original_path from the symlink_path (default: False).
+        replace: Replace existing symlink if True (default: False, error if exists) (defualt: False)
+        strict: If true, raises an error if the original_path does not exist. (default: True)
+
+    Returns:
+        Path to the created symlink.
+
+    Raises:
+        AssertionError: If `original_path` doesn't exist (and strict) or `symlink_path` already exists (and not replaced).
+    """
+    import os
 
     if path_exists(symlink_path) and not path_exists(original_path):
         #If the caller of this function gets the arguments backwards, fix it automatically
@@ -15902,10 +15921,15 @@ def make_symlink(original_path,symlink_path='.'):
     if is_a_folder(symlink_path):
         symlink_path=path_join(symlink_path,get_file_name(original_path))
 
-    assert path_exists(original_path), "Can't create symlink to %s because that path does not exist!"%original_path
-    assert not path_exists(symlink_path), "Can't create symlink at %s because a file already exists there!"%symlink_path
+    assert not strict or path_exists(original_path), "Can't create symlink to %s because that path does not exist!"%original_path
+    assert replace or not path_exists(symlink_path), "Can't create symlink at %s because a file already exists there!"%symlink_path
+
+    if relative:
+        original_path = get_relative_path(original_path, root=get_parent_folder(symlink_path))
+
+    if replace and is_symlink(symlink_path):
+        os.remove(symlink_path)
     
-    import os
     os.symlink(original_path,symlink_path)
     
     return symlink_path
