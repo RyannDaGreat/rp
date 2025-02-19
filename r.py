@@ -2672,6 +2672,7 @@ def video_with_progress_bar(
     def helper():
         nonlocal size, bar_color, background_color, position, reverse
         length = len(video)
+        assert length > 0, 'Cannot make progress bar on video with only one frame - length='+str(length)
         for index, image in enumerate(video):
             progress = index / (length - 1)
             frame = gather_args_call(image_with_progress_bar)
@@ -2706,7 +2707,7 @@ def _get_executable(name, download_urls, executable_name):
         if currently_running_linux()
         else download_urls["windows"]
     )
-    zip_file = download_url(url, download_dir, skip_existing=True)
+    zip_file = download_url(url, download_dir, skip_existing=True, show_progress=True)
     folder = strip_file_extension(zip_file)
     if not folder_exists(folder):
         unzip_to_folder(zip_file)
@@ -3737,7 +3738,7 @@ def random_element(x):
     elif isinstance(x, Set):
         return random_element(list(x))
 
-    elif isinstance(x, Iterable):
+    elif isinstance(x, Iterable) or has_len(x) and hasattr(x, "__getitem__"):
         index = random_index(x)
         if _is_pandas_iloc_iterable(x):
             x=x.iloc
@@ -4240,7 +4241,8 @@ def is_valid_url(url:str)->bool:
 
 
 def _erase_terminal_line():
-    sys.stdout.write('\033[2K\033[1G')#erase and go to beginning of line https://stackoverflow.com/questions/5290994/remove-and-replace-printed-items
+    """ erase and go to beginning of line https://stackoverflow.com/questions/5290994/remove-and-replace-printed-items """
+    sys.stdout.write('\033[2K\033[1G')
 
 def load_files(
     load_file,
@@ -15322,46 +15324,46 @@ def _multi_line_python_input(prompt):
     return out
 
 _default_pyin_settings=dict(
-enable_mouse_support=False,
-enable_history_search=True,
-highlight_matching_parenthesis=True,
-enable_input_validation=False,
-enable_auto_suggest=True,
-show_line_numbers=True,
-show_signature=True,
-# _current_ui_style_name='stars',
-_current_ui_style_name='adventure',
-# _current_code_style_name='default',
-_current_code_style_name='dracula',
+    enable_mouse_support=False,
+    enable_history_search=True,
+    highlight_matching_parenthesis=True,
+    enable_input_validation=False,
+    enable_auto_suggest=True,
+    show_line_numbers=True,
+    show_signature=True,
+    # _current_ui_style_name='stars',
+    _current_ui_style_name='adventure',
+    # _current_code_style_name='default',
+    _current_code_style_name='dracula',
 
-show_docstring=False,
-show_realtime_input=False,
-show_vars=False,
-show_meta_enter_message=True,
-completion_visualisation='multi-column' if not currently_running_windows() else 'pop-up',
-completion_menu_scroll_offset=1,
+    show_docstring=False,
+    show_realtime_input=False,
+    show_vars=False,
+    show_meta_enter_message=True,
+    completion_visualisation='multi-column' if not currently_running_windows() else 'pop-up',
+    completion_menu_scroll_offset=1,
 
-show_status_bar=True,
-wrap_lines=True,
-complete_while_typing=True,
-vi_mode=False,
-paste_mode=False  ,
-confirm_exit=True  ,
-accept_input_on_enter=2  ,
-enable_open_in_editor=True,
-enable_system_bindings=True,
-show_all_options=False,
-show_last_assignable=False,
-show_battery_life=False,
-enable_microcompletions=True,
-history_syntax_highlighting=False,
-history_number_of_lines=2500,
-min_bot_space=15,
-top_space=0,
-true_color=False,
+    show_status_bar=True,
+    wrap_lines=True,
+    complete_while_typing=True,
+    vi_mode=False,
+    paste_mode=False  ,
+    confirm_exit=True  ,
+    accept_input_on_enter=2  ,
+    enable_open_in_editor=True,
+    enable_system_bindings=True,
+    show_all_options=False,
+    show_last_assignable=False,
+    show_battery_life=False,
+    enable_microcompletions=True,
+    history_syntax_highlighting=False,
+    history_number_of_lines=2500,
+    min_bot_space=15,
+    top_space=0,
+    true_color=False,
 
-session_title='',
-    )
+    session_title='',
+)
 _pyin_settings_file_path=__file__+'.rp_pyin_settings'
 _globa_pyin=[None]
 
@@ -15817,14 +15819,13 @@ def _all_files_listed_in_exception_traceback(exception:BaseException)->list:
     return out
 
 
-def read_symlink(path: str, *, recursive=False, strict=False):
+def read_symlink(path: str, *, recursive=False):
     """
     Resolves the path of a symlink up to a specified number of levels.
 
     Args:
         path: Path to the symlink.
         recursive: If True, will keep resolving symlinks until it hits a non-symlink
-        strict: If True, raises error if given path is not a symlink. Else, returns original path on error.
 
     Returns:
         Resolved path string.
@@ -15833,7 +15834,7 @@ def read_symlink(path: str, *, recursive=False, strict=False):
         Exception: If strict=True and initial path is not a symlink
     """
     assert isinstance(path, str)
-    if strict and not is_symlink(path): raise AssertionError('Not a symlink: ' + path)
+    if not is_symlink(path): raise AssertionError('Not a symlink: ' + path)
 
     path = path.rstrip('/')
     path = os.readlink(path)
@@ -15844,7 +15845,62 @@ def read_symlink(path: str, *, recursive=False, strict=False):
 
     return path
 
+def make_symlink_absolute(symlink_path, *, recursive=False, physical=True):
+    """Replace the destination of a symlink with an absolute path instead of a relative one"""
+    destination_path = read_symlink(symlink_path, recursive=recursive)
+    destination_path = get_absolute_path(destination_path, physical=physical)
+    return make_symlink(destination_path, symlink_path, relative=False, replace=True)
+
+
+def make_symlink_relative(symlink_path, *, recursive=False):
+    """Replace the destination of a symlink with a relative path instead of an absolute one"""
+    destination_path = read_symlink(symlink_path, recursive=recursive)
+    if starts_with_any(destination_path, "/", "~"):
+        destination_path = get_absolute_path(destination_path, physical=False)
+        make_symlink(destination_path, symlink_path, relative=True, replace=True)
+    return symlink_path
+
+def read_symlinks(
+    *symlink_paths,
+    recursive=False,
+    strict=True,
+    num_threads=None,
+    show_progress=False,
+    lazy=False
+):
+    """ Plural of rp.read_symlink """
+    symlink_paths = detuple(symlink_paths)
+    if show_progress == True: show_progress = "eta:" + get_current_function_name()
+    return gather_args_call(load_files, read_symlink, symlink_paths)
+
+def make_symlinks_relative(
+    *symlink_paths,
+    recursive=False,
+    strict=True,
+    num_threads=None,
+    show_progress=False,
+    lazy=False
+):
+    """ Plural of rp.make_symlink_relative """
+    symlink_paths = detuple(symlink_paths)
+    if show_progress == True: show_progress = "eta:" + get_current_function_name()
+    return gather_args_call(load_files, make_symlink_relative, symlink_paths)
+
+def make_symlinks_absolute(
+    *symlink_paths,
+    recursive=False,
+    strict=True,
+    num_threads=None,
+    show_progress=False,
+    lazy=False
+):
+    """ Plural of rp.make_symlink_absolute """
+    symlink_paths = detuple(symlink_paths)
+    if show_progress == True: show_progress = "eta:" + get_current_function_name()
+    return gather_args_call(load_files, make_symlink_absolute, symlink_paths)
+
 def symlink_is_broken(path:str):
+    """ Returns True if the symlink points to a path that doesn't exist """
     assert is_symlink(path)
     if not path_exists(path):
         return True
@@ -15853,7 +15909,9 @@ def symlink_is_broken(path:str):
 # def symlink_works(path:str):
 #     return not symlink_is_broken(path)
 
-def make_hardlink(original_path, hardlink_path):
+def make_hardlink(original_path, hardlink_path, *, recursive=False):
+    import os
+
     if path_exists(hardlink_path) and not path_exists(original_path):
         # If the caller of this function gets the arguments backwards, fix it automatically
         hardlink_path, original_path = original_path, hardlink_path
@@ -15862,12 +15920,21 @@ def make_hardlink(original_path, hardlink_path):
         hardlink_path = path_join(hardlink_path, get_file_name(original_path))
 
     assert path_exists(original_path), "Can't create hardlink to %s because that path does not exist!" % original_path
-    assert not is_a_folder(original_path) or is_symbolic_link(original_path), "Can't create a hardlink to a folder, only to files: " + original_path
     assert not path_exists(hardlink_path), "Can't create hardlink at %s because a file already exists there!" % hardlink_path
-    
-    import os
-    os.link(original_path, hardlink_path)
-    
+
+    original_is_folder = is_a_folder(original_path)
+    make_parent_folder(hardlink_path)
+    if recursive and original_is_folder:
+        assert currently_running_unix(), 'Recursive hardlinks not implemented in rp for windows yet'    
+        command = 'cp -al '+shlex.quote(original_path)+' '+shlex.quote(hardlink_path)
+        result = os.system(command)
+        if result:
+            raise RuntimeError("Error with command: "+command)
+        return hardlink_path
+    else:
+        assert not original_is_folder or is_symbolic_link(original_path), "Can't create a hardlink to a folder, only to files: " + original_path
+        os.link(original_path, hardlink_path)
+        
     return hardlink_path
 
 def replace_symlink_with_hardlink(symlink_path):
@@ -15949,16 +16016,16 @@ def is_symbolic_link(path:str):
 
 is_symlink=is_symbolic_link
 
-def symlink_move(from_path,to_path):
+def symlink_move(from_path,to_path,*,relative=False):
     """
     Move a file or folder, but leave a symlink behind so that programs that try to access the original file aren't affected
     """
     from_path=get_absolute_path(from_path)
     to_path=get_absolute_path(to_path)
 
-    assert path_exists(from_path)
+    assert path_exists(from_path),from_path
     to_path=move_path(from_path,to_path)
-    make_symlink(from_path,to_path)
+    make_symlink(from_path,to_path,relative=relative)
     return to_path
 
 def _guess_mimetype(file_path)->str:
@@ -17009,7 +17076,7 @@ def _convert_powerpoint_file(path,message=None):
 
 
 def _write_default_gitignore():
-    types_to_ignore='pyc swo swp swn un~ DS_Store'.split()
+    types_to_ignore='pyc swo swp swn swm un~ gstmp ipynb_checkpoints DS_Store'.split()
     types_to_ignore=['*.'+x for x in types_to_ignore]
 
     new_lines = (
@@ -17924,6 +17991,9 @@ def pseudo_terminal(
 
         WPI    decode_image_from_bytes(web_paste())
 
+        DI $display_image(ans) if $is_image(ans) else $display_video(ans)
+        DV $display_video(ans)
+        DVL $display_video(ans,loop=True)
 
         A ACATA
         AA ACATA
@@ -18019,6 +18089,8 @@ def pseudo_terminal(
         GPP $get_path_parent(ans)
         GFN $get_file_name(ans) if isinstance(ans,str) else $get_file_names(ans)
         GPN $get_path_name(ans)
+        SFE $strip_file_extension(ans) if isinstance(ans,str) else $strip_file_extensions(ans)
+        GFE $get_file_extension(ans) if isinstance(ans,str) else $get_file_extensions(ans)
 
 
         # GO GC
@@ -18329,7 +18401,7 @@ def pseudo_terminal(
 
         NL $fansi_print('Number of lines in ans: %i'%$number_of_lines(ans), 'yellow')
 
-        ZG !lazygit
+        ZG $r._install_lazygit();$os.system('lazygit')
         UNCOMMIT !git reset --soft HEAD^
 
         # ZGA $os.system('cd '+ans'+' && lazygit') #NOT Ready yet - CDA's logic is more complex and can handle funcs and modules, this could only handle strings...
@@ -23136,140 +23208,144 @@ def cv_manually_selected_contour(contours,image=None):
 def cosine_similarity(x,y):
     return np.sum(normalized(x)*normalized(y).conj())
 
-# def fourier_descriptor(contour,*,order=10,normalize=True):
-#     # import pyefd
-#     # contour=np.asarray(contour).squeeze()
-#     # descriptor=pyefd.elliptic_fourier_descriptors(contour, order=order, normalize=normalize).flatten()[3 if normalize else 0:]
-#     # # descriptor/=np.arange(len(descriptor))+1#Make higher harmonics worth less
-#     # return descriptor
-#     def complex_descriptors(points,approach='mean'):
-#         assert approach in 'mean','delta'#Try both of these and see which is better
-#         #TODO: How do we ensure all of these points are clockwise?
-#         #TODO: Right now we just assume all of these points are clockwise...this function shouldn't need that assumption, though.
-#         #EXAMPLE: complex_descriptors([[1,1],[1,2],[2,2],[2,1]])  -> [[ 0.-1.j -0.-1.j -0.-1.j  0.-1.j]...]  #four points of a square  (... means there are just 4 duplicate elements with this value in the array)
-#         #EXAMPLE: complex_descriptors([[0,0],[0,1],[1,1],[1,0]])  -> [[ 0.-1.j -0.-1.j -0.-1.j  0.-1.j]...]  #translated down by 1
-#         #EXAMPLE: complex_descriptors([[0,1],[1,1],[1,0],[0,0]])  -> [[ 0.-1.j -0.-1.j -0.-1.j  0.-1.j]...]  #rotated 90 degrees (shifted order of points)
-#         #EXAMPLE: complex_descriptors([[0,2],[2,2],[2,0],[0,0]])  -> [[ 0.-1.j -0.-1.j -0.-1.j  0.-1.j]...]  #scaled up by 2
-#         #EXAMPLE: complex_descriptors([[1,2],[2,2],[2,0],[0,0]])  -> [[-0.5-1.j   0.2-0.4j  0. -2.j  -0. -1.j ]
-#         #                                                             [ 0. -2.j  -0. -1.j  -0.5-1.j   0.2-0.4j]
-#         #                                                             [-0. -1.j  -0.5-1.j   0.2-0.4j  0. -2.j ]
-#         #                                                             [ 0.2-0.4j  0. -2.j  -0. -1.j  -0.5-1.j ]]#Made it asymmetrical; so now we have four different possible shifts
-#         points=np.asarray(points,np.complex128)
-#         assert points.shape[1]==2
+def fourier_descriptor(contour,*,order=10,normalize=True):
+    # import pyefd
+    # contour=np.asarray(contour).squeeze()
+    # descriptor=pyefd.elliptic_fourier_descriptors(contour, order=order, normalize=normalize).flatten()[3 if normalize else 0:]
+    # # descriptor/=np.arange(len(descriptor))+1#Make higher harmonics worth less
+    # return descriptor
+    def complex_descriptors(points,approach='mean'):
+        assert approach in 'mean','delta'#Try both of these and see which is better
+        #TODO: How do we ensure all of these points are clockwise?
+        #TODO: Right now we just assume all of these points are clockwise...this function shouldn't need that assumption, though.
+        #EXAMPLE: complex_descriptors([[1,1],[1,2],[2,2],[2,1]])  -> [[ 0.-1.j -0.-1.j -0.-1.j  0.-1.j]...]  #four points of a square  (... means there are just 4 duplicate elements with this value in the array)
+        #EXAMPLE: complex_descriptors([[0,0],[0,1],[1,1],[1,0]])  -> [[ 0.-1.j -0.-1.j -0.-1.j  0.-1.j]...]  #translated down by 1
+        #EXAMPLE: complex_descriptors([[0,1],[1,1],[1,0],[0,0]])  -> [[ 0.-1.j -0.-1.j -0.-1.j  0.-1.j]...]  #rotated 90 degrees (shifted order of points)
+        #EXAMPLE: complex_descriptors([[0,2],[2,2],[2,0],[0,0]])  -> [[ 0.-1.j -0.-1.j -0.-1.j  0.-1.j]...]  #scaled up by 2
+        #EXAMPLE: complex_descriptors([[1,2],[2,2],[2,0],[0,0]])  -> [[-0.5-1.j   0.2-0.4j  0. -2.j  -0. -1.j ]
+        #                                                             [ 0. -2.j  -0. -1.j  -0.5-1.j   0.2-0.4j]
+        #                                                             [-0. -1.j  -0.5-1.j   0.2-0.4j  0. -2.j ]
+        #                                                             [ 0.2-0.4j  0. -2.j  -0. -1.j  -0.5-1.j ]]#Made it asymmetrical; so now we have four different possible shifts
+        points=np.asarray(points,np.complex128)
+        assert points.shape[1]==2
 
-#         #Make turn all the 2d points (x,y) into complex scalars x+yi (where i is the imaginary constant)
-#         points=points[:,0]+points[:,1]*1j
+        #Make turn all the 2d points (x,y) into complex scalars x+yi (where i is the imaginary constant)
+        points=points[:,0]+points[:,1]*1j
 
-#         #Right now we're still dealing with complex numbers...
+        #Right now we're still dealing with complex numbers...
 
-#         if approach=='delta':points=np.roll(points,-1)-points#Get raw difference points (position invariance)
-#         if approach=='mean' :points=points-np.mean(points,0) #Altenrative approach: Subtract the mean (position invariance)
-#         points=np.roll(points,-1)/points#Get rotation vectors required (both scale and rotation invariance)
-#         #Note that we do NOT have to explicitly normalize any vectors to obtain scale invariance. Division does that implicitly.
-#         return points
-#         #Return every possible shift for these points
-#         #return np.abs(np.fft.fft(points))
-#         #return all_rolls(points)
+        if approach=='delta':points=np.roll(points,-1)-points#Get raw difference points (position invariance)
+        if approach=='mean' :points=points-np.mean(points,0) #Altenrative approach: Subtract the mean (position invariance)
+        points=np.roll(points,-1)/points#Get rotation vectors required (both scale and rotation invariance)
+        #Note that we do NOT have to explicitly normalize any vectors to obtain scale invariance. Division does that implicitly.
+        return points
+        #Return every possible shift for these points
+        #return np.abs(np.fft.fft(points))
+        #return all_rolls(points)
 
-#     #If normalize, invariant to scale, rotation, and position
-#     #Notes: this seems to be invariant to subdivision (taking one edge and breaking it into two while keeping the same shape)
-#     #   fourier_descriptor([[0,0],[0,1],[1,1],[1,0]])  ====  fourier_descriptor([[0,0],[0,1],[1,1],[1,.5],[1,0]])  (They're exactly equal on almost all of the elements of the result, barring two of the descriptors' floating point errors)
-#     #   Therefore it is probably safe to decimate a contour first if speed is important.
-#     return np.abs(np.fft.fft(complex_descriptors(evenly_split_path(np.squeeze(contour),250))))[:20]
+    #If normalize, invariant to scale, rotation, and position
+    #Notes: this seems to be invariant to subdivision (taking one edge and breaking it into two while keeping the same shape)
+    #   fourier_descriptor([[0,0],[0,1],[1,1],[1,0]])  ====  fourier_descriptor([[0,0],[0,1],[1,1],[1,.5],[1,0]])  (They're exactly equal on almost all of the elements of the result, barring two of the descriptors' floating point errors)
+    #   Therefore it is probably safe to decimate a contour first if speed is important.
+    return np.abs(np.fft.fft(complex_descriptors(evenly_split_path(np.squeeze(contour),250))))[:20]
 
-# def fourier_descriptor_distance(contour_1,contour_2,**fourier_descriptor_kwargs):
-#     #For guidance on how to use fourier_descriptor_kwargs, see the kwargs of fourier_descriptor
-#     return euclidean_distance(fourier_descriptor(contour_1,**fourier_descriptor_kwargs),
-#                               fourier_descriptor(contour_2,**fourier_descriptor_kwargs))
+def fourier_descriptor_distance(contour_1,contour_2,**fourier_descriptor_kwargs):
+    """
+    For guidance on how to use fourier_descriptor_kwargs, see the kwargs of fourier_descriptor
+    """
+    return euclidean_distance(fourier_descriptor(contour_1,**fourier_descriptor_kwargs),
+                              fourier_descriptor(contour_2,**fourier_descriptor_kwargs))
 
-# def fourier_descriptor_similarity(contour_1,contour_2,**fourier_descriptor_kwargs):
-#     #For guidance on how to use fourier_descriptor_kwargs, see the kwargs of fourier_descriptor
-#     normalized_dot_product(fourier_descriptor(contour_1,**fourier_descriptor_kwargs),
-#                                   fourier_descriptor(contour_2,**fourier_descriptor_kwargs))
-#     return normalized_dot_product(fourier_descriptor(contour_1,**fourier_descriptor_kwargs),
-#                                   fourier_descriptor(contour_2,**fourier_descriptor_kwargs))
+def fourier_descriptor_similarity(contour_1,contour_2,**fourier_descriptor_kwargs):
+    """
+    For guidance on how to use fourier_descriptor_kwargs, see the kwargs of fourier_descriptor
+    """
+    normalized_dot_product(fourier_descriptor(contour_1,**fourier_descriptor_kwargs),
+                                  fourier_descriptor(contour_2,**fourier_descriptor_kwargs))
+    return normalized_dot_product(fourier_descriptor(contour_1,**fourier_descriptor_kwargs),
+                                  fourier_descriptor(contour_2,**fourier_descriptor_kwargs))
 
-# def cv_contour_match(a,b,scale_invariant=False):
+def cv_contour_match(a,b,scale_invariant=False):
 
-#     def conv_circ( signal, kernel ):
-#         '''
-#             signal: real 1D array
-#             kernel: real 1D array
-#             signal and kernel must have same shape/length
-#         '''
-#         return np.fft.ifft(np.fft.fft(signal)*np.fft.fft(kernel))
+    def conv_circ( signal, kernel ):
+        '''
+            signal: real 1D array
+            kernel: real 1D array
+            signal and kernel must have same shape/length
+        '''
+        return np.fft.ifft(np.fft.fft(signal)*np.fft.fft(kernel))
 
-#     def complex_descriptor(points,approach='mean'):
-#         assert approach in 'mean','delta'#Try both of these and see which is better
-#         #TODO: How do we ensure all of these points are clockwise?
-#         #TODO: Right now we just assume all of these points are clockwise...this function shouldn't need that assumption, though.
-#         #EXAMPLE: complex_descriptors([[1,1],[1,2],[2,2],[2,1]])  -> [[ 0.-1.j -0.-1.j -0.-1.j  0.-1.j]...]  #four points of a square  (... means there are just 4 duplicate elements with this value in the array)
-#         #EXAMPLE: complex_descriptors([[0,0],[0,1],[1,1],[1,0]])  -> [[ 0.-1.j -0.-1.j -0.-1.j  0.-1.j]...]  #translated down by 1
-#         #EXAMPLE: complex_descriptors([[0,1],[1,1],[1,0],[0,0]])  -> [[ 0.-1.j -0.-1.j -0.-1.j  0.-1.j]...]  #rotated 90 degrees (shifted order of points)
-#         #EXAMPLE: complex_descriptors([[0,2],[2,2],[2,0],[0,0]])  -> [[ 0.-1.j -0.-1.j -0.-1.j  0.-1.j]...]  #scaled up by 2
-#         #EXAMPLE: complex_descriptors([[1,2],[2,2],[2,0],[0,0]])  -> [[-0.5-1.j   0.2-0.4j  0. -2.j  -0. -1.j ]
-#         #                                                             [ 0. -2.j  -0. -1.j  -0.5-1.j   0.2-0.4j]
-#         #                                                             [-0. -1.j  -0.5-1.j   0.2-0.4j  0. -2.j ]
-#         #                                                             [ 0.2-0.4j  0. -2.j  -0. -1.j  -0.5-1.j ]]#Made it asymmetrical; so now we have four different possible shifts
-#         points=np.asarray(points,np.complex128)
-#         assert points.shape[1]==2
+    def complex_descriptor(points,approach='mean'):
+        assert approach in 'mean','delta'#Try both of these and see which is better
+        #TODO: How do we ensure all of these points are clockwise?
+        #TODO: Right now we just assume all of these points are clockwise...this function shouldn't need that assumption, though.
+        #EXAMPLE: complex_descriptors([[1,1],[1,2],[2,2],[2,1]])  -> [[ 0.-1.j -0.-1.j -0.-1.j  0.-1.j]...]  #four points of a square  (... means there are just 4 duplicate elements with this value in the array)
+        #EXAMPLE: complex_descriptors([[0,0],[0,1],[1,1],[1,0]])  -> [[ 0.-1.j -0.-1.j -0.-1.j  0.-1.j]...]  #translated down by 1
+        #EXAMPLE: complex_descriptors([[0,1],[1,1],[1,0],[0,0]])  -> [[ 0.-1.j -0.-1.j -0.-1.j  0.-1.j]...]  #rotated 90 degrees (shifted order of points)
+        #EXAMPLE: complex_descriptors([[0,2],[2,2],[2,0],[0,0]])  -> [[ 0.-1.j -0.-1.j -0.-1.j  0.-1.j]...]  #scaled up by 2
+        #EXAMPLE: complex_descriptors([[1,2],[2,2],[2,0],[0,0]])  -> [[-0.5-1.j   0.2-0.4j  0. -2.j  -0. -1.j ]
+        #                                                             [ 0. -2.j  -0. -1.j  -0.5-1.j   0.2-0.4j]
+        #                                                             [-0. -1.j  -0.5-1.j   0.2-0.4j  0. -2.j ]
+        #                                                             [ 0.2-0.4j  0. -2.j  -0. -1.j  -0.5-1.j ]]#Made it asymmetrical; so now we have four different possible shifts
+        points=np.asarray(points,np.complex128)
+        assert points.shape[1]==2
 
-#         #Make turn all the 2d points (x,y) into complex scalars x+yi (where i is the imaginary constant)
-#         points=points[:,0]+points[:,1]*1j
+        #Make turn all the 2d points (x,y) into complex scalars x+yi (where i is the imaginary constant)
+        points=points[:,0]+points[:,1]*1j
 
-#         #Right now we're still dealing with complex numbers...
+        #Right now we're still dealing with complex numbers...
 
-#         if approach=='delta':points=np.roll(points,-1)-points#Get raw difference points (position invariance)
-#         if approach=='mean' :points=points-np.mean(points,0) #Altenrative approach: Subtract the mean (position invariance)
-#         points=np.roll(points,-1)/points#Get rotation vectors required (both scale and rotation invariance)
-#         #Note that we do NOT have to explicitly normalize any vectors to obtain scale invariance. Division does that implicitly.
+        if approach=='delta':points=np.roll(points,-1)-points#Get raw difference points (position invariance)
+        if approach=='mean' :points=points-np.mean(points,0) #Altenrative approach: Subtract the mean (position invariance)
+        points=np.roll(points,-1)/points#Get rotation vectors required (both scale and rotation invariance)
+        #Note that we do NOT have to explicitly normalize any vectors to obtain scale invariance. Division does that implicitly.
 
-#         return points
+        return points
 
-#     def ryan_match(from_points,to_points):
-#         df=complex_descriptor(from_points)#Descriptor from
-#         dt=complex_descriptor(  to_points)#Descriptor to
-#         df=df/np.linalg.norm(df)
-#         dt=dt/np.linalg.norm(dt)
-#         c=conv_circ(df,np.conjugate(dt[::-1]))#This is just a hunch...I dont completely understand what Im doing yet
-#         c=c.real
-#         return 1-max(c)
+    def ryan_match(from_points,to_points):
+        df=complex_descriptor(from_points)#Descriptor from
+        dt=complex_descriptor(  to_points)#Descriptor to
+        df=df/np.linalg.norm(df)
+        dt=dt/np.linalg.norm(dt)
+        c=conv_circ(df,np.conjugate(dt[::-1]))#This is just a hunch...I dont completely understand what Im doing yet
+        c=c.real
+        return 1-max(c)
 
 
-#     return ryan_match(a.squeeze(),b.squeeze())
+    return ryan_match(a.squeeze(),b.squeeze())
 
-#     #QUICK HACK GET RID OF THIS
-#     #Compare two contours: a and b. Returns a float.
-#     #The closer the output is to 0, the better the match between a and b.
-#     #This is invariant to rotation, scale, and translation (it uses hu moments to compare contours)
-#     #https://docs.opencv.org/3.1.0/d5/d45/tutorial_py_contours_more_functions.html
-#     cv2=pip_import('cv2')
-#     # out=cv2.matchShapes(a,b,1,0.0)
-#     n=lambda x:x/np.linalg.norm(x)
-#     hu=lambda contour:cv2.HuMoments(cv2.moments(contour))
-#     da=[*n(fourier_descriptor(a))*1]#,*n(hu(a))]#descriptor a
-#     db=[*n(fourier_descriptor(b))*1]#,*n(hu(b))]#descriptor b
-#     return 1-np.dot(da,db)
-#     if not scale_invariant:
-#         #There should be some way to make the hu moments simply not be invariant to scale, but I don't know how to do this
-#         #TODO: Do that ^
-#         #This doesn't seem to have much effect...and I think that's OK for now...
-#         #TODO: Clean this function up...in particular, right here:
-#         #For now, we'll just add the contour length to the output
-#         out*=np.exp((np.log(cv_contour_length(a)+1)-np.log(cv_contour_length(b)+1))**2)
-#         out*=np.exp((np.log(cv_contour_area  (a)+1)-np.log(cv_contour_area  (b)+1))**2)
-#         pass
-#     # out+=cv2.createHausdorffDistanceExtractor().computeDistance(a,b)
-#     return out
-# def cv_best_match_contour(contour,contours,**kwargs):
-#     #Given a target contour and a list of contours, return the closest match to contour among contours
-#     #(Intended to be used to search for a contour in an image)
-#     assert is_iterable(contours)
-#     return min(contours,key=lambda candidate:cv_contour_match(contour,candidate,**kwargs))
-# def cv_best_match_contours(contour,contours,n=None,**kwargs):
-#     #Return the n best matches to contour in contours
-#     assert is_iterable(contours)
-#     return sorted(contours,key=lambda candidate:cv_contour_match(contour,candidate,**kwargs))[:n or len(contours)]
+    #QUICK HACK GET RID OF THIS
+    #Compare two contours: a and b. Returns a float.
+    #The closer the output is to 0, the better the match between a and b.
+    #This is invariant to rotation, scale, and translation (it uses hu moments to compare contours)
+    #https://docs.opencv.org/3.1.0/d5/d45/tutorial_py_contours_more_functions.html
+    cv2=pip_import('cv2')
+    # out=cv2.matchShapes(a,b,1,0.0)
+    n=lambda x:x/np.linalg.norm(x)
+    hu=lambda contour:cv2.HuMoments(cv2.moments(contour))
+    da=[*n(fourier_descriptor(a))*1]#,*n(hu(a))]#descriptor a
+    db=[*n(fourier_descriptor(b))*1]#,*n(hu(b))]#descriptor b
+    return 1-np.dot(da,db)
+    if not scale_invariant:
+        #There should be some way to make the hu moments simply not be invariant to scale, but I don't know how to do this
+        #TODO: Do that ^
+        #This doesn't seem to have much effect...and I think that's OK for now...
+        #TODO: Clean this function up...in particular, right here:
+        #For now, we'll just add the contour length to the output
+        out*=np.exp((np.log(cv_contour_length(a)+1)-np.log(cv_contour_length(b)+1))**2)
+        out*=np.exp((np.log(cv_contour_area  (a)+1)-np.log(cv_contour_area  (b)+1))**2)
+        pass
+    # out+=cv2.createHausdorffDistanceExtractor().computeDistance(a,b)
+    return out
+def cv_best_match_contour(contour,contours,**kwargs):
+    #Given a target contour and a list of contours, return the closest match to contour among contours
+    #(Intended to be used to search for a contour in an image)
+    assert is_iterable(contours)
+    return min(contours,key=lambda candidate:cv_contour_match(contour,candidate,**kwargs))
+def cv_best_match_contours(contour,contours,n=None,**kwargs):
+    #Return the n best matches to contour in contours
+    assert is_iterable(contours)
+    return sorted(contours,key=lambda candidate:cv_contour_match(contour,candidate,**kwargs))[:n or len(contours)]
 
 def _cv_morphological_helper(image,diameter,cv_method,*,copy,circular,iterations):
     """
@@ -23293,10 +23369,12 @@ def _cv_morphological_helper(image,diameter,cv_method,*,copy,circular,iterations
             image  = cv_method(image,kernel,iterations=iterations)
     if original_dtype==bool:image=as_binary_image(image)
     return image
+
 def cv_erode (image,diameter=2,*,copy=True,circular=False,iterations=1):
     #TODO min_filter is now kinda redundant, and slower if you dont have opencv. What to do about that?
     cv2=pip_import('cv2')
     return _cv_morphological_helper(image,diameter,cv_method=cv2.erode ,copy=copy,circular=circular,iterations=iterations)
+
 def cv_dilate(image,diameter=2,*,copy=True,circular=False,iterations=1):
     """
     Dilates image with a box kernel. Runs very quickly because it takes two orthoganal 1-d passes.
@@ -25781,10 +25859,37 @@ def download_font(url):
     make_directory(_download_font_dir)
     return download_url(url, _download_font_dir, skip_existing=True)
 
-def download_google_fonts(*font_names,skip_existing=True):
-    """ See download_google_font's docstring. This is it's plural form. """
-    font_names=detuple(font_names)
-    return [download_google_font(font_name,skip_existing=skip_existing) for font_name in font_names]
+def download_fonts(
+    *font_names,
+    skip_existing=True,
+    show_progress=False,
+    strict=True,
+    num_threads=None,
+    lazy=False
+):
+    """See download_google_font's docstring. This is it's plural form."""
+    font_names = detuple(font_names)
+    return gather_args_call(
+        load_files,
+        lambda font_name: download_font(font_name, skip_existing=skip_existing),
+        font_names,
+    )
+
+def download_google_fonts(
+    *font_names,
+    skip_existing=True,
+    show_progress=False,
+    strict=True,
+    num_threads=None,
+    lazy=False
+):
+    """See download_google_font's docstring. This is it's plural form."""
+    font_names = detuple(font_names)
+    return gather_args_call(
+        load_files,
+        lambda font_name: download_google_font(font_name, skip_existing=skip_existing),
+        font_names,
+    )
 
 def get_downloaded_fonts():
     """ Returns a list of font files downloaded by rp """
@@ -25800,6 +25905,125 @@ def get_downloaded_fonts():
         except FileNotFoundError:
             return []
     return get(_fonts_download_folder) + get(_google_fonts_download_folder)
+
+
+#All Google fonts I'm aware of - this is NOT exhaustive! It keeps changing! See https://fonts.google.com
+_all_google_fonts=[
+    '42dot Sans', 'ABeeZee', 'ADLaM Display', 'AR One Sans', 'Abel', 'Abhaya Libre', 'Aboreto', 'Abril Fatface', 'Actor', 'Adamina', 'Advent Pro', 'Afacad Flux', 'Agbalumo', 'Agdasima', 'Agu Display',
+    'Aguafina Script', 'Akatab', 'Akaya Telivigala', 'Akshar', 'Aladin', 'Alata', 'Alatsi', 'Albert Sans', 'Alef', 'Alegreya', 'Alegreya SC', 'Alegreya Sans', 'Alegreya Sans SC', 'Aleo', 'Alex Brush', 'Alexandria',
+    'Alfa Slab One', 'Alice', 'Alike Angular', 'Alkalami', 'Alkatra', 'Allerta Stencil', 'Allura', 'Almarai', 'Almendra', 'Almendra Display', 'Almendra SC', 'Alumni Sans Collegiate One', 'Alumni Sans Inline One',
+    'Alumni Sans Pinstripe', 'Amarante', 'Amaranth', 'Amethysta', 'Amiri', 'Amiri Quran', 'Amita', 'Anaheim', 'Andika', 'Anek Bangla', 'Anek Devanagari', 'Anek Gujarati', 'Anek Gurmukhi', 'Anek Kannada',
+    'Anek Latin', 'Anek Malayalam', 'Anek Odia', 'Anek Tamil', 'Anek Telugu', 'Angkor', 'Annapurna SIL', 'Annie Use Your Telescope', 'Anonymous Pro', 'Anta', 'Antic', 'Antic Didone', 'Antic Slab', 'Anton', 'Anton SC',
+    'Antonio', 'Anybody', 'Aoboshi One', 'Arapey', 'Arbutus', 'Arbutus Slab', 'Architects Daughter', 'Archivo', 'Archivo Black', 'Archivo Narrow', 'Aref Ruqaa', 'Arima', 'Arimo', 'Arizonia', 'Arsenal', 'Artifika', 'Arvo',
+    'Arya', 'Asap', 'Asap Condensed', 'Asar', 'Asset', 'Assistant', 'Astloch', 'Asul', 'Athiti', 'Atkinson Hyperlegible', 'Atkinson Hyperlegible Mono', 'Atkinson Hyperlegible Next', 'Atma', 'Atomic Age', 'Audiowide',
+    'Autour One', 'Average', 'Average Sans', 'Averia Gruesa Libre', 'Averia Libre', 'Averia Serif Libre', 'Azeret Mono', 'B612', 'B612 Mono', 'BIZ UDGothic', 'BIZ UDMincho', 'BIZ UDPGothic', 'BIZ UDPMincho',
+    'Bacasime Antique', 'Bad Script', 'Badeen Display', 'Bagel Fat One', 'Bahiana', 'Bahianita', 'Bai Jamjuree', 'Bakbak One', 'Ballet', 'Baloo 2', 'Baloo Bhaijaan 2', 'Baloo Bhaina 2', 'Baloo Chettan 2', 'Baloo Da 2',
+    'Baloo Paaji 2', 'Baloo Tamma 2', 'Baloo Tammudu 2', 'Baloo Thambi 2', 'Balthazar', 'Bangers', 'Barlow', 'Barlow Condensed', 'Barlow Semi Condensed', 'Barriecito', 'Barrio', 'Baskervville',
+    'Baskervville SC', 'Battambang', 'Baumans', 'Bayon', 'Be Vietnam Pro', 'Beau Rivage', 'Bebas Neue', 'Beiruti', 'Belgrano', 'Bellefair', 'Belleza', 'Bellota', 'Bellota Text', 'BenchNine', 'Benne', 'Bentham',
+    'Berkshire Swash', 'Besley', 'Beth Ellen', 'Bevan', 'BhuTuka Expanded One', 'Big Shoulders Display', 'Big Shoulders Inline Display', 'Big Shoulders Inline Text', 'Big Shoulders Stencil Display',
+    'Big Shoulders Stencil Text', 'Bigelow Rules', 'Bigshot One', 'Bilbo', 'BioRhyme', 'BioRhyme Expanded', 'Birthstone', 'Birthstone Bounce', 'Biryani', 'Bitter', 'Black And White Picture', 'Black Han Sans', 'Blaka',
+    'Blaka Hollow', 'Blaka Ink', 'Bodoni Moda', 'Bodoni Moda SC', 'Bokor', 'Bona Nova', 'Bona Nova SC', 'Bonbon', 'Bonheur Royale', 'Boogaloo', 'Borel', 'Bowlby One', 'Braah One', 'Brawler', 'Bricolage Grotesque',
+    'Bruno Ace', 'Bruno Ace SC', 'Brygada 1918', 'Bubblegum Sans', 'Bubbler One', 'Bungee', 'Bungee Hairline', 'Bungee Inline', 'Bungee Outline', 'Bungee Shade', 'Bungee Spice', 'Bungee Tint',
+    'Butcherman', 'Butterfly Kids', 'Cabin', 'Cabin Condensed', 'Cactus Classical Serif', 'Caesar Dressing', 'Cagliostro', 'Cairo', 'Caladea', 'Calistoga', 'Calligraffitti', 'Candal', 'Cantarell',
+    'Cantata One', 'Cantora One', 'Capriola', 'Caramel', 'Carattere', 'Cardo', 'Carlito', 'Carrois Gothic SC', 'Carter One', 'Castoro', 'Catamaran', 'Caudex', 'Caveat', 'Caveat Brush', 'Cedarville Cursive', 'Chakra Petch',
+    'Changa', 'Changa One', 'Chango', 'Charis SIL', 'Charm', 'Charmonman', 'Chathura', 'Chela One', 'Chelsea Market', 'Chenla', 'Cherish', 'Cherry Bomb One', 'Cherry Cream Soda', 'Cherry Swash', 'Chicle',
+    'Chilanka', 'Chivo', 'Chivo Mono', 'Chocolate Classical Sans', 'Chokokutai', 'Cinzel', 'Cinzel Decorative', 'Clicker Script', 'Climate Crisis', 'Codystar', 'Coiny', 'Combo', 'Comfortaa', 'Comforter',
+    'Comforter Brush', 'Comic Neue', 'Comme', 'Commissioner', 'Concert One', 'Condiment', 'Content', 'Contrail One', 'Convergence', 'Cookie', 'Corben', 'Corinthia', 'Cormorant', 'Cormorant Infant', 'Cormorant Upright',
+    'Courgette', 'Courier Prime', 'Cousine', 'Coustard', 'Covered By Your Grace', 'Crafty Girls', 'Creepster', 'Crete Round', 'Crimson Pro', 'Crimson Text', 'Croissant One', 'Crushed', 'Cuprum',
+    'Cute Font', 'Cutive', 'DM Mono', 'DM Sans', 'DM Serif Display', 'DM Serif Text', 'Dai Banna SIL', 'Dancing Script', 'Danfo', 'Dangrek', 'Darumadrop One', 'David Libre', 'Days One', 'Dekko', 'Dela Gothic One',
+    'Delicious Handrawn', 'Delius Swash Caps', 'Delius Unicase', 'Della Respira', 'Devonshire', 'Dhurjati', 'Didact Gothic', 'Diphylleia', 'Diplomata', 'Diplomata SC', 'Do Hyeon', 'Dokdo', 'Domine', 'Donegal One',
+    'Doppio One', 'Dorsa', 'Dosis', 'Dr Sugiyama', 'DynaPuff', 'EB Garamond', 'Eater', 'Economica', 'Eczar', 'Edu NSW ACT Foundation', 'Edu QLD Beginner', 'Edu TAS Beginner', 'Edu VIC WA NT Beginner',
+    'El Messiri', 'Elsie', 'Elsie Swash Caps', 'Emblema One', 'Emilys Candy', 'Encode Sans', 'Encode Sans Condensed', 'Encode Sans Expanded', 'Encode Sans SC', 'Encode Sans Semi Condensed', 'Engagement', 'Englebert',
+    'Enriqueta', 'Ephesis', 'Epilogue', 'Erica One', 'Ewert', 'Exo', 'Expletus Sans', 'Explora', 'Faculty Glyphic', 'Familjen Grotesk', 'Fanwood Text', 'Farsan', 'Fascinate', 'Fascinate Inline', 'Fasthand',
+    'Fauna One', 'Faustina', 'Federant', 'Federo', 'Felipa', 'Fenix', 'Figtree', 'Fira Code', 'Fira Sans', 'Fira Sans Condensed', 'Fira Sans Extra Condensed', 'Fjord One', 'Flavors', 'Fleur De Leah',
+    'Flow Block', 'Flow Rounded', 'Foldit', 'Fondamento', 'Fontdiner Swanky', 'Forum', 'Fragment Mono', 'Francois One', 'Frank Ruhl Libre', 'Fraunces', 'Freckle Face', 'Fredericka the Great', 'Fredoka', 'Freeman', 'Frijole',
+    'Fruktur', 'Fugaz One', 'Fuggles', 'Funnel Display', 'Funnel Sans', 'Fustat', 'Fuzzy Bubbles', 'GFS Didot', 'GFS Neohellenic', 'Ga Maamli', 'Gabarito', 'Gabriela', 'Gaegu', 'Gafata', 'Gajraj One', 'Galada',
+    'Galindo', 'Gamja Flower', 'Gantari', 'Gasoek One', 'Gayathri', 'Geist', 'Geist Mono', 'Genos', 'Gentium Book Plus', 'Gentium Plus', 'Geo', 'Geologica', 'Georama', 'Geostar', 'Geostar Fill', 'Germania One',
+    'Gideon Roman', 'Gidugu', 'Girassol', 'Give You Glory', 'Glass Antiqua', 'Glegoo', 'Gloria Hallelujah', 'Glory', 'Gluten', 'Goblin One', 'Goldman', 'Golos Text', 'Gorditas', 'Gothic A1', 'Gowun Batang', 'Gowun Dodum',
+    'Grandiflora One', 'Grape Nuts', 'Gravitas One', 'Grechen Fuemen', 'Grenze', 'Grenze Gotisch', 'Grey Qo', 'Griffy', 'Gruppo', 'Gudea', 'Gugi', 'Gulzar', 'Gupter', 'Gurajada', 'Gwendolyn', 'Habibi', 'Hachi Maru Pop',
+    'Hahmlet', 'Hammersmith One', 'Hanalei', 'Hanalei Fill', 'Handjet', 'Handlee', 'Hanken Grotesk', 'Hanuman', 'Happy Monkey', 'Harmattan', 'Headland One', 'Hedvig Letters Sans', 'Hedvig Letters Serif', 'Heebo',
+    'Herr Von Muellerhoff', 'Hina Mincho', 'Hind', 'Hind Guntur', 'Hind Siliguri', 'Hind Vadodara', 'Holtwood One SC', 'Homemade Apple', 'Homenaje', 'Honk', 'Host Grotesk', 'Hubballi', 'Hurricane',
+    'IBM Plex Mono', 'IBM Plex Sans', 'IBM Plex Sans Arabic', 'IBM Plex Sans Condensed', 'IBM Plex Sans Devanagari', 'IBM Plex Sans Hebrew', 'IBM Plex Sans JP', 'IBM Plex Sans KR',
+    'IBM Plex Sans Thai', 'IBM Plex Sans Thai Looped', 'IBM Plex Serif', 'IM Fell DW Pica', 'IM Fell DW Pica SC', 'IM Fell Double Pica', 'IM Fell Double Pica SC', 'IM Fell English SC', 'IM Fell French Canon',
+    'IM Fell French Canon SC', 'IM Fell Great Primer', 'IM Fell Great Primer SC', 'Ibarra Real Nova', 'Iceland', 'Imperial Script', 'Imprima', 'Inclusive Sans', 'Inconsolata', 'Inder',
+    'Indie Flower', 'Ingrid Darling', 'Inika', 'Inknut Antiqua', 'Inria Sans', 'Inria Serif', 'Inspiration', 'Instrument Sans', 'Inter', 'Inter Tight', 'Irish Grover', 'Island Moments', 'Istok Web', 'Italianno', 'Itim',
+    'Jacquard 12', 'Jacquard 12 Charted', 'Jacquard 24 Charted', 'Jacquarda Bastarda 9', 'Jacquarda Bastarda 9 Charted', 'Jacques Francois Shadow', 'Jaini', 'Jaini Purva', 'Jaro', 'Jersey 10',
+    'Jersey 10 Charted', 'Jersey 15', 'Jersey 15 Charted', 'Jersey 20', 'Jersey 25', 'Jersey 25 Charted', 'JetBrains Mono', 'Jim Nightshade', 'Joan', 'Jolly Lodger', 'Jomhuria', 'Jomolhari', 'Josefin Sans',
+    'Josefin Slab', 'Jost', 'Jua', 'Judson', 'Julee', 'Julius Sans One', 'Junge', 'Jura', 'Just Another Hand', 'Just Me Again Down Here', 'Kablammo', 'Kaisei Decol', 'Kaisei HarunoUmi', 'Kaisei Opti', 'Kalam',
+    'Kalnia', 'Kalnia Glaze', 'Kameron', 'Kanit', 'Karantina', 'Karla', 'Karla Tamil Inclined', 'Karla Tamil Upright', 'Katibeh', 'Kaushan Script', 'Kavoon', 'Kdam Thmor Pro', 'Keania One', 'Kelly Slab', 'Kenia', 'Khand',
+    'Khmer', 'Khula', 'Kings', 'Kirang Haerang', 'Kite One', 'Kiwi Maru', 'Knewave', 'Kodchasan', 'Kode Mono', 'Koh Santepheap', 'Kolker Brush', 'Konkhmer Sleokchher', 'Kosugi', 'Kosugi Maru', 'Koulen', 'Kreon',
+    'Kristi', 'Krona One', 'Krub', 'Kulim Park', 'Kumar One', 'Kumar One Outline', 'Kumbh Sans', 'Kurale', 'LXGW WenKai Mono TC', 'LXGW WenKai TC', 'La Belle Aurore', 'Labrada', 'Lacquer', 'Laila',
+    'Lalezar', 'Lancelot', 'Langar', 'Lateef', 'Lato', 'Lavishly Yours', 'League Spartan', 'Ledger', 'Lekton', 'Lemon', 'Lexend', 'Lexend Deca', 'Lexend Exa', 'Lexend Mega', 'Lexend Peta', 'Lexend Tera', 'Lexend Zetta',
+    'Libre Barcode 128', 'Libre Barcode 128 Text', 'Libre Barcode 39', 'Libre Barcode 39 Extended', 'Libre Barcode 39 Extended Text', 'Libre Barcode 39 Text', 'Libre Barcode EAN13 Text', 'Libre Baskerville',
+    'Libre Bodoni', 'Libre Caslon Display', 'Libre Caslon Text', 'Libre Franklin', 'Licorice', 'Life Savers', 'Lilita One', 'Lily Script One', 'Limelight', 'Linden Hill', 'Linefont', 'Lisu Bosa',
+    'Liter', 'Literata', 'Liu Jian Mao Cao', 'Livvic', 'Lobster', 'Lobster Two', 'Londrina Outline', 'Londrina Shadow', 'Londrina Solid', 'Long Cang', 'Lora', 'Love Light', 'Love Ya Like A Sister',
+    'Loved by the King', 'Lovers Quarrel', 'Luckiest Guy', 'Lugrasimo', 'Lunasima', 'Lustria', 'Luxurious Roman', 'Luxurious Script', 'M PLUS 1', 'M PLUS 1 Code', 'M PLUS 1p', 'M PLUS 2', 'M PLUS Rounded 1c', 'Macondo',
+    'Macondo Swash Caps', 'Mada', 'Madimi One', 'Maiden Orange', 'Maitree', 'Mako', 'Mali', 'Mallanna', 'Maname', 'Mandali', 'Manjari', 'Manrope', 'Mansalva', 'Manuale', 'Marcellus', 'Marcellus SC', 'Marck Script',
+    'Margarine', 'Markazi Text', 'Marmelad', 'Martel', 'Martel Sans', 'Martian Mono', 'Marvel', 'Mate', 'Matemasie', 'Maven Pro', 'McLaren', 'Mea Culpa', 'Meddon', 'MedievalSharp', 'Medula One', 'Meera Inimai',
+    'Megrim', 'Meie Script', 'Merienda', 'Merriweather', 'Merriweather Sans', 'Metal', 'Metal Mania', 'Metamorphous', 'Metrophobic', 'Michroma', 'Micro 5', 'Micro 5 Charted', 'Milonga', 'Miltonian', 'Miltonian Tattoo',
+    'Mina', 'Mingzat', 'Miniver', 'Miriam Libre', 'Mirza', 'Miss Fajardose', 'Mochiy Pop P One', 'Modak', 'Modern Antiqua', 'Moderustic', 'Mogra', 'Mohave', 'Moirai One', 'Molengo', 'Mona Sans', 'Monda', 'Monofett',
+    'Monomakh', 'Monomaniac One', 'Monoton', 'Montaga', 'Montagu Slab', 'MonteCarlo', 'Montserrat', 'Montserrat Alternates', 'Montserrat Subrayada', 'Montserrat Underline', 'Moo Lah Lah', 'Mooli',
+    'Moul', 'Moulpali', 'Mountains of Christmas', 'Mr Bedfort', 'Mr Dafoe', 'Mrs Saint Delafield', 'Mrs Sheppards', 'Mukta', 'Mukta Mahee', 'Mukta Vaani', 'Mulish', 'Murecho', 'MuseoModerno', 'My Soul', 'Mynerve',
+    'Mystery Quest', 'NTR', 'Nabla', 'Namdhinggo', 'Nanum Brush Script', 'Nanum Gothic', 'Nanum Gothic Coding', 'Nanum Myeongjo', 'Nanum Pen Script', 'Narnoor', 'Neonderthaw', 'Nerko One', 'Neucha',
+    'Neuton', 'New Rocker', 'New Tegomin', 'News Cycle', 'Niconne', 'Niramit', 'Nixie One', 'Nokora', 'Norican', 'Nosifer', 'Notable', 'Nothing You Could Do', 'Noticia Text', 'Noto Color Emoji', 'Noto Emoji',
+    'Noto Music', 'Noto Rashi Hebrew', 'Noto Sans', 'Noto Sans Adlam', 'Noto Sans Adlam Unjoined', 'Noto Sans Anatolian Hieroglyphs', 'Noto Sans Arabic', 'Noto Sans Armenian', 'Noto Sans Balinese',
+    'Noto Sans Bamum', 'Noto Sans Bassa Vah', 'Noto Sans Batak', 'Noto Sans Bengali', 'Noto Sans Bhaiksuki', 'Noto Sans Brahmi', 'Noto Sans Buginese', 'Noto Sans Buhid', 'Noto Sans Canadian Aboriginal',
+    'Noto Sans Carian', 'Noto Sans Cham', 'Noto Sans Coptic', 'Noto Sans Cuneiform', 'Noto Sans Cypriot', 'Noto Sans Cypro Minoan', 'Noto Sans Devanagari', 'Noto Sans Display', 'Noto Sans Duployan',
+    'Noto Sans Elbasan', 'Noto Sans Elymaic', 'Noto Sans Ethiopic', 'Noto Sans Georgian', 'Noto Sans Glagolitic', 'Noto Sans Gothic', 'Noto Sans Gujarati', 'Noto Sans Gunjala Gondi', 'Noto Sans Gurmukhi',
+    'Noto Sans Hanifi Rohingya', 'Noto Sans Hanunoo', 'Noto Sans Hatran', 'Noto Sans Hebrew', 'Noto Sans Imperial Aramaic', 'Noto Sans Inscriptional Pahlavi', 'Noto Sans Inscriptional Parthian',
+    'Noto Sans Javanese', 'Noto Sans Kaithi', 'Noto Sans Kawi', 'Noto Sans Kayah Li', 'Noto Sans Kharoshthi', 'Noto Sans Khojki', 'Noto Sans Khudawadi', 'Noto Sans Lao', 'Noto Sans Lao Looped',
+    'Noto Sans Limbu', 'Noto Sans Linear A', 'Noto Sans Linear B', 'Noto Sans Lisu', 'Noto Sans Lycian', 'Noto Sans Lydian', 'Noto Sans Mahajani', 'Noto Sans Malayalam', 'Noto Sans Mandaic',
+    'Noto Sans Manichaean', 'Noto Sans Marchen', 'Noto Sans Masaram Gondi', 'Noto Sans Math', 'Noto Sans Mayan Numerals', 'Noto Sans Medefaidrin', 'Noto Sans Mende Kikakui', 'Noto Sans Meroitic', 'Noto Sans Miao',
+    'Noto Sans Modi', 'Noto Sans Mono', 'Noto Sans Mro', 'Noto Sans Myanmar', 'Noto Sans Nabataean', 'Noto Sans Nag Mundari', 'Noto Sans Nandinagari', 'Noto Sans New Tai Lue', 'Noto Sans Newa', 'Noto Sans Ogham',
+    'Noto Sans Ol Chiki', 'Noto Sans Old Hungarian', 'Noto Sans Old Italic', 'Noto Sans Old North Arabian', 'Noto Sans Old Permic', 'Noto Sans Old Persian', 'Noto Sans Old Sogdian',
+    'Noto Sans Old South Arabian', 'Noto Sans Old Turkic', 'Noto Sans Osage', 'Noto Sans Osmanya', 'Noto Sans Pahawh Hmong', 'Noto Sans Palmyrene', 'Noto Sans Pau Cin Hau', 'Noto Sans Phoenician',
+    'Noto Sans Psalter Pahlavi', 'Noto Sans Runic', 'Noto Sans Saurashtra', 'Noto Sans Sharada', 'Noto Sans Shavian', 'Noto Sans Siddham', 'Noto Sans SignWriting', 'Noto Sans Sogdian', 'Noto Sans Sora Sompeng',
+    'Noto Sans Soyombo', 'Noto Sans Sundanese', 'Noto Sans Syloti Nagri', 'Noto Sans Symbols', 'Noto Sans Symbols 2', 'Noto Sans Syriac', 'Noto Sans Tagalog', 'Noto Sans Tagbanwa', 'Noto Sans Tai Le',
+    'Noto Sans Tai Tham', 'Noto Sans Tai Viet', 'Noto Sans Takri', 'Noto Sans Tamil', 'Noto Sans Tamil Supplement', 'Noto Sans Tangsa', 'Noto Sans Telugu', 'Noto Sans Thaana', 'Noto Sans Thai',
+    'Noto Sans Thai Looped', 'Noto Sans Tirhuta', 'Noto Sans Ugaritic', 'Noto Sans Vithkuqi', 'Noto Sans Wancho', 'Noto Sans Warang Citi', 'Noto Sans Yi', 'Noto Sans Zanabazar Square', 'Noto Serif',
+    'Noto Serif Ahom', 'Noto Serif Armenian', 'Noto Serif Balinese', 'Noto Serif Bengali', 'Noto Serif Devanagari', 'Noto Serif Display', 'Noto Serif Dogra', 'Noto Serif Ethiopic', 'Noto Serif Georgian',
+    'Noto Serif Grantha', 'Noto Serif Gurmukhi', 'Noto Serif Hebrew', 'Noto Serif Hentaigana', 'Noto Serif Khmer', 'Noto Serif Khojki', 'Noto Serif Lao', 'Noto Serif Malayalam', 'Noto Serif Myanmar',
+    'Noto Serif Nyiakeng Puachue Hmong', 'Noto Serif Old Uyghur', 'Noto Serif Ottoman Siyaq', 'Noto Serif Sinhala', 'Noto Serif Tamil', 'Noto Serif Tangut', 'Noto Serif Telugu', 'Noto Serif Thai',
+    'Noto Serif Tibetan', 'Noto Serif Todhri', 'Noto Serif Toto', 'Noto Serif Yezidi', 'Noto Znamenny Musical Notation', 'Nova Cut', 'Nova Flat', 'Nova Mono', 'Nova Oval', 'Nova Script', 'Nova Slim',
+    'Nunito', 'Nunito Sans', 'Nuosu SIL', 'Odibee Sans', 'Offside', 'Oi', 'Ojuju', 'Old Standard TT', 'Oldenburg', 'Oleo Script', 'Oleo Script Swash Caps', 'Onest', 'Open Sans', 'Oranienbaum', 'Orbit',
+    'Oregano', 'Orienta', 'Original Surfer', 'Oswald', 'Outfit', 'Overlock', 'Overlock SC', 'Overpass', 'Overpass Mono', 'Oxanium', 'Oxygen Mono', 'PT Sans', 'PT Sans Caption', 'PT Serif', 'PT Serif Caption', 'Pacifico',
+    'Padauk', 'Palanquin', 'Palanquin Dark', 'Palette Mosaic', 'Paprika', 'Parisienne', 'Parkinsans', 'Passero One', 'Passion One', 'Passions Conflict', 'Pathway Extreme', 'Pathway Gothic One',
+    'Patrick Hand', 'Patrick Hand SC', 'Pattaya', 'Patua One', 'Paytone One', 'Peralta', 'Permanent Marker', 'Petemoss', 'Petrona', 'Phetsarath', 'Philosopher', 'Phudu', 'Piazzolla', 'Piedra', 'Pirata One',
+    'Pixelify Sans', 'Plaster', 'Play', 'Playfair', 'Playfair Display', 'Playpen Sans', 'Pochaevsk', 'Podkova', 'Poetsen One', 'Poiret One', 'Poller One', 'Poly', 'Ponnala', 'Pontano Sans', 'Poor Story', 'Poppins',
+    'Port Lligat Sans', 'Port Lligat Slab', 'Potta One', 'Pragati Narrow', 'Praise', 'Prata', 'Preahvihear', 'Press Start 2P', 'Pridi', 'Princess Sofia', 'Prociono', 'Prompt', 'Prosto One', 'Protest Guerrilla',
+    'Protest Riot', 'Protest Strike', 'Proza Libre', 'Public Sans', 'Purple Purse', 'Qahiri', 'Quando', 'Quantico', 'Quattrocento', 'Quattrocento Sans', 'Questrial', 'Quicksand', 'Qwitcher Grypen', 'REM',
+    'Racing Sans One', 'Radio Canada', 'Rajdhani', 'Rakkas', 'Raleway', 'Ramabhadra', 'Ramaraja', 'Rambla', 'Rammetto One', 'Rampart One', 'Ranchers', 'Rancho', 'Ranga', 'Rasa', 'Rationale', 'Ravi Prakash',
+    'Recursive', 'Red Hat Display', 'Red Hat Text', 'Redacted', 'Redacted Script', 'Reddit Mono', 'Reddit Sans', 'Reddit Sans Condensed', 'Redressed', 'Reem Kufi', 'Reem Kufi Fun', 'Reem Kufi Ink', 'Reenie Beanie',
+    'Reggae One', 'Revalia', 'Rhodium Libre', 'Ribeye', 'Ribeye Marrow', 'Risque', 'Roboto Condensed', 'Roboto Mono', 'Roboto Serif', 'Roboto Slab', 'Rochester', 'Rock 3D', 'Rock Salt', 'RocknRoll One', 'Rokkitt',
+    'Romanesco', 'Ropa Sans', 'Rosario', 'Rosarivo', 'Rouge Script', 'Rowdies', 'Rozha One', 'Rubik', 'Rubik 80s Fade', 'Rubik Beastly', 'Rubik Broken Fax', 'Rubik Bubbles', 'Rubik Dirt', 'Rubik Distressed',
+    'Rubik Doodle Shadow', 'Rubik Doodle Triangles', 'Rubik Gemstones', 'Rubik Glitch', 'Rubik Glitch Pop', 'Rubik Iso', 'Rubik Lines', 'Rubik Maps', 'Rubik Marker Hatch', 'Rubik Microbe', 'Rubik Mono One',
+    'Rubik Moonrocks', 'Rubik Pixels', 'Rubik Puddles', 'Rubik Scribble', 'Rubik Spray Paint', 'Rubik Storm', 'Rubik Vinyl', 'Ruda', 'Rufina', 'Ruge Boogie', 'Ruluko', 'Ruslan Display', 'Russo One', 'Ruthie', 'Ruwudu',
+    'SUSE', 'Sacramento', 'Sahitya', 'Sail', 'Saira', 'Saira Semi Condensed', 'Saira Stencil One', 'Salsa', 'Sanchez', 'Sancreek', 'Sankofa Display', 'Sansita', 'Sansita Swashed', 'Sarabun', 'Sarala', 'Sarina', 'Sarpanch',
+    'Sassy Frass', 'Satisfy', 'Sawarabi Gothic', 'Sawarabi Mincho', 'Scheherazade New', 'Schibsted Grotesk', 'Scope One', 'Seaweed Script', 'Secular One', 'Sedan', 'Sedan SC', 'Sedgwick Ave', 'Sedgwick Ave Display',
+    'Sen', 'Send Flowers', 'Seymour One', 'Shadows Into Light', 'Shadows Into Light Two', 'Shalimar', 'Shantell Sans', 'Shanti', 'Share', 'Share Tech Mono', 'Shippori Antique', 'Shippori Antique B1',
+    'Shippori Mincho', 'Shippori Mincho B1', 'Shizuru', 'Shojumaru', 'Siemreap', 'Sigmar', 'Sigmar One', 'Signika', 'Signika Negative', 'Silkscreen', 'Simonetta', 'Single Day', 'Sirin Stencil', 'Six Caps',
+    'Sixtyfour Convergence', 'Skranji', 'Slabo 13px', 'Slabo 27px', 'Slackey', 'Slackside One', 'Smooch', 'Smooch Sans', 'Smythe', 'Snippet', 'Snowburst One', 'Sofadi One', 'Sofia', 'Sofia Sans Extra Condensed',
+    'Sofia Sans Semi Condensed', 'Solitreo', 'Solway', 'Sometype Mono', 'Song Myung', 'Sono', 'Sora', 'Sorts Mill Goudy', 'Sour Gummy', 'Source Code Pro', 'Source Sans 3', 'Source Serif 4', 'Space Grotesk',
+    'Space Mono', 'Special Elite', 'Spectral', 'Spectral SC', 'Spicy Rice', 'Spinnaker', 'Spirax', 'Splash', 'Spline Sans', 'Spline Sans Mono', 'Squada One', 'Square Peg', 'Sree Krushnadevaraya', 'Sriracha', 'Srisakdi',
+    'Staatliches', 'Stalemate', 'Stalinist One', 'Stardos Stencil', 'Stick', 'Stick No Bills', 'Stint Ultra Condensed', 'Stint Ultra Expanded', 'Stoke', 'Stylish', 'Sue Ellen Francisco', 'Suez One', 'Sulphur Point', 'Sumana',
+    'Sunshiney', 'Supermercado One', 'Sura', 'Suranna', 'Suravaram', 'Suwannaphum', 'Swanky and Moo Moo', 'Syncopate', 'Syne', 'Syne Mono', 'Syne Tactile', 'Tac One', 'Tai Heritage Pro', 'Tangerine', 'Tapestry',
+    'Taprom', 'Tauri', 'Taviraj', 'Teachers', 'Teko', 'Telex', 'Tenali Ramakrishna', 'Tenor Sans', 'Text Me One', 'Texturina', 'Thasadith', 'The Girl Next Door', 'The Nautigal', 'Tienne', 'Tillana',
+    'Tilt Prism', 'Tilt Warp', 'Timmana', 'Tinos', 'Tiny5', 'Tiro Bangla', 'Tiro Devanagari Marathi', 'Tiro Devanagari Sanskrit', 'Tiro Gurmukhi', 'Tiro Kannada', 'Tiro Tamil', 'Tiro Telugu', 'Titan One', 'Titillium Web',
+    'Tomorrow', 'Tourney', 'Trade Winds', 'Triodion', 'Trirong', 'Trispace', 'Trochut', 'Truculenta', 'Tsukimi Rounded', 'Tulpen One', 'Twinkle Star', 'Ubuntu', 'Ubuntu Condensed', 'Ubuntu Mono', 'Ubuntu Sans',
+    'Ubuntu Sans Mono', 'Uchen', 'Ultra', 'Unbounded', 'Uncial Antiqua', 'Underdog', 'Unica One', 'Unkempt', 'Unlock', 'Unna', 'Updock', 'Urbanist', 'VT323', 'Varela Round', 'Varta', 'Vast Shadow', 'Vazirmatn',
+    'Vesper Libre', 'Viaoda Libre', 'Vibes', 'Vibur', 'Victor Mono', 'Vidaloka', 'Viga', 'Vina Sans', 'Voces', 'Volkhov', 'Vollkorn', 'Vollkorn SC', 'Voltaire', 'Waiting for the Sunrise', 'Wallpoet',
+    'Walter Turncoat', 'Water Brush', 'Waterfall', 'Wavefont', 'Wellfleet', 'Whisper', 'Wire One', 'Wittgenstein', 'Wix Madefor Display', 'Wix Madefor Text', 'Work Sans', 'Workbench', 'Xanh Mono', 'Yaldevi',
+    'Yanone Kaffeesatz', 'Yantramanav', 'Yarndings 12', 'Yarndings 12 Charted', 'Yarndings 20', 'Yarndings 20 Charted', 'Yatra One', 'Yellowtail', 'Yeseva One', 'Yesteryear', 'Yomogi', 'Ysabeau', 'Ysabeau Infant',
+    'Ysabeau Office', 'Yuji Boku', 'Yuji Hentaigana Akari', 'Yuji Mai', 'Yuji Syuku', 'ZCOOL KuaiLe', 'ZCOOL QingKe HuangYou', 'ZCOOL XiaoWei', 'Zain', 'Zen Antique', 'Zen Antique Soft', 'Zen Dots',
+    'Zen Kaku Gothic New', 'Zen Kurenaido', 'Zen Loop', 'Zen Maru Gothic', 'Zen Old Mincho', 'Zen Tokyo Zoo', 'Zeyada', 'Zhi Mang Xing', 'Zilla Slab', 'Zilla Slab Highlight'
+]
+
+def download_all_google_fonts(*,show_progress=True):
+    """ 
+    Download all Google fonts I know of: 120.1MB
+    Returns a list of paths to all downloaded fonts
+    """
+    return gather_args_call(download_google_fonts, _all_google_fonts)
 
 def _get_file_path(path_or_url):
     """If given a url, get a file path that can be used for things"""
@@ -25839,6 +26063,9 @@ def get_file_extension(file_path):
     """
     file_path = _get_file_path(file_path)
     return os.path.splitext(file_path)[1].rpartition('.')[2]
+
+def get_file_extensions(file_paths):
+    return list(map(get_file_extension,file_paths))
 
 def with_file_extension(path:str,extension:str,*,replace=False):
     """
@@ -27506,8 +27733,8 @@ def _images_conversion(func, images, *, copy_check ,copy=True):
         elif func==as_rgb_image:
             if len(images.shape)==3: #Given grayscale images
                 #BHW matrices turn into RGB tensors
-                # return ... Fill this in. Duplicate the grayscale along all RGB channels
-                pass #Not implemented yet
+                #Duplicate the grayscale along all RGB channels
+                return images[...,None].repeat(3,axis=3)
             assert len(images.shape)==4, images.shape #BHWC
             C=images.shape[3]
             if C==3:
@@ -27518,14 +27745,22 @@ def _images_conversion(func, images, *, copy_check ,copy=True):
 
         elif func==as_rgba_image:
             if len(images.shape)==3: #Given grayscale images
-                #BHW matrices turn into RGB tensors
-                # return ... Fill this in. Alpha channel is 1 if floating point else 255 if uint8 else True if bool, the other 3 are duplciated from the grayscale matrices...
-                pass #Not implemented yet
+                #BHW matrices turn into RGBA tensors
+                #Duplicate the grayscale along all RGBA channels
+                #Alpha channel is 1 if floating point else 255 if uint8 else True if bool, the other 3 are duplciated from the grayscale matrices...
+                output = images[...,None].repeat(4,axis=3)
+                if images.dtype==np.uint8:
+                    output[...,3]=255
+                elif images.dtype==bool:
+                    output[...,3]=True
+                else:
+                    output[...,3]=1
+                return output
+                
             assert len(images.shape)==4, images.shape #BHWC
             C=images.shape[3]
             if C==3:
-                # return ... add a 4th channel 
-                pass #Not implemented yet
+                return np.concatenate(images,np.ones_like(images[:,:,:1]))
             else:
                 assert C==4, C
                 return images.copy()
@@ -27535,7 +27770,12 @@ def _images_conversion(func, images, *, copy_check ,copy=True):
                 return images.copy()
             assert len(images.shape)==4, images.shape #BHWC
             #Average the RGB channels and turn back to uint8 or float or binary...
-            pass #Not implemented yet
+            if images.dtype==np.uint8:
+                return (images[...,:3].sum(3)//3).astype(np.uint8)
+            elif images.dtype==bool:
+                return  images[...,:3].mean(3)>.5
+            else:
+                return  images[...,:3].mean(3)
 
 
         #TODO: Handle all edge cases of as_rgb_images, as_rgba_images, as_binary_images
@@ -28395,6 +28635,7 @@ def _rinsp_search_helper(root,query,depth=10):
             return
         searched.add(id(root))
         for name in keys(root):
+            if name.startswith('__') and name.endswith('__'): continue
             if match(name):yield path+[name]
             try:yield from helper(get(root,name),depth-1,path+[name])
             except Exception:pass
@@ -29007,13 +29248,22 @@ def get_youtube_video_thumbnail(url_or_id,*,use_cache=False,output='image'):
     
     thumbnail_image = load_image(thumbnail_url, use_cache=use_cache)
     return thumbnail_image
-    
-def _get_video_file_duration_via_moviepy(path):
-    #https://stackoverflow.com/questions/3844430/how-to-get-the-duration-of-a-video-in-python
-    #pip install moviepy
+
+def _moviepy_VideoFileClip(path, *args, **kwargs):
+    """ Moviepy 2 has breaking changes! They moved a class. See https://zulko.github.io/moviepy/getting_started/updating_to_v2.html """
     pip_import('moviepy')
-    from moviepy.editor import VideoFileClip
-    return VideoFileClip(path).duration
+    try:
+        from moviepy.editor import VideoFileClip  # MoviePy v1 import
+    except ImportError:
+        from moviepy import VideoFileClip  # MoviePy v2 import
+    return VideoFileClip(path, *args, **kwargs)
+
+def _get_video_file_duration_via_moviepy(path)->float:
+    """
+    Returns the duration of a video file, in seconds
+    https://stackoverflow.com/questions/3844430/how-to-get-the-duration-of-a-video-in-python
+    """
+    return _moviepy_VideoFileClip(path).duration
 
 _get_video_file_duration_cache={}
 def get_video_file_duration(path,use_cache=True):
@@ -29032,10 +29282,7 @@ def _get_video_file_framerate_via_moviepy(path, use_cache=True):
     if use_cache and path in _get_video_file_framerate_cache:
         return _get_video_file_framerate_cache[path]
 
-    pip_import('moviepy')
-    from moviepy.editor import VideoFileClip
-
-    with VideoFileClip(path) as video:
+    with _moviepy_VideoFileClip(path) as video:
         framerate = video.fps
 
     _get_video_file_framerate_cache[path] = framerate
@@ -29083,9 +29330,8 @@ def get_video_file_framerate(path, use_cache=True):
         pip_import('moviepy')
 
         #Ning had some error where the following line failed, but Yuancheng's didnt...
-        from moviepy.editor import VideoFileClip
-
         return _get_video_file_framerate_via_moviepy(path, use_cache)
+
     except Exception:
         return _get_video_file_framerate_via_ffprobe(path, use_cache)
 
@@ -33130,9 +33376,13 @@ def is_s3_url(url):
     "Returns true if the given string is an Amazon S3 URL"
     return isinstance(url,str) and url.startswith('s3://')
 
+def is_gs_url(url):
+    "Returns true if the given string is an Google Cloud Storage URL"
+    return isinstance(url,str) and url.startswith('gs://')
+
 def download_url(url, path=None, *, skip_existing=False, show_progress=False, timeout=None):
     """
-    Works with both HTTP and Aws S3 Urls
+    Works with both HTTP, Aws S3 and Google Cloud Storage urls
     Download a file from a url and return the path it downloaded to. It no path is specified, it will choose one for you and return it (as a string)
     If path exists and it is a folder, it will download to the url's filename in that folder
     EXAMPLE: open_file_with_default_application(download_url('https://i.imgur.com/qSmVyCo.jpg'))#Show a picture of a cat
@@ -33173,6 +33423,23 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
             raise Exception("rp.download_url failed to download s3 url %s to path %s: "%(url,path) + str(e))
 
         return path
+    
+    elif is_gs_url(url):
+
+        import subprocess
+
+        try:
+            gs_args = ['gsutil', 'cp', '-r', url, path]
+            if timeout:
+                gs_args = ['timeout', str(timeout)] + gs_args
+            subprocess.check_call(gs_args)
+        except subprocess.TimeoutExpired:
+            raise TimeoutError("rp.download_url timed out downloading Google Cloud Storage url %s to path %s"%(url,path))
+        except subprocess.CalledProcessError as e:
+            raise Exception("rp.download_url failed to download Google Cloud Storage url %s to path %s: "%(url,path) + str(e))
+
+        return path
+
 
     elif _is_youtube_video_url(url):
         return download_youtube_video(url, path, skip_existing=skip_existing, show_progress=show_progress, timeout=timeout) # Pass timeout to youtube download
@@ -33463,11 +33730,11 @@ def get_cache_file_path(url, *, cache_dir=None, file_extension=None, hash_func=N
     output = path_join(cache_dir, filename)
     return output
 
-def get_cache_file_paths(urls, *, cache_dir=None, file_extension=None, hash_func=None, lazy=False):
+def get_cache_file_paths(urls, *, cache_dir=None, file_extension=None, hash_func=None, lazy=False, show_progress=False):
     """Plural of get_cache_file_path, supporting a `lazy` option"""
     func = gather_args_wrap(get_cache_file_path)
-    out = map(func, urls)
-    if not lazy: out = list(out)
+    if show_progress is True: show_progress='eta:'+get_current_function_name()
+    out = load_files(func, urls, lazy=lazy, num_threads=0, show_progress=show_progress)
     return out
 
 def debug(level=0):
@@ -34088,70 +34355,6 @@ def input_select_folder(root=None,sort_by='name',reverse=True,message=None,file_
 def input_select_file(root=None,sort_by='name',reverse=True,message=None,file_extension_filter=None)->str:
     return input_select_path(root=root,sort_by=sort_by,reverse=reverse,include_folders=False,include_files=True,message=message,file_extension_filter=file_extension_filter)
 
-#def input_select_folder(root=None,sort_by='name',reverse=True)->str:
-#    #Asks the user to select a folder
-#    #If reverse. put option 0 on the bottom instead of the top (might make it easier to read)
-#    assert root is None or is_a_folder(root)
-#    if root is None:
-#        root=get_current_directory()
-#    assert is_a_folder(root)
-#    print('Current Folder:',fansi(get_absolute_path(root),'yellow','bold'))
-#    folders=get_all_paths(root,include_files=False,include_folders=True,sort_by=sort_by)
-#    parent=get_parent_directory(root)
-#    select_button=None
-#    paths=[select_button,parent]+folders
-#    def format_path(path:str):
-#        if path==select_button:
-#            return fansi(root,'yellow','bold')
-#        else:
-#            if path==parent:
-#                path='..'
-#            else:
-#                path=get_folder_name(path)
-#            path=fansi(path,'cyan','bold')
-#            return path
-#    selected=input_select('Please select a folder to navigate into it, or select '+fansi('0','yellow','bold')+' to choose the current folder:',options=paths,stringify=format_path,reverse=reverse)
-#    if selected==select_button:
-#        selected=root
-#        print('You selected the following folder: '+fansi(selected,'cyan','bold')) 
-#        return selected
-#    else:
-#        try:
-#            return input_select_folder(selected,sort_by=sort_by)
-#        except PermissionError as error:
-#            print(fansi('ERROR: ','red','bold')+fansi(error,'red'))
-#            return input_select_folder(root    ,sort_by=sort_by)
-
-#def input_select_file(root=None,sort_by='name',reverse=True)->str:
-#    #Asks the user to select a file
-#    #If reverse. put option 0 on the bottom instead of the top (might make it easier to read)
-#    assert root is None or is_a_folder(root)
-#    if root is None:
-#        root=get_current_directory()
-#    print('Current Folder:',fansi(get_absolute_path(root),'cyan','bold'))
-#    folders=get_all_paths(root,sort_by=sort_by,include_files=False,include_folders=True)
-#    files  =get_all_paths(root,sort_by=sort_by,include_files=True,include_folders=False)
-#    parent=get_parent_directory(root)
-#    paths=[parent]+folders+files
-#    def format_path(path:str):
-#        if is_a_folder(path):
-#            if path==parent:
-#                path='..'
-#            path=get_folder_name(path)
-#            return fansi(path,'cyan','bold')
-#        else:
-#            path=get_file_name(path)
-#            path=fansi(path,'yellow','bold')
-#            return path
-#    selected=input_select('Please select a file:',options=paths,stringify=format_path,reverse=reverse)
-#    if is_a_folder(selected):
-#        try:
-#            return input_select_file(selected,sort_by=sort_by,reverse=reverse)
-#        except PermissionError as error:
-#            print(fansi('ERROR: ','red','bold')+fansi(error,'red'))
-#            return input_select_file(root    ,sort_by=sort_by,reverse=reverse)
-#    print('You selected the following file: '+fansi(selected,'cyan','bold')) 
-#    return selected
 
 def input_select_serial_device_id(*defaults)->str:
     """
@@ -34762,10 +34965,10 @@ def _load_ryan_lazygit_config():
 def _install_lazygit(force=False):
     #https://github.com/jesseduffield/lazygit/tree/master?tab=readme-ov-file#installation
     
+    if 'lazygit' in get_system_commands() and not force:
+        print('lazygit is already installed. Not installing because force==False.')
+        return
     with SetCurrentDirectoryTemporarily(make_directory(temporary_file_path())):
-        if 'lazygit' in get_system_commands() and not force:
-            print('lazygit is already installed. Not installing because force==False.')
-            return
         
         if currently_running_mac():
             os.system('brew install jesseduffield/lazygit/lazygit')
@@ -34804,6 +35007,17 @@ def _install_filebrowser():
         assert False, "Unsupported OS"
 
     os.system(command)
+
+def _install_cog():
+    """ 
+    Cog is an open source tool that makes it easy to put a machine learning model in a Docker container.
+    https://replicate.com/docs/guides/push-a-model
+    """
+    if not 'cog' in get_system_commands():
+        os.system("""
+            sudo curl -o /usr/local/bin/cog -L https://github.com/replicate/cog/releases/latest/download/cog_`uname -s`_`uname -m`
+            sudo chmod +x /usr/local/bin/cog
+        """)
 
 def _run_bashtop():
     if not "bashtop" in get_system_commands():
