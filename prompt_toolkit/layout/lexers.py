@@ -14,6 +14,9 @@ from .utils import split_lines
 import re
 import six
 
+from pygments.lexers import Python3Lexer
+from pygments.lexers import BashLexer
+
 __all__ = (
     'Lexer',
     'SimpleLexer',
@@ -178,7 +181,6 @@ def longest_common_prefix(a,b):
 
 
 
-from pygments.lexers import Python3Lexer
 class FastPygmentsTokenizer:
     def __init__(self,pygments_lexer=Python3Lexer()):
         self.old_text=''
@@ -280,17 +282,40 @@ class PygmentsLexer(Lexer):
 
         self.old_text=""
 
-        # Instantiate the Pygments lexer.
+        # Instantiate the Pygments lexer. (Python)
         self.pygments_lexer = pygments_lexer_cls(
             stripnl=False,
             stripall=False,
-            ensurenl=False)
-
+            ensurenl=False,
+        )
         self.fast_pygments_lexer=self.pygments_lexer
-        self.fast_pygments_lexer=FastPygmentsTokenizer(self.pygments_lexer)
+        self.fast_pygments_tokenizer=FastPygmentsTokenizer(self.pygments_lexer)
+
+        # Instantiate the Bash lexer.
+        self.bash_lexer = BashLexer(
+            stripnl=False,
+            stripall=False,
+            ensurenl=False,
+        )
+        self.fast_bash_lexer=self.bash_lexer
+        self.fast_bash_tokenizer=FastPygmentsTokenizer(self.bash_lexer)
 
         # Create syntax sync instance.
         self.syntax_sync = syntax_sync or RegexSync.from_pygments_lexer_cls(pygments_lexer_cls)
+
+    def get_lexer(self, document):
+        text = document.text
+        if text.startswith("!"):
+            return self.fast_bash_lexer  # Bash
+        else:
+            return self.fast_pygments_lexer  # Python
+
+    def get_tokenizer(self, document):
+        text = document.text
+        if text.startswith("!"):
+            return self.fast_bash_tokenizer  # Bash
+        else:
+            return self.fast_pygments_tokenizer  # Python
 
     @classmethod
     def from_filename(cls, filename, sync_from_start=True):
@@ -345,7 +370,7 @@ class PygmentsLexer(Lexer):
                 # still replace \r\n and \r by \n.  (We don't want that,
                 # Pygments should return exactly the same amount of text, as we
                 # have given as input.)
-                for _, t, v in self.fast_pygments_lexer.get_tokens_unprocessed(text):
+                for _, t, v in self.get_tokenizer(document).get_tokens_unprocessed(text):
                     yield t, v
 
             return enumerate(split_lines(get_tokens()), start_lineno)
