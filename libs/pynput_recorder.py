@@ -211,7 +211,7 @@ class KeyUpTrigger(Trigger):
 
 
 class TwoKeyDownTrigger(Trigger):
-    NUM_ACTIONS = 1
+    NUM_ACTIONS = 2
 
     def __init__(self, key1, key2):
         self.key1 = key1
@@ -383,8 +383,6 @@ def record_actions(start_trigger=None, end_trigger=None):
 
         # Check triggers
 
-        num_actions_to_pop = 0
-
         if not start_recording:
             rp.fansi_print(action, "italic dark gray")
             if start_trigger(action):
@@ -395,8 +393,20 @@ def record_actions(start_trigger=None, end_trigger=None):
         else:
             if end_trigger(action):
                 # Just triggered the end
+                print("BLOOBAH")
+                for _ in range(end_trigger.NUM_ACTIONS):
+                    while actions and isinstance(actions[-1], DelayAction):
+                        actions.pop()
+                    if actions:
+                        actions.pop()
+                        deleted_action = actions.pop()
+                        # This is ugly logic...actions should instead be FILTERED through triggers.
+                        # For this reason, I'll abstract this whole codebase away into an rp function, as I might improve this logic in the future to handle new types of triggers.
+                        rp.fansi_print(
+                            f"[{len(actions)}]: ACTIONS -= {action}", "orange red blue green"
+                        )
                 stop_recording = True
-                num_actions_to_pop += start_trigger.NUM_ACTIONS
+                return
 
         # If we are here, we are actively recording this action
         now = time.time()
@@ -412,20 +422,6 @@ def record_actions(start_trigger=None, end_trigger=None):
         # Add the actual action
         actions.append(action)
         rp.fansi_print(f"[{len(actions)}]: ACTIONS += {action}", "yellow blue green")
-
-        # Some Triggers require deleting the last N actions...
-        while num_actions_to_pop:
-            num_actions_to_pop -= 1
-            while actions and isinstance(actions[-1], DelayAction):
-                actions.pop()
-            if not actions:
-                break
-            deleted_action = actions.pop()
-            # This is ugly logic...actions should instead be FILTERED through triggers.
-            # For this reason, I'll abstract this whole codebase away into an rp function, as I might improve this logic in the future to handle new types of triggers.
-            rp.fansi_print(
-                f"[{len(actions)}]: ACTIONS -= {action}", "orange red blue green"
-            )
 
     # ---------------------------------------------------------------------
     #  Listener callbacks
@@ -482,7 +478,15 @@ def playback_actions(actions):
     print(f"Playing back {len(actions)} actions...")
     for i, action in enumerate(actions, start=1):
         action()
-        print(f"[{i}/{len(actions)}] {action}")
+        style = None
+        if isinstance(action, DelayAction): style = 'dark gray italic'
+        if isinstance(action, MouseMoveAction): style = 'dark light gray'
+        elif isinstance(action, MouseAction): style = 'gray green yellow bold'
+        if isinstance(action, KeyboardReleaseAction): style = 'white blue red blue magenta bold'
+        if isinstance(action, KeyboardPressAction): style = 'white blue green blue cyan bold'
+        action_str = rp.fansi(action, style)
+        num_str = rp.fansi(f"[{i}/{len(actions)}]", "yellow gray")
+        print(f"{num_str} {action_str}")
     print("Playback finished.")
 
 
@@ -549,6 +553,10 @@ class PynputCasette(list):
             if isinstance(x, DelayAction):
                 x.seconds /= factor
         return self
+
+    def slowdown(self, factor):
+        return self.speedup(1 / factor)
+
 
     def play(self, loop=False):
         for _ in range(1 + 999**999 * loop):
