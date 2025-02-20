@@ -452,7 +452,7 @@ def record_actions(start_trigger=None, end_trigger=None):
     mouse_listener.start()
     keyboard_listener.start()
 
-    print("Recording... Use triggers or Ctrl+C to stop.")
+    print("Recording...Press cmd+shift anywhere or Ctrl+C in the terminal to stop.")
     try:
         while not stop_recording:
             time.sleep(0.000001)
@@ -470,13 +470,28 @@ def record_actions(start_trigger=None, end_trigger=None):
 # P L A Y B A C K
 ##############################################################################
 
-
 def playback_actions(actions):
     """
     Replays each Action in sequence by simply calling it.
+    Press escape to interrupt playback!
     """
-    print(f"Playing back {len(actions)} actions...")
+
+    #A safekey
+    abort=False
+    abort_key=Key.esc
+    def on_press(key):
+        nonlocal abort
+        if key==abort_key:
+            abort=True
+            safekey_listener.stop()
+    safekey_listener = keyboard.Listener(on_press=on_press)
+    safekey_listener.start()
+
+    rp.fansi_print(f"Playing back {len(actions)} actions...press {abort_key} to abort!",'white white bold')
     for i, action in enumerate(actions, start=1):
+        if abort:
+            rp.fansi_print('Aborting playback!','red orange','bold')
+            raise KeyboardInterrupt
         action()
         style = None
         if isinstance(action, DelayAction): style = 'dark gray italic'
@@ -487,7 +502,8 @@ def playback_actions(actions):
         action_str = rp.fansi(action, style)
         num_str = rp.fansi(f"[{i}/{len(actions)}]", "yellow gray")
         print(f"{num_str} {action_str}")
-    print("Playback finished.")
+
+    rp.fansi_print("Playback finished.",'white white bold')
 
 
 ##############################################################################
@@ -557,6 +573,37 @@ class PynputCasette(list):
     def slowdown(self, factor):
         return self.speedup(1 / factor)
 
+    def remove_mousemoves(self):
+        return PynputCasette(x for x in self if not isinstance(x, MouseMoveAction)).merge_delays()
+
+    def merge_delays(self):
+        out = []
+        for x in self:
+            x = copy(x)
+            if isinstance(x, DelayAction) and out and isinstance(out[-1], DelayAction):
+                out[-1].seconds+=x.seconds
+            else:
+                out.append(x)
+        return PynputCasette(out)
+
+    def set_all_delays(self,func_or_float):
+        """ Takes a float -> float func OR a float"""
+        if callable(func_or_float):
+            func = func_or_float
+        else:
+            func_or_float = float(func_or_float)
+            func = lambda x: func_or_float
+
+        out = []
+        for x in self:
+            x=copy(x)
+            if isinstance(x, DelayAction):
+                x.seconds=func(x.seconds)
+            out.append(x)
+        return PynputCasette(out)
+
+    def cap_all_delays(self,seconds):
+        return modify_all_delays(lambda x:min(x,seconds))
 
     def play(self, loop=False):
         for _ in range(1 + 999**999 * loop):
