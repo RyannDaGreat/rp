@@ -40353,10 +40353,25 @@ try:
             def __getattribute__(self,key):
                 return getattr(pip_import(module_name),key)
         return LazyloadedModule(module_name)
-    np=autoimportable_module('numpy')
+    # np=autoimportable_module('numpy')
     # icecream=autoimportable_module('icecream')
 except:
     print("Warning: Cannot import numpy. Please excuse any 'np is None' errors, or try rp.pip_install('numpy')")
+
+def PynputCasette(actions=None):
+    """
+    Records mouse and keyboard actions, and allows you to play them back. 
+
+    Please see a youtube tutorial I made for this class: 
+        https://www.youtube.com/watch?v=9x6uwhg2dpc
+    """
+    pip_import("pynput")
+    from rp.libs.pynput_recorder import PynputCasette
+
+    if actions:
+        return PynputCasette(actions)
+    else:
+        return PynputCasette().record()
 
 def find_and_replace_text_files(query, replacement, paths=".", interactive=False):
     """
