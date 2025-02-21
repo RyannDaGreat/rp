@@ -2362,7 +2362,7 @@ def load_python_bindings(python_input):
     #     buffer.insert_text(")")
     #     buffer.cursor_left(count=1)
 #endregion
-    for char in '''`~!@#$%^&*()-_=+[{]}\|;:'",<.>/?']''':
+    for char in r'''`~!@#$%^&*()-_=+[{]}\|;:'",<.>/?']''':
         def go(c):
             @handle(c,filter=~vi_mode_enabled&microcompletions_enabled)
             def _(event):
@@ -2715,6 +2715,15 @@ def load_python_bindings(python_input):
                                          '\\tbp':'toggle_big_parenthesis',
                                          '\\spa':'string_paste',
                                          '\\d0l':'delete_empty_lines',
+                                         '\\d1l':'delete_empty_lines_1',
+                                         '\\d2l':'delete_empty_lines_2',
+                                         '\\d3l':'delete_empty_lines_3',
+                                         '\\d4l':'delete_empty_lines_4',
+                                         '\\d5l':'delete_empty_lines_5',
+                                         '\\d6l':'delete_empty_lines_6',
+                                         '\\d7l':'delete_empty_lines_7',
+                                         '\\d8l':'delete_empty_lines_8',
+                                         '\\d9l':'delete_empty_lines_9',
                                          '\\dtt':'delete_to_top',
                                          '\\dtb':'delete_to_bottom',
                                          '\\sl':'sort_lines',
@@ -3013,6 +3022,20 @@ def load_python_bindings(python_input):
                                     text=buffer.document.text
                                     text='\n'.join(line for line in text.split('\n') if line.strip())
                                     buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                if header.startswith('delete_empty_lines_'):
+                                    N=header[len('delete_empty_lines_'):]
+                                    try:
+                                        N=int(N)
+                                        N+=1
+                                        import rp
+                                        text=buffer.document.text
+                                        text=rp.strip_trailing_whitespace(text)
+                                        while '\n'*(N+1) in text:
+                                            text=text.replace('\n'*(N+1),'\n'*N)
+                                        buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    except e:
+                                        buffer.insert_text(str(e))
+
                                 if header=='sort_lines':
                                     text=buffer.document.text
                                     text='\n'.join(sorted(text.split('\n')))

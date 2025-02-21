@@ -18,7 +18,7 @@ keyboard_controller = KeyboardController()
 class Reprable:
     def __repr__(self):
         attributes = [
-            f"{attr}={repr(value)}"
+            f"{attr}={str(value)}"
             for attr, value in self.__dict__.items()
             if not "__" in attr
         ]
@@ -603,7 +603,7 @@ class PynputCasette(list):
         return PynputCasette(out)
 
     def cap_all_delays(self,seconds):
-        return modify_all_delays(lambda x:min(x,seconds))
+        return self.set_all_delays(lambda x:min(x,seconds))
 
     def play(self, loop=False):
         for _ in range(1 + 999**999 * loop):

@@ -17,11 +17,23 @@ def arg_eval(code):
 
 def pop_kwargs():
     kwargs = {}
-    while len(sys.argv) > 3 and sys.argv[-2].startswith('--'):
+    while len(sys.argv) > 3 and rp.starts_with_any(sys.argv[-2], "--", "---"):
         #While we might have a "--kwarg value" at the end
         value = sys.argv.pop()
-        value = arg_eval(value)
-        name  = sys.argv.pop()[len('--'):]
+        name  = sys.argv.pop()
+
+        if name.startswith('---'):
+            #Treated as string
+            name = name[len('---'):]
+
+        elif name.startswith('--'):
+            #Treated as evaluable
+            name = name[len('--'):]
+            value = arg_eval(value)
+
+        else:
+            assert False, 'Sanity check'
+
         kwargs[name] = value
     return kwargs
 
@@ -45,6 +57,9 @@ HELP:
               Format: rp call <funcname> arg1 arg2 arg3 --kwarg1 value1 --kwarg2 value2
       exec    Execute Python code with optional variable assignments
               Format: rp exec <code> --variable1 value1 --variable2 value2
+      
+    Note: All kwargs whose keys start with -- are evaluated as python code, 
+        and all that start with --- are treated as string literals
 
     If no command is provided, an interactive Python terminal (rp.pterm) is started.
 """

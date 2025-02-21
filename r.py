@@ -10003,6 +10003,17 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
     if isinstance(object, int) and process_exists(object):
         print_process_info(object)
 
+
+    if isinstance(object, int) and get_port_is_taken(object):
+        try:
+            process=get_process_using_port(object)
+            by_string = 'BY PROCESS %i'%(process)
+            print(col(tab + 'PORT %i IS TAKEN '%object + by_string))
+            print_process_info(process)
+        except Exception as e:
+            by_string = '(unknown process: %s)'%repr(e)
+            print(col(tab + 'PORT %i IS TAKEN '%object + by_string))
+                
  
     if is_symlink(object):
         print(col(tab + 'SYMLINK --> '+read_symlink(object)))
@@ -18197,6 +18208,7 @@ def pseudo_terminal(
         DQ CDHQ FAST
 
         PRP PYM rp
+        SURP $os.system('sudo '+sys.executable+' -m rp')
 
         GOO  $open_google_search_in_web_browser(str(ans))
         GOOP $open_google_search_in_web_browser($string_from_clipboard())
@@ -35088,6 +35100,97 @@ def get_next_free_port(port):
         port+=1
     return port
 
+_get_all_taken_ports_cache = None
+
+
+def get_all_taken_ports(
+    *, lazy=False, num_threads=None, show_progress=False, use_cache=False
+):
+    """Returns all ports that are currently taken up"""
+    global _get_all_taken_ports_cache
+    if use_cache and _get_all_taken_ports_cache is not None:
+        return _get_all_taken_ports_cache
+
+    def helper(x):
+        assert get_port_is_taken(x)
+        return x
+
+    if show_progress is True:
+        show_progress = "eta:" + get_current_function_name()
+    output = load_files(
+        helper,
+        range(65536),
+        strict=False,
+        lazy=lazy,
+        num_threads=None,
+        show_progress=show_progress,
+    )
+    if not lazy:
+        _get_all_taken_ports_cache = output
+    return output
+
+def get_process_using_port(port: int, *, strict = True):
+    """
+    Gets the process ID (PID) using the specified port.
+
+    Args:
+        port: The port number.
+        strict: If True, raise RuntimeError if no process is found.
+                If None, return None if no process is found.
+
+    Returns:
+        The PID, or None if strict is None and no process is found.
+
+    Raises:
+        TypeError: If 'port' is not an int, or 'strict' is not bool or None.
+        ValueError: If 'port' is out of range.
+        RuntimeError: If strict is True and no process/PID is found.
+        psutil.Error: If there's a psutil error (rare).
+
+    EXAMPLES:
+        >>> # Assuming a process is listening on port 8080
+        >>> port = 8080
+        >>> assert get_port_is_taken(port)
+        >>> pid = get_process_using_port(port)
+        >>> print(pid)  # Output would be the PID (e.g., 1234)
+
+        >>> # If no process is listening on port 9999, with strict=True (default)
+        >>> port = 9999
+        >>> try:
+        ...   get_process_using_port(port)
+        ... except RuntimeError as e:
+        ...   print(str(e))
+        No process found using port 9999.
+
+        >>> # If no process is listening on port 9999, with strict=None
+        >>> port = 9999
+        >>> result = get_process_using_port(port, strict=None)
+        >>> print(result)
+        None
+    """
+    pip_import('psutil')
+    import psutil
+
+    if not isinstance(port, int):
+        raise TypeError("Port must be an integer but got type %s"%type(port))
+    if not 0 <= port <= 65535:
+        raise ValueError("Port must be within the range 0-65535 but got %i"%port)
+    if strict not in [True, None]:
+        raise TypeError("'strict' argument must be either True or None but got %s"%strict)
+
+    for conn in psutil.net_connections():
+        if conn.laddr.port == port and conn.status == psutil.CONN_LISTEN:
+            if conn.pid:
+                return conn.pid
+            elif strict: # Handle edge case where PID might not be available
+                raise RuntimeError("Process found using port {0}, but PID is unavailable.".format(port))
+            else:
+                return None
+
+    if strict:
+        raise RuntimeError("No process found using port {0}.".format(port))
+    else:
+        return None
 
 
 def can_convert_object_to_bytes(x:object)->bool:
