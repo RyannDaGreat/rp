@@ -43,6 +43,7 @@ from math import factorial
 # endregion
 # region ［entuple， detuple］
 
+_original_pwd = os.getcwd()
 
 def entuple(x):
     # For pesky petty things.
@@ -5427,7 +5428,7 @@ def save_image_jxl(image, path=None, *, quality=100, add_extension=True):
         ... #png = save_image(final_grid, 'comparison_grid.png')
         
     """
-    pip_import("pillow_jxl", "pillow-jpegxl-plugin")
+    pip_import("pillow_jxl", "pillow-jxl-plugin")
 
     image = as_numpy_image(image)
     if is_grayscale_image(image):
@@ -6512,15 +6513,19 @@ def _display_video_via_mediapy(video, framerate):
 
     return mediapy.show_video(video, fps=framerate)
 
-
-def display_video_in_notebook(video, filetype='mp4', *, framerate=60):
+def display_video_in_notebook(video, filetype='mp4', *, embed=True, framerate=60):
     """
     Display a video or image in a Jupyter notebook.
 
     Args:
         video: The video object to display.
-        filetype (str, optional): The filetype of the video or image. Supported filetypes are 'gif', 'png', 'mp4', and 'avi'. Defaults to 'gif'.
+            - Can be a video: i.e. a list of images as defined by rp.is_image (such as a list of PIL images), or a TCHW torch tensor with values between 0 and 1, or a THWC numpy array
+            - Can be an existing file path: Such as /path/to/video.mp4
+            - Can be a URL: Such as https://file-examples.com/storage/feaef0a3ad67b78fd9cc1df/2017/04/file_example_MP4_480_1_5MG.mp4
+        filetype (str, optional): The filetype of the video or image. Supported filetypes are 'gif', 'png', 'mp4', 'webp' and 'avi'. Defaults to 'gif'.
         framerate (int, optional): The framerate of the video. Defaults to 60.
+        embed (bool, optional): If true, encodes the video as a base-64 string into the notebook itelf - so that the video is saved with the notebook.
+            If false, it will display it as a reference to some file on the host's computer. Good for decreasing filesize of the notebooks.
 
     Raises:
         ValueError: If an unsupported filetype is provided.
@@ -6529,15 +6534,20 @@ def display_video_in_notebook(video, filetype='mp4', *, framerate=60):
         >>> video = create_video(...)
         >>> display_video_in_jupyter_notebook(video, filetype='mp4', embed=True)
     """
-    embed=True # embed (bool, optional): Whether to embed the video or image content directly in the notebook. If False, the video or image is displayed using the file path. Defaults to False.
+    return gather_args_call(_display_video_in_notebook)
 
-    from IPython.display import Image, display, HTML
+def _display_video_in_notebook(video, filetype, *, embed, framerate, save_video=None):
+
+    if save_video is None:
+        save_video=save_video
+
+    from IPython.display import Image, display, HTML, Video
 
     filetype = filetype.strip('.').lower()
-    image_filetypes = 'gif png'.split()
+    image_filetypes = 'gif png webp'.split()
     video_filetypes = 'mp4 avi'.split()
 
-    if filetype=='mp4':
+    if embed and not isinstance(video, str) and filetype=='mp4':
         try:
             return _display_video_via_mediapy(video, framerate)
         except ImportError:
@@ -6546,24 +6556,35 @@ def display_video_in_notebook(video, filetype='mp4', *, framerate=60):
 
     try:
         if isinstance(video, str):
-            assert file_exists(video), 'rp.display_video_in_notebook: Video file {0} does not exist'.format(video)
+            assert is_valid_url(video) or file_exists(video), 'rp.display_video_in_notebook: Video file {0} does not exist'.format(video)
             temp_path = video
+            filetype = get_file_extension(temp_path)
         else:
             temp_path = temporary_file_path(filetype)
             save_video(video, temp_path, framerate=framerate)
+
+        if not embed and filetype in video_filetypes and not is_valid_url(temp_path):
+            #We need a url like http://0.0.0.0:5678/files/TEMP/video.png
+            #For some reason this is needed on videos and NOT images??
+            temp_path = get_relative_path(
+                temp_path,
+                _original_pwd,
+            )
 
         if filetype in image_filetypes:
             if embed:
                 image_hex = file_to_base64(temp_path)
                 display_object = HTML('<img src="data:image/{0};base64,{1}">'.format(filetype, image_hex))
+                # display_object = Image(filename=temp_path, embed=embed) #Equivalent - but the former offers more control if we need it later
             else:
-                display_object = Image(filename=temp_path)
+                assert is_valid_url(temp_path), "I wasn't able to get embed=False to work with image paths yet: temp_path=%s"%temp_path
+                display_object = Image(filename=temp_path, embed=embed)
         elif filetype in video_filetypes:
             if embed:
                 video_hex = file_to_base64(temp_path)
                 display_object = HTML('<video loop autoplay controls><source src="data:video/{0};base64,{1}" type="video/{0}"></video>'.format(filetype, video_hex))
             else:
-                display_object = HTML('<video loop autoplay controls><source src="{0}" type="video/{1}"></video>'.format(temp_path, filetype))
+                display_object = Video(filename=temp_path, html_attributes='autoplay loop controls')
         else:
             raise ValueError("rp.display_video_in_notebook: Unsupported filetype: {0}. Supported filetypes are {1}".format(filetype, ', '.join(image_filetypes + video_filetypes)))
 
@@ -6572,6 +6593,25 @@ def display_video_in_notebook(video, filetype='mp4', *, framerate=60):
     finally:
         if not isinstance(video, str) and embed and file_exists(temp_path):
             delete_file(temp_path)
+
+def display_video_in_notebook_webp(video, quality=100, framerate=60, embed=False):
+    """
+    Displays an animated webp in a Jupyter notebook with a specified quality and framerate
+    See rp.display_video_in_notebook's docstring for explanations of what the args do
+
+    EXAMPLE:
+        >>> import rp
+        ... video_url = "https://file-examples.com/storage/feaef0a3ad67b78fd9cc1df/2017/04/file_example_MP4_480_1_5MG.mp4"
+        ... video = rp.load_video(video_url, use_cache=True)
+        ... 
+        ... for quality in [1, 10, 25, 50, 90, 95, 100]:
+        ...     #Ranges from ~500KB to 14MB
+        ...     print(quality)
+        ...     rp.display_video_in_notebook_webp(video, quality)
+    """
+    def save_video(video, path, framerate):
+        return save_video_webp(video, path, quality=quality, framerate=framerate)
+    return gather_args_call(_display_video_in_notebook, filetype='webp')
 
 # def display_embedded_video_in_notebook(video,framerate:int=30,filetype:str='gif'):
 #     """
@@ -10679,6 +10719,19 @@ def append_line_to_file(line:str,file_path:str):
     if not file_exists(file_path):
         string_to_text_file(file_path,line)
     else:
+
+
+
+
+
+
+
+
+
+
+
+
+
         file=open(file_path, 'a')
         try:
             file.write('\n'+line)
@@ -21247,6 +21300,8 @@ def save_animated_png(frames, path=None,*,framerate=None):
     make_parent_directory(path)
     save_animated_png(path, frames, delay=delay)
 
+    path = get_absolute_path(path)
+
     return path
 
 save_video_png = save_animated_png
@@ -27772,7 +27827,10 @@ def _images_conversion(func, images, *, copy_check ,copy=True):
             assert len(images.shape)==4, images.shape #BHWC
             C=images.shape[3]
             if C==3:
-                return np.concatenate(images,np.ones_like(images[:,:,:1]))
+                alpha=np.ones_like(images[:,:,:,:1])
+                if images.dtype==np.uint8:
+                    alpha*=255
+                return np.concatenate((images,alpha),3)
             else:
                 assert C==4, C
                 return images.copy()
@@ -29596,6 +29654,8 @@ def save_video_avi(frames,path:str=None,framerate:int=30):
         frame=as_byte_image(frame)
         frame=cv_bgr_rgb_swap(frame)
         out.write(frame)
+
+    path = rp.get_absolute_path(path)
         
     return path
 
@@ -29933,6 +29993,8 @@ def save_video_gif_via_pil(video, path=None, *, framerate=30):
         loop=0,
     )
 
+    path = get_absolute_path(path)
+
     return path
 
 save_animated_gif = save_video_gif = save_animated_gif_via_pil = save_video_gif_via_pil
@@ -30124,7 +30186,7 @@ def save_video(images, path, *, framerate=60):
     """
     assert not isinstance(images, str), 'The first argument should be the sequence of video frames, not the path!'
 
-    assert get_file_extension(path) in 'mp4 avi gif png'.split(), 'This function currently supports .mp4, .avi, .png and .gif files'
+    assert get_file_extension(path) in 'mp4 avi gif png webp'.split(), 'This function currently supports .mp4, .avi, .png, .webp and .gif files'
 
     if path.endswith('.mp4') : return save_video_mp4(images,path,framerate=framerate, show_progress=False)
     if path.endswith('.avi') : return save_video_avi(images,path,framerate=framerate)
@@ -37096,11 +37158,16 @@ def bytes_to_file(data: bytes, path: str = None):
 
 _file_to_bytes_cache={}
 def file_to_bytes(path: str, use_cache=False):
+
     if use_cache and path in _file_to_bytes_cache:
         return _file_to_bytes_cache[path]
 
-    with open(path, 'rb') as out:
-        data = out.read()
+    if is_valid_url(path):
+        data = curl_bytes(path)
+
+    else:
+        with open(path, 'rb') as out:
+            data = out.read()
 
     if use_cache:
         _file_to_bytes_cache[path]=_file_to_bytes_cache
