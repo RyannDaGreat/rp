@@ -4345,7 +4345,7 @@ def _load_files(
             elif action == "done":
                 elapsed_time = gtoc() - start_time
                 _erase_terminal_line()
-                print("%s: Done! Loaded %i files in %.3f seconds"%(eta_title, num_yielded, elapsed_time))#This is here because of the specifics of the eta function we're using to display progress
+                print("%s: Done! Did %i items in %.3f seconds"%(eta_title, num_yielded, elapsed_time))#This is here because of the specifics of the eta function we're using to display progress
 
     else:
         def progress_func(action):
@@ -7298,7 +7298,7 @@ def histogram_in_terminal(values,sideways=False):
 
     values=as_numpy_array(values).flatten()
     if sideways==True:
-        out=plotille.hist(l,width=get_terminal_width()-33,bins=get_terminal_height()-0)
+        out=plotille.hist(values,width=get_terminal_width()-33,bins=get_terminal_height()-0)
     else:
         out=plotille.histogram(values,width=get_terminal_width()-20,height=get_terminal_height()-15)
 
@@ -8626,6 +8626,10 @@ def gather_args_wrap(func, *, frames_back=1):
         >>>
         >>> example_func()
         a=1, b=2, c=3
+        >>> c = 999
+        >>> example_func()
+        a=1, b=2, c=999
+
     """
     import functools
     @functools.wraps(func)
@@ -14448,6 +14452,38 @@ def reload_rp():
     import rp
     return rp
     
+#OLD CODE. WORKS FINE! BUT I WANTED TO REFACTOR IT. THIS CODE IS ANCIENT!!!! SOOO OLD!!!!! LIKE OVER 9 YEARS OLD....2016-esque
+# def _eta(total_n,*,min_interval=.3,title="r.eta"):
+#     """
+#     Example:
+#         >>> a = eta(2000,title='test')
+#         ... for i in range(2000):
+#         ...     sleep(.031)
+#         ...     a(i)
+#
+#     This method is slopily written, but works perfectly.
+#     """
+#     timer=tic()
+#     interval_timer=[tic()]
+#     title='\r'+title+": "
+#     def display_eta(proportion_completed,time_elapsed_in_seconds,TOTAL_TO_CIMPLET,COMPLETSOFAR,print_out=True):
+#         if interval_timer[0]()>=min_interval:
+#             interval_timer[0]=tic()
+#             # Estimated time of arrival printer
+#             from datetime import timedelta
+#             out_method=(lambda x:print(x,end='') if print_out else identity)
+#             temp=timedelta(seconds=time_elapsed_in_seconds)
+#             completerey="\tProgress: " + str(COMPLETSOFAR) + "/" + str(TOTAL_TO_CIMPLET)
+#             if proportion_completed<=0:
+#                 return out_method(title +"NO PROGRESS; INFINITE TIME REMAINING. T=" +str(temp) +(completerey))
+#             # exec(mini_terminal)
+#             eta=float(time_elapsed_in_seconds) / proportion_completed  # Estimated time of arrival
+#             etr=eta- time_elapsed_in_seconds # Estimated time remaining
+#             return out_method(title+(("ETR=" + str(timedelta(seconds=etr)) + "\tETA=" + str(timedelta(seconds=eta)) + "\tT="+str(temp) + completerey if etr > 0 else "COMPLETED IN " + str(temp)+completerey+"\n")))
+#     def out(n,print_out=True):
+#         return display_eta(n/total_n,timer(),print_out=print_out,TOTAL_TO_CIMPLET=total_n,COMPLETSOFAR=n)
+#     return out
+
 def _eta(total_n,*,min_interval=.3,title="r.eta"):
     """
     Example:
@@ -14456,27 +14492,57 @@ def _eta(total_n,*,min_interval=.3,title="r.eta"):
         ...     sleep(.031)
         ...     a(i)
 
-    This method is slopily written, but works perfectly.
     """
+    from datetime import timedelta
+
     timer=tic()
     interval_timer=[tic()]
-    title='\r'+title+": "
+    title=title+": "
+
+    def print_status(x):
+        x=str(x)
+        _erase_terminal_line()
+        print(x,end='',flush=True)
+
     def display_eta(proportion_completed,time_elapsed_in_seconds,TOTAL_TO_CIMPLET,COMPLETSOFAR,print_out=True):
         if interval_timer[0]()>=min_interval:
             interval_timer[0]=tic()
             # Estimated time of arrival printer
-            from datetime import timedelta
-            out_method=(lambda x:print(x,end='') if print_out else identity)
             temp=timedelta(seconds=time_elapsed_in_seconds)
-            completerey="\tProgress: " + str(COMPLETSOFAR) + "/" + str(TOTAL_TO_CIMPLET)
-            if proportion_completed<=0:
-                return out_method(title +"NO PROGRESS; INFINITE TIME REMAINING. T=" +str(temp) +(completerey))
-            # exec(mini_terminal)
-            eta=float(time_elapsed_in_seconds) / proportion_completed  # Estimated time of arrival
+            progress = "\tProgress: " + str(COMPLETSOFAR) + "/" + str(TOTAL_TO_CIMPLET)
+
+            if proportion_completed <= 0:
+                return print_status(
+                    title
+                    + "NO PROGRESS; INFINITE TIME REMAINING. T="
+                    + str(temp)
+                    + (progress)
+                )
+
+            eta = float(time_elapsed_in_seconds) / proportion_completed
+            # Estimated time of arrival
             etr=eta- time_elapsed_in_seconds # Estimated time remaining
-            return out_method(title+(("ETR=" + str(timedelta(seconds=etr)) + "\tETA=" + str(timedelta(seconds=eta)) + "\tT="+str(temp) + completerey if etr > 0 else "COMPLETED IN " + str(temp)+completerey+"\n")))
+
+            return print_status(
+                title
+                + (
+                    (
+                        "ETR="
+                        + str(timedelta(seconds=etr))
+                        + "\tETA="
+                        + str(timedelta(seconds=eta))
+                        + "\tT="
+                        + str(temp)
+                        + progress
+                        if etr > 0
+                        else "COMPLETED IN " + str(temp) + progress + "\n"
+                    )
+                )
+            )
+
     def out(n,print_out=True):
         return display_eta(n/total_n,timer(),print_out=print_out,TOTAL_TO_CIMPLET=total_n,COMPLETSOFAR=n)
+
     return out
 
 class eta:
@@ -23629,8 +23695,9 @@ def line_split(string):
     EXAMPLE: line_split('hello\nworld')==['hello','world']
     """
     return string.splitlines()
-def line_join(lines):
+def line_join(*lines):
     """ EXAMPLE: line_join(['hello','world'])=='hello\nworld' """
+    lines=detuple(lines)
     lines=[str(line) for line in lines]#Make sure all lines are strings. This lets line_join([1,2,3,4,5]) not crash
     return '\n'.join(lines)
 
@@ -32708,8 +32775,39 @@ def _string_pager_via_pypager(string):
     p.run()
 
 def _string_pager_via_click(string):
+    """ A pure-python alternative to less """
     click=pip_import('click')
     click.echo_via_pager(string)
+
+def _string_pager_via_less(string):
+   """
+   Pipes a string into less, respecting ANSI escape sequences for coloring.
+
+   Args:
+       string: The string to pipe into less.
+
+   Raises:
+       FileNotFoundError: If the 'less' command is not found.
+       Exception: For other errors during the process.
+
+   EXAMPLE:
+     >>> colored_text = '\\033[31mRed Text\\033[0m'
+     >>> _string_pager_via_less(colored_text)
+     # (less pager will open displaying 'Red Text' in red)
+   """
+   import subprocess
+   import os
+
+   try:
+       process = subprocess.Popen(
+           ['less', '-r'],  # -r option to interpret raw control characters (ANSI escapes)
+           stdin=subprocess.PIPE,
+           stderr=subprocess.PIPE
+       )
+       process.communicate(string.encode('utf-8')) # Encode string to bytes for stdin
+
+   except FileNotFoundError:
+       raise FileNotFoundError("less command not found. Please make sure less is installed.")
 
 def string_pager(string):
     """
@@ -32718,7 +32816,13 @@ def string_pager(string):
     Useful for displaying gigantic outputs without printing the whole thing
     """
     string=str(string)
-    _string_pager_via_click(string)
+
+    if currently_running_unix() and 'less' in get_system_commands(use_cache=True):
+        _string_pager_via_less(string)
+    else:
+        #Maybe windows needs this? Idk io
+        _string_pager_via_click(string)
+
     # _string_pager_via_pypager(string)#We're not using this one right now, because it uses prompt toolkit and might break if we have the wrong version installed
 
 
@@ -33806,7 +33910,7 @@ def get_cache_file_path(url, *, cache_dir=None, file_extension=None, hash_func=N
 
 def get_cache_file_paths(urls, *, cache_dir=None, file_extension=None, hash_func=None, lazy=False, show_progress=False):
     """Plural of get_cache_file_path, supporting a `lazy` option"""
-    func = gather_args_wrap(get_cache_file_path)
+    func = gather_args_bind(get_cache_file_path)
     if show_progress is True: show_progress='eta:'+get_current_function_name()
     out = load_files(func, urls, lazy=lazy, num_threads=0, show_progress=show_progress)
     return out
@@ -34949,6 +35053,7 @@ def _set_ryan_tmux_conf():
         bind '"' split-window -c "#{pane_current_path}"
         bind % split-window -h -c "#{pane_current_path}"
         bind C new-window -c "#{pane_current_path}"  #Use capital C to create new window with same directory as current pane
+        bind e setw synchronize-panes #e synchronizes the keyboard
     #COLORS:
         #Let tmux use 256 colors, instead of being limited to plain boring ascii colors
         # set -g default-terminal "tmux-256color" #Glitchy, can't reset. Breaks lazygit. Don't use.
@@ -35340,9 +35445,37 @@ def _run_tmux_command(command):
     result = subprocess.run(command, text=True, capture_output=True)
     return result.stdout.strip()
 
-def _get_current_tmux_window():
+def tmux_get_current_pane_index() -> int:
+    """Returns the index of the current tmux pane."""
+    return int(_run_tmux_command("tmux display -p -t '{down-of}' '#{pane_index}'".split()))
+
+def tmux_get_current_window_index() -> int:
     """Returns the index of the current tmux window."""
-    return int(_run_tmux_command(['tmux', 'display-message', '-p', '#{window_index}']))
+    return int(_run_tmux_command(["tmux", "display-message", "-p", "#{window_index}"]))
+
+def tmux_get_current_window_name() -> str:
+    """Returns the name of the current tmux window."""
+    return _run_tmux_command(["tmux", "display-message", "-p", "#{window_name}"])
+
+def tmux_get_current_session_index() -> int:
+    """Returns the index of the current tmux session."""
+    return int(_run_tmux_command(["tmux", "display-message", "-p", "#{session_index}"]))
+
+def tmux_get_current_session_name() -> str:
+    """
+    Returns:
+        str: The name of the current tmux session.
+
+    Raises:
+        AssertionError: If you run this function outside of tmux
+
+    Examples:
+        # Within a tmux session
+        >>> tmux_get_current_session_name()
+        'mysession'
+    """
+    assert running_in_tmux(), 'rp.tmux_get_current_session_name: This function must be called while running in tmux'
+    return _run_tmux_command('tmux display-message -p #{session_name}'.split())
 
 def _get_all_tmux_windows():
     """Returns a list of all window indexes in the current tmux session."""
@@ -35351,7 +35484,7 @@ def _get_all_tmux_windows():
 
 def _tmux_close_windows(filter_condition):
     """Closes tmux windows based on a filtering condition function, private to this module."""
-    current_window = _get_current_tmux_window()
+    current_window = tmux_get_current_window_index()
     all_windows = _get_all_tmux_windows()
     windows_to_close = [w for w in all_windows if filter_condition(w, current_window)]
 
@@ -35373,7 +35506,7 @@ def tmux_close_other_windows():
 
 def tmux_close_other_sessions():
     """Closes all tmux sessions except the current one."""
-    current_session = _get_current_tmux_session()
+    current_session = tmux_get_current_session_name()
     all_sessions = _get_all_tmux_sessions()
     sessions_to_close = [s for s in all_sessions if s != current_session]
 
@@ -35383,10 +35516,6 @@ def tmux_close_other_sessions():
 
 tmux_kill_other_sessions = tmux_close_other_sessions
 
-def _get_current_tmux_session():
-    """Returns the name of the current tmux session."""
-    return _run_tmux_command(['tmux', 'display-message', '-p', '#{session_name}'])
-
 def _get_all_tmux_sessions():
     """Returns a list of all session names in tmux."""
     sessions = _run_tmux_command(['tmux', 'list-sessions', '-F', '#{session_name}']).split()
@@ -35394,7 +35523,7 @@ def _get_all_tmux_sessions():
 
 def tmux_detach_other_clients():
     """Detaches all other clients from the current tmux session."""
-    current_session = _get_current_tmux_session()
+    current_session = tmux_get_current_session_name()
     all_clients = _get_all_tmux_clients(current_session)
     current_client = _get_current_tmux_client()
     clients_to_detach = [c for c in all_clients if c != current_client]
@@ -35438,7 +35567,7 @@ def tmux_get_unique_session_name(name=""):
         index+=1
     
     return candidate_name
-        
+
 def tmux_get_current_session_name():
     """
     Returns:
@@ -36508,9 +36637,8 @@ def get_video_file_shape(path, use_cache=True):
         return _video_shape_cache[path]
 
     pip_import('moviepy')
-    from moviepy.editor import VideoFileClip
 
-    with VideoFileClip(path) as video:
+    with _moviepy_VideoFileClip(path) as video:
         width, height = video.size
         num_frames = int(video.fps * video.duration)
         num_channels = 3  # Assuming RGB - I'm not aware of any other formats
@@ -41097,9 +41225,22 @@ def _get_cotracker_model(device=None):
     
     Returns:
         The loaded CoTracker model
+
+    Downloads are cached here: ~/.cache/torch/hub/facebookresearch_co-tracker_main
     """
     import torch
-    cotracker = torch.hub.load("facebookresearch/co-tracker", "cotracker3_offline")
+
+    model_name = 'cotracker3_offline'
+
+    try:
+        #Don't use internet if we don't have to! Try to use the torch hub cache so I can transfer it onto offline computers like XCloud
+        cache_path = '~/.cache/torch/hub/facebookresearch_co-tracker_main'
+        cache_path = rp.get_absolute_path(cache_path)
+        cotracker = torch.hub.load(cache_path, model_name, source='local')
+    except FileNotFoundError:
+        #Download from the internet...
+        cotracker = torch.hub.load("facebookresearch/co-tracker", model_name)
+
     if device is not None:
         cotracker = cotracker.to(device)
     return cotracker
