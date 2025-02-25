@@ -34958,8 +34958,7 @@ def _sort_imports_via_isort(code):
     return isort.code(code)
 sort_imports_via_isort = _sort_imports_via_isort
 
-def _set_ryan_tmux_conf():
-    conf=r'''
+_ryan_tmux_conf=r'''
 #Ryan Burgert's Tmux config
 #Main changes:
 #   * Note: These shortcuts are all preceded by Control+B
@@ -35043,6 +35042,8 @@ def _set_ryan_tmux_conf():
     #CHANGING THE LEADER:
         # bind-key M-a set-option -g prefix M-b # Alt+a sets the leader to Alt+B
         # bind-key C-a set-option -g prefix C-b # Control+A sets the leAder to Control+B
+    #PANE SYNCHRONIZATOIN:
+        bind e setw synchronize-panes #e synchronizes the keyboard
 
 #OPTIONS:
     #ESCAPE:
@@ -35094,10 +35095,11 @@ def _set_ryan_tmux_conf():
            #https://github.com/tmux/tmux/wiki/Clipboard#terminal-support---tmux-inside-tmux
            # set -g set-clipboard external
            set -g set-clipboard on
-    '''
+'''
+def _set_ryan_tmux_conf():
     conf_path=get_absolute_path("~/.tmux.conf")
     if not file_exists(conf_path) or input_yes_no("You already have a tmux config file ~/.tmux.conf, would you like to overwrite it?"):
-        string_to_text_file(conf_path,conf)
+        string_to_text_file(conf_path,_ryan_tmux_conf)
         shell_command('git clone https://github.com/tmux-plugins/tmux-yank ~/clone/path')
         print("Succesfully configured your tmux! Please restart tmux to see the changes.")
     try:
