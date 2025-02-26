@@ -35641,14 +35641,37 @@ def tmux_kill_sessions(*session_names,strict=False):
 
 def tmux_type_in_all_panes(keystrokes: str, *, session: str = None, window: str = None):
     """
-    Sends keystrokes to all panes within a specified Tmux session and window. If no session or window is specified,
-    the current active session and window are used. If only a session is specified, it targets the default window in that session.
+    Sends keystrokes to all panes within a specified Tmux session and window.
+    If no session or window is specified, the current active session and window are used.
+    If only a session is specified, it targets the default window in that session.
     If only a window is specified, it targets that window in the current session.
 
     Args:
         keystrokes (str): The keystrokes to send.
         session (str, optional): The target session name or ID (defaults to the current session).
         window (str, optional): The target window within the session (defaults to the current window).
+
+    Special keys and key combinations can be sent using tmux's `send-keys` syntax.
+    For example, to send `control+c`, use `"C-c"` as the `keystrokes` argument.
+    Here, `"C-"` prefixes denote the Control key, followed by the key itself (`"c"` in this case).
+
+    **Common Special Keys:**
+
+    - **Control Key:**  Use `"C-"` prefix (e.g., `"C-c"`, `"C-v"`, `"C-a"`)
+    - **Enter:** `"Enter"`
+    - **Space:** `"Space"`
+    - **Tab:** `"Tab"`
+    - **Escape:** `"Escape"`
+    - **Backspace:** `"Backspace"`
+    - **Delete:** `"Delete"`
+    - **Up Arrow:** `"Up"`
+    - **Down Arrow:** `"Down"`
+    - **Left Arrow:** `"Left"`
+    - **Right Arrow:** `"Right"`
+
+    For a comprehensive list of all supported keys, refer to the `tmux send-keys` documentation
+    (e.g., by running `man tmux` in your terminal and searching for "send-keys").
+
     """
     import subprocess
 
