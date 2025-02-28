@@ -2749,7 +2749,7 @@ def slowmo_video_via_rife(video):
         save_images(video, input_dir, show_progress=True)
         command=shlex.quote(rife_executable) + " -i " + shlex.quote(input_dir) + " -o " + shlex.quote(output_dir)
         fansi_print(command, 'yellow')
-        os.system(command)
+        _run_sys_command(command)
         new_video = load_images(output_dir, show_progress=True)
         new_video = as_numpy_array(new_video)
     finally:
@@ -16867,7 +16867,13 @@ def _ISM(ans,*,preview:str=None):
         return _iterfzf(ans,multi=True,exact=True,preview=preview)
 
 _which_cache={}
-def _shell_which(cmd):
+def _which(cmd):
+
+    #Faster than using the which command...
+    import shutil
+    util_which = shutil.which(cmd)
+    if util_which:
+        return util_which
         
     def update(cmd):
         output=shell_command('which '+cmd)
@@ -16879,6 +16885,7 @@ def _shell_which(cmd):
     else:
         update(cmd)
         return _which_cache[cmd]
+
 _whiches_cache=None
 def _whiches():
     global _whiches_cache
@@ -16886,7 +16893,7 @@ def _whiches():
     def refresh(show_progress=False):
         global _whiches_cache
         keys = get_system_commands()
-        values = load_files(_shell_which, keys, show_progress=show_progress)
+        values = load_files(_which, keys, show_progress=show_progress)
         _whiches_cache =  {k:v for k,v in zip(keys,values)}
 
     if _whiches_cache is None:
@@ -18510,8 +18517,10 @@ def pseudo_terminal(
         MVPH $r._cpah($string_from_clipboard(),$move_path)
         MPH  $r._cpah($string_from_clipboard(),$move_path)
 
-        GCLP $git_clone($string_from_clipboard())
-        GCLA $git_clone(ans,show_progress=True)
+        GCLP  $git_clone($string_from_clipboard())
+        GCLPS $git_clone($string_from_clipboard(),depth=1)
+        GCLA  $git_clone(ans,show_progress=True)
+        GCLAS $git_clone(ans,show_progress=True,depth=1) #Git-Clone ans Shallow
         GURL $get_git_remote_url()
         SURL $shorten_url(ans)
         REPO $get_path_parent($get_git_repo_root($get_absolute_path('.')))
@@ -30187,22 +30196,6 @@ save_animated_gif = save_video_gif = save_animated_gif_via_pil = save_video_gif_
 
 
 
-def _ensure_ffmpeg_installed():
-    if "ffmpeg" not in get_system_commands():
-        if   currently_running_windows(): assert False, "Please install ffmpeg! https://www.ffmpeg.org/download.html"
-        elif currently_running_linux  (): assert False, "Please install ffmpeg! >>> sudo apt install ffmpeg"
-        elif currently_running_mac    (): assert False, "Please install ffmpeg! >>> brew install ffmpeg #get brew at https://brew.sh"
-        else:                             assert False, "Please install ffmpeg!"
-
-def _ensure_nvtop_installed():
-    if "nvtop" not in get_system_commands():
-        assert False, "Please install nvtop! sudo apt install nvtop"
-
-def _ensure_zsh_installed():
-    if "zsh" not in get_system_commands():
-        assert False, "Please install zsh! sudo apt install zsh"
-
-
 def convert_to_gif_via_ffmpeg(
     video_path,
     output_path=None,
@@ -35138,6 +35131,8 @@ _ryan_tmux_conf=r'''
         # bind-key C-a set-option -g prefix C-b # Control+A sets the leAder to Control+B
     #PANE SYNCHRONIZATOIN:
         bind e setw synchronize-panes #e synchronizes the keyboard
+    #PANE RESET
+        bind C-r respawn-pane -k #Respawn a pane
 
 #OPTIONS:
     #ESCAPE:
@@ -35201,6 +35196,137 @@ def _set_ryan_tmux_conf():
     except Exception:
         pass
 
+def _run_sys_command(command, title='SYS COMMAND'):
+    """ 
+    Run a system command, announcing it
+
+    EXAMPLE:
+        >>> _run_sys_command('echo hello')
+        SYS COMMAND: echo hello
+        hello
+        ans = 0
+    """
+    message = fansi(title+": ",'bold green')+fansi(command, 'green')
+    print(message)
+    return os.system(command)
+
+def _ensure_installed(name:str,*,windows=None,mac=None,linux=None):
+    """ Attempts to install a program on various operating systems """
+
+    assert isinstance(name,    str)
+    assert isinstance(linux,   str) or linux   is None
+    assert isinstance(mac,     str) or mac     is None
+    assert isinstance(windows, str) or windows is None
+
+    if system_command_exists(name):
+        #Don't reinstall what we've already installed
+        return
+
+    if   currently_running_linux()   and linux   is None: raise RuntimeError('r._ensure_installed('+repr(name)+'): Linux not supported!')
+    elif currently_running_mac()     and mac     is None: raise RuntimeError('r._ensure_installed('+repr(name)+'): MacOS not supported!')
+    elif currently_running_windows() and windows is None: raise RuntimeError('r._ensure_installed('+repr(name)+'): Windows not supported!')
+
+    if   currently_running_linux()  : command = linux
+    elif currently_running_mac()    : command = mac
+    elif currently_running_windows(): command = windows
+
+    if   starts_with_any(command, 'brew ', 'yes | brew '): _ensure_brew_installed()
+    elif starts_with_any(command, 'curl ', 'yes | curl '): _ensure_curl_installed()
+    elif starts_with_any(command, 'apt', 'apt-get'): command = 'sudo '+command
+
+    error_code =_run_sys_command(command)
+
+    if error_code:
+        raise RuntimeError('r._ensure_installed('+name+'): Failed to run system command with error code %i: %s' % (error_code, command))
+
+def _brew_install(x):
+    _ensure_brew_installed()
+    command = 'brew install '+shlex.quote(x)
+    _run_sys_command(command)
+
+def _ensure_brew_installed():
+    assert not currently_running_windows(), 'r._ensure_brew_installed: brew isnt supported on Windows. Try WSL? See https://docs.brew.sh/Installation'
+    if not system_command_exists('brew'):
+        _run_sys_command('''/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"''')
+    assert system_command_exists('brew'), 'r._ensure_brew_installed: Failed to automatically install homebrew. Please see https://brew.sh'
+
+def _ensure_curl_installed():
+    _ensure_installed(
+        'curl',
+        mac='brew install curl',
+        linux='apt install curl --yes',
+        windows='winget install --id=cURL.cURL -e --accept-source-agreements', #https://winstall.app/apps/cURL.cURL
+    )
+
+def _ensure_ffmpeg_installed():
+    _ensure_installed(
+        'ffmpeg',
+        mac='brew install ffmpeg',
+        linux='apt install ffmpeg --yes',
+        windows='winget install --id=Gyan.FFmpeg  -e --accept-source-agreements', #https://winstall.app/apps/Gyan.FFmpeg
+    )
+    if not system_command_exists("ffmpeg"):
+        if   currently_running_windows(): assert False, "Please install ffmpeg! https://www.ffmpeg.org/download.html"
+        elif currently_running_linux  (): assert False, "Please install ffmpeg! >>> sudo apt install ffmpeg"
+        elif currently_running_mac    (): assert False, "Please install ffmpeg! >>> brew install ffmpeg #get brew at https://brew.sh"
+        else:                             assert False, "Please install ffmpeg!"
+
+def _ensure_nvtop_installed():
+    _ensure_installed(
+        'nvtop',
+        mac=None,
+        linux='apt install nvtop --yes',
+        windows=None,
+    )
+
+def _ensure_zsh_installed():
+    _ensure_installed(
+        'zsh',
+        mac='brew install zsh',
+        linux='apt install zsh --yes',
+        windows=None,
+    )
+
+def _ensure_tmux_installed():
+    _ensure_installed(
+        'tmux',
+        mac='brew install tmux',
+        linux='apt install tmux --yes',
+        windows=None,
+    )
+
+def _ensure_ollama_installed():
+    _ensure_installed(
+        'ollama',
+        mac='brew install ollama',
+        linux='curl -fsSL https://ollama.com/install.sh | sh',
+        windows='winget install --id=Ollama.Ollama  -e  --accept-source-agreements', #https://winstall.app/apps/Ollama.Ollama
+    )
+    pip_import('ollama')
+
+def _install_grounded_sam_2(grounded_sam_dir:str=None,force=False):
+    """
+    WARNING: This function might be moved to CommonSource!
+    Installs this: https://github.com/IDEA-Research/Grounded-SAM-2
+    Downloads code, installs it
+    Downloads checkpoints too
+    If grounded_sam_dir is not specified, defaults to rp's downloads folder
+    """
+    grounded_sam_dir = grounded_sam_dir or path_join(r._rp_downloads_folder, "grounded_sam_2")
+    
+    if force and folder_exists(grounded_sam_dir):
+        shutil.rmtree(grounded_sam_dir)
+        
+    if not folder_exists(grounded_sam_dir):
+        git_clone("https://github.com/IDEA-Research/Grounded-SAM-2", grounded_sam_dir, depth=1)
+        
+    with SetCurrentDirectoryTemporarily(grounded_sam_dir):
+        os.environ["SAM2_BUILD_CUDA"] = "0"
+        for checkpoint_folder in ["gdino_checkpoints", "checkpoints"]:
+            with SetCurrentDirectoryTemporarily(checkpoint_folder):
+                os.system("bash download_ckpts.sh")
+        pip_install('-e ".[notebooks]"')
+
 def _load_ryan_lazygit_config():
     _install_lazygit()
 
@@ -35233,7 +35359,7 @@ def _load_ryan_lazygit_config():
     """).strip()
 
     if file_exists(path) and config_lines.strip() not in load_text_file(path):
-        append_line_to_file(config_lines,path)
+        append_line_to_file(config_lines + "\n", path)
 
     return path
 
@@ -35246,9 +35372,9 @@ def _install_lazygit(force=False):
     with SetCurrentDirectoryTemporarily(make_directory(temporary_file_path())):
         
         if currently_running_mac():
-            os.system('brew install jesseduffield/lazygit/lazygit')
+            _brew_install('jesseduffield/lazygit/lazygit')
         elif currently_running_linux():
-            os.system(
+            _run_sys_command(
                 unindent(
                 r"""
                 LAZYGIT_VERSION=$(curl -s "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
@@ -35260,17 +35386,17 @@ def _install_lazygit(force=False):
             )
         elif currently_running_windows():
             #Untested
-            os.system("""winget install -e --id=JesseDuffield.lazygit""")
+            _run_sys_command("""winget install -e --id=JesseDuffield.lazygit""")
         
     
     
-def _install_filebrowser():
+def _ensure_filebrowser_installed():
     """https://filebrowser.org/installation"""
 
     system_commands = get_system_commands()
 
     if "filebrowser" in system_commands:
-        print("r._install_filebrowser: filebrowser already installed")
+        print("r._ensure_filebrowser_installed: filebrowser already installed")
         return
     if "brew" in system_commands:
         command = "brew tap filebrowser/tap && brew install filebrowser"
@@ -35281,15 +35407,15 @@ def _install_filebrowser():
     else:
         assert False, "Unsupported OS"
 
-    os.system(command)
+    _run_sys_command(command)
 
-def _install_cog():
+def _ensure_cog_installed():
     """ 
     Cog is an open source tool that makes it easy to put a machine learning model in a Docker container.
     https://replicate.com/docs/guides/push-a-model
     """
     if not 'cog' in get_system_commands():
-        os.system("""
+        _run_sys_command("""
             sudo curl -o /usr/local/bin/cog -L https://github.com/replicate/cog/releases/latest/download/cog_`uname -s`_`uname -m`
             sudo chmod +x /usr/local/bin/cog
         """)
@@ -35301,7 +35427,7 @@ def _run_bashtop():
             'rp: "bashtop" command not found - trying to install it!', "yellow", "bold"
         )
         if currently_running_linux():
-            os.system("""yes | sudo add-apt-repository ppa:bashtop-monitor/bashtop
+            _run_sys_command("""yes | sudo add-apt-repository ppa:bashtop-monitor/bashtop
                          sudo apt update
                          sudo apt install bashtop""")
         elif currently_running_mac():
@@ -35317,10 +35443,10 @@ def _run_bashtop():
 
 def _configure_filebrowser():
     #https://filebrowser.org/configuration/authentication-method
-    os.system('filebrowser config set --auth.method=noauth')
+    _run_sys_command('filebrowser config set --auth.method=noauth')
     
 def _run_filebrowser(port=8080, root='.'):
-    _install_filebrowser()
+    _ensure_filebrowser_installed()
     _configure_filebrowser()
 
     port=get_next_free_port(port)
@@ -35328,7 +35454,6 @@ def _run_filebrowser(port=8080, root='.'):
     print('r._run_filebrowser: Running '+repr(command))
 
     os.system(command)
-
 
 def get_port_is_taken(port: int) -> bool:
     """
@@ -41232,7 +41357,7 @@ def _pip_import_depth_pro(autoyes=False):
                         + shlex.quote(sys.executable)
                         + " -m pip install -e ."
                     )
-                    os.system(command)
+                    _run_sys_command(command)
 
                     fansi_print("RUNNING COMMAND: " + command, "cyan", "bold")
 
@@ -41513,7 +41638,7 @@ def _pip_import_pyflow():
                     import pyflow
                     return pyflow
                 except ImportError:
-                    os.system(sys.executable + " setup.py build_ext -i")
+                    _run_sys_command(sys.executable + " setup.py build_ext -i")
 
         import pyflow
         return pyflow
