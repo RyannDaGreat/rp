@@ -4344,8 +4344,7 @@ def _load_files(
                 show_eta(num_yielded)
             elif action == "done":
                 elapsed_time = gtoc() - start_time
-                _erase_terminal_line()
-                print("%s: Done! Did %i items in %.3f seconds"%(eta_title, num_yielded, elapsed_time))#This is here because of the specifics of the eta function we're using to display progress
+                _print_status("%s: Done! Did %i items in %.3f seconds"%(eta_title, num_yielded, elapsed_time))#This is here because of the specifics of the eta function we're using to display progress
 
     else:
         def progress_func(action):
@@ -10651,7 +10650,14 @@ def save_pickled_value(file_name: str,*variables):
 def string_to_text_file(file_path: str,string: str,) -> None:
     "string_to_text_file(file_path, string) writes text file"
     file_path=get_absolute_path(file_path)#Make sure it recognizes ~/.vimrc AKA with the ~ attached
-    file=open(file_path,"w")
+
+    try:
+        file=open(file_path,"w")
+    except Exception:
+        if not folder_exists(get_parent_folder(file_path)):
+            raise FileNotFoundError("Parent folder does not exist: "+str(get_parent_folder(file_patH)))
+        raise
+
     try:
         file.write(string)
     except Exception:
@@ -10749,12 +10755,21 @@ def as_easydict(*args, **kwargs):
     return EasyDict(*args, **kwargs)
 
 
+_load_json_cache={}
 def load_json(path, *, use_cache=False):
+
+    if use_cache and path in _load_json_cache:
+        from copy import deepcopy
+        return as_easydict(deepcopy(_load_json_cache[path]))
+
     text=text_file_to_string(path, use_cache=use_cache)
     import json
     out = json.loads(text)
     if not isinstance(out, dict):
         return out
+
+    if use_cache or path in _load_json_cache:
+        _load_json_cache[path]=out
 
     return as_easydict(out)
 
@@ -10771,6 +10786,7 @@ def load_jsons(*paths, use_cache=False, strict=True, num_threads=None, show_prog
 
 def save_json(data,path,*,pretty=False,default=None):
     import json
+
 
     kwargs = dict(default=default)
     if pretty:
@@ -11610,7 +11626,7 @@ def get_nested_value(list_to_be_accessed,*address_int_list,ignore_errors: bool =
 #             from os import system
 #             system(command)
 
-def shell_command(command: str, stdin: str = None) -> str:
+def shell_command(command: str, *, stdin: str = None) -> str:
     """
     Execute a shell command and return its output.
 
@@ -11711,6 +11727,62 @@ def _get_cached_system_commands():
         rp.run_as_new_thread(update_sys_commands)
 
     return _get_sys_commands_cache
+
+_system_command_exists_cache = {}
+def system_command_exists(command, *, use_cache=False):
+    """
+    Checks if a system command exists; returns True if it does, False otherwise.
+    
+    Args:
+        command: The system command to check (string).
+        use_cache: Whether to use cached results if available (default: True).
+        
+    Returns:
+        bool: True if the command exists, False otherwise.
+    Faster than 
+        >>> command in get_all_system_commands() #Slow
+        >>> system_command_exists(command) #Fast
+        
+    Examples:
+        >>> system_command_exists("nonexistentcommand12345")
+        False
+        >>> system_command_exists("ls")
+        True
+        >>> system_command_exists("python3")
+        True
+        >>> system_command_exists('/opt/homebrew/bin/python3')
+        True
+        
+    Benchmark Results (1000 iterations, use_cache=False):
+        ┌──────────────────┬──────────┬──────────┬───────────┬─────────────────┐
+        │ Method           │ Min (ms) │ Max (ms) │ Mean (ms) │ Performance     │
+        ├──────────────────┼──────────┼──────────┼───────────┼─────────────────┤
+        │ shutil.which     │ 0.025    │ 0.242    │ 0.038     │ baseline        │
+        │ subprocess.run   │ 5.538    │ 19.546   │ 6.057     │ ~200x slower    │
+        │ get_all_commands │ 36.220   │ 59.800   │ 43.680    │ ~1150x slower   │
+        └──────────────────┴──────────┴──────────┴───────────┴─────────────────┘
+    """
+    import shutil
+    if not isinstance(command, str):
+        raise TypeError("Command must be a string.")
+    
+    if use_cache and command in _system_command_exists_cache:
+        return _system_command_exists_cache[command]
+    
+    #METHOD 1: Super fast!
+    exists = shutil.which(command) is not None
+
+    ##METHOD 2: THIS WORKS, BUT BENCHMARKED OVER 100x SLOWER THAN shutil.which
+    #try:
+    #    exists = subprocess.run(['which', command], shell=False, check=False, capture_output=True).returncode == 0
+    #except FileNotFoundError:
+    #    exists = False
+
+    ##METHOD 3: ORIGINAL, SLOWEST VERSION - DOESN'T HANDLE PATHS LIKE /opt/homebrew/bin/python3
+    #exists = command in get_system_commands()
+        
+    _system_command_exists_cache[command] = exists
+    return exists
 
 def add_to_env_path(path):
     """
@@ -14484,6 +14556,25 @@ def reload_rp():
 #         return display_eta(n/total_n,timer(),print_out=print_out,TOTAL_TO_CIMPLET=total_n,COMPLETSOFAR=n)
 #     return out
 
+
+_print_status_prev_len = 0
+def _print_status(x):
+    """ Print a single line in such a way that it will be overwritten if we call _print_status again """
+    global _print_status_prev_len
+
+    x = str(x)
+
+    if not running_in_jupyter_notebook():
+        _erase_terminal_line()
+
+    print(
+        "\r" + " " * _print_status_prev_len + "\r" + x,
+        end="",
+        flush=True,
+    )
+
+    _print_status_prev_len = len(x)
+
 def _eta(total_n,*,min_interval=.3,title="r.eta"):
     """
     Example:
@@ -14495,24 +14586,22 @@ def _eta(total_n,*,min_interval=.3,title="r.eta"):
     """
     from datetime import timedelta
 
-    timer=tic()
-    interval_timer=[tic()]
-    title=title+": "
+    timer = tic()
+    interval_timer = tic()
+    title = title + ": "
 
-    def print_status(x):
-        x=str(x)
-        _erase_terminal_line()
-        print(x,end='',flush=True)
+    def display_eta(proportion_completed,time_elapsed_in_seconds,TOTAL_TO_COMPLETE,COMPLETED_SO_FAR):
+        nonlocal interval_timer
 
-    def display_eta(proportion_completed,time_elapsed_in_seconds,TOTAL_TO_CIMPLET,COMPLETSOFAR,print_out=True):
-        if interval_timer[0]()>=min_interval:
-            interval_timer[0]=tic()
+        if interval_timer()>=min_interval:
+            interval_timer=tic()
+
             # Estimated time of arrival printer
             temp=timedelta(seconds=time_elapsed_in_seconds)
-            progress = "\tProgress: " + str(COMPLETSOFAR) + "/" + str(TOTAL_TO_CIMPLET)
+            progress = "\tProgress: " + str(COMPLETED_SO_FAR) + "/" + str(TOTAL_TO_COMPLETE)
 
             if proportion_completed <= 0:
-                return print_status(
+                return _print_status(
                     title
                     + "NO PROGRESS; INFINITE TIME REMAINING. T="
                     + str(temp)
@@ -14521,9 +14610,9 @@ def _eta(total_n,*,min_interval=.3,title="r.eta"):
 
             eta = float(time_elapsed_in_seconds) / proportion_completed
             # Estimated time of arrival
-            etr=eta- time_elapsed_in_seconds # Estimated time remaining
+            etr = eta - time_elapsed_in_seconds  # Estimated time remaining
 
-            return print_status(
+            return _print_status(
                 title
                 + (
                     (
@@ -14540,8 +14629,13 @@ def _eta(total_n,*,min_interval=.3,title="r.eta"):
                 )
             )
 
-    def out(n,print_out=True):
-        return display_eta(n/total_n,timer(),print_out=print_out,TOTAL_TO_CIMPLET=total_n,COMPLETSOFAR=n)
+    def out(n):
+        return display_eta(
+            n / total_n,
+            timer(),
+            TOTAL_TO_COMPLETE=total_n,
+            COMPLETED_SO_FAR=n,
+        )
 
     return out
 
@@ -14570,8 +14664,8 @@ class eta:
 
         self.display_eta = _eta(x, title=title, min_interval=min_interval)
 
-    def __call__(self, n, print_out=True):
-        self.display_eta(n, print_out)
+    def __call__(self, n):
+        self.display_eta(n)
 
     def __iter__(self):
         for i,e in enumerate(self.elements):
@@ -14793,7 +14887,7 @@ def get_source_file(object):
 # region Editor Launchers
 def edit(file_or_object,editor_command='atom'):
     if isinstance(file_or_object,str):
-        return shell_command(editor_command +" " + repr(file_or_object),as_subprocess=True)# Idk if there's anything worth returning but maybe there is? run_as_subprocess is true so we can edit things in editors like vim, suplemon, emacs etc.
+        return os.system(editor_command +" " + shlex.quote(repr(file_or_object)))# Idk if there's anything worth returning but maybe there is? run_as_subprocess is true so we can edit things in editors like vim, suplemon, emacs etc.
     else:
         return edit(get_source_file(object=file_or_object),editor_command=editor_command)
 sublime=lambda x:edit(x,'sublime')
@@ -28328,7 +28422,7 @@ def launch_terminal_in_colab(height='400',fullscreen=False):
     from google.colab.output import serve_kernel_port_as_window
     from google.colab.output import serve_kernel_port_as_iframe
 
-    if 'shellinaboxd' not in get_system_commands():
+    if not system_command_exists('shellinaboxd'):
         print('Installing shellinabox...')
         os.system('apt install shellinabox &> /dev/null')
 
