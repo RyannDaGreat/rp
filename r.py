@@ -29492,11 +29492,20 @@ def get_youtube_video_thumbnail(url_or_id,*,use_cache=False,output='image'):
 def _moviepy_VideoFileClip(path, *args, **kwargs):
     """ Moviepy 2 has breaking changes! They moved a class. See https://zulko.github.io/moviepy/getting_started/updating_to_v2.html """
     pip_import('moviepy')
+
     try:
         from moviepy.editor import VideoFileClip  # MoviePy v1 import
+
+        return VideoFileClip(path, *args, **kwargs)
+
     except ImportError:
         from moviepy import VideoFileClip  # MoviePy v2 import
-    return VideoFileClip(path, *args, **kwargs)
+
+        try:
+            suppress_console_output() #It spams the console
+            return VideoFileClip(path, *args, **kwargs)
+        finally:
+            restore_console_output()
 
 def _get_video_file_duration_via_moviepy(path)->float:
     """
