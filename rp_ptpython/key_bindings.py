@@ -2149,10 +2149,17 @@ def handle_character(buffer,char,event=None):
                 token=shortcuts[before]
 
             if token is not None and not is_callable_token(before) and not is_iterable_token(before):
-                #Allow 'cd thing' to be 'CD thing'
                 buffer.delete_before_cursor(len(before))
-                buffer.insert_text(token+' ')
+                if isinstance(token, str):
+                    #Allow 'cd thing' to be 'CD thing'
+                    buffer.insert_text(token+' ')
+                else:
+                    assert len(token)==2, token
+                    buffer.insert_text(token[0])
+                    buffer.insert_text(token[1])
+                    buffer.cursor_left(len(token[1]))
                 return True
+
 
         #OLD VERSION
         #if before=='cd' and not after and char==' ':

@@ -17334,8 +17334,8 @@ def _add_pterm_prefix_shortcut(shortcut:str,replacement:str):
     When using pterm, you can type commands like 'pi ' --> 'PIP install '
     This lets you add custom ones from your rprc file, like _add_prefix_shortcut('fu','!fileutil')
     """
-    assert isinstance(shortcut,str)
-    assert isinstance(replacement,str)
+    assert isinstance(shortcut,str), shortcut
+    assert isinstance(replacement,str) or isinstance(replacement, list) and len(replacement)==2, replacement
     
     import rp.r_iterm_comm as ric
     ric.kibble_shortcuts[shortcut]=replacement
@@ -33656,7 +33656,7 @@ def is_gs_url(url):
 
 def download_url(url, path=None, *, skip_existing=False, show_progress=False, timeout=None):
     """
-    Works with both HTTP, Aws S3 and Google Cloud Storage urls
+    Works with both HTTP, Aws S3 and Google Cloud Storage urls, as well as /cns paths accessed via Google's internal fileutil
     Download a file from a url and return the path it downloaded to. It no path is specified, it will choose one for you and return it (as a string)
     If path exists and it is a folder, it will download to the url's filename in that folder
     EXAMPLE: open_file_with_default_application(download_url('https://i.imgur.com/qSmVyCo.jpg'))#Show a picture of a cat
@@ -33671,7 +33671,7 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
 
     else:
         if path is None:
-            path=get_file_name(url)
+            path= './' + get_file_name(url)
 
         #Create the parent directory of the destination if it doesn't already exist
         root = get_path_parent(path)
@@ -33711,6 +33711,28 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
             raise TimeoutError("rp.download_url timed out downloading Google Cloud Storage url %s to path %s"%(url,path))
         except subprocess.CalledProcessError as e:
             raise Exception("rp.download_url failed to download Google Cloud Storage url %s to path %s: "%(url,path) + str(e))
+
+        return path
+    
+    elif url.startswith('/cns/') and system_command_exists('fileutil', use_cache=True) and not folder_exists('/cns'):
+        #We're on an internal Google computer and want to download a file from colossus
+
+        import subprocess
+
+        try:
+            kwargs = dict()
+            fileutil_args = ['fileutil', 'cp', '--R', '--f']
+            if timeout:
+                fileutil_args+=['--fileutil_timeout',str(timeout)] #Not a guarantee - in the doc it says its aspirational
+                fileutil_args = ['timeout', str(timeout*2)] + fileutil_args #So we kill it if it takes 2x as long as the deadline
+            fileutil_args+=[url,path]
+            if not show_progress:
+                kwargs.update(dict(stderr=subprocess.DEVNULL))
+            subprocess.check_call(fileutil_args,**kwargs)
+        except subprocess.TimeoutExpired:
+            raise TimeoutError("rp.download_url timed out downloading Google Colossus url %s to path %s"%(url,path))
+        except subprocess.CalledProcessError as e:
+            raise Exception("rp.download_url failed to download Google Colossus url %s to path %s: "%(url,path) + str(e))
 
         return path
 
