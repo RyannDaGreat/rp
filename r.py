@@ -34935,6 +34935,7 @@ __import__("sys").path.append(__import__("os").getcwd())
 
 ## Custom command prefix shortcuts
 #__import__('rp').r._add_pterm_prefix_shortcut("fu","!!fileutil")
+#__import__('rp').r._add_pterm_prefix_shortcut("fp",["fansi_print('","','green bold')"])
 
 ## Custom pterm commands
 #__import__('rp').r._add_pterm_command_shortcuts('''
