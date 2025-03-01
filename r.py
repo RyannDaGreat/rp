@@ -35340,6 +35340,14 @@ def _ensure_brew_installed():
         _run_sys_command('''/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"''')
     assert system_command_exists('brew'), 'r._ensure_brew_installed: Failed to automatically install homebrew. Please see https://brew.sh'
 
+def _ensure_wget_installed():
+    _ensure_installed(
+        'wget',
+        mac='brew install wget',
+        linux='apt install wget --yes',
+        windows='winget install --id=JernejSimoncic.Wget  -e --accept-source-agreements', #https://winstall.app/apps/JernejSimoncic.Wget
+    )
+
 def _ensure_curl_installed():
     _ensure_installed(
         'curl',
@@ -35377,6 +35385,12 @@ def _ensure_zsh_installed():
         windows=None,
     )
 
+def _install_oh_my_zsh():
+    """ https://ohmyz.sh/#install """
+    _ensure_zsh_installed()
+    _ensure_curl_installed()
+    _run_sys_command('sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"')
+
 def _ensure_tmux_installed():
     _ensure_installed(
         'tmux',
@@ -35385,6 +35399,15 @@ def _ensure_tmux_installed():
         windows=None,
     )
 
+def _ensure_git_installed():
+    _ensure_installed(
+        'git',
+        mac='brew install git',
+        linux='apt install git --yes',
+        windows='winget install --id=Git.Git  -e --accept-source-agreements',#https://winstall.app/apps/Git.Git
+    )
+    pip_import('git',auto_yes=True)
+
 def _ensure_ollama_installed():
     _ensure_installed(
         'ollama',
@@ -35392,9 +35415,9 @@ def _ensure_ollama_installed():
         linux='curl -fsSL https://ollama.com/install.sh | sh',
         windows='winget install --id=Ollama.Ollama  -e  --accept-source-agreements', #https://winstall.app/apps/Ollama.Ollama
     )
-    pip_import('ollama')
+    pip_import('ollama',auto_yes=True)
 
-def _install_grounded_sam_2(grounded_sam_dir:str=None,force=False):
+def _install_grounded_sam_2(grounded_sam_dir: str = None, force=False):
     """
     WARNING: This function might be moved to CommonSource!
     Installs this: https://github.com/IDEA-Research/Grounded-SAM-2
@@ -35402,10 +35425,15 @@ def _install_grounded_sam_2(grounded_sam_dir:str=None,force=False):
     Downloads checkpoints too
     If grounded_sam_dir is not specified, defaults to rp's downloads folder
     """
+    import shutil
+
     grounded_sam_dir = grounded_sam_dir or path_join(r._rp_downloads_folder, "grounded_sam_2")
     
-    if force and folder_exists(grounded_sam_dir):
-        shutil.rmtree(grounded_sam_dir)
+    if folder_exists(grounded_sam_dir):
+        if force:
+            shutil.rmtree(grounded_sam_dir)
+        else:
+            return
         
     if not folder_exists(grounded_sam_dir):
         git_clone("https://github.com/IDEA-Research/Grounded-SAM-2", grounded_sam_dir, depth=1)
@@ -35416,6 +35444,31 @@ def _install_grounded_sam_2(grounded_sam_dir:str=None,force=False):
             with SetCurrentDirectoryTemporarily(checkpoint_folder):
                 os.system("bash download_ckpts.sh")
         pip_install('-e ".[notebooks]"')
+
+def _install_pytorch_hed(git_dir: str = None, force=False):
+    """
+    https://github.com/xwjabc/hed
+    """
+    import shutil    
+
+    git_dir = git_dir or path_join(r._rp_downloads_folder, "pytorch_hed")
+    
+    if folder_exists(git_dir):
+        if force:
+            shutil.rmtree(git_dir)
+        else:
+            return git_dir
+        
+    if not folder_exists(git_dir):
+        git_clone("https://github.com/xwjabc/hed", git_dir, depth=1)
+        
+    with SetCurrentDirectoryTemporarily(git_dir):
+        _ensure_wget_installed()
+        _run_sys_command("wget https://cseweb.ucsd.edu/~weijian/static/datasets/hed/hed-data.tar")
+        _run_sys_command("tar xvf ./hed-data.tar")    
+
+    return git_dir
+
 
 def _load_ryan_lazygit_config():
     _install_lazygit()
@@ -42759,6 +42812,7 @@ def get_current_git_hash(folder='.'):
 def get_git_commit_message(folder='.'):
     assert folder_exists(folder)
     assert is_a_git_repo(folder), 'Not in a git repo'
+    _ensure_git_installed()
     pip_import('git')
     import git
     with SetCurrentDirectoryTemporarily(folder): 
@@ -42857,6 +42911,8 @@ def git_clone(url, path=None, *, depth=None, branch=None, single_branch=False, s
     :param show_progress: Print the git clone command before executing
     :return: Path to the cloned repo
     """
+    _ensure_git_installed()
+
     url = _distill_github_url(url)
 
     if path is None:
@@ -42877,6 +42933,8 @@ def git_clone(url, path=None, *, depth=None, branch=None, single_branch=False, s
 
 def git_pull(path='.', *, branch=None, show_progress=False):
     """Git pulls the latest changes from the remote repository."""
+    _ensure_git_installed()
+
     path = get_absolute_path(path)
     
     command = 'cd ' + shlex.quote(path) + ' && git pull'
@@ -42889,6 +42947,8 @@ def git_pull(path='.', *, branch=None, show_progress=False):
     os.system(command)
 
 def get_git_info(folder='.'):
+    _ensure_git_installed()
+
     pip_import('git')
     import git
     repo=git.Repo(folder)
@@ -42935,6 +42995,8 @@ def get_git_date_modified(file_path):
         >>> except Exception as e:
         >>>     print(e)
     """
+    _ensure_git_installed()
+
     import subprocess
     import shlex
     import os
