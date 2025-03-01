@@ -105,7 +105,6 @@ packages = [
     "omegaconf",
     "openai",
     "opencv-contrib-python",
-    "opencv-python",
     "osascript",
     "pandas",
     "patool",
@@ -125,7 +124,7 @@ packages = [
     "pyaudio",
     "pydantic",
     "pydub",
-    "pyflann",
+    "pyflann",  # TODO: This needs to be fixed. It's broken for python3. It needs to be fixed using 2to3, and then inlined into this rp package. This is needed for flann_dict
     "pyfx",
     "pygame",
     "pygments",
@@ -174,6 +173,7 @@ packages = [
     "snowy",
     "sounddevice",
     "stackprinter",
+    "supervision",
     "suplemon",
     "sympy",
     "tabview",
@@ -190,8 +190,10 @@ packages = [
     "tqdm",
     "transliterate",
     "twilio",
+    "ufmt",  # Combines black + usort: https://github.com/omnilib/ufmt
     "urllib",
     "urwid",
+    "usort",  # An alternative to isort: https://libraries.io/pypi/usort
     "visidata",
     "vispy",
     "voluptuous",
@@ -218,6 +220,7 @@ torch_packages = [
     "diffusers",
     "peft",
     "safetensors",
+    "tensordict",
     "timm",
     "tomesd",
     "torch",
