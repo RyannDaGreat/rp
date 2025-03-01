@@ -6593,7 +6593,7 @@ def _display_video_in_notebook(video, filetype, *, embed, framerate, save_video=
         if not isinstance(video, str) and embed and file_exists(temp_path):
             delete_file(temp_path)
 
-def display_video_in_notebook_webp(video, quality=100, framerate=60, embed=False):
+def display_video_in_notebook_webp(video, quality=100, framerate=60):
     """
     Displays an animated webp in a Jupyter notebook with a specified quality and framerate
     See rp.display_video_in_notebook's docstring for explanations of what the args do
@@ -6610,7 +6610,7 @@ def display_video_in_notebook_webp(video, quality=100, framerate=60, embed=False
     """
     def save_video(video, path, framerate):
         return save_video_webp(video, path, quality=quality, framerate=framerate)
-    return gather_args_call(_display_video_in_notebook, filetype='webp')
+    return gather_args_call(_display_video_in_notebook, filetype='webp', embed=True)
 
 # def display_embedded_video_in_notebook(video,framerate:int=30,filetype:str='gif'):
 #     """
@@ -11603,6 +11603,27 @@ def get_nested_value(list_to_be_accessed,*address_int_list,ignore_errors: bool =
                 raise IndexError
     return list_to_be_accessed
 
+def get_nested_attr(obj, attr):
+    """
+    Get a nested attribute from an object using dot notation.
+    
+    Args:
+        obj: The object to get the attribute from
+        attr: String with attribute names in dot notation (e.g., "attr1.attr2.attr3")
+        
+    Returns:
+        The value of the nested attribute
+        
+    Raises:
+        AttributeError: If any attribute in the chain doesn't exist
+    """
+    attrs = attr.split('.')
+    
+    for name in attrs:
+        obj = getattr(obj, name)
+        
+    return obj
+
 # def shell_command(command: str,as_subprocess=False,return_printed_stuff_as_string: bool = True) -> str or None:
 #     # region OLD VERSION: had an argument called return_printed_stuff_as_string, which I never really used as False, and run_as_subprocess when True might not return a string anyay. If I recall correctly, I implemented return_printed_stuff_as_string simply because it was sometimes annoying to see the output when using pseudo_terminal
 #     #       def shell_command(command: str,return_printed_stuff_as_string: bool = True,run_as_subprocess=False) -> str or None:
@@ -12152,6 +12173,14 @@ def sorted_by_number(x, *, reverse=False):
 
 def sorted_by_len(x, *, reverse=False):
     return sorted(x, key=len, reverse=reverse)
+
+def sorted_by_attr(x, attr, *, key=None, reverse=False):
+    def new_key(e):
+        e = get_nested_attr(e, attr)
+        if key is not None:
+            e = key(e)
+        return e
+    return sorted(x, key=new_key, reverse=reverse)
 
 # def sync_sorted(*lists_in_descending_sorting_priority,key=identity):
 #         # Sorts main_list and reorders all *lists_in_descending_sorting_priority the same way, in sync with main_list
@@ -14589,11 +14618,21 @@ def _eta(total_n,*,min_interval=.3,title="r.eta"):
     timer = tic()
     interval_timer = tic()
     title = title + ": "
+    shown_done = False
+
+    def fansi_progress(string, proportion, style='underlined'):
+        """ Used to show a progress bar under the ETA text! """
+        string = string.expandtabs() #Jupyter doesn't render underlines over tabs
+        num_chars = round(len(string) * proportion)
+        return fansi(string[:num_chars], style) + string[num_chars:]
 
     def display_eta(proportion_completed,time_elapsed_in_seconds,TOTAL_TO_COMPLETE,COMPLETED_SO_FAR):
         nonlocal interval_timer
+        nonlocal shown_done
 
-        if interval_timer()>=min_interval:
+        done = proportion_completed >= 1
+
+        if interval_timer()>=min_interval or done and not shown_done:
             interval_timer=tic()
 
             # Estimated time of arrival printer
@@ -14612,22 +14651,25 @@ def _eta(total_n,*,min_interval=.3,title="r.eta"):
             # Estimated time of arrival
             etr = eta - time_elapsed_in_seconds  # Estimated time remaining
 
+            if done:
+                shown_done = True
+
             return _print_status(
-                title
-                + (
-                    (
-                        "ETR="
-                        + str(timedelta(seconds=etr))
-                        + "\tETA="
-                        + str(timedelta(seconds=eta))
-                        + "\tT="
-                        + str(temp)
-                        + progress
-                        if etr > 0
-                        else "COMPLETED IN " + str(temp) + progress + "\n"
-                    )
+                fansi_progress(
+                    title
+                    + "ETR="
+                    + str(timedelta(seconds=etr))
+                    + "\tETA="
+                    + str(timedelta(seconds=eta))
+                    + "\tT="
+                    + str(temp)
+                    + progress,
+                    proportion_completed,
                 )
+                if not done
+                else title + "COMPLETED IN " + str(temp) + progress + "\n"
             )
+
 
     def out(n):
         return display_eta(
@@ -14652,10 +14694,14 @@ class eta:
         ...     sleep(.1)
     """
 
-    def __init__(self, x, title='r.eta', min_interval=.3):
-        assert isinstance(x, int) or hasattr(x, '__len__')
+    def __init__(self, x, title='r.eta', min_interval=.3, length=None):
+        assert isinstance(x, int) or hasattr(x, '__len__') or length is not None
 
-        if hasattr(x, '__len__'):
+        if length is not None:
+            length = int(length)
+            self.elements = IteratorWithLen(x, length)
+            x = length
+        elif has_len(x):
             self.elements = x
             x = len(x)
         else:
@@ -39370,10 +39416,11 @@ def resize_video_to_fit(
     *,
     allow_growth=True,
     alpha_weighted=False,
-    show_progress=False
+    show_progress=False,
+    lazy=False
 ):
     """ Almost the same as resize_images_to_fit - but height and width and interp can be args and returns numpy arrays if input video is a numpy array too """
-    output = gather_args_call(resize_images_to_fit, images)
+    output = gather_args_call(resize_images_to_fit, video)
 
     if is_numpy_array(video): output = as_numpy_array(output)
 
@@ -39409,7 +39456,7 @@ def resize_videos_to_fit(
     )
 
     if show_progress:
-        output = eta(output, title=get_current_function_name())
+        output = eta(output, title=get_current_function_name(), length=len(videos))
 
     if not lazy:
         output = list(output)
@@ -39445,7 +39492,7 @@ def resize_videos_to_hold(
     )
 
     if show_progress:
-        output = eta(output, title=get_current_function_name())
+        output = eta(output, title=get_current_function_name(), length=len(videos))
 
     if not lazy:
         output = list(output)
