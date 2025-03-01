@@ -25904,6 +25904,8 @@ def pil_text_to_image(
 def download_google_font(font_name, *, skip_existing=True):
     """
     Original code from: https://gist.github.com/ravgeetdhillon/0063aaee240c0cddb12738c232bd8a49
+
+    download_google_font('G:Roboto') is equivalent to download_google_font('Roboto')
     
     EXAMPLE:
         >>> #Go to https://fonts.google.com to explore more fonts!
@@ -26111,6 +26113,9 @@ def download_google_font(font_name, *, skip_existing=True):
 
         return paths
 
+    if font_name.startswith('G:'):
+        font_name = font_name[len('G:'):]
+
     fonts_folder = path_join(_google_fonts_download_folder,font_name)
 
     if folder_exists(fonts_folder):
@@ -26134,13 +26139,20 @@ def download_google_font(font_name, *, skip_existing=True):
     return path
 
 @memoized
-def download_font(url):
+def download_font(url, *, skip_existing=True):
     """
     https://github.com/ctrlcctrlv/lcd-font/raw/master/otf/LCD14.otf
     """
+
+    #Special Cases
+    if url in _ryan_fonts:
+        url = _ryan_fonts[url]
+    elif url.startswith('G:'):
+        return download_google_font(url)
+
     _download_font_dir=path_join(_rp_folder,"downloads/fonts")
     make_directory(_download_font_dir)
-    return download_url(url, _download_font_dir, skip_existing=True)
+    return download_url(url, _download_font_dir, skip_existing=skip_existing)
 
 def download_fonts(
     *font_names,
