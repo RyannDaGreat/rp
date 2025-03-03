@@ -24784,6 +24784,9 @@ class CachedInstances:
     requested with the same arguments as a previously created object, the cached
     instance is returned instead of creating a new one.
 
+    A new class property, self.instance_cache, is added - you can use this to 
+    clear the cache to make room for some VRAM elsewhere etc
+
     The cache is implemented using an rp.HandyDict, which allows for more complex keys,
     such as lists and other non-hashable types, to be used cached arguments.
 
@@ -35445,29 +35448,30 @@ def _install_grounded_sam_2(grounded_sam_dir: str = None, force=False):
                 os.system("bash download_ckpts.sh")
         pip_install('-e ".[notebooks]"')
 
-def _install_pytorch_hed(git_dir: str = None, force=False):
-    """
-    https://github.com/xwjabc/hed
-    """
-    import shutil    
-
-    git_dir = git_dir or path_join(r._rp_downloads_folder, "pytorch_hed")
-    
-    if folder_exists(git_dir):
-        if force:
-            shutil.rmtree(git_dir)
-        else:
-            return git_dir
-        
-    if not folder_exists(git_dir):
-        git_clone("https://github.com/xwjabc/hed", git_dir, depth=1)
-        
-    with SetCurrentDirectoryTemporarily(git_dir):
-        _ensure_wget_installed()
-        _run_sys_command("wget https://cseweb.ucsd.edu/~weijian/static/datasets/hed/hed-data.tar")
-        _run_sys_command("tar xvf ./hed-data.tar")    
-
-    return git_dir
+#THIS FUNCTION INSTALLS IT FINE! BUT I DIDN'T FINISH MAKING IT USEFUL YET. UNCOMMENT ONCE I HAVE WRAPPERS FOR IT.
+# def _install_pytorch_hed(git_dir: str = None, force=False):
+#     """
+#     https://github.com/xwjabc/hed
+#     """
+#     import shutil    
+#
+#     git_dir = git_dir or path_join(r._rp_downloads_folder, "pytorch_hed")
+#     
+#     if folder_exists(git_dir):
+#         if force:
+#             shutil.rmtree(git_dir)
+#         else:
+#             return git_dir
+#         
+#     if not folder_exists(git_dir):
+#         git_clone("https://github.com/xwjabc/hed", git_dir, depth=1)
+#         
+#     with SetCurrentDirectoryTemporarily(git_dir):
+#         _ensure_wget_installed()
+#         _run_sys_command("wget https://cseweb.ucsd.edu/~weijian/static/datasets/hed/hed-data.tar")
+#         _run_sys_command("tar xvf ./hed-data.tar")    
+#
+#     return git_dir
 
 
 def _load_ryan_lazygit_config():
@@ -36376,20 +36380,135 @@ def tmuxp_launch_session_from_yaml(session_yaml,*,attach=False):
 
 
     
-def extract_code_from_ipynb(path:str=None):
-    """ Its a utility for running ipynb files in rp, by extracting their code into cells that can be run individually """
+#OLD, HARD-TO-READ CODE THAT DOES WORK
+# def extract_code_from_ipynb(path:str=None):
+#     """ Its a utility for running ipynb files in rp, by extracting their code into cells that can be run individually """
+#     import json
+#     if path is None:
+#         path=input_select_file(file_extension_filter='ipynb')
+#     assert path_exists(path),'Sorry, but '+repr(path)+' doesnt exist'
+#     path=text_file_to_string(path)
+#     notebook=json.loads(path)
+#     code_cells=[''.join(cell['source']) for cell in notebook['cells'] if cell['cell_type']=='code'] 
+#     code_cells=[code_cell for code_cell in code_cells if code_cell.strip()]
+#     notebook_code='\n\n#################################\n\n'.join(code_cells)
+#     notebook_code=line_join((line if not (line.startswith('%') or line.startswith('!')) else '#'+line) for line in line_split(notebook_code))
+#     ans=notebook_code
+#     return ans
+
+
+def _extract_code_cells_from_ipynb(notebook_path=None):
+    """
+    Extract code cells from a Jupyter notebook as a list.
+
+    Args:
+        notebook_path (str, optional): Path to the notebook file. If None, prompts for selection.
+
+    Returns:
+        list: List of processed code cells from the notebook.
+    """
     import json
-    if path is None:
-        path=input_select_file(file_extension_filter='ipynb')
-    assert path_exists(path),'Sorry, but '+repr(path)+' doesnt exist'
-    path=text_file_to_string(path)
-    notebook=json.loads(path)
-    code_cells=[''.join(cell['source']) for cell in notebook['cells'] if cell['cell_type']=='code'] 
-    code_cells=[code_cell for code_cell in code_cells if code_cell.strip()]
-    notebook_code='\n\n#################################\n\n'.join(code_cells)
-    notebook_code=line_join((line if not (line.startswith('%') or line.startswith('!')) else '#'+line) for line in line_split(notebook_code))
-    ans=notebook_code
-    return ans
+
+    # Handle path input
+    if notebook_path is None:
+        notebook_path = input_select_file(file_extension_filter='ipynb')
+
+    # Validate path exists
+    if not path_exists(notebook_path):
+        raise ValueError(f"Notebook path does not exist: {notebook_path}")
+
+    # Read and parse notebook
+    notebook_data = load_json(notebook_path)
+
+    # Extract code from code cells, skipping empty cells
+    code_blocks = []
+    for cell in notebook_data['cells']:
+        if cell['cell_type'] == 'code':
+            cell_code = ''.join(cell['source'])
+            if cell_code.strip():
+                code_blocks.append(cell_code)
+
+    # Process code blocks - comment out magic and shell commands
+    processed_blocks = []
+    for block in code_blocks:
+        processed_lines = []
+        for line in block.split('\n'):
+            if line.startswith('%') or line.startswith('!'):
+                processed_lines.append('#' + line)
+            else:
+                processed_lines.append(line)
+        processed_blocks.append('\n'.join(processed_lines))
+
+    return processed_blocks
+
+def _print_code_cell(code, cell_num: int = 1):
+    num_prefix = "%s│"
+    mln = len(str(number_of_lines(code)))
+    mln = len(num_prefix % mln)
+
+    print(
+        indentify(
+            " " * (mln)
+            + fansi(
+                "┌"
+                + (" CELL #%i " % cell_num).center(
+                    string_width(code) + 1,
+                    "─",
+                ),
+                "bold  dark white white dark white",
+            )
+            + "\n"
+            + with_line_numbers(
+                fansi_pygments(code, "python3"),
+                align=True,
+                prefix=fansi(num_prefix, "dark white white dark white"),
+                start_from=1,
+            ),
+            "    ",
+        )
+    )
+
+_ipynb_separator = '#'*50
+
+def exec_ipynb(notebook_path:str, *, scope=None):
+    """ Run code from a jupyter notebook """
+    if scope is None:
+        #Execute code in the scope of the caller
+        scope=get_scope(1)
+    scope = dict(scope) #Make a copy
+
+    cells = _extract_code_cells_from_ipynb(notebook_path)
+
+    def _announce_cell(cell_num):
+        _print_code_cell(cells[cell_num])
+    scope[_announce_cell]=_announce_cell
+
+
+    # cells = ['__import__("rp").r._print_code_cell('+repr(cell)+')'+'\n'+cell for cell in cells]
+    cells = [
+        "\n\n"+_ipynb_separator+"\n_announce_cell(%i)\n\n" % i + cell
+        for i, cell in enumerate(cells)
+    ]
+
+    for cell in cells:
+        exeval(cell, scope)
+
+def extract_code_from_ipynb(notebook_path=None):
+    """
+    Extract and concatenate code from a Jupyter notebook as a single string.
+
+    Args:
+        notebook_path (str, optional): Path to the notebook file. If None, prompts for selection.
+
+    Returns:
+        str: Concatenated code from all code cells with cell separators.
+    """
+    # Get processed code blocks
+    code_blocks = extract_code_cells_from_ipynb(notebook_path)
+
+    # Join with separators
+    cell_separator = '\n\n'+_ipynb_separator+'\n\n'
+    return cell_separator.join(code_blocks)
 
 @memoized
 def _get_facebook_client(email,password):
