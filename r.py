@@ -887,13 +887,19 @@ def _transform_fansi_arg(spec):
 
     return color, style, background
 
-def fansi(text_string="", text_color=None, style=None, background_color=None, *, per_line=True, reset=True, truecolor=False):
+def fansi(text_string="", text_color=None, style=None, background_color=None, *, per_line=True, reset=True, truecolor=False, link=None):
     """
     'fansi' is a pun, referring to ANSI and fancy
     Uses ANSI formatting to give the terminal styled color outputs.
 
     The 'per_line' option applies fansi to each line separately, which is useful for multi-line strings. It is enabled by default.
     The 'truecolor' option enables 24-bit truecolor support if the terminal supports it. It is disabled by default.
+    The 'link' option creates a hyperlink to the provided URL. It is None by default.
+    Note on terminal hyperlink support:
+    - iTerm2, GNOME Terminal, Konsole: Directly clickable hyperlinks
+    - Wezterm: Requires Ctrl+click or similar modifier (configurable)
+    - Alacritty: Highlights links, but requires additional configuration for clicking
+      (Check .alacritty.yml documentation for mouse.url settings)
 
     STYLES:
                                                                Alacritty   Terminal.app   Wezterm 
@@ -926,6 +932,10 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
             If truecolor=True, assumes terminal has 24-bit color support. Otherwise, 256 color support will be assumed.
             See the below example!
 
+    LINK:
+        - If link is provided, the text becomes a clickable hyperlink in terminals that support hyperlinks
+        - Example: fansi("Click me", "blue", "underlined", link="https://example.com")
+
     EXAMPLES:
 
         >>> #Shorthand: You can combine multiple styles together, foreground and background separated by 'on'!
@@ -951,6 +961,10 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
         ...     + "After reset..."
         ...     + fansi("All at once!", 'hot pink', 'underlined blinking italic strike bold super')
         ... )
+
+        >>> #Using hyperlinks
+        ... print(fansi("Click here to visit example.com", "blue", "underlined", link="https://example.com"))
+        ... print(fansi("Documentation", "green", link="https://docs.python.org"))
 
         >>> #Display an image (display_image_in_terminal_color is faster - but this is to show how fansi works)
         ... for truecolor in [True,False]:
@@ -1007,6 +1021,11 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
         ... for color in ["green cyan", "blue cyan", "navy blue", "hot pink"]:
         ...     print(fansi("\tXXXXX " + str(color) + " ", background_color=color))
         
+        ... fansi_print("Hyperlink Examples:", style="underlined")
+        ... print(fansi("\tPython Documentation", "blue", "underlined", link="https://docs.python.org"))
+        ... print(fansi("\tGoogle Search", "green", link="https://google.com"))
+        ... print(fansi("\tGitHub Repository", "magenta", "bold", link="https://github.com"))
+        ... print("Note: In Wezterm, use Ctrl+click on links. In Alacritty, hyperlinks may need configuration.")
     """
 
     if isinstance(text_color, str) and style is None and background_color is None:
@@ -1018,7 +1037,7 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
     # Handle per_line option
     if per_line and text_string:
         lines = text_string.splitlines(keepends=True)
-        lines = [fansi(line, text_color, style, background_color, per_line=False, reset=reset, truecolor=truecolor) for line in lines]
+        lines = [fansi(line, text_color, style, background_color, per_line=False, reset=reset, truecolor=truecolor, link=link) for line in lines]
         return ''.join(lines)
 
     # Check if ANSI formatting is disabled
@@ -1092,14 +1111,24 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
             except Exception:
                 print("ERROR: fansi: Invalid background_color '%s'. Valid options are: %s, or any RGB float color compatible with rp.as_rgb_float_color" % (background_color, list(color_codes.keys())))
 
+    # Apply hyperlink if provided
+    hyperlink_start = ""
+    hyperlink_end = ""
+    if link is not None:
+        # OSC 8 hyperlink format: ESC]8;params;URI\BEL text ESC]8;;\BEL
+        # Where ESC is \033, and BEL is \007
+        # The empty string before the URI is where additional parameters can go
+        # For maximum compatibility across terminals (Wezterm/Alacritty/iTerm/etc.)
+        hyperlink_params = ""  # Could add params like "id=identifier" here if needed
+        hyperlink_start = "\033]8;" + hyperlink_params + ";" + str(link) + "\007"
+        hyperlink_end = "\033]8;;\007"
+
     # Apply ANSI formatting
     format_sequence = ';'.join(format_codes)
-    output = "\x1b[{}m{}".format(format_sequence, text_string)
+    output = "\x1b[{}m{}{}{}".format(format_sequence, hyperlink_start, text_string, hyperlink_end)
     if reset:
         output += '\x1b[0m'
     return output
-
-
 
 
 def _legacy_fansi(text_string,text_color=None,style=None,background_color=None,*,per_line=True):
@@ -1540,6 +1569,8 @@ def fansi_pygments(
     The style parameter allows specifying a color scheme for the highlighting.
     The color_mode parameter specifies the color mode for the output (basic, 256, or truecolor).
     """
+    if fansi_is_disabled():
+        return code
     
     pip_import("pygments")
     from pygments import highlight
@@ -9248,14 +9279,14 @@ def display_dict(d: dict,
                  arrow          = " --> "
                  # arrow          = " ⟶  "
                  ) -> None:
-    # Made by Ryan Burgert for the purpose of visualizing large dictionaries.
-    # EXAMPLE DISPLAY:
-    '''
-     >>> display_dict({'name': 'Zed', 'age': 39, 'height': 6 * 12 + 2})
-    age ⟶  39
-    height ⟶  74
-    name ⟶  Zed
-    '''
+    """
+    Made by Ryan Burgert for the purpose of visualizing large dictionaries.
+    EXAMPLE DISPLAY:
+        >>> display_dict({'name': 'Zed', 'age': 39, 'height': 6 * 12 + 2})
+        age ⟶  39
+        height ⟶  74
+        name ⟶  Zed
+    """
     # Of course, in the console you will see the appropriate colors for each section.
     return (print if print_it else identity)((((lambda x:clip_string_width(x,max_wraps_per_line=2,clipped_suffix='………')) if clip_width else identity)(post_processor('\n'.join((key_color(key) + arrow_color(arrow) + value_color(d[key])) for key in key_sorter(d.keys()))))))  # Theres a lot of code here because we're trying to make large amounts of text user-friendly in a terminal environment. Thats why this is so complicated and possibly perceived as messy
 def display_list(l: list,
@@ -9265,6 +9296,527 @@ def display_list(l: list,
                  print_it    = True) -> None:
     # also works with tuples etc
     return display_dict(d=list_to_index_dict(l),key_color=key_color,arrow_color=arrow_color,value_color=value_color,print_it=print_it)
+ 
+def display_markdown(markdown:str):
+    """
+    Display markdown text in both Jupyter notebook and terminal environments.
+    
+    markdown : str
+        Markdown text to display or path to a .md file
+        
+    EXAMPLES:
+        >>> # Basic markdown elements
+        >>> display_markdown('''
+        ... # Main Heading
+        ... ## Secondary Heading
+        ... 
+        ... **Bold text** and *italic text*
+        ... 
+        ... - Bullet point 1
+        ... - Bullet point 2
+        ...   - Nested bullet
+        ... 
+        ... 1. Numbered item
+        ... 2. Another numbered item
+        ... 
+        ... > This is a blockquote
+        ... 
+        ... [Link text](https://example.com)
+        ... 
+        ... ---
+        ... 
+        ... ```python
+        ... def example_function():
+        ...     return "Code blocks work too!"
+        ... ```
+        ... ''')
+        
+        >>> # Advanced markdown elements
+        >>> display_markdown('''
+        ... ## Tables
+        ... 
+        ... | Header 1 | Header 2 | Header 3 |
+        ... |----------|----------|----------|
+        ... | Value 1  | Value 2  | Value 3  |
+        ... | Value 4  | Value 5  | Value 6  |
+        ... 
+        ... ## Task Lists
+        ... 
+        ... - [x] Completed task
+        ... - [ ] Incomplete task
+        ... 
+        ... ## Math Formulas (in Jupyter)
+        ... 
+        ... Inline equation: $E = mc^2$
+        ... 
+        ... Block equation:
+        ... 
+        ... $$
+        ... \\frac{d}{dx}e^x = e^x
+        ... $$
+        ... 
+        ... ## Diagrams (in some environments)
+        ... 
+        ... ```mermaid
+        ... graph TD;
+        ...     A-->B;
+        ...     A-->C;
+        ...     B-->D;
+        ...     C-->D;
+        ... ```
+        ... ''')
+    """
+    if markdown.endswith(".md") and file_exists(markdown):
+        markdown = load_text_file(markdown)
+
+    if running_in_jupyter_notebook():
+        from IPython.display import display, Markdown
+
+        display(Markdown(markdown))
+
+    else:
+        pip_import("rich")
+        from rich import print
+        from rich.markdown import Markdown
+
+        print(Markdown(markdown))
+
+def _get_carbon_url(code):
+    """
+    Generate a Carbon URL to visualize code snippets with syntax highlighting.
+
+    code : str
+        The code to display
+    Returns str:
+        URL that can be opened in a browser to display the code
+    """
+    import urllib.parse
+    import re
+
+    params = {
+        "code": code,
+        "l": "python",
+        "t": "monokai",
+    }
+    encoded_params = urllib.parse.urlencode(params)
+    return "https://carbon.now.sh/?"+str(encoded_params)
+
+def display_code(code, *, title = "Code Cell"):
+    """
+    Print code cell with formatting, line numbers, and syntax highlighting.
+    In a terminal, it displays a clickable link to bring you to the source code copyable online via carbon.sh!
+    In Jupyter, it displays a custom HTML cell with a copy button and macOS-style window controls!
+
+    Parameters:
+    -----------
+    code : str
+        The code to display
+    title : str
+        The cell number to display in the title
+
+    EXAMPLE:
+        >>> display_code(get_source_code(load_image))
+
+    """
+    code = code.rstrip() #We have to for the printer...
+    if not running_in_jupyter_notebook():
+        num_prefix = "%s│"
+        mln = number_of_lines(code)
+        mln = len(num_prefix % mln)
+        print(
+            "\n"
+            + indentify(
+                " " * (mln - 1)
+                + fansi(
+                    "┌"
+                    + (title).center(
+                        string_width(code) + 1,
+                        "─",
+                    ),
+                    "bold  dark white white dark white",
+                    link=_get_carbon_url(code),
+                )
+                + "\n"
+                + with_line_numbers(
+                    fansi_pygments(code, "python3"),
+                    align=True,
+                    prefix=fansi(num_prefix, "dark white white dark white"),
+                    start_from=1,
+                ),
+                "  ",
+            )
+            + "\n"
+        )
+
+    else:
+        from IPython.display import display, HTML, Javascript
+        import re
+
+        # First, make sure highlight.js is loaded (if it's not already)
+        display(
+            HTML(
+                """
+        <script>
+        if (typeof hljs === 'undefined') {
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/monokai.min.css';
+            document.head.appendChild(link);
+            
+            var script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js';
+            document.head.appendChild(script);
+        }
+        </script>
+        """
+            )
+        )
+
+        # Split the code into lines for line numbers
+        code_lines = code.splitlines()
+        num_lines = len(code_lines)
+        line_num_width = len(str(num_lines))
+
+        # Escape HTML characters in the code
+        escaped_code = (
+            code.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        )
+
+        # Create HTML with line numbers and code content
+        line_numbered_code = []
+        for i, line in enumerate(code_lines, 1):
+            escaped_line = (
+                line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            )
+            if not escaped_line:  # Handle empty lines
+                escaped_line = " "
+
+            line_numbered_code.append(
+                '<div class="code-line">'
+                '<span class="line-number">{0}</span>'
+                '<span class="code-content"></span>'  # Empty content to be filled by JS
+                "</div>".format(i)
+            )
+
+        # Combine all lines
+        code_with_line_numbers = "\n".join(line_numbered_code)
+
+        # Store the original code in a data attribute (safely escaped)
+        import html
+
+        code_for_attr = html.escape(code)
+
+        # Generate a unique ID for this code cell (avoid hyphens for JS compatibility)
+        import uuid
+
+        cell_id = "codecell{0}".format(uuid.uuid4().hex[:8])
+
+        # Wrap with styling and include script to apply highlight.js
+        html_template = """
+        <style>
+            #{0} .code-cell-container {{
+                border: 1px solid #2d2d2d;
+                border-radius: 4px;
+                margin: 10px 0;
+                overflow: hidden;
+                font-size: 8pt;
+                font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
+            }}
+            #{0} .code-cell-header {{
+                background-color: #272822;
+                color: #f8f8f2;
+                padding: 5px;
+                text-align: center;
+                font-weight: bold;
+                display: flex;
+                align-items: center;
+                position: relative;
+            }}
+            #{0} .window-controls {{
+                display: flex;
+                position: absolute;
+                left: 10px;
+                gap: 6px;
+            }}
+            #{0} .control-button {{
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                border: none;
+                cursor: pointer;
+            }}
+            #{0} .close-button {{
+                background-color: #ff5f56;
+            }}
+            #{0} .minimize-button {{
+                background-color: #ffbd2e;
+            }}
+            #{0} .control-button:hover {{
+                filter: brightness(90%);
+            }}
+            #{0} .title-text {{
+                flex: 1;
+                text-align: center;
+            }}
+            #{0} .copy-button {{
+                position: absolute;
+                right: 10px;
+                background-color: #49483e;
+                border: none;
+                color: #f8f8f2;
+                padding: 3px 8px;
+                border-radius: 3px;
+                cursor: pointer;
+                font-size: 12px;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                transition: background-color 0.2s;
+            }}
+            #{0} .copy-button:hover {{
+                background-color: #75715e;
+            }}
+            #{0} .copy-icon {{
+                width: 14px;
+                height: 14px;
+                fill: currentColor;
+            }}
+            #{0} .code-cell-content {{
+                padding: 10px;
+                background-color: #272822;
+                overflow-x: auto;
+                line-height: 1.5;
+                color: #f8f8f2;
+                max-height: 2000px; /* Increased to accommodate larger code blocks */
+                transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1); /* Smoother easing function */
+                transform-origin: top;
+                opacity: 1;
+            }}
+            #{0}.minimized .code-cell-content {{
+                max-height: 0;
+                padding-top: 0;
+                padding-bottom: 0;
+                opacity: 0.7;
+                transform: scaleY(0.01); /* Creates a folding effect */
+                overflow: hidden;
+            }}
+            #{0} .code-line {{
+                display: flex;
+                white-space: pre;
+                min-height: 1.5em;
+            }}
+            #{0} .code-content {{
+                flex: 1;
+                padding-left: 0.5em;
+                white-space: pre;
+            }}
+            #{0} .line-number {{
+                color: #75715e !important;
+                border-right: 1px solid #49483e;
+                padding-right: 0.5em;
+                text-align: right;
+                user-select: none;
+                min-width: {1}ch;
+                display: inline-block;
+            }}
+        </style>
+        
+        <div id="{0}" data-original-code="{2}">
+            <div class="code-cell-container">
+                <div class="code-cell-header">
+                    <div class="window-controls">
+                        <button class="control-button close-button" id="close-button-{0}" title="Close"></button>
+                        <button class="control-button minimize-button" id="minimize-button-{0}" title="Minimize"></button>
+                    </div>
+                    <div class="title-text">{3}</div>
+                    <button class="copy-button" id="copy-button-{0}">
+                        <svg class="copy-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                            <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                        </svg>
+                        Copy
+                    </button>
+                </div>
+                <div class="code-cell-content">
+                    <div style="display:none">
+                        <pre><code class="python">{4}</code></pre>
+                    </div>
+                    <div class="line-numbers-code">
+                        {5}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+        (function() {{
+            // Setup copy button functionality
+            function setupCopyButton() {{
+                const copyButton = document.getElementById('copy-button-{0}');
+                if (copyButton) {{
+                    copyButton.addEventListener('click', function() {{
+                        try {{
+                            // Get the original code directly from our data attribute
+                            const codeContainer = document.getElementById('{0}');
+                            const originalCode = codeContainer.getAttribute('data-original-code');
+                            
+                            // Create a temporary textarea element to copy the text
+                            const textarea = document.createElement('textarea');
+                            textarea.value = originalCode;
+                            textarea.setAttribute('readonly', '');
+                            textarea.style.position = 'absolute';
+                            textarea.style.left = '-9999px';
+                            document.body.appendChild(textarea);
+                            
+                            // Select the text and copy it
+                            textarea.select();
+                            document.execCommand('copy');
+                            
+                            // Remove the textarea
+                            document.body.removeChild(textarea);
+                            
+                            // Update the button to show feedback
+                            const originalText = copyButton.innerHTML;
+                            copyButton.innerHTML = `
+                                <svg class="copy-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                                </svg>
+                                Copied!
+                            `;
+                            copyButton.style.backgroundColor = '#a6e22e';
+                            
+                            setTimeout(() => {{
+                                copyButton.innerHTML = originalText;
+                                copyButton.style.backgroundColor = '';
+                            }}, 2000);
+                        }} catch (err) {{
+                            console.error('Failed to copy code: ', err);
+                            alert('Failed to copy code to clipboard: ' + err.message);
+                        }}
+                    }});
+                }}
+            }}
+            
+            // Setup the window control buttons
+            function setupWindowControls() {{
+                const closeButton = document.getElementById('close-button-{0}');
+                const minimizeButton = document.getElementById('minimize-button-{0}');
+                const codeContainer = document.getElementById('{0}');
+                
+                if (closeButton) {{
+                    closeButton.addEventListener('click', function() {{
+                        // Hide the entire code cell
+                        codeContainer.style.display = 'none';
+                    }});
+                }}
+                
+                if (minimizeButton) {{
+                    minimizeButton.addEventListener('click', function() {{
+                        // Toggle minimized class to show/hide content
+                        const isMinimized = codeContainer.classList.toggle('minimized');
+                        
+                        // Add visual indicator to the minimize button
+                        if (isMinimized) {{
+                            minimizeButton.style.boxShadow = 'inset 0 0 0 1px rgba(0, 0, 0, 0.3)';
+                            minimizeButton.setAttribute('title', 'Expand');
+                        }} else {{
+                            minimizeButton.style.boxShadow = '';
+                            minimizeButton.setAttribute('title', 'Minimize');
+                            
+                            // If expanding, scroll into view after animation completes
+                            setTimeout(() => {{
+                                const content = document.querySelector('#{0} .code-cell-content');
+                                content.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
+                            }}, 400);
+                        }}
+                    }});
+                }}
+            }}
+            
+            // Setup all interactive elements
+            setTimeout(() => {{
+                setupCopyButton();
+                setupWindowControls();
+            }}, 300);
+            
+            function applyHighlighting() {{
+                if (typeof hljs !== 'undefined') {{
+                    try {{
+                        // Get the code element and highlight it
+                        const codeElement = document.querySelector('#{0} code');
+                        hljs.highlightElement(codeElement);
+                        
+                        // Get the highlighted code
+                        const highlightedCode = codeElement.innerHTML;
+                        
+                        // Process the highlighted code line by line
+                        const processedLines = [];
+                        let currentLine = '';
+                        let inTag = false;
+                        let tagContent = '';
+                        
+                        // Parse the highlighted HTML to extract properly tagged lines
+                        for (let i = 0; i < highlightedCode.length; i++) {{
+                            const char = highlightedCode[i];
+                            
+                            if (char === '<') {{
+                                inTag = true;
+                                tagContent = char;
+                            }} else if (inTag && char === '>') {{
+                                inTag = false;
+                                tagContent += char;
+                                currentLine += tagContent;
+                            }} else if (inTag) {{
+                                tagContent += char;
+                            }} else if (char === '\\n') {{
+                                processedLines.push(currentLine || ' ');
+                                currentLine = '';
+                            }} else {{
+                                currentLine += char;
+                            }}
+                        }}
+                        
+                        if (currentLine) {{
+                            processedLines.push(currentLine);
+                        }}
+                        
+                        // Apply the highlighted lines to our line-numbered code
+                        const codeContentElements = document.querySelectorAll('#{0} .code-content');
+                        for (let i = 0; i < codeContentElements.length; i++) {{
+                            if (i < processedLines.length) {{
+                                codeContentElements[i].innerHTML = processedLines[i];
+                            }} else {{
+                                codeContentElements[i].innerHTML = ' ';
+                            }}
+                        }}
+                        
+                        // Hide the original code block
+                        document.querySelector('#{0} [style="display:none"]').style.display = 'none';
+                    }} catch (e) {{
+                        console.error('Error applying highlighting:', e);
+                    }}
+                }} else {{
+                    // If highlight.js is not loaded yet, wait and try again
+                    setTimeout(applyHighlighting, 100);
+                }}
+            }}
+            
+            // Start the highlighting process
+            setTimeout(applyHighlighting, 300);
+        }})();
+        </script>
+        """
+
+        html = html_template.format(
+            cell_id,
+            line_num_width + 1,
+            code_for_attr,
+            title,
+            escaped_code,
+            code_with_line_numbers
+        )
+
+        display(HTML(html))
+
 # endregion
 # region  'youtube_dl'﹣dependent methods: ［rip_music，rip_info］
 # noinspection SpellCheckingInspection
@@ -36415,7 +36967,7 @@ def _extract_code_cells_from_ipynb(notebook_path=None):
 
     # Validate path exists
     if not path_exists(notebook_path):
-        raise ValueError(f"Notebook path does not exist: {notebook_path}")
+        raise ValueError("Notebook path does not exist: "+str(notebook_path))
 
     # Read and parse notebook
     notebook_data = load_json(notebook_path)
@@ -36441,57 +36993,46 @@ def _extract_code_cells_from_ipynb(notebook_path=None):
 
     return processed_blocks
 
-def _print_code_cell(code, cell_num: int = 1):
-    num_prefix = "%s│"
-    mln = len(str(number_of_lines(code)))
-    mln = len(num_prefix % mln)
-
-    print(
-        indentify(
-            " " * (mln)
-            + fansi(
-                "┌"
-                + (" CELL #%i " % cell_num).center(
-                    string_width(code) + 1,
-                    "─",
-                ),
-                "bold  dark white white dark white",
-            )
-            + "\n"
-            + with_line_numbers(
-                fansi_pygments(code, "python3"),
-                align=True,
-                prefix=fansi(num_prefix, "dark white white dark white"),
-                start_from=1,
-            ),
-            "    ",
-        )
-    )
-
 _ipynb_separator = '#'*50
 
-def exec_ipynb(notebook_path:str, *, scope=None):
-    """ Run code from a jupyter notebook """
+def exec_ipynb(notebook_path:str, *, scope=None, show_code=True):
+    """
+    Run code from a jupyter notebook 
+    TODO: Add show_text and show_markdown options too 
+    """
     if scope is None:
         #Execute code in the scope of the caller
         scope=get_scope(1)
-    scope = dict(scope) #Make a copy
 
     cells = _extract_code_cells_from_ipynb(notebook_path)
 
-    def _announce_cell(cell_num):
-        _print_code_cell(cells[cell_num])
-    scope[_announce_cell]=_announce_cell
+    if show_code:
+        original_cells = _extract_code_cells_from_ipynb(notebook_path)
 
+        #We also have a display_markdown() helper func ready to go! TODO: Please use it.
+        def _announce_cell(cell_num):
+            display_code(
+                original_cells[cell_num],
+                title=" "
+                + get_file_name(notebook_path, include_file_extension=False)
+                + " : CELL #"
+                + str(cell_num)
+                + " ",
+            )
 
-    # cells = ['__import__("rp").r._print_code_cell('+repr(cell)+')'+'\n'+cell for cell in cells]
-    cells = [
-        "\n\n"+_ipynb_separator+"\n_announce_cell(%i)\n\n" % i + cell
-        for i, cell in enumerate(cells)
-    ]
+        # cells = ['__import__("rp").r._print_code_cell('+repr(cell)+')'+'\n'+cell for cell in cells]
+        cells = [
+            "\n\n"+_ipynb_separator+"\n_announce_cell(%i)\n\n" % i + cell
+            for i, cell in enumerate(cells)
+        ]
 
-    for cell in cells:
-        exeval(cell, scope)
+        with TemporarilySetItem(scope, dict(_announce_cell=_announce_cell)):
+            for cell in cells:
+                exeval(cell, scope)
+
+    else:
+        for cell in cells:
+            exeval(cell, scope)
 
 def extract_code_from_ipynb(notebook_path=None):
     """
