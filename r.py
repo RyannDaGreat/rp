@@ -9401,7 +9401,7 @@ def _get_carbon_url(code):
     encoded_params = urllib.parse.urlencode(params)
     return "https://carbon.now.sh/?"+str(encoded_params)
 
-def display_code(code, *, title="Code Cell"):
+def display_code_cell(code, *, title="Code Cell"):
     """
     Print code cell with formatting, line numbers, and syntax highlighting.
     In a terminal, it displays a clickable link to bring you to the source code copyable online via carbon.sh!
@@ -9415,7 +9415,7 @@ def display_code(code, *, title="Code Cell"):
         The cell number to display in the title
 
     EXAMPLE:
-        >>> display_code(get_source_code(load_image))
+        >>> display_code_cell(get_source_code(load_image))
 
     """
     # IMPORTANT: Do not use f-strings in this function to maintain compatibility
@@ -37213,7 +37213,7 @@ def exec_ipynb(notebook_path:str, *, scope=None, show_code=True):
 
         #We also have a display_markdown() helper func ready to go! TODO: Please use it.
         def _announce_cell(cell_num):
-            display_code(
+            display_code_cell(
                 original_cells[cell_num],
                 title=" "
                 + get_file_name(notebook_path, include_file_extension=False)
