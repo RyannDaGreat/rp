@@ -9401,7 +9401,7 @@ def _get_carbon_url(code):
     encoded_params = urllib.parse.urlencode(params)
     return "https://carbon.now.sh/?"+str(encoded_params)
 
-def display_code(code, *, title: str = "Code Cell"):
+def display_code(code, *, title="Code Cell"):
     """
     Print code cell with formatting, line numbers, and syntax highlighting.
     In a terminal, it displays a clickable link to bring you to the source code copyable online via carbon.sh!
@@ -9452,6 +9452,8 @@ def display_code(code, *, title: str = "Code Cell"):
     else:
         from IPython.display import display, HTML, Javascript
         import re
+        import uuid
+        import html
 
         # First, make sure highlight.js is loaded (if it's not already)
         display(
@@ -9504,20 +9506,15 @@ def display_code(code, *, title: str = "Code Cell"):
         code_with_line_numbers = "\n".join(line_numbered_code)
 
         # Store the original code in a data attribute (safely escaped)
-        import html
-
         code_for_attr = html.escape(code)
 
         # Generate a unique ID for this code cell (avoid hyphens for JS compatibility)
-        import uuid
-
-        # Avoid f-strings
         cell_id = "codecell" + uuid.uuid4().hex[:8]
 
-        # Wrap with styling and include script to apply highlight.js
-        html = f"""
+        # Create style and HTML content using string formatting instead of f-strings
+        style_template = """
         <style>
-            #{cell_id} .code-cell-container {{
+            #{0} .code-cell-container {{
                 border: 1px solid #2d2d2d;
                 border-radius: 4px;
                 margin: 10px 0;
@@ -9525,7 +9522,7 @@ def display_code(code, *, title: str = "Code Cell"):
                 font-size: 8pt;
                 font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace;
             }}
-            #{cell_id} .code-cell-header {{
+            #{0} .code-cell-header {{
                 background-color: #272822;
                 color: #f8f8f2;
                 padding: 5px;
@@ -9535,33 +9532,33 @@ def display_code(code, *, title: str = "Code Cell"):
                 align-items: center;
                 position: relative;
             }}
-            #{cell_id} .window-controls {{
+            #{0} .window-controls {{
                 display: flex;
                 position: absolute;
                 left: 10px;
                 gap: 6px;
             }}
-            #{cell_id} .control-button {{
+            #{0} .control-button {{
                 width: 12px;
                 height: 12px;
                 border-radius: 50%;
                 border: none;
                 cursor: pointer;
             }}
-            #{cell_id} .close-button {{
+            #{0} .close-button {{
                 background-color: #ff5f56;
             }}
-            #{cell_id} .minimize-button {{
+            #{0} .minimize-button {{
                 background-color: #ffbd2e;
             }}
-            #{cell_id} .control-button:hover {{
+            #{0} .control-button:hover {{
                 filter: brightness(90%);
             }}
-            #{cell_id} .title-text {{
+            #{0} .title-text {{
                 flex: 1;
                 text-align: center;
             }}
-            #{cell_id} .copy-button, #{cell_id} .hamburger-menu {{
+            #{0} .copy-button, #{0} .hamburger-menu {{
                 background-color: #49483e;
                 border: none;
                 color: #f8f8f2;
@@ -9574,32 +9571,32 @@ def display_code(code, *, title: str = "Code Cell"):
                 gap: 5px;
                 transition: background-color 0.2s;
             }}
-            #{cell_id} .copy-button {{
+            #{0} .copy-button {{
                 position: absolute;
                 right: 50px;
             }}
-            #{cell_id} .hamburger-menu {{
+            #{0} .hamburger-menu {{
                 position: absolute;
                 right: 10px;
                 padding: 3px 5px;
             }}
-            #{cell_id} .copy-button:hover, #{cell_id} .hamburger-menu:hover {{
+            #{0} .copy-button:hover, #{0} .hamburger-menu:hover {{
                 background-color: #75715e;
             }}
-            #{cell_id} .copy-icon,             #{cell_id} .hamburger-icon {{
+            #{0} .copy-icon, #{0} .hamburger-icon {{
                 width: 14px;
                 height: 14px;
                 fill: currentColor;
                 transition: transform 0.3s ease;
             }}
-            #{cell_id} .hamburger-icon.active {{
+            #{0} .hamburger-icon.active {{
                 transform: rotate(90deg);
             }}
-            #{cell_id} .hamburger-icon rect {{
+            #{0} .hamburger-icon rect {{
                 fill: currentColor;
                 transition: y 0.3s ease, transform 0.3s ease, opacity 0.3s ease;
             }}
-            #{cell_id} .secondary-menu {{
+            #{0} .secondary-menu {{
                 max-height: 0;
                 overflow: hidden;
                 background-color: #272822;
@@ -9611,17 +9608,17 @@ def display_code(code, *, title: str = "Code Cell"):
                 transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
                 opacity: 0;
             }}
-            #{cell_id} .secondary-menu.visible {{
+            #{0} .secondary-menu.visible {{
                 max-height: 40px;
                 padding: 5px 10px;
                 opacity: 1;
             }}
-            #{cell_id} .secondary-menu.closing {{
+            #{0} .secondary-menu.closing {{
                 max-height: 0;
                 padding: 0 10px;
                 opacity: 0;
             }}
-            #{cell_id} .secondary-menu button {{
+            #{0} .secondary-menu button {{
                 background-color: #49483e;
                 border: none;
                 color: #f8f8f2;
@@ -9631,77 +9628,79 @@ def display_code(code, *, title: str = "Code Cell"):
                 font-size: 12px;
                 transition: background-color 0.2s;
             }}
-            #{cell_id} #minimize-all-{cell_id}:hover, #{cell_id} #maximize-all-{cell_id}:hover {{
+            #{0} #minimize-all-{0}:hover, #{0} #maximize-all-{0}:hover {{
                 background-color: #ffbd2e;
                 color: #272822;
             }}
-            #{cell_id} #close-all-{cell_id}:hover {{
+            #{0} #close-all-{0}:hover {{
                 background-color: #ff5f56;
                 color: #272822;
             }}
-            #{cell_id} #minimize-all-{cell_id}.active, #{cell_id} #maximize-all-{cell_id}.active {{
+            #{0} #minimize-all-{0}.active, #{0} #maximize-all-{0}.active {{
                 background-color: #ffbd2e;
                 color: #272822;
             }}
-            #{cell_id} #close-all-{cell_id}.active {{
+            #{0} #close-all-{0}.active {{
                 background-color: #ff5f56;
                 color: #272822;
             }}
-            #{cell_id} .code-cell-content {{
+            #{0} .code-cell-content {{
                 padding: 10px;
                 background-color: #272822;
                 overflow-x: auto;
                 line-height: 1.5;
                 color: #f8f8f2;
-                max-height: 2000px; /* Increased to accommodate larger code blocks */
-                transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1); /* Smoother easing function */
+                max-height: 2000px;
+                transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
                 transform-origin: top;
                 opacity: 1;
             }}
-            #{cell_id}.minimized .code-cell-content {{
+            #{0}.minimized .code-cell-content {{
                 max-height: 0;
                 padding-top: 0;
                 padding-bottom: 0;
                 opacity: 0.7;
-                transform: scaleY(0.01); /* Creates a folding effect */
+                transform: scaleY(0.01);
                 overflow: hidden;
             }}
-            #{cell_id} .code-line {{
+            #{0} .code-line {{
                 display: flex;
                 white-space: pre;
                 min-height: 1.5em;
             }}
-            #{cell_id} .code-content {{
+            #{0} .code-content {{
                 flex: 1;
                 padding-left: 0.5em;
                 white-space: pre;
             }}
-            #{cell_id} .line-number {{
+            #{0} .line-number {{
                 color: #75715e !important;
                 border-right: 1px solid #49483e;
                 padding-right: 0.5em;
                 text-align: right;
                 user-select: none;
-                min-width: {line_num_width + 1}ch;
+                min-width: {1}ch;
                 display: inline-block;
             }}
         </style>
+        """
         
-        <div id="{cell_id}" data-original-code="{code_for_attr}">
+        content_template = """
+        <div id="{0}" data-original-code="{1}">
             <div class="code-cell-container">
                 <div class="code-cell-header">
                     <div class="window-controls">
-                        <button class="control-button close-button" id="close-button-{cell_id}" title="Close"></button>
-                        <button class="control-button minimize-button" id="minimize-button-{cell_id}" title="Minimize"></button>
+                        <button class="control-button close-button" id="close-button-{0}" title="Close"></button>
+                        <button class="control-button minimize-button" id="minimize-button-{0}" title="Minimize"></button>
                     </div>
-                    <div class="title-text">{title}</div>
-                    <button class="copy-button" id="copy-button-{cell_id}">
+                    <div class="title-text">{2}</div>
+                    <button class="copy-button" id="copy-button-{0}">
                         <svg class="copy-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                             <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
                         </svg>
                         Copy
                     </button>
-                    <button class="hamburger-menu" id="hamburger-menu-{cell_id}" title="More options">
+                    <button class="hamburger-menu" id="hamburger-menu-{0}" title="More options">
                         <svg class="hamburger-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 14 14">
                             <rect x="2" y="3" width="10" height="2" rx="1"/>
                             <rect x="2" y="6" width="10" height="2" rx="1"/>
@@ -9709,32 +9708,34 @@ def display_code(code, *, title: str = "Code Cell"):
                         </svg>
                     </button>
                 </div>
-                <div class="secondary-menu" id="secondary-menu-{cell_id}">
-                    <button id="minimize-all-{cell_id}">Minimize All</button>
-                    <button id="maximize-all-{cell_id}">Maximize All</button>
-                    <button id="close-all-{cell_id}">Close All</button>
+                <div class="secondary-menu" id="secondary-menu-{0}">
+                    <button id="minimize-all-{0}">Minimize All</button>
+                    <button id="maximize-all-{0}">Maximize All</button>
+                    <button id="close-all-{0}">Close All</button>
                 </div>
                 <div class="code-cell-content">
                     <div style="display:none">
-                        <pre><code class="python">{escaped_code}</code></pre>
+                        <pre><code class="python">{3}</code></pre>
                     </div>
                     <div class="line-numbers-code">
-                        {code_with_line_numbers}
+                        {4}
                     </div>
                 </div>
             </div>
         </div>
+        """
         
+        script_template = """
         <script>
         (function() {{
             // Setup copy button functionality
             function setupCopyButton() {{
-                const copyButton = document.getElementById('copy-button-{cell_id}');
+                const copyButton = document.getElementById('copy-button-{0}');
                 if (copyButton) {{
                     copyButton.addEventListener('click', function() {{
                         try {{
                             // Get the original code directly from our data attribute
-                            const codeContainer = document.getElementById('{cell_id}');
+                            const codeContainer = document.getElementById('{0}');
                             const originalCode = codeContainer.getAttribute('data-original-code');
                             
                             // Create a temporary textarea element to copy the text
@@ -9776,9 +9777,9 @@ def display_code(code, *, title: str = "Code Cell"):
             
             // Setup the window control buttons
             function setupWindowControls() {{
-                const closeButton = document.getElementById('close-button-{cell_id}');
-                const minimizeButton = document.getElementById('minimize-button-{cell_id}');
-                const codeContainer = document.getElementById('{cell_id}');
+                const closeButton = document.getElementById('close-button-{0}');
+                const minimizeButton = document.getElementById('minimize-button-{0}');
+                const codeContainer = document.getElementById('{0}');
                 
                 if (closeButton) {{
                     closeButton.addEventListener('click', function() {{
@@ -9802,7 +9803,7 @@ def display_code(code, *, title: str = "Code Cell"):
                             
                             // If maximizeing, scroll into view after animation completes
                             setTimeout(() => {{
-                                const content = document.querySelector('#{cell_id} .code-cell-content');
+                                const content = document.querySelector('#{0} .code-cell-content');
                                 content.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
                             }}, 400);
                         }}
@@ -9812,12 +9813,12 @@ def display_code(code, *, title: str = "Code Cell"):
             
             // Setup hamburger menu and secondary controls
             function setupHamburgerMenu() {{
-                const hamburgerButton = document.getElementById('hamburger-menu-{cell_id}');
+                const hamburgerButton = document.getElementById('hamburger-menu-{0}');
                 const hamburgerIcon = hamburgerButton.querySelector('.hamburger-icon');
-                const secondaryMenu = document.getElementById('secondary-menu-{cell_id}');
-                const minimizeAllButton = document.getElementById('minimize-all-{cell_id}');
-                const maximizeAllButton = document.getElementById('maximize-all-{cell_id}');
-                const closeAllButton = document.getElementById('close-all-{cell_id}');
+                const secondaryMenu = document.getElementById('secondary-menu-{0}');
+                const minimizeAllButton = document.getElementById('minimize-all-{0}');
+                const maximizeAllButton = document.getElementById('maximize-all-{0}');
+                const closeAllButton = document.getElementById('close-all-{0}');
                 
                 if (hamburgerButton && secondaryMenu) {{
                     // Toggle secondary menu visibility when hamburger is clicked
@@ -9870,7 +9871,7 @@ def display_code(code, *, title: str = "Code Cell"):
                                 cell.classList.add('minimized');
                                 
                                 // Also update the minimize button's visual state
-                                const minButton = document.querySelector(`#${{cell.id}} .minimize-button`);
+                                const minButton = document.querySelector('#' + cell.id + ' .minimize-button');
                                 if (minButton) {{
                                     minButton.style.boxShadow = 'inset 0 0 0 1px rgba(0, 0, 0, 0.3)';
                                     minButton.setAttribute('title', 'Maximize');
@@ -9902,7 +9903,7 @@ def display_code(code, *, title: str = "Code Cell"):
                                 cell.classList.remove('minimized');
                                 
                                 // Update the minimize button's visual state
-                                const minButton = document.querySelector(`#${{cell.id}} .minimize-button`);
+                                const minButton = document.querySelector('#' + cell.id + ' .minimize-button');
                                 if (minButton) {{
                                     minButton.style.boxShadow = '';
                                     minButton.setAttribute('title', 'Minimize');
@@ -9937,7 +9938,7 @@ def display_code(code, *, title: str = "Code Cell"):
                 if (typeof hljs !== 'undefined') {{
                     try {{
                         // Get the code element and highlight it
-                        const codeElement = document.querySelector('#{cell_id} code');
+                        const codeElement = document.querySelector('#{0} code');
                         hljs.highlightElement(codeElement);
                         
                         // Get the highlighted code
@@ -9975,7 +9976,7 @@ def display_code(code, *, title: str = "Code Cell"):
                         }}
                         
                         // Apply the highlighted lines to our line-numbered code
-                        const codeContentElements = document.querySelectorAll('#{cell_id} .code-content');
+                        const codeContentElements = document.querySelectorAll('#{0} .code-content');
                         for (let i = 0; i < codeContentElements.length; i++) {{
                             if (i < processedLines.length) {{
                                 codeContentElements[i].innerHTML = processedLines[i];
@@ -9985,7 +9986,7 @@ def display_code(code, *, title: str = "Code Cell"):
                         }}
                         
                         // Hide the original code block
-                        document.querySelector('#{cell_id} [style="display:none"]').style.display = 'none';
+                        document.querySelector('#{0} [style="display:none"]').style.display = 'none';
                     }} catch (e) {{
                         console.error('Error applying highlighting:', e);
                     }}
@@ -10001,7 +10002,22 @@ def display_code(code, *, title: str = "Code Cell"):
         </script>
         """
 
-        display(HTML(html))
+        # Apply the style and content templates
+        style = style_template.format(cell_id, line_num_width + 1)
+        content = content_template.format(
+            cell_id,
+            code_for_attr,
+            title,
+            escaped_code,
+            code_with_line_numbers
+        )
+        script = script_template.format(cell_id)
+        
+        # Combine all HTML parts
+        html_output = style + content + script
+
+        # Display the complete HTML
+        display(HTML(html_output))
 
 # endregion
 # region  'youtube_dl'﹣dependent methods: ［rip_music，rip_info］
