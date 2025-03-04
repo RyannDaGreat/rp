@@ -12505,6 +12505,18 @@ def _get_cached_system_commands():
 
     return _get_sys_commands_cache
 
+def _add_system_commands_to_pterm_bash_highlighter():
+    """ 
+    This function lets us syntax-highlight any system commands in the !<shell stuff> in pterm seen upon boot 
+    It can't update them over time right now, it's a one-time thing
+    """ 
+    import pygments.lexers.shell as shell
+    import re
+    Name=shell.Name
+    commands=get_system_commands()
+    shell.BashLexer.tokens['basic']+=[(r'\b(' + '|'.join(re.escape(x) for x in commands) + r')(?=[\s)\`])', Name.Function),]
+_add_system_commands_to_pterm_bash_highlighter()
+
 _system_command_exists_cache = {}
 def system_command_exists(command, *, use_cache=False):
     """
