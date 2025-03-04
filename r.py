@@ -10257,6 +10257,8 @@ def force_suppress_warnings():
     warnings.filterwarnings("ignore")
 def force_restore_warnings():
     warnings.filterwarnings("default")
+def TemporarilySuppressConsoleOutput():
+    return TemporarilySetAttr(sys.stdout, write=_muted_stdout_write)
 # def toggle_console_output ⟵ I was going to implement this, but then decided against it: it could get really annoying/confusing if used often.
 # endregion
 # region Ryan's Inspector: ［rinsp］
@@ -37209,12 +37211,11 @@ def exec_ipynb(notebook_path:str, *, scope=None, show_code=True):
     cells = _extract_code_cells_from_ipynb(notebook_path)
 
     if show_code:
-        original_cells = _extract_code_cells_from_ipynb(notebook_path)
 
         #We also have a display_markdown() helper func ready to go! TODO: Please use it.
         def _announce_cell(cell_num):
             display_code_cell(
-                original_cells[cell_num],
+                cells[cell_num],
                 title=" "
                 + get_file_name(notebook_path, include_file_extension=False)
                 + " : CELL #"
@@ -37222,19 +37223,44 @@ def exec_ipynb(notebook_path:str, *, scope=None, show_code=True):
                 + " ",
             )
 
-        # cells = ['__import__("rp").r._print_code_cell('+repr(cell)+')'+'\n'+cell for cell in cells]
-        cells = [
-            "\n\n"+_ipynb_separator+"\n_announce_cell(%i)\n\n" % i + cell
-            for i, cell in enumerate(cells)
-        ]
-
+        halt=False
         with TemporarilySetItem(scope, dict(_announce_cell=_announce_cell)):
-            for cell in cells:
-                exeval(cell, scope)
+            for cell_num,cell in enumerate(cells):
+                if halt:
+                    break
+                _announce_cell(cell_num)
+
+                if running_in_jupyter_notebook():
+                    with _get_jupyter_output_widget():
+                        #Redirect Jupyter's output into an output widget
+                        #We do this so if something calls clear_output, 
+                        #   it only clears the output of this 'virtual'
+                        #   cell, instead of clearing all previous cells.
+                        try:
+                            exeval(cell, scope)
+                        except:
+                            #When capturing the output, it won't stop on error
+                            #It will keep plowing through unless we stop it...
+                            halt=True
+                            raise
+                else:
+                    exeval(cell, scope)
+
 
     else:
         for cell in cells:
             exeval(cell, scope)
+
+def _get_jupyter_output_widget():
+    pip_import("IPython")
+    pip_import("ipywidgets")
+
+    import ipywidgets as widgets
+    from IPython.display import display
+
+    output_widget = widgets.Output()
+    display(output_widget)
+    return output_widget
 
 def extract_code_from_ipynb(notebook_path=None):
     """
@@ -41476,10 +41502,10 @@ def view_string_diff(before:str,after:str):
     
     try:
         set_current_directory(temp_dir)
-        os.system('git init')
+        os.system('git init  > /dev/null 2>&1')
         string_to_text_file(file_name,before)
-        os.system('git add '+file_name)
-        os.system('git commit -am '+repr(commit_message))
+        os.system('git add '+shlex.quote(file_name)+'  > /dev/null 2>&1')
+        os.system('git commit -am '+shlex.quote(commit_message)+' > /dev/null 2>&1')
         string_to_text_file(file_name,after)
         os.system('ydiff -s '+file_name)
     finally:
