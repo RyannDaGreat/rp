@@ -73,6 +73,7 @@ def get_apt_completions():
 
         return _get_apt_completions_cache
 
+SHOWN_ERROR=False
 class PythonCompleter(Completer):
     """
     Completer for Python code.
@@ -541,6 +542,8 @@ class PythonCompleter(Completer):
 
         old_origin=origin
     def get_completions(self, document, complete_event,force=False):
+     import rp
+     try:
       import warnings
       with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -744,6 +747,14 @@ class PythonCompleter(Completer):
             out_completions.append(Completion(text=text, start_position=-len(post_period_origin), display=display))
 
         yield from out_completions
+     except Exception as e:
+         global SHOWN_ERROR
+         if not SHOWN_ERROR:
+           print()
+           rp.fansi_print("  >> RP AUTOCOMPLETION ERROR START : SAVED EXCEPTION TO rp.rp_ptpython.completer.SHOWN_ERROR <<  ",'red red bold on black black')
+           rp.print_stack_trace()
+           rp.fansi_print("  >> WILL ONLY SHOW COMPLETION ERRORS ONCE PER SESSION TO AVOID SPAM <<  \n  >> SET rp.rp_ptpython.SHOWN_ERROR=True IN RPRC TO DISABLE THESE COMPLETION ERROR REPORTS <<  ",'red red bold on black black')
+           SHOWN_ERROR=e
 
         #OLD VERSION BEFORE SORTING_KEY
         # for x in ric.current_candidates:
