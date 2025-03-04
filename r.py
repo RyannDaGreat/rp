@@ -19149,6 +19149,8 @@ def pseudo_terminal(
         TR tree
         TRA treeall
 
+        CVD $fansi_print('CUDA_VISIBLE_DEVICES: %s'%get_cuda_visible_devices(), 'bold yellow yellow on dark blue')
+
         FON fansion
         FOF fansioff
         FOFF fansioff
@@ -19381,6 +19383,8 @@ def pseudo_terminal(
 
         RWC $web_copy($get_source_code($r))
 
+        CCA $r._run_claude_code(ans).code
+
         RST __import__('os').system('reset')
         RS  __import__('os').system('reset')
 
@@ -19413,6 +19417,8 @@ def pseudo_terminal(
         
         LEA  [eval(str(x)) for x in ans]
         EVLA [eval(str(x)) for x in ans]
+
+        PAF ans=$string_from_clipboard(); ans=ans.splitlines() if '\\n' in ans else ans[1:-1].split("' '") if ans.startswith("'") and ans.endswith("'") else ans #Paste Files (for MacOS when you copy multiple files)
 
         CLS CLEAR
         VV !vim
@@ -31359,6 +31365,73 @@ def change_video_file_framerate(video_path, new_framerate, output_path=None):
         fansi_print("Error output: " + e.stderr.decode("utf-8"), "red")
         return None
 
+def concat_mp4_files(*input_files, output_file=None):
+    """
+    Concatenate multiple MP4 files with zero degradation (no recompression).
+
+    Args:
+        input_files (list): List of input MP4 file paths
+        output_file (str): Path for the output concatenated MP4 file
+
+    Returns:
+        str: The path to the concatenated file if successful.
+
+    Raises:
+        ValueError: If no input files are provided.
+        FileNotFoundError: If any input file does not exist.
+        subprocess.CalledProcessError: If FFmpeg fails during concatenation.
+        Exception: For any other unexpected errors.
+    """
+    import subprocess
+    import os
+    import tempfile
+
+    input_files = detuple(input_files)
+
+    if not input_files:
+        raise ValueError("concat_mp4_files: No input files provided.")
+
+    if isinstance(input_files, str):
+        input_files = input_files.strip().splitlines()
+        
+    if output_file is None:
+        output_file = with_file_name(input_files[0], "concatenated_videos.mp4")
+        output_file = rp.get_unique_copy_path(output_file)
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as temp_file:
+        temp_filename = temp_file.name
+        for file_path in input_files:
+            if not os.path.exists(file_path):
+                os.unlink(temp_filename)
+                raise FileNotFoundError(f"concat_mp4_files: File not found: {file_path}")
+            escaped_path = file_path.replace("'", "'\\''")
+            temp_file.write("file '{}'\n".format(escaped_path))
+
+    try:
+        cmd = [
+            'ffmpeg',
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', temp_filename,
+            '-c', 'copy',
+            '-map_metadata', '0',
+            '-movflags', '+faststart',
+            output_file
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return output_file
+
+    except subprocess.CalledProcessError as e:
+        raise subprocess.CalledProcessError(e.returncode, e.cmd, output=e.output, stderr=e.stderr,
+                                            msg="concat_mp4_files: FFmpeg concatenation failed.") from e
+
+    except Exception as e:
+        raise Exception("concat_mp4_files: An unexpected error occurred.") from e
+
+    finally:
+        if os.path.exists(temp_filename):
+            os.unlink(temp_filename)
+
 
 def directory_exists(path):
     if not isinstance(path,str): return False
@@ -36093,7 +36166,8 @@ def _ensure_installed(name:str,*,windows=None,mac=None,linux=None):
 
     if   starts_with_any(command, 'brew ', 'yes | brew '): _ensure_brew_installed()
     elif starts_with_any(command, 'curl ', 'yes | curl '): _ensure_curl_installed()
-    elif starts_with_any(command, 'apt', 'apt-get'): command = 'sudo '+command
+    elif starts_with_any(command, 'npm ' , 'yes | npm ' ): _ensure_npm_installed()
+    elif starts_with_any(command, 'apt ' , 'apt-get '   ): command = 'sudo '+command
 
     error_code =_run_sys_command(command)
 
@@ -36140,6 +36214,15 @@ def _ensure_ffmpeg_installed():
         elif currently_running_mac    (): assert False, "Please install ffmpeg! >>> brew install ffmpeg #get brew at https://brew.sh"
         else:                             assert False, "Please install ffmpeg!"
 
+def _ensure_claudecode_installed():
+    _ensure_installed(
+        'claude',
+        # https://github.com/anthropics/claude-code
+        mac    ='npm install -g @anthropic-ai/claude-code',
+        linux  ='npm install -g @anthropic-ai/claude-code',
+        windows='npm install -g @anthropic-ai/claude-code',
+    )
+
 def _ensure_nvtop_installed():
     _ensure_installed(
         'nvtop',
@@ -36168,6 +36251,14 @@ def _ensure_tmux_installed():
         mac='brew install tmux',
         linux='apt install tmux --yes',
         windows=None,
+    )
+
+def _ensure_npm_installed():
+    _ensure_installed(
+        'npm',
+        mac='brew install npm',
+        linux='apt install npm --yes',
+        windows='winget install -e --id OpenJS.NodeJS --accept-source-agreements',#https://winget.run/pkg/OpenJS/NodeJS
     )
 
 def _ensure_git_installed():
@@ -36354,6 +36445,31 @@ def _run_bashtop():
 
     #Run it!
     os.system('bashtop')
+
+def _run_claude_code(code):
+    _ensure_claudecode_installed()
+    if file_exists(code):
+        code = get_parent_directory(code)
+    if directory_exists(code):
+        workdir=code
+    else:
+        if not isinstance(code, str):
+            try:
+                code = get_source_code(code)
+            except:
+                pass
+        display_code_cell(code,title=' Claude code.py ')
+        workdir = temporary_file_path()
+        make_directory(workdir)
+    print(fansi_highlight_path(workdir))
+    with SetCurrentDirectoryTemporarily(workdir):
+        save_text_file(code, "code.py")
+        os.system("claude")
+        if file_exists('code.py'):
+            return gather_vars("code workdir")
+        else:
+            return gather_vars("workdir")
+
 
 
 def _configure_filebrowser():
@@ -44584,7 +44700,16 @@ def set_cuda_visible_devices(*devices):
     return prev_visible_devices
 
 
-        
+def get_cuda_visible_devices():
+    """ Returns a list of ints """
+    import ast
+    key = 'CUDA_VISIBLE_DEVICES'
+    if key in os.environ:
+        out = os.environ[key]
+        if out:
+            return list(ast.literal_eval(out))
+    return []
+
 def _removestar(code:str,max_line_length=100,quiet=False):
     """
     Takes something like:
