@@ -95,10 +95,10 @@
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/prompt_toolkit
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Users/Ryan
 /Users/Ryan/PycharmProjects/QuickPython/rp
 /Users/Ryan/PycharmProjects/QuickPython/rp.egg-info
 /Users/Ryan/PycharmProjects
 /Users/Ryan/PycharmProjects/QuickPython
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
