@@ -31404,7 +31404,7 @@ def concat_mp4_files(*input_files, output_file=None):
         for file_path in input_files:
             if not os.path.exists(file_path):
                 os.unlink(temp_filename)
-                raise FileNotFoundError(f"concat_mp4_files: File not found: {file_path}")
+                raise FileNotFoundError("concat_mp4_files: File not found: "+file_path)
             escaped_path = file_path.replace("'", "'\\''")
             temp_file.write("file '{}'\n".format(escaped_path))
 
