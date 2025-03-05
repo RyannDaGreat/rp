@@ -19384,6 +19384,7 @@ def pseudo_terminal(
         RWC $web_copy($get_source_code($r))
 
         CCA $r._run_claude_code(ans).code
+        CCH $r._run_claude_code('.')
 
         RST __import__('os').system('reset')
         RS  __import__('os').system('reset')
@@ -36466,6 +36467,7 @@ def _run_claude_code(code):
         save_text_file(code, "code.py")
         os.system("claude")
         if file_exists('code.py'):
+            code = load_text_file('code.py')
             return gather_vars("code workdir")
         else:
             return gather_vars("workdir")
