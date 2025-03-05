@@ -14029,6 +14029,8 @@ def is_string_literal(s:str):
         return False
 
 def indentify(s:str,indent='\t'):
+    if isinstance(indent, int):
+        indent=' '*indent
     return '\n'.join(indent + x for x in s.split('\n'))
 
 def unindent(string, indent=" "):
@@ -19263,6 +19265,7 @@ def pseudo_terminal(
 
         JL PYM jupyter lab
         UNCOMMIT !git reset --soft HEAD^
+        REATTACH_MASTER !git branch temp-recovery-branch ; git checkout temp-recovery-branch ; git checkout master ; git merge temp-recovery-branch ; git branch -d temp-recovery-branch #Reattach from the reflog to master
 
         NB  $extract_code_from_ipynb()
         NBA  $extract_code_from_ipynb(ans)
