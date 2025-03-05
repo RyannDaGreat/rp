@@ -37470,6 +37470,11 @@ def get_all_facebook_messages(my_email:str=None,my_password:str=None,my_name:str
     print(output)
     return message_tuples
 
+def explore_pytorch_module(module):
+    """ https://github.com/RyannDaGreat/torchviewer.git """
+    import rp.libs.pytorch_module_explorer as pme
+    pme.explore_module(module)
+
 def visualize_pytorch_model(model,*,input_shape=None, example_input=None, supress_warnings=True):
     """
     TODO: integrate code better with _visualize_pytorch_model_via_torchviz: get rid of redundant code
