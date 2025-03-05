@@ -403,8 +403,9 @@ class PythonInput(object):
                           is_visible=is_visible)
         def doge(self):
             setattr(self,'sand_creature',"Option Camel")
-            from doge.core import main
-            main()
+            # This hasn't aged well :( Fuck Trump and fuck elon - they ruined a meme!
+            # from doge.core import main
+            # main()
 
         return [
             OptionCategory('Input',[
@@ -708,16 +709,16 @@ class PythonInput(object):
 
             ]),
             OptionCategory('Ryan Python',[
-                Option(title='Sand Creature',
-                        is_visible=lambda:getattr(self,'show_all_options',True),
+                # Option(title='Sand Creature',
+                #         is_visible=lambda:getattr(self,'show_all_options',True),
 
-                       description='This is an option selection test that should print stuff',
-                       get_current_value=lambda:getattr(self,'sand_creature','(Broken)'),
-                       get_values=lambda:{
-                           "Option Llama":lambda:setattr(self,'sand_creature',"Option Llama"),# print("Selected Llama"),
-                           "Option Donkey":lambda:setattr(self,'sand_creature',"Option Donkey"),# print("Selected Donkey"),
-                           "Option Camel":lambda:doge(self),# print("Selected Camel"),
-                       }),
+                #        description='This is an option selection test that should print stuff',
+                #        get_current_value=lambda:getattr(self,'sand_creature','(Broken)'),
+                #        get_values=lambda:{
+                #            "Option Llama":lambda:setattr(self,'sand_creature',"Option Llama"),# print("Selected Llama"),
+                #            "Option Donkey":lambda:setattr(self,'sand_creature',"Option Donkey"),# print("Selected Donkey"),
+                #            "Option Camel":lambda:doge(self),# print("Selected Camel"),
+                #        }),
                 Option(title='Show Last Assignable',
                         is_visible=lambda:getattr(self,'show_all_options',True),
 
