@@ -500,14 +500,14 @@ function RyanHighlightDefaults()
     :highlight DiffChange guifg=#000000 guibg=#87cefa ctermfg=16 ctermbg=117
     :highlight DiffDelete guifg=#000000 guibg=#8a8a8a ctermfg=16 ctermbg=245
     let g:gitgutter_override_sign_column_highlight = 0
-    :highlight GitGutterDelete guifg=#ff2222 ctermfg=9 cterm=bold ctermbg=232 guibg=#080808
-    :highlight GitGutterAdd    guifg=#009900 ctermfg=2 cterm=bold ctermbg=232 guibg=#080808
-    :highlight GitGutterChange guifg=#bbbb00 ctermfg=3 cterm=bold ctermbg=232 guibg=#080808
-    :highlight GitGutterChangeDelete ctermfg=4 guifg=#0000ff
-    :highlight GutterMarks     guifg=#007fff ctermfg=6 cterm=bold ctermbg=232 guibg=#080808
+    :highlight GitGutterAdd          guifg=#009900 ctermfg=2   cterm=bold ctermbg=232 guibg=#080808
+    :highlight GitGutterChange       guifg=#bbbb00 ctermfg=3   cterm=bold ctermbg=232 guibg=#080808
+    :highlight GitGutterDelete       guifg=#ff2222 ctermfg=9   cterm=bold ctermbg=232 guibg=#080808
+    :highlight GitGutterChangeDelete guifg=#ff8000 ctermfg=208 cterm=bold ctermbg=232 guibg=#080808
+    :highlight GutterMarks           guifg=#F07fff ctermfg=2 cterm=bold ctermbg=232 guibg=#080808
     :highlight PudbBreakpointSign    ctermfg=red cterm=bold ctermbg=232 guibg=#080808
     
-    call RyanGitGutterHighlights()
+    " call RyanGitGutterHighlights()
     :highlight ALEErrorSign ctermfg=199 cterm=bold ctermbg=232 guifg=#ff0087 guibg=#080808
     
     :highlight clear SignColumn
@@ -851,6 +851,9 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         " Toggle Gitgutter
         nmap <F4>g : GitGutterToggle <CR>
         nmap <leader>jg : GitGutterToggle <CR>
+
+        " Gitgutter Commit Selection
+        nnoremap <leader>jG :call<space>GitGutterSelectDiffBase()<CR>
         
         "Doesn't work - idk why
         " " NerdTree
@@ -2097,6 +2100,90 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             :silent! pyx import sys,os;sys.path.append(os.environ['RP_SITE_PACKAGES'])
 
 
+" AI-WRITTEN FUNCTIONS:
+    "CHOOSE GITGUTTER DIFF COMMIT \jG:
+        function! GitGutterSelectDiffBase()
+          " Check if git is available
+          if !executable('git')
+            echoerr "Git executable not found in PATH"
+            return
+          endif
+
+          " Get the git commits with SHA and message (limit to 100)
+          let git_output = system('git log --oneline -n 100')
+          
+          if v:shell_error
+            echoerr "Failed to get git commits: " . git_output
+            return
+          endif
+          
+          let commits = split(git_output, '\n')
+          
+          " Create quickfix list
+          let qf_list = []
+          
+          " Add 'main' option at the top
+          call add(qf_list, {'text': 'MAIN: main (current branch)', 'lnum': 1})
+          
+          " Add commits to the quickfix list
+          let lnum = 2
+          for commit in commits
+            let parts = matchlist(commit, '\(\S\+\)\s\+\(.*\)')
+            if len(parts) >= 3
+              let sha = parts[1]
+              let msg = parts[2]
+              call add(qf_list, {'text': sha . ': ' . msg, 'lnum': lnum})
+              let lnum += 1
+            endif
+          endfor
+          
+          " Populate the quickfix list
+          call setqflist(qf_list)
+          
+          " Open the quickfix window
+          copen
+          
+          " Set the title of the quickfix window to include instructions
+          let w:quickfix_title = 'Select a commit to set as GitGutter diff base (press Enter)'
+          
+          " Set up a buffer-local mapping for selection
+          nnoremap <buffer> <CR> :call GitGutterSetDiffBase()<CR>
+        endfunction
+
+        function! GitGutterSetDiffBase()
+          " Get the selected line info
+          let qf_item = getqflist()[line('.') - 1]
+          let line_text = qf_item.text
+          
+          " Extract SHA from the text (format is "SHA: message" or "MAIN: main (current branch)")
+          let parts = matchlist(line_text, '\(\S\+\): \(.*\)')
+          if len(parts) >= 3
+            let sha_or_main = parts[1]
+            
+            " Check if 'MAIN' was selected
+            if sha_or_main ==# 'MAIN'
+              let g:gitgutter_diff_base = ''
+            else
+              let g:gitgutter_diff_base = sha_or_main
+            endif
+            
+            " Close the quickfix window
+            cclose
+            
+            " Update GitGutter
+            GitGutter
+            
+            " Provide feedback
+            if empty(g:gitgutter_diff_base)
+              echo "GitGutter diff base set to index (current branch)"
+            else
+              echo "GitGutter diff base set to " . g:gitgutter_diff_base
+            endif
+          else
+            echo "Failed to parse commit information"
+          endif
+        endfunction
+
 "Plugin 'maralla/completor.vim'
 "Plugin 'prabirshrestha/asyncomplete.vim'
 " Plugin 'preservim/vim-wordchipper'
@@ -2114,3 +2201,4 @@ function! OpenTabsLater(timer_id)
     endif
 endfunction
 autocmd VimEnter * call timer_start(100, 'OpenTabsLater')
+
