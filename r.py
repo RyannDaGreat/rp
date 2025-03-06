@@ -19267,6 +19267,8 @@ def pseudo_terminal(
         UNCOMMIT !git reset --soft HEAD^
         REATTACH_MASTER !git branch temp-recovery-branch ; git checkout temp-recovery-branch ; git checkout master ; git merge temp-recovery-branch ; git branch -d temp-recovery-branch #Reattach from the reflog to master
 
+        EMA $explore_pytorch_module(ans)
+
         NB  $extract_code_from_ipynb()
         NBA  $extract_code_from_ipynb(ans)
         NBC  $r.clear_jupyter_notebook_outputs()
@@ -36134,7 +36136,7 @@ def _set_ryan_tmux_conf():
     except Exception:
         pass
 
-def _run_sys_command(command, title='SYS COMMAND'):
+def _run_sys_command(*command, title='SYS COMMAND'):
     """ 
     Run a system command, announcing it
 
@@ -36144,6 +36146,9 @@ def _run_sys_command(command, title='SYS COMMAND'):
         hello
         ans = 0
     """
+    if len(command)>=1:
+        command = " ".join(shlex.quote(x) for x in command)
+
     message = fansi(title+": ",'bold green')+fansi(command, 'green')
     print(message)
     return os.system(command)
@@ -46458,14 +46463,24 @@ def get_free_disk_space(path='/'):
     return free
 
 _pip_install_needs_sudo=True
-def pip_install(pip_args:str):
+_pip_install_use_uv=False
+def pip_install(pip_args:str,*,use_uv=None):
     assert isinstance(pip_args,str),'pip_args must be a string like "numpy --upgrade" or "rp --upgrade --no-cache --user" etc'
-    import os
+
     if currently_running_unix() and rp.r._pip_install_needs_sudo:
         #Attempt to get root priveleges. Sometimes we need root priveleges to install stuff. If we're on unix, attempt to become the root for this process. There's probably a better way to do this but idk how and don't really care that much even though I probably should...
         os.system('sudo echo')#This should only prompt for a password once...making the next command run in sudo.
-    os.system(sys.executable+' -m pip install '+pip_args)
+
+    pip='pip'
+    if use_uv==True or use_uv is None and _pip_install_use_uv:
+        pip_import('uv')
+        pip = 'uv pip'
+
+    command = shlex.quote(sys.executable)+' -m '+pip+' install '+pip_args
+
+    _run_sys_command(command)
     _refresh_autocomplete_module_list()
+
     #DONT DELETE THIS COMMENT BLOCK: An alternative way to install things with pip:
     #    from pip.__main__ import _main as pip
     #    errored=pip(['install', package_name]+['--upgrade']*upgrade)
