@@ -1022,6 +1022,7 @@ class ModelTreeViewer(App):
 
 def explore_module(module):
     """Start the interactive module explorer"""
+    assert rp.is_torch_module(module), 'Is not a torch.nn.Module: '+str(type(module))
     app = ModelTreeViewer(module)
     app.run()
 
