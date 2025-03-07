@@ -3661,6 +3661,9 @@ def is_torch_image(image):
     "Returns True if image could be a CHW torch image"
     return is_torch_tensor(image) and image.ndim==3
 
+def is_torch_module(x) -> bool:
+    return _is_instance_of_module_class(x, 'torch.nn', 'Module')
+
 def _is_pandas_dataframe(x) -> bool:
     return _is_instance_of_module_class(x, 'pandas', 'DataFrame')
 
@@ -46519,7 +46522,7 @@ def pip_install(pip_args:str,*,backend=None):
 
     pip_cmd = dict(pip="pip", uv="uv pip")[backend]
 
-    command = shlex.quote(sys.executable) + " -m " + pip_cmd + " install " + pip_args
+    command = shlex.quote(sys.executable) + " -m " + pip + " install " + pip_args
 
     _run_sys_command(command)
     _refresh_autocomplete_module_list()
@@ -46928,6 +46931,10 @@ def pip_import(module_name,package_name=None,*,auto_yes=False):
             fansi_print("pip_import: normally we would try to install your package via pip, but you're not connected to the internet. Failed to pip_install("+repr(package_name)+')')
             raise
 
+def _import_module(module_name):
+    """ Can import a module name with multiple .'s in it, like rp.git.CommonSource. __import__ can't do that it just returns rp """
+    return exeval(line_join("%return module", "import " + module_name + " as module"))
+
 _rp_git_token=None #Set in RPRC
 _rp_git_dir=path_join(get_parent_directory(__file__),'git')
 def git_import(repo,token=None,*,pull=False):
@@ -46949,7 +46956,7 @@ def git_import(repo,token=None,*,pull=False):
             git_pull(path)
 
     try:
-        return __import__(module)
+        return _import_module(module)
     except ImportError:
         pass
     
@@ -46965,7 +46972,7 @@ def git_import(repo,token=None,*,pull=False):
     git_clone(url,path)
     
     try:
-        return __import__(module)
+        return _import_module(module)
     except ImportError:
         fansi_print('rp_git_import: Failed to import repo='+repr(repo), 'red', 'bold')
         raise
