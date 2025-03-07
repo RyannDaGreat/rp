@@ -37486,7 +37486,25 @@ def get_all_facebook_messages(my_email:str=None,my_password:str=None,my_name:str
     return message_tuples
 
 def explore_pytorch_module(module):
-    """ https://github.com/RyannDaGreat/torchviewer.git """
+    """
+    Lets you explore a pytorch module in a graphical terminal ui.
+    No more wondering what a config does to a model - it runs on executing code (not static)!
+    Make sure to run this in a terminal emulator! It can be over SSH, that's fine.
+    It tells you which parts of a model take how many gigavytes etc, lets you explore their source code and attributes
+
+    EXAMPLE: Explore Stable Diffusion's U-Net
+        >>> #pip install rp textual textual[syntax]
+        ... 
+        ... import rp
+        ... import torch
+        ... from diffusers import StableDiffusionPipeline
+        ... 
+        ... pipe = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", revision="fp16", torch_dtype=torch.float16)
+        ... rp.explore_pytorch_module(pipe.unet)
+    """
+    #pip install rp textual textual[syntax]
+
+    # https://github.com/RyannDaGreat/torchviewer.git
     import rp.libs.pytorch_module_explorer as pme
     pme.explore_module(module)
 
