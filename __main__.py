@@ -114,3 +114,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+    import threading
+    threading._shutdown=lambda *x,**y:None #Fuck the threading shutdown crap

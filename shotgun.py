@@ -1,13 +1,13 @@
 #A dependency shotgun - installs a bunch of packages
 
-packages = [
+#A set of packages that are tried and true to install together as one 
+harmonized_packages = [
     "2to3",
     "Cython",
     "HTMLParser",
     "IPython",
     "Imath",
     "OpenEXR",
-    "PIL",
     "PyYAML",
     "Pyperclip",
     "SentencePiece",
@@ -25,7 +25,6 @@ packages = [
     "av",
     "beautifulsoup4",
     "black",
-    "blist",
     "bokeh",
     "boto3",
     "bpytop",
@@ -34,7 +33,6 @@ packages = [
     "cloud-detect",
     "cmapy",
     "colorama",
-    "cv2",
     "datasets",
     "decord",
     "dill",
@@ -56,7 +54,6 @@ packages = [
     "func_timeout",
     "get-mac",
     "getmac",
-    "git",
     "glances",
     "googletrans",
     "gpustat",
@@ -100,7 +97,6 @@ packages = [
     "numba",
     "numpngw",
     "nvitop",
-    "odule_nam",
     "oldest-supported-numpy",
     "omegaconf",
     "openai",
@@ -108,12 +104,10 @@ packages = [
     "osascript",
     "pandas",
     "patool",
-    "peepdis",
     "pillow",
     "pillow-avif-plugin",
     "pillow-jxl-plugin",
     "pillow_heif",
-    "playsound",
     "plotille",
     "psutil",
     "ptpython",
@@ -121,11 +115,9 @@ packages = [
     "py-spy",
     "py3nvml",
     "pyarrow",
-    "pyaudio",
     "pydantic",
     "pydub",
     "pyflann",  # TODO: This needs to be fixed. It's broken for python3. It needs to be fixed using 2to3, and then inlined into this rp package. This is needed for flann_dict
-    "pyfx",
     "pygame",
     "pygments",
     "pyinstrument",
@@ -139,7 +131,6 @@ packages = [
     "pyscreenshot",
     "pyserial",
     "pytesseract",
-    "python-editorjs2py",
     "python-minifier",
     "pytube",
     "pytubefix",
@@ -152,7 +143,6 @@ packages = [
     "removestar",
     "requests",
     "rich",
-    "rtmidi",
     "scenedetect",
     "scikit-image",
     "scikit-learn",
@@ -166,9 +156,7 @@ packages = [
     "serial",
     "setproctitle",
     "sk-video",
-    "skimage",
     "sklearn",
-    "skvideo",
     "smart_open",
     "snowy",
     "sounddevice",
@@ -180,9 +168,9 @@ packages = [
     "taichi",
     "tensorboard",
     "textual",
-    "textual[syntax]",
     "textual-imageview",
     "textual-paint",
+    "textual[syntax]",
     "timestring",
     "timg",
     "tmuxp",
@@ -192,9 +180,11 @@ packages = [
     "transliterate",
     "twilio",
     "ufmt",  # Combines black + usort: https://github.com/omnilib/ufmt
-    "urllib",
+    "urllib3",
     "urwid",
+    "usort",
     "usort",  # An alternative to isort: https://libraries.io/pypi/usort
+    "uv", # Like pip...but much much faster! Might use as the default for pip_install if its reliable...
     "visidata",
     "vispy",
     "voluptuous",
@@ -203,36 +193,48 @@ packages = [
     "webcolors",
     "win_unicode_console",
     "word2number",
-    "uv", # Like pip...but much much faster! Might use as the default for pip_install if its reliable...
     "wordcloud",
     "xdoctest",
     "xonsh",
-    "yaml",
     "yapf",
     "ydiff",
     "youtube_dl",
-    "zalgo-tex",
     "zalgo-text",
 ]
 
+#Packages that might not install together nicely with packages - must try individually
+unreliable_packages = [
+    "playsound",
+    "pyaudio",
+    "rtmidi",
+    "blist",
+    "git",
+    "pyfx",
+    "urllib",
+    "skvideo",
+    "peepdis",
+]
+
+
+#Packages that depend on pytorch. Note that some computers need a different torch version! So these are separated.
 torch_packages = [
     "SwissArmyTransformer",
     "bitsandbytes",
     "deepspeed",
     "diffusers",
+    "flash_attn", #This can take forever, see its instructions. Sorry, you gotta do this one yourself...
     "peft",
     "safetensors",
-    # "flash_attn", #This can take forever, see its instructions. Sorry, you gotta do this one yourself...
     "tensordict",
     "timm",
     "tomesd",
     "torch",
-    "torchviz",
     "torchao",
     "torchaudio",
     "torchdiffeq",
     "torchsde",
     "torchvision",
+    "torchviz",
     "transformers",
     "xformers",
 ]

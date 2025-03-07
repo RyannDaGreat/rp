@@ -2105,6 +2105,7 @@ def handle_character(buffer,char,event=None):
                 'pipr':'PIP install -r',
                 'pipu':'PIP uninstall',
                 'piu':'PIP uninstall',
+                'uv':'PYM uv pip install',
                 'pu':'PU',
                 'pd': 'PYM pudb',
                 'vi':'VIM',
@@ -2127,6 +2128,7 @@ def handle_character(buffer,char,event=None):
                 'hd':'CDH',
                 'b':'CDH',
                 'inm':'if __name__ == "__main__":',
+
 
                 'torchrun':'PYM torch.distributed.run',
             })
@@ -3306,7 +3308,7 @@ def load_python_bindings(python_input):
                                         from rp import pip_import
                                         yapf=pip_import('yapf')
                                     except:
-                                        fansi_print("ERROR: To use yapf's autoformat, you must first install yapf. 'pip install yapf' is an option. See https://github.com/google/yapf",'red','bold')
+                                        buffer.insert_text("#ERROR: To use yapf's autoformat, you must first install yapf. 'pip install yapf' is an option. See https://github.com/google/yapf",'red','bold')
                                         return
                                     try:
                                         # buffer.delete_before_cursor(len('\\ya'))

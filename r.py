@@ -11411,7 +11411,7 @@ def string_to_text_file(file_path: str,string: str,) -> None:
         file=open(file_path,"w")
     except Exception:
         if not folder_exists(get_parent_folder(file_path)):
-            raise FileNotFoundError("Parent folder does not exist: "+str(get_parent_folder(file_patH)))
+            raise FileNotFoundError("Parent folder does not exist: "+str(get_parent_folder(file_path)))
         raise
 
     try:
@@ -36146,7 +36146,10 @@ def _run_sys_command(*command, title='SYS COMMAND'):
         hello
         ans = 0
     """
-    if len(command)>=1:
+
+    if len(command)==1:
+        command = command[0]
+    else:
         command = " ".join(shlex.quote(x) for x in command)
 
     message = fansi(title+": ",'bold green')+fansi(command, 'green')
@@ -36457,23 +36460,30 @@ def _run_bashtop():
 
 def _run_claude_code(code):
     _ensure_claudecode_installed()
+
     if file_exists(code):
         code = get_parent_directory(code)
+
     if directory_exists(code):
-        workdir=code
-    else:
-        if not isinstance(code, str):
-            try:
-                code = get_source_code(code)
-            except:
-                pass
-        display_code_cell(code,title=' Claude code.py ')
-        workdir = temporary_file_path()
-        make_directory(workdir)
+        with SetCurrentDirectoryTemporarily(code):
+            _run_sys_command('claude')
+        return
+
+    if not isinstance(code, str):
+        try:
+            code = get_source_code(code)
+        except:
+            pass
+        
+    display_code_cell(code,title=' Claude code.py ')
+    workdir = temporary_file_path()
+    make_directory(workdir)
+
     print(fansi_highlight_path(workdir))
     with SetCurrentDirectoryTemporarily(workdir):
-        save_text_file(code, "code.py")
-        os.system("claude")
+        save_text_file(code, 'code.py')
+        _run_sys_command('claude')
+
         if file_exists('code.py'):
             code = load_text_file('code.py')
             return gather_vars("code workdir")
@@ -46462,21 +46472,36 @@ def get_free_disk_space(path='/'):
     total, used, free = shutil.disk_usage(path)
     return free
 
+def _ensure_uv_installed():
+    """ Clone of pip that's much faster """
+    try:
+        import uv
+    except ImportError:
+        pip_install("uv", backend="pip")
+
 _pip_install_needs_sudo=True
-_pip_install_use_uv=False
-def pip_install(pip_args:str,*,use_uv=None):
+_pip_install_default_backend='pip'
+def pip_install(pip_args:str,*,backend=None):
+    """ Try to install a python package """
+
     assert isinstance(pip_args,str),'pip_args must be a string like "numpy --upgrade" or "rp --upgrade --no-cache --user" etc'
 
+    if backend is None:
+        backend = _pip_install_default_backend
+    assert backend in ['pip', 'uv']
+
+    if backend=='uv':
+        _ensure_uv_installed()
+
     if currently_running_unix() and rp.r._pip_install_needs_sudo:
-        #Attempt to get root priveleges. Sometimes we need root priveleges to install stuff. If we're on unix, attempt to become the root for this process. There's probably a better way to do this but idk how and don't really care that much even though I probably should...
+        #Attempt to get root priveleges. Sometimes we need root priveleges to install stuff. 
+        #If we're on unix, attempt to become the root for this process. 
+        #There's probably a better way to do this but idk how and don't really care that much even though I probably should...
         os.system('sudo echo')#This should only prompt for a password once...making the next command run in sudo.
 
-    pip='pip'
-    if use_uv==True or use_uv is None and _pip_install_use_uv:
-        pip_import('uv')
-        pip = 'uv pip'
+    pip_cmd = dict(pip="pip", uv="uv pip")[backend]
 
-    command = shlex.quote(sys.executable)+' -m '+pip+' install '+pip_args
+    command = shlex.quote(sys.executable) + " -m " + pip + " install " + pip_args
 
     _run_sys_command(command)
     _refresh_autocomplete_module_list()
@@ -46488,6 +46513,7 @@ def pip_install(pip_args:str,*,use_uv=None):
     #        assert False,'pip_install: installation of module '+repr(package_name)+' failed.'
 
 def update_rp():
+    """ Update this package """
     if input_yes_no("Are you sure you'd like to try updating rp? (You will need to restart it to see any effects)"):
         # --index-url https://pypi.org/simple is so other internal pypi's that are out of date don't prevent the upgrade (looking at you, netflix! https://pypi.netflix.net/simple is often out of date...)
         pip_install("rp --upgrade --no-cache  --index-url https://pypi.org/simple")
