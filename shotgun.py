@@ -180,6 +180,7 @@ packages = [
     "taichi",
     "tensorboard",
     "textual",
+    "textual[syntax]",
     "textual-imageview",
     "textual-paint",
     "timestring",
@@ -202,6 +203,7 @@ packages = [
     "webcolors",
     "win_unicode_console",
     "word2number",
+    "uv", # Like pip...but much much faster! Might use as the default for pip_install if its reliable...
     "wordcloud",
     "xdoctest",
     "xonsh",
@@ -220,6 +222,7 @@ torch_packages = [
     "diffusers",
     "peft",
     "safetensors",
+    # "flash_attn", #This can take forever, see its instructions. Sorry, you gotta do this one yourself...
     "tensordict",
     "timm",
     "tomesd",
@@ -250,7 +253,7 @@ def install(*extra_packages):
         print("ATTEMPTING TO INSTALL PACKAGE:".center(len(bar)))
         print(package.center(len(bar)))
         print(bar)
-        rp.pip_install(package)
+        rp.pip_install(package, use_uv=True)
 
 if __name__=='__main__':
     try:
