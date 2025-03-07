@@ -112,8 +112,8 @@ def main():
         # If no additional arguments or not the 'run' command, call _pterm
         rp.r._pterm()
 
-if __name__ == '__main__':
-    main()
-
     import threading
     threading._shutdown=lambda *x,**y:None #Fuck the threading shutdown crap
+
+if __name__ == '__main__':
+    main()
