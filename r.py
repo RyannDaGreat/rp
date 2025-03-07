@@ -13,6 +13,13 @@ from __future__ import unicode_literals
 # region Import
 # This is useful for running things on the terminal app or in blender
 # import r# For rinsp searches for functions in the r module, so I don't need to keep typing 'import r' over and over again
+
+# Places I want to access no matter where I launch r.py
+# sys.path.append('/Users/Ryan/PycharmProjects/RyanBStandards_Python3.5')
+# sys.path.append('/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages')
+# endregion
+# region ［entuple， detuple］
+
 import sys
 import threading
 from builtins import *#For autocompletion with pseudo_terminal
@@ -22,7 +29,7 @@ import rp
 import os
 import time
 import shlex
-import glob,sys
+import sys
 import random
 import warnings
 import pickle
@@ -37,11 +44,17 @@ from multiprocessing.dummy import Pool as ThreadPool  # ⟵ par_map uses ThreadP
 from contextlib import contextmanager
 from math import factorial
 
-# Places I want to access no matter where I launch r.py
-# sys.path.append('/Users/Ryan/PycharmProjects/RyanBStandards_Python3.5')
-# sys.path.append('/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages')
-# endregion
-# region ［entuple， detuple］
+#Make glob both a function and module
+import glob
+glob.glob.__dict__.update(glob.__dict__)
+glob=glob.glob
+
+# Make copy both a function and module
+import copy
+copy.copy.__dict__.update(copy.__dict__)
+copy = copy.copy
+
+
 
 _original_pwd = os.getcwd()
 
@@ -1937,6 +1950,26 @@ def get_max_image_dimensions(*images):
     heights=[get_image_height(x) for x in images]
     widths =[get_image_width (x) for x in images]
     return max(heights),max(widths)
+
+def get_max_video_dimensions(*images):
+    """ Given a set of videos, return the maximum height and width seen across all of them """
+    images = detuple(images)
+
+    if is_numpy_array(images) or is_torch_tensor(images): return get_image_dimensions(images[0,0]) #Efficiency shortcut: if given video is a tensor, all heights and widths will be the same
+
+    heights=[get_video_height(x) for x in images]
+    widths =[get_video_width (x) for x in images]
+    return max(heights),max(widths)
+
+def get_min_video_dimensions(*images):
+    """ Given a set of videos, return the minimum height and width seen across all of them """
+    images = detuple(images)
+
+    if is_numpy_array(images) or is_torch_tensor(images): return get_image_dimensions(images[0,0]) #Efficiency shortcut: if given video is a tensor, all heights and widths will be the same
+
+    heights=[get_video_height(x) for x in images]
+    widths =[get_video_width (x) for x in images]
+    return min(heights),min(widths)
 
 def get_min_image_dimensions(*images):
     """ Given a set of images, return the minimum height and width seen across all of them """
@@ -19277,6 +19310,8 @@ def pseudo_terminal(
         JL PYM jupyter lab
         UNCOMMIT !git reset --soft HEAD^
         REATTACH_MASTER !git branch temp-recovery-branch ; git checkout temp-recovery-branch ; git checkout master ; git merge temp-recovery-branch ; git branch -d temp-recovery-branch #Reattach from the reflog to master
+        PULL !git pull
+        PUL  !git pull
 
         EMA $explore_torch_module(ans)
 
@@ -32682,8 +32717,31 @@ def crop_image(image, height: int = None, width: int = None, origin=None, copy=F
     
     return out
 
-def crop_images(images, height:int = None, width:int=None, origin='top left'):
-    return [crop_image(image, height=height, width=width, origin=origin) for image in images]
+def crop_images(images, height:int = None, width:int=None, origin='top left', *, show_progress=False, lazy=False):
+    output = (crop_image(image, height=height, width=width, origin=origin) for image in images)
+
+    if show_progress:
+        output = eta(output, 'rp.crop_images', length=len(images))
+    if not lazy:
+        output = list(output)
+    return output
+
+def crop_videos(videos, height:int = None, width:int=None, origin='top left', *, show_progress=False, lazy=False, lazy_frames=False):
+    output = (crop_images(video, height=height, width=width, origin=origin, lazy=lazy_frames) for video in videos)
+
+    if show_progress:
+        output = eta(output, 'rp.crop_images', length=len(images))
+    if not lazy:
+        output = list(output)
+    return output
+
+def crop_videos_to_min_size(videos, origin='top left', *, show_progress=False, lazy=False, lazy_frames=False):
+    height, width = get_min_video_dimensions(videos)
+    return gather_args_call(crop_videos)
+
+def crop_videos_to_max_size(videos, origin='top left', *, show_progress=False, lazy=False, lazy_frames=False):
+    height, width = get_max_video_dimensions(videos)
+    return gather_args_call(crop_videos)
 
 def crop_image_zeros(image,*,output='image'):
     """
@@ -37512,12 +37570,84 @@ def explore_torch_module(module):
         ... 
         ... pipe = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", revision="fp16", torch_dtype=torch.float16)
         ... rp.explore_torch_module(pipe.unet)
+        ... #Shows a TUI that looks something like this:
+        ... # ╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+        ... # ║▼ 1.6GB UNet2DConditionModel                                    │                                                                                                   ║
+        ... # ║├── 23.1KB (conv_in): Conv2d(4, 320, kernel_size=(3, 3), stride=│             /opt/homebrew/lib/python3.10/site-packages/diffusers/models/attention.py              ║
+        ... # ║├── (time_proj): Timesteps                                      │                                                                                                   ║
+        ... # ║├── ▶ 3.9MB (time_embedding): TimestepEmbedding                 │───────────────────────────────────────────────────────────────────────────────────────────────────║
+        ... # ║├── ▼ 476.1MB (down_blocks): ModuleList                         │▊▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▎║
+        ... # ║│   ├── ▶ 20.1MB (0): CrossAttnDownBlock2D                      │▊   1  @maybe_allow_in_graph                                                                      ▎║
+        ... # ║│   ├── ▶ 70.2MB (1): CrossAttnDownBlock2D                      │▊   2  class BasicTransformerBlock(nn.Module):                                                 ▄▄ ▎║
+        ... # ║│   ├── ▼ 267.0MB (2): CrossAttnDownBlock2D                     │▊   3      r'''                                                                                   ▎║
+        ... # ║│   │   ├── ▼ 132.6MB (attentions): ModuleList                  │▊   4      A basic Transformer block.                                                             ▎║
+        ... # ║│   │   │   ├── ▼ 66.3MB (0): Transformer2DModel                │▊   5                                                                                             ▎║
+        ... # ║│   │   │   │   ├── 5KB (norm): GroupNorm(32, 1280, eps=1e-06, a│▊   6      Parameters:                                                                            ▎║
+        ... # ║│   │   │   │   ├── 3.1MB (proj_in): Conv2d(1280, 1280, kernel_s│▊   7          dim (`int`): The number of channels in the input and output.                       ▎║
+        ... # ║│   │   │   │   ├── ▼ 60.0MB (transformer_blocks): ModuleList   │▊   8          num_attention_heads (`int`): The number of heads to use for multi-head             ▎║
+        ... # ║│   │   │   │   │   └── ▼ 60.0MB (0): BasicTransformerBlock     │▊      attention.                                                                                 ▎║
+        ... # ║│   │   │   │   │       ├── 5KB (norm1): LayerNorm((1280,), eps=│▊   9          attention_head_dim (`int`): The number of channels in each head.                   ▎║
+        ... # ║│   │   │   │   │       ├── ▼ 12.5MB (attn1): Attention         │▊  10          dropout (`float`, *optional*, defaults to 0.0): The dropout probability to use.    ▎║
+        ... # ║│   │   │   │   │       │   ├── 3.1MB (to_q): Linear(in_features│▊  11          cross_attention_dim (`int`, *optional*): The size of the encoder_hidden_states     ▎║
+        ... # ║│   │   │   │   │       │   ├── 3.1MB (to_k): Linear(in_features│▊      vector for cross attention.                                                                ▎║
+        ... # ║│   │   │   │   │       │   ├── 3.1MB (to_v): Linear(in_features│▊  12          activation_fn (`str`, *optional*, defaults to `"geglu"`): Activation function      ▎║
+        ... # ║│   │   │   │   │       │   └── ▶ 3.1MB (to_out): ModuleList    │▊      to be used in feed-forward.                                                                ▎║
+        ... # ║│   │   │   │   │       ├── 5KB (norm2): LayerNorm((1280,), eps=│▊  13          num_embeds_ada_norm (:                                                             ▎║
+        ... # ║│   │   │   │   │       ├── ▶ 10.0MB (attn2): Attention         │▊  14              obj: `int`, *optional*): The number of diffusion steps used during             ▎║
+        ... # ║│   │   │   │   │       ├── 5KB (norm3): LayerNorm((1280,), eps=│▊      training. See `Transformer2DModel`.                                                        ▎║
+        ... # ║│   │   │   │   │       └── ▶ 37.5MB (ff): FeedForward          │▊  15          attention_bias (:                                                                  ▎║
+        ... # ║│   │   │   │   └── 3.1MB (proj_out): Conv2d(1280, 1280, kernel_│▊  16              obj: `bool`, *optional*, defaults to `False`): Configure if the attentions     ▎║
+        ... # ║│   │   │   └── ▶ 66.3MB (1): Transformer2DModel                │▊      should contain a bias parameter.                                                           ▎║
+        ... # ║│   │   ├── ▶ 106.3MB (resnets): ModuleList                     │▊  17          only_cross_attention (`bool`, *optional*):                                         ▎║
+        ... # ║│   │   └── ▶ 28.1MB (downsamplers): ModuleList                 │▊  18              Whether to use only cross-attention layers. In this case two cross             ▎║
+        ... # ║│   └── ▶ 118.8MB (3): DownBlock2D                              │▊▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▎║
+        ... # ║├── ▼ 974.3MB (up_blocks): ModuleList                           │───────────────────────────────────────────────────────────────────────────────────────────────────║
+        ... # ║│   ├── ▶ 309.5MB (0): UpBlock2D                                │                                                                                                   ║
+        ... # ║│   ├── ▶ 492.7MB (1): CrossAttnUpBlock2D                       │                   Attributes: down_blocks[2].attentions[0].transformer_blocks[0]                  ║
+        ... # ║│   ├── ▶ 136.2MB (2): CrossAttnUpBlock2D                       │                                                                                                   ║
+        ... # ║│   └── ▶ 35.9MB (3): CrossAttnUpBlock2D                        │───────────────────────────────────────────────────────────────────────────────────────────────────║
+        ... # ║├── ▶ 185.1MB (mid_block): UNetMidBlock2DCrossAttn              │▼ Attributes of BasicTransformerBlock                                                              ║
+        ... # ║├── 1.2KB (conv_norm_out): GroupNorm(32, 320, eps=1e-05, affine=│├── ▶ T_destination: TypeVar                                                                       ║
+        ... # ║├── (conv_act): SiLU                                            │├── activation_fn: "geglu"                                                                         ║
+        ... # ║└── 22.5KB (conv_out): Conv2d(320, 4, kernel_size=(3, 3), stride│├── attention_bias: False                                                                          ║
+        ... # ║                                                                │├── attention_head_dim: 160                                                                        ║
+        ... # ║                                                                │├── call_super_init: False                                                                         ║
+        ... # ║                                                                │├── cross_attention_dim: 768                                                                     ▃▃║
+        ... # ║                                                                │├── dim: 1280                                                                                      ║
+        ... # ║                                                                │├── double_self_attention: False                                                                   ║
+        ... # ║                                                                │├── dropout: 0.0                                                                                   ║
+        ... # ║                                                                │├── dump_patches: False                                                                            ║
+        ... # ║                                                                │├── ▼ forward_stats: [dict with 20 keys, dict with 20 keys, dict with 20 keys, dict with 20 keys]  ║
+        ... # ╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
     """
+
     #pip install rp textual textual[syntax]
 
     # https://github.com/RyannDaGreat/torchviewer.git
     import rp.libs.pytorch_module_explorer as pme
     pme.explore_module(module)
+
+def record_module_foward_stats(module):
+    """
+    A context manager to wrap a call of a torch module! Records tons of stats about it
+    Best to use with rp.explore_torch_module - see the self-contained example!
+
+    EXAMPLE:
+        >>> from diffusers import StableDiffusionPipeline
+        ... import rp
+        ... 
+        ... pipe = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", revision="fp16", torch_dtype=torch.float16)
+        ... pipe = pipe.to('mps')
+        ... 
+        ... # Use the context manager for clean hook management
+        ... with rp.record_module_forward_stats(pipe.unet):
+        ...     pipe('Image of Doggy', num_inference_steps=3)
+        ... 
+        ... # Explore the collected stats
+        ... rp.explore_torch_module(pipe.unet)
+    """
+    import rp.libs.torch_hooks as th
+    return th.record_module_foward_stats(module)
 
 def visualize_pytorch_model(model,*,input_shape=None, example_input=None, supress_warnings=True):
     """
@@ -37530,9 +37660,10 @@ def visualize_pytorch_model(model,*,input_shape=None, example_input=None, supres
     See https://github.com/waleedka/hiddenlayer/blob/master/demos/pytorch_graph.ipynb for a demo
     
     EXAMPLE:
-        import torchvision.models
-        model = torchvision.models.vgg16()
-        visualize_pytorch_model(model,[3,224,224])
+        >>> import torchvision.models
+        ... model = torchvision.models.vgg16()
+        ... visualize_pytorch_model(model,[3,224,224])
+
     """
 
     import warnings
@@ -45715,7 +45846,10 @@ get_num_gpus = get_gpu_count
 
 
 def get_visible_gpu_ids():
-    """ If cuda_visible_devices is set, returns that. Otherwise, return all hardware GPU ID's. """
+    """ 
+    Return all GPU's that are intended to be available to this process.
+    If cuda_visible_devices is set, returns that. Otherwise, return all hardware GPU ID's. 
+    """
 
     #If the CUDA_VISIBLE_DEVICES environment variable is set, respect it!
     cuda_visible_devices = get_cuda_visible_devices()
@@ -47221,8 +47355,8 @@ def killport(port: int):
     
     # Kill each process
     for pid in pids:
+        os.kill(int(pid), signal.SIGKILL)
         if pid.isdigit():
-            os.kill(int(pid), signal.SIGKILL)
             print("Killed process with PID: "+str(pid))
         else:
             print("No process found on port "+str(port))
