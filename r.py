@@ -8038,7 +8038,7 @@ def pop_gather(x,*indices):
         del x[b - a]
     return out
 
-def gather_vars(*var_names, frames_back=1, skip_missing=False):
+def gather_vars(*var_names, frames_back=1, skip_missing=False, as_dict=True):
     """
     TODO: Elaborate on frames_back = ... functionality for getting ALL frames back - we want a min_frames_back and max_frames_back
     Better yet use slice objects, and gather_args_wrap(func)[2:]() lets us specify the frames_back via slices
@@ -8088,6 +8088,10 @@ def gather_vars(*var_names, frames_back=1, skip_missing=False):
 
     Written partially with GPT4: https://shareg.pt/g9N1X3U
     """
+
+    if not as_dict:
+        assert not skip_missing, 'rp.gather_vars: Cannot have as_dict and skip_missing. If we return a list of vars instead of a dict, there cannot be any gaps'
+
     assert frames_back==... or frames_back>=1, 'gather_vars is useless if we don\'t look at least one frame back'
     min_frames_back = 1 if frames_back==... else frames_back
 
@@ -8135,6 +8139,10 @@ def gather_vars(*var_names, frames_back=1, skip_missing=False):
            result_dict[name] = local_vars[name]
         elif not skip_missing:
             raise KeyError("Can't find variable '%s'"%name)
+
+    if not as_dict:
+        assert not skip_missing
+        return gather(result_dict, flattened_var_names)
 
     return EasyDict(result_dict)
 
@@ -19270,7 +19278,7 @@ def pseudo_terminal(
         UNCOMMIT !git reset --soft HEAD^
         REATTACH_MASTER !git branch temp-recovery-branch ; git checkout temp-recovery-branch ; git checkout master ; git merge temp-recovery-branch ; git branch -d temp-recovery-branch #Reattach from the reflog to master
 
-        EMA $explore_pytorch_module(ans)
+        EMA $explore_torch_module(ans)
 
         NB  $extract_code_from_ipynb()
         NBA  $extract_code_from_ipynb(ans)
@@ -37488,7 +37496,7 @@ def get_all_facebook_messages(my_email:str=None,my_password:str=None,my_name:str
     print(output)
     return message_tuples
 
-def explore_pytorch_module(module):
+def explore_torch_module(module):
     """
     Lets you explore a pytorch module in a graphical terminal ui.
     No more wondering what a config does to a model - it runs on executing code (not static)!
@@ -37503,7 +37511,7 @@ def explore_pytorch_module(module):
         ... from diffusers import StableDiffusionPipeline
         ... 
         ... pipe = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", revision="fp16", torch_dtype=torch.float16)
-        ... rp.explore_pytorch_module(pipe.unet)
+        ... rp.explore_torch_module(pipe.unet)
     """
     #pip install rp textual textual[syntax]
 
@@ -44525,7 +44533,7 @@ def select_torch_device(n=0, *, silent=False, prefer_used=False, reserve=False):
 
             return selected_device
 
-    all_gpus = get_all_gpu_ids()
+    all_gpus = get_visible_gpu_ids()
     used_gpus = list(set(get_gpu_ids_used_by_process()) | _select_torch_device_used_gpus)
 
     if prefer_used and used_gpus and not silent:
@@ -44668,7 +44676,7 @@ def waste_gpus(*gpu_ids):
     """
 
     if not gpu_ids:
-        gpu_ids = get_all_gpu_ids()
+        gpu_ids = get_visible_gpu_ids()
     
     for gpu_id in gpu_ids:
         run_as_new_thread(_waste_gpu, gpu_id)
@@ -45706,8 +45714,28 @@ def get_gpu_count():
 get_num_gpus = get_gpu_count
 
 
+def get_visible_gpu_ids():
+    """ If cuda_visible_devices is set, returns that. Otherwise, return all hardware GPU ID's. """
+
+    #If the CUDA_VISIBLE_DEVICES environment variable is set, respect it!
+    cuda_visible_devices = get_cuda_visible_devices()
+    if cuda_visible_devices:
+        return cuda_visible_devices
+
+    #Otherwise, return ALL gpu's
+    return get_all_gpu_ids()
+
+
+
 def get_all_gpu_ids():
     """ If you are on a device with GPU's, returns [0, 1, 2, ... (num gpus - 1) ] """
+
+    #If the CUDA_VISIBLE_DEVICES environment variable is set, respect it!
+    cuda_visible_devices = get_cuda_visible_devices()
+    if cuda_visible_devices:
+        return cuda_visible_devices
+
+    #Otherwise, return ALL gpu's
     return list(range(get_gpu_count()))
 
 
