@@ -64,3 +64,18 @@ experimental/__pycache__
 libs/jedi/__pycache__
 libs/jedi/api/__pycache__
 libs/jedi/common/__pycache__
+
+#<RP Default Gitignore Start>
+*.pyc
+*.swo
+*.swp
+*.swn
+*.swm
+*.un~
+*.gstmp
+*.ipynb_checkpoints
+*.DS_Store
+#<RP Default Gitignore End>
+
+
+libs/.pytorch_module_explorer.py.un~
