@@ -650,7 +650,7 @@ class ModelTreeViewer(App):
         path = self.get_module_path(obj)
         
         # Update the attributes title directly
-        attrs_title.update(f"Attributes: {path}")
+        attrs_title.update(f"Attributes: {path}".replace('[',r'\[').replace(']',r'\]'))
         
         # Create and use the AttributeTree helper class
         attribute_tree = AttributeTree(attrs_tree)
