@@ -46519,7 +46519,7 @@ def pip_install(pip_args:str,*,backend=None):
 
     pip_cmd = dict(pip="pip", uv="uv pip")[backend]
 
-    command = shlex.quote(sys.executable) + " -m " + pip + " install " + pip_args
+    command = shlex.quote(sys.executable) + " -m " + pip_cmd + " install " + pip_args
 
     _run_sys_command(command)
     _refresh_autocomplete_module_list()
