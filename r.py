@@ -37627,7 +37627,7 @@ def explore_torch_module(module):
     import rp.libs.pytorch_module_explorer as pme
     pme.explore_module(module)
 
-def record_module_foward_stats(module):
+def record_torch_module_forward_stats(module):
     """
     A context manager to wrap a call of a torch module! Records tons of stats about it
     Best to use with rp.explore_torch_module - see the self-contained example!
@@ -37635,19 +37635,22 @@ def record_module_foward_stats(module):
     EXAMPLE:
         >>> from diffusers import StableDiffusionPipeline
         ... import rp
+        ... import torch
+        ... 
+        ... device = rp.select_torch_device()
         ... 
         ... pipe = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", revision="fp16", torch_dtype=torch.float16)
-        ... pipe = pipe.to('mps')
+        ... pipe = pipe.to(device)
         ... 
-        ... # Use the context manager for clean hook management
-        ... with rp.record_module_forward_stats(pipe.unet):
+        ... # Record input/output tensor shapes, etc for all modules
+        ... with rp.record_torch_module_forward_stats(pipe.unet):
         ...     pipe('Image of Doggy', num_inference_steps=3)
         ... 
-        ... # Explore the collected stats
+        ... # Explore the collected stats - press 'f' to see them
         ... rp.explore_torch_module(pipe.unet)
     """
     import rp.libs.torch_hooks as th
-    return th.record_module_foward_stats(module)
+    return th.record_module_forward_stats(module)
 
 def visualize_pytorch_model(model,*,input_shape=None, example_input=None, supress_warnings=True):
     """
