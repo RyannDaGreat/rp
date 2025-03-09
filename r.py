@@ -37643,11 +37643,11 @@ def record_torch_module_forward_stats(module):
         ... pipe = pipe.to(device)
         ... 
         ... # Record input/output tensor shapes, etc for all modules
-        ... with rp.record_torch_module_forward_stats(pipe.unet):
+        ... with rp.record_torch_module_forward_stats(pipe):
         ...     pipe('Image of Doggy', num_inference_steps=3)
         ... 
         ... # Explore the collected stats - press 'f' to see them
-        ... rp.explore_torch_module(pipe.unet)
+        ... rp.explore_torch_module(pipe)
     """
     import rp.libs.torch_hooks as th
     return th.record_module_forward_stats(module)
