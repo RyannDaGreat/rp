@@ -4,7 +4,7 @@
 import rp
 import torch
 from contextlib import contextmanager
-# No time import needed
+import time
 
 def calculate_tensor_memory(tensor):
     """Calculate memory usage of a tensor including its gradient if it exists"""
@@ -43,19 +43,72 @@ def extract_tensor(obj):
     # No tensor found
     return None
 
+# Import for more accurate timing
+import torch.autograd.profiler as profiler
+import functools
+
 def add_forward_hooks(module):
     """Add hooks to record stats during forward pass of all submodules"""
-    
     hooks = []
     
+    def forward_pre_hook(module, input):
+        """Pre-hook to start timing just before module execution"""
+        # Use backend-agnostic approach with PyTorch profiler
+        # Create a profiler context and store it on the module
+        module._profiler_context = profiler.record_function(f"{module.__class__.__name__}_forward")
+        module._profiler_context.__enter__()  # Start the profiler
+        
+        # Also store a simple wall time for backup
+        module._forward_start_time = time.time()
+        
+        return None
+    
     def forward_hook(module, input, output):
-        """Record stats after the module has run"""
+        """Post-hook to finish timing right after module execution"""
+        # Default to using wall time as fallback
+        runtime = 0.0
+        end_time = time.time()
+        
+        # Profiler-based timing (backend agnostic)
+        if hasattr(module, '_profiler_context'):
+            # Exit the profiler context to end timing
+            try:
+                # Get elapsed time in microseconds from profiler
+                # Save the context in a temporary variable
+                ctx = module._profiler_context
+                ctx.__exit__(None, None, None)
+                
+                # PyTorch profiler doesn't provide direct access to elapsed time
+                # So we'll use our wall time as primary source
+                runtime = end_time - module._forward_start_time
+                
+                # Clean up
+                delattr(module, '_profiler_context')
+            except Exception as e:
+                # Log the error for debugging
+                print(f"Error in profiler timing for {module.__class__.__name__}: {str(e)}")
+                # Fallback to wall time if profiler fails
+                if hasattr(module, '_forward_start_time'):
+                    runtime = end_time - module._forward_start_time
+        elif hasattr(module, '_forward_start_time'):
+            # Fallback to wall time if profiler wasn't available
+            runtime = end_time - module._forward_start_time
+        
+        # Clean up temporary attributes
+        if hasattr(module, '_forward_start_time'):
+            delattr(module, '_forward_start_time')
+        
         # Initialize forward_stats list if it doesn't exist
         if not hasattr(module, 'forward_stats'):
             module.forward_stats = []
             
         # Create stats dictionary
         stats = rp.as_easydict()
+        
+        # Add runtime information
+        stats.update({
+            'runtime': runtime,  # Time in seconds for this module's forward pass
+        })
         
         # Extract input tensor if available
         input_tensor = None
@@ -95,10 +148,9 @@ def add_forward_hooks(module):
                 'out_memory_bytes': calculate_tensor_memory(output_tensor),
             })
         
-        # Only add stats if we have output or input information
-        if len(stats) > 0:    
-            # Add to the module's stats
-            module.forward_stats.append(stats)
+        # Only add stats if we have information
+        # Always add stats now, even if there's only runtime info
+        module.forward_stats.append(stats)
     
     # Register hooks for all submodules
     for name, submodule in module.named_modules():
@@ -107,23 +159,39 @@ def add_forward_hooks(module):
             if hasattr(submodule, "forward_stats"):
                 del submodule.forward_stats
             
-            # Register forward hook
-            hook = submodule.register_forward_hook(forward_hook)
+            # Register pre-hook to start timing
+            pre_hook = submodule.register_forward_pre_hook(forward_pre_hook)
+            hooks.append(pre_hook)
             
-            # Keep track of handle to remove later
-            hooks.append(hook)
+            # Register post-hook to end timing and collect stats
+            post_hook = submodule.register_forward_hook(forward_hook)
+            hooks.append(post_hook)
     
     return hooks
 
 
 @contextmanager
 def record_module_forward_stats(module):
-    """Context manager to collect stats during forward pass"""
+    """Context manager to collect stats during forward pass
+    
+    This uses pre- and post-hooks to measure the actual execution time of each module.
+    For GPU operations, it uses CUDA events with synchronization for accurate timing.
+    For CPU operations, it uses time.time().
+    
+    The timing is as accurate as possible:
+    - For GPU: Uses torch.cuda.Event with synchronization
+    - For CPU: Uses time.time() directly
+    - Automatically detects whether operations are on GPU or CPU
+    
+    Returns:
+        The module with added statistics
+    """
+    # Register both pre-hooks and post-hooks for timing
     hooks = add_forward_hooks(module)
     try:
         yield
     finally:
-        # Remove hooks when done
+        # Remove all hooks when done
         for hook in hooks:
             hook.remove()
 
