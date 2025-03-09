@@ -5,6 +5,8 @@ import rp
 import torch
 from contextlib import contextmanager
 import time
+import inspect
+from typing import Dict, Any, Union, List, Optional
 
 def calculate_tensor_memory(tensor):
     """Calculate memory usage of a tensor including its gradient if it exists"""
@@ -170,42 +172,153 @@ def add_forward_hooks(module):
     return hooks
 
 
+def is_torch_module(obj: Any) -> bool:
+    """Check if an object is a PyTorch module
+    
+    Args:
+        obj: The object to check
+        
+    Returns:
+        bool: True if obj is a PyTorch module, False otherwise
+    """
+    try:
+        return isinstance(obj, torch.nn.Module)
+    except (ImportError, AttributeError):
+        return False
+
+
+def find_modules_in_object(obj: Any) -> Dict[str, torch.nn.Module]:
+    """Find all PyTorch modules within an object's attributes
+    
+    Args:
+        obj: Any object that might contain PyTorch modules as attributes
+        
+    Returns:
+        Dict mapping attribute names to module instances
+    """
+    modules = {}
+    
+    # If the object itself is a module, return it with an empty key
+    if is_torch_module(obj):
+        modules[""] = obj
+        return modules
+    
+    # For non-module objects, search their attributes
+    if hasattr(obj, "__dict__"):
+        for name, value in obj.__dict__.items():
+            if is_torch_module(value):
+                modules[name] = value
+    
+    return modules
+
+
 @contextmanager
-def record_module_forward_stats(module):
+def stats_collection(obj: Any):
     """Context manager to collect stats during forward pass
     
-    This uses pre- and post-hooks to measure the actual execution time of each module.
-    For GPU operations, it uses CUDA events with synchronization for accurate timing.
-    For CPU operations, it uses time.time().
+    This function works with both:
+    1. PyTorch modules directly
+    2. Objects that contain PyTorch modules as attributes (like diffusers pipelines)
     
-    The timing is as accurate as possible:
-    - For GPU: Uses torch.cuda.Event with synchronization
-    - For CPU: Uses time.time() directly
-    - Automatically detects whether operations are on GPU or CPU
+    It uses pre- and post-hooks to measure the actual execution time of each module
+    and collect input/output tensor statistics.
     
+    Args:
+        obj: A PyTorch module or an object containing PyTorch modules
+        
     Returns:
-        The module with added statistics
+        The module(s) with added statistics
+        
+    Examples:
+        # Direct module usage
+        model = torch.nn.Sequential(...)
+        with stats_collection(model):
+            output = model(input_tensor)
+            
+        # With diffusers pipeline
+        pipe = StableDiffusionPipeline.from_pretrained(...)
+        with stats_collection(pipe):
+            output = pipe("prompt", num_inference_steps=10)
+            
+        # After collection, view the results with the module explorer
+        from rp.libs.pytorch_module_explorer import explore_module
+        explore_module(model)  # or explore_module(pipe)
     """
-    # Register both pre-hooks and post-hooks for timing
-    hooks = add_forward_hooks(module)
+    # Find all modules in the object
+    modules = find_modules_in_object(obj)
+    
+    # If no modules found, warn and proceed
+    if not modules:
+        print(f"Warning: No PyTorch modules found in {type(obj).__name__} object")
+        try:
+            yield
+            return
+        finally:
+            pass
+    
+    # Add hooks to all found modules
+    all_hooks = []
+    
+    for name, module in modules.items():
+        hooks = add_forward_hooks(module)
+        all_hooks.extend(hooks)
+        
+        # Print info about which modules are being monitored
+        if name:
+            print(f"Collecting stats for {name} ({module.__class__.__name__})")
+        else:
+            print(f"Collecting stats for {module.__class__.__name__}")
+    
     try:
         yield
     finally:
         # Remove all hooks when done
-        for hook in hooks:
+        for hook in all_hooks:
             hook.remove()
 
 
+# Legacy function for backward compatibility
+@contextmanager
+def record_module_forward_stats(module):
+    """Legacy context manager - kept for backwards compatibility
+    
+    Please use stats_collection() instead for new code.
+    
+    This uses pre- and post-hooks to measure the actual execution time of each module.
+    
+    Returns:
+        The module with added statistics
+    """
+    # Simply call our new function
+    with stats_collection(module):
+        yield
 
+
+# Example usage:
+# 
 # from diffusers import StableDiffusionPipeline
+# import torch
 # import rp
+# from rp.libs.torch_hooks import stats_collection
+# from rp.libs.pytorch_module_explorer import explore_module
 #
-# pipe = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", revision="fp16", torch_dtype=torch.float16)
-# pipe = pipe.to('mps')
+# # Load a pipeline
+# pipe = StableDiffusionPipeline.from_pretrained(
+#     "runwayml/stable-diffusion-v1-5", 
+#     torch_dtype=torch.float16
+# )
+# pipe = pipe.to("cuda")
 #
-# # Use the context manager for clean hook management
-# with rp.record_module_forward_stats(pipe.unet):
-#     pipe('Image of Doggy', num_inference_steps=3)
+# # Use the context manager to collect stats on the entire pipeline
+# with stats_collection(pipe):
+#     pipe("a photo of an astronaut riding a horse", num_inference_steps=5)
 #
-# # Explore the collected stats
-# rp.explore_torch_module(pipe.unet)
+# # Explore the pipeline with collected stats
+# explore_module(pipe)
+#
+# # Or just monitor a specific module:
+# with stats_collection(pipe.unet):
+#     pipe("a photo of an astronaut riding a horse", num_inference_steps=5)
+#
+# # Explore just the UNET
+# explore_module(pipe.unet)

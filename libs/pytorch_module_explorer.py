@@ -2307,64 +2307,118 @@ class ModelTreeViewer(App):
             
         return total_size, int(param_count)
         
-    def populate_tree(self, module, tree_node):
-        """Recursively populate tree from PyTorch module"""
-        module_name = module._get_name()
-        extra_info = module.extra_repr()
-        
-        # Calculate the module size and parameter count
-        module_size, param_count = self.calculate_module_stats(module)
-        
-        # Get state dict info for leaf modules (no children)
-        state_dict_info = ""
-        if not module._modules:  # This is a leaf module
-            try:
-                # Get state dict and format tensor shapes
-                params = list(module.state_dict().items())
-                if params:
-                    shapes = []
-                    for param_name, tensor in params:
-                        if isinstance(tensor, torch.Tensor):
-                            shape_str = f"{param_name}: {format_shape(tensor.shape)}"
-                            shapes.append(shape_str)
-                    state_dict_info = ", ".join(shapes)
-            except Exception as e:
-                state_dict_info = f"Error: {str(e)}"
-        
-        # Create or get the parent node data
-        if tree_node == self.query_one(Tree).root:
-            node_name = ""
-        else:
-            node_label = str(tree_node.label)
-            if ":" in node_label:
-                node_name = node_label.split(":")[0].strip("() ")
-            else:
-                node_name = node_label
-        
-        node_data = ModuleNode(name=node_name, module_type=module_name, 
-                              extra_info=extra_info, state_dict_info=state_dict_info, 
-                              module=module, size_bytes=module_size, param_count=param_count)
-        self.node_data[tree_node] = node_data
-        
-        # Set node display text
-        tree_node.label = node_data.get_label()
-        
-        # Add all child modules
-        has_children = bool(module._modules)
-        
-        # Set whether this node can be expanded
-        tree_node.allow_expand = has_children
-        
-        # Add all child modules
-        for key, child_module in module._modules.items():
-            # Apply consistent formatting with yellow module name and syntax-colored code
-            module_part = f"[bold yellow]({key})[/bold yellow]: "
-            # Use cyan for the class name (typical Python syntax highlighting)
-            code_part = f"[cyan]{child_module._get_name()}[/cyan]"
-            formatted_label = module_part + code_part
+    def populate_tree(self, obj, tree_node):
+        """
+        Recursively populate tree from PyTorch module or object containing modules
+
+        Args:
+            obj: Either a PyTorch module or an object containing modules in __dict__
+            tree_node: The current tree node to populate
+        """
+        # Check if the object is a PyTorch module
+        if is_torch_module(obj):
+            # Handle PyTorch module case
+            module = obj
+            module_name = module._get_name()
+            extra_info = module.extra_repr()
             
-            child_node = tree_node.add(formatted_label)
-            self.populate_tree(child_module, child_node)
+            # Calculate the module size and parameter count
+            module_size, param_count = self.calculate_module_stats(module)
+            
+            # Get state dict info for leaf modules (no children)
+            state_dict_info = ""
+            if not module._modules:  # This is a leaf module
+                try:
+                    # Get state dict and format tensor shapes
+                    params = list(module.state_dict().items())
+                    if params:
+                        shapes = []
+                        for param_name, tensor in params:
+                            if isinstance(tensor, torch.Tensor):
+                                shape_str = f"{param_name}: {format_shape(tensor.shape)}"
+                                shapes.append(shape_str)
+                        state_dict_info = ", ".join(shapes)
+                except Exception as e:
+                    state_dict_info = f"Error: {str(e)}"
+            
+            # Create or get the parent node data
+            if tree_node == self.query_one(Tree).root:
+                node_name = ""
+            else:
+                node_label = str(tree_node.label)
+                if ":" in node_label:
+                    node_name = node_label.split(":")[0].strip("() ")
+                else:
+                    node_name = node_label
+            
+            node_data = ModuleNode(name=node_name, module_type=module_name, 
+                                  extra_info=extra_info, state_dict_info=state_dict_info, 
+                                  module=module, size_bytes=module_size, param_count=param_count)
+            self.node_data[tree_node] = node_data
+            
+            # Set node display text
+            tree_node.label = node_data.get_label()
+            
+            # Add all child modules
+            has_children = bool(module._modules)
+            
+            # Set whether this node can be expanded
+            tree_node.allow_expand = has_children
+            
+            # Add all child modules
+            for key, child_module in module._modules.items():
+                # Apply consistent formatting with yellow module name and syntax-colored code
+                module_part = f"[bold yellow]({key})[/bold yellow]: "
+                # Use cyan for the class name (typical Python syntax highlighting)
+                code_part = f"[cyan]{child_module._get_name()}[/cyan]"
+                formatted_label = module_part + code_part
+                
+                child_node = tree_node.add(formatted_label)
+                self.populate_tree(child_module, child_node)
+        else:
+            # Handle non-module objects by exploring their __dict__ for modules
+            # This is for the root node that contains modules but isn't itself a module
+            
+            if tree_node == self.query_one(Tree).root:
+                # For the root node, create a special node data
+                root_class_name = obj.__class__.__name__
+                node_data = ModuleNode(name="", module_type=root_class_name, 
+                                    extra_info="", state_dict_info="", 
+                                    module=obj, size_bytes=0, param_count=0)
+                self.node_data[tree_node] = node_data
+                
+                # Set root node label
+                tree_node.label = f"[cyan]{root_class_name}[/cyan]"
+                
+                # Find all PyTorch modules in the object's __dict__
+                module_dict = {}
+                
+                if hasattr(obj, "__dict__"):
+                    for key, value in obj.__dict__.items():
+                        if is_torch_module(value):
+                            module_dict[key] = value
+                
+                # Add all found modules as children
+                if module_dict:
+                    tree_node.allow_expand = True
+                    
+                    for key, module in module_dict.items():
+                        # Apply consistent formatting
+                        module_part = f"[bold yellow]({key})[/bold yellow]: "
+                        code_part = f"[cyan]{module._get_name()}[/cyan]"
+                        formatted_label = module_part + code_part
+                        
+                        child_node = tree_node.add(formatted_label)
+                        self.populate_tree(module, child_node)
+                else:
+                    # No modules found
+                    tree_node.allow_expand = False
+                    tree_node.add("[italic red]No PyTorch modules found in this object[/italic red]")
+            else:
+                # Non-root node that's not a module - just display its type
+                class_name = obj.__class__.__name__
+                tree_node.label = f"[cyan]{class_name}[/cyan] (not a PyTorch module)"
+                tree_node.allow_expand = False
     
     def on_tree_node_selected(self, event) -> None:
         """Handle tree node selection to update the editor and attributes tree"""
@@ -3613,13 +3667,103 @@ class ModelTreeViewer(App):
 
 
 
-def explore_module(module):
-    """Start the interactive module explorer"""
-    app = ModelTreeViewer(module)
+def is_torch_module(obj):
+    """Check if an object is a PyTorch module
+    
+    Args:
+        obj: The object to check
+        
+    Returns:
+        bool: True if obj is a PyTorch module, False otherwise
+    """
+    try:
+        import torch.nn
+        return isinstance(obj, torch.nn.Module)
+    except (ImportError, AttributeError):
+        return False
+
+
+class ModuleWrapper(torch.nn.Module):
+    """
+    Wraps a non-module object to make it look like a PyTorch module.
+    Only PyTorch modules in the object's __dict__ will be exposed as children.
+    """
+    def __init__(self, obj):
+        """
+        Initialize the wrapper with an object
+        
+        Args:
+            obj: The object to wrap
+        """
+        super().__init__()
+        self.wrapped_obj = obj
+        
+        # Extract all torch modules from the object's __dict__
+        if hasattr(obj, "__dict__"):
+            for name, value in obj.__dict__.items():
+                if is_torch_module(value):
+                    # Add each module as a child module of this wrapper
+                    self.add_module(name, value)
+    
+    def _get_name(self):
+        """Return the class name of the wrapped object"""
+        return f"{self.wrapped_obj.__class__.__name__}Wrapper"
+    
+    def extra_repr(self):
+        """Show what object is being wrapped"""
+        return f"wrapped_type={self.wrapped_obj.__class__.__name__}"
+    
+    def forward(self, *args, **kwargs):
+        """Forward method - not used but required for nn.Module"""
+        raise NotImplementedError("ModuleWrapper is for visualization only")
+
+
+def explore_module(obj):
+    """
+    Start the interactive module explorer
+    
+    Args:
+        obj: Either a PyTorch module or an object containing PyTorch modules
+            in its __dict__ (like models with multiple components)
+            
+    Example:
+        # Regular module usage
+        import torch
+        model = torch.nn.Sequential(
+            torch.nn.Linear(10, 20), 
+            torch.nn.ReLU()
+        )
+        explore_module(model)
+        
+        # Non-module object containing modules
+        class ModelContainer:
+            def __init__(self):
+                self.encoder = torch.nn.Linear(10, 20)
+                self.decoder = torch.nn.Linear(20, 10)
+                self.other_attr = "not a module"
+                
+        container = ModelContainer()
+        explore_module(container)  # Will show encoder and decoder modules
+    """
+    # If the object is not a module but has modules in its __dict__, wrap it
+    if not is_torch_module(obj):
+        # Check if it has any modules in its __dict__
+        has_modules = False
+        if hasattr(obj, "__dict__"):
+            for value in obj.__dict__.values():
+                if is_torch_module(value):
+                    has_modules = True
+                    break
+        
+        if has_modules:
+            obj = ModuleWrapper(obj)
+    
+    # Run the explorer with the object (wrapped if needed)
+    app = ModelTreeViewer(obj)
     app.run()
 
 
-def explore_torch_module_with_stats(module, *args, **kwargs):
+def explore_torch_module_with_stats(obj, *args, **kwargs):
     """
     Run a forward pass and then explore the module. If torch_hooks has been used
     to collect forward_stats, they will be displayed when pressing 'f'.
@@ -3650,14 +3794,44 @@ def explore_torch_module_with_stats(module, *args, **kwargs):
             model(x)
         # Then explore the module with the collected stats
         explore_module(model)
+        
+        # Method 3: Non-module container with modules
+        class ModelContainer:
+            def __init__(self):
+                self.model = torch.nn.Sequential(
+                    torch.nn.Linear(10, 20),
+                    torch.nn.ReLU()
+                )
+            def forward(self, x):
+                return self.model(x)
+                
+        container = ModelContainer()
+        # Run with stats collection on the inner model
+        with rp.libs.torch_hooks.stats_collection(container.model):
+            container.forward(x)
+        # Then explore the container
+        explore_module(container)
     """
-    # Check if we were given input data
-    if len(args) > 0:
-        # Run a forward pass (no stats collection on its own)
-        module(*args, **kwargs)
+    # For non-module objects with a callable/runnable module attribute
+    if not is_torch_module(obj) and hasattr(obj, "__dict__"):
+        # Try to identify a main module to run the forward pass on
+        main_module = None
+        for name, value in obj.__dict__.items():
+            if is_torch_module(value):
+                main_module = value
+                break
+                
+        # If we found a module and have input data, run the forward pass on it
+        if main_module is not None and len(args) > 0:
+            main_module(*args, **kwargs)
     
-    # Now explore the module (will show forward_stats if they exist)
-    explore_module(module)
+    # For regular module objects, run the forward pass directly
+    elif is_torch_module(obj) and len(args) > 0:
+        # Run a forward pass (no stats collection on its own)
+        obj(*args, **kwargs)
+    
+    # Now explore the module or wrapped object (will show forward_stats if they exist)
+    explore_module(obj)
 
 
 if __name__ == "__main__":
