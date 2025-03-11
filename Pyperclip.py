@@ -1,4 +1,12 @@
 copy=paste=None
+
+import rp
+import os
+
+@rp.memoized
+def _xsel_works()
+    return os.system('xsel') == 0
+
 try:
     """
     Pyperclip
@@ -141,6 +149,7 @@ try:
 
 
     def _copyXsel(text):
+        assert _xsel_works()
         p = Popen(['xsel', '-i'], stdin=PIPE)
         try:
             # works on Python 3 (bytes() requires an encoding)
@@ -151,6 +160,7 @@ try:
 
 
     def _pasteXsel():
+        assert _xsel_works()
         p = Popen(['xsel', '-o'], stdout=PIPE)
         stdout, stderr = p.communicate()
         return bytes.decode(stdout)
