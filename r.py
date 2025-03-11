@@ -12410,17 +12410,66 @@ def get_nested_attr(obj, attr):
     Args:
         obj: The object to get the attribute from
         attr: String with attribute names in dot notation (e.g., "attr1.attr2.attr3")
+              Any numeric attrs, like attr.1.2 are treated as indexes - like obj.attr[1][2]
+              Any ..'s are meant for dict accesses, so attr..key.value is treated as obj.attr["key"].value
+              If an int is passed as attr, such as get_nested_attr(obj, 0), it is equivalent to obj[0]
+              Likewise, get_nested_attr(obj, ".key") is equivalent to obj["key"]
         
     Returns:
         The value of the nested attribute
         
     Raises:
         AttributeError: If any attribute in the chain doesn't exist
+
+    EXAMPLES:
+        >>> class Person:
+        ...     def __init__(self):
+        ...         self.name = "Alice"
+        ...         self.skills = ["Python", "SQL"]
+        ...         self.metadata = {"status": "active"}
+        ...         self.address = type('Address', (), {'city': 'New York'})()
+        ... 
+        >>> person = Person()
+
+        >>> get_nested_attr(person, "name")             --> 'Alice'    # person.name
+        >>> get_nested_attr(person, "address.city")     --> 'New York' # person.address.city
+        >>> get_nested_attr(person, "skills.0")         --> 'Python'   # person.skills[0]
+        >>> get_nested_attr(person, "metadata..status") --> 'active'   # person.metadata["status"]
+
+        >>> get_nested_attr(["a", "b", "c"], 1)         --> 'b'        # ["a", "b", "c"][1]
+        >>> get_nested_attr({"x": 123}, ".x")           --> 123        # {"x": 123}["x"]
+
+        >>> nested = {"users": [{"profile": {"languages": ["English", "Spanish"]}}]}
+        >>> get_nested_attr(nested, "users.0..profile..languages.1") --> 'Spanish' # nested["users"][0]["profile"]["languages"][1]
+
     """
-    attrs = attr.split('.')
+    assert isinstance(attr, (str,int)), type(attr)
+
+    attr=str(attr) #In case
+    assert not '...' in attr, 'attr has syntax error - it has ... in it, only . and .. are allowed: '+repr(attr)
+
+    attrs = str(attr).split('.')
     
+    as_key = False
     for name in attrs:
-        obj = getattr(obj, name)
+
+        #Handle obj..name as obj["name"]
+        if not name:
+            # We had a .. separator
+            as_key=True
+            continue
+        if as_key:
+            as_key=False
+            obj = obj[name]
+            continue
+
+        try:
+            #Normal functionality - object attribute access
+            obj = getattr(obj, name)
+        except AttributeError:
+            #Numeric index access
+            if name.isnumeric():
+                obj = obj[int(name)]
         
     return obj
 
@@ -13739,30 +13788,162 @@ def print_highlighted_stack_trace(error:BaseException=None):
     # highlighted_error_string=highlight(error_string, Python3TracebackLexer(), TerminalTrueColorFormatter())
     print(highlighted_error_string)    
 
-def print_rich_stack_trace(error=None, *, extra_lines=5, show_locals=False):
-    """ Use the 'rich' library to print a stack trace """
-    if error is None: error=get_current_exception()
-    assert isinstance(error, BaseException)
-    pip_import("rich")
-    import rich.traceback
-
-    exc_type = type(error)
-    trace = error.__traceback__
-
-    return rich.print(
-        rich.traceback.Traceback.from_exception(
-            exc_type=type(error),
+def print_rich_stack_trace(error_or_frames_back=None, *, extra_lines=5, show_locals=False, width=None, print_output=True):
+    """
+    Use the 'rich' library to print or return a stack trace.
+    
+    This function can handle both exceptions and current execution frames.
+    
+    Args:
+        error_or_frames_back: Either an exception to display or an integer representing 
+                             how many frames to go back from current execution point.
+                             If None, uses current exception or current frame.
+        extra_lines (int): Number of extra lines of code to show around the trace point.
+        show_locals (bool): Whether to display local variables.
+        width (int, optional): Width of the traceback output. If None, uses terminal width.
+        print_output (bool): Whether to print the traceback (True) or return it as a string (False).
+    
+    Returns:
+        str or None: If print_output is False, returns the traceback as a string.
+                    If print_output is True, prints to the console and returns None.
+    """
+    pip_import('rich')
+    import inspect
+    import io
+    import types
+    from rich.console import Console
+    from rich.traceback import Traceback, LOCALS_MAX_LENGTH, LOCALS_MAX_STRING
+    
+    if width is None:
+        width = get_terminal_width()
+    
+    # For backward compatibility: if error_or_frames_back is None, try to get current exception
+    if error_or_frames_back is None:
+        error = get_current_exception()
+        # If no current exception, we'll use the current frame (frames_back=0)
+        if error is not None:
+            error_or_frames_back = error
+        else:
+            error_or_frames_back = 0
+    
+    # Determine if we're dealing with an exception or a frame depth
+    if isinstance(error_or_frames_back, BaseException):
+        # Handle exception traceback
+        error = error_or_frames_back
+        exc_type = type(error)
+        traceback = error.__traceback__
+        
+        # Create the traceback object
+        rich_tb = Traceback.from_exception(
+            exc_type=exc_type,
             exc_value=error,
-            traceback=error.__traceback__,
-            width=get_terminal_width(),
+            traceback=traceback,
+            width=width,
             extra_lines=extra_lines,
             theme=None,
             show_locals=show_locals,
-            locals_max_length=rich.traceback.LOCALS_MAX_LENGTH,
-            locals_max_string=rich.traceback.LOCALS_MAX_STRING,
+            locals_max_length=LOCALS_MAX_LENGTH,
+            locals_max_string=LOCALS_MAX_STRING,
         )
-    )
+        
+        if print_output:
+            import rich
+            rich.print(rich_tb)
+            return None
+        else:
+            # Get string representation
+            string_io = io.StringIO()
+            console = Console(file=string_io, width=width, force_terminal=True, color_system="standard")
+            console.print(rich_tb)
+            return string_io.getvalue()
+            
+    else:
+        # Handle current frame traceback (synthetic)
+        frames_back = error_or_frames_back
+        if not isinstance(frames_back, int):
+            frames_back = 0
+            
+        # Get the caller's frame
+        current_frame = inspect.currentframe()
+        
+        # Add 1 to frames_back to account for this function's frame
+        total_frames_to_skip = frames_back + 1
+        
+        # Skip the desired number of frames
+        for _ in range(total_frames_to_skip):
+            if current_frame.f_back is not None:
+                current_frame = current_frame.f_back
+            else:
+                # No more frames to skip, so we use the last available frame
+                break
+        
+        # Now create a synthetic traceback that includes all frames from this point upward
+        # We need to capture the frames in reverse order (innermost first)
+        frames = []
+        frame = current_frame
+        while frame:
+            frames.append(frame)
+            frame = frame.f_back
+        
+        # Build the traceback chain from the bottom up (outermost to innermost)
+        synthetic_tb = None
+        for frame in reversed(frames):
+            synthetic_tb = types.TracebackType(
+                tb_next=synthetic_tb,
+                tb_frame=frame,
+                tb_lasti=frame.f_lasti,
+                tb_lineno=frame.f_lineno
+            )
+        
+        # Create a dummy exception with our synthetic traceback
+        exc_value = Exception("Traceback capture point")
+        
+        # Create a Traceback object
+        traceback = Traceback.from_exception(
+            Exception, 
+            exc_value, 
+            synthetic_tb,
+            width=width,
+            extra_lines=extra_lines,
+            show_locals=show_locals,
+            locals_max_length=LOCALS_MAX_LENGTH,
+            locals_max_string=LOCALS_MAX_STRING
+        )
+        
+        # Get string representation
+        string_io = io.StringIO()
+        console = Console(file=string_io, width=width, force_terminal=True, color_system="standard")
+        console.print(traceback)
+        
+        # Get the rendered string and filter out the exception message
+        traceback_str = string_io.getvalue()
+        traceback_lines = traceback_str.split('\n')
+        filtered_lines = [line for line in traceback_lines if '─' in line or '│' in line]
+        result = '\n'.join(filtered_lines)
+        
+        if print_output:
+            print(result, end='')
+            return None
+        else:
+            return result
 
+# Helper function for those who prefer a more explicit API
+def get_rich_traceback_string(frames_back=0, *, extra_lines=5, show_locals=True, width=None):
+    """
+    Get the current execution frame and format it as a pretty ANSI-colored traceback string.
+    
+    Args:
+        frames_back (int): Number of frames to go back in the call stack. Defaults to 0.
+        extra_lines (int): Number of extra lines of code to show around the trace point.
+        show_locals (bool): Whether to display local variables.
+        width (int, optional): Width of the traceback output. If None, uses terminal width.
+    
+    Returns:
+        str: ANSI-formatted traceback string
+    """
+    return print_rich_stack_trace(frames_back+1, extra_lines=extra_lines, 
+                                  show_locals=show_locals, width=width, 
+                                  print_output=False)
 
 #Private right now because it feels a bit redundant. maybe expose it in the future. used be web_evaluator
 #https://chatgpt.com/share/ee550199-4242-41c6-88dd-f2a72c8d4c84
@@ -13863,7 +14044,7 @@ def harmonic_analysis_via_least_squares(wave,harmonics:int):
     phases=np.arctan2(*out)
     return np.asarray([amplitudes,phases])  # https://www.desmos.com/calculator/fnlwi71n9x
 
-def cluster_by_key(iterable,key,as_dict=False)->list:
+def cluster_by_key(iterable,key,*,as_dict=False)->list:
     """
     Iterable is a list of values
     Key is a function that takes a value from iterable and returns a hashable
@@ -13880,6 +14061,20 @@ def cluster_by_key(iterable,key,as_dict=False)->list:
     if as_dict:
         return outputs
     return list(outputs.values())
+
+def cluster_by_attr(iterable,attr,*,as_dict=False)->list:
+    return cluster_by_key(
+        iterable,
+        lambda x: get_nested_attr(x, attr),
+        as_dict=as_dict,
+    )
+
+def chunk_by_attr(iterable,attr,*,as_dict=False)->list:
+    return chunk_by_key(
+        iterable,
+        lambda x: get_nested_attr(x, attr),
+        compare=lambda x, y: x == y,
+    )
     
 def chunk_by_key(iterable, key=lambda x: x, compare=lambda x, y: x == y):
     """
@@ -23625,8 +23820,10 @@ def _cv_helper(*,image,copy,antialias):
     if antialias:kwargs['lineType']=cv2.LINE_AA#Whether to antialias the things we draw
     if copy     :image=image.copy();#as_byte_image(as_rgb_image(image))#Decide whether we should mutate an image or create a new one (which is less efficient but easier to write in my opinion)
     return image,kwargs
+
 try:
     class Contour(np.ndarray):
+        """ Used in the output of cv_find_contours - gives extra info, more than a simply numpy array """
         # __slots__ = ['parent','children','_descendants_cache','_is_inner_cache']#Prevent adding new attriutes. This makes it faster.
         @property
         def is_inner(self):
@@ -23661,6 +23858,7 @@ try:
             return self._descendants_cache
 except Exception:
     pass
+
 def cv_find_contours(image,*,include_every_pixel=False):
     """
     Contours are represented in the form [[x,y],[x,y],[x,y]].
@@ -23832,32 +24030,141 @@ def cv_draw_circle(
     x,
     y,
     radius=5,
-    
     color='white',
+
+    rim = 0,
+    rim_color='black',
     *,
     antialias=True,
     copy=True
 ):
-    "Draws a filled circle with center x,y on a given image. If copy=False, it will mutate the original image."
-    
+    """
+    Draws a filled circle with center x,y on a given image. If copy=False, it *might* mutate the original image if the given image is an RGB or RGBA byte image.
+
+    Rim draws an outline around the circle. If it's positive, it draws on the outside of the circle. If negative, draws on the inside.
+
+    EXAMPLE:
+        >>> N = 300
+        ... image = load_image(
+        ...     "https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pages/images/emma.png?raw=true",
+        ...     use_cache=True,
+        ... )
+        ... 
+        ... colors = as_rgba_float_colors("random blue" for _ in range(N))
+        ... rim_colors = as_rgba_float_colors("white randomgray" for _ in range(N))
+        ... y = random_ints(N, get_image_height(image) - 1)
+        ... x = random_ints(N, get_image_width(image) - 1)
+        ... radii = random_floats(N, 1, 30)
+        ... rims = random_floats(N, -10, 10)
+        ... 
+        ... display_image(cv_draw_circles(image, x, y, radii, colors, rims, rim_colors))
+
+    """
+
     cv2 = pip_import("cv2")
+
+    radius = max(0, radius)
+    
+    image, kwargs = _cv_helper(image=image, copy=copy, antialias=antialias)
+
+    if not radius and not rim:
+        #Fast shortcut
+        return image
+
+    #Handle rim - a ring aronud the circle
+    if rim > 0:
+        image = cv_draw_circle(image, x, y, radius = radius + rim, color = rim_color, rim=0, copy=False, antialias=antialias)
+        image = cv_draw_circle(image, x, y, radius = radius      , color =     color, rim=0, copy=False, antialias=antialias)
+        return image
+    elif rim < 0:
+        image = cv_draw_circle(
+            image,
+            x,
+            y,
+            radius=radius + rim,
+            color=color,
+            rim=-rim,
+            rim_color=rim_color,
+            copy=False,
+            antialias=antialias,
+        )
+        return image
     
     color=as_rgb_float_color(color)
     color=float_color_to_byte_color(color)
     
     if is_binary_image(image):
-        image = rp.as_rgb_image(image)
-    image = as_byte_image(image)
+        image = rp.as_rgb_image(image, copy=copy)
+    image = as_byte_image(image, copy=copy)
 
     radius = int(radius)        
     x      = int(x)
     y      = int(y)
     
-    image, kwargs = _cv_helper(image=image, copy=copy, antialias=antialias)
-    
     cv2.circle(image, (x, y), radius, color, -1, **kwargs)
     return image
 
+def cv_draw_circles(
+    image,
+    x,
+    y,
+    radius=5,
+    color='white',
+
+    rim = 0,
+    rim_color='black',
+    *,
+    antialias=True,
+    show_progress=False,
+    copy=True
+):
+    """
+    Plural of cv_draw_circle
+    x, y, color, antialias are all broadcastable
+
+    EXAMPLE:
+        >>> N = 300
+        ... image = load_image(
+        ...     "https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pages/images/emma.png?raw=true",
+        ...     use_cache=True,
+        ... )
+        ... 
+        ... colors = as_rgba_float_colors("random blue" for _ in range(N))
+        ... rim_colors = as_rgba_float_colors("white randomgray" for _ in range(N))
+        ... y = random_ints(N, get_image_height(image) - 1)
+        ... x = random_ints(N, get_image_width(image) - 1)
+        ... radii = random_floats(N, 1, 30)
+        ... rims = random_floats(N, -10, 10)
+        ... 
+        ... display_image(cv_draw_circles(image, x, y, radii, colors, rims, rim_colors))
+    """
+
+    #broadcast_lists only broadcasts lists - so make any iterables lists
+    try:              color = [as_rgba_float_color(color)]
+    except Exception: color = list(color)
+    try:              rim_color = [as_rgba_float_color(rim_color)]
+    except Exception: rim_color = list(rim_color)
+    if is_iterable(x)                : x         = list(x)
+    if is_iterable(y)                : y         = list(y)
+    if is_iterable(radius)           : radius    = list(radius)
+    if is_iterable(antialias)        : antialias = list(antialias)
+    if is_iterable(rim)              : rim       = list(rim)
+
+    xs, ys, radiuss, colors, antialiass, rims, rim_colors = broadcast_lists(x, y, radius, color, antialias, rim, rim_color)
+    assert len(xs)==len(ys)==len(radiuss)==len(colors)==len(antialiass)==len(rims)==len(rim_colors)
+    
+    bundles = zip(xs, ys, radiuss, colors, antialiass, rims, rim_colors)
+
+    if show_progress:
+        length = len(xs)
+        bundles = eta(bundles, "cv_draw_circles", length=length)
+
+    image, kwargs = _cv_helper(image=image, copy=copy, antialias=antialias)
+
+    for x, y, radius, color, antialias, rim, rim_color in bundles:
+        image = cv_draw_circle(image, x, y, radius, color, rim=rim, rim_color=rim_color, antialias=antialias, copy=False)
+
+    return image
 
 def cv_line_graph(
     y_values,
@@ -26325,7 +26632,7 @@ def _slow_pil_text_to_image(
     numpy_image = np.array(image)[:, delimiter_text_width:-delimiter_text_width]
     return numpy_image
 
-def as_rgba_float_color(color,clamp=True):
+def as_rgba_float_color(color,*,clamp=True):
     """
     TODO: use this all over RP!
 
@@ -26595,6 +26902,13 @@ def as_rgb_float_color(color, clamp=True):
     """ The RGB counterpart to as_rgba_float_color. See rp.as_rgba_float_color for full documentation! """
     return as_rgba_float_color(color, clamp=clamp)[:3]
     
+
+def as_rgba_float_colors(colors,clamp=True):
+    return [as_rgba_float_color(x) for x in colors]
+
+def as_rgb_float_colors(colors,clamp=True):
+    return [as_rgb_float_color(x) for x in colors]
+
 
 _ryan_fonts = {
     "R:Futura"      : "https://github.com/Eyeline-Research/Go-with-the-Flow/raw/refs/heads/website/fonts/Futura.ttc",
@@ -28941,6 +29255,7 @@ def _common_image_converter(images):
         return channel_converter(dtype_converter(image,copy=copy),copy=copy)
     return converter
 
+#SINGULAR RANDOM COLORS
 def random_rgb_byte_color():
     return (randint(255),randint(255),randint(255))
 def random_rgba_byte_color():
@@ -28964,6 +29279,33 @@ def random_grayscale_binary_color():
 
 def random_hex_color(hashtag=True):
     return byte_color_to_hex_color(random_rgb_byte_color())
+
+
+#PLURAL VERSIONS
+def random_rgb_byte_colors(N):
+    return [random_rgb_byte_color() for _ in range(N)]
+def random_rgba_byte_colors(N):
+    return [random_rgba_byte_color() for _ in range(N)]
+def random_grayscale_byte_colors(N):
+    return [random_grayscale_byte_color() for _ in range(N)]
+
+def random_rgb_float_colors(N):
+    return [random_rgb_float_color() for _ in range(N)]
+def random_rgba_float_colors(N):
+    return [random_rgba_float_color() for _ in range(N)]
+def random_grayscale_float_colors(N):
+    return [random_grayscale_float_color() for _ in range(N)]
+
+def random_rgb_binary_colors(N):
+    return [random_rgb_binary_color() for _ in range(N)]
+def random_rgba_binary_colors(N):
+    return [random_rgba_binary_color() for _ in range(N)]
+def random_grayscale_binary_colors(N):
+    return [random_grayscale_binary_color() for _ in range(N)]
+
+def random_hex_colors(N, hashtag=True):
+    return [random_hex_color(hashtag=hashtag) for _ in range(N)]
+
 
 def is_color(color):
     return is_iterable(color) and all(is_number(x) for x in color)
@@ -29049,6 +29391,10 @@ _rp_colors = dict(
     dark=(0.0,0.0,0.0),
     light=(1.0,1.0,1.0),
     random=lambda:random_rgb_float_color(),
+    randomgray=lambda:(random_float(),)*3,
+    randomgrey=lambda:(random_float(),)*3,
+    randomhue=lambda:hsv_to_rgb_float_color(random_float(),1,1),
+    randombw=lambda:(float(random_chance()),)*3,
 )
 
 _cached_rp_colors={}
@@ -42808,7 +43154,7 @@ def run_depth_pro(image, *, focal_length=None, device=None):
 
 
 @memoized
-def _get_cotracker_model(device=None):
+def _get_cotracker_model(device=None, dtype=None):
     """
     Loads and caches the CoTracker model.
     
@@ -42833,8 +43179,11 @@ def _get_cotracker_model(device=None):
         #Download from the internet...
         cotracker = torch.hub.load("facebookresearch/co-tracker", model_name)
 
+    if dtype is not None:
+        cotracker = cotracker.to(dtype)
     if device is not None:
         cotracker = cotracker.to(device)
+
     return cotracker
 
 def run_cotracker(
@@ -42855,7 +43204,7 @@ def run_cotracker(
     Args:
         video: Input video as either a file path, numpy array, or torch tensor.
               Should be in format T×H×W×C for numpy array.
-        device: Torch device to run inference on
+        device: Torch device to run inference on, defaulting to video.device else rp.select_torch_device()
         queries: Query points of shape (N, 3) in format (t, x, y) for frame index
                 and pixel coordinates. Used for tracking specific points.
         segm_mask: Segmentation mask of shape (H, W). Can be used with grid_size
@@ -42913,6 +43262,16 @@ def run_cotracker(
     pip_import('einops')
     from einops import rearrange
     
+    if device is None:
+        if is_torch_tensor(video):
+            device = video.device
+        else:
+            device = rp.select_torch_device(device, prefer_used=True)
+
+    dtype = torch.float32
+
+    cotracker = _get_cotracker_model(device, dtype)
+
     if isinstance(video, str):
         video = load_video(video)
         video = as_rgb_images(video)
@@ -42921,18 +43280,23 @@ def run_cotracker(
         video = torch.tensor(video)
         assert video.ndim == 4, video.ndim              #    T, H, W, C
         video = rearrange(video, 'T H W C -> 1 T C H W')# B, T, C, H, W
-        video = video.float()
-    
-    cotracker = _get_cotracker_model(device)
-    
-    if device is not None:
-        video = video.to(device)
-        if queries is not None:
-            queries = rearrange(queries, "N TXY -> 1 N TXY") # B N 3
-            queries = queries.to(device)
+    elif video.ndim==4:
+        video = rearrange(video, 'T C H W -> 1 T C H W')# B, T, C, H, W
+
+    video = video.to(dtype=dtype, device=device)
+
+    if queries is not None:
+        if not is_torch_tensor(queries):
+            queries = as_numpy_array(queries)
+            queries = torch.tensor(queries)
+
+        queries = rearrange(queries, "N TXY -> 1 N TXY") # B N 3
+
         if segm_mask is not None:
             queries = rearrange(queries, "H W -> 1 1 H W") # B 1 H W
             segm_mask = segm_mask.to(device)
+
+        queries = queries.to(dtype=dtype, device=device)
     
     pred_tracks, pred_visibility = cotracker(
         video,
@@ -45179,6 +45543,9 @@ def list_transpose(list_of_lists:list):
      >>> list_transpose(ans)
      ans = [[1, 4, 7, 10]] #What I want: [[1,4,7,10],[2,5,8],[3,6,9]]
     """
+    if not len(list_of_lists):
+        #Handle the null case
+        return list_of_lists
 
     #Optimizations for tensors - effectively the same but potentially much faster
     if is_numpy_array (list_of_lists): return list_of_lists.transpose(0,1)
