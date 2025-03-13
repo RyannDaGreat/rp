@@ -429,11 +429,10 @@ def tic() -> callable:
     return local_toc  # Returns a method so you can do a=tic();a.toc() ⟵ Gives a local (not global) toc value so each tic can be used as a new timer
 def toc() -> float:
     return gtoc() - _global_tic
-def ptoc(new_line=True) -> None:
-    print(str(toc()) + " seconds",end='\n'if new_line else '')
+def ptoc(title='',*,new_line=True) -> None:
+    print(str(title) + ": %05f seconds" % toc(), end="\n" if new_line else "")
 def ptoctic(label='') -> None:
-    print(label,end='')
-    ptoc()
+    ptoc(label)
     tic()
 #                                         ⎧                                      ⎫
 #                                         ⎪     ⎧                               ⎫⎪
@@ -8246,6 +8245,16 @@ def bundle_vars(*args, **kwargs):
     else:
         raise RuntimeError("Couldn't find the variable names")
 
+def gather_attrs(x, *attrs, as_dict=False):
+    """ li, si = gather_attrs(rp, 'load_image save_image') """
+    attrs = ' '.join(attrs)
+    attrs = attrs.split()
+
+    if as_dict:
+        return as_easydict({name:getattr(x, name) for name in attrs})
+    else:
+        return [getattr(x, name) for name in attrs]
+
 def destructure(d: dict) -> tuple:
     """
     Extracts values from a dictionary based on the variable names in the
@@ -12370,6 +12379,7 @@ def deepcopy_multiply(iterable,factor: int):
     for i in range(factor):
         out+=deepcopy(iterable)
     return out
+
 def assert_equality(*args,equality_check=identity):
     """
     When you have a,b,c,d and e and they're all equal and you just can't choose...when the symmetry is just too much symmetry!
@@ -12387,6 +12397,7 @@ def assert_equality(*args,equality_check=identity):
         assert (base_check == arg_check)," assert_equality check failed, because " + str(base_check) + " ≠ " + str(arg_check)
         base=arg
     return base
+
 def get_nested_value(list_to_be_accessed,*address_int_list,ignore_errors: bool = False):
     """
     Needs to be better documented. ignore_errors will simply stop tunneling through the array if it gets an error and return the latest value created.
@@ -29158,7 +29169,7 @@ def _images_conversion(func, images, *, copy_check ,copy=True):
             elif images.dtype==bool:
                 return images.astype(np.uint8) * 255
             else:
-                return (images*255).astype(np.uint8)
+                return np.clip(images*255, 0, 255).astype(np.uint8)
 
         elif func==as_byte_image:
             if images.dtype==np.uint8:
@@ -34184,7 +34195,7 @@ def connected_to_internet():
     return False
 
 def _string_pager_via_pypager(string):
-    """ Uses prompt-toolkit. But this can break if you have the wrong prompt toolkit version.  """
+    """ Uses prompt-toolkit. But this can break if you have the wrong prompt toolkit version.  Also it fails on ANSI escape sequences. """
     pip_import('pypager')
     string=str(string)
     from pypager.source import StringSource
@@ -34228,6 +34239,7 @@ def _string_pager_via_less(string):
    except FileNotFoundError:
        raise FileNotFoundError("less command not found. Please make sure less is installed.")
 
+_default_string_pager = _string_pager_via_click
 def string_pager(string):
     """
     Uses a python-based pager, similar to the program 'less', where you can scroll and search through things
@@ -34236,13 +34248,14 @@ def string_pager(string):
     """
     string=str(string)
 
-    if currently_running_unix() and 'less' in get_system_commands(use_cache=True):
-        _string_pager_via_less(string)
-    else:
-        #Maybe windows needs this? Idk io
-        _string_pager_via_click(string)
+    try:
+        return _default_string_pager(string)
+    except FileNotFoundError:
+        #If we're on windows, and we tried to use _string_pager_via_less
+        return _string_pager_via_click(string)
 
-    # _string_pager_via_pypager(string)#We're not using this one right now, because it uses prompt toolkit and might break if we have the wrong version installed
+    return _string_pager_via_pypager(string)#We're not using this one right now, because it uses prompt toolkit and might break if we have the wrong version installed. It also fails on ansi escape colorings.
+
 
 
 #region Mouse functions
@@ -39825,6 +39838,16 @@ def torch_resize_image(image, size, interp="auto", *, copy=True):
 
     return out
 
+def torch_resize_images(*images, size, interp="auto", copy=True):
+    images = detuple(images)
+    as_tensor = is_torch_tensor(images)
+    resized = [gather_args_call(torch_resize_image, x) for x in images]
+    if as_tensor:
+        import torch
+        resized = torch.stack(resized)
+    return resized
+
+
 def torch_remap_image(image, x, y, *, relative=False, interp='bilinear', add_alpha_mask=False, use_cached_meshgrid=False):
     """
     Remap an image tensor using the given x and y coordinate tensors.
@@ -40131,6 +40154,439 @@ def get_identity_uv_map(height=256,width=256,uv_form='xy'):
     output[:,:,yi]=y
 
     return output
+
+def validate_tensor_shapes(*, verbose=False, **kwargs):
+    """
+    Validates that tensor dimensions match expected shapes and extracts dimension values.
+    Reads the tensors from the caller's scope using the variable names found in kwargs.
+    
+    Args:
+        verbose: Boolean, if True suppresses shape information printing (default: True)
+        **kwargs: Either tensor variables with form strings (e.g., image="H W C") 
+                 or manual dimension specifications (e.g., C=3)
+                 You can also prefix them with 'numpy:' or 'torch:' for type assertions
+    
+    Returns:
+        EasyDict with extracted dimension values (dims.H, dims.W, etc.)
+    
+    Raises:
+        ValueError: With detailed error message when validation fails
+    
+    WHY USE THIS:
+    - Catch shape mismatches early with clear error messages
+    - Extract dimension values like H, W, C into easy-to-use variables
+    - Ensure multiple tensors share compatible dimensions
+    - Avoid hard-to-debug shape errors deep in your model
+    
+    EXAMPLES:
+
+        0. Original use-case (more typical):
+            >>> #First, validate the relationships
+            ... rp.validate_shapes(
+            ...     video ='torch: PT PH PW RGB',
+            ...     mask  ='torch: PT PH PW',
+            ...     tracks='numpy: PT N XY',
+            ...     track_colors='N LC',
+            ...     dotted_latent='LT LC LH LW',
+            ...     verbose='bold white random green',
+            ...     XY = 2, #Keeping XY to show that X and Y are the ordering
+            ...     XY = 3,
+            ... )
+            ... #Then, assign the vars as so
+            ... PT, PH, PW = mask.shape
+            ... PT, N, XY = tracks.shape
+            ... LT, LC, LH, LW = dotted_latent.shape
+            ... 
+            ... #PRINTS THE FOLLOWING:
+            ... #
+            ... # Shape Validation:
+            ... #     Expected Forms:
+            ... #       • dotted_latent: LT LC LH LW
+            ... #       • mask: PT PH PW
+            ... #       • track_colors: N LC
+            ... #       • tracks: PT N XY
+            ... #       • video: PT PH PW RGB
+            ... #       Where:
+            ... #         XY=2
+            ... #         RGB=3
+            ... #     
+            ... #     Actual Shapes:
+            ... #       • dotted_latent: 13,16,60,90
+            ... #       • mask: 49,480,720
+            ... #       • track_colors: 200,16
+            ... #       • tracks: 49,200,2
+            ... #       • video: 49,480,720,3
+
+        0. Original use-case (fancier):
+            >>> H, W, C = rp.validate_shapes(
+            ...     #Instead of rp.destructure, we can also do this to be more pythonic
+            ...     'H W C',
+            ...     
+            ...     #The tensors we want to check
+            ...     video ='PT PH PW 3',
+            ...     mask  ='PT PH PW',
+            ...     tracks='PT N XY',
+            ...
+            ...     **rp.gather_vars('PT PH PW PT N XY'), #Manually specify existing dims
+            ...
+            ...     verbose='bold yellow', #Format the printout with fansi
+            ... )
+
+        1. Basic usage - extract dimensions:
+            >>> img = torch.zeros(224, 224, 3)
+            >>> dims = validate_tensor_shapes(img="H W C")
+            >>> dims.H  # 224
+            >>> dims.W  # 224
+            >>> dims.C  # 3
+        
+        2. Check that multiple tensors share dimensions:
+            >>> img = torch.zeros(224, 224, 3)
+            >>> mask = torch.zeros(224, 224, 1) 
+            >>> dims = validate_tensor_shapes(img="H W C", mask="H W 1")
+            # This passes because H and W are the same in both
+            
+            # This would FAIL because the heights don't match:
+            >>> img = torch.zeros(224, 224, 3)
+            >>> mask = torch.zeros(256, 224, 1)
+            >>> validate_tensor_shapes(img="H W C", mask="H W 1")
+            ValueError: [detailed error showing H=224 vs H=256]
+        
+        3. Enforce specific dimension values:
+            >>> img = torch.zeros(224, 224, 3)
+            >>> validate_tensor_shapes(img="H W 3")  # Passes, requires channel dim to be exactly 3
+            >>> img = torch.zeros(224, 224, 4)
+            >>> validate_tensor_shapes(img="H W 3")  # FAILS with clear error message
+        
+        4. Set dimension values manually:
+            >>> img = torch.zeros(224, 224, 3)
+            >>> dims = validate_tensor_shapes(img="H W C", C=5)  # Fail! C=3 in img but we set C=5
+        
+        5. Works with any object that has a shape attribute (torch, numpy, etc.):
+            >>> numpy_array = np.zeros((224, 224, 3))
+            >>> dims = validate_tensor_shapes(numpy_array="H W C")
+            
+        6. Validate tensor types with numpy: and torch: prefixes:
+            >>> numpy_array = np.zeros((224, 224, 3))
+            ... torch_tensor = torch.zeros(32, 10)
+            ... # This passes - tensors match their expected types
+            ... validate_tensor_shapes(
+            ...     torch_tensor="torch: B D",     # Expects a torch tensor
+            ...     numpy_array="numpy: H W C"     # Expects a numpy array
+            ... )
+            ... 
+            ... # This would FAIL - wrong tensor types
+            ... validate_tensor_shapes(
+            ...     torch_tensor="numpy: B D",     # torch_tensor is not a numpy array
+            ...     numpy_array="torch: H W C"     # numpy_array is not a torch tensor
+            ... )
+            ValueError: [detailed error showing type mismatches]
+
+    Please see rp.r._test_validate_tensor_shapes() for more cases!
+
+    """
+    def format_shape(shape):
+        return ','.join(map(str, shape))
+
+    # Get the caller's scope to find tensor variables
+    caller_scope = get_scope(1)
+    
+    # Separate dimension constraints from tensor form strings
+    dim_constraints = {}
+    tensor_forms = {}
+    shape_dict = {}
+    
+    # Store actual shapes for reporting
+    actual_shapes = {}
+    
+    # Collect all errors
+    tensor_type_errors = []
+    missing_shape_errors = []
+    dim_count_errors = []
+    literal_mismatch_errors = []
+    inconsistencies = {}
+
+    # Process kwargs
+    for key, value in kwargs.items():
+        if not isinstance(value, str):
+            # This is a dimension constraint
+            dim_constraints[key] = value
+            continue
+            
+        value = value.strip()
+        original_value = value
+        type_check = None
+        
+        # Handle type prefixes
+        if value.startswith('torch:'):
+            type_check = 'torch'
+            value = value[6:].strip()
+        elif value.startswith('numpy:'):
+            type_check = 'numpy'
+            value = value[6:].strip()
+            
+        # Save the cleaned form string
+        tensor_forms[key] = original_value
+        
+        # Find the tensor in the caller's scope
+        if key in caller_scope:
+            tensor = caller_scope[key]
+            
+            # Apply type checks if specified
+            if type_check == 'torch' and not is_torch_tensor(tensor):
+                tensor_type_errors.append('{} is {} but should be a torch tensor'.format(key, type(tensor)))
+            elif type_check == 'numpy' and not is_numpy_array(tensor):
+                tensor_type_errors.append('{} is {} but should be a numpy array'.format(key, type(tensor)))
+            
+            # Get the shape
+            if hasattr(tensor, 'shape'):
+                shape = tensor.shape
+                shape_dict[shape] = value
+                # Store the actual shape for reporting
+                actual_shapes[key] = shape
+            else:
+                missing_shape_errors.append("{} has no shape (type '{}')".format(key, type(tensor).__name__))
+        else:
+            missing_shape_errors.append("{} not found".format(key))
+    
+    # Important - create a copy of constraints to use for final dimensions
+    dims = dim_constraints.copy()
+    dim_sources = {}  # Track which tensors defined each dimension
+    
+    # Track which dimensions were explicitly provided via kwargs
+    kwarg_dims = set(dim_constraints.keys())
+    
+    for shape_tuple, form_str in shape_dict.items():
+        # Find tensor name for this shape
+        tensor_name = next((name for name, fmt in tensor_forms.items() 
+                           if hasattr(caller_scope[name], 'shape') 
+                           and caller_scope[name].shape == shape_tuple), "unknown")
+
+        shape_string = format_shape(shape_tuple)
+        
+        # Use the cleaned form string (without type prefixes) for validation
+        form_parts = form_str.strip().split()
+        
+        if len(shape_tuple) != len(form_parts):
+            dim_count_errors.append(
+                "{} has shape {} with {} dims but form {} needs {}".format(
+                    tensor_name, shape_string, len(shape_tuple), form_str, len(form_parts))
+            )
+            continue  # Skip further processing of this shape
+        
+        for i, (dim_value, dim_name) in enumerate(zip(shape_tuple, form_parts)):
+            # Handle integer literals in form string
+            if dim_name.isdigit():
+                expected = int(dim_name)
+                if dim_value != expected:
+                    literal_mismatch_errors.append(
+                        "{} has shape {} but needs form {}: expected {} at dim {} but got {}".format(
+                            tensor_name, shape_string, form_str, expected, i, dim_value)
+                    )
+                continue
+                
+            # Handle named dimensions
+            if dim_name in dims and dim_name not in kwarg_dims:
+                # Only check consistency for dimensions NOT provided as kwargs
+                current = dims[dim_name]
+                if current != dim_value:
+                    # Record this inconsistency
+                    if dim_name not in inconsistencies:
+                        inconsistencies[dim_name] = {}
+                    
+                    # Record this tensor's value
+                    inconsistencies[dim_name][tensor_name] = dim_value
+                    
+                    # If first inconsistency, record previous sources too
+                    if len(inconsistencies[dim_name]) == 1:
+                        for src, val in dim_sources[dim_name].items():
+                            inconsistencies[dim_name][src] = val
+            elif dim_name not in kwarg_dims:
+                # Only set dimensions from tensors if not already set via kwargs
+                dims[dim_name] = dim_value
+            else:
+                # Check if the tensor's value conflicts with the kwarg value
+                kwarg_value = dims[dim_name]
+                #TODO: If a tensor has self-inconsistencies only one is reported, such as form H H H vs shape (1,2,3)
+                if kwarg_value != dim_value:
+                    if dim_name not in inconsistencies:
+                        inconsistencies[dim_name] = {}
+                    
+                    # Record both values
+                    inconsistencies[dim_name]['kwargs'] = kwarg_value
+                    inconsistencies[dim_name][tensor_name] = dim_value
+            
+            # Track which tensor provided which dimension
+            if dim_name not in dim_sources:
+                dim_sources[dim_name] = {}
+            dim_sources[dim_name][tensor_name] = dim_value
+    
+    # Compile all errors into a single message if any were found
+    all_errors = []
+    
+    # Always show expected forms and actual shapes
+    all_errors.append("Shape Validation Error!")
+
+    all_errors.append("Expected Forms:")
+    for tensor_name, form_str in sorted(tensor_forms.items()):
+        all_errors.append("  • {}: {}".format(tensor_name, form_str))
+    
+    # Show kwarg specifications if any
+    if dim_constraints:
+        all_errors.append("  Where:")
+        for dim, value in sorted(dim_constraints.items()):
+            all_errors.append("    {}={}".format(dim, value))
+    
+    # Show actual shapes
+    all_errors.append("\nActual Shapes:")
+    for tensor_name, shape in sorted(actual_shapes.items()):
+        shape_string = format_shape(shape)
+        all_errors.append("  • {}: {}".format(tensor_name, shape_string))
+    
+    has_errors = any([missing_shape_errors, dim_count_errors, literal_mismatch_errors, inconsistencies, tensor_type_errors])
+    
+    if missing_shape_errors:
+        all_errors.append("\nMissing or invalid tensors:")
+        for error in missing_shape_errors:
+            all_errors.append("  • {}".format(error))
+
+    if tensor_type_errors:
+        all_errors.append("\nTensors are of wrong types:")
+        for error in tensor_type_errors:
+            all_errors.append("  • {}".format(error))
+    
+    if dim_count_errors:
+        all_errors.append("\nDimension count mismatches:")
+        for error in dim_count_errors:
+            all_errors.append("  • {}".format(error))
+    
+    if literal_mismatch_errors:
+        all_errors.append("\nLiteral value mismatches:")
+        for error in literal_mismatch_errors:
+            all_errors.append("  • {}".format(error))
+    
+    if inconsistencies:
+        all_errors.append("\nInconsistent dimensions:")
+        for dim_name, sources in inconsistencies.items():
+            all_errors.append("  • '{}' has values:".format(dim_name))
+            for source, value in sources.items():
+                if source == 'kwargs':
+                    all_errors.append("    - {} (specified as kwarg)".format(value))
+                else:
+                    all_errors.append("    - {} from {}".format(value, source))
+    
+    error_message = "\n".join(all_errors)
+    
+    # If there are validation errors, raise the error
+    if has_errors:
+        raise ValueError(error_message)
+    else:
+        # Print the shapes info without raising an error if not silent=False
+        if verbose:
+            report_string = (
+                "Shape Validation:\n"
+                +indentify(
+                    line_join(error_message.splitlines()[1:]),
+                    '    ',
+                )
+            )
+            if isinstance(verbose, str):
+                #Allow stylization!
+                report_string = fansi(report_string, verbose)
+            print(report_string)
+
+    dims = as_easydict(dims)
+    return dims
+
+
+
+def _test_validate_tensor_shapes():
+    import torch
+
+    def run_test(name, func, should_raise=False):
+        """Run a test function and report results."""
+        print("\n{}\nTEST: {}\n{}".format('='*80, name, '-'*80))
+        try:
+            result = func()
+            if should_raise:
+                print("❌ FAILED: Expected error but got result {}".format(result))
+            else:
+                print("✅ PASSED: {}".format(result))
+        except Exception as e:
+            if should_raise:
+                print("✅ EXPECTED ERROR: {}".format(type(e).__name__))
+                print(str(e))
+            else:
+                print("❌ UNEXPECTED ERROR: {}".format(type(e).__name__))
+                print(str(e))
+
+    # ======== SUCCESSFUL CASES ========
+    
+    # Test Case 1: Single tensor with simple form
+    def test_single_tensor():
+        img = torch.zeros((224, 224, 3))
+        dims = validate_tensor_shapes(img="H W C")
+        return "dims.H={}, dims.W={}, dims.C={}".format(dims.H, dims.W, dims.C)
+    run_test("Single tensor", test_single_tensor)
+    
+    # Test Case 2: Multiple tensors with consistent dimensions
+    def test_multiple_tensors_consistent():
+        img = torch.zeros((224, 224, 3))
+        mask = torch.zeros((224, 224, 1))
+        dims = validate_tensor_shapes(img="H W C", mask="H W 1")
+        return "dims.H={}, dims.W={}, dims.C={}".format(dims.H, dims.W, dims.C)
+    run_test("Multiple tensors (consistent)", test_multiple_tensors_consistent)
+    
+    # Test Case 3: Mixed tensor types (numpy and torch)
+    def test_mixed_tensor_types():
+        img = torch.zeros((224, 224, 3))
+        mask = np.zeros((224, 224, 1))
+        dims = validate_tensor_shapes(img="H W C", mask="H W 1")
+        return "dims.H={}, dims.W={}, dims.C={}".format(dims.H, dims.W, dims.C)
+    run_test("Mixed tensor types", test_mixed_tensor_types)
+    
+    # Test Case 4: With manual dimension specification
+    def test_manual_dimension():
+        img = torch.zeros((224, 224, 3))
+        dims = validate_tensor_shapes(img="H W C", C=5)
+        return "Manual dimension specification: dims.C={} (not 3 from img)".format(dims.C)
+    run_test("Manual dimension specification", test_manual_dimension, should_raise=True)
+    
+    # ======== ERROR CASES ========
+    
+    # Test Case 5: Non-existent tensor
+    def test_missing_tensor():
+        img = torch.zeros((224, 224, 3))
+        return validate_tensor_shapes(img="H W C", not_existing="H W C")
+    run_test("Missing tensor", test_missing_tensor, should_raise=True)
+    
+    # Test Case 6: Variable without shape attribute
+    def test_not_a_tensor():
+        img = torch.zeros((224, 224, 3))
+        not_a_tensor = "just a string"
+        return validate_tensor_shapes(img="H W C", not_a_tensor="H W C")
+    run_test("Not a tensor", test_not_a_tensor, should_raise=True)
+    
+    # Test Case 7: Dimension count mismatch
+    def test_dim_count_mismatch():
+        img = torch.zeros((224, 224, 3))
+        wrong_form = torch.zeros((224, 224))
+        return validate_tensor_shapes(img="H W C", wrong_form="H W C")
+    run_test("Dimension count mismatch", test_dim_count_mismatch, should_raise=True)
+    
+    # Test Case 8: Literal mismatch
+    def test_literal_mismatch():
+        img = torch.zeros((224, 224, 3))
+        mask = torch.zeros((224, 224, 4))
+        return validate_tensor_shapes(img="H W 3", mask="H W 3")
+    run_test("Literal value mismatch", test_literal_mismatch, should_raise=True)
+    
+    # Test Case 9: Dimension inconsistency between tensors
+    def test_inconsistent_dims():
+        img = torch.zeros((224, 224, 3))
+        larger_img = torch.zeros((256, 256, 3))
+        return validate_tensor_shapes(img="H W C", larger_img="H W C")
+    run_test("Inconsistent dimensions", test_inconsistent_dims, should_raise=True)
+
 
 
 #Math functions that work across libraries
@@ -44798,9 +45254,37 @@ def as_numpy_image(image,*,copy=True):
         return as_numpy_array(image)
     else:
         assert False,'Unsupported image type: '+str(type(image))
+
+def as_numpy_video(video):
+    if is_numpy_array(video):
+        return video
+    if is_torch_tensor(video):
+        pip_import('einops')
+        import einops
+        return as_numpy_array(einops.rearrange(video, 'T C H W -> T H W C'))
+    return [as_numpy_image(x) for x in video]
+
+def as_numpy_videos(videos):
+    if is_numpy_array(videos):
+        return videos
+    if is_torch_tensor(videos):
+        pip_import('einops')
+        import einops
+        return as_numpy_array(einops.rearrange(videos, 'B T C H W -> B T H W C'))
+    return [as_numpy_video(x) for x in videos]
+
+def as_torch_videos(videos, *, device=None, dtype=None, copy=False):
+    """ Plural of rp.as_torch_video """
+    import torch
+    videos = [gather_args_call(as_torch_video, video) for video in videos]
+    if 1==len(set(x.shape for x in videos))==len(set(x.device for x in videos)):
+        videos = torch.stack(videos)
+    return videos
     
-def as_torch_images(images):
-    """ Plural of rp.as_torch_image """
+def as_torch_images(images, *, device=None, dtype=None, copy=False):
+    """ Plural of rp.as_torch_image AKA rp.as_torch_video """
+    import torch
+
     if _is_numpy_array(images) or all(is_image(x) for x in images):
 
         #Convert to floating point, because that will happen anyway...
@@ -44817,23 +45301,29 @@ def as_torch_images(images):
         assert len(images.shape)!=3,'Grayscale images are not yet supported'
 
         images=images.transpose(0,3,1,2)
-        import torch
-        images=torch.Tensor(images)
+        images=torch.tensor(images, device=device, dtype=dtype)
         return images
+
     elif is_torch_tensor(images):
+        if copy:
+            images = images.clone()
+
         #Not creating a copy. GPU tensors are expensive.
         return images
+
     else:
         raise TypeError('Unsupported image datatype: %s'%type(images))
 
-def as_torch_image(image):
+as_torch_video = as_torch_images
+
+def as_torch_image(image, *, device=None, dtype=None, copy=False):
     """ Converts an image to a floating point torch tensor in CHW form """
     if is_torch_tensor(image):
         return image.clone()
     elif is_pil_image(image):
-        return as_torch_image(as_numpy_image(image,copy=False))
+        return gather_args_call(as_numpy_image(image, copy=False))
     elif isinstance(image,np.ndarray):
-        return as_torch_images(image[None])[0]
+        return gather_args_call(as_torch_images, image[None])[0]
     else:
         assert False,'Unsupported image type: '+str(type(image))
 
@@ -47054,7 +47544,7 @@ def pip_install(pip_args:str,*,backend=None):
 
     pip_cmd = dict(pip="pip", uv="uv pip")[backend]
 
-    command = shlex.quote(sys.executable) + " -m " + pip + " install " + pip_args
+    command = shlex.quote(sys.executable) + " -m " + pip_cmd + " install " + pip_args
 
     _run_sys_command(command)
     _refresh_autocomplete_module_list()
