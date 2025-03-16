@@ -40713,7 +40713,7 @@ def _create_array_like(x, *, func_name, shape=None, dtype=None):
     else:
         assert False, type(x)
             
-    raise ValueError(f"Unsupported type {type(x)} or function {func_name}")
+    raise ValueError("Unsupported type "+str(type(x))+" or function "+func_name)
 
 def _zeros_like(x, *, shape=None, dtype=None):
     """Works across libraries - such as numpy, torch"""
