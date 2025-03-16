@@ -11538,19 +11538,6 @@ def append_line_to_file(line:str,file_path:str):
     if not file_exists(file_path):
         string_to_text_file(file_path,line)
     else:
-
-
-
-
-
-
-
-
-
-
-
-
-
         file=open(file_path, 'a')
         try:
             file.write('\n'+line)
@@ -12617,8 +12604,8 @@ def _add_system_commands_to_pterm_bash_highlighter():
     import pygments.lexers.shell as shell
     import re
     Name=shell.Name
-    commands=get_system_commands()
-    shell.BashLexer.tokens['basic']+=[(r'\b(' + '|'.join(re.escape(x) for x in commands) + r')(?=[\s)\`])', Name.Function),]
+    commands=get_system_commands()+['!']
+    shell.BashLexer.tokens['basic']+=[(r'(^|!|\b)(' + '|'.join(re.escape(x) for x in commands) + r')(?=[\s)\`]|$)', Name.Function),]
 _add_system_commands_to_pterm_bash_highlighter()
 
 _system_command_exists_cache = {}
@@ -23591,6 +23578,83 @@ def kill_processes(*pids, signall="SIGKILL", strict=True):
                 raise
 
 
+def search_processes(pattern, *, show_progress=False, whole_arg=False):
+    """
+    Search for processes containing pattern in their command.
+
+    Args:
+        pattern: String to search for in process commands
+        show_progress: Whether to show progress information
+        whole_arg: If True, only match complete command arguments
+
+            Examples:
+            For a process with command: "/usr/bin/python3 script.py --config file.txt"
+
+            With whole_arg=False (default):
+                - "python" would match (substring of an argument)
+                - "config" would match (substring of an argument)
+
+            With whole_arg=True:
+                - "python" would NOT match (not a complete argument)
+                - "python3" would NOT match (part of "/usr/bin/python3")
+                - "--config" would match (complete argument)
+                - "script.py" would match (complete argument)
+
+            Tips:
+                - To match whole args, you can add spaces to the beginning and ends of the pattern
+                >>> search_processes(' ollama serve ')
+                ans = {18374: {'pid': 18374, 'command': ['ollama', 'serve']}}
+
+    Returns:
+        dict[int, dict]: Dictionary mapping matching process PIDs to their information
+    """
+    import psutil
+    import sys
+    from typing import List
+
+    matches = {}
+    pattern = pattern.lower()
+
+    # Get process count for progress reporting
+    total = 0
+    if show_progress:
+        try:
+            total = len(list(psutil.process_iter()))
+            sys.stdout.write("\rSearching through " + str(total) + " processes...")
+            sys.stdout.flush()
+        except:
+            show_progress = False
+
+    # Search processes
+    for i, proc in enumerate(psutil.process_iter(["pid", "cmdline"])):
+        if show_progress and i % 100 == 0:
+            sys.stdout.write("\rSearching: " + str(i) + "/" + str(total))
+            sys.stdout.flush()
+
+        try:
+            command = proc.info["cmdline"]
+            if not command:
+                continue
+
+            if whole_arg:
+                # Match whole arguments only
+                match_found = any(arg.lower() == pattern for arg in command)
+            else:
+                # Match anywhere in the command
+                match_found = pattern in " " + " ".join(command).lower() + " "
+
+            if match_found:
+                pid = proc.info["pid"]
+                matches[pid] = gather_vars("pid command")
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+
+    if show_progress:
+        sys.stdout.write("\rFound " + str(len(matches)) + " processes matching '" + pattern + "'")
+        sys.stdout.flush()
+        print()
+
+    return matches
 
 def regex_match(string,regex)->bool:
     """ returns true if the regex describes the whole string """
@@ -36584,7 +36648,7 @@ def _run_sys_command(*command, title='SYS COMMAND'):
     print(message)
     return os.system(command)
 
-def _ensure_installed(name:str,*,windows=None,mac=None,linux=None):
+def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, force=False):
     """ Attempts to install a program on various operating systems """
 
     assert isinstance(name,    str)
@@ -36592,7 +36656,7 @@ def _ensure_installed(name:str,*,windows=None,mac=None,linux=None):
     assert isinstance(mac,     str) or mac     is None
     assert isinstance(windows, str) or windows is None
 
-    if system_command_exists(name):
+    if not force and system_command_exists(name):
         #Don't reinstall what we've already installed
         return
 
@@ -36710,43 +36774,65 @@ def _ensure_git_installed():
     )
     pip_import('git',auto_yes=True)
 
-def _ensure_ollama_installed():
+def _install_ollama(force=False):
     _ensure_installed(
         'ollama',
         mac='brew install ollama',
         linux='curl -fsSL https://ollama.com/install.sh | sh',
         windows='winget install --id=Ollama.Ollama  -e  --accept-source-agreements', #https://winstall.app/apps/Ollama.Ollama
+        force=force,
     )
     pip_import('ollama',auto_yes=True)
 
-def _install_grounded_sam_2(grounded_sam_dir: str = None, force=False):
-    """
-    WARNING: This function might be moved to CommonSource!
-    Installs this: https://github.com/IDEA-Research/Grounded-SAM-2
-    Downloads code, installs it
-    Downloads checkpoints too
-    If grounded_sam_dir is not specified, defaults to rp's downloads folder
-    """
-    import shutil
-
-    grounded_sam_dir = grounded_sam_dir or path_join(r._rp_downloads_folder, "grounded_sam_2")
-    
-    if folder_exists(grounded_sam_dir):
-        if force:
-            shutil.rmtree(grounded_sam_dir)
-        else:
-            return
+def _ensure_ollama_server_running():
+    serve_processes = search_processes(" ollama serve ")
+    ollama_running = bool(serve_processes)
+    if not ollama_running:
+        _install_ollama()
         
-    if not folder_exists(grounded_sam_dir):
-        git_clone("https://github.com/IDEA-Research/Grounded-SAM-2", grounded_sam_dir, depth=1)
+        session_name = tmux_get_unique_session_name("Ollama Server")
+            
+        yaml = tmuxp_create_session_yaml(
+            {"ollama": "ollama serve"},
+            session_name=session_name,
+        )
+        tmuxp_launch_session_from_yaml(yaml)
         
-    with SetCurrentDirectoryTemporarily(grounded_sam_dir):
-        os.environ["SAM2_BUILD_CUDA"] = "0"
-        for checkpoint_folder in ["gdino_checkpoints", "checkpoints"]:
-            with SetCurrentDirectoryTemporarily(checkpoint_folder):
-                os.system("bash download_ckpts.sh")
-        pip_install('-e ".[notebooks]"')
+        fansi_print(
+            " >> OLLAMA SERVER STARTED IN TMUX SESSION: %s << "%repr(session_name),
+            "italic bold black black on green cyan",
+        )
 
+#THIS FUNCTION INSTALLS IT FINE! BUT I DIDN'T FINISH MAKING IT USEFUL YET. UNCOMMENT ONCE I HAVE WRAPPERS FOR IT.
+# def _install_grounded_sam_2(grounded_sam_dir: str = None, force=False):
+#     """
+#     TODO: I currently don't have code that uses this, I used SA2VA instead. It's in CommonSource.
+#     WARNING: This function might be moved to CommonSource!
+#     Installs this: https://github.com/IDEA-Research/Grounded-SAM-2
+#     Downloads code, installs it
+#     Downloads checkpoints too
+#     If grounded_sam_dir is not specified, defaults to rp's downloads folder
+#     """
+#     import shutil
+#
+#     grounded_sam_dir = grounded_sam_dir or path_join(r._rp_downloads_folder, "grounded_sam_2")
+#     
+#     if folder_exists(grounded_sam_dir):
+#         if force:
+#             shutil.rmtree(grounded_sam_dir)
+#         else:
+#             return
+#         
+#     if not folder_exists(grounded_sam_dir):
+#         git_clone("https://github.com/IDEA-Research/Grounded-SAM-2", grounded_sam_dir, depth=1)
+#         
+#     with SetCurrentDirectoryTemporarily(grounded_sam_dir):
+#         os.environ["SAM2_BUILD_CUDA"] = "0"
+#         for checkpoint_folder in ["gdino_checkpoints", "checkpoints"]:
+#             with SetCurrentDirectoryTemporarily(checkpoint_folder):
+#                 os.system("bash download_ckpts.sh")
+#         pip_install('-e ".[notebooks]"')
+#
 #THIS FUNCTION INSTALLS IT FINE! BUT I DIDN'T FINISH MAKING IT USEFUL YET. UNCOMMENT ONCE I HAVE WRAPPERS FOR IT.
 # def _install_pytorch_hed(git_dir: str = None, force=False):
 #     """
@@ -36834,8 +36920,6 @@ def _install_lazygit(force=False):
             #Untested
             _run_sys_command("""winget install -e --id=JesseDuffield.lazygit""")
         
-    
-    
 def _ensure_filebrowser_installed():
     """https://filebrowser.org/installation"""
 
@@ -37263,7 +37347,7 @@ def tmux_get_unique_session_name(name=""):
     candidate_name = name
     index = 0
     while not candidate_name or candidate_name in existing_sessions:
-        candidate_name = name + '.' * bool(name) + str(index)
+        candidate_name = name + ' ' * bool(name) + str(index)
         index+=1
     
     return candidate_name
@@ -37849,7 +37933,7 @@ def extract_code_from_ipynb(notebook_path=None):
         str: Concatenated code from all code cells with cell separators.
     """
     # Get processed code blocks
-    code_blocks = extract_code_cells_from_ipynb(notebook_path)
+    code_blocks = _extract_code_cells_from_ipynb(notebook_path)
 
     # Join with separators
     cell_separator = '\n\n'+_ipynb_separator+'\n\n'
@@ -46172,11 +46256,15 @@ def list_dict_transpose(data):
     dict_type=None
     if list_type is None: list_type = list
     if dict_type is None:
-        if rp.r._is_easydict(inner_sample) or rp.r._is_easydict(data):
-            pip_import('easydict')
-            from easydict import EasyDict as dict_type
-        else:
-            dict_type = dict
+        pip_import('easydict')
+        from easydict import EasyDict as dict_type
+
+        # #I used to switch between dict and EasyDict...but I think I just like EasyDict
+        # if rp.r._is_easydict(inner_sample) or rp.r._is_easydict(data):
+        #     pip_import('easydict')
+        #     from easydict import EasyDict as dict_type
+        # else:
+        #     dict_type = dict
 
     if issubclass(outer_type, Mapping):
         # If data is dict-like {'a':, 'b':[3,4]} turn it to [{'a':1,'b':3},{'a':2,'b':4}]
