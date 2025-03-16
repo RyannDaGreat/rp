@@ -5626,7 +5626,7 @@ def convert_image_file(
         input_file (str): Path to the image file to be converted.
         new_extension (str, optional): Desired extension for the output files. If None, the extension is not changed.
         output_folder (str, optional): Path to the folder where the converted image will be saved. 
-                                        If not provided, the image is saved in the same folder as the input file.
+                                       If not provided, the image is saved in the same folder as the input file.
         skip_overwrite (bool, optional): If True, won't overwrite existing files. Defaults to False.
         image_transform (func, optional): A function that modifies the image before it's saved again. 
                                           It should take in an image and a path string and return an image.
@@ -36986,18 +36986,20 @@ def _run_claude_code(code):
             code = get_source_code(code)
         except:
             pass
-        
-    display_code_cell(code,title=' Claude code.py ')
-    workdir = temporary_file_path()
+
+    filename = "editme.py"
+
+    display_code_cell(code, title=" Claude " + filename + " ")
+    workdir = path_join(_claudecode_folder, 'workspace_%i'%millis())
     make_directory(workdir)
 
     print(fansi_highlight_path(workdir))
     with SetCurrentDirectoryTemporarily(workdir):
-        save_text_file(code, 'code.py')
-        _run_sys_command('claude')
+        save_text_file(code, filename)
+        _run_sys_command("claude")
 
-        if file_exists('code.py'):
-            code = load_text_file('code.py')
+        if file_exists(filename):
+            code = load_text_file(filename)
             return gather_vars("code workdir")
         else:
             return gather_vars("workdir")
@@ -37164,7 +37166,7 @@ def object_to_bytes(x:object)->bytes:
     return dill.dumps(x)
 
 def bytes_to_object(x:bytes)->object:
-    #Inverse of object_to_bytes, see object_to_bytes for more documentation
+    """ Inverse of object_to_bytes, see object_to_bytes for more documentation """
     dill=pip_import('dill')
     try:
         return dill.loads(x)
@@ -40686,15 +40688,91 @@ def _floor(x):
     if is_torch_tensor(x):return x.floor().long()
     return math.floor(x)
 
-def _randn_like(x):
-    """ Works across libraries - such as numpy, torch """
-    if is_numpy_array(x):
-        return np.random.randn(*x.shape)
-    elif is_torch_tensor:
-        import torch
-        return torch.randn_like(x)
+def _create_array_like(x, *, func_name, shape=None, dtype=None):
+    """Helper function for creating arrays/tensors across libraries"""
+    target_shape = shape if shape is not None else x.shape
+    target_dtype = dtype if dtype is not None else x.dtype
+    
+    if is_torch_tensor(x):  # PyTorch tensor
+        import torch as th
+        device = x.device
+        if func_name == 'zeros':
+            return th.zeros(target_shape, dtype=target_dtype, device=device)
+        elif func_name == 'ones':
+            return th.ones(target_shape, dtype=target_dtype, device=device)
+        elif func_name == 'randn':
+            return th.randn(target_shape, dtype=target_dtype, device=device)
+    elif is_numpy_array(x):  # NumPy array
+        import numpy as np
+        if func_name == 'zeros':
+            return np.zeros(target_shape, dtype=target_dtype)
+        elif func_name == 'ones':
+            return np.ones(target_shape, dtype=target_dtype)
+        elif func_name == 'randn':
+            return np.random.randn(*target_shape).astype(target_dtype)
     else:
-        raise ValueError(get_current_function_name() + " does not support type "+str(type(tensor)))
+        assert False, type(x)
+            
+    raise ValueError(f"Unsupported type {type(x)} or function {func_name}")
+
+def _zeros_like(x, *, shape=None, dtype=None):
+    """Works across libraries - such as numpy, torch"""
+    return _create_array_like(x, func_name='zeros', shape=shape, dtype=dtype)
+
+
+def _ones_like(x, *, shape=None, dtype=None):
+    """Works across libraries - such as numpy, torch"""
+    return _create_array_like(x, func_name='ones', shape=shape, dtype=dtype)
+
+
+def _randn_like(x, *, shape=None, dtype=None):
+    """Works across libraries - such as numpy, torch"""
+    return _create_array_like(x, func_name='randn', shape=shape, dtype=dtype)
+
+def crop_tensor(tensor, new_shape):
+    """
+    Crop or pad tensor to new shape, preserving original data where dimensions overlap.
+    
+    Creates a new tensor/array with the requested shape and copies data from
+    the original tensor where dimensions overlap. Works with both NumPy arrays
+    and PyTorch tensors. Can make tensors larger (padding with zeros) or smaller (cropping).
+    
+    Args:
+        tensor: Input tensor (PyTorch) or array (NumPy)
+        new_shape: Target shape as tuple of dimensions
+        
+    Returns:
+        New tensor/array with requested shape containing original data
+        where dimensions overlap
+
+    Examples:
+        >>> import numpy as np
+        ... arr = np.ones((2, 3))
+        ... print(crop_tensor(arr, (4, 5)))  # returns array of shape (4, 5) with ones in top-left 2x3 area
+        ... print(crop_tensor(arr, (1, 2)))  # returns array of shape (1, 2) with data cropped from original
+        [[1. 1. 1. 0. 0.]
+         [1. 1. 1. 0. 0.]
+         [0. 0. 0. 0. 0.]
+         [0. 0. 0. 0. 0.]]
+        [[1. 1.]]
+        
+        >>> import torch
+        ... t = torch.ones((2, 3))
+        ... print(crop_tensor(t, (4, 5)))  # returns tensor of shape (4, 5) with ones in top-left 2x3 area
+        ... print(crop_tensor(t, (1, 2))  # returns tensor of shape (1, 2) with data cropped from original
+        tensor([[1., 1., 1., 0., 0.],
+                [1., 1., 1., 0., 0.],
+                [0., 0., 0., 0., 0.],
+                [0., 0., 0., 0., 0.]])
+        tensor([[1., 1.]])
+
+    """
+    old_shape = tensor.shape
+    new_tensor = _zeros_like(tensor, shape=new_shape)
+    slices = tuple(slice(0, min(o, n)) for o, n in zip(old_shape, new_shape))
+    new_tensor[slices] = tensor[slices]
+    return new_tensor
+
 
 def get_bilinear_weights(x, y):
     """
@@ -40784,7 +40862,7 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
 
         >>> def demo_torch_scatter_add_image(interp,normalize=False,):
         ...     import torch
-        ...
+        ... 
         ...     url = "https://upload.wikimedia.org/wikipedia/en/7/7d/Lenna_%28test_image%29.png"
         ...     image=as_torch_image(load_image(url))
         ...     
@@ -40793,17 +40871,17 @@ def torch_scatter_add_image(image, x, y, *, relative=False, interp='floor', heig
         ...     wave_speed = 0.1
         ...     wave_freq = 0.025
         ...     wave_amp = 20
-        ...
+        ... 
         ...     def get_frames():
         ...         for frame in range(num_frames):
         ...             y, x = torch.meshgrid(torch.arange(image.shape[1]), torch.arange(image.shape[2]))
         ...             x = x.float()
         ...             y = y.float()
-        ...
+        ... 
         ...             # Apply sine and cosine waves to create caustics effect
         ...             dx = wave_amp * torch.cos(wave_freq * (x + y) + frame * wave_speed)
         ...             dy = wave_amp * torch.sin(wave_freq * (x - y) + frame * wave_speed)
-        ...
+        ... 
         ...             caustics_image = torch_scatter_add_image(
         ...                 image,
         ...                 dx,
@@ -43555,6 +43633,8 @@ _rp_folder = get_parent_folder(__file__)
 _rp_downloads_folder = path_join(_rp_folder, "downloads")
 _google_fonts_download_folder = _rp_downloads_folder + "/google_fonts"
 _fonts_download_folder        = _rp_downloads_folder + "/fonts"
+_rp_outputs_folder = path_join(_rp_folder, "outputs")
+_claudecode_folder            = _rp_outputs_folder + "/claudecode"
 
 
 def _pip_import_depth_pro(autoyes=False):
