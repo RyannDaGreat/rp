@@ -4,7 +4,7 @@ import rp
 import os
 
 @rp.memoized
-def _xsel_works()
+def _xsel_works():
     return os.system('xsel') == 0
 
 try:
