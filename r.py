@@ -1188,7 +1188,7 @@ def _fansi_fix(string):
                 
                 # Restore previous format if there's any
                 if format_stack:
-                    result.append(f'\x1b[{format_stack[-1]}m')
+                    result.append('\x1b[%sm'%format_stack[-1])
         else:
             # Add the format code
             result.append(match.group(0))
