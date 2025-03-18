@@ -1143,6 +1143,69 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
     return output
 
 
+def _fansi_fix(string):
+    """
+    Fixes nested ANSI formatting issues in a string by restoring outer formatting after inner resets.
+    
+    When nested fansi calls are used, the inner reset code (\x1b[0m) cancels all formatting.
+    This function ensures that after an inner reset, the outer formatting is restored.
+    
+    Example:
+        fansi("Hello "+fansi("World",'yellow')+"!",'green')
+        Original output: \x1b[32mHello \x1b[33mWorld\x1b[0m!\x1b[0m
+        Fixed output: \x1b[32mHello \x1b[33mWorld\x1b[0m\x1b[32m!\x1b[0m
+    
+    Args:
+        string (str): The string with ANSI formatting to fix
+        
+    Returns:
+        str: The fixed string with proper nested formatting
+    """
+    import re
+    
+    # Regular expression to find ANSI escape sequences
+    ansi_pattern = re.compile(r'\x1b\[((?:\d+;)*\d+)m')
+    
+    # Process the string
+    result = []
+    last_pos = 0
+    format_stack = []  # Stack to track active format codes
+    
+    for match in ansi_pattern.finditer(string):
+        # Add text before this sequence
+        if match.start() > last_pos:
+            result.append(string[last_pos:match.start()])
+        
+        code = match.group(1)
+        
+        if code == '0':  # Reset code
+            # Add the reset
+            result.append('\x1b[0m')
+            
+            # Pop from format stack
+            if format_stack:
+                format_stack.pop()
+                
+                # Restore previous format if there's any
+                if format_stack:
+                    result.append(f'\x1b[{format_stack[-1]}m')
+        else:
+            # Add the format code
+            result.append(match.group(0))
+            
+            # Push to format stack
+            format_stack.append(code)
+        
+        # Update last position
+        last_pos = match.end()
+    
+    # Add remaining text
+    if last_pos < len(string):
+        result.append(string[last_pos:])
+    
+    return ''.join(result)
+
+
 def _legacy_fansi(text_string,text_color=None,style=None,background_color=None,*,per_line=True):
     """
     TODO: Fix bug: PROBLEM is that '\n' not in fansi('Hello\n','gray')
@@ -3542,19 +3605,19 @@ def image_to_all_normalized_xy_rgb_training_pairs(image):
     # outputs=list(zip(r,g,b))
     # io_pairs=list(zip(inputs,outputs))
     #
-    #  ⁠⁠⁠⁠    ⎧                                    ⎫
-    #  ⁠⁠⁠⁠    ⎪    ⎧                              ⎫⎪
-    # ⁠⁠⁠⁠     ⎪    ⎪   ⎧                         ⎫⎪⎪
+    #      ⎧                                    ⎫
+    #      ⎪    ⎧                              ⎫⎪
+    #      ⎪    ⎪   ⎧                         ⎫⎪⎪
     # print(list(zip(*random_batch(io_pairs,2))))
-    #  ⁠⁠⁠⁠    ⎪    ⎪   ⎩                         ⎭⎪⎪
-    #  ⁠⁠⁠⁠    ⎪    ⎩                              ⎭⎪
-    #  ⁠⁠⁠⁠    ⎩                                    ⎭
+    #      ⎪    ⎪   ⎩                         ⎭⎪⎪
+    #      ⎪    ⎩                              ⎭⎪
+    #      ⎩                                    ⎭
     #
-    #  ⁠⁠⁠⁠ ⎧                                                                      ⎫
-    #  ⁠⁠⁠⁠ ⎪⎧                          ⎫  ⎧                                      ⎫⎪
+    #   ⎧                                                                      ⎫
+    #   ⎪⎧                          ⎫  ⎧                                      ⎫⎪
     # # [(('x₂', 'y₂'), ('x₃', 'y₃')), (('r₂', 'g₂', 'b₂'), ('r₃', 'g₃', 'b₃'))]
-    #  ⁠⁠⁠⁠ ⎪⎩                          ⎭  ⎩                                      ⎭⎪
-    #  ⁠⁠⁠⁠ ⎩                                                                      ⎭
+    #   ⎪⎩                          ⎭  ⎩                                      ⎭⎪
+    #   ⎩                                                                      ⎭
     # endregion
 # endregion
 
@@ -10480,7 +10543,7 @@ def _translate_timezone(x):
 
 
 _default_timezone=None
-def format_date(date, timezone=None):
+def format_date(date, timezone=None, *, align=False):
     """
     EXAMPLES:
         >>> get_current_date()
@@ -10496,6 +10559,14 @@ def format_date(date, timezone=None):
         >>> r._default_timezone='UTC'
         >>> print(format_date(ans,None))    ––>   Thu Jul 11, 2024 at 8:12:59AM UTC
         >>> print(format_date(ans,''))      ––>   Thu Jul 11, 2024 at 8:12:59AM
+
+    ALIGN IS SO YOU CAN DO THINGS LIKE THIS:
+        35: b06bb58256 [[Fri Feb 28, 2025 at 11:55:05PM]] Ficx eta
+        34: 04cf83f8d2 [[Sat Mar 01, 2025 at 12:37:04AM]] Fixes and get_nested_attr
+        33: aedd490a14 [[Sat Mar 01, 2025 at  1:11:26AM]] ETA better!
+        32: 710eca8bf6 [[Sat Mar 01, 2025 at  2:15:10AM]] Updoot
+
+
     """
     import datetime
 
@@ -10524,6 +10595,9 @@ def format_date(date, timezone=None):
     time_part = "{hour}:{minute:02d}:{second:02d}{am_pm}".format(
         hour=hour, minute=minute, second=second, am_pm=am_pm
     )
+
+    if align:
+        time_part = time_part.rjust(len(" 2:32:45AM"))
 
     formatted_date = "{date_part} at {time_part}".format(
         date_part=date_part, time_part=time_part
@@ -14882,6 +14956,57 @@ def _cv_skeletonize(img):
             break
 
     return skel
+
+def get_edge_drawing(image):
+    """
+    Alternative to Canny Edges that's more robust
+
+    Extract edges from an image using EdgeDrawing (ED) algorithm.
+
+    EdgeDrawing is a real-time edge detection algorithm developed by Cihan Topal and Cuneyt Akinlar.
+    It works by first identifying anchor points in the image (pixels with high gradient magnitude),
+    then linking these anchor points to form continuous edge segments.
+
+    When use_parameter_free=True, it uses the Parameter-Free EdgeDrawing (PF-ED) variant, which
+    automatically determines gradient and anchor thresholds from the image.
+
+    Reference:
+        Topal, C., & Akinlar, C. (2012). Edge drawing: A combined real-time edge and segment
+        detector. Journal of Visual Communication and Image Representation, 23(6), 862-872.
+
+    Args:
+        image: numpy.ndarray in HW3 format (height, width, 3 channels)
+
+    Returns:
+        Binary edge map as numpy.ndarray
+        
+    EXAMPLE:
+        >>> #Live Demo
+        ... stream = load_webcam_stream()
+        ... for frame in stream:
+        ...     can = auto_canny(frame)
+        ...     edg = get_edge_image(frame)
+        ...     display_image(horizontally_concatenated_images(frame,can, edg))
+
+    """
+    import numpy as np
+    import cv2
+
+    gray = rp.as_byte_image(rp.as_grayscale_image(image))
+
+    # Initialize edge detector
+    ed = cv2.ximgproc.createEdgeDrawing()
+    params = cv2.ximgproc.EdgeDrawing.Params()
+    params.PFmode = True  # use Parameter-Free mode
+
+    ed.setParams(params)
+
+    # Detect edges and get binary edge map
+    edges = ed.detectEdges(gray)
+    edge_map = ed.getEdgeImage(edges)
+
+    return edge_map
+
 
 # noinspection PyTypeChecker
 def print_latex_image(latex: str):
@@ -19608,6 +19733,9 @@ def pseudo_terminal(
         LJEA [$line_join(x) for x in ans] #Line Join Each Ans
         CJ ",".join(map(str,ans))
 
+        SGC $select_git_commit()
+        DUNKA $pip_import('dunk');$os.system(f"git diff {ans} | dunk")
+
         FN $r._get_function_names(ans)
 
         SHA $get_sha256_hash(ans,show_progress=True)
@@ -19718,7 +19846,7 @@ def pseudo_terminal(
 
         PIF PIP freeze
 
-        HOSTLAB !python -m jupyter lab --ip 0.0.0.0 --port 5678 --NotebookApp.password='' --NotebookApp.token='' --allow-root
+        HOSTLAB !$PY -m rp call pip_import jupyter --auto_yes True ; $PY -m jupyter lab --ip 0.0.0.0 --port 5678 --NotebookApp.password='' --NotebookApp.token='' --allow-root
 
         '''
 
@@ -19731,6 +19859,7 @@ def pseudo_terminal(
         if hasattr(ric,'additional_command_shortcuts'):
             command_shortcuts+=list(ric.additional_command_shortcuts)
 
+        command_shortcuts = [x.replace('$PY',sys.executable) for x in command_shortcuts]
         command_shortcuts = [x.replace('$',rp_import) for x in command_shortcuts]
         
         command_shortcuts=list(map(str.strip,command_shortcuts))
@@ -29437,6 +29566,12 @@ def float_color_to_byte_color(float_color):
 def float_color_to_hex_color(float_color):
     return byte_color_to_hex_color(float_color_to_byte_color(float_color))
 
+_altbw_flipflop=False
+def _altbw():
+    global _altbw_flipflop
+    _altbw_flipflop=not _altbw_flipflop
+    return _altbw_flipflop
+
 _rp_colors = dict(
     # My color definitions
     red=(1.0, 0.0, 0.0),
@@ -29470,6 +29605,7 @@ _rp_colors = dict(
     randomgrey=lambda:(random_float(),)*3,
     randomhue=lambda:hsv_to_rgb_float_color(random_float(),1,1),
     randombw=lambda:(float(random_chance()),)*3,
+    altbw=lambda:(float(_altbw()),)*3,
 )
 
 _cached_rp_colors={}
@@ -29519,7 +29655,7 @@ def _get_rp_color(name):
         else:
             color = blend_colors(color, _rp_colors[color_name])
 
-    if not 'random' in name:
+    if not 'random' in name and not 'alt' in name:
         _cached_rp_colors[name]=color
     
     return color
@@ -32081,7 +32217,7 @@ def delete_path(path,*,permanent=True):
     else:
         assert False, "This should be impossible...it appears that path %s exists but is neither a file nor a folder."%path
 
-def _delete_paths_helper(*paths,permanent=True,delete_function=delete_path,strict):
+def _delete_paths_helper(*paths,permanent=True,delete_function=delete_path,strict,show_progress):
     """
     EXAMPLE:  delete_paths( 'a.jpg','b.jpg' )
     EXAMPLE:  delete_paths(['a.jpg','b.jpg'])
@@ -32089,29 +32225,37 @@ def _delete_paths_helper(*paths,permanent=True,delete_function=delete_path,stric
     """
     output = []
     paths=detuple(paths)
+
     if isinstance(paths,str):
         paths=[paths] #if we gave a single path as an argument, turn it into a list so we can iterate over it...
-    for path in paths:
-        if isinstance(path,str):
-            try:
-                delete_function(path,permanent=permanent)
-                output.append(path)
-            except Exception:
-                if strict:
-                    raise
-                else:
-                    if strict is None:
-                        output.append(None)
-    return output
+                
+    def delfunc(path):
+        delete_function(path,permanent=permanent)
 
-def delete_paths(*paths,permanent=True,strict=True):
-    return _delete_paths_helper(*paths,permanent=permanent,delete_function=delete_path,strict=strict)
+    show_progress=show_progress and 'eta:Deleting Paths'
 
-def delete_files(*paths,permanent=True,strict=True):
-    return _delete_paths_helper(*paths,permanent=permanent,delete_function=delete_file,strict=strict)
+    return load_files(delfunc, paths, strict=strict,show_progress=show_progress)
 
-def delete_folders(*paths,permanent=True,strict=True):
-    return _delete_paths_helper(*paths,permanent=permanent,delete_function=delete_folders,strict=strict)
+    # for path in paths:
+    #     if isinstance(path,str):
+    #         try:
+    #             output.append(path)
+    #         except Exception:
+    #             if strict:
+    #                 raise
+    #             else:
+    #                 if strict is None:
+    #                     output.append(None)
+    # return output
+
+def delete_paths(*paths,permanent=True,strict=True,show_progress=False):
+    return _delete_paths_helper(*paths,permanent=permanent,delete_function=delete_path,strict=strict,show_progress=show_progress)
+
+def delete_files(*paths,permanent=True,strict=True,show_progress=False):
+    return _delete_paths_helper(*paths,permanent=permanent,delete_function=delete_file,strict=strict,show_progress=show_progress)
+
+def delete_folders(*paths,permanent=True,strict=True,show_progress=False):
+    return _delete_paths_helper(*paths,permanent=permanent,delete_function=delete_folders,strict=strict,show_progress=show_progress)
 delete_directories=delete_folders
 
 def copy_path(from_path,to_path,*,extract=False):
@@ -38147,6 +38291,105 @@ def visualize_pytorch_model(model,*,input_shape=None, example_input=None, supres
             # display_image(load_image(output_path),block=block) #We would use this line if we wanted to rasterize it. However, a PDF is probably the best option
             open_file_with_default_application(output_path)# If we're making a pdf, open it in some pdf viewer
 
+def get_sinusoidal_positional_encodings(length: int, dim: int, scale: float = 10000.0) -> np.ndarray:
+    """
+    Generate sinusoidal position encodings for transformer models.
+    
+    Parameters:
+        length: int
+            Length of the sequence.
+        dim: int
+            Dimension of the model (embedding dimension).
+        scale: float, optional
+            Scaling factor for the frequencies, by default 10000.0¹
+    
+    Returns:
+        np.ndarray
+            Position encoding matrix of shape (length, dim).
+    
+    Notes:
+        The position encoding uses sine for even indices and cosine for odd indices
+        in the embedding dimension, with frequencies decreasing as the dimension increases.
+        
+        ¹ The value 10000 comes from the original "Attention is All You Need" paper by 
+        Vaswani et al. (2017), Section 3.5 "Positional Encoding", page 6. The paper 
+        states: "We use sine and cosine functions of different frequencies... 
+        where pos is the position and i is the dimension." The specific value 10000 
+        appears in equation (5) as a scaling factor that determines how quickly the 
+        frequencies decrease across embedding dimensions. While the paper doesn't 
+        explicitly justify why 10000 was chosen, it has become the standard in transformer 
+        implementations. Paper link: https://arxiv.org/pdf/1706.03762.pdf
+    
+    EXAMPLES:
+        >>> encoding = get_position_encoding(length=4, dim=6)
+        >>> encoding.shape
+        (4, 6)
+        >>> encoding = get_position_encoding(length=10, dim=512)
+        >>> encoding.shape
+        (10, 512)
+        
+        >>> #---------------------------
+        ... # EXAMPLES
+        ... #---------------------------
+        ... import numpy as np
+        ... import matplotlib.pyplot as plt
+        ... from typing import Tuple
+        ...
+        ... # Example 1: Generate and print a small position encoding matrix
+        ... P = get_sinusoidal_positional_encodings(length=4, dim=4, scale=100)
+        ... print("Position encoding matrix (4×4):")
+        ... print(P)
+        ... print("Shape: %s" % str(P.shape))
+        ... 
+        ... # Example 2: Visualize a larger position encoding matrix
+        ... P_large = get_sinusoidal_positional_encodings(length=20, dim=64)
+        ... plt.figure(figsize=(10, 8))
+        ... plt.imshow(P_large, cmap='viridis', aspect='auto')
+        ... plt.colorbar()
+        ... plt.title("Position Encodings (20×64)")
+        ... plt.xlabel("Embedding Dimension")
+        ... plt.ylabel("Sequence Position")
+        ... plt.savefig("position_encoding_heatmap.png")
+        ... plt.show()  # Uncomment to display the plot
+    """
+
+    #---------------------------
+    # INPUT VALIDATION
+    #---------------------------
+    if not isinstance(length, int) or length <= 0:
+        raise ValueError("length must be a positive integer, got %s" % length)
+    
+    if not isinstance(dim, int) or dim <= 0:
+        raise ValueError("dim must be a positive integer, got %s" % dim)
+    
+    if dim % 2 != 0:
+        raise ValueError("dim must be even, got %s" % dim)
+    
+
+    #---------------------------
+    # POSITION ENCODING CALCULATION
+    #---------------------------
+    # Initialize position encoding matrix
+    position_encoding = np.zeros((length, dim))
+    
+    # Generate position encodings
+    for pos in range(length):
+        for i in range(dim // 2):
+            denominator = scale ** (2 * i / dim)
+            position_encoding[pos, 2 * i] = np.sin(pos / denominator)
+            position_encoding[pos, 2 * i + 1] = np.cos(pos / denominator)
+    
+
+    #---------------------------
+    # OUTPUT VALIDATION
+    #---------------------------
+    assert position_encoding.shape == (length, dim)
+    
+    return position_encoding
+
+
+
+
 #def _visualize_pytorch_model_via_torchviz(model,*,input_shape=None, example_input=None):
 #    pip_import('torch'      )
 #    pip_import('torchviz'   )
@@ -40683,10 +40926,178 @@ def _ceil(x):
     return math.ceil(x)
 
 def _floor(x):
-    """ Works across libraries - such as numpy, torch, pure python """
+    """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.floor(x).astype(int)
     if is_torch_tensor(x):return x.floor().long()
     return math.floor(x)
+
+def _round(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.round(x).astype(int)
+    if is_torch_tensor(x):return x.round().long()
+    return round(x)
+
+def _sin(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.sin(x)
+    if is_torch_tensor(x):return torch.sin(x)
+    return math.sin(x)
+
+def _cos(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.cos(x)
+    if is_torch_tensor(x):return torch.cos(x)
+    return math.cos(x)
+
+def _tan(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.tan(x)
+    if is_torch_tensor(x):return torch.tan(x)
+    return math.tan(x)
+
+def _exp(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.exp(x)
+    if is_torch_tensor(x):return torch.exp(x)
+    return math.exp(x)
+
+def _log(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.log(x)
+    if is_torch_tensor(x):return torch.log(x)
+    return math.log(x)
+
+def _log10(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.log10(x)
+    if is_torch_tensor(x):return torch.log10(x)
+    return math.log10(x)
+
+def _sqrt(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.sqrt(x)
+    if is_torch_tensor(x):return torch.sqrt(x)
+    return math.sqrt(x)
+
+def _abs(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.abs(x)
+    if is_torch_tensor(x):return torch.abs(x)
+    return abs(x)
+
+def _pow(x, y):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.power(x, y)
+    if is_torch_tensor(x):return torch.pow(x, y)
+    return math.pow(x, y)
+
+def _fft(x):
+    """ works across libraries - such as numpy, torch """
+    if is_numpy_array (x):return np.fft.fft(x)
+    if is_torch_tensor(x):return torch.fft.fft(x)
+    raise ValueError("FFT not available for Python scalars")
+
+def _ifft(x):
+    """ works across libraries - such as numpy, torch """
+    if is_numpy_array (x):return np.fft.ifft(x)
+    if is_torch_tensor(x):return torch.fft.ifft(x)
+    raise ValueError("IFFT not available for Python scalars")
+
+def _tanh(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.tanh(x)
+    if is_torch_tensor(x):return torch.tanh(x)
+    return math.tanh(x)
+
+def _sigmoid(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return 1 / (1 + np.exp(-x))
+    if is_torch_tensor(x):return torch.sigmoid(x)
+    return 1 / (1 + math.exp(-x))
+
+def _relu(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.maximum(0, x)
+    if is_torch_tensor(x):return torch.relu(x)
+    return max(0, x)
+
+def _softmax(x, dim=-1):
+    """ works across libraries - such as numpy, torch """
+    if is_numpy_array (x):
+        e_x = np.exp(x - np.max(x, axis=dim, keepdims=True))
+        return e_x / e_x.sum(axis=dim, keepdims=True)
+    if is_torch_tensor(x):return torch.softmax(x, dim=dim)
+    raise ValueError("Softmax not applicable for Python scalars")
+
+def _log2(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.log2(x)
+    if is_torch_tensor(x):return torch.log2(x)
+    return math.log2(x)
+
+def _asin(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.arcsin(x)
+    if is_torch_tensor(x):return torch.asin(x)
+    return math.asin(x)
+
+def _acos(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.arccos(x)
+    if is_torch_tensor(x):return torch.acos(x)
+    return math.acos(x)
+
+def _atan(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.arctan(x)
+    if is_torch_tensor(x):return torch.atan(x)
+    return math.atan(x)
+
+def _clip(x, min_val, max_val):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.clip(x, min_val, max_val)
+    if is_torch_tensor(x):return torch.clamp(x, min_val, max_val)
+    return max(min_val, min(max_val, x))
+
+# Alias for _clip
+def _clamp(x, min_val, max_val):
+    return _clip(x, min_val, max_val)
+
+def _atan2(y, x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (y):return np.arctan2(y, x)
+    if is_torch_tensor(y):return torch.atan2(y, x)
+    return math.atan2(y, x)
+
+def _sinh(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.sinh(x)
+    if is_torch_tensor(x):return torch.sinh(x)
+    return math.sinh(x)
+
+def _cosh(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.cosh(x)
+    if is_torch_tensor(x):return torch.cosh(x)
+    return math.cosh(x)
+
+def _sign(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.sign(x)
+    if is_torch_tensor(x):return torch.sign(x)
+    return -1 if x < 0 else (1 if x > 0 else 0)
+
+def _degrees(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.degrees(x)
+    if is_torch_tensor(x):return torch.rad2deg(x)
+    return math.degrees(x)
+
+def _radians(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.radians(x)
+    if is_torch_tensor(x):return torch.deg2rad(x)
+    return math.radians(x)
 
 def _create_array_like(x, *, func_name, shape=None, dtype=None):
     """Helper function for creating arrays/tensors across libraries"""
@@ -45213,6 +45624,81 @@ def get_git_date_modified(file_path):
         raise EnvironmentError("Git command failed: {}".format(e.stderr.strip()))
     except ValueError as e:
         raise ValueError("Date parsing error: {}. Git command output: {}".format(e, result.stdout.strip()))
+
+def select_git_commit():
+    """
+    Let user select a git commit using input_select
+
+    Returns:
+        Selected commit hash
+    
+    EXAMPLE:
+        
+        >>>   4: a7b9b7e387 [[Sat Mar 15, 2025 at  5:56:39PM]] EXAMPLES
+        ...   3: 04f2e93f7d [[Mon Mar 17, 2025 at  3:55:57PM]] Torchtools
+        ...   2: 9b00705d67 [[Mon Mar 17, 2025 at  3:56:04PM]] Mathfuncs
+        ...   1: 8160e2c31c [[Mon Mar 17, 2025 at  3:56:45PM]] Math funcs
+        ...   0: 03f40d3fc9 [[Mon Mar 17, 2025 at  9:23:54PM]] Align
+        ... Please enter an integer between 0 and 156 (inclusive), or '?' for more options.
+        ...  >
+        
+    """
+    # Args:
+    #     n: Number of commits to show. If None, shows all commits.
+    n = None
+
+    import subprocess
+    from datetime import datetime
+
+    # Get git log with format: hash, author date, commit message
+    cmd = ["git", "log"]
+    if n is not None:
+        cmd.append("-" + str(n))
+    cmd.extend(["--pretty=format:%H|%ad|%s", "--date=raw"])
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    if result.returncode != 0:
+        print("Error getting git log: " + str(result.stderr))
+        return None
+
+    # Parse the git log output
+    commits = []
+    for line in result.stdout.strip().split("\n"):
+        if not line:
+            continue
+        parts = line.split("|", 2)
+        if len(parts) != 3:
+            continue
+
+        commit_hash, date_raw, message = parts
+        # Parse date (timestamp and timezone offset)
+        date_parts = date_raw.split()
+        if len(date_parts) == 2:
+            timestamp = int(date_parts[0])
+            date = datetime.fromtimestamp(timestamp)
+            formatted_date = "[[" + format_date(date, align=True) + "]]"
+            formatted_date = fansi(formatted_date, "light blue white")
+
+            # Create display string: 10 chars of hash + date + message
+            commit_string = commit_hash[:10]
+            commit_string = fansi(commit_string, "italic yellow light gray", truecolor=True)
+            display = commit_string + " " + formatted_date
+            display = fansi(display, background_color="on dark dark altbw randomhue", truecolor=True)
+            display = rp.r._fansi_fix(display)
+            display += " " + message
+            commits.append((commit_hash, display))
+
+    # Use input_select to let user choose
+    if commits:
+        options = [display for _, display in commits]
+        selected = input_select("Select a git commit:", options, stringify=str, reverse=True)
+
+        # Find the hash for the selected display
+        for commit_hash, display in commits:
+            if display == selected:
+                return commit_hash
+
+    return None
 
 
 def _autoformat_python_code_via_black(code:str):
