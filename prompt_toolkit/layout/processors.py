@@ -9,6 +9,7 @@ from __future__ import unicode_literals
 from abc import ABCMeta, abstractmethod
 from six import with_metaclass
 from six.moves import range
+import re
 
 from rp.prompt_toolkit.cache import SimpleCache
 from rp.prompt_toolkit.document import Document
@@ -21,6 +22,7 @@ from rp.prompt_toolkit.token import Token
 from .utils import token_list_len, explode_tokens
 
 import re
+import keyword
 
 __all__ = (
     'Processor',
@@ -38,6 +40,9 @@ __all__ = (
     'ShowLeadingWhiteSpaceProcessor',
     'ShowTrailingWhiteSpaceProcessor',
     'TabsProcessor',
+    'IndentGuideProcessor',
+    'ShowWhitespaceProcessor',
+    'HighlightWordOccurrencesProcessor',
 )
 
 
@@ -603,3 +608,278 @@ class ConditionalProcessor(Processor):
     def __repr__(self):
         return '%s(processor=%r, filter=%r)' % (
             self.__class__.__name__, self.processor, self.filter)
+
+
+class IndentGuideProcessor(Processor):
+    """
+    Render indent guides - vertical lines that help visualize indentation levels.
+    
+    :param tabstop: (Integer) Horizontal space taken by a tab or space indentation level.
+    :param get_char: Callable that takes a `CommandLineInterface` and returns a
+        character (text of length one) to be used for the indent guide.
+    :param propagate: (Boolean) Whether to propagate indentation to empty lines.
+    """
+    def __init__(self, tabstop=4, get_char=None, propagate=False):
+        assert isinstance(tabstop, Integer) or isinstance(tabstop, int)
+        assert get_char is None or callable(get_char)
+        
+        self.get_char = get_char or (lambda cli: '▏')  # Left-aligned vertical bar for indent guides
+        self.tabstop = tabstop
+        self.propagate = propagate
+        # Store the latest indentation guides per line number
+        self._indentation_cache = {}
+        
+    def _get_propagated_indentation(self, cli, document, lineno, line_text):
+        """
+        Determine the appropriate indentation for the current line by looking at surrounding context.
+        Uses a simplified version of the propagate_whitespace logic for empty lines.
+        """
+        # If the line is entirely whitespace, try to propagate indentation from nearby lines
+        if line_text.strip() == '':
+            # Look at lines before this one
+            before_line = lineno - 1
+            before_indent = 0
+            
+            # Look back up to 5 lines to find indentation
+            lookback_count = 0
+            while before_line >= 0 and lookback_count < 5:
+                if before_line < len(document.lines):
+                    before_text = document.lines[before_line]
+                    # Skip completely empty lines
+                    if before_text.strip():
+                        # Count leading spaces
+                        before_indent = len(before_text) - len(before_text.lstrip())
+                        break
+                before_line -= 1
+                lookback_count += 1
+                
+            # Look at lines after this one
+            after_line = lineno + 1
+            after_indent = 0
+            
+            # Look forward up to 5 lines to find indentation
+            lookforward_count = 0
+            while after_line < len(document.lines) and lookforward_count < 5:
+                if after_line < len(document.lines):
+                    after_text = document.lines[after_line]
+                    # Skip completely empty lines
+                    if after_text.strip():
+                        # Count leading spaces
+                        after_indent = len(after_text) - len(after_text.lstrip())
+                        break
+                after_line += 1
+                lookforward_count += 1
+            
+            # Use the minimum indentation level found to be conservative
+            if before_indent > 0 and after_indent > 0:
+                return min(before_indent, after_indent)
+            elif before_indent > 0:
+                return before_indent
+            elif after_indent > 0:
+                return after_indent
+            
+        # For non-empty lines, just count the spaces
+        indent_level = 0
+        for char in line_text:
+            if char == ' ':
+                indent_level += 1
+            elif char == '\t':
+                # For tabs, increment by tabstop
+                indent_level = (indent_level // self.tabstop + 1) * self.tabstop
+            else:
+                break
+                
+        return indent_level
+        
+    def apply_transformation(self, cli, document, lineno, source_to_display, tokens):
+        if not tokens:
+            return Transformation(tokens)
+            
+        # Get line text
+        line_text = token_list_to_text(tokens)
+        
+        # Determine indentation level based on mode
+        if self.propagate and line_text.strip() == '':
+            # In Propagate mode, use context for empty lines
+            indent_level = self._get_propagated_indentation(cli, document, lineno, line_text)
+        else:
+            # In Regular mode, just use the actual indentation of the line
+            indent_level = 0
+            for char in line_text:
+                if char == ' ':
+                    indent_level += 1
+                elif char == '\t':
+                    # For tabs, increment by tabstop
+                    indent_level = (indent_level // self.tabstop + 1) * self.tabstop
+                else:
+                    break
+        
+        # If we have no indentation at all, no guides to add
+        if indent_level == 0:
+            return Transformation(tokens)
+            
+        # Explode tokens to be able to modify individual characters
+        tokens = explode_tokens(tokens)
+        
+        # Character to use for indent guides
+        guide_char = self.get_char(cli)
+        
+        # For each indentation level that's a multiple of tabstop (e.g., 4, 8, 12, etc.)
+        # Add an indent guide character, but skip the first column (position 0)
+        for i in range(self.tabstop, indent_level, self.tabstop):
+            if self.propagate and line_text.strip() == '':
+                # For empty lines in Propagate mode
+                # Make sure we have enough tokens for this indentation level
+                while i >= len(tokens):
+                    tokens.append((Token, ' '))
+                # Replace with indent guide
+                tokens[i] = (Token.IndentGuide, guide_char)
+            elif i < len(tokens) and tokens[i][1].isspace():
+                # For non-empty lines or Regular mode, only replace existing whitespace
+                tokens[i] = (Token.IndentGuide, guide_char)
+        
+        return Transformation(tokens)
+
+
+class HighlightWordOccurrencesProcessor(Processor):
+    """
+    Processor that highlights all occurrences of the word under the cursor.
+    
+    :param get_word_at_cursor: A callable that takes a document and returns the word
+                              at the current cursor position as a string.
+    :param min_word_length: Minimum length of the word before highlighting is triggered.
+    """
+    def __init__(self, get_word_at_cursor=None, min_word_length=3, ignore_case=False, skip_keywords=True):
+        self.get_word_at_cursor = get_word_at_cursor or self._default_get_word_at_cursor
+        self.min_word_length = min_word_length
+        self.ignore_case = ignore_case
+        self.skip_keywords = skip_keywords
+        self._positions_cache = SimpleCache(maxsize=8)
+        
+    def _default_get_word_at_cursor(self, document):
+        """
+        Default implementation to get the word at the cursor position.
+        Extracts the word using alphanumeric characters and underscore only.
+        """
+        if document.is_cursor_at_the_end_of_line:
+            # When cursor is at the end of line, check the word before the cursor
+            word, _ = document.find_boundaries_of_current_word(WORD=False, include_trailing_whitespace=False)
+            text = document.text_before_cursor[word:]
+        else:
+            # Get the word under cursor
+            text = document.get_word_under_cursor(WORD=False)
+            
+        # Only allow alphanumeric characters and underscores
+        import re
+        match = re.search(r'[a-zA-Z0-9_]+', text)
+        if match:
+            return match.group(0)
+        return ''
+    
+    def _get_positions_to_highlight(self, document):
+        """
+        Return a list of (row, col) tuples for all occurrences of the word under cursor.
+        """
+        word = self.get_word_at_cursor(document)
+        
+        # Skip short words, empty strings, and Python keywords
+        if not word or len(word) < self.min_word_length:
+            return []
+            
+        # Skip Python keywords if option is enabled
+        if self.skip_keywords and word in keyword.kwlist:
+            return []
+        
+        positions = []
+        
+        # Use regular expression to find all occurrences
+        # Match only when surrounded by word boundaries or non-alphanumeric characters
+        # This ensures we only match complete words
+        pattern = r'(?<!\w)' + re.escape(word) + r'(?!\w)'
+        flags = re.IGNORECASE if self.ignore_case else 0
+        
+        for lineno, line in enumerate(document.lines):
+            for match in re.finditer(pattern, line, flags=flags):
+                # Store positions with their length for highlighting
+                positions.append((lineno, match.start(), len(word)))
+        
+        return positions
+    
+    def apply_transformation(self, cli, document, lineno, source_to_display, tokens):
+        if not tokens:
+            return Transformation(tokens)
+            
+        # Use caching for performance
+        key = (cli.render_counter, document.text, document.cursor_position)
+        positions = self._positions_cache.get(
+            key, lambda: self._get_positions_to_highlight(document))
+        
+        # Skip highlighting if there's only one occurrence
+        if len(positions) <= 1:
+            return Transformation(tokens)
+            
+        # Apply highlighting for this line
+        tokens = explode_tokens(tokens)
+            
+        for row, col, length in positions:
+            if row == lineno:
+                # Transform column position
+                display_col = source_to_display(col)
+                
+                # Highlight each character of the word
+                for i in range(length):
+                    idx = display_col + i
+                    if 0 <= idx < len(tokens):  # Added bounds check for safety
+                        old_token, text = tokens[idx]
+                        # Preserve the existing token, just add WordOccurrences
+                        tokens[idx] = (old_token + (':', ) + Token.WordOccurrences, text)
+        
+        return Transformation(tokens)
+
+
+class ShowWhitespaceProcessor(Processor):
+    """
+    Render whitespace characters visible - spaces appear as middle dots and tabs as arrows.
+    
+    :param get_space_char: Callable that takes a `CommandLineInterface` and returns a
+        character (text of length one) to be used for spaces.
+    :param get_tab_char: Callable that takes a `CommandLineInterface` and returns a
+        character (text of length one) to be used for tabs.
+    :param token: Token to be used for whitespace characters.
+    """
+    def __init__(self, get_space_char=None, get_tab_char=None, token=None):
+        assert get_space_char is None or callable(get_space_char)
+        assert get_tab_char is None or callable(get_tab_char)
+        
+        self.get_space_char = get_space_char or (lambda cli: '·')  # Middle dot for spaces
+        self.get_tab_char = get_tab_char or (lambda cli: '→')      # Right arrow for tabs
+        self.token = token or Token.Whitespace
+        
+    def apply_transformation(self, cli, document, lineno, source_to_display, tokens):
+        if not tokens:
+            return Transformation(tokens)
+        
+        # Explode tokens to be able to modify individual characters
+        tokens = explode_tokens(tokens)
+        
+        # Get characters to use for whitespace
+        space_char = self.get_space_char(cli)
+        tab_char = self.get_tab_char(cli)
+        
+        # Walk through all tokens and replace whitespace with visible characters
+        for i in range(len(tokens)):
+            token, text = tokens[i]
+            
+            # Skip tokens that are already special (like indent guides)
+            if Token.IndentGuide in token:
+                continue
+                
+            # Replace spaces with visible spaces
+            if text == ' ':
+                tokens[i] = (Token.Whitespace.Space, space_char)
+            
+            # Replace tabs with visible tabs
+            elif text == '\t':
+                tokens[i] = (Token.Whitespace.Tab, tab_char)
+        
+        return Transformation(tokens)

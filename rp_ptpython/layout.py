@@ -12,12 +12,18 @@ from rp.prompt_toolkit.layout.dimension import LayoutDimension
 from rp.prompt_toolkit.layout.lexers import SimpleLexer
 from rp.prompt_toolkit.layout.margins import PromptMargin
 from rp.prompt_toolkit.layout.menus import CompletionsMenu, MultiColumnCompletionsMenu
-from rp.prompt_toolkit.layout.processors import ConditionalProcessor, AppendAutoSuggestion, HighlightSearchProcessor, HighlightSelectionProcessor, HighlightMatchingBracketProcessor, Processor, Transformation
+from rp.prompt_toolkit.layout.processors import (
+    ConditionalProcessor, AppendAutoSuggestion, HighlightSearchProcessor, 
+    HighlightSelectionProcessor, HighlightMatchingBracketProcessor, 
+    Processor, Transformation, IndentGuideProcessor, ShowWhitespaceProcessor,
+    HighlightWordOccurrencesProcessor
+)
 from rp.prompt_toolkit.layout.screen import Char
 from rp.prompt_toolkit.layout.toolbars import CompletionsToolbar, ArgToolbar, SearchToolbar, ValidationToolbar, SystemToolbar, TokenListToolbar
 from rp.prompt_toolkit.layout.utils import token_list_width
 from rp.prompt_toolkit.reactive import Integer
 from rp.prompt_toolkit.selection import SelectionType
+from rp.prompt_toolkit.token import Token
 from rp.prompt_toolkit.document import Document
 from rp.prompt_toolkit.selection import SelectionState
 
@@ -634,20 +640,40 @@ def create_layout(python_input,
                 buffer_name=DEFAULT_BUFFER,
                 lexer=lexer,
                 input_processors=[
+                    # Order matters here! We want to ensure brackets are highlighted properly
+                    # First highlight selections 
+                    HighlightSelectionProcessor(),
+                    DisplayMultipleCursors(DEFAULT_BUFFER),
+                    # Then highlight search results
                     ConditionalProcessor(
                         processor=HighlightSearchProcessor(preview_search=True),
                         filter=HasFocus(SEARCH_BUFFER),
                     ),
-                    HighlightSelectionProcessor(),
-                    DisplayMultipleCursors(DEFAULT_BUFFER),
-                    # Show matching parentheses, but only while editing.
+                    # Then highlight matching brackets - this is critical
                     ConditionalProcessor(
                         processor=HighlightMatchingBracketProcessor(chars='[](){}'),
                         filter=HasFocus(DEFAULT_BUFFER) & ~IsDone() &
                             Condition(lambda cli: python_input.highlight_matching_parenthesis)),
+                    # Other processors can come after
                     ConditionalProcessor(
                         processor=AppendAutoSuggestion(),
-                        filter=~IsDone())
+                        filter=~IsDone()),
+                    ConditionalProcessor(
+                        processor=IndentGuideProcessor(tabstop=4, propagate=False),
+                        filter=HasFocus(DEFAULT_BUFFER) & ~IsDone() &
+                            Condition(lambda cli: python_input.indent_guides_mode == 'Regular')),
+                    ConditionalProcessor(
+                        processor=IndentGuideProcessor(tabstop=4, propagate=True),
+                        filter=HasFocus(DEFAULT_BUFFER) & ~IsDone() &
+                            Condition(lambda cli: python_input.indent_guides_mode == 'Propagate')),
+                    ConditionalProcessor(
+                        processor=ShowWhitespaceProcessor(token=Token.Whitespace),
+                        filter=HasFocus(DEFAULT_BUFFER) & ~IsDone() &
+                            Condition(lambda cli: python_input.show_whitespace)),
+                    ConditionalProcessor(
+                        processor=HighlightWordOccurrencesProcessor(min_word_length=1, skip_keywords=True),
+                        filter=HasFocus(DEFAULT_BUFFER) & ~IsDone() &
+                            Condition(lambda cli: python_input.highlight_matching_words))
                 ] + extra_buffer_processors,
                 menu_position=menu_position,
 
@@ -658,6 +684,11 @@ def create_layout(python_input,
             # Scroll offsets. The 1 at the bottom is important to make sure the
             # cursor is never below the "Press [Meta+Enter]" message which is a float.
             scroll_offsets=ScrollOffsets(bottom=1, left=4, right=4),
+            # Highlight cursor line - brackets will be drawn on top of this
+            cursorline=Condition(lambda cli: (python_input.highlight_cursor_line and 
+                                          len(cli.buffers[DEFAULT_BUFFER].document.lines) > 1 and 
+                                          HasFocus(DEFAULT_BUFFER)(cli))),
+            cursorline_token=Token.CursorLine,
             # As long as we're editing, prefer a minimal height of 6.
             get_height=(lambda cli: (
                 None if cli.is_done or python_input.show_exit_confirmation

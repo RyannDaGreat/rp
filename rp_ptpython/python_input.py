@@ -198,6 +198,10 @@ class PythonInput(object):
         self.enable_input_validation=True
         self.enable_auto_suggest=False
         self.enable_mouse_support=False
+        self.indent_guides_mode='Propagate'  # 'Off', 'Regular', or 'Propagate'
+        self.show_whitespace=False  # Show spaces as middle dots and tabs as arrows
+        self.highlight_cursor_line=False  # Highlight the background of the cursor line
+        self.highlight_matching_words=True  # Underline all occurrences of the word under cursor
         self.enable_history_search=False  # When True, like readline, going
         # back in history will filter the
         # history on the records starting
@@ -508,7 +512,24 @@ class PythonInput(object):
                 simple_option(title='Wrap lines',
                               description='Wrap lines instead of scrolling horizontally.',
                               field_name='wrap_lines'),
-                                simple_option(title='History Highlighting',
+                Option(title='Indent guides',
+                       description='Display vertical indent guides. "Regular" shows guides only for existing indentation. "Propagate" also shows guides on empty lines between indented blocks.',
+                       get_current_value=lambda:self.indent_guides_mode,
+                       get_values=lambda:{
+                           'Off': lambda:setattr(self, 'indent_guides_mode', 'Off'),
+                           'Regular': lambda:setattr(self, 'indent_guides_mode', 'Regular'),
+                           'Propagate': lambda:setattr(self, 'indent_guides_mode', 'Propagate'),
+                       }),
+                simple_option(title='Show whitespace',
+                       description='Display spaces as middle dots (·) and tabs as arrows (→).',
+                       field_name='show_whitespace'),
+                simple_option(title='Highlight cursor line',
+                       description='Highlight the background of the line with the cursor.',
+                       field_name='highlight_cursor_line'),
+                simple_option(title='Highlight matching words',
+                       description='Underline all occurrences of the word under the cursor.',
+                       field_name='highlight_matching_words'),
+                simple_option(title='History Highlighting',
                               description='When using F3 (aka History Broswer) to select entries from history,  '
                                           'should we use syntax highlighting? Its pretty, but slow.',
                               field_name='history_syntax_highlighting'),

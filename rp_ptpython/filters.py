@@ -6,6 +6,7 @@ __all__ = (
     'HasSignature',
     'ShowSidebar',
     'ShowDocstring',
+    'ShouldHighlightCursorLine',
 )
 
 

@@ -16763,6 +16763,10 @@ _default_pyin_settings=dict(
     min_bot_space=15,
     top_space=0,
     true_color=False,
+    indent_guides_mode='Regular',
+    highlight_cursor_line=False  ,# Highlight the background of the cursor line
+    highlight_matching_words=True  ,# Underline all occurrences of the word under cursor
+    show_whitespace=True,
 
     session_title='',
 )
@@ -32372,7 +32376,7 @@ def copy_directory(from_path, to_path, *, extract=False, follow_symlinks=False):
 
     import shutil
     #Do the actual copying - extract into to_path
-    shutil.copytree(from_path, to_path, symlinks=follow_symlinks)
+    shutil.copytree(from_path, to_path, symlinks=follow_symlinks, dirs_exist_ok=True)
 
     return to_path
 

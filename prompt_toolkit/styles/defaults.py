@@ -17,18 +17,24 @@ DEFAULT_STYLE_EXTENSIONS = {
     # Highlighting of search matches in document.
     Token.SearchMatch:                            'noinherit reverse',
     Token.SearchMatch.Current:                    'noinherit #ffffff bg:#448844 underline',
+    
+    # Indent guides
+    Token.IndentGuide:                            '#303030',
+    
+    # Whitespace visualization
+    Token.Whitespace:                             '#303030',
 
     # Highlighting of select text in document.
     Token.SelectedText:                           'reverse',
 
     Token.CursorColumn:                           'bg:#dddddd',
-    Token.CursorLine:                             'underline',
+    Token.CursorLine:                             'bg:#2a3438',
     Token.ColorColumn:                            'bg:#ccaacc',
 
-    # Highlighting of matching brackets.
-    Token.MatchingBracket:                        '',
-    Token.MatchingBracket.Other:                  '#000000 bg:#aacccc',
-    Token.MatchingBracket.Cursor:                 '#ff8888 bg:#880000',
+    # Highlighting of matching brackets - must be very vivid to show on top of cursor line
+    Token.MatchingBracket:                        'bold',
+    Token.MatchingBracket.Other:                  '#ffffff bg:#3333ff bold',
+    Token.MatchingBracket.Cursor:                 '#ffffff bg:#ff3333 bold',
 
     Token.MultipleCursors.Cursor:                 '#000000 bg:#ccccaa',
 
@@ -84,6 +90,9 @@ DEFAULT_STYLE_EXTENSIONS = {
     # Trailing whitespace and tabs.
     Token.TrailingWhiteSpace:                     '#999999',
     Token.Tab:                                    '#999999',
+    Token.Whitespace.Space:                       '#252525',  
+    Token.Whitespace.Tab:                         '#252525',
+    Token.WordOccurrences:                        'underline',
 
     # When Control-C has been pressed. Grayed.
     Token.Aborted:                                '#888888',
