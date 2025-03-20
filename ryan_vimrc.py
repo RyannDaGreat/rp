@@ -1067,6 +1067,13 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         "    Plugin 'chrisbra/vim-autoread'
         "    :set noautoread
 
+        "ALIGN:
+            Plugin 'junegunn/vim-easy-align'
+            " Start interactive EasyAlign in visual mode (e.g. vipga)
+            xmap ga <Plug>(EasyAlign)
+            " Start interactive EasyAlign for a motion/text object (e.g. gaip)
+            nmap ga <Plug>(EasyAlign)
+
         "AUTOREAD:
         " https://superuser.com/questions/181377/auto-reloading-a-file-in-vim-as-soon-as-it-changes-on-disk
         set autoread                                                                                                                                                                                    
