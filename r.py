@@ -9336,6 +9336,111 @@ def rebind_globals_to_module(module, *, monkey_patch=False):
     return decorator
 
 
+def globals_macro(func):
+    """
+    Decorator that makes a function's local variables available globally.
+    
+    When a function decorated with @globals_macro is called, all local variables created
+    within the function become available in the global namespace after execution.
+    This includes both function parameters and local variables.
+    
+    The global namespace modification is the primary feature of this decorator,
+    intentionally creating side effects by design. Variables defined inside the
+    function will persist after execution.
+    
+    Example (Normal Execution):
+        >>> # Variables don't exist before using the decorator
+        >>> 'x' in globals(), 'y' in globals(), 'z' in globals()
+        (False, False, False)
+        
+        >>> @globals_macro
+        ... def f(x, y):
+        ...     z = x + y
+        >>> f(1, 2)
+        
+        >>> # Variables now exist in the global scope
+        >>> x, y, z
+        (1, 2, 3)
+    
+    Example (With Error):
+        >>> # Variables are still preserved even when an error occurs
+        >>> @globals_macro
+        ... def f(x, y):
+        ...     1/0  # Division by zero error
+        ...     z = x + y  # This line never executes
+        >>> try:
+        ...     f(100, 200)
+        ... except ZeroDivisionError:
+        ...     print("Error caught")
+        Error caught
+        
+        >>> # Parameters are still preserved in the global scope
+        >>> x, y
+        (100, 200)
+        >>> # But z isn't defined since that line never executed
+        >>> 'z' in globals()
+        False
+    """
+    import inspect
+    import functools
+    import sys
+    import types
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        # Get the caller's globals
+        caller_frame = sys._getframe(1)
+        caller_globals = caller_frame.f_globals
+        
+        # Create a dictionary to store function's locals
+        func_locals = {}
+        
+        # First, bind the arguments to parameter names to ensure parameters are captured
+        sig = inspect.signature(func)
+        bound_args = sig.bind(*args, **kwargs)
+        bound_args.apply_defaults()
+        func_locals.update(bound_args.arguments)
+        
+        # Set up trace function to capture variables on each line
+        def trace_func(frame, event, arg):
+            # We're only interested in the function we're decorating
+            if frame.f_code == func.__code__:
+                # Copy all variables from the frame's locals to our dictionary
+                for var_name, value in frame.f_locals.items():
+                    func_locals[var_name] = value
+                # Keep tracing this function
+                return trace_func
+            # Don't trace other functions
+            return None
+            
+        # Set tracing and execute the function
+        original_trace = sys.gettrace()
+        sys.settrace(trace_func)
+        
+        try:
+            # Call the function and get its result
+            result = func(*args, **kwargs)
+            return result
+        except Exception:
+            # Capture the exception info
+            exc_info = sys.exc_info()
+            # Will re-raise after transferring variables
+            raise_later = True
+        finally:
+            # Restore the original trace function
+            sys.settrace(original_trace)
+            
+            # Copy the captured locals to the caller's globals
+            for name, value in func_locals.items():
+                caller_globals[name] = value
+                
+            # If there was an exception, re-raise it
+            if 'raise_later' in locals() and raise_later:
+                raise exc_info[1].with_traceback(exc_info[2])
+    
+    return wrapper
+
+
 def _filter_dict_via_fzf(input_dict,*,preview=None):
     """Uses fzf to select a subset of a dict and returns that dict."""
     #Refactored using GPT4 from a mess: https://chat.openai.com/share/66251028-75eb-4c55-960c-1e7477e34060
