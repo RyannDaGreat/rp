@@ -9339,6 +9339,8 @@ def rebind_globals_to_module(module, *, monkey_patch=False):
 def globals_macro(func):
     """
     Decorator that makes a function's local variables available globally.
+
+    Useful for making reusable cells in a Jupyter notebook.
     
     When a function decorated with @globals_macro is called, all local variables created
     within the function become available in the global namespace after execution.
@@ -9380,6 +9382,44 @@ def globals_macro(func):
         >>> # But z isn't defined since that line never executed
         >>> 'z' in globals()
         False
+
+    Example:
+        >>> @globals_macro
+        ... def part_0a():
+        ...     url = "https://www.pupsgonewild.com/s/cc_images/cache_7853498.jpg"
+        ... 
+        ... 
+        ... @globals_macro
+        ... def part_0b():
+        ...     url = "https://mortenhannemose.github.io/assets/img/Lena_1024.png"
+        ... 
+        ... 
+        ... @globals_macro
+        ... def part_0c():
+        ...     url = "https://res.cloudinary.com/lancaster-puppies-laravel/image/upload/$date_!12%252F26%252F2024!/t_lpr-full-transform/t_lpr-date-transform/r_16/v1/default/eoxl4syekwivgrdgze5u?_a=AJAJZWI0"
+        ... 
+        ... 
+        ... @globals_macro
+        ... def part_1():
+        ...     image = load_image(url)
+        ... 
+        ... 
+        ... @globals_macro
+        ... def part_2():
+        ...     images = []
+        ...     for part_0 in [part_0a, part_0b, part_0c]:
+        ...         part_0()
+        ...         part_1()
+        ...         images.append(image)
+        ... 
+        ... 
+        ... @globals_macro
+        ... def part_3():
+        ...     part_2()
+        ...     display_image(horizontally_concatenated_images(images))
+        ... 
+        ... 
+        ... part_3()
     """
     import inspect
     import functools
@@ -35048,6 +35088,89 @@ def get_scope(frames_back=0):
 
     return {'locals':frame.f_locals, 'globals':frame.f_globals}[scope]
 
+
+def _get_visible_scope(frames_back=0):
+    """
+    Treat the output as read-only! Will include all variables that can be seen from that point.
+
+    Should be an improved form of get_scope, but to avoid breaking other code (just in case), I'm making this a private helper for rp internals.
+    
+    Get the scope of n levels up from the current stack frame,
+    including all globals, locals, and variables from enclosing scopes.
+    
+    Parameters:
+    frames_back (int): How many frames to go up in the stack. 0 means the calling function's frame.
+    
+    Returns:
+    dict: A dictionary with all variables from globals, locals, and enclosing scopes.
+
+    EXAMPLE:
+        >>> import rp
+        ... y=456
+        ... def f():
+        ...     x=123
+        ...     def g():
+        ...         print(rp.repr_kwargs_dict(rp.r._get_visible_scope()))
+        ...     g()
+        ... f()
+        dict(
+             __name__        = '__main__',
+             __doc__         = None,
+             __package__     = None,
+             __loader__      = <_frozen_importlib_external.SourceFileLoader object at 0x104e90530>,
+             __spec__        = None,
+             __annotations__ = {},
+             __builtins__    = <module 'builtins' (built-in)>,
+             __file__        = '/Users/burgert/CleanCode/Sandbox/test.py',
+             __cached__      = None,
+             rp              = <module 'rp' from '/Users/burgert/miniconda3/lib/python3.12/site-packages/rp/__init__.py'>,
+             y               = 456,
+             f               = <function f at 0x104e6e340>,
+             x               = 123,
+             g               = <function f.<locals>.g at 0x104ef5760>,
+        )
+
+    """
+    assert isinstance(frames_back, int), 'frames_back must be an integer'
+    assert frames_back >= 0, 'frames_back cannot be negative'
+
+    import inspect
+
+    frame = inspect.currentframe()
+    frame = frame.f_back  # Don't return the scope for this function
+    for _ in range(frames_back):
+        frame = frame.f_back
+        if frame is None:
+            break
+
+    # Create result dict with both globals and locals
+    result = {}
+    result.update(frame.f_globals)
+    result.update(frame.f_locals)
+    
+    # Check for variables in enclosing scopes
+    current = frame
+    # Handle freevars (variables from enclosing scopes)
+    if hasattr(current, 'f_code') and hasattr(current.f_code, 'co_freevars'):
+        # Get a list of all outer frames
+        frames = []
+        outer = current.f_back
+        while outer:
+            frames.append(outer)
+            outer = outer.f_back
+        
+        # Process each frame from innermost to outermost
+        for outer_frame in frames:
+            if outer_frame.f_locals:
+                # Check each local in the outer frame
+                for name, value in outer_frame.f_locals.items():
+                    # Add it if it's not already in our result
+                    if name not in result:
+                        result[name] = value
+    
+    return result
+
+
 _all_module_names=set()
 def get_all_importable_module_names(use_cache=True):
     """
@@ -40804,7 +40927,7 @@ def validate_tensor_shapes(*, verbose=False, **kwargs):
         return ','.join(map(str, shape))
 
     # Get the caller's scope to find tensor variables
-    caller_scope = get_scope(1)
+    caller_scope = _get_visible_scope(1)
     
     # Separate dimension constraints from tensor form strings
     dim_constraints = {}
