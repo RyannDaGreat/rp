@@ -685,10 +685,15 @@ def create_layout(python_input,
             # cursor is never below the "Press [Meta+Enter]" message which is a float.
             scroll_offsets=ScrollOffsets(bottom=1, left=4, right=4),
             # Highlight cursor line - brackets will be drawn on top of this
-            cursorline=Condition(lambda cli: (python_input.highlight_cursor_line and 
-                                          len(cli.buffers[DEFAULT_BUFFER].document.lines) > 1 and 
-                                          HasFocus(DEFAULT_BUFFER)(cli))),
+            # Now using same conditions as other processors like HighlightWordOccurrencesProcessor
+            cursorline=Condition(lambda cli: python_input.highlight_cursor_line) & 
+                       HasFocus(DEFAULT_BUFFER) & ~IsDone() &
+                       Condition(lambda cli: len(cli.buffers[DEFAULT_BUFFER].document.lines) > 1),
             cursorline_token=Token.CursorLine,
+            # Highlight cursor column - same conditions as cursor line
+            cursorcolumn=Condition(lambda cli: python_input.highlight_cursor_column) & 
+                      HasFocus(DEFAULT_BUFFER) & ~IsDone(),
+            cursorcolumn_token=Token.CursorColumn,
             # As long as we're editing, prefer a minimal height of 6.
             get_height=(lambda cli: (
                 None if cli.is_done or python_input.show_exit_confirmation

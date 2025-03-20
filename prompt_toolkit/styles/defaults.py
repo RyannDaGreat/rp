@@ -27,7 +27,7 @@ DEFAULT_STYLE_EXTENSIONS = {
     # Highlighting of select text in document.
     Token.SelectedText:                           'reverse',
 
-    Token.CursorColumn:                           'bg:#dddddd',
+    Token.CursorColumn:                           'bg:#3c464a',
     Token.CursorLine:                             'bg:#2a3438',
     Token.ColorColumn:                            'bg:#ccaacc',
 

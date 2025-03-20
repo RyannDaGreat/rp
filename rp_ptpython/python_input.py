@@ -201,6 +201,7 @@ class PythonInput(object):
         self.indent_guides_mode='Propagate'  # 'Off', 'Regular', or 'Propagate'
         self.show_whitespace=False  # Show spaces as middle dots and tabs as arrows
         self.highlight_cursor_line=False  # Highlight the background of the cursor line
+        self.highlight_cursor_column=False  # Highlight the background of the cursor column
         self.highlight_matching_words=True  # Underline all occurrences of the word under cursor
         self.enable_history_search=False  # When True, like readline, going
         # back in history will filter the
@@ -526,6 +527,9 @@ class PythonInput(object):
                 simple_option(title='Highlight cursor line',
                        description='Highlight the background of the line with the cursor.',
                        field_name='highlight_cursor_line'),
+                simple_option(title='Highlight cursor column',
+                       description='Highlight the background of the column with the cursor.',
+                       field_name='highlight_cursor_column'),
                 simple_option(title='Highlight matching words',
                        description='Underline all occurrences of the word under the cursor.',
                        field_name='highlight_matching_words'),

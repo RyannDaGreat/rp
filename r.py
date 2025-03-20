@@ -754,6 +754,77 @@ def ConditionalContext(condition, context_manager, *args, **kwargs):
             yield
 
     return wrapper()
+
+class PrintBeforeAfter:
+    """
+
+    A context manager that prints the value of an expression or callable before and after execution.
+
+    Args:
+        target: Either a string representing an expression or a callable function.
+
+    Example:
+        >>> x = 10
+        ... with PrintBeforeAfter("x"):
+        ...     x += 5
+        ...
+        ... def get_value():
+        ...     return x * 2
+        ...
+        ... with PrintBeforeAfter(get_value):
+        ...     x *= 3
+        --> BEFORE: x  ==  10
+        <-- AFTER:  x  ==  15
+        --> BEFORE: 30
+        <-- AFTER:  90
+
+    Example:
+        >>> with rp.PrintBeforeAfter('transformer.patch_embed.proj'):
+        ...     transformer.patch_embed.proj = rp.libs.torch_tools.resize_conv2d_channels(
+        ...         transformer.patch_embed.proj,
+        ...         in_channels=64,
+        ...     )
+        --> BEFORE: transformer.patch_embed.proj  ==  Conv2d(32, 3072, kernel_size=(2, 2), stride=(2, 2))
+        <-- AFTER:  transformer.patch_embed.proj  ==  Conv2d(64, 3072, kernel_size=(2, 2), stride=(2, 2))
+
+    """
+
+    def __init__(self, target):
+        self._scope = get_scope(frames_back=1)
+        self._target = target
+
+        if not (isinstance(target, str) or callable(target)):
+            raise AssertionError("Target must be a string or callable")
+
+    def _get_value(self):
+        if isinstance(self._target, str):
+            out = exeval(self._target, self._scope)
+        elif callable(self._target):
+            out = self._target()
+        else:
+            assert False
+        return str(out)
+
+    def _get_name(self):
+        if isinstance(self._target, str):
+            return self._target + "  ==  "
+        elif callable(self._target):
+            return ""
+        else:
+            assert False
+
+    def __enter__(self):
+        fansi_print(
+            " --> BEFORE: " + self._get_name() + self._get_value(),
+            "bold green",
+        )
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        fansi_print(
+            " <-- AFTER:  " + self._get_name() + self._get_value(),
+            "bold green",
+        )
+
         
 #THIS IS DEPRECATED IN FAVOR OF get_all_paths
 # def get_all_file_names(file_name_ending: str = '',file_name_must_contain: str = '',folder_path: str = get_current_directory(),show_debug_narrative: bool = False):
@@ -16765,6 +16836,7 @@ _default_pyin_settings=dict(
     true_color=False,
     indent_guides_mode='Regular',
     highlight_cursor_line=False  ,# Highlight the background of the cursor line
+    highlight_cursor_column=False ,# Highlight the background of the cursor column
     highlight_matching_words=True  ,# Underline all occurrences of the word under cursor
     show_whitespace=True,
 
@@ -34400,7 +34472,13 @@ def connected_to_internet():
     try:
         # connect to the host -- tells us if the host is actually
         # reachable
-        socket.create_connection(("www.google.com", 80))
+        url_to_try = 'www.google.com'
+
+        if 'XM_XID' in os.environ:
+            #If we're in Google's internal XCloud, we should check a non-google URL
+            url_to_try = 'https://www.microsoft.com'
+
+        socket.create_connection((url_to_try, 80))
         return True
     except OSError:
         pass

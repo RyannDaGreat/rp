@@ -774,6 +774,8 @@ def generate_style(python_style, ui_style):
     
     # Set cursor line background color to RGB(42, 52, 56) - slightly lighter for better contrast
     styles[Token.CursorLine] = 'bg:#2a3438'
+    # Set cursor column background color to RGB(60, 70, 74) - slightly darker than cursor line
+    styles[Token.CursorColumn] = 'bg:#3c464a'
 
     return style_from_dict(styles)
 
@@ -2808,7 +2810,7 @@ dracula={
     Token.Comment.PreprocFile                          : '#6272a4                           ',
     Token.Comment.Single                               : '#6272a4                           ',
     Token.Comment.Special                              : '#6272a4                           ',
-    Token.CursorColumn                                 : '           bg:#dddddd             ',
+    Token.CursorColumn                                 : '           bg:#3c464a             ',
     Token.CursorLine                                   : '                         bg:#2a3438',
     Token.Digraph                                      : '#4444ff                           ',
     Token.Docstring                                    : '#84bbc9                           ',
