@@ -94,7 +94,37 @@ def is_iterable_token(token_name):
 
     
 
+def edit_event_buffer_in_external(event,cmd):
+        buffer=event.cli.current_buffer
+        document=buffer.document
+        text=buffer.document.text   
+        from rp import text_file_to_string,temporary_file_path,string_to_text_file
+        import subprocess
 
+        path=temporary_file_path()+'.py'
+        string_to_text_file(path,text)
+
+        try:
+            subprocess.call([cmd,path])
+
+            text=text_file_to_string(path)
+
+            from rp import delete_file
+            delete_file(path)
+
+            if text!='':
+                #That means the user saved the file
+                buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+
+            event.cli.renderer.clear()#Refresh the screen
+
+        except Exception as e:
+            buffer.insert_text('#'+str(e))
+
+
+
+def edit_event_buffer_in_nano(event): edit_event_buffer_in_external(event,'nano')
+def edit_event_buffer_in_micro(event): edit_event_buffer_in_external(event,'micro')
 def edit_event_buffer_in_vim(event):
         buffer=event.cli.current_buffer
         document=buffer.document
@@ -2706,6 +2736,8 @@ def load_python_bindings(python_input):
                                          '\\wco':'web_copy',
                                          '\\ed':'editor',
                                          '\\vi':'vim',
+                                         '\\mi':'micro',
+                                         '\\na':'nano',
                                          '\\al':'align_lines',
                                          '\\ac':'align_char',
                                          '\\sw':'strip_whitespace',
@@ -3259,6 +3291,10 @@ def load_python_bindings(python_input):
                                         buffer.insert_text("#ERROR: Cannot import 'editor'. Try pip install python-editor")
                                 if header=='vim':
                                     edit_event_buffer_in_vim(event)
+                                if header=='micro':
+                                    edit_event_buffer_in_micro(event)
+                                if header=='nano':
+                                    edit_event_buffer_in_nano(event)
                                 if header=='save' or header=='string ans':#header=='save' because of the conflict of \sa in the dict
                                     buffer.insert_text(repr(str(get_ans())))
                                 if header=='ans':

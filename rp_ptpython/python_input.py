@@ -234,6 +234,12 @@ class PythonInput(object):
         self.ui_styles=get_all_ui_styles()
         self._current_code_style_name='default'
         self._current_ui_style_name='default'
+        self.code_invert_colors=False
+        self.code_invert_brightness=False
+        self.ui_invert_colors=False
+        self.ui_invert_brightness=False
+        self.code_hue_shift=0  # Hue shift for code elements (0-355 degrees in 5-degree increments)
+        self.ui_hue_shift=0    # Hue shift for UI elements (0-355 degrees in 5-degree increments)
 
         if is_windows():
             self._current_code_style_name='win32'
@@ -374,7 +380,20 @@ class PythonInput(object):
         renderer receives a new style class, he will redraw everything.)
         """
         return generate_style(self.code_styles[self._current_code_style_name],
-                              self.ui_styles[self._current_ui_style_name])
+                              self.ui_styles[self._current_ui_style_name],
+                              code_invert_colors=self.code_invert_colors,
+                              code_invert_brightness=self.code_invert_brightness,
+                              ui_invert_colors=self.ui_invert_colors,
+                              ui_invert_brightness=self.ui_invert_brightness,
+                              code_hue_shift=self.code_hue_shift,
+                              ui_hue_shift=self.ui_hue_shift)
+                              
+    def _update_style(self):
+        """
+        Update the current style. Used when toggling the invert_colors option.
+        """
+        self._current_style = self._generate_style()
+        return True
     def _create_options(self):
         """
         Create a list of `Option` instances for the options sidebar.
@@ -825,6 +844,51 @@ class PythonInput(object):
                        get_values=lambda:dict(
                            (name,partial(self.use_ui_colorscheme,name)) for name in self.ui_styles)
                        ),
+                Option(title='Invert Code Colors',
+                       description='Invert foreground and background colors for code syntax highlighting.',
+                       get_current_value=lambda: ['off', 'on'][self.code_invert_colors],
+                       get_values=lambda:{
+                           'on': lambda: setattr(self, 'code_invert_colors', True) or self._update_style(),
+                           'off': lambda: setattr(self, 'code_invert_colors', False) or self._update_style(),
+                       }),
+                Option(title='Invert Code Brightness',
+                       description='Invert brightness of code syntax highlighting while preserving color hue.',
+                       get_current_value=lambda: ['off', 'on'][self.code_invert_brightness],
+                       get_values=lambda:{
+                           'on': lambda: setattr(self, 'code_invert_brightness', True) or self._update_style(),
+                           'off': lambda: setattr(self, 'code_invert_brightness', False) or self._update_style(),
+                       }),
+                Option(title='Invert UI Colors',
+                       description='Invert foreground and background colors for UI elements.',
+                       is_visible=lambda: getattr(self, 'show_all_options', False),
+                       get_current_value=lambda: ['off', 'on'][self.ui_invert_colors],
+                       get_values=lambda:{
+                           'on': lambda: setattr(self, 'ui_invert_colors', True) or self._update_style(),
+                           'off': lambda: setattr(self, 'ui_invert_colors', False) or self._update_style(),
+                       }),
+                Option(title='Invert UI Brightness',
+                       description='Invert brightness of UI elements while preserving color hue.',
+                       is_visible=lambda: getattr(self, 'show_all_options', False),
+                       get_current_value=lambda: ['off', 'on'][self.ui_invert_brightness],
+                       get_values=lambda:{
+                           'on': lambda: setattr(self, 'ui_invert_brightness', True) or self._update_style(),
+                           'off': lambda: setattr(self, 'ui_invert_brightness', False) or self._update_style(),
+                       }),
+                Option(title='Code Hue Shift',
+                       description='Shift the hue of code syntax highlighting by the specified number of degrees.',
+                       get_current_value=lambda: '{:03d}'.format(self.code_hue_shift),
+                       get_values=lambda: dict(
+                           ('{:03d}'.format(degrees), lambda degrees=degrees: setattr(self, 'code_hue_shift', degrees) or self._update_style())
+                           for degrees in range(0, 360, 5)
+                       )),
+                Option(title='UI Hue Shift',
+                       description='Shift the hue of UI elements by the specified number of degrees.',
+                       is_visible=lambda: getattr(self, 'show_all_options', False),
+                       get_current_value=lambda: '{:03d}'.format(self.ui_hue_shift),
+                       get_values=lambda: dict(
+                           ('{:03d}'.format(degrees), lambda degrees=degrees: setattr(self, 'ui_hue_shift', degrees) or self._update_style())
+                           for degrees in range(0, 360, 5)
+                       )),
                 simple_option(title='True color (24 bit)',
                         # is_visible=lambda:getattr(self,'show_all_options',True),
 

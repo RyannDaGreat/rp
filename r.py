@@ -9336,13 +9336,14 @@ def rebind_globals_to_module(module, *, monkey_patch=False):
     return decorator
 
 
-def globals_macro(func):
+def globalize_locals(func):
     """
-    Decorator that makes a function's local variables available globally.
+    Decorator that makes a function's local variables available globally,
+    allowing a function to effectively act as a macro.
 
     Useful for making reusable cells in a Jupyter notebook.
     
-    When a function decorated with @globals_macro is called, all local variables created
+    When a function decorated with @globalize_locals is called, all local variables created
     within the function become available in the global namespace after execution.
     This includes both function parameters and local variables.
     
@@ -9355,7 +9356,7 @@ def globals_macro(func):
         >>> 'x' in globals(), 'y' in globals(), 'z' in globals()
         (False, False, False)
         
-        >>> @globals_macro
+        >>> @globalize_locals
         ... def f(x, y):
         ...     z = x + y
         >>> f(1, 2)
@@ -9366,7 +9367,7 @@ def globals_macro(func):
     
     Example (With Error):
         >>> # Variables are still preserved even when an error occurs
-        >>> @globals_macro
+        >>> @globalize_locals
         ... def f(x, y):
         ...     1/0  # Division by zero error
         ...     z = x + y  # This line never executes
@@ -9384,27 +9385,27 @@ def globals_macro(func):
         False
 
     Example:
-        >>> @globals_macro
+        >>> @globalize_locals
         ... def part_0a():
         ...     url = "https://www.pupsgonewild.com/s/cc_images/cache_7853498.jpg"
         ... 
         ... 
-        ... @globals_macro
+        ... @globalize_locals
         ... def part_0b():
         ...     url = "https://mortenhannemose.github.io/assets/img/Lena_1024.png"
         ... 
         ... 
-        ... @globals_macro
+        ... @globalize_locals
         ... def part_0c():
         ...     url = "https://res.cloudinary.com/lancaster-puppies-laravel/image/upload/$date_!12%252F26%252F2024!/t_lpr-full-transform/t_lpr-date-transform/r_16/v1/default/eoxl4syekwivgrdgze5u?_a=AJAJZWI0"
         ... 
         ... 
-        ... @globals_macro
+        ... @globalize_locals
         ... def part_1():
         ...     image = load_image(url)
         ... 
         ... 
-        ... @globals_macro
+        ... @globalize_locals
         ... def part_2():
         ...     images = []
         ...     for part_0 in [part_0a, part_0b, part_0c]:
@@ -9413,7 +9414,7 @@ def globals_macro(func):
         ...         images.append(image)
         ... 
         ... 
-        ... @globals_macro
+        ... @globalize_locals
         ... def part_3():
         ...     part_2()
         ...     display_image(horizontally_concatenated_images(images))
@@ -16984,6 +16985,14 @@ _default_pyin_settings=dict(
     highlight_cursor_column=False ,# Highlight the background of the cursor column
     highlight_matching_words=True  ,# Underline all occurrences of the word under cursor
     show_whitespace=True,
+    
+    # Color customization settings
+    code_invert_colors=False,     # Invert colors for code syntax highlighting
+    code_invert_brightness=False, # Invert brightness for code syntax highlighting
+    ui_invert_colors=False,       # Invert colors for UI elements (hidden by default)
+    ui_invert_brightness=False,   # Invert brightness for UI elements (hidden by default)
+    code_hue_shift=0,             # Hue shift for code syntax highlighting (0-355 degrees in 5-degree increments)
+    ui_hue_shift=0,               # Hue shift for UI elements (0-355 degrees in 5-degree increments, hidden by default)
 
     session_title='',
 )
@@ -20036,6 +20045,7 @@ def pseudo_terminal(
         IGN       $r._write_default_gitignore()
         IGNORE    $r._write_default_gitignore()
         GIG       $r._write_default_gitignore()
+        GPL !git pull
 
         PPTA $r._convert_powerpoint_file(ans)
         PPT $r._convert_powerpoint_file($input_select_file(file_extension_filter='pptx'),message='Select a powerpoint file')
@@ -27321,6 +27331,9 @@ def as_rgba_float_color(color,*,clamp=True):
     assert len(color) == 4 
     if clamp:
         color = tuple(max(0,min(1,x)) for x in color)
+
+    color = tuple(map(float,color)) #Make sure they're all floats! 
+
     return color
 
 def as_rgb_float_color(color, clamp=True):
@@ -29784,8 +29797,8 @@ def byte_color_to_float_color(byte_color):
 def float_color_to_byte_color(float_color):
     return tuple(round(clamp(x*255,0,255)) for x in float_color)
 
-def float_color_to_hex_color(float_color):
-    return byte_color_to_hex_color(float_color_to_byte_color(float_color))
+def float_color_to_hex_color(float_color, hashtag=True):
+    return byte_color_to_hex_color(float_color_to_byte_color(float_color),hashtag=hashtag)
 
 _altbw_flipflop=False
 def _altbw():
@@ -38736,14 +38749,36 @@ def get_sinusoidal_positional_encodings(length: int, dim: int, scale: float = 10
 #    return _visualize_pytorch_model_via_torchviz(model,input_shape=input_shape,example_input=example_input)
 
 def inverted_color(color):
-    if   is_binary_color(color):
-        return tuple(not x for x in color)
-    elif is_byte_color(color):
-        return tuple(255-x for x in color)
-    elif is_float_color(color):
-        return tuple(1-x for x in color)
+    """
+        >>> inverted_color('#00FF00')      --->  #FF00FF               #If given color is in hex form, keep the hashtag
+        >>> inverted_color('00FF00')       --->  FF00FF                #Or if given color is hex with no hashtag, dont include hashtag
+        >>> inverted_color((255,0,0))      --->  (0, 255, 255)         #Works with byte colors
+        >>> inverted_color((1,0,0))        --->  (254, 255, 255)       #If colors are ints, are treated as bytes
+        >>> inverted_color((1.0,0,0))      --->  (0.0, 1, 1)           #Float colors treated differently
+        >>> inverted_color((1.,0.,0.,0.))  --->  (0.0, 1.0, 1.0, 0.0)  #Alpha is not inverted, it is kept the same
+        >>> inverted_color((1.,0.,0.,1.))  --->  (0.0, 1.0, 1.0, 1.0)  #(ditto to above)
+        >>> inverted_color('green')        --->  (1.0, 0.0, 1.0, 1.0)  #If a string is given, compatiable with as_rgba_float_color, return a float color
+    """
+    if   is_binary_color(color): return tuple(not x for x in color[:3])+tuple(color[3:])
+    elif is_byte_color(color)  : return tuple(255-x for x in color[:3])+tuple(color[3:])
+    elif is_float_color(color) : return tuple(1-x   for x in color[:3])+tuple(color[3:])
+    elif isinstance(color, str):
+        hashtag = color.startswith('#')
+        if hashtag:
+            color = color[1:]
+
+        is_hex = len(color) == 6 and set(color) <= set("0123456789abcdefABCDEF")
+
+        output = inverted_color(
+            as_rgba_float_color(color),
+        )
+
+        if is_hex:
+            output = float_color_to_hex_color(output, hashtag=hashtag)
+
+        return output
     else:
-        raise TypeError('Unknown color format')
+        raise TypeError('Unknown color format: '+repr(color))
 
 def inverted_image(image,invert_alpha=False):
     """ Inverts the colors of an image. By default, it doesn't touch the alpha channel (if one exists) """
