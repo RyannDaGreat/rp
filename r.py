@@ -16993,6 +16993,14 @@ _default_pyin_settings=dict(
     ui_invert_brightness=False,   # Invert brightness for UI elements (hidden by default)
     code_hue_shift=0,             # Hue shift for code syntax highlighting (0-355 degrees in 5-degree increments)
     ui_hue_shift=0,               # Hue shift for UI elements (0-355 degrees in 5-degree increments, hidden by default)
+    code_min_brightness=0.0,      # Minimum brightness for code elements (0.0-1.0)
+    code_max_brightness=1.0,      # Maximum brightness for code elements (0.0-1.0)
+    ui_min_brightness=0.0,        # Minimum brightness for UI elements (0.0-1.0)
+    ui_max_brightness=1.0,        # Maximum brightness for UI elements (0.0-1.0)
+    code_min_saturation=0.0,      # Minimum saturation for code elements (0.0-1.0)
+    code_max_saturation=1.0,      # Maximum saturation for code elements (0.0-1.0)
+    ui_min_saturation=0.0,        # Minimum saturation for UI elements (0.0-1.0)
+    ui_max_saturation=1.0,        # Maximum saturation for UI elements (0.0-1.0)
 
     session_title='',
 )

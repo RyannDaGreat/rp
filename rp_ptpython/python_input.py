@@ -240,6 +240,14 @@ class PythonInput(object):
         self.ui_invert_brightness=False
         self.code_hue_shift=0  # Hue shift for code elements (0-355 degrees in 5-degree increments)
         self.ui_hue_shift=0    # Hue shift for UI elements (0-355 degrees in 5-degree increments)
+        self.code_min_brightness=0.0  # Minimum brightness for code elements (0.0-1.0)
+        self.code_max_brightness=1.0  # Maximum brightness for code elements (0.0-1.0)
+        self.ui_min_brightness=0.0    # Minimum brightness for UI elements (0.0-1.0)
+        self.ui_max_brightness=1.0    # Maximum brightness for UI elements (0.0-1.0)
+        self.code_min_saturation=0.0  # Minimum saturation for code elements (0.0-1.0)
+        self.code_max_saturation=1.0  # Maximum saturation for code elements (0.0-1.0)
+        self.ui_min_saturation=0.0    # Minimum saturation for UI elements (0.0-1.0)
+        self.ui_max_saturation=1.0    # Maximum saturation for UI elements (0.0-1.0)
 
         if is_windows():
             self._current_code_style_name='win32'
@@ -386,7 +394,15 @@ class PythonInput(object):
                               ui_invert_colors=self.ui_invert_colors,
                               ui_invert_brightness=self.ui_invert_brightness,
                               code_hue_shift=self.code_hue_shift,
-                              ui_hue_shift=self.ui_hue_shift)
+                              ui_hue_shift=self.ui_hue_shift,
+                              code_min_brightness=self.code_min_brightness,
+                              code_max_brightness=self.code_max_brightness,
+                              ui_min_brightness=self.ui_min_brightness,
+                              ui_max_brightness=self.ui_max_brightness,
+                              code_min_saturation=self.code_min_saturation,
+                              code_max_saturation=self.code_max_saturation,
+                              ui_min_saturation=self.ui_min_saturation,
+                              ui_max_saturation=self.ui_max_saturation)
                               
     def _update_style(self):
         """
@@ -832,20 +848,16 @@ class PythonInput(object):
                        }),
             ]),
             OptionCategory('Color Themes',[
+                # Code-related options
                 Option(title='Code',
                        description='Color scheme to use for the Python code.',
-                       get_current_value=lambda:self._current_code_style_name,
+                       get_current_value=lambda:self._current_code_style_name[:15],
                        get_values=lambda:dict(
                            (name,partial(self.use_code_colorscheme,name)) for name in self.code_styles)
                        ),
-                Option(title='User Interface',
-                       description='Color scheme to use for the user interface.',
-                       get_current_value=lambda:self._current_ui_style_name,
-                       get_values=lambda:dict(
-                           (name,partial(self.use_ui_colorscheme,name)) for name in self.ui_styles)
-                       ),
                 Option(title='Invert Code Colors',
                        description='Invert foreground and background colors for code syntax highlighting.',
+                       is_visible=lambda: getattr(self, 'show_all_options', False),
                        get_current_value=lambda: ['off', 'on'][self.code_invert_colors],
                        get_values=lambda:{
                            'on': lambda: setattr(self, 'code_invert_colors', True) or self._update_style(),
@@ -853,11 +865,60 @@ class PythonInput(object):
                        }),
                 Option(title='Invert Code Brightness',
                        description='Invert brightness of code syntax highlighting while preserving color hue.',
+                       is_visible=lambda: getattr(self, 'show_all_options', False),
                        get_current_value=lambda: ['off', 'on'][self.code_invert_brightness],
                        get_values=lambda:{
                            'on': lambda: setattr(self, 'code_invert_brightness', True) or self._update_style(),
                            'off': lambda: setattr(self, 'code_invert_brightness', False) or self._update_style(),
                        }),
+                Option(title='Code Hue Shift',
+                       description='Shift the hue of code syntax highlighting by the specified number of degrees.',
+                       is_visible=lambda: getattr(self, 'show_all_options', False),
+                       get_current_value=lambda: '{:03d}'.format(self.code_hue_shift),
+                       get_values=lambda: dict(
+                           ('{:03d}'.format(degrees), lambda degrees=degrees: setattr(self, 'code_hue_shift', degrees) or self._update_style())
+                           for degrees in range(0, 360, 5)
+                       )),
+                Option(title='Code Min Brightness',
+                       description='Set the minimum brightness level for code elements.',
+                       is_visible=lambda: getattr(self, 'show_all_options', False),
+                       get_current_value=lambda: '{:.1f}'.format(self.code_min_brightness),
+                       get_values=lambda: dict(
+                           ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'code_min_brightness', value/10) or self._update_style())
+                           for value in range(0, 11)
+                       )),
+                Option(title='Code Max Brightness',
+                       description='Set the maximum brightness level for code elements.',
+                       is_visible=lambda: getattr(self, 'show_all_options', False),
+                       get_current_value=lambda: '{:.1f}'.format(self.code_max_brightness),
+                       get_values=lambda: dict(
+                           ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'code_max_brightness', value/10) or self._update_style())
+                           for value in range(0, 11)
+                       )),
+                Option(title='Code Min Saturation',
+                       description='Set the minimum saturation level for code elements.',
+                       is_visible=lambda: getattr(self, 'show_all_options', False),
+                       get_current_value=lambda: '{:.1f}'.format(self.code_min_saturation),
+                       get_values=lambda: dict(
+                           ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'code_min_saturation', value/10) or self._update_style())
+                           for value in range(0, 11)
+                       )),
+                Option(title='Code Max Saturation',
+                       description='Set the maximum saturation level for code elements.',
+                       is_visible=lambda: getattr(self, 'show_all_options', False),
+                       get_current_value=lambda: '{:.1f}'.format(self.code_max_saturation),
+                       get_values=lambda: dict(
+                           ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'code_max_saturation', value/10) or self._update_style())
+                           for value in range(0, 11)
+                       )),
+                
+                # UI-related options
+                Option(title='User Interface',
+                       description='Color scheme to use for the user interface.',
+                       get_current_value=lambda:self._current_ui_style_name[:15],
+                       get_values=lambda:dict(
+                           (name,partial(self.use_ui_colorscheme,name)) for name in self.ui_styles)
+                       ),
                 Option(title='Invert UI Colors',
                        description='Invert foreground and background colors for UI elements.',
                        is_visible=lambda: getattr(self, 'show_all_options', False),
@@ -874,13 +935,6 @@ class PythonInput(object):
                            'on': lambda: setattr(self, 'ui_invert_brightness', True) or self._update_style(),
                            'off': lambda: setattr(self, 'ui_invert_brightness', False) or self._update_style(),
                        }),
-                Option(title='Code Hue Shift',
-                       description='Shift the hue of code syntax highlighting by the specified number of degrees.',
-                       get_current_value=lambda: '{:03d}'.format(self.code_hue_shift),
-                       get_values=lambda: dict(
-                           ('{:03d}'.format(degrees), lambda degrees=degrees: setattr(self, 'code_hue_shift', degrees) or self._update_style())
-                           for degrees in range(0, 360, 5)
-                       )),
                 Option(title='UI Hue Shift',
                        description='Shift the hue of UI elements by the specified number of degrees.',
                        is_visible=lambda: getattr(self, 'show_all_options', False),
@@ -889,9 +943,42 @@ class PythonInput(object):
                            ('{:03d}'.format(degrees), lambda degrees=degrees: setattr(self, 'ui_hue_shift', degrees) or self._update_style())
                            for degrees in range(0, 360, 5)
                        )),
+                Option(title='UI Min Brightness',
+                       description='Set the minimum brightness level for UI elements.',
+                       is_visible=lambda: getattr(self, 'show_all_options', False),
+                       get_current_value=lambda: '{:.1f}'.format(self.ui_min_brightness),
+                       get_values=lambda: dict(
+                           ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'ui_min_brightness', value/10) or self._update_style())
+                           for value in range(0, 11)
+                       )),
+                Option(title='UI Max Brightness',
+                       description='Set the maximum brightness level for UI elements.',
+                       is_visible=lambda: getattr(self, 'show_all_options', False),
+                       get_current_value=lambda: '{:.1f}'.format(self.ui_max_brightness),
+                       get_values=lambda: dict(
+                           ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'ui_max_brightness', value/10) or self._update_style())
+                           for value in range(0, 11)
+                       )),
+                Option(title='UI Min Saturation',
+                       description='Set the minimum saturation level for UI elements.',
+                       is_visible=lambda: getattr(self, 'show_all_options', False),
+                       get_current_value=lambda: '{:.1f}'.format(self.ui_min_saturation),
+                       get_values=lambda: dict(
+                           ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'ui_min_saturation', value/10) or self._update_style())
+                           for value in range(0, 11)
+                       )),
+                Option(title='UI Max Saturation',
+                       description='Set the maximum saturation level for UI elements.',
+                       is_visible=lambda: getattr(self, 'show_all_options', False),
+                       get_current_value=lambda: '{:.1f}'.format(self.ui_max_saturation),
+                       get_values=lambda: dict(
+                           ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'ui_max_saturation', value/10) or self._update_style())
+                           for value in range(0, 11)
+                       )),
+                
+                # General color options
                 simple_option(title='True color (24 bit)',
                         # is_visible=lambda:getattr(self,'show_all_options',True),
-
                               description='Use 24 bit colors instead of 256 colors\nThis is only supported on some terminal apps\nSome known to support it: Ubuntu\'s default terminal, MacOS iTerm',
                               field_name='true_color'),
             ]),

@@ -6,7 +6,7 @@ def get_all_ui_styles():
     """
     Return a dict mapping {ui_style_name -> style_dict}.
     """
-    return {
+    styles = {
         # 'inverted_1': inverted_1,#Nothing special; this is teh same as default
         'default'    :default_ui_style,
         'blue'       :blue_ui_style,
@@ -46,33 +46,35 @@ def get_all_ui_styles():
         'sunset'     :sunset,
         'sunset_warm':sunset_warm,
         'sunset_cool':sunset_cool,
-        'solarized_dark': solarized_dark,
-        'retro'      :retro,
-        'onedark'    :onedark,
-        'nord'       :nord,
-        'night_owl'  :night_owl,
-        'monokai'    :monokai,
-        'neon'       :neon,
-        'material'   :material,
-        'github_dark':github_dark,
-        'galaxy'     :galaxy,
-        'cyberpunk'  :cyberpunk,
-        'candy'      :candy,
-        'cherry'     :cherry,
-        'daffodil'   :daffodil,
-        'mahogany'   :mahogany,
-        'lemon'      :lemon,
-        'walle'      :walle,
-        'tokyo_night':tokyo_night,
-        'tomorrow'   :tomorrow,
-        'tomorrow_night':tomorrow_night,
-        'tomorrow_night_blue':tomorrow_night_blue,
-        'tomorrow_night_bright':tomorrow_night_bright,
-        'tomorrow_night_eighties':tomorrow_night_eighties,
-        'sunset_monokai':sunset_monokai,
-        'clara_monokai':clara_monokai,
-        'synthwave_monokai':synthwave_monokai,
+        'solar_dk_blue'  :solarized_dark,
+        'retro_80s'      :retro,
+        'onedark_purple' :onedark,
+        'nord_arctic'    :nord,
+        'night_owl_blue' :night_owl,
+        'monokai':monokai,
+        'neon_bright'    :neon,
+        'material_design':material,
+        'github_darkmode':github_dark,
+        'galaxy_stars'   :galaxy,
+        'cyberpunk_2077' :cyberpunk,
+        'candy_colorful' :candy,
+        'cherry_red'     :cherry,
+        'daffodil_yellow':daffodil,
+        'mahogany_wood'  :mahogany,
+        'lemon_fresh'    :lemon,
+        'walle_robot'    :walle,
+        'tokyo_nightfall':tokyo_night,
+        'tomorrow'      :tomorrow,
+        'tomorrow_night' :tomorrow_night,
+        'tomor_night_blu':tomorrow_night_blue,
+        'tom_night_brite':tomorrow_night_bright,
+        'tom_night_80s'  :tomorrow_night_eighties,
+        'sunset_monokai' :sunset_monokai,
+        'clara_monokai'  :clara_monokai,
+        'synth_monokai'  :synthwave_monokai,
     }
+    
+    return styles
 
 from pygments.token import Token, Keyword, Name, Comment, String, Operator, Number
 from pygments.styles import get_style_by_name, get_all_styles
@@ -221,24 +223,24 @@ def get_all_code_styles():
     result['dracula']=dracula#i have no idea how this came to be lol...it just appeared on ws1 one day, even tho no word 'dracula' was on the original rp or any of its files...
     # Add new styles
     # Themes to style code in syntax highlighting
-    result['solarized_dark_style'] = solarized_dark_style
-    result['onedark_style'] = onedark_style
-    result['nord_style'] = nord_style
-    result['night_owl_style'] = night_owl_style
-    result['monokai_style'] = monokai_style
-    result['github_dark_style'] = github_dark_style
-    result['tokyo_night_style'] = tokyo_night_style
-    result['tomorrow_style'] = tomorrow_style
-    result['tomorrow_night_style'] = tomorrow_night_style
-    result['tomorrow_night_blue_style'] = tomorrow_night_blue_style
-    result['tomorrow_night_bright_style'] = tomorrow_night_bright_style
-    result['tomorrow_night_eighties_style'] = tomorrow_night_eighties_style
-    result['dejavu_style'] = dejavu_style
-    result['sunset_warm_style'] = sunset_warm_style
-    result['sunset_cool_style'] = sunset_cool_style
-    result['sunset_monokai_style'] = sunset_monokai_style
-    result['clara_monokai_style'] = clara_monokai_style
-    result['synthwave_monokai_style'] = synthwave_monokai_style
+    result['solarized_dark'] = solarized_dark_style
+    result['onedark'] = onedark_style
+    result['nord'] = nord_style
+    result['night_owl'] = night_owl_style
+    result['monokai'] = monokai_style
+    result['github_dark'] = github_dark_style
+    result['tokyo_night'] = tokyo_night_style
+    result['tomorrow'] = tomorrow_style
+    result['tomorrow_night'] = tomorrow_night_style
+    result['tomor_night_blu'] = tomorrow_night_blue_style
+    result['tom_night_brite'] = tomorrow_night_bright_style
+    result['tom_night_80s'] = tomorrow_night_eighties_style
+    result['dejavu'] = dejavu_style
+    result['sunset_warm'] = sunset_warm_style
+    result['sunset_cool'] = sunset_cool_style
+    result['sunset_mono'] = sunset_monokai_style
+    result['clara_mono'] = clara_monokai_style
+    result['synth_mono'] = synthwave_monokai_style
     
     return result
 from pygments.token import Keyword, Name, Comment, String, Error, \
@@ -754,7 +756,9 @@ snape_style={Token: '',
 
 
 def generate_style(python_style, ui_style, code_invert_colors=False, code_invert_brightness=False, 
-                ui_invert_colors=False, ui_invert_brightness=False, code_hue_shift=0, ui_hue_shift=0):
+                ui_invert_colors=False, ui_invert_brightness=False, code_hue_shift=0, ui_hue_shift=0,
+                code_min_brightness=0.0, code_max_brightness=1.0, ui_min_brightness=0.0, ui_max_brightness=1.0,
+                code_min_saturation=0.0, code_max_saturation=1.0, ui_min_saturation=0.0, ui_max_saturation=1.0):
     """
     Generate Pygments Style class from two dictionaries
     containing style rules.
@@ -769,6 +773,14 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
                                 while preserving hue.
     :param code_hue_shift: Integer indicating the number of degrees to shift the hue for code elements (0-360).
     :param ui_hue_shift: Integer indicating the number of degrees to shift the hue for UI elements (0-360).
+    :param code_min_brightness: Float (0.0-1.0) indicating the minimum brightness for code elements.
+    :param code_max_brightness: Float (0.0-1.0) indicating the maximum brightness for code elements.
+    :param ui_min_brightness: Float (0.0-1.0) indicating the minimum brightness for UI elements.
+    :param ui_max_brightness: Float (0.0-1.0) indicating the maximum brightness for UI elements.
+    :param code_min_saturation: Float (0.0-1.0) indicating the minimum saturation for code elements.
+    :param code_max_saturation: Float (0.0-1.0) indicating the maximum saturation for code elements.
+    :param ui_min_saturation: Float (0.0-1.0) indicating the minimum saturation for UI elements.
+    :param ui_max_saturation: Float (0.0-1.0) indicating the maximum saturation for UI elements.
     """
     assert isinstance(python_style, dict)  or isinstance(ui_style,ChaosStyle)
     assert isinstance(ui_style, dict) or isinstance(ui_style,ChaosStyle)
@@ -778,10 +790,6 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
     for token, style_str in python_style.items():
         processed_style = style_str
         
-        # Apply code hue shift if specified
-        if code_hue_shift != 0:
-            processed_style = shift_hue_string(processed_style, code_hue_shift)
-            
         # Apply code brightness inversion if enabled
         if code_invert_brightness:
             processed_style = invert_brightness_string(processed_style)
@@ -790,6 +798,18 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
         if code_invert_colors:
             processed_style = invert_style_string(processed_style)
             
+        # Apply code brightness limits
+        if code_min_brightness > 0.0 or code_max_brightness < 1.0:
+            processed_style = adjust_brightness_range_string(processed_style, code_min_brightness, code_max_brightness)
+            
+        # Apply code saturation limits
+        if code_min_saturation > 0.0 or code_max_saturation < 1.0:
+            processed_style = adjust_saturation_range_string(processed_style, code_min_saturation, code_max_saturation)
+            
+        # Apply code hue shift after saturation changes
+        if code_hue_shift != 0:
+            processed_style = shift_hue_string(processed_style, code_hue_shift)
+            
         processed_python_style[token] = processed_style
 
     # Process the UI style dictionary with transformations
@@ -797,10 +817,6 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
     for token, style_str in ui_style.items():
         processed_style = style_str
         
-        # Apply UI hue shift if specified
-        if ui_hue_shift != 0:
-            processed_style = shift_hue_string(processed_style, ui_hue_shift)
-            
         # Apply UI brightness inversion if enabled
         if ui_invert_brightness:
             processed_style = invert_brightness_string(processed_style)
@@ -808,6 +824,18 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
         # Apply UI color inversion if enabled
         if ui_invert_colors:
             processed_style = invert_style_string(processed_style)
+            
+        # Apply UI brightness limits
+        if ui_min_brightness > 0.0 or ui_max_brightness < 1.0:
+            processed_style = adjust_brightness_range_string(processed_style, ui_min_brightness, ui_max_brightness)
+            
+        # Apply UI saturation limits
+        if ui_min_saturation > 0.0 or ui_max_saturation < 1.0:
+            processed_style = adjust_saturation_range_string(processed_style, ui_min_saturation, ui_max_saturation)
+            
+        # Apply UI hue shift after saturation changes
+        if ui_hue_shift != 0:
+            processed_style = shift_hue_string(processed_style, ui_hue_shift)
             
         processed_ui_style[token] = processed_style
 
@@ -832,10 +860,6 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
     for token, style_str in code_tokens.items():
         processed_style = style_str
         
-        # Apply code hue shift if specified
-        if code_hue_shift != 0:
-            processed_style = shift_hue_string(processed_style, code_hue_shift)
-            
         # Apply code brightness inversion if enabled
         if code_invert_brightness:
             processed_style = invert_brightness_string(processed_style)
@@ -844,212 +868,139 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
         if code_invert_colors:
             processed_style = invert_style_string(processed_style)
             
+        # Apply code brightness limits
+        if code_min_brightness > 0.0 or code_max_brightness < 1.0:
+            processed_style = adjust_brightness_range_string(processed_style, code_min_brightness, code_max_brightness)
+            
+        # Apply code saturation limits
+        if code_min_saturation > 0.0 or code_max_saturation < 1.0:
+            processed_style = adjust_saturation_range_string(processed_style, code_min_saturation, code_max_saturation)
+            
+        # Apply code hue shift after saturation changes
+        if code_hue_shift != 0:
+            processed_style = shift_hue_string(processed_style, code_hue_shift)
+            
         styles[token] = processed_style
 
     return style_from_dict(styles)
 
-def shift_hue_string(style_str, degrees):
-    """
-    Shift the hue of colors in a style string by the specified number of degrees.
-    
-    :param style_str: The style string to process
-    :param degrees: The number of degrees to shift the hue (0-360)
-    """
+import colorsys
+
+def hex_to_rgb(hex_color):
+    """Convert hex color to RGB floats (0.0-1.0)"""
+    if hex_color.startswith('#'):
+        hex_color = hex_color[1:]
+    try:
+        r = int(hex_color[0:2], 16) / 255.0
+        g = int(hex_color[2:4], 16) / 255.0
+        b = int(hex_color[4:6], 16) / 255.0
+        return (r, g, b)
+    except Exception:
+        return (0, 0, 0)  # Default to black on error
+
+def rgb_to_hex(r, g, b):
+    """Convert RGB floats to hex color string"""
+    r_hex = '{0:02x}'.format(max(0, min(255, int(r * 255))))
+    g_hex = '{0:02x}'.format(max(0, min(255, int(g * 255))))
+    b_hex = '{0:02x}'.format(max(0, min(255, int(b * 255))))
+    return '#{0}{1}{2}'.format(r_hex, g_hex, b_hex)
+
+def transform_color(color, transform_func):
+    """Apply a transform function to a color in hex format"""
+    if not color.startswith('#'):
+        return color
+    try:
+        r, g, b = hex_to_rgb(color)
+        r, g, b = transform_func(r, g, b)
+        return rgb_to_hex(r, g, b)
+    except Exception:
+        return color
+
+def transform_style_string(style_str, transform_func):
+    """Apply a transform function to all colors in a style string"""
     if not style_str:
         return style_str
         
     parts = style_str.split()
-    shifted_parts = []
+    transformed_parts = []
     
     for part in parts:
         if part.startswith('bg:'):
             color = part[3:]
             if color.startswith('#'):
-                try:
-                    # Convert hex to RGB
-                    r = int(color[1:3], 16) / 255.0
-                    g = int(color[3:5], 16) / 255.0
-                    b = int(color[5:7], 16) / 255.0
-                    
-                    # Shift hue
-                    import colorsys
-                    h, s, v = colorsys.rgb_to_hsv(r, g, b)
-                    h = (h + (degrees/360.0)) % 1.0  # Shift hue and wrap around 0-1
-                    r, g, b = colorsys.hsv_to_rgb(h, s, v)
-                    
-                    # Convert back to hex
-                    r_hex = '{0:02x}'.format(int(r*255))
-                    g_hex = '{0:02x}'.format(int(g*255))
-                    b_hex = '{0:02x}'.format(int(b*255))
-                    shifted_hex = '#{0}{1}{2}'.format(r_hex, g_hex, b_hex)
-                    shifted_parts.append('bg:' + shifted_hex)
-                except Exception:
-                    shifted_parts.append(part)
-            elif color in ANSI_COLOR_NAMES:
-                shifted_parts.append(part)
+                transformed_hex = transform_color(color, transform_func)
+                transformed_parts.append('bg:' + transformed_hex)
             else:
-                shifted_parts.append(part)
+                transformed_parts.append(part)
         elif part.startswith('#'):
-            try:
-                # Convert hex to RGB
-                r = int(part[1:3], 16) / 255.0
-                g = int(part[3:5], 16) / 255.0
-                b = int(part[5:7], 16) / 255.0
-                
-                # Shift hue
-                import colorsys
-                h, s, v = colorsys.rgb_to_hsv(r, g, b)
-                h = (h + (degrees/360.0)) % 1.0  # Shift hue and wrap around 0-1
-                r, g, b = colorsys.hsv_to_rgb(h, s, v)
-                
-                # Convert back to hex
-                r_hex = '{0:02x}'.format(int(r*255))
-                g_hex = '{0:02x}'.format(int(g*255))
-                b_hex = '{0:02x}'.format(int(b*255))
-                shifted_hex = '#{0}{1}{2}'.format(r_hex, g_hex, b_hex)
-                shifted_parts.append(shifted_hex)
-            except Exception:
-                shifted_parts.append(part)
+            transformed_hex = transform_color(part, transform_func)
+            transformed_parts.append(transformed_hex)
         else:
-            shifted_parts.append(part)
+            transformed_parts.append(part)
     
-    return ' '.join(shifted_parts)
+    return ' '.join(transformed_parts)
+
+# Color transformation functions
+def shift_hue_transform(degrees):
+    """Create transform function that shifts hue"""
+    def transform(r, g, b):
+        h, s, v = colorsys.rgb_to_hsv(r, g, b)
+        h = (h + (degrees/360.0)) % 1.0  # Shift hue and wrap around 0-1
+        return colorsys.hsv_to_rgb(h, s, v)
+    return transform
+
+def brightness_invert_transform():
+    """Create transform function that inverts brightness"""
+    def transform(r, g, b):
+        h, l, s = colorsys.rgb_to_hls(r, g, b)
+        l = 1.0 - l  # Invert lightness
+        return colorsys.hls_to_rgb(h, l, s)
+    return transform
+
+def color_invert_transform():
+    """Create transform function that inverts colors"""
+    def transform(r, g, b):
+        return (1.0 - r, 1.0 - g, 1.0 - b)
+    return transform
+
+def brightness_range_transform(min_brightness=0.0, max_brightness=1.0):
+    """Create transform function that rescales brightness to the specified range"""
+    def transform(r, g, b):
+        h, l, s = colorsys.rgb_to_hls(r, g, b)
+        # Rescale lightness: x = x * (max - min) + min
+        l = l * (max_brightness - min_brightness) + min_brightness
+        return colorsys.hls_to_rgb(h, l, s)
+    return transform
+
+def saturation_range_transform(min_saturation=0.0, max_saturation=1.0):
+    """Create transform function that rescales saturation to the specified range"""
+    def transform(r, g, b):
+        h, l, s = colorsys.rgb_to_hls(r, g, b)
+        # Rescale saturation: x = x * (max - min) + min
+        s = s * (max_saturation - min_saturation) + min_saturation
+        return colorsys.hls_to_rgb(h, l, s)
+    return transform
+
+# Style string transformers that use the generic transform_style_string function
+def shift_hue_string(style_str, degrees):
+    """Shift the hue of colors in a style string"""
+    return transform_style_string(style_str, shift_hue_transform(degrees))
 
 def invert_brightness_string(style_str):
-    """
-    Invert only the brightness of colors in a style string, preserving hue.
-    
-    This implementation uses both luma-based brightness inversion for better perceptual results
-    and preserves the original hue of the color.
-    """
-    if not style_str:
-        return style_str
-        
-    parts = style_str.split()
-    inverted_parts = []
-    
-    for part in parts:
-        if part.startswith('bg:'):
-            color = part[3:]
-            if color.startswith('#'):
-                try:
-                    # Convert hex to RGB
-                    r = int(color[1:3], 16) / 255.0
-                    g = int(color[3:5], 16) / 255.0
-                    b = int(color[5:7], 16) / 255.0
-                    
-                    # Calculate perceived brightness (luma)
-                    # Using Rec. 709 coefficients for better perceptual accuracy
-                    luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
-                    
-                    # Convert to HSL which is better for brightness manipulation
-                    import colorsys
-                    h, l, s = colorsys.rgb_to_hls(r, g, b)
-                    
-                    # Invert lightness while preserving hue
-                    l = 1.0 - l
-                    
-                    # Convert back to RGB
-                    r, g, b = colorsys.hls_to_rgb(h, l, s)
-                    
-                    # Convert back to hex
-                    r_hex = '{0:02x}'.format(int(r*255))
-                    g_hex = '{0:02x}'.format(int(g*255))
-                    b_hex = '{0:02x}'.format(int(b*255))
-                    inverted_hex = '#{0}{1}{2}'.format(r_hex, g_hex, b_hex)
-                    inverted_parts.append('bg:' + inverted_hex)
-                except Exception:
-                    inverted_parts.append(part)
-            elif color in ANSI_COLOR_NAMES:
-                inverted_parts.append(part)
-            else:
-                inverted_parts.append(part)
-        elif part.startswith('#'):
-            try:
-                # Convert hex to RGB
-                r = int(part[1:3], 16) / 255.0
-                g = int(part[3:5], 16) / 255.0
-                b = int(part[5:7], 16) / 255.0
-                
-                # Calculate perceived brightness (luma)
-                # Using Rec. 709 coefficients for better perceptual accuracy
-                luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
-                
-                # Convert to HSL which is better for brightness manipulation
-                import colorsys
-                h, l, s = colorsys.rgb_to_hls(r, g, b)
-                
-                # Invert lightness while preserving hue
-                l = 1.0 - l
-                
-                # Convert back to RGB
-                r, g, b = colorsys.hls_to_rgb(h, l, s)
-                
-                # Convert back to hex
-                r_hex = '{0:02x}'.format(int(r*255))
-                g_hex = '{0:02x}'.format(int(g*255))
-                b_hex = '{0:02x}'.format(int(b*255))
-                inverted_hex = '#{0}{1}{2}'.format(r_hex, g_hex, b_hex)
-                inverted_parts.append(inverted_hex)
-            except Exception:
-                inverted_parts.append(part)
-        else:
-            inverted_parts.append(part)
-    
-    return ' '.join(inverted_parts)
+    """Invert brightness of colors in a style string"""
+    return transform_style_string(style_str, brightness_invert_transform())
+
+def adjust_brightness_range_string(style_str, min_brightness=0.0, max_brightness=1.0):
+    """Adjust brightness range of colors in a style string"""
+    return transform_style_string(style_str, brightness_range_transform(min_brightness, max_brightness))
+
+def adjust_saturation_range_string(style_str, min_saturation=0.0, max_saturation=1.0):
+    """Adjust saturation range of colors in a style string"""
+    return transform_style_string(style_str, saturation_range_transform(min_saturation, max_saturation))
 
 def invert_style_string(style_str):
-    """
-    Invert the colors in a style string.
-    """
-    if not style_str:
-        return style_str
-        
-    parts = style_str.split()
-    inverted_parts = []
-    
-    for part in parts:
-        if part.startswith('bg:'):
-            color = part[3:]
-            if color.startswith('#'):
-                try:
-                    inverted_hex = rp.inverted_color(color)
-                    # Handle string result
-                    if isinstance(inverted_hex, str):
-                        # Strip alpha component if present (trim to 7 chars)
-                        if len(inverted_hex) > 7:
-                            inverted_hex = inverted_hex[:7]
-                        if inverted_hex.startswith('#'):
-                            inverted_parts.append('bg:' + inverted_hex)
-                        else:
-                            inverted_parts.append('bg:#' + inverted_hex)
-                    else:
-                        # Keep original if result is unexpected
-                        inverted_parts.append(part)
-                except Exception:
-                    inverted_parts.append(part)
-            elif color in ANSI_COLOR_NAMES:
-                inverted_parts.append(part)
-            else:
-                inverted_parts.append(part)
-        elif part.startswith('#'):
-            try:
-                inverted_hex = rp.inverted_color(part)
-                # Handle string result
-                if isinstance(inverted_hex, str):
-                    # Strip alpha component if present (trim to 7 chars)
-                    if len(inverted_hex) > 7:
-                        inverted_hex = inverted_hex[:7]
-                    inverted_parts.append(inverted_hex)
-                else:
-                    # Keep original if result is unexpected
-                    inverted_parts.append(part)
-            except Exception:
-                inverted_parts.append(part)
-        else:
-            inverted_parts.append(part)
-    
-    return ' '.join(inverted_parts)
+    """Invert colors in a style string"""
+    return transform_style_string(style_str, color_invert_transform())
 
 
 # Code style for Windows consoles. They support only 16 colors,
