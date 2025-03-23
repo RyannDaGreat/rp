@@ -17140,18 +17140,11 @@ def python_input(scope,header='',enable_ptpython=True,iPython=False):
             #Usually these warnings come from autocomplete stumbling upon some property of some library which is deprecated
             #I don't care about this, and it interrupts the typing experience
             default_python_input_eventloop=default_python_input_eventloop or PythonCommandLineInterface(create_eventloop(),python_input=pyin)
-        #
-        # try:
 
-            code_obj = default_python_input_eventloop.run()
-        # gotta_save=False#Sorry about this clusterfuck of code. I'm really tired, and this code really doesn't affect anybody else in the whole world but me...and I know how it works, despite how yucky it is. (my ide makes it really easy to write this way with multiple cursors)
-        # if _pseudo_terminal_settings["pyin.enable_history_search"]!=pyin.enable_history_search:_pseudo_terminal_settings["pyin.enable_history_search"]=pyin.enable_history_search;gotta_save=True;print("CHANGESD")
-        # if _pseudo_terminal_settings["pyin.highlight_matching_parenthesis"]!=pyin.highlight_matching_parenthesis:_pseudo_terminal_settings["pyin.highlight_matching_parenthesis"]=pyin.highlight_matching_parenthesis;gotta_save=True;print("CHANGESD")
-        # if _pseudo_terminal_settings["pyin.enable_input_validation"]!=pyin.enable_input_validation:_pseudo_terminal_settings["pyin.enable_input_validation"]=pyin.enable_input_validation;gotta_save=True;print("CHANGESD")
-        # if _pseudo_terminal_settings["pyin.enable_auto_suggest"]!=pyin.enable_auto_suggest:_pseudo_terminal_settings["pyin.enable_auto_suggest"]=pyin.enable_auto_suggest;gotta_save=True;print("CHANGESD")
-        # if _pseudo_terminal_settings["pyin.show_line_numbers"]!=pyin.show_line_numbers:_pseudo_terminal_settings["pyin.show_line_numbers"]=pyin.show_line_numbers;gotta_save=True;print("CHANGESD")
-        # if _pseudo_terminal_settings["pyin.show_signature"]!=pyin.show_signature:_pseudo_terminal_settings["pyin.show_signature"]=pyin.show_signature;gotta_save=True;print("CHANGESD")
-        # if gotta_save:_save_pseudo_terminal_settings_to_file()
+            with no_gc(): #One of the bottlenecks of prompt-toolkit is that it triggers the gc so much, something to do with redraws or somethin' idk. But during input let's disable garbage collection.
+                #If this causes memory leaks, make a new context like reduce_gc_frequency(scale_factor=10) etc
+                code_obj = default_python_input_eventloop.run()
+                
 
         return code_obj.text
     except EOFError:
@@ -18801,6 +18794,41 @@ class _PtermLevelTitleContext:
         if self.should_do:
             rp.r._set_session_title(self.old_title)
 
+# Global state
+_no_gc_gc_lock = threading.RLock()
+_no_gc_disable_count = 0
+_no_gc_was_enabled = True
+
+@contextlib.contextmanager
+def no_gc():
+    """
+    Simple context manager to temporarily disable garbage collection.
+    Thread-safe and supports nested calls.
+    
+    Example:
+        with no_gc():
+            # Critical code without garbage collection
+            process_large_dataset()
+    """
+    import gc
+    import threading
+    import contextlib
+
+    global _no_gc_disable_count, _no_gc_was_enabled
+    
+    with _no_gc_gc_lock:
+        if _no_gc_disable_count == 0:
+            _no_gc_was_enabled = gc.isenabled()
+            gc.disable()
+        _no_gc_disable_count += 1
+    
+    try:
+        yield
+    finally:
+        with _no_gc_gc_lock:
+            _no_gc_disable_count -= 1
+            if _no_gc_disable_count == 0 and _no_gc_was_enabled:
+                gc.enable()
  
 _user_created_var_names=set()
 _cd_history=[]
