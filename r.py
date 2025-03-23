@@ -20007,6 +20007,8 @@ def pseudo_terminal(
 
         SGC $select_git_commit()
         DUNKA $pip_import('dunk');$os.system(f"git diff {ans} | dunk")
+        DUNKP $dunk_string_diff(ans,$string_from_clipboard())
+        PDUNK $dunk_string_diff($string_from_clipboard(),ans)
 
         FN $r._get_function_names(ans)
 
@@ -37480,7 +37482,25 @@ def _run_bashtop():
     os.system('bashtop')
 
 def _run_claude_code(code):
+    """
+    Given code as either a path or a string, edits that code using claudecode.
+    
+    If the given code is a file path, makes a temporary directory and works there,
+    creating an editme.py file. If the code is a string, it creates a temporary
+    workspace with the code in editme.py. Auto-commits changes via git thread.
+    
+    Args:
+        code: A file path, directory path, or string containing code to edit
+        
+    Returns:
+        EasyDict with keys:
+            - code: The edited code (if editme.py exists after editing)
+            - workdir: Path to the temporary working directory
+    """
+    import subprocess
+    
     _ensure_claudecode_installed()
+    _ensure_git_installed()
 
     if file_exists(code):
         code = get_parent_directory(code)
@@ -37505,14 +37525,29 @@ def _run_claude_code(code):
     print(fansi_highlight_path(workdir))
     with SetCurrentDirectoryTemporarily(workdir):
         save_text_file(code, filename)
-        _run_sys_command("claude")
+
+        done = False
+        
+        @run_as_new_thread
+        def commit_thread():
+            silent = ' &> /dev/null ' * 1
+            os.system('git init '+silent)
+            while not done and get_current_directory()==workdir:
+                sleep(.1)
+                commit_message = 'Auto-Commit at '+format_current_date()
+                os.system('git add --all '+silent+' && git commit -am '+shlex.quote(commit_message)+silent)
+            
+        try:
+            #Make sure it doesnt block the above thread!
+            subprocess.run("claude", shell=True)
+        finally:
+            done=True
 
         if file_exists(filename):
             code = load_text_file(filename)
             return gather_vars("code workdir")
         else:
             return gather_vars("workdir")
-
 
 
 def _configure_filebrowser():
@@ -43561,22 +43596,24 @@ def play_the_matrix_animation():
     
     curses.wrapper(main)
         
-def view_string_diff(before:str,after:str):
+def _string_diff_helper(before:str, after:str, command:str):
     """
-    This function asssumes you have git installed
-    Lets you view the diff between two strings interactively
-    TODO: Let you accept/reject changes between the diffs and return the result as a string
+    Helper function for string diff operations
+    Sets up git repo and executes the provided diff command
     """
-    
-    pip_import('ydiff')
-    import os,ydiff,subprocess
+
+    if is_utf8_file(before) and is_utf8_file(after):
+        before=load_text_file(before)
+        after=load_text_file(after)
+
+    import os, subprocess
     
     original_dir=get_current_directory()
     temp_dir=temporary_file_path()
     make_directory(temp_dir)
     
     file_name='temp.py'
-    commit_message='Changed '+file_name
+    commit_message='changed '+file_name
     
     try:
         set_current_directory(temp_dir)
@@ -43585,10 +43622,28 @@ def view_string_diff(before:str,after:str):
         os.system('git add '+shlex.quote(file_name)+'  > /dev/null 2>&1')
         os.system('git commit -am '+shlex.quote(commit_message)+' > /dev/null 2>&1')
         string_to_text_file(file_name,after)
-        os.system('ydiff -s '+file_name)
+        os.system(command)
     finally:
         set_current_directory(original_dir)
         delete_directory(temp_dir)
+
+def dunk_string_diff(before:str,after:str):
+    """
+    this function asssumes you have git installed
+    lets you view the diff between two strings interactively
+    uses dunk: https://github.com/darrenburns/dunk
+    """
+    pip_import('dunk')
+    _string_diff_helper(before, after, 'git diff | dunk')
+
+def view_string_diff(before:str,after:str):
+    """
+    this function asssumes you have git installed
+    lets you view the diff between two strings interactively
+    todo: let you accept/reject changes between the diffs and return the result as a string
+    """
+    pip_import('ydiff')
+    _string_diff_helper(before, after, 'ydiff -s temp.py')
 
 def vim_string_diff(before:str,after:str):
     """
