@@ -885,34 +885,34 @@ class PythonInput(object):
                 Option(title='Code Min Brightness',
                        description='Set the minimum brightness level for code elements.',
                        is_visible=lambda: getattr(self, 'show_all_options', False),
-                       get_current_value=lambda: '{:.1f}'.format(self.code_min_brightness),
+                       get_current_value=lambda: '{:0.2f}'.format(self.code_min_brightness),
                        get_values=lambda: dict(
-                           ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'code_min_brightness', value/10) or self._update_style())
-                           for value in range(0, 11)
+                           ('{:0.2f}'.format(value/50), lambda value=value: setattr(self, 'code_min_brightness', value/50) or self._update_style())
+                           for value in range(0,51)
                        )),
                 Option(title='Code Max Brightness',
                        description='Set the maximum brightness level for code elements.',
                        is_visible=lambda: getattr(self, 'show_all_options', False),
-                       get_current_value=lambda: '{:.1f}'.format(self.code_max_brightness),
+                       get_current_value=lambda: '{:0.2f}'.format(self.code_max_brightness),
                        get_values=lambda: dict(
-                           ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'code_max_brightness', value/10) or self._update_style())
-                           for value in range(0, 11)
+                           ('{:0.2f}'.format(value/50), lambda value=value: setattr(self, 'code_max_brightness', value/50) or self._update_style())
+                           for value in range(0,51)
                        )),
                 Option(title='Code Min Saturation',
                        description='Set the minimum saturation level for code elements.',
                        is_visible=lambda: getattr(self, 'show_all_options', False),
-                       get_current_value=lambda: '{:.1f}'.format(self.code_min_saturation),
+                       get_current_value=lambda: '{:0.2f}'.format(self.code_min_saturation),
                        get_values=lambda: dict(
-                           ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'code_min_saturation', value/10) or self._update_style())
-                           for value in range(0, 11)
+                           ('{:0.2f}'.format(value/50), lambda value=value: setattr(self, 'code_min_saturation', value/50) or self._update_style())
+                           for value in range(0,51)
                        )),
                 Option(title='Code Max Saturation',
                        description='Set the maximum saturation level for code elements.',
                        is_visible=lambda: getattr(self, 'show_all_options', False),
-                       get_current_value=lambda: '{:.1f}'.format(self.code_max_saturation),
+                       get_current_value=lambda: '{:0.2f}'.format(self.code_max_saturation),
                        get_values=lambda: dict(
-                           ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'code_max_saturation', value/10) or self._update_style())
-                           for value in range(0, 11)
+                           ('{:0.2f}'.format(value/50), lambda value=value: setattr(self, 'code_max_saturation', value/50) or self._update_style())
+                           for value in range(0,51)
                        )),
                 
                 # UI-related options
@@ -949,34 +949,34 @@ class PythonInput(object):
                 Option(title='UI Min Brightness',
                        description='Set the minimum brightness level for UI elements.',
                        is_visible=lambda: getattr(self, 'show_all_options', False),
-                       get_current_value=lambda: '{:.1f}'.format(self.ui_min_brightness),
+                       get_current_value=lambda: '{:0.2f}'.format(self.ui_min_brightness),
                        get_values=lambda: dict(
-                           ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'ui_min_brightness', value/10) or self._update_style())
-                           for value in range(0, 11)
+                           ('{:0.2f}'.format(value/50), lambda value=value: setattr(self, 'ui_min_brightness', value/50) or self._update_style())
+                           for value in range(0,51)
                        )),
                 Option(title='UI Max Brightness',
                        description='Set the maximum brightness level for UI elements.',
                        is_visible=lambda: getattr(self, 'show_all_options', False),
-                       get_current_value=lambda: '{:.1f}'.format(self.ui_max_brightness),
+                       get_current_value=lambda: '{:0.2f}'.format(self.ui_max_brightness),
                        get_values=lambda: dict(
-                           ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'ui_max_brightness', value/10) or self._update_style())
-                           for value in range(0, 11)
+                           ('{:0.2f}'.format(value/50), lambda value=value: setattr(self, 'ui_max_brightness', value/50) or self._update_style())
+                           for value in range(0,51)
                        )),
                 Option(title='UI Min Saturation',
                        description='Set the minimum saturation level for UI elements.',
                        is_visible=lambda: getattr(self, 'show_all_options', False),
-                       get_current_value=lambda: '{:.1f}'.format(self.ui_min_saturation),
+                       get_current_value=lambda: '{:0.2f}'.format(self.ui_min_saturation),
                        get_values=lambda: dict(
-                           ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'ui_min_saturation', value/10) or self._update_style())
-                           for value in range(0, 11)
+                           ('{:0.2f}'.format(value/50), lambda value=value: setattr(self, 'ui_min_saturation', value/50) or self._update_style())
+                           for value in range(0,51)
                        )),
                 Option(title='UI Max Saturation',
                        description='Set the maximum saturation level for UI elements.',
                        is_visible=lambda: getattr(self, 'show_all_options', False),
-                       get_current_value=lambda: '{:.1f}'.format(self.ui_max_saturation),
+                       get_current_value=lambda: '{:0.2f}'.format(self.ui_max_saturation),
                        get_values=lambda: dict(
-                           ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'ui_max_saturation', value/10) or self._update_style())
-                           for value in range(0, 11)
+                           ('{:0.2f}'.format(value/50), lambda value=value: setattr(self, 'ui_max_saturation', value/50) or self._update_style())
+                           for value in range(0,51)
                        )),
                 Option(title='BG/FG Contrast',
                        description='Set the minimum brightness difference between foreground and background. 0.0 allows identical colors, higher values increase contrast.',
