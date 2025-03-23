@@ -37281,6 +37281,25 @@ def _ensure_npm_installed():
         linux='apt install npm --yes',
         windows='winget install -e --id OpenJS.NodeJS --accept-source-agreements',#https://winget.run/pkg/OpenJS/NodeJS
     )
+    _ensure_node_installed() #https://github.com/anthropics/claude-code/issues/113 - taupirho's response
+
+def _ensure_nvm_installed():
+    _ensure_curl_installed()
+    _ensure_installed(
+        'nvm',
+        mac  ='curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash',
+        linux='curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash',
+        windows='winget install -e --id CoreyButler.NVMforWindows', #https://winget.run/pkg/CoreyButler/NVMforWindows
+    )
+
+def _ensure_node_installed():
+    _ensure_nvm_installed()
+    _ensure_installed(
+        'node',
+        mac='nvm install --lts',
+        linux='nvm install --lts',
+        windows='nvm install --lts',#https://winget.run/pkg/OpenJS/NodeJS
+    )
 
 def _ensure_git_installed():
     _ensure_installed(
