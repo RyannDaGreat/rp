@@ -248,6 +248,8 @@ class PythonInput(object):
         self.code_max_saturation=1.0  # Maximum saturation for code elements (0.0-1.0)
         self.ui_min_saturation=0.0    # Minimum saturation for UI elements (0.0-1.0)
         self.ui_max_saturation=1.0    # Maximum saturation for UI elements (0.0-1.0)
+        self.ui_bg_fg_contrast=0.0    # Minimum brightness difference between foreground and background (0.0-1.0)
+        self.background_mode='Default'  # Background mode: "Nowhere", "Default", "Black", or "White"
 
         if is_windows():
             self._current_code_style_name='win32'
@@ -402,7 +404,8 @@ class PythonInput(object):
                               code_min_saturation=self.code_min_saturation,
                               code_max_saturation=self.code_max_saturation,
                               ui_min_saturation=self.ui_min_saturation,
-                              ui_max_saturation=self.ui_max_saturation)
+                              ui_max_saturation=self.ui_max_saturation,
+                              ui_bg_fg_contrast=self.ui_bg_fg_contrast)
                               
     def _update_style(self):
         """
@@ -974,6 +977,13 @@ class PythonInput(object):
                        get_values=lambda: dict(
                            ('{:.1f}'.format(value/10), lambda value=value: setattr(self, 'ui_max_saturation', value/10) or self._update_style())
                            for value in range(0, 11)
+                       )),
+                Option(title='BG/FG Contrast',
+                       description='Set the minimum brightness difference between foreground and background. 0.0 allows identical colors, higher values increase contrast.',
+                       get_current_value=lambda: '{:.2f}'.format(self.ui_bg_fg_contrast),
+                       get_values=lambda: dict(
+                           ('{:.2f}'.format(value/50), lambda value=value: setattr(self, 'ui_bg_fg_contrast', value/50) or self._update_style())
+                           for value in range(0, 50)  # Only go up to 0.98
                        )),
                 
                 # General color options

@@ -16973,6 +16973,9 @@ _default_pyin_settings=dict(
     enable_system_bindings=True,
     show_all_options=False,
     show_last_assignable=False,
+    # Background settings
+    ui_bg_fg_contrast=0.0,      # Minimum contrast between foreground and background (0.0-1.0)
+    background_mode='Default',  # Background mode: "Nowhere", "Default", "Black", or "White"
     show_battery_life=False,
     enable_microcompletions=True,
     history_syntax_highlighting=False,
@@ -17030,6 +17033,9 @@ def _load_pyin_settings_file():
         for attr in _default_pyin_settings:
             if attr in d:
                 setattr(pyin,attr,d[attr])
+        
+        # Make sure style settings like background_mode and ui_bg_fg_contrast take effect
+        pyin._update_style()
 
     _load_pyin_settings_from_dict(settings)
     _set_default_session_title()

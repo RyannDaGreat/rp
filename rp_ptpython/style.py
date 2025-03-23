@@ -758,7 +758,8 @@ snape_style={Token: '',
 def generate_style(python_style, ui_style, code_invert_colors=False, code_invert_brightness=False, 
                 ui_invert_colors=False, ui_invert_brightness=False, code_hue_shift=0, ui_hue_shift=0,
                 code_min_brightness=0.0, code_max_brightness=1.0, ui_min_brightness=0.0, ui_max_brightness=1.0,
-                code_min_saturation=0.0, code_max_saturation=1.0, ui_min_saturation=0.0, ui_max_saturation=1.0):
+                code_min_saturation=0.0, code_max_saturation=1.0, ui_min_saturation=0.0, ui_max_saturation=1.0,
+                ui_bg_fg_contrast=1.0):
     """
     Generate Pygments Style class from two dictionaries
     containing style rules.
@@ -781,6 +782,7 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
     :param code_max_saturation: Float (0.0-1.0) indicating the maximum saturation for code elements.
     :param ui_min_saturation: Float (0.0-1.0) indicating the minimum saturation for UI elements.
     :param ui_max_saturation: Float (0.0-1.0) indicating the maximum saturation for UI elements.
+    :param ui_bg_fg_contrast: Float (0.1-3.0) indicating the contrast multiplier between background and foreground colors.
     """
     assert isinstance(python_style, dict)  or isinstance(ui_style,ChaosStyle)
     assert isinstance(ui_style, dict) or isinstance(ui_style,ChaosStyle)
@@ -844,6 +846,11 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
     styles.update(DEFAULT_STYLE_EXTENSIONS)
     styles.update(processed_python_style)
     styles.update(processed_ui_style)
+    
+    # Apply contrast adjustment between background and foreground as the very last step
+    # This ensures it's applied after all other transformations
+    if ui_bg_fg_contrast != 1.0:
+        styles = adjust_fg_bg_contrast(styles, ui_bg_fg_contrast)
     
     # Apply code transformations to code-related elements like whitespace, indent guides, and cursor line
     # These are part of the code display, so they should have the same transformations applied
@@ -997,6 +1004,198 @@ def adjust_brightness_range_string(style_str, min_brightness=0.0, max_brightness
 def adjust_saturation_range_string(style_str, min_saturation=0.0, max_saturation=1.0):
     """Adjust saturation range of colors in a style string"""
     return transform_style_string(style_str, saturation_range_transform(min_saturation, max_saturation))
+
+def force_black_white(style_dict):
+    """
+    Force all foreground/background pairs to be black and white.
+    
+    Args:
+        style_dict: Dictionary of token -> style strings
+        
+    Returns:
+        New style dictionary with black and white colors
+    """
+    new_style_dict = {}
+    
+    for token, style_str in style_dict.items():
+        if not style_str:
+            new_style_dict[token] = style_str
+            continue
+            
+        # Parse the style string into components
+        parts = style_str.split()
+        fg_part = None
+        bg_part = None
+        other_parts = []
+        
+        # Identify foreground and background colors
+        for part in parts:
+            if part.startswith('bg:#'):
+                bg_part = part
+            elif part.startswith('#'):
+                fg_part = part
+            else:
+                other_parts.append(part)
+        
+        # If we don't have both fg and bg, skip this token
+        if not fg_part or not bg_part:
+            new_style_dict[token] = style_str
+            continue
+        
+        # Extract RGB values
+        fg_r, fg_g, fg_b = hex_to_rgb(fg_part)
+        bg_r, bg_g, bg_b = hex_to_rgb(bg_part[3:])  # Skip the "bg:" prefix
+        
+        # Calculate brightness for foreground and background
+        fg_brightness = 0.299*fg_r + 0.587*fg_g + 0.114*fg_b
+        bg_brightness = 0.299*bg_r + 0.587*bg_g + 0.114*bg_b
+        
+        # Set to black and white based on which was originally brighter
+        if fg_brightness >= bg_brightness:
+            # Foreground was brighter, so make it white and background black
+            new_fg = "#ffffff"
+            new_bg = "bg:#000000"
+        else:
+            # Background was brighter, so make it white and foreground black
+            new_fg = "#000000"
+            new_bg = "bg:#ffffff"
+        
+        # Construct the new style string
+        new_parts = other_parts + [new_fg, new_bg]
+        new_style_dict[token] = ' '.join(new_parts)
+    
+    return new_style_dict
+
+def adjust_fg_bg_contrast(style_dict, min_brightness_delta=0.0):
+    """
+    Ensure a minimum brightness difference between foreground and background colors.
+    
+    Args:
+        style_dict: Dictionary of token -> style strings
+        min_brightness_delta: Minimum brightness difference (0.0-1.0) 
+                             0.0 = no change
+                             1.0 = maximum contrast (black/white)
+    
+    Returns:
+        New style dictionary with adjusted colors
+    """
+    # Ensure min_brightness_delta is in valid range 0.0-1.0
+    min_brightness_delta = max(0.0, min(0.98, min_brightness_delta))
+    
+    if min_brightness_delta <= 0.001:  # Small threshold to handle floating point errors
+        # No change needed for very small values
+        return style_dict
+        
+    # Make a copy of the style dictionary
+    new_style_dict = {}
+    
+    # Process each token and its style string
+    for token, style_str in style_dict.items():
+        if not style_str:
+            new_style_dict[token] = style_str
+            continue
+            
+        # Parse the style string into components
+        parts = style_str.split()
+        fg_part = None
+        bg_part = None
+        other_parts = []
+        
+        # Identify foreground and background colors
+        for part in parts:
+            if part.startswith('bg:#'):
+                bg_part = part
+            elif part.startswith('#'):
+                fg_part = part
+            else:
+                other_parts.append(part)
+        
+        # If we don't have both fg and bg, skip this token
+        if not fg_part or not bg_part:
+            new_style_dict[token] = style_str
+            continue
+        
+        # Extract RGB values
+        fg_r, fg_g, fg_b = hex_to_rgb(fg_part)
+        bg_r, bg_g, bg_b = hex_to_rgb(bg_part[3:])  # Skip the "bg:" prefix
+        
+        # Calculate brightness for foreground and background
+        # Using the perceived luminance formula: 0.299*R + 0.587*G + 0.114*B
+        fg_brightness = 0.299*fg_r + 0.587*fg_g + 0.114*fg_b
+        bg_brightness = 0.299*bg_r + 0.587*bg_g + 0.114*bg_b
+        
+        # Sort by brightness
+        if fg_brightness >= bg_brightness:
+            lighter_color = (fg_r, fg_g, fg_b)
+            darker_color = (bg_r, bg_g, bg_b)
+            fg_is_lighter = True
+        else:
+            lighter_color = (bg_r, bg_g, bg_b)
+            darker_color = (fg_r, fg_g, fg_b)
+            fg_is_lighter = False
+        
+        lighter_brightness = max(fg_brightness, bg_brightness)
+        darker_brightness = min(fg_brightness, bg_brightness)
+        
+        # Current brightness difference
+        brightness_delta = lighter_brightness - darker_brightness
+        
+        # If current difference is less than minimum, adjust both colors
+        if brightness_delta < min_brightness_delta:
+            # How much we need to adjust
+            adjustment_needed = min_brightness_delta - brightness_delta
+            
+            # Blend lighter color with white and darker color with black
+            # to achieve the desired brightness difference
+            
+            # First, determine how much to adjust each color
+            # We'll move both equally to maintain the midpoint
+            lighter_adjustment = adjustment_needed / 2
+            darker_adjustment = adjustment_needed / 2
+            
+            # Adjust brightness of both colors, but ensure we can't exceed the 0-1 range
+            if lighter_brightness + lighter_adjustment > 1.0:
+                # Can't go brighter than 1.0, adjust darker color more
+                extra = (lighter_brightness + lighter_adjustment) - 1.0
+                lighter_adjustment = 1.0 - lighter_brightness
+                darker_adjustment += extra
+            
+            if darker_brightness - darker_adjustment < 0.0:
+                # Can't go darker than 0.0, adjust lighter color more
+                extra = darker_adjustment - darker_brightness
+                darker_adjustment = darker_brightness
+                lighter_adjustment += extra
+            
+            # Now blend with white/black to achieve the new brightness
+            # For lighter color, blend with white (1,1,1)
+            lighter_blend_amount = lighter_adjustment / (1.0 - lighter_brightness) if lighter_brightness < 1.0 else 0.0
+            new_lighter_r = lighter_color[0] * (1 - lighter_blend_amount) + 1.0 * lighter_blend_amount
+            new_lighter_g = lighter_color[1] * (1 - lighter_blend_amount) + 1.0 * lighter_blend_amount
+            new_lighter_b = lighter_color[2] * (1 - lighter_blend_amount) + 1.0 * lighter_blend_amount
+            
+            # For darker color, blend with black (0,0,0)
+            darker_blend_amount = darker_adjustment / darker_brightness if darker_brightness > 0.0 else 1.0
+            new_darker_r = darker_color[0] * (1 - darker_blend_amount) + 0.0 * darker_blend_amount
+            new_darker_g = darker_color[1] * (1 - darker_blend_amount) + 0.0 * darker_blend_amount
+            new_darker_b = darker_color[2] * (1 - darker_blend_amount) + 0.0 * darker_blend_amount
+            
+            # Assign the new colors based on which was originally lighter
+            if fg_is_lighter:
+                fg_r, fg_g, fg_b = new_lighter_r, new_lighter_g, new_lighter_b
+                bg_r, bg_g, bg_b = new_darker_r, new_darker_g, new_darker_b
+            else:
+                bg_r, bg_g, bg_b = new_lighter_r, new_lighter_g, new_lighter_b
+                fg_r, fg_g, fg_b = new_darker_r, new_darker_g, new_darker_b
+        
+        # Convert back to hex color strings
+        new_fg = rgb_to_hex(fg_r, fg_g, fg_b)
+        new_bg = 'bg:' + rgb_to_hex(bg_r, bg_g, bg_b)
+        
+        # Construct the new style string
+        new_parts = other_parts + [new_fg, new_bg]
+        new_style_dict[token] = ' '.join(new_parts)
+    
+    return new_style_dict
 
 def invert_style_string(style_str):
     """Invert colors in a style string"""
