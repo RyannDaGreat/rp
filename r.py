@@ -4544,7 +4544,7 @@ def _load_files(
                 show_eta(num_yielded)
             elif action == "done":
                 elapsed_time = gtoc() - start_time
-                _print_status("%s: Done! Did %i items in %.3f seconds"%(eta_title, num_yielded, elapsed_time))#This is here because of the specifics of the eta function we're using to display progress
+                # _print_status("%s: Done! Did %i items in %.3f seconds"%(eta_title, num_yielded, elapsed_time))#This is here because of the specifics of the eta function we're using to display progress
 
     else:
         def progress_func(action):
@@ -16016,7 +16016,8 @@ def _eta(total_n,*,min_interval=.3,title="r.eta"):
                     proportion_completed,
                 )
                 if not done
-                else title + "COMPLETED IN " + str(temp) + progress + "\n"
+                # else title + "COMPLETED IN " + str(temp) + progress + "\n"
+                else title + "Done! Did %i items in %s" % (COMPLETED_SO_FAR, temp) + "\n"
             )
 
 
@@ -35597,7 +35598,9 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
         import subprocess
 
         try:
-            aws_args = ['aws', 's3', 'cp', url, path, '--quiet']
+            aws_args = ['aws', 's3', 'cp', url, path] 
+            if not show_progress:
+                aws_args+=['--quiet']
             if timeout:
                 aws_args.extend(['--cli-connect-timeout', str(timeout)]) # Add timeout for s3 cli
                 aws_args.extend(['--cli-read-timeout', str(timeout)]) # Add timeout for s3 cli
@@ -35614,10 +35617,13 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
         import subprocess
 
         try:
+            kwargs = dict()
             gs_args = ['gsutil', 'cp', '-r', url, path]
             if timeout:
                 gs_args = ['timeout', str(timeout)] + gs_args
-            subprocess.check_call(gs_args)
+            if not show_progress:
+                kwargs.update(dict(stderr=subprocess.DEVNULL))
+            subprocess.check_call(gs_args,**kwargs)
         except subprocess.TimeoutExpired:
             raise TimeoutError("rp.download_url timed out downloading Google Cloud Storage url %s to path %s"%(url,path))
         except subprocess.CalledProcessError as e:
