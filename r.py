@@ -23844,6 +23844,13 @@ def get_process_memory(pid:int=None)->int:
     process = psutil.Process(pid)
     return process.memory_info().rss#Get this process's total memory in bytes
 
+def get_process_cwd(pid):
+    pip_import('psutil')
+    import psutil
+    process = psutil.Process(pid)
+    cwd = process.cwd()
+    return cwd
+
 def get_process_username(pid: int=None) -> str:
     """
     Returns the username associated with the given process ID (pid).
@@ -36952,6 +36959,15 @@ def _set_ryan_vimrc(confirm=False):
     Only pseudo_terminal uses this confirm argument (and it will stay that way) so it's not a big deal this is messy, it can be cleaned later. The default is to autoinstall without asking.
     """
 
+    #Mar 2025: Bug in vim for highlighting f-strings. Fix suggested from here: https://stackoverflow.com/questions/70261663/vim-syntax-highlighting-of-a-python-formatted-string
+    os.system(
+        """
+        mkdir -p "$HOME/.vim/syntax"
+        curl -s https://raw.githubusercontent.com/vim/vim/21c6d8b5b6ef510c9c78b9dfb89a41146599505f/runtime/syntax/python.vim \
+          > "$HOME/.vim/syntax/python.vim"
+        """
+    )
+
     packages = 'isort black-macchiato pyflakes removestar ropevim drawille pudb'.split()
 
     for package in packages:
@@ -36973,7 +36989,6 @@ def _set_ryan_vimrc(confirm=False):
         vimrc=text_file_to_string(get_module_path_from_name('rp.ryan_vimrc'))
         string_to_text_file(vimrc_path,vimrc)
         shell_command('git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim')
-        import os
         os.system('vim +PluginInstall +qall')
         print("Finished setting your ~/.vimrc vim settings. Give it a try! Enter 'ans?v' without quotes to see your new ~/.vimrc file")
 
@@ -48464,6 +48479,7 @@ def print_process_info(pid):
         cpu_usage = "{:.2f}%".format(process.cpu_percent(interval=1.0))
         num_threads = process.num_threads()
         status = process.status()
+        cwd = process.cwd()
 
         # Get parent process information
         parent_pid = process.ppid()
@@ -48487,6 +48503,7 @@ def print_process_info(pid):
         table.add_row("Command", Syntax(command, "bash", theme="monokai"))
         table.add_row("Status", status)
         table.add_row("PID", str(pid))
+        table.add_row("Working Dir", cwd)
         table.add_row("Parent Process", parent_info)
         table.add_row("Subprocess IDs", subprocess_ids)
         table.add_row("Start Time", start_time)
@@ -49316,8 +49333,8 @@ def get_only(collection):
     return next(iter(collection))
 
 
-def killport(port: int):
-    "Kills any process using that port"
+def killport(port: int, strict=True):
+    "Kills any process using that port. If strict and no process uses that port, raise an error."
     import subprocess
     import os
     import signal
@@ -49333,6 +49350,12 @@ def killport(port: int):
 
     # Extract PIDs from the output
     pids = pids.decode().strip().split('\n')
+
+    if pids==['']:
+        if strict:
+            raise ValueError("rp.killport: No processes using port %i" % port)
+        else:
+            return
     
     # Kill each process
     for pid in pids:
