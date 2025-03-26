@@ -457,9 +457,19 @@ def nanos(seconds=gtoc) -> int:
 
 # endregion
 # region  Files and such: ［get_current_directory‚ get_all_file_names］
-def get_current_directory():
+def get_process_cwd(pid):
+    pip_import('psutil')
+    import psutil
+    process = psutil.Process(pid)
+    cwd = process.cwd()
+    return cwd
+
+def get_current_directory(pid=None):
     # Get the result of 'cd' in a shell. This is the current folder where save or load things by default.
     # SUMMARY: get_current_directory() ≣ sys.path[0] ﹦ ﹙default folder_path﹚ ﹦ ﹙current directory﹚ ﹦ /Users/Ryan/PycharmProjects/RyanBStandards_Python3.5
+    if pid is not None:
+        assert isinstance(pid,int),pid
+        return _get_process_cwd(pid)
     try:
         import os
         return os.getcwd()
@@ -23843,13 +23853,6 @@ def get_process_memory(pid:int=None)->int:
 
     process = psutil.Process(pid)
     return process.memory_info().rss#Get this process's total memory in bytes
-
-def get_process_cwd(pid):
-    pip_import('psutil')
-    import psutil
-    process = psutil.Process(pid)
-    cwd = process.cwd()
-    return cwd
 
 def get_process_username(pid: int=None) -> str:
     """
