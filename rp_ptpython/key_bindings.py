@@ -56,6 +56,15 @@ def run_arbitrary_code_without_destroying_buffer(code,event,put_in_history=True)
     run_code_without_destroying_buffer(event,put_in_history=put_in_history)
     buffer.document=original_document#Put the old text/cursor pos/etc back. Dont mutate the buffer
 
+def replace_buffer_text(buffer, new_text):
+    #OLD CODE:
+    # buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+    document=buffer.document
+    old_text = document.text
+    old_cursor_pos = document.cursor_position
+    new_cursor_pos = calculate_new_cursor_pos(old_cursor_pos, old_text, new_text)
+    buffer.document = Document(new_text, new_cursor_pos)
+
 def handle_run_cell(event):
     #Happens when we press control+w or alt+w
     #Run current cell between the boundary prefixes
@@ -91,7 +100,6 @@ def is_iterable_token(token_name):
     except Exception as e:
         return False
 
-
     
 
 def edit_event_buffer_in_external(event,cmd):
@@ -114,7 +122,11 @@ def edit_event_buffer_in_external(event,cmd):
 
             if text!='':
                 #That means the user saved the file
-                buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                buffer.document = Document(
+                    text,
+                    min(len(text), buffer.document.cursor_position),
+                    buffer.document.selection,
+                )
 
             event.cli.renderer.clear()#Refresh the screen
 
@@ -158,7 +170,7 @@ def edit_event_buffer_in_vim(event):
 
         if text!='':
             #That means the user saved the file
-            buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+            buffer.replace_text(buffer, text)
 
         event.cli.renderer.clear()#Refresh the screen
 
@@ -948,6 +960,100 @@ class TabShouldInsertWhitespaceFilter(Filter):
 def has_selected_completion(buffer):# If we have a completion visibly selected on the menu
     return buffer.complete_state and buffer.complete_state.complete_index is not None
 last_pressed_dash=False
+
+def calculate_new_cursor_pos(old_cursor_pos: int, old_code_string: str, new_code_string: str):
+    """
+    Calculate the new cursor position after a code string is modified.
+    
+    Args:
+        old_cursor_pos: Cursor position in the old code string
+        old_code_string: Original code string
+        new_code_string: Modified code string
+        
+    Returns:
+        New cursor position in the modified code string
+        
+    EXAMPLES:
+        Adding text before cursor:
+        Old: def |hello():
+        New: def |new_hello():
+
+        Adding text after cursor:
+        Old: def |hello():
+        New: def |hello(name):
+
+        Deleting text before cursor:
+        Old: def hello_world|():
+        New: def hello|():
+
+        Deleting text at cursor:
+        Old: def hello|_world():
+        New: def hello|world():
+
+        Complex changes:
+        Old: def hello(name):
+            print('H|ello, ' + name)
+        New: def greet(person):
+            print(f'Gr|eetings, {person}!')
+
+    Written with ClaudeCode 2025 March
+    """
+    import difflib
+    
+    # Get the diff between the old and new code string
+    diff = difflib.SequenceMatcher(None, old_code_string, new_code_string)
+    
+    # Initialize the new cursor position
+    new_pos = old_cursor_pos
+    
+    # Track position changes through the diff operations
+    for tag, i1, i2, j1, j2 in diff.get_opcodes():
+        if tag == 'equal':
+            # No change in this region
+            if i2 <= old_cursor_pos:
+                # This equal region is before the cursor
+                continue
+            else:
+                # We've gone past the cursor position
+                break
+        
+        elif tag == 'delete':
+            # Text was deleted
+            if i1 >= old_cursor_pos:
+                # Deletion happened after the cursor, no impact
+                break
+            elif i2 <= old_cursor_pos:
+                # Deletion happened entirely before the cursor
+                # Cursor needs to move back by the amount deleted
+                new_pos -= (i2 - i1)
+            else:
+                # Deletion includes the cursor position
+                # Move cursor to the start of the deleted region
+                new_pos = j1
+                break
+        
+        elif tag in ('replace', 'insert'):
+            # Text was added or replaced
+            if i1 >= old_cursor_pos:
+                # Change happened after the cursor, no impact
+                break
+            elif i2 <= old_cursor_pos:
+                # Change happened entirely before the cursor
+                # Cursor needs to move by the net change in length
+                new_pos += (j2 - j1) - (i2 - i1)
+            else:
+                # Change includes the cursor position
+                # For simplicity, move cursor to end of the changed region
+                offset = old_cursor_pos - i1
+                new_pos = j1 + min(offset, j2 - j1)
+                break
+    
+    # Ensure cursor is within bounds
+    new_pos = max(0, min(new_pos, len(new_code_string)))
+    
+    return new_pos
+
+
 
 
 class CommentedParenthesizerAutomator:
@@ -2982,14 +3088,14 @@ def load_python_bindings(python_input):
                                     #Insert the alignment char that cant normally be typed on a keyboard in this app
                                     text=buffer.document.text
                                     text=align_lines_to_char(text)
-                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    buffer.replace_text(buffer, text)
                                 if header=='align_char':
                                     buffer.insert_text(align_char)
                                     buffer.cursor_left()
                                 if header=='strip_whitespace':
                                     text=buffer.document.text
                                     text='\n'.join(line.rstrip() for line in text.split('\n'))
-                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    buffer.replace_text(buffer, text)
                                 if header=='import_from_swap':
                                     before_line=buffer.document.current_line_before_cursor
                                     after_line=buffer.document.current_line_after_cursor
@@ -3050,7 +3156,7 @@ def load_python_bindings(python_input):
                                     text=text.splitlines()[lineno:]
                                     text='\n'.join(text)
                                     buffer.document=Document(text,colno-len(r'\dt'),buffer.document.selection)
-                                    # buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    # buffer.replace_text(buffer, text)
                                 if header=='delete_to_bottom':
                                     text=buffer.document.text
                                     lineno=document.text_before_cursor.count('\n')
@@ -3058,11 +3164,13 @@ def load_python_bindings(python_input):
                                     text=text.splitlines()[:lineno+1]
                                     text='\n'.join(text)
                                     buffer.document=Document(text,text.rfind('\n')+colno-len(r'\dt'),buffer.document.selection)
-                                    # buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    # buffer.replace_text(buffer, text)
                                 if header=='delete_empty_lines':
                                     text=buffer.document.text
                                     text='\n'.join(line for line in text.split('\n') if line.strip())
-                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    # buffer.replace_text(buffer, text)
+                                    replace_buffer_text(buffer, text)
+                                    replace_buffer_text(buffer, text)
                                 if header.startswith('delete_empty_lines_'):
                                     N=header[len('delete_empty_lines_'):]
                                     try:
@@ -3073,28 +3181,33 @@ def load_python_bindings(python_input):
                                         text=rp.strip_trailing_whitespace(text)
                                         while '\n'*(N+1) in text:
                                             text=text.replace('\n'*(N+1),'\n'*N)
-                                        buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                        # buffer.replace_text(buffer, text)
+                                        replace_buffer_text(buffer, text)
                                     except e:
                                         buffer.insert_text(str(e))
 
                                 if header=='sort_lines':
                                     text=buffer.document.text
                                     text='\n'.join(sorted(text.split('\n')))
-                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    # buffer.replace_text(buffer, text)
+                                    replace_buffer_text(buffer, text)
                                 if header=='reverse_lines':
                                     text=buffer.document.text
                                     text='\n'.join(reversed(text.split('\n')))
-                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    # buffer.replace_text(buffer, text)
+                                    replace_buffer_text(buffer, text)
                                 if header=='strip_comments':
                                     from rp import strip_python_comments
                                     text=buffer.document.text
                                     text=strip_python_comments(text)
-                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    # buffer.replace_text(buffer, text)
+                                    replace_buffer_text(buffer, text)
                                 if header=='strip_docstrings':
                                     from rp import strip_python_docstrings
                                     text=buffer.document.text
                                     text=strip_python_docstrings(text)
-                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    # buffer.replace_text(buffer, text)
+                                    replace_buffer_text(buffer, text)
                                 if header=='inline_rp':
                                     from rp.r import _inline_rp_code
                                     text=buffer.document.text
@@ -3102,13 +3215,15 @@ def load_python_bindings(python_input):
                                         text=_inline_rp_code(text)
                                     except:
                                         text='#inline_rp ERROR'
-                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    # buffer.replace_text(buffer, text)
+                                    replace_buffer_text(buffer, text)
                                 if header=='if_name_main':
                                     buffer.insert_text('if __name__ == "__main__":\n    ')
                                 if header=='repr':
                                     #A shortcut to `repr\py
                                     text=buffer.document.text
-                                    buffer.document=Document(repr(text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    # buffer.document=Document(repr(text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    replace_buffer_text(buffer, text)
                                 if header=='black':
                                     from rp import pip_import
                                     try:
@@ -3116,7 +3231,8 @@ def load_python_bindings(python_input):
                                         import black
                                         text=buffer.document.text
                                         text=black.format_str(text,mode=black.Mode())
-                                        buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                        # buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                        replace_buffer_text(buffer, text)
                                     except BaseException as e:
                                         buffer.insert_text('#black: Error: '+str(e).replace('\n',' ; '))
                                 if header=='sort_imports':
@@ -3124,7 +3240,8 @@ def load_python_bindings(python_input):
                                     try:
                                         text=buffer.document.text
                                         text=rp.r._sort_imports_via_isort(text)
-                                        buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                        # buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                        replace_buffer_text(buffer, text)
                                     except BaseException as e:
                                         buffer.insert_text('#sort_imports: Error: '+str(e).replace('\n',' ; '))
                                 if header=='remove_star':
@@ -3132,7 +3249,8 @@ def load_python_bindings(python_input):
                                         from rp.r import _removestar
                                         text=buffer.document.text
                                         text=_removestar(text)
-                                        buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                        # buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                        replace_buffer_text(buffer, text)
                                     except BaseException as e:
                                         buffer.insert_text('#remove_star: Error: '+str(e).replace('\n',' ; '))
                                 if header=='gpt':
@@ -3160,7 +3278,7 @@ def load_python_bindings(python_input):
                                         import rp
                                         text=buffer.document.text
                                         text=rp.minify_python_code(text)
-                                        buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                        buffer.replace_text(buffer, text)
                                     except BaseException as e:
                                         buffer.insert_text('#min (aka python-minifier): Error: '+str(e).replace('\n',' ; '))
                                 if header=='source_code':
@@ -3206,7 +3324,7 @@ def load_python_bindings(python_input):
                                             text=load_gist(text)
                                     except Exception:
                                         text='#Failed to load gist at specified url'
-                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    buffer.replace_text(buffer, text)
                                 if header=='repr ans':
                                     #Sets ans=str(current buffer)
                                     text=buffer.document.text
@@ -3215,7 +3333,7 @@ def load_python_bindings(python_input):
                                 if header=='tabs to spaces':
                                     text=buffer.document.text
                                     text=text.replace('\t','    ')
-                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    buffer.replace_text(buffer, text)
                                 if header=='function_name':
                                     #Insert the current function's name
                                     func_names=get_all_function_names(buffer.document.text_before_cursor)
@@ -3224,7 +3342,7 @@ def load_python_bindings(python_input):
                                     text=buffer.document.text
                                     from rp import python_2_to_3
                                     text=python_2_to_3(text)
-                                    buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    buffer.replace_text(buffer, text)
                                 if header=='while':
                                     text=buffer.document.text
                                     text='while True:\n'+'\n'.join(['    '+line for line in text.split('\n')])
@@ -3285,7 +3403,7 @@ def load_python_bindings(python_input):
                                         from rp import pip_import
                                         editor=pip_import('editor')
                                         text=editor.edit(contents=text,use_tty=True,suffix='.py').decode()
-                                        buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                        buffer.replace_text(buffer, text)
                                         event.cli.renderer.clear()#Refresh the screen
                                     except ImportError:
                                         buffer.insert_text("#ERROR: Cannot import 'editor'. Try pip install python-editor")
@@ -4747,10 +4865,35 @@ def load_python_bindings(python_input):
             #On ubuntu, shift+backspace triggers this; and inserting 'HISTORY' is very annoying when we just want to backspace
             buffer.delete_before_cursor()
             # buffer.insert_text('HISTORY')
+
         @handle(Keys.ControlE)
         def _(event):
-            #Run the buffer without erasing it or disturbing cursor position
-            run_code_without_destroying_buffer(event)
+            if not meta_pressed():
+                #Run the buffer without erasing it or disturbing cursor position
+                run_code_without_destroying_buffer(event)
+            else:
+                global aicode_result
+                buffer=event.cli.current_buffer
+                original_code = buffer.document.text
+                import rp.r_iterm_comm as ric
+                # code = '__import__("rp").r_iterm_comm.aicode_result=__import__("rp").r._run_claude_code('+repr(original_code)+') # Using AI to edit your code'
+                # run_arbitrary_code_without_destroying_buffer(code, event, put_in_history=False)
+                import rp
+                aicode_result=rp.r._run_claude_code(original_code)
+                new_code=aicode_result.code
+                old_cursor_pos = buffer.document.cursor_position
+                new_cursor_pos=calculate_new_cursor_pos(old_cursor_pos, original_code, new_code)
+                if hasattr(aicode_result, 'code'):
+                    buffer.document = Document(
+                        new_code,
+                        # min(len(new_code), buffer.document.cursor_position),
+                        new_cursor_pos,
+                    )
+                else:
+                    buffer.insert_text("#ERROR Running ClaudeCode: "+repr(aicode_result))
+                run_arbitrary_code_without_destroying_buffer('',event,put_in_history=False) #Needed to keep UI clean
+
+
 
         @handle(Keys.ControlW)
         def _(event):
