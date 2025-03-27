@@ -170,7 +170,7 @@ def edit_event_buffer_in_vim(event):
 
         if text!='':
             #That means the user saved the file
-            buffer.replace_text(buffer, text)
+            replace_buffer_text(buffer, text)
 
         event.cli.renderer.clear()#Refresh the screen
 
@@ -3088,14 +3088,14 @@ def load_python_bindings(python_input):
                                     #Insert the alignment char that cant normally be typed on a keyboard in this app
                                     text=buffer.document.text
                                     text=align_lines_to_char(text)
-                                    buffer.replace_text(buffer, text)
+                                    replace_buffer_text(buffer, text)
                                 if header=='align_char':
                                     buffer.insert_text(align_char)
                                     buffer.cursor_left()
                                 if header=='strip_whitespace':
                                     text=buffer.document.text
                                     text='\n'.join(line.rstrip() for line in text.split('\n'))
-                                    buffer.replace_text(buffer, text)
+                                    replace_buffer_text(buffer, text)
                                 if header=='import_from_swap':
                                     before_line=buffer.document.current_line_before_cursor
                                     after_line=buffer.document.current_line_after_cursor
@@ -3156,7 +3156,7 @@ def load_python_bindings(python_input):
                                     text=text.splitlines()[lineno:]
                                     text='\n'.join(text)
                                     buffer.document=Document(text,colno-len(r'\dt'),buffer.document.selection)
-                                    # buffer.replace_text(buffer, text)
+                                    # replace_buffer_text(buffer, text)
                                 if header=='delete_to_bottom':
                                     text=buffer.document.text
                                     lineno=document.text_before_cursor.count('\n')
@@ -3164,11 +3164,11 @@ def load_python_bindings(python_input):
                                     text=text.splitlines()[:lineno+1]
                                     text='\n'.join(text)
                                     buffer.document=Document(text,text.rfind('\n')+colno-len(r'\dt'),buffer.document.selection)
-                                    # buffer.replace_text(buffer, text)
+                                    # replace_buffer_text(buffer, text)
                                 if header=='delete_empty_lines':
                                     text=buffer.document.text
                                     text='\n'.join(line for line in text.split('\n') if line.strip())
-                                    # buffer.replace_text(buffer, text)
+                                    # replace_buffer_text(buffer, text)
                                     replace_buffer_text(buffer, text)
                                     replace_buffer_text(buffer, text)
                                 if header.startswith('delete_empty_lines_'):
@@ -3181,7 +3181,7 @@ def load_python_bindings(python_input):
                                         text=rp.strip_trailing_whitespace(text)
                                         while '\n'*(N+1) in text:
                                             text=text.replace('\n'*(N+1),'\n'*N)
-                                        # buffer.replace_text(buffer, text)
+                                        # replace_buffer_text(buffer, text)
                                         replace_buffer_text(buffer, text)
                                     except e:
                                         buffer.insert_text(str(e))
@@ -3189,24 +3189,24 @@ def load_python_bindings(python_input):
                                 if header=='sort_lines':
                                     text=buffer.document.text
                                     text='\n'.join(sorted(text.split('\n')))
-                                    # buffer.replace_text(buffer, text)
+                                    # replace_buffer_text(buffer, text)
                                     replace_buffer_text(buffer, text)
                                 if header=='reverse_lines':
                                     text=buffer.document.text
                                     text='\n'.join(reversed(text.split('\n')))
-                                    # buffer.replace_text(buffer, text)
+                                    # replace_buffer_text(buffer, text)
                                     replace_buffer_text(buffer, text)
                                 if header=='strip_comments':
                                     from rp import strip_python_comments
                                     text=buffer.document.text
                                     text=strip_python_comments(text)
-                                    # buffer.replace_text(buffer, text)
+                                    # replace_buffer_text(buffer, text)
                                     replace_buffer_text(buffer, text)
                                 if header=='strip_docstrings':
                                     from rp import strip_python_docstrings
                                     text=buffer.document.text
                                     text=strip_python_docstrings(text)
-                                    # buffer.replace_text(buffer, text)
+                                    # replace_buffer_text(buffer, text)
                                     replace_buffer_text(buffer, text)
                                 if header=='inline_rp':
                                     from rp.r import _inline_rp_code
@@ -3215,7 +3215,7 @@ def load_python_bindings(python_input):
                                         text=_inline_rp_code(text)
                                     except:
                                         text='#inline_rp ERROR'
-                                    # buffer.replace_text(buffer, text)
+                                    # replace_buffer_text(buffer, text)
                                     replace_buffer_text(buffer, text)
                                 if header=='if_name_main':
                                     buffer.insert_text('if __name__ == "__main__":\n    ')
@@ -3278,7 +3278,7 @@ def load_python_bindings(python_input):
                                         import rp
                                         text=buffer.document.text
                                         text=rp.minify_python_code(text)
-                                        buffer.replace_text(buffer, text)
+                                        replace_buffer_text(buffer, text)
                                     except BaseException as e:
                                         buffer.insert_text('#min (aka python-minifier): Error: '+str(e).replace('\n',' ; '))
                                 if header=='source_code':
@@ -3324,7 +3324,7 @@ def load_python_bindings(python_input):
                                             text=load_gist(text)
                                     except Exception:
                                         text='#Failed to load gist at specified url'
-                                    buffer.replace_text(buffer, text)
+                                    replace_buffer_text(buffer, text)
                                 if header=='repr ans':
                                     #Sets ans=str(current buffer)
                                     text=buffer.document.text
@@ -3333,7 +3333,7 @@ def load_python_bindings(python_input):
                                 if header=='tabs to spaces':
                                     text=buffer.document.text
                                     text=text.replace('\t','    ')
-                                    buffer.replace_text(buffer, text)
+                                    replace_buffer_text(buffer, text)
                                 if header=='function_name':
                                     #Insert the current function's name
                                     func_names=get_all_function_names(buffer.document.text_before_cursor)
@@ -3342,7 +3342,7 @@ def load_python_bindings(python_input):
                                     text=buffer.document.text
                                     from rp import python_2_to_3
                                     text=python_2_to_3(text)
-                                    buffer.replace_text(buffer, text)
+                                    replace_buffer_text(buffer, text)
                                 if header=='while':
                                     text=buffer.document.text
                                     text='while True:\n'+'\n'.join(['    '+line for line in text.split('\n')])
@@ -3403,7 +3403,7 @@ def load_python_bindings(python_input):
                                         from rp import pip_import
                                         editor=pip_import('editor')
                                         text=editor.edit(contents=text,use_tty=True,suffix='.py').decode()
-                                        buffer.replace_text(buffer, text)
+                                        replace_buffer_text(buffer, text)
                                         event.cli.renderer.clear()#Refresh the screen
                                     except ImportError:
                                         buffer.insert_text("#ERROR: Cannot import 'editor'. Try pip install python-editor")
