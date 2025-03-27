@@ -92,6 +92,7 @@ KEYBOARD SHORTCUTS:
 	⌥ ]    insert ] at the end of the line without moving the cursor to the end of the line
 	⌃ t    loads previous buffer in history regardless of where cursor is (stands for top). Faster than spamming the up arrow key
 	⌃ b    loads next buffer in history regardless of where cursor is (stands for bottom). Faster than spamming the down arrow key
+	⌥ ⌃ e  Edit code with AI
 	LESS IMPORTANT AND MAYBE REMOVED IN FUTURE:
 		//While these keyboard shortcuts are kind of silly, I do find myself using them quite often
 		⌃ h    inserts 'HISTORY'
