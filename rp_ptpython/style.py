@@ -858,7 +858,7 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
         Token.IndentGuide: '#303030',
         Token.Whitespace: '#252525',
         Token.Whitespace.Space: '#252525',
-        Token.Whitespace.Tab: '#252525',
+        Token.Whitespace.Tab: '#FF2525',
         Token.CursorLine: 'bg:#2a3438',
         # Token.CursorColumn: 'bg:#3c464a'
         Token.CursorColumn: 'bg:#1c262a'

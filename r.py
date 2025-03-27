@@ -37524,6 +37524,35 @@ def _run_bashtop():
     #Run it!
     os.system('bashtop')
 
+def _disable_terminal_mouse_reporting():
+    """
+    Disables terminal mouse reporting/tracking modes that can cause
+    unwanted output like [200~[<64;106;43M when scrolling.
+    
+	   Originally made for when Claudecode bugs out with scrolling when in editor...
+    
+    This sends ANSI escape sequences to turn off various mouse tracking modes:
+    - 1000: Disables normal mouse tracking (button press/release events)
+    - 1002: Disables mouse tracking with drag events
+    - 1003: Disables all mouse motion events (even when buttons not pressed)
+    - 1004: Disables focus in/out event reporting
+    - 1005: Disables UTF-8 mouse mode
+    - 1006: Disables SGR mouse mode (extended coordinate reporting)
+    - 1015: Disables urxvt mouse mode (another extended reporting format)
+    
+    The 'l' at the end means "turn off" these features (vs 'h' which turns them on).
+    """
+    print("\033[?1000;1002;1003;1004;1005;1006;1015l", end="", flush=True)
+
+def _terminal_move_cursor_to_bottom_and_new_line():
+    """
+    Prints ANSI escape sequence to move cursor to the bottom row 
+    and creates a new line.
+    """
+    # Move to the bottom of the screen
+    print("\033[9999B", end="", flush=True)
+    print()
+
 def _run_claude_code(code):
     """
     Given code as either a path or a string, edits that code using claudecode.

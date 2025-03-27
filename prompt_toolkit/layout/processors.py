@@ -852,7 +852,7 @@ class ShowWhitespaceProcessor(Processor):
         assert get_tab_char is None or callable(get_tab_char)
         
         self.get_space_char = get_space_char or (lambda cli: '·')  # Middle dot for spaces
-        self.get_tab_char = get_tab_char or (lambda cli: '→')      # Right arrow for tabs
+        self.get_tab_char = get_tab_char or (lambda cli: '\t')      # Right arrow for tabs
         self.token = token or Token.Whitespace
         
     def apply_transformation(self, cli, document, lineno, source_to_display, tokens):

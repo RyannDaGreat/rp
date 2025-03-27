@@ -4879,6 +4879,8 @@ def load_python_bindings(python_input):
                 # code = '__import__("rp").r_iterm_comm.aicode_result=__import__("rp").r._run_claude_code('+repr(original_code)+') # Using AI to edit your code'
                 # run_arbitrary_code_without_destroying_buffer(code, event, put_in_history=False)
                 import rp
+                rp.r._disable_terminal_mouse_reporting()
+                rp.r._terminal_move_cursor_to_bottom_and_new_line()
                 aicode_result=rp.r._run_claude_code(original_code)
                 new_code=aicode_result.code
                 old_cursor_pos = buffer.document.cursor_position
