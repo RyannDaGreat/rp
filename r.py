@@ -42455,7 +42455,7 @@ def accumulate_flows(*flows,reduce=True,reverse=False):
 
     if reverse:
         #Use reverse flow
-        return -accumulate_flows([-f for f in flows][::-1])
+        return -gather_args_call(accumulate_flows, [-f for f in flows][::-1], reverse=False)
 
     if is_numpy_array(flows):
         assert flows.ndim==4, 'rp.accumulate_flows: flows should be in T2HW form, but its shape is '+str(flows.shape)
@@ -47311,6 +47311,9 @@ def resize_list_to_fit(array:list, max_length:int):
         max_length = len(array)
 
     return resize_list(array,max_length)
+
+def resize_lists_to_fit(arrays:list, max_length:int):
+    return [resize_list_to_fit(x, max_length) for x in arrays]
 
 def list_transpose(list_of_lists:list):
     """
