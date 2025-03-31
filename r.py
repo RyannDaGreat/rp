@@ -6535,16 +6535,53 @@ def stop_sound():
     except ImportError:
         pass
 
-_default_wav_output_path='r.mp3_to_wav_temp.wav'  # Expect this file to be routinely overwritten.
-def mp3_to_wav(mp3_file_path: str,wav_output_path: str = _default_wav_output_path,samplerate=None) -> str:
+def mp3_to_wav(mp3_file_path: str,wav_output_path: str = None,samplerate=None) -> str:
     """
     This is a audio file converter that converts mp3 files to wav files.
     You must install 'lame' to use this function.
     Saves a new wav file derived from the mp3 file you gave it.
     shell_command('lame --decode '+mp3_file_path+" "+wav_output_path)# From https://gist.github.com/kscottz/5898352
     """
-    shell_command('lame ' + str(samplerate or default_samplerate) + ' -V 0 -h --decode ' + shlex.quote(mp3_file_path) + " " + shlex.quote(wav_output_path))  # From https://gist.github.com/kscottz/5898352
+
+    if wav_output_path is None:
+        wav_output_path = os.path.splitext(mp3_file_path)[0] + ".wav"
+
+    _run_sys_command(
+        "lame "
+        + str(samplerate or default_samplerate)
+        + " -V 0 -h --decode "
+        + shlex.quote(mp3_file_path)
+        + " "
+        + shlex.quote(wav_output_path)
+    )  # From https://gist.github.com/kscottz/5898352
+
     return wav_output_path
+
+def wav_to_mp3(wav_file_path: str, mp3_output_path: str = None, samplerate: int = 44100) -> str:
+    """
+    This is an audio file converter that converts wav files to mp3 files.
+    You must install 'ffmpeg' to use this function.
+    Saves a new mp3 file derived from the wav file you gave it.
+    """
+    
+    _ensure_ffmpeg_installed()
+
+
+    import os
+    import subprocess
+
+    if mp3_output_path is None:
+        mp3_output_path = os.path.splitext(wav_file_path)[0] + ".mp3"
+    
+    cmd = ['ffmpeg', '-i', wav_file_path]
+    if samplerate:
+        cmd.extend(['-ar', str(samplerate)])
+    cmd.extend(['-y', mp3_output_path])
+    cmd+='-hide_banner -loglevel error'.split()
+    
+    subprocess.run(cmd, check=True)
+    return mp3_output_path
+
 # endregionx
 # region  Matplotlib: ［display_image，brutish_display_image，display_color_255，display_grayscale_image，line_graph，block，clf］
 
@@ -7291,6 +7328,12 @@ def display_image_slideshow(images='.',display=None,use_cache=True):
         else:
             display=display_image
 
+    if display in [display_image_in_terminal, display_image_in_terminal_color]:
+        old_display = display
+        def display(image):
+            # _terminal_move_cursor_to_top_left()
+            old_display(image)
+
     if isinstance(images,str) and is_a_folder(images):
         images=get_all_paths(images,sort_by='number',include_files=True,include_folders=False)
         images=[path for path in images if is_image_file(path)]
@@ -7312,6 +7355,7 @@ def display_image_slideshow(images='.',display=None,use_cache=True):
         print('        p: Go to the prev image')
         print('        r: Go to a random image')
         print('        #: Go to a selected image')
+        print('        a: Play Animation - press any key to stop')
         print('        +: Zoom In')
         print('        -: Zoom Out')
         print('        l: Pan Right')
@@ -7343,6 +7387,12 @@ def display_image_slideshow(images='.',display=None,use_cache=True):
         new_image=new_image[origin_y*scale:origin_y*scale+get_image_height(image), origin_x*scale:origin_x*scale+get_image_width(image)]
         return new_image
     
+    autoplay=0
+    def stop_autoplay_on_keypress():
+        nonlocal autoplay
+        input_keypress(handle_keyboard_interrupt=True)
+        autoplay=0
+
     while True:
         if not skip_load:
             index%=len(images)
@@ -7372,6 +7422,10 @@ def display_image_slideshow(images='.',display=None,use_cache=True):
             print('Failed to display image #%i/%i'%(index+1,len(images)))
             # print_stack_trace(e)
         
+        if autoplay:
+            index += autoplay
+            continue
+
         if currently_in_a_tty():
             key=input_keypress()
         else:
@@ -7387,6 +7441,10 @@ def display_image_slideshow(images='.',display=None,use_cache=True):
         elif key=='#':
             print("Which image would you like to view?")
             index=input_integer(0,len(images)-1)
+
+        elif key=='a':
+            autoplay=1
+            run_as_new_thread(stop_autoplay_on_keypress)
 
         #Panning and zooming
         elif key=='+':
@@ -17009,6 +17067,8 @@ _default_pyin_settings=dict(
     ui_hue_shift=0,               # Hue shift for UI elements (0-355 degrees in 5-degree increments, hidden by default)
     code_min_brightness=0.0,      # Minimum brightness for code elements (0.0-1.0)
     code_max_brightness=1.0,      # Maximum brightness for code elements (0.0-1.0)
+    code_ui_min_brightness=0.0,   # Minimum brightness for code UI elements (whitespace, indent guides, row/column highlights) (0.0-1.0)
+    code_ui_max_brightness=1.0,   # Maximum brightness for code UI elements (whitespace, indent guides, row/column highlights) (0.0-1.0)
     ui_min_brightness=0.0,        # Minimum brightness for UI elements (0.0-1.0)
     ui_max_brightness=1.0,        # Maximum brightness for UI elements (0.0-1.0)
     code_min_saturation=0.0,      # Minimum saturation for code elements (0.0-1.0)
@@ -36354,6 +36414,46 @@ def path_intersects_point(path,point)->bool:
     """ Return true if a 2d point "point" lies along a path of 2d points "path" """
     return paths_intersect([point],path)
 
+
+def reduce_wrap(func):
+    """
+    Decorator that extends a binary (two-argument) function to accept variable arguments.
+    The function should be associative and commutative for this to work correctly.
+    
+    Args:
+        func: A function that takes exactly two arguments and returns a result
+              of the same type.
+    
+    Returns:
+        A decorated function that accepts any number of arguments and applies the binary
+        function in a pairwise fashion using functools.reduce.
+        
+    Examples:
+        @reduce_wrap
+        def add(a, b):
+            return a + b
+            
+        add(1, 2)          # Returns 3
+        add(1, 2, 3, 4)    # Returns 10
+        add()              # Raises TypeError: At least one argument is required
+        add(5)             # Returns 5
+    """
+    import functools
+    @functools.wraps(func)
+    def wrapper(*args):
+        if not args:
+            raise TypeError(func.__name__ + "() requires at least one argument")
+        if len(args) == 1:
+            return args[0]
+        
+        return functools.reduce(func, args)
+    
+    # Add note about varargs extension
+    wrapper.__doc__ = (wrapper.__doc__ or "") + "\n\nThis function accepts variable arguments (*args)."
+    
+    return wrapper
+
+@reduce_wrap
 def longest_common_prefix(a,b):
     """
     Written by Ryan Burgert, 2020. Written for efficiency's sake.
@@ -36387,6 +36487,7 @@ def longest_common_prefix(a,b):
     return a[:s]
 
 
+@reduce_wrap
 def longest_common_suffix(a,b):
     """
     This funcion is analagous to longest_common_prefix. See it for more documentation.
@@ -36403,6 +36504,8 @@ def longest_common_suffix(a,b):
         out=''.join(out)
     return out
 
+
+@reduce_wrap
 def longest_common_substring(a,b):
     """
     https://pypi.org/project/pylcs/
@@ -37544,13 +37647,24 @@ def _disable_terminal_mouse_reporting():
     """
     print("\033[?1000;1002;1003;1004;1005;1006;1015l", end="", flush=True)
 
+def _terminal_move_cursor_to_top_left():
+    """
+    Prints ANSI escape sequence to move cursor to the top-left position
+    of the terminal.
+    """
+    # Move to home position (1,1)
+    print("\033[H", end="", flush=True)
+
+def _terminal_move_cursor_to_bottom_left():
+    # Move to the bottom of the screen
+    print("\033[9999B", end="", flush=True)
+
 def _terminal_move_cursor_to_bottom_and_new_line():
     """
     Prints ANSI escape sequence to move cursor to the bottom row 
     and creates a new line.
     """
-    # Move to the bottom of the screen
-    print("\033[9999B", end="", flush=True)
+    _terminal_move_cursor_to_bottom_left()
     print()
 
 def _run_claude_code(code):
@@ -38981,7 +39095,7 @@ def make_zip_file_from_folder(src_folder:str=None, dst_zip_file:str=None)->str:
         
     return dst_zip_file
 
-def extract_zip_file(zip_file_path, folder_path=None, *, treat_as=None):
+def extract_zip_file(zip_file_path, folder_path=None, *, treat_as=None, show_progress=False):
     """
     Extracts a zip or tar file to a specified folder. If the folder doesn't exist, it is created.
 
@@ -38991,6 +39105,7 @@ def extract_zip_file(zip_file_path, folder_path=None, *, treat_as=None):
           extracts to a new folder next to the zip file, with the same name as the file.
         - treat_as (str, optional): If specified as 'zip' or 'tar', treats the file at zip_file_path as a zip or tar file,
           useful for files like .pptx that are zip archives but have a different extension.
+        - show_progress (bool, optional): If True, shows extraction progress. Default is False.
 
     Returns:
         The path to the folder where files were extracted.
@@ -39011,12 +39126,24 @@ def extract_zip_file(zip_file_path, folder_path=None, *, treat_as=None):
         # If we're just unpacking a zip file, we don't need pyunpack
         import zipfile
         with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
-            zip_ref.extractall(folder_path)
+            if show_progress:
+                file_list = zip_ref.namelist()
+                for file in eta(file_list, title="rp.extract_zip_file to "+folder_path):
+                    zip_ref.extract(file, folder_path)
+            else:
+                zip_ref.extractall(folder_path)
+    
     elif get_file_extension(zip_file_path) == 'tar' or treat_as == 'tar':
         # If it's a tar file, use tarfile to extract it
         import tarfile
         with tarfile.open(zip_file_path, 'r') as tar_ref:
-            tar_ref.extractall(folder_path)
+            if show_progress:
+                file_list = tar_ref.getnames()
+                for file in eta(file_list, title="rp.extract_zip_file to "+folder_path):
+                    tar_ref.extract(file, folder_path)
+            else:
+                tar_ref.extractall(folder_path)
+    
     else:
         # If it's not a zip or tar file, don't give up. We can still unzip rar, jar, 7z, and other filetypes with the help of pyunpack
         _extract_archive_via_pyunpack(zip_file_path, folder_path)
@@ -39024,6 +39151,7 @@ def extract_zip_file(zip_file_path, folder_path=None, *, treat_as=None):
     _maybe_unbury_folder(folder_path)  # If it created something like unzipped_folder/unzipped_folder/contents make it into unzipped_folder/contents instead
 
     return folder_path
+
 unzip_to_folder=extract_zip_file
 
 def _extract_archive_via_pyunpack(archive_path, folder_path):
@@ -42338,9 +42466,9 @@ def accumulate_flows(*flows,reduce=True,reverse=False):
             _y = cv_remap_image(fy, ox, oy, relative=True, interp="bilinear")
             ox = ox + _x
             oy = oy + _y
-            if not reduce: os.append(np.stack((ox, oy)))
+            if not reduce: out_flows.append(np.stack((ox, oy)))
         if reduce: return np.stack((ox, oy))  #In  [XY]HW form
-        else:      return np.stack(os)        #In T[XY]HW form
+        else:      return np.stack(out_flows) #In T[XY]HW form
         
     elif is_torch_tensor(flows):
         assert flows.ndim==4, 'rp.accumulate_flows: flows should be in T2HW form, but its shape is '+str(flows.shape)
@@ -42355,11 +42483,11 @@ def accumulate_flows(*flows,reduce=True,reverse=False):
         
     elif all(map(is_numpy_array,flows)):
         flows=as_numpy_array(flows)
-        return accumulate_flows(flows)
+        return gather_args_call(accumulate_flows, flows)
         
     elif all(map(is_torch_tensor,flows)):
         import torch
-        return accumulate_flows(torch.stack(flows))
+        return gather_args_call(accumulate_flowsr, torch.stack(flows))
     
     else:
         assert False, 'All flows should be either torch tensors or all numpy arrays, not a mix of both.'
@@ -46587,7 +46715,7 @@ def select_torch_device(n=0, *, silent=False, prefer_used=False, reserve=False):
         silent (bool, optional): If True, suppresses print statements. Defaults to False.
         prefer_used (bool, optional): If True, selects a GPU already in use by the current
             process if available. Defaults to False.
-        reserve (bool, optional): If True, will reserve the GPU for future usage - by allocating a small amount of VRAM
+        reserve (bool, optional): If True, will reserve the GPU for future usage - by allocating a small amount of VRAM immediately
             It requires the filelock library, which will be used to prevent other processes from claiming the same GPU at the same time
 
     Returns:

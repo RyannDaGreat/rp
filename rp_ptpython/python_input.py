@@ -248,6 +248,8 @@ class PythonInput(object):
         self.code_max_saturation=1.0  # Maximum saturation for code elements (0.0-1.0)
         self.ui_min_saturation=0.0    # Minimum saturation for UI elements (0.0-1.0)
         self.ui_max_saturation=1.0    # Maximum saturation for UI elements (0.0-1.0)
+        self.code_ui_min_brightness=None  # Minimum brightness for code UI elements (whitespace, indent guides, etc.) (0.0-1.0)
+        self.code_ui_max_brightness=None  # Maximum brightness for code UI elements (whitespace, indent guides, etc.) (0.0-1.0)
         self.ui_bg_fg_contrast=0.0    # Minimum brightness difference between foreground and background (0.0-1.0)
         self.background_mode='Default'  # Background mode: "Nowhere", "Default", "Black", or "White"
 
@@ -405,7 +407,9 @@ class PythonInput(object):
                               code_max_saturation=self.code_max_saturation,
                               ui_min_saturation=self.ui_min_saturation,
                               ui_max_saturation=self.ui_max_saturation,
-                              ui_bg_fg_contrast=self.ui_bg_fg_contrast)
+                              ui_bg_fg_contrast=self.ui_bg_fg_contrast,
+                              code_ui_min_brightness=self.code_ui_min_brightness,
+                              code_ui_max_brightness=self.code_ui_max_brightness)
                               
     def _update_style(self):
         """
@@ -914,6 +918,24 @@ class PythonInput(object):
                            ('{:0.2f}'.format(value/50), lambda value=value: setattr(self, 'code_max_saturation', value/50) or self._update_style())
                            for value in range(0,51)
                        )),
+                       
+                # Code UI elements brightness controls (separate from code brightness)
+                Option(title='Code UI Min Brightness',
+                       description='Set the minimum brightness level for code UI elements (whitespace, indent guides, row/column highlights).',
+                       get_current_value=lambda: '{:0.2f}'.format(self.code_ui_min_brightness if self.code_ui_min_brightness is not None else 0.0),
+                       is_visible=lambda: getattr(self, 'show_all_options', False),
+                       get_values=lambda: dict(
+                           ('{:0.2f}'.format(value/50), lambda value=value: setattr(self, 'code_ui_min_brightness', value/50) or self._update_style())
+                           for value in range(0,51)
+                       )),
+                Option(title='Code UI Max Brightness',
+                       description='Set the maximum brightness level for code UI elements (whitespace, indent guides, row/column highlights).',
+                       get_current_value=lambda: '{:0.2f}'.format(self.code_ui_max_brightness if self.code_ui_max_brightness is not None else 1.0),
+                       is_visible=lambda: getattr(self, 'show_all_options', False),
+                       get_values=lambda: dict(
+                           ('{:0.2f}'.format(value/50), lambda value=value: setattr(self, 'code_ui_max_brightness', value/50) or self._update_style())
+                           for value in range(0,51)
+                       )),
                 
                 # UI-related options
                 Option(title='User Interface',
@@ -978,6 +1000,7 @@ class PythonInput(object):
                            ('{:0.2f}'.format(value/50), lambda value=value: setattr(self, 'ui_max_saturation', value/50) or self._update_style())
                            for value in range(0,51)
                        )),
+                       
                 Option(title='BG/FG Contrast',
                        description='Set the minimum brightness difference between foreground and background. 0.0 allows identical colors, higher values increase contrast.',
                        get_current_value=lambda: '{:.2f}'.format(self.ui_bg_fg_contrast),

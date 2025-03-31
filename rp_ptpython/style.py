@@ -759,7 +759,7 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
                 ui_invert_colors=False, ui_invert_brightness=False, code_hue_shift=0, ui_hue_shift=0,
                 code_min_brightness=0.0, code_max_brightness=1.0, ui_min_brightness=0.0, ui_max_brightness=1.0,
                 code_min_saturation=0.0, code_max_saturation=1.0, ui_min_saturation=0.0, ui_max_saturation=1.0,
-                ui_bg_fg_contrast=1.0):
+                ui_bg_fg_contrast=1.0, code_ui_min_brightness=None, code_ui_max_brightness=None):
     """
     Generate Pygments Style class from two dictionaries
     containing style rules.
@@ -783,6 +783,10 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
     :param ui_min_saturation: Float (0.0-1.0) indicating the minimum saturation for UI elements.
     :param ui_max_saturation: Float (0.0-1.0) indicating the maximum saturation for UI elements.
     :param ui_bg_fg_contrast: Float (0.1-3.0) indicating the contrast multiplier between background and foreground colors.
+    :param code_ui_min_brightness: Float (0.0-1.0) indicating the minimum brightness for code UI elements 
+                             (whitespace, indent guides, row/column highlights). Defaults to 0.0 if None.
+    :param code_ui_max_brightness: Float (0.0-1.0) indicating the maximum brightness for code UI elements
+                             (whitespace, indent guides, row/column highlights). Defaults to 1.0 if None.
     """
     assert isinstance(python_style, dict)  or isinstance(ui_style,ChaosStyle)
     assert isinstance(ui_style, dict) or isinstance(ui_style,ChaosStyle)
@@ -864,7 +868,12 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
         Token.CursorColumn: 'bg:#1c262a'
     }
     
-    # Apply the same transformations to these tokens as we did to code
+    # Apply code UI-specific transformations to these tokens
+    # Use code_ui_ settings directly, do not fall back to code_ settings
+    # This ensures code_ui elements have their own brightness independent of code elements
+    code_ui_min_b = 0.0 if code_ui_min_brightness is None else code_ui_min_brightness
+    code_ui_max_b = 1.0 if code_ui_max_brightness is None else code_ui_max_brightness
+    
     for token, style_str in code_tokens.items():
         processed_style = style_str
         
@@ -876,11 +885,11 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
         if code_invert_colors:
             processed_style = invert_style_string(processed_style)
             
-        # Apply code brightness limits
-        if code_min_brightness > 0.0 or code_max_brightness < 1.0:
-            processed_style = adjust_brightness_range_string(processed_style, code_min_brightness, code_max_brightness)
+        # Apply code UI-specific brightness limits
+        if code_ui_min_b > 0.0 or code_ui_max_b < 1.0:
+            processed_style = adjust_brightness_range_string(processed_style, code_ui_min_b, code_ui_max_b)
             
-        # Apply code saturation limits
+        # Apply code saturation limits (using code saturation settings)
         if code_min_saturation > 0.0 or code_max_saturation < 1.0:
             processed_style = adjust_saturation_range_string(processed_style, code_min_saturation, code_max_saturation)
             
