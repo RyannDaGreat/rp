@@ -8103,9 +8103,14 @@ def min_valued_index(l):
 def blend(𝓍,𝓎,α):  # Also known as 'lerp'
     return (1 - α) * 𝓍 + α * 𝓎  # More α --> More 𝓎 ⋀ Less 𝓍
 def iblend(z,𝓍,𝓎):  # iblend≣inverse blend. Solves for α， given 𝓏﹦blend(𝓍,𝓎,α)
-    z-=𝓍
-    z/=𝓎-𝓍
+    z=z-𝓍
+    z=z/(𝓎-𝓍)
     return z
+
+    #OLD: Has mutations
+    # z-=𝓍
+    # z/=𝓎-𝓍
+    # return z
 def interp(x,x0,x1,y0,y1):  # 2 point interpolation
     return (x - x0) / (x1 - x0) * (y1 - y0) + y0  # https://www.desmos.com/calculator/bqpv7tfvpy
 
@@ -37310,6 +37315,7 @@ def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, force=Fa
     elif starts_with_any(command, 'curl ', 'yes | curl '): _ensure_curl_installed()
     elif starts_with_any(command, 'npm ' , 'yes | npm ' ): _ensure_npm_installed()
     elif starts_with_any(command, 'apt ' , 'apt-get '   ): command = 'sudo '+command
+    elif starts_with_any(command, 'snap ' ,'yes | snap' ): command = 'sudo '+command
 
     error_code =_run_sys_command(command)
 
@@ -37365,11 +37371,20 @@ def _ensure_claudecode_installed():
         windows='npm install -g @anthropic-ai/claude-code',
     )
 
+def _ensure_snap_installed():
+    _ensure_installed(
+        'snap',
+        mac=None,
+        linux='sudo apt update ; sudo apt install snapd',
+        windows=None,
+    )
+
+
 def _ensure_nvtop_installed():
     _ensure_installed(
         'nvtop',
         mac=None,
-        linux='apt install nvtop --yes',
+        linux='snap install nvtop --yes',
         windows=None,
     )
 
@@ -37714,14 +37729,28 @@ def _run_claude_code(code):
 
         done = False
         
+        # @run_as_new_thread
+        # def commit_thread():
+        #     silent = ' &> /dev/null ' * 1
+        #     os.system('git init '+silent)
+        #     while not done and get_current_directory()==workdir:
+        #         sleep(.1)
+        #         commit_message = 'Auto-Commit at '+format_current_date()
+        #         os.system('git add --all '+silent+' && git commit -am '+shlex.quote(commit_message)+silent)
+
+        import subprocess
         @run_as_new_thread
-        def commit_thread():
-            silent = ' &> /dev/null ' * 1
-            os.system('git init '+silent)
+        def commit_process():
+            devnull = open(os.devnull, 'w')
+            subprocess.run(['git', 'init'], stdout=devnull, stderr=devnull)
             while not done and get_current_directory()==workdir:
                 sleep(.1)
                 commit_message = 'Auto-Commit at '+format_current_date()
-                os.system('git add --all '+silent+' && git commit -am '+shlex.quote(commit_message)+silent)
+                try:
+                    subprocess.run(['git', 'add', '--all'], stdout=devnull, stderr=devnull)
+                    subprocess.run(['git', 'commit', '-am', commit_message], stdout=devnull, stderr=devnull)
+                except Exception:
+                    pass
             
         try:
             #Make sure it doesnt block the above thread!
