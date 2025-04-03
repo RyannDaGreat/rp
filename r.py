@@ -955,6 +955,13 @@ _fansi_styles = {
     "strike": 9,
     "sub": 74,
     "super": 73,
+
+    #https://ryantravitz.com/blog/2023-02-18-pull-of-the-undercurl/
+    'underline'  : '4:1', #Same as underlined, but supports custom colors! 
+    'underdouble': '4:2',
+    'undercurl'  : '4:3',
+    'underdots'  : '4:4', 
+    'underdash'  : '4:5',
 }
 
 def _transform_fansi_arg(spec):
@@ -980,13 +987,25 @@ def _transform_fansi_arg(spec):
 
     return color, style, background
 
-def fansi(text_string="", text_color=None, style=None, background_color=None, *, per_line=True, reset=True, truecolor=False, link=None):
+def fansi(
+    text_string="",
+    text_color=None,
+    style=None,
+    background_color=None,
+    underline_color=None,
+    *,
+    per_line=True,
+    reset=True,
+    truecolor=False,
+    link=None
+):
     """
     'fansi' is a pun, referring to ANSI and fancy
     Uses ANSI formatting to give the terminal styled color outputs.
 
     The 'per_line' option applies fansi to each line separately, which is useful for multi-line strings. It is enabled by default.
     The 'truecolor' option enables 24-bit truecolor support if the terminal supports it. It is disabled by default.
+    The 'underline_color' option allows specifying a color for underlines independent of the text color. It is None by default.
     The 'link' option creates a hyperlink to the provided URL. It is None by default.
     Note on terminal hyperlink support:
     - iTerm2, GNOME Terminal, Konsole: Directly clickable hyperlinks
@@ -1130,7 +1149,7 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
     # Handle per_line option
     if per_line and text_string:
         lines = text_string.splitlines(keepends=True)
-        lines = [fansi(line, text_color, style, background_color, per_line=False, reset=reset, truecolor=truecolor, link=link) for line in lines]
+        lines = [fansi(line, text_color, style, background_color, underline_color=underline_color, per_line=False, reset=reset, truecolor=truecolor, link=link) for line in lines]
         return ''.join(lines)
 
     # Check if ANSI formatting is disabled
@@ -1216,13 +1235,32 @@ def fansi(text_string="", text_color=None, style=None, background_color=None, *,
         hyperlink_start = "\033]8;" + hyperlink_params + ";" + str(link) + "\007"
         hyperlink_end = "\033]8;;\007"
 
+    # Handle underline_color if provided
+    underline_color_code = ""
+    if underline_color is not None:
+        if isinstance(underline_color, str) and underline_color in color_codes:
+            color_code = color_codes[underline_color] 
+            underline_color_code = '\033[58;5;{}m'.format(color_code)
+        else:
+            try:
+                underline_color = as_rgb_float_color(underline_color)
+                if truecolor and not isinstance(underline_color, int):
+                    r, g, b = float_color_to_byte_color(underline_color)
+                    underline_color_code = '\033[58;2;{};{};{}m'.format(r, g, b)
+                else:
+                    color_code = underline_color if isinstance(underline_color, int) else float_color_to_ansi256(underline_color)
+                    underline_color_code = '\033[58;5;{}m'.format(color_code)
+            except Exception:
+                print("ERROR: fansi: Invalid underline_color '{}'. Valid options are: {}, or any RGB float color compatible with rp.as_rgb_float_color".format(
+                    underline_color, list(color_codes.keys())))
+
     # Apply ANSI formatting
     format_sequence = ';'.join(format_codes)
-    output = "\x1b[{}m{}{}{}".format(format_sequence, hyperlink_start, text_string, hyperlink_end)
+    # Insert underline color after the format codes if needed
+    output = "\x1b[{}m{}{}{}{}".format(format_sequence, underline_color_code, hyperlink_start, text_string, hyperlink_end)
     if reset:
         output += '\x1b[0m'
     return output
-
 
 def _fansi_fix(string):
     """
@@ -1359,7 +1397,17 @@ def _legacy_fansi(text_string,text_color=None,style=None,background_color=None,*
 # from random import randint
 # print(seq([lambda old:old+fansi(chr(randint(0,30000)),randint(0,7),randint(0,7),randint(0,7))]*100,''))
 # endregion
-def fansi_print(text_string: object,text_color: object = None,style: object = None,background_color: object = None,new_line=True,reset=True,truecolor=True) -> object:
+def fansi_print(
+    text_string: object,
+    text_color: object = None,
+    style: object = None,
+    background_color: object = None,
+    underline_color=None,
+    *,
+    new_line=True,
+    reset=True,
+    truecolor=True
+):
     """
     This function prints colored text in a terminal.
     It can also print bolded, underlined, or highlighted text.
@@ -1375,10 +1423,12 @@ def fansi_print(text_string: object,text_color: object = None,style: object = No
             background_color=background_color,
             reset=reset,
             truecolor=truecolor,
+            underline_color=underline_color,
         ),
         end="\n" if new_line else "",
         flush=True,
     )
+
 # noinspection PyShadowingBuiltins
 def print_fansi_reference_table() -> None:
     """
@@ -15400,6 +15450,21 @@ def _get_cdh_back_names():
         if x.strip()
     ]
 
+def _user_path_ans(ans):
+    """
+    EXAMPLE:
+        >>> ans = /Users/burgert/miniconda3/lib/python3.12/site-packages/rp
+        >>> _user_path_ans(ans)
+        ans = ~/miniconda3/lib/python3.12/site-packages/rp
+    """
+    if isinstance(ans, (list, tuple)):
+        return list(map(_user_path_ans,ans))
+
+    ans=str(ans)
+    ans=get_absolute_path(ans)
+    if ans.startswith(get_home_directory()):
+        ans='~'+ans[len(get_home_directory()):]
+    return ans
 
 def _cdh_back_query(query):
     assert isinstance(query, str)
@@ -18043,6 +18108,8 @@ def _absolute_path_ans(ans):
 def _relative_path_ans(ans):
     #Relative Path Ans
     if isinstance(ans,str):
+        if ans.startswith('~'):
+            ans=os.path.expanduser(ans)
         return get_relative_path(ans)
     else:
         return [get_relative_path(x) for x in ans]
@@ -18631,6 +18698,8 @@ def _pterm_fuzzy_cd(query_path, do_cd=False):
     if query_path.startswith('/'):
         #Doesn't work for windows. Who cares lol
         root='/'
+    elif query_path.startswith('~/'):
+        root=get_home_directory()
     else:
         root='.'
 
@@ -18798,7 +18867,7 @@ def _convert_powerpoint_file(path,message=None):
 
 
 def _write_default_gitignore():
-    types_to_ignore='pyc swo swp swn swm un~ gstmp ipynb_checkpoints DS_Store'.split()
+    types_to_ignore='pyc bak swo swp swn swm swh swi swj swk swl swm swn swo swp un~ gstmp ipynb_checkpoints DS_Store'.split()
     types_to_ignore=['*.'+x for x in types_to_ignore]
 
     new_lines = (
@@ -19629,6 +19698,8 @@ def pseudo_terminal(
         FC FCOPY
         MLP MLPASTE
 
+        PSP $shlex.split($string_from_clipboard())
+
         TPWC $web_copy($printed($tmux_paste()))
         WCTP $web_copy($printed($tmux_paste()))
         TPCO $string_to_clipboard($printed(str($tmux_paste())))
@@ -19823,7 +19894,7 @@ def pseudo_terminal(
         RA     RUNA
         EA     RUNA
 
-        CPR $check_pip_requirements()
+        CPR !$PY -m rp call check_pip_requirements
 
         BAA  $os.system('bash '+str(ans))
         ZSHA $os.system('bash '+str(ans))
@@ -19944,6 +20015,8 @@ def pseudo_terminal(
         LSA ALS
         LSAD ALSD
         LSAF ALSF
+
+        ATS $tmux_get_scrollback()
 
         quit() RETURN
         exit() RETURN
@@ -20098,6 +20171,7 @@ def pseudo_terminal(
         RNA $rename_file(ans,$input_default($fansi('NewPathName:','blue'),$get_file_name(ans)))
         APA $r._absolute_path_ans(ans)
         RPA $r._relative_path_ans(ans)
+        UPA $r._user_path_ans(ans)
 
         UZA $unzip_to_folder(ans)
         ZIH $make_zip_file_from_folder($get_absolute_path('.'))
@@ -20136,6 +20210,7 @@ def pseudo_terminal(
         UURL $unshorten_url(ans)
 
         GP  $print_gpu_summary()
+        VGP $r._ensure_viddy_installed() ; $r._run_sys_command('viddy '+sys.executable+' call print_gpu_summary')
         NGP $print_notebook_gpu_summary()
         
         LEA  [eval(str(x)) for x in ans]
@@ -22424,7 +22499,7 @@ def pseudo_terminal(
                                 or user_message.startswith("CDU ")
                                 or user_message.startswith("CDH ")
                                 or user_message == "CDP"
-                                or not is_valid_python_syntax(user_message) and folder_exists(user_message)
+                                or not is_valid_python_syntax(user_message) and folder_exists(rp.os.path.expanduser(user_message))
                             )
                             or user_message == "CDB"
                             or user_message == "CDU"
@@ -22433,7 +22508,7 @@ def pseudo_terminal(
                             or user_message == "CDQ"
                             or user_message.replace('CDB','')=='' and user_message
                         ):
-                            if not is_valid_python_syntax(user_message) and folder_exists(user_message):
+                            if not is_valid_python_syntax(user_message) and folder_exists(rp.os.path.expanduser(user_message)):
                                 #Pasting a folder path and entering CD's to it
                                 user_message = "CD "+user_message
 
@@ -30121,10 +30196,18 @@ def get_video_height(video):
     if is_torch_tensor(video) and video.ndim==4:return video.shape[-2] #TCHW form
     return max(map(get_image_height, video))
 
+def get_video_heights(*videos):
+    videos = detuple(videos)
+    return [get_video_height(x) for x in videos]
+
 def get_video_width(video):
     if is_numpy_array (video) and video.ndim==4:return video.shape[ 2] #THWC form
     if is_torch_tensor(video) and video.ndim==4:return video.shape[-1] #TCHW form
     return max(map(get_image_width, video))
+
+def get_video_widths(*videos):
+    videos = detuple(videos)
+    return [get_video_width(x) for x in videos]
 
 #TODO: Finish color conversions
 
@@ -37239,9 +37322,30 @@ _ryan_tmux_conf=r'''
         #STATUSBAR:
             #COLOR:
                 #Pro tip: To see all 256 colors, use rp.print_fansi_reference_table()
-                # set -g status-style bg=colour97 #Set the color of the status bak
-                # set -g pane-active-border-style bg=default,fg=colour97 #The border colors between panes
-                # set -g mode-style bg=colour213,fg=black #Set the color of text selection
+                #THEME: Lavender
+                    #set -g status-style             bg=colour97             #Set the color of the status bar
+                    #set -g pane-active-border-style bg=default,fg=colour97  #The border colors between panes
+                    #set -g mode-style               bg=colour213,fg=black   #Set the color of text selection
+                #THEME: Blue
+                    #set -g status-style             bg=colour25             #Set the color of the status bar
+                    #set -g pane-active-border-style bg=default,fg=colour39  #The border colors between panes
+                    #set -g mode-style               bg=colour117,fg=black   #Set the color of text selection
+                #THEME: Green
+                    #set -g status-style             bg=colour22             #Set the color of the status bar
+                    #set -g pane-active-border-style bg=default,fg=colour40  #The border colors between panes
+                    #set -g mode-style               bg=colour114,fg=black   #Set the color of text selection
+                #THEME: Orange
+                    #set -g status-style             bg=colour166            #Set the color of the status bar
+                    #set -g pane-active-border-style bg=default,fg=colour208 #The border colors between panes
+                    #set -g mode-style               bg=colour215,fg=black   #Set the color of text selection
+                #THEME: Purple
+                    #set -g status-style             bg=colour54             #Set the color of the status bar
+                    #set -g pane-active-border-style bg=default,fg=colour93  #The border colors between panes
+                    #set -g mode-style               bg=colour141,fg=black   #Set the color of text selection
+                #THEME: Red
+                    #set -g status-style             bg=colour124            #Set the color of the status bar
+                    #set -g pane-active-border-style bg=default,fg=colour160 #The border colors between panes
+                    #set -g mode-style               bg=colour203,fg=black   #Set the color of text selection
             #TEXT: 
                 ## Better status, such as AM PM time. TODO: Configure this. It's a mess right now...
                 ## See https://arcolinux.com/everything-you-need-to-know-about-tmux-status-bar/
@@ -37259,6 +37363,15 @@ _ryan_tmux_conf=r'''
            #https://github.com/tmux/tmux/wiki/Clipboard#terminal-support---tmux-inside-tmux
            # set -g set-clipboard external
            set -g set-clipboard on
+
+#UNDERCURLS
+    # https://ryantravitz.com/blog/2023-02-18-pull-of-the-undercurl/
+    # https://gist.github.com/michenriksen/a3fd9e4104548c960696748d994309a3
+    set-option -gas terminal-overrides "*:Tc" # true color support
+    set-option -gas terminal-overrides "*:RGB" # true color support
+    set -as terminal-overrides ',*:Smulx=\E[4::%p1%dm'  # undercurl support
+    set -as terminal-overrides ',*:Setulc=\E[58::2::%p1%{65536}%/%d::%p1%{256}%/%{255}%&%d::%p1%{255}%&%d%;m'  # underscore colours - needs tmux-3.0
+
 '''
 def _set_ryan_tmux_conf():
     conf_path=get_absolute_path("~/.tmux.conf")
@@ -37401,6 +37514,15 @@ def _install_oh_my_zsh():
     _ensure_zsh_installed()
     _ensure_curl_installed()
     _run_sys_command('sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"')
+
+def _ensure_viddy_installed():
+    """ https://github.com/sachaos/viddy """
+    _ensure_installed(
+        'viddy',
+        mac='brew install viddy',
+        linux='wget -O viddy.tar.gz https://github.com/sachaos/viddy/releases/download/v1.3.0/viddy-v1.3.0-linux-x86_64.tar.gz && tar xvf viddy.tar.gz && mv viddy /usr/local/bin',
+        windows=None, #Please see https://github.com/sachaos/viddy
+    )
 
 def _ensure_tmux_installed():
     _ensure_installed(
@@ -38237,6 +38359,28 @@ def tmux_type_in_all_panes(keystrokes: str, *, session: str = None, window: str 
     # Execute the commands
     for command in commands:
         subprocess.run(command, check=True)
+
+
+def tmux_get_scrollback() -> str:
+    """
+    Gets the scrollback buffer of the current tmux pane.
+    
+    Returns:
+        str: The scrollback buffer content.
+    """
+    import subprocess
+    try:
+        # Capture the scrollback buffer using tmux capture-pane and save to stdout
+        result = subprocess.run(
+            ["tmux", "capture-pane", "-p", "-S", "-"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        # Handle errors (e.g., not in a tmux session)
+        raise RuntimeError("Failed to get tmux scrollback: " + str(e))
 
 #Keeping this function private until it works perfectly!
 def _tmux_reset_all_panes(*, session: str = None, window: str = None):
@@ -41271,9 +41415,9 @@ def validate_tensor_shapes(*, verbose=False, **kwargs):
     caller_scope = _get_visible_scope(1)
     
     # Separate dimension constraints from tensor form strings
-    dim_constraints = {}
-    tensor_forms = {}
-    shape_dict = {}
+    dim_constraints = {}  # {name: int, ...}
+    tensor_forms = {}     # {name: form_str, ...}
+    name_shape_forms = [] # [(name, shape, form), ... ]
     
     # Store actual shapes for reporting
     actual_shapes = {}
@@ -41320,7 +41464,7 @@ def validate_tensor_shapes(*, verbose=False, **kwargs):
             # Get the shape
             if hasattr(tensor, 'shape'):
                 shape = tensor.shape
-                shape_dict[shape] = value
+                name_shape_forms.append([key, shape, value])
                 # Store the actual shape for reporting
                 actual_shapes[key] = shape
             else:
@@ -41335,11 +41479,7 @@ def validate_tensor_shapes(*, verbose=False, **kwargs):
     # Track which dimensions were explicitly provided via kwargs
     kwarg_dims = set(dim_constraints.keys())
     
-    for shape_tuple, form_str in shape_dict.items():
-        # Find tensor name for this shape
-        tensor_name = next((name for name, fmt in tensor_forms.items() 
-                           if hasattr(caller_scope[name], 'shape') 
-                           and caller_scope[name].shape == shape_tuple), "unknown")
+    for tensor_name, shape_tuple, form_str in name_shape_forms:
 
         shape_string = format_shape(shape_tuple)
         
@@ -41422,7 +41562,7 @@ def validate_tensor_shapes(*, verbose=False, **kwargs):
         shape_string = format_shape(shape)
         all_errors.append("  • {}: {}".format(tensor_name, shape_string))
     
-    has_errors = any([missing_shape_errors, dim_count_errors, literal_mismatch_errors, inconsistencies, tensor_type_errors])
+    has_errors = bool(missing_shape_errors or dim_count_errors or literal_mismatch_errors or inconsistencies or tensor_type_errors)
     
     if missing_shape_errors:
         all_errors.append("\nMissing or invalid tensors:")
@@ -42822,6 +42962,18 @@ def resize_images_to_min_size(*images, interp="bilinear", alpha_weighted=False):
         display_image_slideshow(resize_images_to_min(ans))
     """
     return resize_images(*images, size=get_min_image_dimensions(*images), interp=interp, alpha_weighted=alpha_weighted)
+
+def resize_videos_to_min_size(*videos):
+    videos = detuple(videos)
+    min_height = min(get_video_heights(videos))
+    min_width  = min(get_video_widths (videos))
+    return resize_videos(videos, size=(min_height, min_width))
+
+def resize_videos_to_max_size(*videos):
+    videos = detuple(videos)
+    max_height = max(get_video_heights(videos))
+    max_width  = max(get_video_widths (videos))
+    return resize_videos(videos, size=(max_height, max_width))
 
 def _iterfzf(iterable, *args,**kwargs):
     pip_import('iterfzf')
@@ -47320,6 +47472,13 @@ def resize_lists_to_max_len(*lists):
     if is_numpy_array(lists): return lists.copy() #Shortcut!
     length=max(map(len,lists))
     return [resize_list(l,length) for l in lists]
+
+def resize_lists_to_min_len(*lists):
+    lists=detuple(lists)
+    if is_numpy_array(lists): return lists.copy() #Shortcut!
+    length=min(map(len,lists))
+    return [resize_list(l,length) for l in lists]
+
 
 def resize_list_to_fit(array:list, max_length:int):
     """
