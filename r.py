@@ -24053,7 +24053,13 @@ def get_process_exists(pid: int) -> bool:
 
     pip_import('psutil')
     import psutil
-    return psutil.pid_exists(pid)
+    try:
+        return psutil.pid_exists(pid)
+    except OverflowError:
+        # It errors if PID is too large:
+        #     OverflowError: signed integer is greater than maximum
+        # ...in this case we know it doesn't exist.
+        return False
 process_exists=get_process_exists
 
 def get_process_start_date(pid=None):
