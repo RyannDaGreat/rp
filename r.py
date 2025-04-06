@@ -15167,39 +15167,61 @@ def display_image_in_terminal(image,dither=True,auto_resize=True,bordered=False)
                 c.set(y,x)
     print(c.frame())
 
+
 def display_image_in_terminal_color(image,*,truecolor=True):
     """
     Will attempt to draw a color image in the terminal
     This is slower than display_image_in_terminal, and relies on both unicode and terminal colors
     EXAMPLE:
+        >>> while True:
+        ...     _terminal_move_cursor_to_top_left()
+        ...     image=load_image_from_webcam()
+        ...     display_image_in_terminal_color(image)
+    EXAMPLE:
         display_image_in_terminal_color(load_image('https://i.guim.co.uk/img/media/faf20d1b2a98cbca9f5eb2946254566527394e15/78_689_3334_1999/master/3334.jpg?width=1200&height=900&quality=85&auto=format&fit=crop&s=69707184a1b38f36fc077f7cafba1130'))#Display Kim Petras in the terminal
     """
-    USE_OPENCV=True
-    pip_import('timg')
+
+    import sys
+    import importlib.util
+    import rp.libs.timg as timg #A c-optimized version of timg
+
     if file_exists(image) or is_valid_url(image):
         image=load_image(image)
-    image=as_numpy_image(image,copy=False)
+
     assert is_image(image)
+    image=as_numpy_image(image,copy=False)
+    image=as_rgb_image(image)
+    image=as_byte_image(image)
+    image=resize_image_to_fit(image,width=get_terminal_width(),allow_growth=False)
+
     if get_image_height(image)%2:
         #We can only display pixel heights of 2,4,6,8 etc.
         #To prevent it from cutting off the bottom pixel, add some black if it's odd...
         #For example, display_image_in_terminal_color(uniform_float_color_image(5,10,(255,0,255,255)))
-        image=bordered_image_solid_color(image,thickness=0,bottom=1,color=(0,0,0,0))
-    image=as_rgb_image(image)
-    image=as_byte_image(image)
-    temp_file=temporary_file_path('png')
-    try:
-        import subprocess
-        width=min(get_terminal_width(),get_image_width(image))
-        height=int(get_image_height(image)*width/get_image_width(image))
-        if width!=get_image_width(image):
-            image=(cv_resize_image if USE_OPENCV else resize_image)(image,(height,width))
-        save_image(image,temp_file)
-        subprocess.run([sys.executable,'-m','timg']+['-m','a8h']*(not truecolor)+['-s',str(width),temp_file])
-    finally:
-        if file_exists(temp_file):
-            delete_file(temp_file)
+        image = bordered_image_solid_color(image, thickness=0, bottom=1, color="black")
 
+    # Get the timg module and use its functionality directly
+    timg_renderer = timg.Renderer()
+    
+    # Load the image
+    #timg_renderer.load_image_from_file(temp_file)
+    timg_renderer.load_image(rp.as_pil_image(image))
+    
+    # Choose the appropriate rendering method based on truecolor flag
+    #    ┌─────────┬──────────────────────────────────────────────┐
+    #    │ Method  │ Description                                  │
+    #    ├─────────┼──────────────────────────────────────────────┤
+    #    │ sixel   │ use sixels - best quality but lowest support │
+    #    │ a8f     │ low-resolution ANSI 8-bit palette            │
+    #    │ a24f    │ low-resolution ANSI 24-bit palette           │
+    #    │ a8h     │ high-resolution ANSI 8-bit palette           │
+    #    │ a24h    │ high-resolution ANSI 24-bit palette          │
+    #    │ ascii   │ ASCII art                                    │
+    #    └─────────┴──────────────────────────────────────────────┘
+    method = 'a24h' if truecolor else 'a8h'
+    
+    # Render the image with the selected method
+    timg_renderer.render(timg.METHODS[method]['class'])
 
 def display_image_in_terminal_imgcat(image):
     """
@@ -37243,12 +37265,27 @@ _ryan_tmux_conf=r'''
     set -g status-left-length 10000
 
 
-#YANKING:
-    # Let tmux copy to the system clipboard.
-    # First, please run   git clone https://github.com/tmux-plugins/tmux-yank ~/clone/path
-    run-shell ~/clone/path/yank.tmux
-    set -g @yank_with_mouse on
-    set -g @yank_selection_mouse 'clipboard' # or 'primary' or 'secondary'
+#CAPABILITIES
+
+    #YANKING:
+        # Let tmux copy to the system clipboard.
+        # First, please run   git clone https://github.com/tmux-plugins/tmux-yank ~/clone/path
+        run-shell ~/clone/path/yank.tmux
+        set -g @yank_with_mouse on
+        set -g @yank_selection_mouse 'clipboard' # or 'primary' or 'secondary'
+
+    #IMAGES:
+        #Allow images to be displayed through tmux
+        #https://github.com/wookayin/python-imgcat/issues/4
+        set -gq allow-passthrough on
+
+    #UNDERCURLS
+        # https://ryantravitz.com/blog/2023-02-18-pull-of-the-undercurl/
+        # https://gist.github.com/michenriksen/a3fd9e4104548c960696748d994309a3
+        set-option -gas terminal-overrides "*:Tc" # true color support
+        set-option -gas terminal-overrides "*:RGB" # true color support
+        set -as terminal-overrides ',*:Smulx=\E[4::%p1%dm'  # undercurl support
+        set -as terminal-overrides ',*:Setulc=\E[58::2::%p1%{65536}%/%d::%p1%{256}%/%{255}%&%d::%p1%{255}%&%d%;m'  # underscore colours - needs tmux-3.0
 
 
 #BINDINGS
@@ -37320,12 +37357,15 @@ _ryan_tmux_conf=r'''
         #To get 24 bit color support in mosh you have to build it yourself! I PROMISE IT'S NOT THAT BAD (it's really quick)! https://github.com/mobile-shell/mosh/wiki/Build-Instructions
         #I was referred there by https://github.com/mobile-shell/mosh/issues/649
         set-option -sa terminal-overrides ",xterm*:Tc" #This somehow enables Truecolor...idk why but it works on Macx! From https://herrbischoff.com/2020/08/how-to-enable-italics-in-tmux/
-    #IMAGES:
-        #Allow images to be displayed through tmux
-        #https://github.com/wookayin/python-imgcat/issues/4
-        set -gq allow-passthrough on
+    #CLIPBOARD:
+        #Let tmux copy to the system clipboard. "external" is more restrictive than "on" - "on lets any program copy to terminal via OSC52. This is what we want.
+        #https://github.com/tmux/tmux/wiki/Clipboard#terminal-support---tmux-inside-tmux
+        # set -g set-clipboard external
+        set -g set-clipboard on
     #THEME:
         #STATUSBAR:
+            #POSITION:
+                #set-option -g status-position top
             #COLOR:
                 #Pro tip: To see all 256 colors, use rp.print_fansi_reference_table()
                 #THEME: Lavender
@@ -37364,19 +37404,6 @@ _ryan_tmux_conf=r'''
                 #set -ag status-right "#[fg=cyan]#(uptime | cut -f 4-5 -d ' ' | cut -f 1 -d ',') "
                 ## set -ag status-right "#[fg=cyan]%A, %d %b %Y %I:%M %p"
                 #set -ag status-right "#[fg=cyan]: %b %d %I:%M %p"
-        #CLIPBOARD:
-           #Let tmux copy to the system clipboard. "external" is more restrictive than "on" - "on lets any program copy to terminal via OSC52. This is what we want.
-           #https://github.com/tmux/tmux/wiki/Clipboard#terminal-support---tmux-inside-tmux
-           # set -g set-clipboard external
-           set -g set-clipboard on
-
-#UNDERCURLS
-    # https://ryantravitz.com/blog/2023-02-18-pull-of-the-undercurl/
-    # https://gist.github.com/michenriksen/a3fd9e4104548c960696748d994309a3
-    set-option -gas terminal-overrides "*:Tc" # true color support
-    set-option -gas terminal-overrides "*:RGB" # true color support
-    set -as terminal-overrides ',*:Smulx=\E[4::%p1%dm'  # undercurl support
-    set -as terminal-overrides ',*:Setulc=\E[58::2::%p1%{65536}%/%d::%p1%{256}%/%{255}%&%d::%p1%{255}%&%d%;m'  # underscore colours - needs tmux-3.0
 
 '''
 def _set_ryan_tmux_conf():
@@ -37845,11 +37872,14 @@ def _run_claude_code(code):
         except:
             pass
 
-    filename = "editme.py"
+    filetype = 'bash' if code.startswith('!') else 'python'
+    filename = "editme." + filetype
 
     display_code_cell(code, title=" Claude " + filename + " ")
     workdir = path_join(_claudecode_folder, 'workspace_%i'%millis())
     make_directory(workdir)
+
+    old_code = code
 
     print(fansi_highlight_path(workdir))
     with SetCurrentDirectoryTemporarily(workdir):
@@ -37888,6 +37918,12 @@ def _run_claude_code(code):
 
         if file_exists(filename):
             code = load_text_file(filename)
+
+            if old_code.startswith('!!') and not code.startswith('!!'):
+                code = '!!'+code.lstrip('!')
+            elif old_code.startswith('!') and not code.startswith('!'):
+                code = '!'+code
+
             return gather_vars("code workdir")
         else:
             return gather_vars("workdir")
@@ -43422,46 +43458,48 @@ def gpt3(text:str):
     Use GPT3 to write some text
     https://deepai.org/machine-learning-model/text-generator
     """
-    pip_import('requests')
-    import requests
-    assert isinstance(text,str),'Text must be a string'
-    assert len(text)>0,'Text cannot be empty'
-    response = requests.post(
-        #If in the future this API key no longer works, you can sign up for one -- its free. Or, if this site is broken, please replace this function with a working API.
-        "https://api.deepai.org/api/text-generator",
-        data={
-            'text': text,
-        },
-        headers={'api-key': '68da3879-3ec4-4f51-905d-dd46a1a88405'}
-    )
-    data=response.json()
-    return data['output']
+    assert False, 'rp.gpt3: This GPT3 API is dead. Dont use this function.'
+    # pip_import('requests')
+    # import requests
+    # assert isinstance(text,str),'Text must be a string'
+    # assert len(text)>0,'Text cannot be empty'
+    # response = requests.post(
+    #     #If in the future this API key no longer works, you can sign up for one -- its free. Or, if this site is broken, please replace this function with a working API.
+    #     "https://api.deepai.org/api/text-generator",
+    #     data={
+    #         'text': text,
+    #     },
+    #     headers={'api-key': '68da3879-3ec4-4f51-905d-dd46a1a88405'}
+    # )
+    # data=response.json()
+    # return data['output']
 
 def deepgenx(code:str)->str:
-    #Similar to GitHub copilot, except it uses GPT-J and is free
-    #See https://deepgenx.com/
-    #Given some python code, it will continue it and return the original code + the continued code
-    pip_import('requests')
-    import requests
-    import json
-    ans = code
-    ans = requests.post(
-        "https://api.deepgenx.com:5700/generate",
-        json=dict(
-            input=code,
-            token_max_length=1024,
-            temperature=1,
-            top_p=.7,
-            # Get your token here: https://deepgenx.com/signin
-            token="8168b4cc9bbc41f0b3b8a403a9ad6b7cf195f01ded98706282980ceff021041e.3a3eed41e43b3a212f8898ba26c6e341a639c2e86bb3110e35f64d312b982086",
-        ),
-    )
-    ans = ans.text
-    ans = json.loads(ans)
-    assert ans['success'], 'deepgenx request failed: '+repr(ans)
-    ans = ans["message"]
-    ans = line_join(ans)
-    return code+ans
+    assert False, 'rp.deepgenx: Deepgenx is dead. Dont use this function.'
+    # #Similar to GitHub copilot, except it uses GPT-J and is free
+    # #See https://deepgenx.com/
+    # #Given some python code, it will continue it and return the original code + the continued code
+    # pip_import('requests')
+    # import requests
+    # import json
+    # ans = code
+    # ans = requests.post(
+    #     "https://api.deepgenx.com:5700/generate",
+    #     json=dict(
+    #         input=code,
+    #         token_max_length=1024,
+    #         temperature=1,
+    #         top_p=.7,
+    #         # Get your token here: https://deepgenx.com/signin
+    #         token="8168b4cc9bbc41f0b3b8a403a9ad6b7cf195f01ded98706282980ceff021041e.3a3eed41e43b3a212f8898ba26c6e341a639c2e86bb3110e35f64d312b982086",
+    #     ),
+    # )
+    # ans = ans.text
+    # ans = json.loads(ans)
+    # assert ans['success'], 'deepgenx request failed: '+repr(ans)
+    # ans = ans["message"]
+    # ans = line_join(ans)
+    # return code+ans
 
 def _get_openai_api_key(key=None):
     if key is not None:
