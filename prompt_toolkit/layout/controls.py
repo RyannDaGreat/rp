@@ -141,12 +141,18 @@ class UIContent(object):
         try:
             return self._line_heights[lineno, width]
         except KeyError:
-            text = token_list_to_text(self.get_line(lineno))
-            result = self.get_height_for_text(text, width)
+            try:
+                text = token_list_to_text(self.get_line(lineno))
+                result = self.get_height_for_text(text, width)
 
-            # Cache and return
-            self._line_heights[lineno, width] = result
-            return result
+                # Cache and return
+                self._line_heights[lineno, width] = result
+                return result
+            except Exception:
+                # If we encounter any errors (such as invalid line numbers),
+                # return a default height of 1 and cache it
+                self._line_heights[lineno, width] = 1
+                return 1
 
     @staticmethod
     def get_height_for_text(text, width):
@@ -578,11 +584,21 @@ class BufferControl(UIControl):
 
             def get_processed_line(i):
                 try:
+                    # Try to get from cache first
                     return cache[i]
                 except KeyError:
-                    processed_line = transform(i, get_line(i))
-                    cache[i] = processed_line
-                    return processed_line
+                    try:
+                        # Not in cache, generate and store
+                        processed_line = transform(i, get_line(i))
+                        cache[i] = processed_line
+                        return processed_line
+                    except Exception:
+                        # In case of any errors (like trying to access invalid line numbers),
+                        # return an empty line instead of crashing
+                        from rp.prompt_toolkit.token import Token
+                        empty_line = transform(i, [(Token, '')])
+                        cache[i] = empty_line
+                        return empty_line
             return get_processed_line
 
         return create_func()

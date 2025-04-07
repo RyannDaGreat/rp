@@ -199,7 +199,7 @@ class PythonInput(object):
         self.enable_auto_suggest=False
         self.enable_mouse_support=False
         self.indent_guides_mode='Propagate'  # 'Off', 'Regular', or 'Propagate'
-        self.show_whitespace=False  # Show spaces as middle dots and tabs as arrows
+        self.show_whitespace='Off'  # 'Off', 'All', or 'Leading'
         self.highlight_cursor_line=False  # Highlight the background of the cursor line
         self.highlight_cursor_column=False  # Highlight the background of the cursor column
         self.highlight_matching_words=True  # Underline all occurrences of the word under cursor
@@ -563,9 +563,16 @@ class PythonInput(object):
                            'Regular': lambda:setattr(self, 'indent_guides_mode', 'Regular'),
                            'Propagate': lambda:setattr(self, 'indent_guides_mode', 'Propagate'),
                        }),
-                simple_option(title='Show whitespace',
-                       description='Display spaces as middle dots (·) and tabs as arrows (→).',
-                       field_name='show_whitespace'),
+                Option(title='Show whitespace',
+                       description='Display spaces as middle dots (·) and tabs as arrows (→). Choose which whitespace to visualize.',
+                       get_current_value=lambda:self.show_whitespace,
+                       get_values=lambda:{
+                           'Off': lambda:setattr(self, 'show_whitespace', 'Off'),
+                           'All': lambda:setattr(self, 'show_whitespace', 'All'),
+                           'Leading': lambda:setattr(self, 'show_whitespace', 'Leading'),
+                           'Trailing': lambda:setattr(self, 'show_whitespace', 'Trailing'),
+                           'Lead+Trail': lambda:setattr(self, 'show_whitespace', 'Lead+Trail'),
+                       }),
                 simple_option(title='Highlight cursor line',
                        description='Highlight the background of the line with the cursor.',
                        field_name='highlight_cursor_line'),

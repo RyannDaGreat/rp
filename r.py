@@ -116,6 +116,7 @@ def itc(f,x):
 # region  ［run‚ fog］
 def run_func(f,*g,**kwg):  # Pop () ⟶ )(
     return f(*g,**kwg)
+call = run_func
 def fog(f,*g,**kwg):  # Encapsulate )( ⟶ ()      'fog' ≣ ƒ ∘ g‚ where g can be any number of parameters.
     return lambda:f(*g,**kwg)
 # endregion
@@ -11934,6 +11935,12 @@ def load_file_lines(file_path, use_cache=False):
     """ Returns all the lines in a file """
     return line_split(text_file_to_string(file_path, use_cache))
 
+def save_file_lines(lines, file_path):
+    assert is_iterable(lines)
+    lines = [str(x) for x in lines]
+    string = line_join(lines)
+    return string_to_text_file(file_path, string)
+
 def load_text_files(*paths, use_cache=False, strict=True, num_threads=None, show_progress=False, lazy=False):
     """
     Plural of text_file_to_string
@@ -15260,6 +15267,48 @@ def display_image_in_terminal_imgcat(image):
 
     imgcat.imgcat(image)
         
+
+def display_video_in_terminal_color(frames, *, loop=True, framerate=None):
+    """
+    Display a video in the terminal with a progress bar.
+
+    Args:
+        frames (list): List of frames to display
+        loop (bool): Whether to loop the video indefinitely
+        framerate (int, optional): Target frames per second. If set, will sleep to maintain this rate.
+
+    EXAMPLE:
+        display_video_in_terminal(load_webcam_stream(), framerate=30)
+    """
+    import time
+
+    while True:
+        for i, f in enumerate(frames):
+            start_time = time.time() if framerate else None
+
+            display_image_in_terminal_color(f)
+            _terminal_move_cursor_to_top_left()
+            w = get_terminal_width()
+            if has_len(frames):
+                fansi_print(
+                    unicode_loading_bar(
+                        i / (len(frames) - 1) * w * 8, chars="▏▎▍▌▋▊▉█"
+                    ).ljust(w),
+                    "white green on black blue white",
+                )
+
+            # Sleep to maintain target framerate if specified
+            if framerate:
+                elapsed = time.time() - start_time
+                target_frame_time = 1.0 / framerate
+                sleep_time = max(0, target_frame_time - elapsed)
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+
+        if not loop:
+            break
+
+
 def auto_canny(image,sigma=0.33,lower=None,upper=None):
     """ Takes an image, returns the canny-edges of it (a binary matrix) """
     pip_import('cv2')
@@ -26522,6 +26571,125 @@ def memoized_property(method):
     memoized_property.__name__+=method.__name__
     memoized_property=property(memoized_property)
     return memoized_property
+
+def _omni_load(path):
+    if ends_with_any(path, '.json'): return rp.load_json(path)
+    if ends_with_any(path, '.yaml'): return rp.load_yaml(path)
+    if ends_with_any(path, '.png .jpg .jpeg .jxl .exr'.split()): return rp.load_image(path)
+    if ends_with_any(path, '.mp4 .gif'.split()): return rp.load_video(path)
+    if ends_with_any(path, '.npy'.split()): return np.load(path)
+    if ends_with_any(path, '.pth .ckpt'.split()): return __import__('torch').load(path)
+    if is_image_file(path): return load_image(path)
+    if is_video_file(path): return load_video(path)
+    if is_utf8_file(path): return load_text_file(path)
+    return file_to_object(path)
+
+def _omni_save(object, path):
+    if ends_with_any(path, '.json'): return rp.save_json(object,path)
+    if ends_with_any(path, '.yaml'): return rp.save_yaml(object,path)
+    if ends_with_any(path, '.png .jpg .jpeg .jxl .exr'.split()): return rp.save_image(object, path)
+    if ends_with_any(path, '.mp4 .gif'.split()): return rp.save_video(object, path)
+    if ends_with_any(path, '.npy'.split()): return np.save(path,object)
+    if ends_with_any(path, '.pth .ckpt'.split()): return __import__('torch').save(object,path)
+    if isinstance(object, str): return save_text_file(object, path)
+    if isinstance(object, bytes): return bytes_to_file(object, path)
+    return object_to_file(object,path)
+
+def file_cache_call(
+    path,
+    func,
+    *args,
+    save=None,
+    load=None,
+    **kwargs
+):
+    """
+    Caches the result of a function call to a file.
+    If the file exists, return its contents. Otherwise, call the function and save the result.
+    
+    Args:
+        path: Path to the cache file
+
+        func: Function to call if cache miss
+        *args: Arguments to pass to func
+        **kwargs: Keyword arguments to pass to func
+
+        save: Function to save result to file
+              Expected signature: save(obj, path)
+        load: Function to load result from file
+              Expected signature: load(path) -> obj
+        
+    Returns:
+        The result of func(*args, **kwargs) or the cached result
+    """
+    save = save or _omni_save
+    load = load or _omni_load
+
+    path = get_absolute_path(path, physical=False)
+
+    if path_exists(path):
+        return load(path)
+    
+    result = func(*args, **kwargs)
+    
+    make_parent_folder(path)
+    save(result,path)
+    
+    return result
+
+
+def file_cache_wrap(path, save=None, load=None):
+    """
+    Decorator that wraps a function with file_cached_call.
+
+    Notes: For intermediate math results, consider using joblib! Look into joblib...this is more for dataset generation...
+
+    Args:
+        path: Path to the cache file
+        save: Function to save result to file (default: _omni_save)
+        load: Function to load result from file (default: _omni_load)
+
+    Returns:
+        A decorator function that wraps the target function with file_cached_call
+        
+    Attributes of decorated function:
+        cache_path: Path to the cache file
+        save: The save function used
+        load: The load function used
+        clear_cache: Method to delete the cache file
+    """
+    #TODO: Give this function more features. It's pretty dang barebones right now...
+    
+    path = get_absolute_path(path, physical=False)
+
+    import functools
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            return file_cache_call(
+                path,
+                func,
+                *args,
+                **kwargs,
+                save=save,
+                load=load,
+            )
+
+        def clear_cache():
+            delete_file(path)
+
+        wrapper.cache_path = path
+        wrapper.save = save
+        wrapper.load = load
+        wrapper.clear_cache = clear_cache
+        
+        # Add a better __repr__ for debugging: Didn't work! Apparently you can't override funcs' __repr__'s.
+        # wrapper.__repr__ = lambda: "<rp.file_cache_wrap for %r at %r>" % (func.__name__, path)
+
+        return wrapper
+
+    return decorator
+
 #endregion
 
 class ClassProperty:
@@ -32606,7 +32774,7 @@ def swap_paths(path_a,path_b):
             pass
         raise
 
-def delete_file(path,*,permanent=True):
+def delete_file(path,*,permanent=True,strict=True):
     """
     Deletes a file at a given path.
     
@@ -32628,8 +32796,14 @@ def delete_file(path,*,permanent=True):
         and then call this function.
     """
     import os
-    assert os.path.exists(path),"r.delete_file: There is no file to delete. The path you specified, '" + path + "', does not exist!"  # This is to avoid the otherwise cryptic errors you would get later on with this method
-    assert file_exists(path),"r.delete_file: The path you selected exists, but is not a file: %s"%path
+    
+    if strict:
+        assert os.path.exists(path),"r.delete_file: There is no file to delete. The path you specified, '" + path + "', does not exist!"  # This is to avoid the otherwise cryptic errors you would get later on with this method
+        assert file_exists(path),"r.delete_file: The path you selected exists, but is not a file: %s"%path
+    else:
+        if not file_exists(path):
+            return
+
     if permanent:
         os.remove(path)
     else:
@@ -33007,6 +33181,9 @@ def get_path_parent(path_or_url:str, levels=1):
 get_file_folder=get_path_parent#Synonyms that might make more sense to read in their context than get_path_parent
 get_file_directory=get_path_parent
 get_parent_directory=get_parent_folder=get_path_parent
+
+# def with_parent_folder(path, parent_folder):
+#     return path_join(parent_folder, get_path_name(path))
 
 def get_paths_parents(*paths_or_urls, levels=1):
     "Plural of get_path_parent"
@@ -37334,6 +37511,8 @@ _ryan_tmux_conf=r'''
         bind e setw synchronize-panes #e synchronizes the keyboard
     #PANE RESET
         bind C-r respawn-pane -k #Respawn a pane
+    #MARKED PANE SWAP:
+        bind C-m swap-pane #Swap the current pane with the marked pane
 
 #OPTIONS:
     #ESCAPE:

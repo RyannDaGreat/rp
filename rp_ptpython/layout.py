@@ -667,9 +667,12 @@ def create_layout(python_input,
                         filter=HasFocus(DEFAULT_BUFFER) & ~IsDone() &
                             Condition(lambda cli: python_input.indent_guides_mode == 'Propagate')),
                     ConditionalProcessor(
-                        processor=ShowWhitespaceProcessor(token=Token.Whitespace),
+                        processor=ShowWhitespaceProcessor(
+                            token=Token.Whitespace, 
+                            mode=lambda cli: python_input.show_whitespace
+                        ),
                         filter=HasFocus(DEFAULT_BUFFER) & ~IsDone() &
-                            Condition(lambda cli: python_input.show_whitespace)),
+                            Condition(lambda cli: python_input.show_whitespace != 'Off')),
                     ConditionalProcessor(
                         processor=HighlightWordOccurrencesProcessor(min_word_length=1, skip_keywords=True),
                         filter=HasFocus(DEFAULT_BUFFER) & ~IsDone() &

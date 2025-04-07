@@ -846,14 +846,21 @@ class ShowWhitespaceProcessor(Processor):
     :param get_tab_char: Callable that takes a `CommandLineInterface` and returns a
         character (text of length one) to be used for tabs.
     :param token: Token to be used for whitespace characters.
+    :param mode: String indicating which whitespace to show:
+        - 'All': Show all whitespace characters (default)
+        - 'Leading': Only show whitespace up to the first non-whitespace character
+        - 'Trailing': Only show whitespace after the last non-whitespace character
+        - 'Lead+Trail': Show whitespace at both the beginning and end of lines
     """
-    def __init__(self, get_space_char=None, get_tab_char=None, token=None):
+    def __init__(self, get_space_char=None, get_tab_char=None, token=None, mode='All'):
         assert get_space_char is None or callable(get_space_char)
         assert get_tab_char is None or callable(get_tab_char)
+        assert mode in ('All', 'Leading', 'Trailing', 'Lead+Trail') or callable(mode)
         
         self.get_space_char = get_space_char or (lambda cli: '·')  # Middle dot for spaces
-        self.get_tab_char = get_tab_char or (lambda cli: '\t')      # Right arrow for tabs
+        self.get_tab_char = get_tab_char or (lambda cli: '\t')     # Tab character for tabs
         self.token = token or Token.Whitespace
+        self.mode = mode
         
     def apply_transformation(self, cli, document, lineno, source_to_display, tokens):
         if not tokens:
@@ -866,20 +873,78 @@ class ShowWhitespaceProcessor(Processor):
         space_char = self.get_space_char(cli)
         tab_char = self.get_tab_char(cli)
         
-        # Walk through all tokens and replace whitespace with visible characters
-        for i in range(len(tokens)):
-            token, text = tokens[i]
-            
-            # Skip tokens that are already special (like indent guides)
-            if Token.IndentGuide in token:
-                continue
+        # Get the current mode
+        current_mode = self.mode(cli) if callable(self.mode) else self.mode
+        
+        if current_mode == 'All':
+            # For 'All' mode - process all whitespace
+            for i in range(len(tokens)):
+                token, text = tokens[i]
                 
-            # Replace spaces with visible spaces
-            if text == ' ':
-                tokens[i] = (Token.Whitespace.Space, space_char)
+                # Skip tokens that are already special (like indent guides)
+                if Token.IndentGuide in token:
+                    continue
+                    
+                # Replace spaces with visible spaces
+                if text == ' ':
+                    tokens[i] = (Token.Whitespace.Space, space_char)
+                
+                # Replace tabs with visible tabs
+                elif text == '\t':
+                    tokens[i] = (Token.Whitespace.Tab, tab_char)
+        
+        if current_mode in ['Leading', 'Lead+Trail']:
+            # For 'Leading' mode - only show whitespace up to the first non-whitespace character
+            found_non_whitespace = False
             
-            # Replace tabs with visible tabs
-            elif text == '\t':
-                tokens[i] = (Token.Whitespace.Tab, tab_char)
+            for i in range(len(tokens)):
+                token, text = tokens[i]
+                
+                # Once we find a non-whitespace character, stop replacing
+                if found_non_whitespace:
+                    continue
+                
+                # Skip tokens that are already special (like indent guides)
+                if Token.IndentGuide in token:
+                    continue
+                
+                # Replace spaces with visible spaces
+                if text == ' ':
+                    tokens[i] = (Token.Whitespace.Space, space_char)
+                
+                # Replace tabs with visible tabs
+                elif text == '\t':
+                    tokens[i] = (Token.Whitespace.Tab, tab_char)
+                
+                # If this token is not whitespace, mark that we found non-whitespace
+                elif text not in (' ', '\t'):
+                    found_non_whitespace = True
+                    
+        if current_mode in ['Trailing', 'Lead+Trail']:
+            # For 'Trailing' mode - only show whitespace after the last non-whitespace character
+            
+            # First find the last non-whitespace token
+            last_non_whitespace_idx = -1
+            for i in range(len(tokens) - 1, -1, -1):
+                token, text = tokens[i]
+                if text not in (' ', '\t'):
+                    last_non_whitespace_idx = i
+                    break
+            
+            # Then process only trailing whitespace
+            for i in range(last_non_whitespace_idx + 1, len(tokens)):
+                token, text = tokens[i]
+                
+                # Skip tokens that are already special (like indent guides)
+                if Token.IndentGuide in token:
+                    continue
+                
+                # Replace spaces with visible spaces
+                if text == ' ':
+                    tokens[i] = (Token.Whitespace.Space, space_char)
+                
+                # Replace tabs with visible tabs
+                elif text == '\t':
+                    tokens[i] = (Token.Whitespace.Tab, tab_char)
         
         return Transformation(tokens)
