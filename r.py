@@ -16991,7 +16991,33 @@ def _display_pterm_flamechart(local=False):
         link=output_location,
     )
 
-    return output_location
+    return html, output_location
+
+def _truncate_string_floats(s, num_sigfigs=4) -> str:
+    """
+    Truncate floating point numbers in a string to the specified number of significant figures.
+    Is robust - doesn't care about syntax of the given string. Does it to ALL numbers.
+
+    Args:
+        s (str): Input string containing floating point numbers
+        num_sigfigs (int): Number of significant figures to keep
+
+    Returns:
+        str: String with floating point numbers truncated
+
+    >>> truncate_floats('''"time": 0.001026,"attributes": {"l29952": 0.0010257080430164933},''')
+    ans = "time": 0.001026,"attributes": {"l29952": 0.001026},
+
+    """
+    import re
+    pattern = r'(\d+\.\d+)'
+
+    def replace(match):
+        num = float(match.group(0))
+        format_str = '{{:.{}g}}'.format(num_sigfigs)
+        return format_str.format(num)
+
+    return re.sub(pattern, replace, s)
 
 def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,ipython=False):
     """
@@ -19588,6 +19614,8 @@ def pseudo_terminal(
         PROF OFF
         PROF FLAME
         PROF FLAME OPEN
+        PROF FLAME COPY
+        PROF FLAME PASTE
 
         <Toggle Colors>
         FANSI ON
@@ -19975,6 +20003,8 @@ def pseudo_terminal(
         FLAME PROF FLAME
         FLA   PROF FLAME
         FLAO  PROF FLAME OPEN
+        FLAC  PROF FLAME COPY
+        FLAP  PROF FLAME PASTE
 
         N  NEXT
         P  PREV
@@ -20695,12 +20725,31 @@ def pseudo_terminal(
                             fansi_print("Toggled _PROF_DEEP. We just the PROFILER to DEEP mode OFF. Use PROF DEEP again to go back to deep mode.", 'blue', 'underlined')
                             _PROF_DEEP=False
 
-                    elif user_message == 'PROF FLAME' or user_message=='PROF FLAME OPEN':
-                        if 'OPEN' in user_message:
-                            flamechart_location = _display_pterm_flamechart(local=True)
-                            open_file_with_default_application(flamechart_location)
-                        else:
-                            flamechart_location = _display_pterm_flamechart()
+                    elif user_message in ['PROF FLAME']:
+                        flamechart_html, flamechart_location = _display_pterm_flamechart(local=True)
+
+                    elif user_message in ['PROF FLAME OPEN']:
+                        flamechart_html, flamechart_location = _display_pterm_flamechart(local=True)
+                        open_file_with_default_application(flamechart_location)
+
+                    elif user_message in ['PROF FLAME COPY']:
+                        flamechart_html, flamechart_location = _display_pterm_flamechart(local=True)
+                        string_to_clipboard(flamechart_html)
+                        compressed_html = object_to_base64(_truncate_string_floats(flamechart_html))
+                        print(compressed_html)
+                        fansi_print(
+                            "Copied flamechart compressed HTML to clipboard! (or if not, copy the above base64 string). View it with FLAP (PROF FLAME PASTE) on a local rp",
+                            "bold cyan",
+                        )
+
+                    elif user_message in ['PROF FLAME PASTE']:
+                        compressed_html = string_from_clipboard()
+                        html = base64_to_object(compressed_html)
+                        path = temporary_file_path('html')
+                        save_text_file(html, path)
+                        open_file_with_default_application(path)
+                        fansi_print("Copied HTML from clipboard to "+path, 'bold cyan')
+
 
 
                     elif user_message == 'WARN':
@@ -38315,6 +38364,31 @@ def get_process_using_port(port: int, *, strict = True):
     else:
         return None
 
+def compress_bytes(data: bytes) -> bytes:
+    """
+    Compress bytes data.
+    
+    Args:
+        data: The input bytes to compress
+        
+    Returns:
+        Compressed bytes
+    """
+    import zlib
+    return zlib.compress(data)
+
+def decompress_bytes(compressed_data: bytes) -> bytes:
+    """
+    Decompress bytes data.
+    
+    Args:
+        compressed_data: The compressed bytes to decompress
+        
+    Returns:
+        Original bytes
+    """
+    import zlib
+    return zlib.decompress(compressed_data)
 
 def can_convert_object_to_bytes(x:object)->bool:
     """
@@ -38333,13 +38407,21 @@ def object_to_bytes(x:object)->bytes:
     """
     # assert can_convert_object_to_bytes(x),'Sorry, but we cannot serialize this object to a bytestring'
     dill=pip_import('dill')
-    return dill.dumps(x)
+    output = dill.dumps(x)
+    output = compress_bytes(output)
+    return output
+
+def object_to_base64(x):
+    return bytes_to_base64(object_to_bytes(x))
+
+def base64_to_object(x):
+    return bytes_to_object(base64_to_bytes(x))
 
 def bytes_to_object(x:bytes)->object:
     """ Inverse of object_to_bytes, see object_to_bytes for more documentation """
     dill=pip_import('dill')
     try:
-        return dill.loads(x)
+        return dill.loads(decompress_bytes(x))
     except Exception:
         return x #bytestrings allready are objects. In the event that we have an error, it might make sense just to return the original bytestring
 
