@@ -20726,7 +20726,7 @@ def pseudo_terminal(
                             _PROF_DEEP=False
 
                     elif user_message in ['PROF FLAME']:
-                        flamechart_html, flamechart_location = _display_pterm_flamechart(local=True)
+                        flamechart_html, flamechart_location = _display_pterm_flamechart(local=False)
 
                     elif user_message in ['PROF FLAME OPEN']:
                         flamechart_html, flamechart_location = _display_pterm_flamechart(local=True)
@@ -20745,6 +20745,7 @@ def pseudo_terminal(
                     elif user_message in ['PROF FLAME PASTE']:
                         compressed_html = string_from_clipboard()
                         html = base64_to_object(compressed_html)
+                        assert isinstance(html, str), 'Failed to decode pasted flamechart!'
                         path = temporary_file_path('html')
                         save_text_file(html, path)
                         open_file_with_default_application(path)
