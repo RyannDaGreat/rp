@@ -16969,7 +16969,7 @@ def exeval(code:str, scope=None):
 
 _prev_pterm_profiler = None
 
-def _display_pterm_flamechart():
+def _display_pterm_flamechart(local=False):
     if _prev_pterm_profiler is None:
         fansi_print("RP Flamechart: Nothing was profiled yet, try running a command after setting PROF ON", 'yellow bold')
         return
@@ -16979,15 +16979,19 @@ def _display_pterm_flamechart():
 
     fansi_print("RP Flamechart: Uploading HTML...", 'green bold')
 
-    if connected_to_internet():
+    if not local and connected_to_internet():
         _web_copy(html.encode(), show_progress=True)
         output_location = _web_clipboard_url
     else:
-        output_location = save_text_file(html, temporary_file_path('html'))
+        output_location = "file://" + save_text_file(html, temporary_file_path("html"))
 
-    fansi_print("RP Flamechart: Visit flamechart at "+output_location, 'green bold underdouble', link=_web_clipboard_url)
+    fansi_print(
+        "RP Flamechart: Visit flamechart at " + output_location,
+        "green bold underdouble",
+        link=output_location,
+    )
 
-    return html
+    return output_location
 
 def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,ipython=False):
     """
@@ -19583,6 +19587,7 @@ def pseudo_terminal(
         PROF ON
         PROF OFF
         PROF FLAME
+        PROF FLAME OPEN
 
         <Toggle Colors>
         FANSI ON
@@ -19969,6 +19974,7 @@ def pseudo_terminal(
         POF   PROF FLAME
         FLAME PROF FLAME
         FLA   PROF FLAME
+        FLAO  PROF FLAME OPEN
 
         N  NEXT
         P  PREV
@@ -20689,8 +20695,13 @@ def pseudo_terminal(
                             fansi_print("Toggled _PROF_DEEP. We just the PROFILER to DEEP mode OFF. Use PROF DEEP again to go back to deep mode.", 'blue', 'underlined')
                             _PROF_DEEP=False
 
-                    elif user_message == 'PROF FLAME':
-                        _display_pterm_flamechart()
+                    elif user_message == 'PROF FLAME' or user_message=='PROF FLAME OPEN':
+                        if 'OPEN' in user_message:
+                            flamechart_location = _display_pterm_flamechart(local=True)
+                            open_file_with_default_application(flamechart_location)
+                        else:
+                            flamechart_location = _display_pterm_flamechart()
+
 
                     elif user_message == 'WARN':
                         if _warnings_are_off():
