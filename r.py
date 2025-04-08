@@ -16978,9 +16978,14 @@ def _display_pterm_flamechart():
     html = _prev_pterm_profiler.output_html()
 
     fansi_print("RP Flamechart: Uploading HTML...", 'green bold')
-    _web_copy(html.encode(), show_progress=True)
 
-    fansi_print("RP Flamechart: Visit flamechart at "+_web_clipboard_url, 'green bold underdouble', link=_web_clipboard_url)
+    if connected_to_internet():
+        _web_copy(html.encode(), show_progress=True)
+        output_location = _web_clipboard_url
+    else:
+        output_location = save_text_file(html, temporary_file_path('html'))
+
+    fansi_print("RP Flamechart: Visit flamechart at "+output_location, 'green bold underdouble', link=_web_clipboard_url)
 
     return html
 
