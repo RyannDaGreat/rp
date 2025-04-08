@@ -1405,6 +1405,7 @@ def fansi_print(
     background_color: object = None,
     underline_color=None,
     *,
+    link=None,
     new_line=True,
     reset=True,
     truecolor=True
@@ -1425,6 +1426,7 @@ def fansi_print(
             reset=reset,
             truecolor=truecolor,
             underline_color=underline_color,
+            link=link,
         ),
         end="\n" if new_line else "",
         flush=True,
@@ -9858,7 +9860,7 @@ def _get_carbon_url(code):
     encoded_params = urllib.parse.urlencode(params)
     return "https://carbon.now.sh/?"+str(encoded_params)
 
-def display_code_cell(code, *, title="Code Cell"):
+def display_code_cell(code, *, title="Code Cell", language=None):
     """
     Print code cell with formatting, line numbers, and syntax highlighting.
     In a terminal, it displays a clickable link to bring you to the source code copyable online via carbon.sh!
@@ -9870,6 +9872,10 @@ def display_code_cell(code, *, title="Code Cell"):
         The code to display
     title : str
         The cell number to display in the title
+    language: str
+        If specified, can be like 'py' or 'md' or 'python3' or 'markdown' or 'JSX' or 'javascript' etc
+        If not specified, defaults to 'python3'
+        Right now, only python syntax highlighting is supported in the Jupyer version...though this could change.
 
     EXAMPLE:
         >>> display_code_cell(get_source_code(load_image))
@@ -9877,6 +9883,8 @@ def display_code_cell(code, *, title="Code Cell"):
     """
     # IMPORTANT: Do not use f-strings in this function to maintain compatibility
     code = code.rstrip() #We have to for the printer...
+    language = language or 'python3'
+
     if not running_in_jupyter_notebook():
         num_prefix = "%s│"
         mln = number_of_lines(code)
@@ -9896,7 +9904,7 @@ def display_code_cell(code, *, title="Code Cell"):
                 )
                 + "\n"
                 + with_line_numbers(
-                    fansi_pygments(code, "python3"),
+                    fansi_pygments(code, language),
                     align=True,
                     prefix=fansi(num_prefix, "dark white white dark white"),
                     start_from=1,
@@ -11280,6 +11288,10 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
         except Exception as e:
             by_string = '(unknown process: %s)'%repr(e)
             print(col(tab + 'PORT %i IS TAKEN '%object + by_string))
+                
+    if isinstance(object, int):
+        filesize_string = human_readable_file_size(object)
+        print(col(tab + 'Filesize:'),filesize_string)
                 
  
     if is_symlink(object):
@@ -16177,8 +16189,9 @@ def _eta(total_n,*,min_interval=.3,title="r.eta"):
     interval_timer = tic()
     title = title + ": "
     shown_done = False
+    style = 'invert'
 
-    def fansi_progress(string, proportion, style='underlined'):
+    def fansi_progress(string, proportion):
         """ Used to show a progress bar under the ETA text! """
         string = string.expandtabs() #Jupyter doesn't render underlines over tabs
         num_chars = round(len(string) * proportion)
@@ -16954,6 +16967,23 @@ def exeval(code:str, scope=None):
 
     return result
 
+_prev_pterm_profiler = None
+
+def _display_pterm_flamechart():
+    if _prev_pterm_profiler is None:
+        fansi_print("RP Flamechart: Nothing was profiled yet, try running a command after setting PROF ON", 'yellow bold')
+        return
+    
+    fansi_print("RP Flamechart: Generating HTML...", 'green bold')
+    html = _prev_pterm_profiler.output_html()
+
+    fansi_print("RP Flamechart: Uploading HTML...", 'green bold')
+    _web_copy(html.encode(), show_progress=True)
+
+    fansi_print("RP Flamechart: Visit flamechart at "+_web_clipboard_url, 'green bold underdouble', link=_web_clipboard_url)
+
+    return html
+
 def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,ipython=False):
     """
     Evaluate or execute within descending hierarchy of dicts
@@ -16963,6 +16993,8 @@ def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,ipy
     if len(dicts)<=1:
     print("exeval")
     """
+    global _prev_pterm_profiler
+
     if len(dicts)==0:
       dicts=[get_scope(1)]
     merged_dict=dicts[0]
@@ -17020,7 +17052,9 @@ def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,ipy
                 print(profiler.output_text(unicode=True, color=True,timeline=False,show_all=_PROF_DEEP).replace('\n\n','\n')[1:-1])#show_all is useful but SOOO verbose it's almost unbearable...
                 fansi_print("...took "+str(_time()-prof_display_start_time)+" seconds to diplay the PROF output",'blue','underlined')
             else:
-                profiler.stop()#Something tells me its not a good idea to leave stray profilers running...
+                profiler.stop()#Something tells me its not a good idea to leave stray _pterm_profilers running...
+            global _prev_pterm_profiler
+            _prev_pterm_profiler = profiler
 
 _PROF_DEEP=True
 
@@ -19543,6 +19577,7 @@ def pseudo_terminal(
         PROF
         PROF ON
         PROF OFF
+        PROF FLAME
 
         <Toggle Colors>
         FANSI ON
@@ -19926,6 +19961,9 @@ def pseudo_terminal(
         PF PROF
         PO PROF
         POD PROF DEEP
+        POF   PROF FLAME
+        FLAME PROF FLAME
+        FLA   PROF FLAME
 
         N  NEXT
         P  PREV
@@ -20236,8 +20274,8 @@ def pseudo_terminal(
 
         DCI $display_image_in_terminal_color(ans)
         
-        FCA $web_copy_path(ans)
-        FCH print("FCH->FileCopyHere");$web_copy_path($get_absolute_path('.'))
+        FCA $web_copy_path(ans,show_progress=True)
+        FCH print("FCH->FileCopyHere");$web_copy_path($get_absolute_path('.'),show_progress=True)
         RMA $r._rma(ans)
         RNA $rename_file(ans,$input_default($fansi('NewPathName:','blue'),$get_file_name(ans)))
         APA $r._absolute_path_ans(ans)
@@ -20645,6 +20683,9 @@ def pseudo_terminal(
                         else:
                             fansi_print("Toggled _PROF_DEEP. We just the PROFILER to DEEP mode OFF. Use PROF DEEP again to go back to deep mode.", 'blue', 'underlined')
                             _PROF_DEEP=False
+
+                    elif user_message == 'PROF FLAME':
+                        _display_pterm_flamechart()
 
                     elif user_message == 'WARN':
                         if _warnings_are_off():
@@ -21072,7 +21113,7 @@ def pseudo_terminal(
                             fansi_print("        *Note: I noticed that ans is callable. If you're trying to copy a function, make sure you paste it in the same python version!",'blue')
 
                         fansi_print("    ...please wait, communicating with "+repr(_web_clipboard_url)+"...","blue",new_line=False)
-                        web_copy(get_ans())
+                        web_copy(get_ans(), show_progress=True)
                         fansi_print("done in "+str(time()-start_time)[:6]+' seconds!',"blue",new_line=True)
                         successful_command_history.append("#WCOPY rp.web_copy(ans)")
 
@@ -21376,6 +21417,9 @@ def pseudo_terminal(
                         string_to_clipboard(get_current_directory())
                     elif user_message.startswith('CAT ') or user_message.startswith('NCAT ') or user_message in ['CAT','NCAT','CATA','NCATA']:
 
+                        if user_message.startswith('CAT ' ):user_message = 'CAT '  + _autocomplete_lss_name(user_message,command_name='CAT' )
+                        if user_message.startswith('NCAT '):user_message = 'NCAT ' + _autocomplete_lss_name(user_message,command_name='NCAT')
+
                         if user_message in ['CAT','NCAT']:
                             print("Please select the file you would like to display")
                             file_name=input_select_file()
@@ -21429,6 +21473,10 @@ def pseudo_terminal(
                         print_code(contents,highlight,line_numbers)
 
                     elif user_message.startswith('CCAT ') or user_message=='CCAT' or user_message=='CCATA':
+
+                        if user_message.startswith('CCAT '):
+                            user_message = 'ACAT '+_autocomplete_lss_name(user_message,command_name='CCAT')
+
                         if user_message=='CCATA':
                             if _get_pterm_verbose(): fansi_print('CCAT -->text_file_to_string Copy CAT ans --> Copies the contents of the file or url at \'ans\' to your clipboard','blue','bold')
                             user_message='CCAT '+str(get_ans())
@@ -21634,7 +21682,7 @@ def pseudo_terminal(
                             from time import time
                             start_time=time()
                             fansi_print("    ...please wait, communicating with "+repr(_web_clipboard_url)+"...","blue",new_line=False)
-                            web_copy_path(path)
+                            web_copy_path(path, show_progress=True)
                             fansi_print("done in "+str(time()-start_time)[:6]+' seconds!',"blue",new_line=True)
                             user_message=repr(path)
 
@@ -37367,7 +37415,7 @@ def _set_ryan_vimrc(confirm=False):
         """
     )
 
-    packages = 'isort black-macchiato pyflakes removestar ropevim drawille pudb'.split()
+    packages = 'isort black-macchiato pyflakes removestar ropevim drawille pudb pynvim'.split()
 
     for package in packages:
         try:
@@ -38051,10 +38099,10 @@ def _run_claude_code(code):
         except:
             pass
 
-    filetype = 'bash' if code.startswith('!') else 'python'
+    filetype = 'bash' if code.startswith('!') else 'py'
     filename = "editme." + filetype
 
-    display_code_cell(code, title=" Claude " + filename + " ")
+    display_code_cell(code, title=" Claude " + filename + " ", language=filetype)
     workdir = path_join(_claudecode_folder, 'workspace_%i'%millis())
     make_directory(workdir)
 
@@ -38142,6 +38190,10 @@ def get_port_is_taken(port: int) -> bool:
             return False  # If bind is successful, port is free
         except socket.error:
             return True  # If bind fails, port is likely in use
+        except OverflowError:
+            # ERROR: OverflowError: bind(): port must be 0-65535.
+            return False
+
 
 def get_next_free_port(port):
     """
@@ -38276,13 +38328,53 @@ def bytes_to_object(x:bytes)->object:
         return x #bytestrings allready are objects. In the event that we have an error, it might make sense just to return the original bytestring
 
 _web_clipboard_url = 'https://ryanpythonide.pythonanywhere.com'#By sqrtryan@gmail.com account
-def web_copy(data:object)->None:
-    """ Send an object to RyanPython's server's clipboard """
+
+class _WebCopyProgressTracker:
+    """Tracks progress for web copy data uploads"""
+    def __init__(self, data, callback):
+        self.bytes_read = 0
+        self.total_size = len(data)
+        self.callback = callback
+        self.data = data
+        
+    def update(self, bytes_count):
+        self.bytes_read += bytes_count
+        self.callback(self.bytes_read)
+        return self.bytes_read
+        
+    def read(self, size=-1):
+        if size == -1:
+            size = len(self.data) - self.bytes_read
+        
+        chunk = self.data[self.bytes_read:self.bytes_read + size]
+        self.update(len(chunk))
+        return chunk
+
+def _web_copy(data:object, *, show_progress=False)->None:
+    """ Make the request for web-copying. Can also upload arbitrary HTML pages. """
     assert connected_to_internet(),"Can't connect to the internet"
-    # assert can_convert_object_to_bytes(data),'rp.web_copy error: Cannot turn the given object into a bytestring! Maybe this type isnt supported? See can_convert_object_to_bytes for more help. The type of object you gave: '+repr(type(data))
+    assert isinstance(data, bytes)
+
     pip_import('requests')
     import requests
-    response=requests.post(_web_clipboard_url,data=object_to_bytes(data))
+    from io import BytesIO
+    
+    if show_progress:
+        display_progress = _eta(len(data), title="Web Copy", min_interval=1/60)
+        
+        # Create a tracker that will monitor the upload progress
+        data = _WebCopyProgressTracker(data, display_progress)
+        
+    response = requests.post(_web_clipboard_url, data=data)
+
+    assert response.status_code==200,'Got bad status code that wasnt 200: '+str(response.status_code)
+    return response
+
+def web_copy(data:object, *, show_progress=False)->None:
+    """ Send an object to RyanPython's server's clipboard """
+    assert connected_to_internet(),"Can't connect to the internet"
+
+    response=_web_copy(object_to_bytes(data), show_progress=show_progress)
     assert response.status_code==200,'Got bad status code that wasnt 200: '+str(response.status_code)
 
 def web_paste():
@@ -44512,14 +44604,14 @@ def web_paste_path(path=None,*,ask_to_replace=True):
                     delete_file(temp_zip)
     return path
 
-def web_copy_path(path:str=None):
+def web_copy_path(path:str=None, *, show_progress=False):
     """ FC (file copy) """
     if path is None:
         path=input_select_path(message='Select a file or folder for web_copy_path:')
         path=get_relative_path(path)
     assert path_exists(path),'Path does not exist: '+str(path)
     data=file_to_bytes(path) if is_a_file(path) else zip_folder_to_bytes(path)
-    web_copy(object_to_bytes(_BundledPath(is_a_file(path),data,path)))
+    web_copy(object_to_bytes(_BundledPath(is_a_file(path),data,path)), show_progress=show_progress)
     return path
 
 def get_all_local_ip_addresses():
