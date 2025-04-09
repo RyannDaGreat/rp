@@ -38462,7 +38462,9 @@ def _web_copy(data:object, *, show_progress=False)->None:
         display_progress = _eta(len(data), title="Web Copy", min_interval=1/60)
         
         # Create a tracker that will monitor the upload progress
-        data = _WebCopyProgressTracker(data, display_progress)
+        new_data = _WebCopyProgressTracker(data, display_progress)
+        if is_iterable(new_data):
+            data = new_data #3.5-friendly
         
     response = requests.post(_web_clipboard_url, data=data)
 
@@ -39145,6 +39147,8 @@ def _extract_code_cells_from_ipynb(notebook_path=None):
     # Handle path input
     if notebook_path is None:
         notebook_path = input_select_file(file_extension_filter='ipynb')
+
+    notebook_path = os.path.expanduser(notebook_path)
 
     # Validate path exists
     if not path_exists(notebook_path):
@@ -47636,7 +47640,14 @@ def get_cuda_visible_devices():
     if key in os.environ:
         out = os.environ[key]
         if out:
-            return list(ast.literal_eval(out))
+            output = ast.literal_eval(out)
+
+            if isinstance(output, int):
+                output = [output]
+
+            output = list(output)
+            
+            return output
     return []
 
 def _removestar(code:str,max_line_length=100,quiet=False):
