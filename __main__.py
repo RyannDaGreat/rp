@@ -5,6 +5,8 @@ default_scope = rp.r.__dict__
 default_scope['r'] = rp.r
 
 def arg_eval(code):
+    code = rp.unindent(code)
+
     if not rp.is_namespaceable(code) and rp.r._is_valid_exeval_python_syntax(code) or code in default_scope:
         #Try to evaluate it. Include rp in the scope for easy access.
         scope = dict(default_scope)
@@ -80,8 +82,11 @@ def main():
             scope = dict(default_scope)
             scope.update({"args__" : args, "kwargs__" : kwargs})
 
+            code = func_name.rstrip()+'(*args__, **kwargs__)'
+            code = rp.unindent(code)
+
             #TODO: THE SCOPE SHOULD INCLUDE ALL IMPORTS FROM RP
-            ans = rp.exeval(func_name+'(*args__, **kwargs__)', scope=scope)
+            ans = rp.exeval(code, scope=scope)
 
         elif sys.argv[1] == "exec":
             # Import everything from your package at the top level
@@ -98,6 +103,7 @@ def main():
             scope.update(kwargs)
 
             code = ' '.join(sys.argv[2:])
+            code = rp.unindent(code)
 
             ans = rp.exeval(code, scope=scope)
 
