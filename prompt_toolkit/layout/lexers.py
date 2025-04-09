@@ -14,8 +14,17 @@ from .utils import split_lines
 import re
 import six
 
+# <CLAUDE CODE START: Adding imports for multi-language highlighting>
 from pygments.lexers import Python3Lexer
-from pygments.lexers import BashLexer
+from pygments.lexers import (
+    BashLexer, JavascriptLexer, HtmlLexer, SqlLexer, JsonLexer,
+    CssLexer, XmlLexer, YamlLexer, RubyLexer, PhpLexer, CppLexer,
+    CLexer, RustLexer, GoLexer, CSharpLexer, JavaLexer, MakefileLexer,
+    PerlLexer, TypeScriptLexer, SwiftLexer, KotlinLexer, ScalaLexer,
+    ObjectiveCLexer, DartLexer, MarkdownLexer, DiffLexer
+)
+from pygments.token import Token
+# <CLAUDE CODE END: Adding imports for multi-language highlighting>
 
 __all__ = (
     'Lexer',
@@ -186,6 +195,102 @@ class FastPygmentsTokenizer:
         self.old_text=''
         self.token_cache=[]
         self.pygments_lexer=pygments_lexer
+        
+        # <CLAUDE CODE START: Initialize language lexers for multi-language highlighting>
+        # Common lexer options
+        lexer_options = {'stripnl': False, 'stripall': False, 'ensurenl': False}
+        
+        # Initialize all lexers with the same options
+        self.bash_lexer = BashLexer(**lexer_options)
+        self.javascript_lexer = JavascriptLexer(**lexer_options)
+        self.html_lexer = HtmlLexer(**lexer_options)
+        self.sql_lexer = SqlLexer(**lexer_options)
+        self.json_lexer = JsonLexer(**lexer_options)
+        self.css_lexer = CssLexer(**lexer_options)
+        self.xml_lexer = XmlLexer(**lexer_options)
+        self.yaml_lexer = YamlLexer(**lexer_options)
+        self.ruby_lexer = RubyLexer(**lexer_options)
+        self.php_lexer = PhpLexer(**lexer_options)
+        self.cpp_lexer = CppLexer(**lexer_options)
+        self.c_lexer = CLexer(**lexer_options)
+        self.rust_lexer = RustLexer(**lexer_options)
+        self.go_lexer = GoLexer(**lexer_options)
+        self.csharp_lexer = CSharpLexer(**lexer_options)
+        self.java_lexer = JavaLexer(**lexer_options)
+        self.makefile_lexer = MakefileLexer(**lexer_options)
+        self.perl_lexer = PerlLexer(**lexer_options)
+        self.typescript_lexer = TypeScriptLexer(**lexer_options)
+        self.swift_lexer = SwiftLexer(**lexer_options)
+        self.kotlin_lexer = KotlinLexer(**lexer_options)
+        self.scala_lexer = ScalaLexer(**lexer_options)
+        self.objc_lexer = ObjectiveCLexer(**lexer_options)
+        self.dart_lexer = DartLexer(**lexer_options)
+        self.markdown_lexer = MarkdownLexer(**lexer_options)
+        self.diff_lexer = DiffLexer(**lexer_options)
+        
+        # Map language identifiers to lexers
+        self.language_lexers = {
+            # Shell scripting
+            'bash': self.bash_lexer,
+            'sh': self.bash_lexer,
+            'shell': self.bash_lexer,
+            'zsh': self.bash_lexer,
+            
+            # Web development
+            'javascript': self.javascript_lexer,
+            'js': self.javascript_lexer,
+            'html': self.html_lexer,
+            'css': self.css_lexer,
+            'xml': self.xml_lexer,
+            'yaml': self.yaml_lexer,
+            'yml': self.yaml_lexer,
+            'json': self.json_lexer,
+            'typescript': self.typescript_lexer,
+            'ts': self.typescript_lexer,
+            
+            # Databases
+            'sql': self.sql_lexer,
+            
+            # Backend languages
+            'python': self.pygments_lexer,
+            'py': self.pygments_lexer,
+            'ruby': self.ruby_lexer,
+            'rb': self.ruby_lexer,
+            'php': self.php_lexer,
+            'perl': self.perl_lexer,
+            'pl': self.perl_lexer,
+            'java': self.java_lexer,
+            'scala': self.scala_lexer,
+            'kotlin': self.kotlin_lexer,
+            'kt': self.kotlin_lexer,
+            
+            # Systems programming
+            'c': self.c_lexer,
+            'cpp': self.cpp_lexer,
+            'c++': self.cpp_lexer,
+            'cxx': self.cpp_lexer,
+            'rust': self.rust_lexer,
+            'rs': self.rust_lexer,
+            'go': self.go_lexer,
+            'golang': self.go_lexer,
+            'csharp': self.csharp_lexer,
+            'cs': self.csharp_lexer,
+            
+            # Mobile development
+            'swift': self.swift_lexer,
+            'objc': self.objc_lexer,
+            'objectivec': self.objc_lexer,
+            'dart': self.dart_lexer,
+            
+            # Other useful formats
+            'makefile': self.makefile_lexer,
+            'make': self.makefile_lexer,
+            'markdown': self.markdown_lexer,
+            'md': self.markdown_lexer,
+            'diff': self.diff_lexer,
+            'patch': self.diff_lexer,
+        }
+        # <CLAUDE CODE END: Initialize language lexers for multi-language highlighting>
     def _set_new_text(self,text):
         # from rp import longest_common_prefix
         #Used to invalidate the token_cache
@@ -221,13 +326,260 @@ class FastPygmentsTokenizer:
         if start_pos>=len(text):
             return#We're aleady at the end of the string; we're done. no more tokens.
         else:
-            for token in self.pygments_lexer.get_tokens_unprocessed(text[start_pos:]):
-                token=(token[0]+start_pos,token[1],token[2])
-                # start,species,data=token
-                # start+=start_pos
-                # token=start,species,data
-                self.token_cache.append(token)
-                yield token
+            # <CLAUDE CODE START: Improved Multi-language string highlighting implementation>
+            # Get the raw tokens from the Pygments lexer
+            raw_tokens = list(self.pygments_lexer.get_tokens_unprocessed(text[start_pos:]))
+            
+            # Process tokens for special language highlighting
+            i = 0
+            while i < len(raw_tokens):
+                pos, token_type, token_text = raw_tokens[i]
+                adjusted_pos = pos + start_pos
+                
+                # Define string token types to look for
+                string_token_types = [
+                    Token.Literal.String,
+                    Token.Literal.String.Doc,
+                    Token.Literal.String.Double,
+                    Token.Literal.String.Single,
+                    Token.Literal.String.Backtick,
+                    Token.Literal.String.Heredoc,
+                ]
+                
+                # Check if this is a string token
+                if any(token_type == t or str(token_type).startswith(str(t) + '.') for t in string_token_types):
+                    # This is the start of a string - collect all consecutive string tokens
+                    string_tokens = [(pos, token_type, token_text)]
+                    string_start = i
+                    current_pos = pos + len(token_text)
+                    j = i + 1
+                    
+                    # Collect all consecutive string tokens
+                    while j < len(raw_tokens):
+                        next_pos, next_type, next_text = raw_tokens[j]
+                        # If not consecutive or not a string token, break
+                        if next_pos != current_pos or not any(next_type == t or str(next_type).startswith(str(t) + '.') for t in string_token_types):
+                            break
+                        
+                        # Add this string token to our collection
+                        string_tokens.append((next_pos, next_type, next_text))
+                        current_pos = next_pos + len(next_text)
+                        j += 1
+                    
+                    # If we have more than one string token or a single one with a language tag, process it
+                    if len(string_tokens) > 1 or '#!' in token_text:
+                        # Combine all string tokens into a single string
+                        combined_text = ''.join(t[2] for t in string_tokens)
+                        combined_start = string_tokens[0][0]
+                        combined_pos = combined_start + start_pos
+                        
+                        # Detect quote type and extract content
+                        opening_quotes = ""
+                        closing_quotes = ""
+                        content = combined_text
+                        
+                        # Identify opening quotes, including prefix modifiers (r, f, etc.)
+                        # Regular expressions would be better here, but we'll use simple string checks
+                        prefix = ""
+                        
+                        # Check for r-strings, f-strings, etc.
+                        if any(combined_text.lower().startswith(p) for p in ['r', 'f', 'b', 'u', 'fr', 'rf', 'br', 'rb']):
+                            # Extract the prefix (r, f, etc.)
+                            for p in ['fr', 'rf', 'br', 'rb', 'r', 'f', 'b', 'u']:
+                                if combined_text.lower().startswith(p):
+                                    prefix_end = len(p)
+                                    prefix = combined_text[:prefix_end]
+                                    content = combined_text[prefix_end:]
+                                    break
+                        
+                        # Now check for the actual quotes
+                        if content.startswith('"""'):
+                            opening_quotes = prefix + '"""'
+                            content = content[3:]
+                        elif content.startswith("'''"):
+                            opening_quotes = prefix + "'''"
+                            content = content[3:]
+                        elif content.startswith('"'):
+                            opening_quotes = prefix + '"'
+                            content = content[1:]
+                        elif content.startswith("'"):
+                            opening_quotes = prefix + "'"
+                            content = content[1:]
+                        elif not prefix and combined_text.startswith('"""'):
+                            # No prefix detected but still starts with quotes
+                            opening_quotes = '"""'
+                            content = combined_text[3:]
+                        elif not prefix and combined_text.startswith("'''"):
+                            opening_quotes = "'''"
+                            content = combined_text[3:]
+                        elif not prefix and combined_text.startswith('"'):
+                            opening_quotes = '"'
+                            content = combined_text[1:]
+                        elif not prefix and combined_text.startswith("'"):
+                            opening_quotes = "'"
+                            content = combined_text[1:]
+                        else:
+                            # Failed to detect opening quotes
+                            opening_quotes = ""
+                            content = combined_text
+                        
+                        # Identify closing quotes
+                        if content.endswith('"""'):
+                            closing_quotes = '"""'
+                            content = content[:-3]
+                        elif content.endswith("'''"):
+                            closing_quotes = "'''"
+                            content = content[:-3]
+                        elif content.endswith('"'):
+                            closing_quotes = '"'
+                            content = content[:-1]
+                        elif content.endswith("'"):
+                            closing_quotes = "'"
+                            content = content[:-1]
+                        
+                        # Check for language tag in the content
+                        bang_pos = combined_text.find('#!')
+                        language_found = False
+                        
+                        if bang_pos >= 0:
+                            # Extract language identifier
+                            first_line_end = combined_text.find('\n', bang_pos)
+                            if first_line_end == -1:
+                                first_line_end = len(combined_text)
+                            
+                            lang_tag = combined_text[bang_pos+2:first_line_end].strip()
+                            lang = lang_tag.split()[0].split('/')[-1] if '/' in lang_tag else lang_tag
+                            
+                            # If we recognize this language, use its lexer
+                            if lang.lower() in self.language_lexers:
+                                language_found = True
+                                
+                                # Process using language-specific lexer
+                                tokens_to_yield = []
+                                
+                                # Calculate the positions of different parts
+                                if opening_quotes:
+                                    # 1. Opening quotes as string literal
+                                    tokens_to_yield.append(
+                                        (combined_pos, Token.Literal.String, opening_quotes)
+                                    )
+                                    
+                                    # 2. Content before the language tag, if any
+                                    if bang_pos > len(opening_quotes):
+                                        prefix = combined_text[len(opening_quotes):bang_pos]
+                                        tokens_to_yield.append(
+                                            (combined_pos + len(opening_quotes), Token.Text, prefix)
+                                        )
+                                    
+                                    # 3. The language tag as a hashbang
+                                    shebang_text = combined_text[bang_pos:first_line_end].strip()
+                                    tokens_to_yield.append(
+                                        (combined_pos + bang_pos, Token.Comment.Hashbang, shebang_text)
+                                    )
+                                    
+                                    # 4. Add the newline if present
+                                    if first_line_end < len(combined_text):
+                                        tokens_to_yield.append(
+                                            (combined_pos + first_line_end, Token.Text, '\n')
+                                        )
+                                        
+                                        # 5. Content after the first line with language-specific highlighting
+                                        remaining_content = combined_text[first_line_end+1:]
+                                        if closing_quotes and remaining_content.endswith(closing_quotes):
+                                            remaining_content = remaining_content[:-len(closing_quotes)]
+                                        
+                                        # Use language-specific lexer for the main content
+                                        language_lexer = self.language_lexers[lang.lower()]
+                                        content_tokens = language_lexer.get_tokens_unprocessed(remaining_content)
+                                        
+                                        # Add with adjusted positions
+                                        content_start = combined_pos + first_line_end + 1
+                                        for content_pos, content_type, content_text in content_tokens:
+                                            tokens_to_yield.append(
+                                                (content_start + content_pos, content_type, content_text)
+                                            )
+                                    
+                                    # 6. Add closing quotes if present
+                                    if closing_quotes:
+                                        closing_pos = combined_pos + len(combined_text) - len(closing_quotes)
+                                        tokens_to_yield.append(
+                                            (closing_pos, Token.Literal.String, closing_quotes)
+                                        )
+                                
+                                # Yield all tokens
+                                for token in tokens_to_yield:
+                                    self.token_cache.append(token)
+                                    yield token
+                                
+                                # Skip all the tokens we've processed
+                                i = j
+                                continue
+                        
+                        # Check for trailing comment-style language tag
+                        elif j < len(raw_tokens) and raw_tokens[j][1] == Token.Comment.Single:
+                            comment_pos, comment_type, comment_text = raw_tokens[j]
+                            if comment_text.startswith('#'):
+                                lang = comment_text[1:].strip()
+                                if lang.lower() in self.language_lexers:
+                                    language_found = True
+                                    
+                                    # Process using language-specific lexer with comment tag
+                                    tokens_to_yield = []
+                                    
+                                    # 1. Opening quotes
+                                    if opening_quotes:
+                                        tokens_to_yield.append(
+                                            (combined_pos, Token.Literal.String, opening_quotes)
+                                        )
+                                    
+                                    # 2. Content with language-specific highlighting
+                                    language_lexer = self.language_lexers[lang.lower()]
+                                    content_tokens = language_lexer.get_tokens_unprocessed(content)
+                                    
+                                    # Add with adjusted positions
+                                    content_start = combined_pos + len(opening_quotes)
+                                    for content_pos, content_type, content_text in content_tokens:
+                                        tokens_to_yield.append(
+                                            (content_start + content_pos, content_type, content_text)
+                                        )
+                                    
+                                    # 3. Closing quotes
+                                    if closing_quotes:
+                                        closing_pos = combined_pos + len(combined_text) - len(closing_quotes)
+                                        tokens_to_yield.append(
+                                            (closing_pos, Token.Literal.String, closing_quotes)
+                                        )
+                                    
+                                    # 4. The language tag comment
+                                    tokens_to_yield.append(
+                                        (comment_pos + start_pos, Token.Comment.Single, comment_text)
+                                    )
+                                    
+                                    # Yield all tokens
+                                    for token in tokens_to_yield:
+                                        self.token_cache.append(token)
+                                        yield token
+                                    
+                                    # Skip all the tokens we've processed including the comment
+                                    i = j + 1
+                                    continue
+                    
+                    # If no language tag was found, or language not supported,
+                    # just yield all collected string tokens normally
+                    if not language_found:
+                        for str_pos, str_type, str_text in string_tokens:
+                            adjusted_token = (str_pos + start_pos, str_type, str_text)
+                            self.token_cache.append(adjusted_token)
+                            yield adjusted_token
+                        i = j
+                        continue
+                
+                # Regular token processing for non-string tokens
+                adjusted_token = (pos + start_pos, token_type, token_text)
+                self.token_cache.append(adjusted_token)
+                yield adjusted_token
+                i += 1
+            # <CLAUDE CODE END: Improved Multi-language string highlighting implementation>
 # t=FastPygmentsTokenizer()
 # print(list(t.get_tokens_unprocessed('((HELLO))')))
 # print(list(t.get_tokens_unprocessed('((HELLO)))')))
@@ -310,12 +662,18 @@ class PygmentsLexer(Lexer):
         else:
             return self.fast_pygments_lexer  # Python
 
+    # <CLAUDE CODE START: Update tokenizer selection to check for language tags>
     def get_tokenizer(self, document):
         text = document.text
         if text.startswith("!"):
             return self.fast_bash_tokenizer  # Bash
+        # Check for multiline string with language shebang
+        elif '"""#!' in text or "'''#!" in text or ('#!' in text and ('"""' in text or "'''" in text)):
+            # Return Python lexer for now, we'll handle language-specific highlights later
+            return self.fast_pygments_tokenizer  # Python
         else:
             return self.fast_pygments_tokenizer  # Python
+    # <CLAUDE CODE END: Update tokenizer selection to check for language tags>
 
     @classmethod
     def from_filename(cls, filename, sync_from_start=True):
