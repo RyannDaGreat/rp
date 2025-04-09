@@ -311,6 +311,35 @@ class FastPygmentsTokenizer:
             pass
         self.old_text=text
     def get_tokens_unprocessed(self,text):
+
+        if text.startswith('!'):
+            #ORIGINAL CODE: Not for nested languages! 
+
+            # yield (0, Token.Keyword, text)
+            #Yields something like [(0, Token.Keyword, 'def'), (3, Token.Text, ' '), (4, Token.Name.Function, 'f'), (5, Token.Punctuation, '('), (6, Token.Punctuation, ')'), (7, Token.Punctuation, ':'), (8, Token.Keyword, 'pass')]
+            self._set_new_text(text)
+            # from rp import text_to_speech
+            # text_to_speech(len(self.token_cache))
+            yield from self.token_cache
+            # for token in self.token_cache:
+                # yield token
+            if not self.token_cache:
+                start_pos=0
+            else:
+                start_pos=self.token_cache[-1][0]+len(self.token_cache[-1][2])
+            if start_pos>=len(text):
+                return#We're aleady at the end of the string; we're done. no more tokens.
+            else:
+                for token in self.pygments_lexer.get_tokens_unprocessed(text[start_pos:]):
+                    token=(token[0]+start_pos,token[1],token[2])
+                    # start,species,data=token
+                    # start+=start_pos
+                    # token=start,species,data
+                    self.token_cache.append(token)
+                    yield token
+            return
+
+
         # yield (0, Token.Keyword, text)
         #Yields something like [(0, Token.Keyword, 'def'), (3, Token.Text, ' '), (4, Token.Name.Function, 'f'), (5, Token.Punctuation, '('), (6, Token.Punctuation, ')'), (7, Token.Punctuation, ':'), (8, Token.Keyword, 'pass')]
         self._set_new_text(text)
