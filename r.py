@@ -15187,6 +15187,7 @@ def display_image_in_terminal(image,dither=True,auto_resize=True,bordered=False)
     print(c.frame())
 
 
+_use_rp_timg=True
 def display_image_in_terminal_color(image,*,truecolor=True):
     """
     Will attempt to draw a color image in the terminal
@@ -15219,28 +15220,44 @@ def display_image_in_terminal_color(image,*,truecolor=True):
         #For example, display_image_in_terminal_color(uniform_float_color_image(5,10,(255,0,255,255)))
         image = bordered_image_solid_color(image, thickness=0, bottom=1, color="black")
 
-    # Get the timg module and use its functionality directly
-    timg_renderer = timg.Renderer()
-    
-    # Load the image
-    #timg_renderer.load_image_from_file(temp_file)
-    timg_renderer.load_image(rp.as_pil_image(image))
-    
-    # Choose the appropriate rendering method based on truecolor flag
-    #    ┌─────────┬──────────────────────────────────────────────┐
-    #    │ Method  │ Description                                  │
-    #    ├─────────┼──────────────────────────────────────────────┤
-    #    │ sixel   │ use sixels - best quality but lowest support │
-    #    │ a8f     │ low-resolution ANSI 8-bit palette            │
-    #    │ a24f    │ low-resolution ANSI 24-bit palette           │
-    #    │ a8h     │ high-resolution ANSI 8-bit palette           │
-    #    │ a24h    │ high-resolution ANSI 24-bit palette          │
-    #    │ ascii   │ ASCII art                                    │
-    #    └─────────┴──────────────────────────────────────────────┘
-    method = 'a24h' if truecolor else 'a8h'
-    
-    # Render the image with the selected method
-    timg_renderer.render(timg.METHODS[method]['class'])
+    def _helper(timg):
+        # Get the timg module and use its functionality directly
+        timg_renderer = timg.Renderer()
+        
+        # Load the image
+        #timg_renderer.load_image_from_file(temp_file)
+        timg_renderer.load_image(rp.as_pil_image(image))
+        
+        # Choose the appropriate rendering method based on truecolor flag
+        #    ┌─────────┬──────────────────────────────────────────────┐
+        #    │ Method  │ Description                                  │
+        #    ├─────────┼──────────────────────────────────────────────┤
+        #    │ sixel   │ use sixels - best quality but lowest support │
+        #    │ a8f     │ low-resolution ANSI 8-bit palette            │
+        #    │ a24f    │ low-resolution ANSI 24-bit palette           │
+        #    │ a8h     │ high-resolution ANSI 8-bit palette           │
+        #    │ a24h    │ high-resolution ANSI 24-bit palette          │
+        #    │ ascii   │ ASCII art                                    │
+        #    └─────────┴──────────────────────────────────────────────┘
+        method = 'a24h' if truecolor else 'a8h'
+        
+        # Render the image with the selected method
+        timg_renderer.render(timg.METHODS[method]['class'])
+
+    global _use_rp_timg
+
+    if _use_rp_timg:
+        try:
+            _helper(timg)
+        except PermissionError:
+            #On XCloud, it fails to build because we have no write permission in that directory for the c compilation of my optimized version
+            _use_rp_timg=False
+
+    if not _use_rp_timg:
+        pip_import('timg')
+        import timg
+        _helper(timg)
+
 
 def display_image_in_terminal_imgcat(image):
     """
@@ -19842,7 +19859,9 @@ def pseudo_terminal(
         FC FCOPY
         MLP MLPASTE
 
-        PSP $shlex.split($string_from_clipboard())
+        PSP  $shlex.split($string_from_clipboard())
+        PAS  $shlex.split($string_from_clipboard())
+        PASH $shlex.split($string_from_clipboard())
 
         TPWC $web_copy($printed($tmux_paste()))
         WCTP $web_copy($printed($tmux_paste()))
@@ -20070,6 +20089,8 @@ def pseudo_terminal(
         SFE $strip_file_extension(ans) if isinstance(ans,str) else $strip_file_extensions(ans)
         GFE $get_file_extension(ans) if isinstance(ans,str) else $get_file_extensions(ans)
 
+        64P  ans=$printed($string_from_clipboard()) ; $fansi_print($human_readable_file_size(len( ans )), 'bold cyan') ; ans=$base64_to_object(ans)   #Copy object via Base64 String
+        64C _ans64=$printed($object_to_base64(ans)) ; $fansi_print($human_readable_file_size(len(_ans64)), 'bold cyan') ; $string_to_clipboard(_ans64) #Copy object via Base64 String
 
         # GO GC
 
