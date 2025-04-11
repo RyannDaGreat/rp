@@ -396,7 +396,7 @@ class FastPygmentsTokenizer:
                         j += 1
                     
                     # If we have more than one string token or a single one with a language tag, process it
-                    if len(string_tokens) > 1 or '#!' in token_text:
+                    if len(string_tokens) > 0 or '#!' in token_text:
                         # Combine all string tokens into a single string
                         combined_text = ''.join(t[2] for t in string_tokens)
                         combined_start = string_tokens[0][0]
