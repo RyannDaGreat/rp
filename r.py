@@ -6664,7 +6664,7 @@ def convert_audio_file(input_file, output_file, *, skip_existing=False):
     import os
 
     if not os.path.exists(input_file):
-        raise FileNotFoundError(f"Input file not found: {input_file}")
+        raise FileNotFoundError("Input file not found: "+input_file)
         
     _ensure_ffmpeg_installed()
 
