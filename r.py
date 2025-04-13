@@ -6635,6 +6635,63 @@ def wav_to_mp3(wav_file_path: str, mp3_output_path: str = None, samplerate: int 
     subprocess.run(cmd, check=True)
     return mp3_output_path
 
+def convert_audio_file(input_file, output_file):
+    """
+    Convert an audio file to a different format using FFmpeg.
+
+    Args:
+        input_file (str): Path to the input audio file.
+        output_file (str): Desired output format or path. If only extension is provided
+                          (e.g., 'mp3', 'wav'), output will use input filename with new extension.
+                          Supported formats: wav, mp3, ogg, mp4.
+
+    Returns:
+        str: Path to the converted audio file.
+
+    Raises:
+        RuntimeError: If FFmpeg encounters an error or is not installed.
+        FileNotFoundError: If the input file does not exist or output file could not be created.
+
+    Notes:
+        - Requires FFmpeg to be installed and available in PATH.
+        - Automatically creates a unique filename if output path already exists.
+    
+    EXAMPLE:
+        >>> convert_audio_file('/Users/ryan/Downloads/Diffusion Illusions: SIGGRAPH 2024 Talk.mp4','wav')
+        ans = /Users/ryan/Downloads/Diffusion Illusions: SIGGRAPH 2024 Talk_copy.wav
+    """
+    import subprocess
+    import os
+
+    if not os.path.exists(input_file):
+        raise FileNotFoundError(f"Input file not found: {input_file}")
+        
+    _ensure_ffmpeg_installed()
+
+    supported_output_filetypes = "wav ogg mp3 mp4".split()
+
+    if output_file in supported_output_filetypes or "." + output_file in supported_output_filetypes:
+        output_file = rp.with_file_extension(input_file, output_file, replace=True)
+        output_file = rp.get_unique_copy_path(output_file)
+
+    try:
+        subprocess.run(
+            ["ffmpeg", "-i", input_file, "-y", output_file],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError("Error converting audio file: " + e.stderr.decode()) from e
+    except FileNotFoundError:
+        raise RuntimeError("FFmpeg not found. Please install FFmpeg to convert audio files.")
+
+    if not os.path.exists(output_file):
+        raise FileNotFoundError("Failed to create output file: " + output_file)
+
+    return output_file
+
+
 # endregionx
 # region  Matplotlib: ［display_image，brutish_display_image，display_color_255，display_grayscale_image，line_graph，block，clf］
 
