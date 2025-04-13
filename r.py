@@ -6635,7 +6635,7 @@ def wav_to_mp3(wav_file_path: str, mp3_output_path: str = None, samplerate: int 
     subprocess.run(cmd, check=True)
     return mp3_output_path
 
-def convert_audio_file(input_file, output_file):
+def convert_audio_file(input_file, output_file, *, skip_existing=False):
     """
     Convert an audio file to a different format using FFmpeg.
 
@@ -6673,6 +6673,11 @@ def convert_audio_file(input_file, output_file):
     if output_file in supported_output_filetypes or "." + output_file in supported_output_filetypes:
         output_file = rp.with_file_extension(input_file, output_file, replace=True)
         output_file = rp.get_unique_copy_path(output_file)
+
+    if os.path.exists(output_file) and skip_existing:
+        return output_file
+
+    make_parent_directory(output_file)
 
     try:
         subprocess.run(
