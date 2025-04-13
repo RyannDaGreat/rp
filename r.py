@@ -6672,6 +6672,11 @@ def convert_audio_file(input_file, output_file, *, skip_existing=False):
 
     if output_file in supported_output_filetypes or "." + output_file in supported_output_filetypes:
         output_file = rp.with_file_extension(input_file, output_file, replace=True)
+
+        if output_file==input_file:
+            #Converting a file to its own type...take a shortcut and just return the original file!
+            return input_file
+
         output_file = rp.get_unique_copy_path(output_file)
 
     if os.path.exists(output_file) and skip_existing:
