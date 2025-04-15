@@ -35,6 +35,7 @@ import warnings
 import pickle
 import tempfile
 import contextlib
+import itertools
 import math
 import random
 import re
@@ -16370,10 +16371,11 @@ class eta:
         self.display_eta(n)
 
     def __iter__(self):
-        for i,e in enumerate(self.elements):
-            self(i)
-            yield e
-        self(i+1)
+        if len(self):
+            for i,e in enumerate(self.elements):
+                self(i)
+                yield e
+            self(i+1)
 
     def __len__(self):
         return len(self.elements)
@@ -19926,9 +19928,9 @@ def pseudo_terminal(
         FC FCOPY
         MLP MLPASTE
 
-        PSP  $shlex.split($string_from_clipboard())
-        PAS  $shlex.split($string_from_clipboard())
-        PASH $shlex.split($string_from_clipboard())
+        PSP  $delist($shlex.split($string_from_clipboard()))
+        PAS  $delist($shlex.split($string_from_clipboard()))
+        PASH $delist($shlex.split($string_from_clipboard()))
 
         TPWC $web_copy($printed($tmux_paste()))
         WCTP $web_copy($printed($tmux_paste()))
@@ -26774,12 +26776,31 @@ def memoized_property(method):
     memoized_property=property(memoized_property)
     return memoized_property
 
+def _omni_load_animated_image(path):
+    """ gif and webp and png can be either a video or image depending on context... """
+    video = load_video(path, show_progress=False) #A non-animated gif will return a video with a single frame
+    if len(video)==1:
+        return video[0]
+    return video
+
+def _omni_save_animated_image(video,path):
+    """ gif and webp and png can be either a video or image depending on context... """
+    if is_image(video):
+        return save_image(video, path)
+    else:
+        return save_video(video, path)
+
+
 def _omni_load(path):
     if ends_with_any(path, '.json'): return rp.load_json(path)
     if ends_with_any(path, '.yaml'): return rp.load_yaml(path)
-    if ends_with_any(path, '.png .jpg .jpeg .jxl .exr'.split()): return rp.load_image(path)
-    if ends_with_any(path, '.mp4 .gif'.split()): return rp.load_video(path)
+    if ends_with_any(path, '.png .webp .gif'.split()): return rp.r._omni_load_animated_image(path)
+    if ends_with_any(path, '.jpg .jpeg .jxl .exr .psd .tga .tiff .tif .jp2 .bmp'.split()): return rp.load_image(path)
+    if ends_with_any(path, '.mp4 .avi'.split()): return rp.load_video(path)
     if ends_with_any(path, '.npy'.split()): return np.load(path)
+    if ends_with_any(path, '.tsv'.split()): return load_tsv(path,show_progress=True)
+    if ends_with_any(path, '.csv'.split()): return __import__('pandas').read_csv(path)
+    if ends_with_any(path, '.parquet'.split()): return load_parquet(path,show_progress=True)
     if ends_with_any(path, '.pth .ckpt'.split()): return __import__('torch').load(path)
     if is_image_file(path): return load_image(path)
     if is_video_file(path): return load_video(path)
@@ -26789,8 +26810,9 @@ def _omni_load(path):
 def _omni_save(object, path):
     if ends_with_any(path, '.json'): return rp.save_json(object,path)
     if ends_with_any(path, '.yaml'): return rp.save_yaml(object,path)
-    if ends_with_any(path, '.png .jpg .jpeg .jxl .exr'.split()): return rp.save_image(object, path)
-    if ends_with_any(path, '.mp4 .gif'.split()): return rp.save_video(object, path)
+    if ends_with_any(path, '.png .webp .gif'.split()): return rp.r._omni_save_animated_image(object, path)
+    if ends_with_any(path, '.jpg .jpeg .jxl .exr .psd .tga .tiff .tif .jp2 .bmp'.split()): return rp.save_image(object, path)
+    if ends_with_any(path, '.mp4'.split()): return rp.save_video(object, path)
     if ends_with_any(path, '.npy'.split()): return np.save(path,object)
     if ends_with_any(path, '.pth .ckpt'.split()): return __import__('torch').save(object,path)
     if isinstance(object, str): return save_text_file(object, path)
@@ -43467,17 +43489,17 @@ def resize_images_to_min_size(*images, interp="bilinear", alpha_weighted=False):
     """
     return resize_images(*images, size=get_min_image_dimensions(*images), interp=interp, alpha_weighted=alpha_weighted)
 
-def resize_videos_to_min_size(*videos):
+def resize_videos_to_min_size(*videos,interp='auto'):
     videos = detuple(videos)
     min_height = min(get_video_heights(videos))
     min_width  = min(get_video_widths (videos))
-    return resize_videos(videos, size=(min_height, min_width))
+    return resize_videos(videos, size=(min_height, min_width),interp=interp)
 
-def resize_videos_to_max_size(*videos):
+def resize_videos_to_max_size(*videos,interp='auto'):
     videos = detuple(videos)
     max_height = max(get_video_heights(videos))
     max_width  = max(get_video_widths (videos))
-    return resize_videos(videos, size=(max_height, max_width))
+    return resize_videos(videos, size=(max_height, max_width),interp=interp)
 
 def _iterfzf(iterable, *args,**kwargs):
     pip_import('iterfzf')
