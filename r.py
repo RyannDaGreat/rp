@@ -1433,6 +1433,10 @@ def fansi_print(
         flush=True,
     )
 
+def fansi_printed(x, *args, **kwargs):
+    fansi_print(x, *args, **kwargs)
+    return x
+
 # noinspection PyShadowingBuiltins
 def print_fansi_reference_table() -> None:
     """
@@ -6665,7 +6669,7 @@ def convert_audio_file(input_file, output_file, *, skip_existing=False):
     import os
 
     if not os.path.exists(input_file):
-        raise FileNotFoundError("Input file not found: "+input_file)
+        raise FileNotFoundError(f"Input file not found: {input_file}")
         
     _ensure_ffmpeg_installed()
 
@@ -18003,6 +18007,8 @@ def make_symlink(original_path, symlink_path=".", *, relative=False, replace=Fal
     if replace and is_symlink(symlink_path):
         os.remove(symlink_path)
     
+    make_parent_folder(symlink_path)
+
     os.symlink(original_path,symlink_path)
     
     return symlink_path
@@ -20392,7 +20398,9 @@ def pseudo_terminal(
         JA  JSON ANS
         JEA JSON ANS
         LJEA [$line_join(x) for x in ans] #Line Join Each Ans
-        CJ ",".join(map(str,ans))
+        CJ   ans.split(",") if isinstance(ans,str) else ",".join(map(str,ans)) 
+        SJ   ans.split(" ") if isinstance(ans,str) else " ".join(map(str,ans)) 
+        SPAJ ans.split(" ") if isinstance(ans,str) else " ".join(map(str,ans)) 
 
         SGC $select_git_commit()
         DUNKA $pip_import('dunk');$os.system(f"git diff {ans} | dunk")
@@ -23214,9 +23222,9 @@ def pseudo_terminal(
             fansi_print("    - Exiting pseudo-terminal at "+level_label(),'blue' ,'bold')
 
 # @formatter:off
-try:from setproctitle import setproctitle as set_process_title \
-        ,getproctitle as get_process_title
-except Exception:pass
+def set_process_title(title):
+    return pip_import('setproctitle').setproctitle(title)
+
 def get_process_title():
     try:
         import setproctitle
@@ -25099,7 +25107,7 @@ def cv_line_graph(
     Draws a line graph using OpenCV with the given values and colors.
 
     Args:
-        y_values (list or numpy.ndarray): The y-values of the data points.
+        y_values (list or numpy.ndarray): The y-values of the data points. This is NOT in image-coordinates, it's in graph coordinates.
         x_values (list or numpy.ndarray, optional): The x-values of the data points. If not provided, the indices of y_values will be used.
         height (int, optional): The height of the output image. If not provided, it will be determined based on the range of y-values.
         width (int, optional): The width of the output image. If not provided, it will be determined based on the number of data points.
@@ -25214,8 +25222,8 @@ def cv_line_graph(
     x_values = np.array(x_values, dtype=np.float32) if x_values is not None else np.arange(len(y_values), dtype=np.float32)
 
     # Determine the dimensions of the output image if not provided
-    height = height or int(np.ptp(y_values))
-    width = width or len(y_values)
+    height = height or int(np.ptp(y_values)+1)
+    width  = width  or int(np.ptp(x_values)+1)
 
     # Create the output image with the specified background color
     graph = np.full((height, width, 4), background_color, dtype=np.uint8)
@@ -26609,7 +26617,18 @@ class HandyDict(dict):
 
 #TODO: HandySet
 
-def handy_hash(value,fallback=None):
+def _torch_tensor_to_bytes_for_hashing(tensor):
+    #https://stackoverflow.com/questions/63880081/how-to-convert-a-torch-tensor-into-a-byte-string - not using numpy
+    #This includes the device!
+    import torch 
+    import io
+    buff = io.BytesIO()
+    torch.save(tensor, buff)
+    buff.seek(0)  # <--  this is what you were missing
+    return buff.read()
+
+
+def handy_hash(value,):
     """
     This function is really handy!
     Meant for hashing things that can't normally be hashed, like lists and dicts and numpy arrays. It pretends they're immutable.
@@ -26617,15 +26636,24 @@ def handy_hash(value,fallback=None):
     For example, lists are turned into tuples, and dicts like {"A":"B","C":"D"} are turned into ((""))
     If it can't hash something, it will just use fallback to hash it. By default, though, fallback is
     """
-    def default_fallback(value):
+
+    def fallback(value):
         # fansi_print('Warning: fallback_hash was called on value where repr(value)=='+repr(value),'yellow') #This is annoying
         return id(value)
-    fallback=fallback or default_fallback
-    value_type=type(value)
+
     try:return hash(value)
     except Exception:pass#This is probably going to happen a lot in this function lol (that's kinda the whole point)
-    try:return hash(('DILL HASH',object_to_bytes(value)))#The dill library is capable of hashing a great many things...including numpy arrays! This was added after my original implementation of handy_hash, as dill is able to handle a huuuggggeee amount of different types
+
+    bytes_hasher = get_sha256_hash
+
+    if is_torch_tensor(value): return ('TORCH SHA256', bytes_hasher(_torch_tensor_to_bytes_for_hashing(value.detach().cpu())))
+    if is_numpy_array (value): return ('NUMPY SHA256', bytes_hasher(value.tobytes()))
+
+    value_type=type(value)
+
+    try:return ('DILL HASH', bytes_hasher(_dill_dumps(value)))#The dill library is capable of hashing a great many things...including numpy arrays! This was added after my original implementation of handy_hash, as dill is able to handle a huuuggggeee amount of different types
     except Exception:pass
+
     hasher=__hashers[value_type] if value_type in __hashers else fallback
     return hasher(value)
 
@@ -26794,14 +26822,14 @@ def _omni_save_animated_image(video,path):
 def _omni_load(path):
     if ends_with_any(path, '.json'): return rp.load_json(path)
     if ends_with_any(path, '.yaml'): return rp.load_yaml(path)
-    if ends_with_any(path, '.png .webp .gif'.split()): return rp.r._omni_load_animated_image(path)
+    if ends_with_any(path, '.png .webp .gif'.split()): return rp._omni_load_animated_image(path)
     if ends_with_any(path, '.jpg .jpeg .jxl .exr .psd .tga .tiff .tif .jp2 .bmp'.split()): return rp.load_image(path)
     if ends_with_any(path, '.mp4 .avi'.split()): return rp.load_video(path)
     if ends_with_any(path, '.npy'.split()): return np.load(path)
     if ends_with_any(path, '.tsv'.split()): return load_tsv(path,show_progress=True)
     if ends_with_any(path, '.csv'.split()): return __import__('pandas').read_csv(path)
     if ends_with_any(path, '.parquet'.split()): return load_parquet(path,show_progress=True)
-    if ends_with_any(path, '.pth .ckpt'.split()): return __import__('torch').load(path)
+    if ends_with_any(path, '.pt .pth .ckpt'.split()): return __import__('torch').load(path)
     if is_image_file(path): return load_image(path)
     if is_video_file(path): return load_video(path)
     if is_utf8_file(path): return load_text_file(path)
@@ -26810,11 +26838,11 @@ def _omni_load(path):
 def _omni_save(object, path):
     if ends_with_any(path, '.json'): return rp.save_json(object,path)
     if ends_with_any(path, '.yaml'): return rp.save_yaml(object,path)
-    if ends_with_any(path, '.png .webp .gif'.split()): return rp.r._omni_save_animated_image(object, path)
+    if ends_with_any(path, '.png .webp .gif'.split()): return rp._omni_save_animated_image(object, path)
     if ends_with_any(path, '.jpg .jpeg .jxl .exr .psd .tga .tiff .tif .jp2 .bmp'.split()): return rp.save_image(object, path)
     if ends_with_any(path, '.mp4'.split()): return rp.save_video(object, path)
     if ends_with_any(path, '.npy'.split()): return np.save(path,object)
-    if ends_with_any(path, '.pth .ckpt'.split()): return __import__('torch').save(object,path)
+    if ends_with_any(path, '.pt .pth .ckpt'.split()): return __import__('torch').save(object,path)
     if isinstance(object, str): return save_text_file(object, path)
     if isinstance(object, bytes): return bytes_to_file(object, path)
     return object_to_file(object,path)
@@ -27145,52 +27173,43 @@ class CachedInstances:
             cls._instance_cache = HandyDict()
         return cls._instance_cache
 
-def get_sha256_hash(source, *, show_progress: bool = False, as_int: bool = False) -> str:
+
+def _get_hash(source, hash_func_name, func_display_name, *, show_progress, format):
     """
-    Calculate the SHA-256 hash of the provided data or the contents of a file specified by its path.
-    If as_int is True, returns the hash as an integer.
-
-    :param source:
-        - bytes: The data to hash.
-        - str: The file path whose contents are to be hashed.
-    :param show_progress: Keyword-only argument that dictates whether to display a progress bar during the hash computation.
-    :param as_int: Keyword-only argument that returns the hash as an integer instead of a hexadecimal string.
-    :return: The SHA-256 hash as a hexadecimal string or an integer.
-
-    EXAMPLES:
-        >>> get_sha256_hash('/Users/ryan/Downloads/A dolphin reading.png')
-        ans = cd318d7a18c5ebf899c53d5a580d5bb659e99c1ca2961ac0507cb0d2946498f6
-        >>> get_sha256_hash(b'test bytestring')
-        ans = 79945b2e3369479b02fabcd95a6d124524a2939e40003c2dcba182c35cf6c10a
-        >>> get_sha256_hash(object_to_bytes([1,2,3,4,5]))
-        ans = ab10184fc37b8a4bf42feef31ada80b347d2096b0dc161921579753765565577
-        >>> get_sha256_hash('/path/to/file', as_int=True)
-        69026873886289201118877060911792184041901559641924946149006354401672729373074
+    Helper function to calculate a hash of the provided data or file contents.
+    
+    :param source: The data or file path to hash
+    :param hash_func_name: Name of the hash function to use (e.g., 'md5', 'sha256')
+    :param func_display_name: Display name for error messages
+    :param show_progress: Whether to display a progress bar
+    :param format: Output format of the hash. Options: 'hex', 'int', 'bytes', 'base64'
+    :return: The hash in the specified format
     """
     import hashlib
     import os
     import io
-
-    hash_obj = hashlib.sha256()
-
+    import base64
+    
+    hash_obj = getattr(hashlib, hash_func_name)()
+    
     if isinstance(source, bytes):
         byte_stream = io.BytesIO(source)
         total_size = len(source)
-        progress_desc = "Hashing data"
+        progress_desc = "Hashing data via " + hash_func_name
     elif isinstance(source, str) and os.path.isfile(source):
         byte_stream = open(source, 'rb')
         total_size = os.path.getsize(source)
-        progress_desc = "Hashing file"
+        progress_desc = "Hashing file via " + hash_func_name
     else:
-        raise TypeError("rp.get_sha256_hash: Unsupported input type '" + type(source).__name__ + "'")
-
+        raise TypeError("rp." + func_display_name + ": Unsupported input type '" + type(source).__name__ + "'")
+    
     progress_bar = None
     if show_progress:
         #TODO: Make it unified with load_files, one unified tqdm/eta function - supporting the same argument formats
         pip_import('tqdm')
         from tqdm import tqdm
         progress_bar = tqdm(total=total_size, desc=progress_desc, unit='B', unit_scale=True, unit_divisor=1024)
-
+    
     chunk_size = 4096 #A nice big chunk size
     while True:
         chunk = byte_stream.read(chunk_size)
@@ -27199,15 +27218,76 @@ def get_sha256_hash(source, *, show_progress: bool = False, as_int: bool = False
         hash_obj.update(chunk)
         if show_progress:
             progress_bar.update(len(chunk))
-
+    
     if hasattr(byte_stream, 'close'):
         byte_stream.close()
+    
+    # Return hash in requested format
+    if format in ('hex', 'base16'):
+        return hash_obj.hexdigest()
+    elif format == 'int':
+        return int(hash_obj.hexdigest(), 16)
+    elif format == 'bytes':
+        return hash_obj.digest()
+    elif format == 'base64':
+        return bytes_to_base64(hash_obj.digest())
+    else:
+        raise ValueError("rp." + func_display_name + ": Unsupported format '" + format + "'. Options: 'hex', 'int', 'bytes', 'base64'")
 
-    hash_result = hash_obj.hexdigest()
-    if as_int:
-        hash_result = int(hash_result, 16)
+def get_md5_hash(source, format='hex', *, show_progress: bool = False):
+    """
+    Calculate the MD5 hash of the provided data or the contents of a file specified by its path.
+    It is both slower AND worse than get_sha256_hash
 
-    return hash_result
+    :param source:
+        - bytes: The data to hash.
+        - str: The file path whose contents are to be hashed.
+    :param show_progress: Keyword-only argument that dictates whether to display a progress bar during the hash computation.
+    :param format: Keyword-only argument that specifies the output format of the hash. 
+                  Options: 'hex'/'base16', 'int', 'bytes', 'base64'.
+    :return: The MD5 hash in the specified format.
+
+    EXAMPLES:
+        >>> get_md5_hash('/Users/ryan/Downloads/A dolphin reading.png')
+        ans = 3d8909facff8e0c479d984d6adcf51c1
+        >>> get_md5_hash(b'test bytestring')
+        ans = 18485e0c32cc8aa30d80dbecdd4fac50
+        >>> get_md5_hash(object_to_bytes([1,2,3,4,5]))
+        b'3b5d3c7d207e37dceeedd301e35e2e58'
+        >>> get_md5_hash('/path/to/file', format='int')
+        78854878685254270795816465693052641713
+        >>> get_md5_hash('/path/to/file', format='base64')
+        'kJh5Sq2LpZ3v2dYHPvs8uQ=='
+    """
+    return _get_hash(source, 'md5', 'get_md5_hash', show_progress=show_progress, format=format)
+
+def get_sha256_hash(source, format='hex', *, show_progress: bool = False):
+    """
+    Calculate the SHA-256 hash of the provided data or the contents of a file specified by its path.
+    It is both better AND faster than get_md5_hash
+
+    :param source:
+        - bytes: The data to hash.
+        - str: The file path whose contents are to be hashed.
+    :param show_progress: Keyword-only argument that dictates whether to display a progress bar during the hash computation.
+    :param format: Keyword-only argument that specifies the output format of the hash. 
+                  Options: 'hex'/'base16', 'int', 'bytes', 'base64'.
+    :return: The SHA-256 hash in the specified format.
+
+    EXAMPLES:
+        >>> get_sha256_hash('/Users/ryan/Downloads/A dolphin reading.png')
+        ans = cd318d7a18c5ebf899c53d5a580d5bb659e99c1ca2961ac0507cb0d2946498f6
+        >>> get_sha256_hash(b'test bytestring')
+        ans = 79945b2e3369479b02fabcd95a6d124524a2939e40003c2dcba182c35cf6c10a
+        >>> get_sha256_hash(object_to_bytes([1,2,3,4,5]))
+        ans = ab10184fc37b8a4bf42feef31ada80b347d2096b0dc161921579753765565577
+        >>> get_sha256_hash('/path/to/file', format='int')
+        69026873886289201118877060911792184041901559641924946149006354401672729373074
+        >>> get_sha256_hash('/path/to/file', format='base64')
+        'g+YuWoycDlhZ9+VRXimYoxXqkR+OFv4PlM0/Y9p9D0E='
+    """
+    return _get_hash(source, 'sha256', 'get_sha256_hash', show_progress=show_progress, format=format)
+
 
 def _labeled_image_text_to_image(text,
                                  align,
@@ -38509,6 +38589,11 @@ def can_convert_object_to_bytes(x:object)->bool:
     dill=pip_import('dill')
     return dill.pickles(x)#https://stackoverflow.com/questions/17872056/how-to-check-if-an-object-is-pickleable
 
+def _dill_dumps(x):
+    pip_import('dill')
+    import dill
+    return dill.dumps(x)
+
 def object_to_bytes(x:object)->bytes:
     """
     Try to somehow turn x into a bytestring. 
@@ -38517,8 +38602,7 @@ def object_to_bytes(x:object)->bytes:
     However it works is a black box, as long as it can be decoded by the bytes_to_object function
     """
     # assert can_convert_object_to_bytes(x),'Sorry, but we cannot serialize this object to a bytestring'
-    dill=pip_import('dill')
-    output = dill.dumps(x)
+    output = _dill_dumps(x)
     output = compress_bytes(output)
     return output
 
@@ -39576,25 +39660,32 @@ def visualize_pytorch_model(model,*,input_shape=None, example_input=None, supres
             # display_image(load_image(output_path),block=block) #We would use this line if we wanted to rasterize it. However, a PDF is probably the best option
             open_file_with_default_application(output_path)# If we're making a pdf, open it in some pdf viewer
 
-def get_sinusoidal_positional_encodings(length: int, dim: int, scale: float = 10000.0) -> np.ndarray:
+
+def get_sinusoidal_positional_encodings(shape, channels, scale=10000.0):
     """
     Generate sinusoidal position encodings for transformer models.
     
     Parameters:
-        length: int
-            Length of the sequence.
-        dim: int
-            Dimension of the model (embedding dimension).
-        scale: float, optional
-            Scaling factor for the frequencies, by default 10000.0¹
+        shape: int or list/tuple of ints
+            Length of the sequence for 1D encoding, or spatial dimensions for multi-dimensional encoding.
+        channels: int or list/tuple of ints
+            Dimension of the model (embedding dimension) for 1D encoding, or embedding dimensions per
+            spatial dimension for multi-dimensional encoding.
+        scale: float or list/tuple of floats, optional
+            Scaling factor for the frequencies, by default 10000.0¹. Can be specified per dimension.
     
     Returns:
         np.ndarray
-            Position encoding matrix of shape (length, dim).
+            Position encoding matrix. For 1D encoding, shape will be (shape, channels).
+            For multi-dimensional encoding, shape will be (*shape, sum(channels)).
     
     Notes:
         The position encoding uses sine for even indices and cosine for odd indices
         in the embedding dimension, with frequencies decreasing as the dimension increases.
+        
+        For multi-dimensional inputs, positional encodings are created separately for each dimension
+        and then concatenated along the channel dimension. This allows different encoding parameters
+        per dimension.
         
         ¹ The value 10000 comes from the original "Attention is All You Need" paper by 
         Vaswani et al. (2017), Section 3.5 "Positional Encoding", page 6. The paper 
@@ -39606,28 +39697,22 @@ def get_sinusoidal_positional_encodings(length: int, dim: int, scale: float = 10
         implementations. Paper link: https://arxiv.org/pdf/1706.03762.pdf
     
     EXAMPLES:
-        >>> encoding = get_position_encoding(length=4, dim=6)
-        >>> encoding.shape
-        (4, 6)
-        >>> encoding = get_position_encoding(length=10, dim=512)
-        >>> encoding.shape
-        (10, 512)
-        
+
         >>> #---------------------------
-        ... # EXAMPLES
+        ... # VISUALIZATION EXAMPLE
         ... #---------------------------
         ... import numpy as np
         ... import matplotlib.pyplot as plt
         ... from typing import Tuple
         ...
         ... # Example 1: Generate and print a small position encoding matrix
-        ... P = get_sinusoidal_positional_encodings(length=4, dim=4, scale=100)
+        ... P = get_sinusoidal_positional_encodings(shape=4, channels=4, scale=100)
         ... print("Position encoding matrix (4×4):")
         ... print(P)
         ... print("Shape: %s" % str(P.shape))
-        ... 
+        ...
         ... # Example 2: Visualize a larger position encoding matrix
-        ... P_large = get_sinusoidal_positional_encodings(length=20, dim=64)
+        ... P_large = get_sinusoidal_positional_encodings(shape=256, channels=128)
         ... plt.figure(figsize=(10, 8))
         ... plt.imshow(P_large, cmap='viridis', aspect='auto')
         ... plt.colorbar()
@@ -39636,31 +39721,155 @@ def get_sinusoidal_positional_encodings(length: int, dim: int, scale: float = 10
         ... plt.ylabel("Sequence Position")
         ... plt.savefig("position_encoding_heatmap.png")
         ... plt.show()  # Uncomment to display the plot
+
+        >>> #BASIC USAGE
+        >>> encoding = get_position_encoding(shape=4, channels=6)
+        >>> encoding.shape
+        (4, 6)
+        >>> encoding = get_position_encoding(shape=10, channels=512)
+        >>> encoding.shape
+        (10, 512)
+        
+        >>> #INPUT --> SHAPE DEMOS:
+        >>> print(get_sinusoidal_positional_encodings((10,10,5),[17])            .shape)#   -->   (10, 10, 5, 51)
+        >>> print(get_sinusoidal_positional_encodings((10,10,5),17)              .shape)#   -->   (10, 10, 5, 51)
+        >>> print(get_sinusoidal_positional_encodings(10,17)                     .shape)#   -->   (10, 17)
+        >>> print(get_sinusoidal_positional_encodings([10],17)                   .shape)#   -->   (10, 17)
+        >>> print(get_sinusoidal_positional_encodings([10,20],17)                .shape)#   -->   (10, 20, 34)
+        >>> print(get_sinusoidal_positional_encodings([10,20],[17,1])            .shape)#   -->   (10, 20, 18)
+        >>> print(get_sinusoidal_positional_encodings([10,20],[17,1],[1])        .shape)#   -->   (10, 20, 18)
+        >>> print(get_sinusoidal_positional_encodings([10,20],[17,1],[1,2])      .shape)#   -->   (10, 20, 18)
+        >>> print(get_sinusoidal_positional_encodings([10,20],[17,1],[1,2,3])    .shape)#   -->   ERROR: ValueError: Error: All lists must have the same length or be scalars. Lengths provided: [2, 2, 3]
+        >>> print(get_sinusoidal_positional_encodings([10,20],[17,1,4],[1,2])    .shape)#   -->   ERROR: ValueError: Error: All lists must have the same length or be scalars. Lengths provided: [2, 3, 3]
+        >>> print(get_sinusoidal_positional_encodings([10,20,5],[17,1,4],[1,2,3]).shape)#   -->   (10, 20, 5, 22)
+        >>> print(get_sinusoidal_positional_encodings([10],[17,1,4],[1,2,3])     .shape)#   -->   (10, 10, 10, 22)
+        >>> print(get_sinusoidal_positional_encodings(10,[17,1,4],[1,2,3])       .shape)#   -->   ERROR: ValueError: channels must be a positive integer, got [17, 1, 4]
+
+        >>> def demo_encoding_similarity(channels=256, scale=10000):
+        ...     '''
+        ...     This demo shows how channels and scale affect similaity values
+        ...     Play around with it, generating different videos!
+        ...     As channels --> Infinity, the distance function becomes super smooth
+        ...     It nicely shows how the cosine similarity is equivariant to the query point
+        ...     This also shows why fourier features don't use just 2 axes...the similaity is so strongly aligned with the axes...
+        ...     Note: Best to run this locally on a macbook so you can preview the animation as its calculated
+        ...     '''
+        ...     import math
+        ... 
+        ...     def get_video():
+        ...         encodings = get_sinusoidal_positional_encodings([512, 512], channels, scale)
+        ...         encodings = encodings.astype(np.float32)
+        ...         # display_video(video_with_progress_bar(full_range(encodings).transpose(2,0,1)),framerate=20,loop=True)
+        ... 
+        ...         coordinate = [64, 64]  # No longer...
+        ... 
+        ...         angles = range(360)
+        ...         coordinates = [
+        ...             (round(256 + 205 * math.cos(angle)), round(256 + 205 * math.sin(angle)))
+        ...             for angle in [angle * 2 * math.pi / 360 for angle in angles]
+        ...         ]
+        ... 
+        ...         for coordinate in eta(coordinates):
+        ...             x, y = coordinate
+        ...             encoding = encodings[y, x]
+        ...             similarity = (encoding[None, None, :] * encodings).sum(-1)
+        ...             similarity_image = full_range(similarity)
+        ...             similarity_image = apply_colormap_to_image(similarity_image, "jet")
+        ...             similarity_image = cv_draw_circle(similarity_image, x, y, rim=2)
+        ...             similarity_image = labeled_image(
+        ...                 similarity_image, f"Embedding Similaity: x={x} y={y}", font="R:Futura"
+        ...             )
+        ...             yield similarity_image
+        ... 
+        ...     display_video(get_video(), loop=True)
+        ... 
+        ... 
+        ... demo_encoding_similarity()
     """
+    
+    #---------------------------
+    # MULTIDIMENSIONAL HANDLING
+    #---------------------------
+    if is_iterable(shape):
+        #---------------------------
+        # BROADCASTING
+        #---------------------------
+        #Optionally us to specify channels and scale on a per-dimension basis
+        if is_iterable(channels): channels = list(channels)
+        if is_iterable(scale   ): scale    = list(scale   )
+        shape = list(shape)
+        shape, channels, scale = broadcast_lists(shape, channels, scale)
+        shape = tuple(shape)
+    
+        #---------------------------
+        # INPUT VALIDATION
+        #---------------------------
+        if not all(isinstance(size, int) and size > 0 for size in shape):
+            raise ValueError("given shape must have all positive ints, but got %s" % shape)
+        
+        if not all(isinstance(chan, int) and chan > 0 for chan in channels):
+            raise ValueError("given channels must all be positive ints, but got %s" % shape)
+
+        #---------------------------
+        # CALCULATE RESULT
+        #---------------------------
+        encodings = [get_sinusoidal_positional_encodings(shap, chan, scal) for (shap,chan,scal) in zip(shape,channels,scale)]
+        
+        # For a shape like (H, W), create positional encodings with shape (H, W, 2*channels)
+        result = None
+        for i, (enc, chan) in enumerate(zip(encodings,channels)):
+            # Create the shape for reshaping: [1, 1, ..., size_i, ..., 1, channels]
+            reshape_shape = [1] * len(shape) + [chan]
+            reshape_shape[i] = shape[i]
+            
+            # Create the tile repeats: [H, W, ..., 1] with a 1 at position i
+            tile_shape = list(shape)
+            tile_shape[i] = 1
+            
+            # Reshape and tile/repeat
+            reshaped = enc.reshape(reshape_shape)
+            tiled = np.tile(reshaped, tile_shape + [1])
+            
+            # Add to result
+            if result is None:
+                result = tiled
+            else:
+                result = np.concatenate([result, tiled], axis=-1)
+
+        assert result.shape == (*shape, sum(channels))
+        
+        return result
 
     #---------------------------
     # INPUT VALIDATION
     #---------------------------
-    if not isinstance(length, int) or length <= 0:
-        raise ValueError("length must be a positive integer, got %s" % length)
+    if not isinstance(shape, int) or shape <= 0:
+        raise ValueError("shape must be a positive integer, got %s" % shape)
     
-    if not isinstance(dim, int) or dim <= 0:
-        raise ValueError("dim must be a positive integer, got %s" % dim)
+    if not isinstance(channels, int) or channels <= 0:
+        raise ValueError("channels must be a positive integer, got %s" % channels)
     
-    if dim % 2 != 0:
-        raise ValueError("dim must be even, got %s" % dim)
+
+    #---------------------------
+    # SPECIAL CASE: ODD CHANNELS
+    #---------------------------
+    if channels % 2 != 0:
+        # If the given number of channels is odd, calculate with one extra channel then clip it off
+        position_encoding = get_sinusoidal_positional_encodings(shape, channels + 1, scale)[:, :channels]
+        assert position_encoding.shape == (shape, channels)
+        return position_encoding
     
 
     #---------------------------
     # POSITION ENCODING CALCULATION
     #---------------------------
     # Initialize position encoding matrix
-    position_encoding = np.zeros((length, dim))
+    position_encoding = np.zeros((shape, channels))
     
     # Generate position encodings
-    for pos in range(length):
-        for i in range(dim // 2):
-            denominator = scale ** (2 * i / dim)
+    for pos in range(shape):
+        for i in range(channels // 2):
+            denominator = scale ** (2 * i / channels)
             position_encoding[pos, 2 * i] = np.sin(pos / denominator)
             position_encoding[pos, 2 * i + 1] = np.cos(pos / denominator)
     
@@ -39668,11 +39877,9 @@ def get_sinusoidal_positional_encodings(length: int, dim: int, scale: float = 10
     #---------------------------
     # OUTPUT VALIDATION
     #---------------------------
-    assert position_encoding.shape == (length, dim)
+    assert position_encoding.shape == (shape, channels)
     
     return position_encoding
-
-
 
 
 #def _visualize_pytorch_model_via_torchviz(model,*,input_shape=None, example_input=None):
@@ -40927,6 +41134,14 @@ def bytes_to_base64(bytestring: bytes) -> str:
 def base64_to_bytes(base64_string: str) -> bytes:
     import base64
     return base64.b64decode(base64_string)
+    
+def bytes_to_base16(bytestring: bytes) -> str:
+    import binascii
+    return binascii.hexlify(bytestring).decode('utf-8')
+
+def base16_to_bytes(base16_string: str) -> bytes:
+    import binascii
+    return binascii.unhexlify(base16_string)
 
 def func_call_to_shell_command(func, *args, **kwargs):
     """
@@ -42257,85 +42472,85 @@ def _round(x):
 def _sin(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.sin(x)
-    if is_torch_tensor(x):return torch.sin(x)
+    if is_torch_tensor(x):return __import__('torch').sin(x)
     return math.sin(x)
 
 def _cos(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.cos(x)
-    if is_torch_tensor(x):return torch.cos(x)
+    if is_torch_tensor(x):return __import__('torch').cos(x)
     return math.cos(x)
 
 def _tan(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.tan(x)
-    if is_torch_tensor(x):return torch.tan(x)
+    if is_torch_tensor(x):return __import__('torch').tan(x)
     return math.tan(x)
 
 def _exp(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.exp(x)
-    if is_torch_tensor(x):return torch.exp(x)
+    if is_torch_tensor(x):return __import__('torch').exp(x)
     return math.exp(x)
 
 def _log(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.log(x)
-    if is_torch_tensor(x):return torch.log(x)
+    if is_torch_tensor(x):return __import__('torch').log(x)
     return math.log(x)
 
 def _log10(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.log10(x)
-    if is_torch_tensor(x):return torch.log10(x)
+    if is_torch_tensor(x):return __import__('torch').log10(x)
     return math.log10(x)
 
 def _sqrt(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.sqrt(x)
-    if is_torch_tensor(x):return torch.sqrt(x)
+    if is_torch_tensor(x):return __import__('torch').sqrt(x)
     return math.sqrt(x)
 
 def _abs(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.abs(x)
-    if is_torch_tensor(x):return torch.abs(x)
+    if is_torch_tensor(x):return __import__('torch').abs(x)
     return abs(x)
 
 def _pow(x, y):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.power(x, y)
-    if is_torch_tensor(x):return torch.pow(x, y)
+    if is_torch_tensor(x):return __import__('torch').pow(x, y)
     return math.pow(x, y)
 
 def _fft(x):
     """ works across libraries - such as numpy, torch """
     if is_numpy_array (x):return np.fft.fft(x)
-    if is_torch_tensor(x):return torch.fft.fft(x)
+    if is_torch_tensor(x):return __import__('torch').fft.fft(x)
     raise ValueError("FFT not available for Python scalars")
 
 def _ifft(x):
     """ works across libraries - such as numpy, torch """
     if is_numpy_array (x):return np.fft.ifft(x)
-    if is_torch_tensor(x):return torch.fft.ifft(x)
+    if is_torch_tensor(x):return __import__('torch').fft.ifft(x)
     raise ValueError("IFFT not available for Python scalars")
 
 def _tanh(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.tanh(x)
-    if is_torch_tensor(x):return torch.tanh(x)
+    if is_torch_tensor(x):return __import__('torch').tanh(x)
     return math.tanh(x)
 
 def _sigmoid(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return 1 / (1 + np.exp(-x))
-    if is_torch_tensor(x):return torch.sigmoid(x)
+    if is_torch_tensor(x):return __import__('torch').sigmoid(x)
     return 1 / (1 + math.exp(-x))
 
 def _relu(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.maximum(0, x)
-    if is_torch_tensor(x):return torch.relu(x)
+    if is_torch_tensor(x):return __import__('torch').relu(x)
     return max(0, x)
 
 def _softmax(x, dim=-1):
@@ -42343,38 +42558,44 @@ def _softmax(x, dim=-1):
     if is_numpy_array (x):
         e_x = np.exp(x - np.max(x, axis=dim, keepdims=True))
         return e_x / e_x.sum(axis=dim, keepdims=True)
-    if is_torch_tensor(x):return torch.softmax(x, dim=dim)
+    if is_torch_tensor(x):return __import__('torch').softmax(x, dim=dim)
     raise ValueError("Softmax not applicable for Python scalars")
 
 def _log2(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.log2(x)
-    if is_torch_tensor(x):return torch.log2(x)
+    if is_torch_tensor(x):return __import__('torch').log2(x)
     return math.log2(x)
 
 def _asin(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.arcsin(x)
-    if is_torch_tensor(x):return torch.asin(x)
+    if is_torch_tensor(x):return __import__('torch').asin(x)
     return math.asin(x)
 
 def _acos(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.arccos(x)
-    if is_torch_tensor(x):return torch.acos(x)
+    if is_torch_tensor(x):return __import__('torch').acos(x)
     return math.acos(x)
 
 def _atan(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.arctan(x)
-    if is_torch_tensor(x):return torch.atan(x)
+    if is_torch_tensor(x):return __import__('torch').atan(x)
     return math.atan(x)
 
 def _clip(x, min_val, max_val):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.clip(x, min_val, max_val)
-    if is_torch_tensor(x):return torch.clamp(x, min_val, max_val)
+    if is_torch_tensor(x):return __import__('torch').clamp(x, min_val, max_val)
     return max(min_val, min(max_val, x))
+
+def _nan_to_num(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.nan_to_num(x)
+    if is_torch_tensor(x):return __import__('torch').nan_to_num(x)
+    return math.atan(x)
 
 # Alias for _clip
 def _clamp(x, min_val, max_val):
@@ -42383,37 +42604,37 @@ def _clamp(x, min_val, max_val):
 def _atan2(y, x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (y):return np.arctan2(y, x)
-    if is_torch_tensor(y):return torch.atan2(y, x)
+    if is_torch_tensor(y):return __import__('torch').atan2(y, x)
     return math.atan2(y, x)
 
 def _sinh(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.sinh(x)
-    if is_torch_tensor(x):return torch.sinh(x)
+    if is_torch_tensor(x):return __import__('torch').sinh(x)
     return math.sinh(x)
 
 def _cosh(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.cosh(x)
-    if is_torch_tensor(x):return torch.cosh(x)
+    if is_torch_tensor(x):return __import__('torch').cosh(x)
     return math.cosh(x)
 
 def _sign(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.sign(x)
-    if is_torch_tensor(x):return torch.sign(x)
+    if is_torch_tensor(x):return __import__('torch').sign(x)
     return -1 if x < 0 else (1 if x > 0 else 0)
 
 def _degrees(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.degrees(x)
-    if is_torch_tensor(x):return torch.rad2deg(x)
+    if is_torch_tensor(x):return __import__('torch').rad2deg(x)
     return math.degrees(x)
 
 def _radians(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.radians(x)
-    if is_torch_tensor(x):return torch.deg2rad(x)
+    if is_torch_tensor(x):return __import__('torch').deg2rad(x)
     return math.radians(x)
 
 def _create_array_like(x, *, func_name, shape=None, dtype=None):
@@ -47302,6 +47523,11 @@ def as_torch_images(images, *, device=None, dtype=None, copy=False):
         assert len(images.shape)!=3,'Grayscale images are not yet supported'
 
         images=images.transpose(0,3,1,2)
+
+        if device=='mps' and dtype in [None, torch.float64]:
+            # TypeError: Cannot convert a MPS Tensor to float64 dtype as the MPS framework doesn't support float64. Please use float32 instead.
+            dtype=torch.float32 
+
         images=torch.tensor(images, device=device, dtype=dtype)
         return images
 
