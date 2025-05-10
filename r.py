@@ -11392,6 +11392,7 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
                     append_stat('#lines',number_of_lines_in_file(path))    
                 if is_video_file(path):
                     append_stat('duration',str(get_video_file_duration(path))+'s')
+                    append_stat('shape',str(get_video_file_shape(path)))
             else:
                 append_stat('FOLDER STATS')
                 append_stat('#files',len(get_all_files(path)))
@@ -19476,6 +19477,13 @@ def pseudo_terminal(
                 except Exception:pass#print("Failed to set numpy width")# AttributeError: readonly attribute '__module__'
                 fansi_print("ans = " + val_str,('green'if save_history or force_green else 'yellow')if use_ans_history else 'gray')
 
+        def eval_for_rinsp(x,*args):
+            try:
+                return eval(x,*args)
+            except SyntaxError:
+                fansi_print("Treating message as string...",'italic magenta')
+                return str(x)
+
         def print_history(return_as_string_instead_of_printing=False):
             output=''
             output+=fansi("HISTORY --> Here is a list of all valid python commands you have entered so far (green means it is a single-line command, whilst yellow means it is a multi-lined command):",'blue','underlined')+'\n'
@@ -21428,7 +21436,7 @@ def pseudo_terminal(
                             _view_image_via_textual_imageview(get_ans())
                     elif user_message.endswith('?v') and not '\n' in user_message:
                         user_message=user_message[:-2]
-                        value=eval(user_message,scope())
+                        value=eval_for_rinsp(user_message,scope())
                         if not is_image(value):
                             if _get_pterm_verbose(): fansi_print("?v --> Running rp.vim(%s)..."%user_message,"blue",'bold',new_line=False)
                             if _get_pterm_verbose(): fansi_print("done!","blue",'bold')
@@ -21456,7 +21464,7 @@ def pseudo_terminal(
                     elif user_message.endswith('?lj') and not '\n' in user_message:
                         if _get_pterm_verbose(): fansi_print("?lj --> string viewer --> shows line_join(map(str,ans))","blue",'bold')
                         user_message=user_message[:-3]
-                        value=eval(user_message,scope())
+                        value=eval_for_rinsp(user_message,scope())
                         string=line_join(map(str,value))
                         print(string)
                         _maybe_display_string_in_pager(string)
@@ -21469,7 +21477,7 @@ def pseudo_terminal(
                     elif user_message.endswith('?t') and not '\n' in user_message:
                         user_message=user_message[:-2]
                         if _get_pterm_verbose(): fansi_print("t --> Table Viewer --> Running view_table(%s):"%user_message,"blue",'bold')
-                        value=eval(user_message,scope())
+                        value=eval_for_rinsp(user_message,scope())
                         view_table(value)
 
                     elif user_message=='?vd' or user_message=='VDA':
@@ -21481,7 +21489,7 @@ def pseudo_terminal(
                     elif user_message.endswith('?vd') and not '\n' in user_message:
                         user_message=user_message[:-2]
                         if _get_pterm_verbose(): fansi_print("?vd --> Visidata --> Running launch_visidata(%s):"%user_message,"blue",'bold')
-                        value=eval(user_message,scope())
+                        value=eval_for_rinsp(user_message,scope())
                         new_value=launch_visidata(value)
                         set_ans(new_value)
 
@@ -21491,7 +21499,7 @@ def pseudo_terminal(
                     elif user_message.endswith('?p') and not '\n' in user_message:
                         user_message=user_message[:-2]
                         if _get_pterm_verbose(): fansi_print("?p --> Pretty Print --> Running pretty_print(%s,with_lines=False):"%user_message,"blue",'bold')
-                        value=eval(user_message,scope())
+                        value=eval_for_rinsp(user_message,scope())
                         pterm_pretty_print(value,with_lines=False)
                         #pip_import('rich').print(value)
                     elif user_message=='?j':
@@ -21500,7 +21508,7 @@ def pseudo_terminal(
                     elif user_message.endswith('?j') and not '\n' in user_message:
                         user_message=user_message[:-2]
                         if _get_pterm_verbose(): fansi_print("?j --> JSON Viewer --> Interactively displaying ans with collapsible menus with r._view_interactive_json","blue",'bold')
-                        value=eval(user_message,scope())
+                        value=eval_for_rinsp(user_message,scope())
                         _view_interactive_json(value)
                     elif user_message=='?i':
                         fansi_print("?i --> PyPI Package Inspection:","blue",'bold')
@@ -21572,7 +21580,7 @@ def pseudo_terminal(
                         # rinsp(eval(user_message[:-2],scope()),1)
                     elif user_message.endswith("?"):
                         if _get_pterm_verbose(): fansi_print("◊? --> rinsp(◊)","blue")
-                        rinsp(eval(user_message[:-1],scope()))
+                        rinsp(eval_for_rinsp(user_message[:-1],scope()))
 
                     elif user_message=='PWD':
                         fansi_print("PWD: "+_fansi_highlight_path(get_current_directory()),"blue",'bold')
@@ -26628,7 +26636,7 @@ def _torch_tensor_to_bytes_for_hashing(tensor):
     return buff.read()
 
 
-def handy_hash(value,):
+def handy_hash(value):
     """
     This function is really handy!
     Meant for hashing things that can't normally be hashed, like lists and dicts and numpy arrays. It pretends they're immutable.
@@ -26646,12 +26654,12 @@ def handy_hash(value,):
 
     bytes_hasher = get_sha256_hash
 
-    if is_torch_tensor(value): return ('TORCH SHA256', bytes_hasher(_torch_tensor_to_bytes_for_hashing(value.detach().cpu())))
-    if is_numpy_array (value): return ('NUMPY SHA256', bytes_hasher(value.tobytes()))
+    if is_torch_tensor(value): return hash(('TORCH SHA256', bytes_hasher(_torch_tensor_to_bytes_for_hashing(value.detach().cpu()))))
+    if is_numpy_array (value): return hash(('NUMPY SHA256', bytes_hasher(value.tobytes())))
 
     value_type=type(value)
 
-    try:return ('DILL HASH', bytes_hasher(_dill_dumps(value)))#The dill library is capable of hashing a great many things...including numpy arrays! This was added after my original implementation of handy_hash, as dill is able to handle a huuuggggeee amount of different types
+    try:return hash(('DILL HASH', bytes_hasher(_dill_dumps(value))))#The dill library is capable of hashing a great many things...including numpy arrays! This was added after my original implementation of handy_hash, as dill is able to handle a huuuggggeee amount of different types
     except Exception:pass
 
     hasher=__hashers[value_type] if value_type in __hashers else fallback
