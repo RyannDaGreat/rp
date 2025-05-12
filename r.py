@@ -998,7 +998,7 @@ def fansi(
     *,
     per_line=True,
     reset=True,
-    truecolor=False,
+    truecolor=None,
     link=None
 ):
     """
@@ -1006,7 +1006,7 @@ def fansi(
     Uses ANSI formatting to give the terminal styled color outputs.
 
     The 'per_line' option applies fansi to each line separately, which is useful for multi-line strings. It is enabled by default.
-    The 'truecolor' option enables 24-bit truecolor support if the terminal supports it. It is disabled by default.
+    The 'truecolor' option enables 24-bit truecolor support if the terminal supports it. By default, it is False, unless your Pterm is set to display Truecolor.
     The 'underline_color' option allows specifying a color for underlines independent of the text color. It is None by default.
     The 'link' option creates a hyperlink to the provided URL. It is None by default.
     Note on terminal hyperlink support:
@@ -1141,6 +1141,10 @@ def fansi(
         ... print(fansi("\tGitHub Repository", "magenta", "bold", link="https://github.com"))
         ... print("Note: In Wezterm, use Ctrl+click on links. In Alacritty, hyperlinks may need configuration.")
     """
+
+    if truecolor is None and 'pyin' in globals() and hasattr(pyin, 'true_color'):
+        #If not specified, grab the truecolor value from pseudo-terminal
+        truecolor = pyin.true_color
 
     if isinstance(text_color, str) and style is None and background_color is None:
         text_color, style, background_color = _transform_fansi_arg(text_color)
@@ -26832,7 +26836,7 @@ def _omni_load(path):
     if ends_with_any(path, '.yaml'): return rp.load_yaml(path)
     if ends_with_any(path, '.png .webp .gif'.split()): return rp._omni_load_animated_image(path)
     if ends_with_any(path, '.jpg .jpeg .jxl .exr .psd .tga .tiff .tif .jp2 .bmp'.split()): return rp.load_image(path)
-    if ends_with_any(path, '.mp4 .avi'.split()): return rp.load_video(path)
+    if ends_with_any(path, '.mp4 .avi .mkv .flv .mov .m4v .wmv .webm'.split()): return rp.load_video(path)
     if ends_with_any(path, '.npy'.split()): return np.load(path)
     if ends_with_any(path, '.tsv'.split()): return load_tsv(path,show_progress=True)
     if ends_with_any(path, '.csv'.split()): return __import__('pandas').read_csv(path)
@@ -36455,6 +36459,7 @@ class _MaybeTemporarilyDownloadVideo:
             except FileNotFoundError:
                 pass
 
+
 def download_url_to_cache(url, cache_dir=None, skip_existing=True, hash_func=None, show_progress=False, timeout=None):
     """
     Like download_url, except you only specify the output diectory - the filename will be chosen for you based on hashing the url.
@@ -36493,6 +36498,10 @@ def download_url_to_cache(url, cache_dir=None, skip_existing=True, hash_func=Non
                 url,
                 cache_path,
             )
+        return cache_path
+    elif folder_exists(url):
+        if not skip_existing or not folder_exists(cache_path):
+            copy_directory(url, cache_path, extract=False, follow_symlinks=False)
         return cache_path
     else:
         raise ValueError("rp.download_url_to_cache: url=%s is neither a valid url nor an existing path"%url)
@@ -42028,12 +42037,14 @@ def get_identity_uv_map(height=256,width=256,uv_form='xy'):
 
     return output
 
-def validate_tensor_shapes(*, verbose=False, **kwargs):
+def validate_tensor_shapes(return_dims=None, *, verbose=False, **kwargs):
     """
     Validates that tensor dimensions match expected shapes and extracts dimension values.
     Reads the tensors from the caller's scope using the variable names found in kwargs.
     
     Args:
+        return_dims: String of space-separated dimension names to return (e.g., "H W"). 
+                    If provided, only returns the specified dimensions instead of all validated dimensions.
         verbose: Boolean, if True suppresses shape information printing (default: True)
         **kwargs: Either tensor variables with form strings (e.g., image="H W C") 
                  or manual dimension specifications (e.g., C=3)
@@ -42159,7 +42170,7 @@ def validate_tensor_shapes(*, verbose=False, **kwargs):
     """
     def format_shape(shape):
         return ','.join(map(str, shape))
-
+    
     # Get the caller's scope to find tensor variables
     caller_scope = _get_visible_scope(1)
     
@@ -42364,8 +42375,13 @@ def validate_tensor_shapes(*, verbose=False, **kwargs):
             print(report_string)
 
     dims = as_easydict(dims)
-    return dims
+    
+    if return_dims:
+        assert isinstance(return_dims, str), type(return_dims)
+        return_dims = return_dims.split()
+        dims = gather(dims, return_dims)
 
+    return dims
 
 
 def _test_validate_tensor_shapes():
