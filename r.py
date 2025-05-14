@@ -2211,11 +2211,11 @@ def uniform_float_color_image(height:int,width:int,color:tuple=(0,0,0,0)):
     assert is_number(color) or is_color(color) and len(color) in {3,4}, 'Color should be a number, an RGB float color, or an RGBA float color'
     
     if is_number(color):
-        output = np.ones((height,width),dtype=float)*color
+        output = np.ones((height,width),dtype=_float_image_dtype())*color
         assert is_grayscale_image(output)
         return output
     else:
-        output = np.ones((height,width,len(color)),dtype=float)*as_numpy_array([[[*color]]])
+        output = np.ones((height,width,len(color)),dtype=_float_image_dtype())*as_numpy_array([[[*color]]])
         assert len(color)==3 and is_rgb_image(output) or len(color)==4 and is_rgba_image(output)
         return output
 
@@ -7291,7 +7291,7 @@ def display_image(image,block=False):
             if ndim==2:
                 image=grayscale_to_rgb(image)
             if image.dtype==bool:
-                image=image.astype(float)
+                image=image.astype(_float_image_dtype())
             return cv_imshow(image,wait=10 if not block else 1000000)#Hit esc in the image to exit it
 
 def with_alpha_checkerboard(image, *, tile_size=8, first_color=1.0, second_color=0.75):
@@ -24654,11 +24654,17 @@ def cv_bgr_rgb_swap(image_or_video):
     Works for both images AND video
     Opencv has an annoying feature: it uses BGR instead of RGB. Heckin' hipsters. This swaps RGB to BGR, vice-versa.
     """
-    image_or_video=np.asarray(image_or_video)
-    image_or_video=image_or_video.copy()
-    temp=image_or_video.copy()
-    image_or_video[...,0],image_or_video[...,2]=temp[...,2],temp[...,0]
-    return image_or_video
+    out = np.asarray(image_or_video)
+
+    assert is_image(out)
+
+    if out.ndim==2: return out #Grayscale
+
+    num_channels = out.shape[-1]
+
+    if   num_channels==3: return out[..., [2,1,0]]   #RGB
+    elif num_channels==4: return out[..., [2,1,0,3]] #RGBA
+
 cv_rgb_bgr_swap=cv_bgr_rgb_swap#In-case you forgot what to type. It's all the same thing though.
 
 _first_time_using_cv_imshow=True
@@ -27449,7 +27455,7 @@ def labeled_image(image,
     background_color = as_rgba_float_color(background_color)
     text_color       = as_rgba_float_color(text_color)
 
-    image=as_numpy_image(image)
+    image=as_numpy_image(image, copy=False)
 
     assert is_image(image)
     assert position in ['top','bottom','left','right']
@@ -27499,7 +27505,7 @@ def labeled_image(image,
             height = abs(height)
             height = min(height, image_height)
             overlay = uniform_float_color_image(image_height - height, image_width, background_color[:3]+(0,))
-            overlay = gather_args_call(labeled_image, overlay, size=height)
+            overlay = gather_args_call(labeled_image, overlay, size=height, size_by_lines=False)
             return blend_images(image, overlay)
 
         height=max(height,1)         #Label height in pixels
@@ -27532,6 +27538,7 @@ def labeled_image(image,
             return vertically_concatenated_images(image,label)
         
     assert False,'This line should be unreachable'
+
 
 def _images_are_all_same_size(images):
     """ TODO: Use this for video processing functions instead of using for loops to check if image sizes are the same... """
@@ -29681,7 +29688,7 @@ def horizontally_concatenated_images(*image_list,origin=None):
         image_list=[image_converter(image,copy=False) for image in image_list]
         max_height=max(get_image_height(img) for img in image_list)
         def heightify(img):
-            img=as_numpy_image(img)
+            img=as_numpy_image(img,copy=False)
             s=list(img.shape)
             if s[0]==max_height:
                 return img #Don't copy - its slow.
@@ -30153,12 +30160,21 @@ def _grayscale_image_to_rgba_image     (image):return _rgb_image_to_rgba_image(_
 def _rgb_image_to_grayscale_image      (image):return _rgb_to_grayscale(image)
 def _rgb_image_to_rgb_image            (image):return as_numpy_array(image).copy()
 def _rgb_image_to_rgba_image           (image):
-    # assert False,'_rgb_image_to_rgba_image: Please fix me Im broken?!'
+    alpha = np.ones((*image.shape[:2], 1), image.dtype)
+
     if is_byte_image(image):
-        #This is a dirty hack. Idk why this method can't handle byte images, and instead of looking deeper into it I'll just make do with this slightly slower version shown in the next line.
-        return as_byte_image(_rgb_image_to_rgba_image(as_float_image(image)))
-    assert not is_byte_image(image),'This function is currently broken for byte images! It adds too many dimensions to the shape'
-    return np.concatenate((image,np.ones((*image.shape[:2],255 if is_byte_image(image) else 1),image.dtype)),2)#TODO TEST ME!!!
+        alpha *= 255
+
+    return np.concatenate((image, alpha), 2)
+
+#OLD CODE, WORKS BUT IS SLOW
+# def _rgb_image_to_rgba_image           (image):
+#     # assert False,'_rgb_image_to_rgba_image: Please fix me Im broken?!'
+#     if is_byte_image(image):
+#         #This is a dirty hack. Idk why this method can't handle byte images, and instead of looking deeper into it I'll just make do with this slightly slower version shown in the next line.
+#         return as_byte_image(_rgb_image_to_rgba_image(as_float_image(image)))
+#     assert not is_byte_image(image),'This function is currently broken for byte images! It adds too many dimensions to the shape'
+#     return np.concatenate((image,np.ones((*image.shape[:2],255 if is_byte_image(image) else 1),image.dtype)),2)#TODO TEST ME!!!
 
 def _rgba_image_to_grayscale_image     (image):return _rgb_image_to_grayscale_image(_rgba_image_to_rgb_image(image))
 def _rgba_image_to_rgb_image           (image):return as_numpy_array(image)[:,:,:3]
@@ -30220,19 +30236,27 @@ def _clamp_float_image(image):
     Take some floating image and make sure that it has no negative numbers or numbers >1
     """
     assert is_float_image(image)
-    image=np.minimum(image,1)
-    image=np.maximum(image,0)
+
+    #This is only faster to check because usually the range IS between 0 and 1
+    # if image.size: and (image.min()<0 or image.max()>1):
+
+    image = np.clip(image, 0, 1)
+
     return image
 
+def _float_image_dtype(): return np.float32
 def _float_image_to_float_image  (image):return image.copy()
-def _float_image_to_byte_image   (image):return (np.asarray(_clamp_float_image(image),dtype=float)*255).astype(np.uint8)
+# def _float_image_to_byte_image   (image):return (np.asarray(_clamp_float_image(image),dtype=float)*255).astype(np.uint8) #May 13 2025: Why we convert float's dtype here? Seems redundant...
+def _float_image_to_byte_image   (image):return (_clamp_float_image(image)*255).astype(np.uint8)
 def _float_image_to_binary_image (image):return np.round(_clamp_float_image(image)).astype(bool)
-def _byte_image_to_float_image   (image):return np.asarray(image,dtype=float)/255
+def _byte_image_to_float_image   (image):return image.astype(_float_image_dtype())/255 #Since we're converting from bytes, we can use a lower precision float here
 def _byte_image_to_byte_image    (image):return image.copy()
 def _byte_image_to_binary_image  (image):return _float_image_to_binary_image(_byte_image_to_float_image(image))
-def _binary_image_to_float_image (image):return np.asarray(image,dtype=float)
+def _binary_image_to_float_image (image):return np.asarray(image,dtype=_float_image_dtype())
 def _binary_image_to_byte_image  (image):return _float_image_to_byte_image(_binary_image_to_float_image(image))
 def _binary_image_to_binary_image(image):return image.copy()
+
+
 
 _channel_conversion_error_message='The given input image has an unrecognized dtype (there are no converters for it)'
 def as_float_image(image,*,copy=True):
@@ -30364,7 +30388,7 @@ def _images_conversion(func, images, *, copy_check ,copy=True):
                 return  images[...,:3].mean(3)
 
 
-        #TODO: Handle all edge cases of as_rgb_images, as_rgba_images, as_binary_images
+        #TODO: Handle all edge cases of as_binary_images
 
 
     #TODO: This can be optimized in the case that images is a numpy array by doing vectorized operations on it
@@ -32343,9 +32367,9 @@ class VideoWriterMP4:
 
 
         #Prepare the frame for the writer...
-        frame=rp.crop_image   (frame, self.height, self.width)
-        frame=rp.as_rgb_image (frame)
-        frame=rp.as_byte_image(frame)
+        frame=rp.crop_image   (frame, self.height, self.width, copy=False)
+        frame=rp.as_rgb_image (frame, copy=False)
+        frame=rp.as_byte_image(frame, copy=False)
 
         self.process.stdin.write(frame.tobytes())
 
@@ -32505,6 +32529,13 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
         if height is None: height=max_height
         if width  is None: width =max_width 
     
+    # YES, this is faster, but it also means more memory...probably not the best thing to do right?
+    # #Speed improvement - batch-convert to uint8
+    # if is_numpy_array(frames) or isinstance(frames, list) or is_torch_tensor(frames):
+    #     frames = as_numpy_images(frames, copy=False)
+    #     frames = as_byte_images(frames, copy=False)
+    #     frames = as_rgb_images(frames, copy=False)
+
     writer = VideoWriterMP4(path, framerate, video_bitrate=video_bitrate, height=height, width=width, show_progress=show_progress)
 
     #Make frames speficiable as a glob, folder path, list of images, or list of image paths
@@ -34148,8 +34179,6 @@ def roll_image(image, dx=0, dy=0, interp='nearest'):
     image = np.roll(image, dx, 1)
     return image
 
-
-
 def crop_image(image, height: int = None, width: int = None, origin=None, copy=False):
     """
     Returns a cropped image to the specified width and height
@@ -34176,7 +34205,7 @@ def crop_image(image, height: int = None, width: int = None, origin=None, copy=F
     if origin is None: origin = 'top left'
 
     assert is_image(image)
-    image = as_numpy_image(image)
+    image = as_numpy_image(image, copy=copy)
     image_width  = get_image_width (image)
     image_height = get_image_height(image)
     assert (image_height, image_width) == image.shape[:2]
@@ -34197,12 +34226,9 @@ def crop_image(image, height: int = None, width: int = None, origin=None, copy=F
     if not any(get_image_dimensions(image)):
         #Handle cropping images that have height or width==0, allowing for zero-padding
         #Todo: This can probably be more elegant, but whatever...
-        if is_grayscale_image(image):
-            return np.zeros((height,width)).astype(image.dtype)
-        if is_rgb_image(image):
-            return np.zeros((height,width,3)).astype(image.dtype)
-        if is_rgba_image(image):
-            return np.zeros((height,width,4)).astype(image.dtype)
+        if is_grayscale_image(image): return np.zeros((height,width  )).astype(image.dtype)
+        if is_rgb_image      (image): return np.zeros((height,width,3)).astype(image.dtype)
+        if is_rgba_image     (image): return np.zeros((height,width,4)).astype(image.dtype)
 
     origins=['top left','center','bottom right'] #TODO: Possibly add more origins
     assert origin in origins,'Invalid origin: %s. Please select from %s'%(repr(origin),repr(origins))
@@ -34239,6 +34265,8 @@ def crop_image(image, height: int = None, width: int = None, origin=None, copy=F
     out[:common_height,:common_width]+=image[:common_height,:common_width]
     
     return out
+
+
 
 def crop_images(images, height:int = None, width:int=None, origin='top left', *, show_progress=False, lazy=False):
     output = (crop_image(image, height=height, width=width, origin=origin) for image in images)
@@ -38369,8 +38397,8 @@ def _run_claude_code(code):
     if not isinstance(code, str):
         try:
             code = get_source_code(code)
-        except:
-            pass
+        except Exception:
+            code = str(code)
 
     filetype = 'bash' if code.startswith('!') else 'py'
     filename = "editme." + filetype
@@ -41502,7 +41530,7 @@ def _prepare_cv_image(image):
         image = as_numpy_image(image)
     elif is_float_image(image):
         #Float16 is no good
-        image = image.astype(float)
+        image = image.astype(_float_image_dtype())
 
     return image
     
