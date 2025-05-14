@@ -2,6 +2,7 @@ from copy import copy, deepcopy
 import rp
 import time
 import abc
+import subprocess
 
 from pynput import mouse, keyboard
 from pynput.mouse import Controller as MouseController, Button
@@ -20,7 +21,7 @@ class Reprable:
         attributes = [
             f"{attr}={str(value)}"
             for attr, value in self.__dict__.items()
-            if not "__" in attr
+            if not "__" in attr and value != []
         ]
         return f'{type(self).__name__}({", ".join(attributes)})'
 
@@ -465,6 +466,264 @@ def record_actions(start_trigger=None, end_trigger=None):
     print(f"Recorded {len(actions)} actions (including DelayActions).")
     return actions
 
+##############################################################################
+# T M U X
+##############################################################################
+
+# This section was generated with the help of Claude-Code, May 14 2025
+
+# Mapping from pynput Key to tmux key name
+PYNPUT_TO_TMUX_KEYS = {
+    Key.alt: "M",         # Only for tracking active modifiers
+    Key.alt_r: "M",       # Only for tracking active modifiers
+    Key.backspace: "BSpace",
+    Key.ctrl: "C",        # Only for tracking active modifiers
+    Key.ctrl_r: "C",      # Only for tracking active modifiers
+    Key.delete: "DC",
+    Key.down: "Down",
+    Key.end: "End",
+    Key.enter: "Enter",
+    Key.esc: "Escape",
+    Key.f1: "F1",
+    Key.f2: "F2",
+    Key.f3: "F3",
+    Key.f4: "F4",
+    Key.f5: "F5",
+    Key.f6: "F6",
+    Key.f7: "F7",
+    Key.f8: "F8",
+    Key.f9: "F9",
+    Key.f10: "F10",
+    Key.f11: "F11",
+    Key.f12: "F12",
+    Key.f13: "F13",
+    Key.f14: "F14",
+    Key.f15: "F15",
+    Key.f16: "F16",
+    Key.f17: "F17",
+    Key.f18: "F18",
+    Key.f19: "F19",
+    Key.f20: "F20",
+    Key.home: "Home",
+    Key.left: "Left",
+    Key.page_down: "PageDown", 
+    Key.page_up: "PageUp",
+    Key.right: "Right",
+    Key.space: "Space",
+    Key.tab: "Tab",
+    Key.up: "Up",
+}
+
+# Special characters that need escaping in tmux
+TMUX_SPECIAL_CHARS = {
+    ';': '\\;',
+    '#': '\\#',
+    ',': '\\,',
+}
+
+
+class TmuxSendkeyAction(Action):
+    """
+    Represents a tmux send-keys command.
+    Can be initialized with a tmux key string or converted from a pynput key.
+    """
+    
+    def __init__(self, key_str, modifiers=None):
+        """
+        Initialize with a tmux key string (e.g., "Enter", "Space", "C-c").
+        
+        Args:
+            key_str (str): The key string in tmux format
+            modifiers (list): Optional list of modifier keys ['C', 'M', 'S']
+                              C = Control, M = Alt/Meta, S = Shift
+        """
+        self.key_str = key_str
+        self.modifiers = modifiers or []
+        
+    def __call__(self):
+        """
+        Execute the tmux send-keys command to send this key to tmux.
+        """
+        
+        # Tmux format for key combinations varies based on key type
+        if self.modifiers:
+            # For special keys with modifiers (like function keys, arrows, etc.)
+            if self.key_str in ["Enter", "Space", "BSpace", "DC", "Down", "Up", "Left", "Right", 
+                               "Home", "End", "PageUp", "PageDown", "Tab", "Escape"] or \
+               (self.key_str.startswith("F") and self.key_str[1:].isdigit()):
+                # Format as: prefix key_name (e.g., "C-M-Up")
+                mod_prefix = '-'.join(self.modifiers)
+                key_arg = f"{mod_prefix}-{self.key_str}"
+                args = ["tmux", "send-keys", key_arg]
+            else:
+                # Regular character with modifiers
+                mod_prefix = '-'.join(self.modifiers)
+                key_arg = f"{mod_prefix}-{self.key_str}"
+                args = ["tmux", "send-keys", key_arg]
+        else:
+            # For special keys without modifiers, use the name format
+            if self.key_str in ["Enter", "Space", "BSpace", "DC", "Down", "Up", "Left", "Right", 
+                               "Home", "End", "PageUp", "PageDown", "Tab", "Escape"] or \
+               (self.key_str.startswith("F") and self.key_str[1:].isdigit()):
+                args = ["tmux", "send-keys", self.key_str]
+            else:
+                # Regular character
+                args = ["tmux", "send-keys", self.key_str]
+                
+        cmd_str = " ".join(args)
+        
+        try:
+            # Actually execute the tmux command
+            subprocess.run(args, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error executing tmux command: {e}")
+        except FileNotFoundError:
+            print("Error: tmux command not found. Is tmux installed and in your PATH?")
+    
+    @classmethod
+    def from_pynput(cls, key, active_modifiers=None, strict=True):
+        """
+        Convert a pynput key to a TmuxSendkeyAction.
+        
+        Args:
+            key: The pynput key to convert (Key enum, KeyCode, or char)
+            active_modifiers (dict): Dictionary with current active modifiers
+                                    e.g. {'ctrl': True, 'alt': False, 'shift': False}
+            strict (bool): If True, raise an exception if the key can't be converted;
+                          otherwise, return None
+        
+        Returns:
+            TmuxSendkeyAction or None: The converted tmux action
+            
+        Raises:
+            ValueError: If the key can't be converted and strict is True
+        """
+        modifiers = []
+        if active_modifiers:
+            if active_modifiers.get('ctrl'):
+                modifiers.append('C')
+            if active_modifiers.get('alt'):
+                modifiers.append('M')
+            if active_modifiers.get('shift'):
+                modifiers.append('S')
+        
+        # Special keys (like Key.enter, Key.space, etc.)
+        if isinstance(key, Key):
+            # Don't convert modifier keys themselves when they're pressed
+            if key in [Key.ctrl, Key.ctrl_r, Key.alt, Key.alt_r, 
+                      Key.shift, Key.shift_r]:
+                return None
+                
+            tmux_key = PYNPUT_TO_TMUX_KEYS.get(key)
+            if tmux_key is None:
+                if strict:
+                    raise ValueError(f"Cannot convert pynput key {key} to tmux format")
+                return None
+            return cls(tmux_key, modifiers)
+        
+        # Regular characters: could be str or KeyCode object
+        if hasattr(key, 'char') and key.char is not None:
+            # KeyCode with character representation
+            char = key.char
+            if char in TMUX_SPECIAL_CHARS:
+                return cls(TMUX_SPECIAL_CHARS[char], modifiers)
+            return cls(char, modifiers)
+            
+        # String literals
+        elif isinstance(key, str):
+            # Escape special characters
+            if key in TMUX_SPECIAL_CHARS:
+                return cls(TMUX_SPECIAL_CHARS[key], modifiers)
+            # Regular character
+            return cls(key, modifiers)
+        
+        # Try to get string representation as fallback
+        try:
+            key_str = str(key)
+            # Check if it's a quoted character like 'a'
+            if key_str.startswith("'") and key_str.endswith("'") and len(key_str) == 3:
+                char = key_str[1]
+                if char in TMUX_SPECIAL_CHARS:
+                    return cls(TMUX_SPECIAL_CHARS[char], modifiers)
+                return cls(char, modifiers)
+        except:
+            pass
+        
+        # Unknown key type
+        if strict:
+            raise ValueError(f"Unknown key type: {type(key)} - {key}")
+        return None
+
+def pynput_casette_to_tmux(casette, *, strict):
+    """
+    Convert the PynputCasette to a list of TmuxSendkeyAction objects.
+    
+    This conversion:
+    1. Keeps all DelayAction objects
+    2. Converts KeyboardPressAction to TmuxSendkeyAction, including modifiers
+    3. Removes all KeyboardReleaseAction objects
+    4. Removes all mouse-related actions
+    5. Tracks active modifiers (ctrl, alt, shift) for proper key combinations
+    
+    Args:
+        strict (bool): If True, raise an exception if any key can't be converted;
+                      if False, skip keys that can't be converted
+                      
+    Returns:
+        PynputCasette: A new casette containing only DelayAction and TmuxSendkeyAction objects
+        
+    Raises:
+        ValueError: If strict=True and a key can't be converted
+    """
+    tmux_actions = []
+    
+    # Track which modifier keys are currently pressed
+    active_modifiers = {
+        'ctrl': False,
+        'alt': False,
+        'shift': False,
+    }
+    
+    for action in casette:
+        if isinstance(action, (DelayAction, TmuxSendkeyAction)):
+            # Keep all delay actions and tmux actions
+            tmux_actions.append(copy(action))
+
+        elif isinstance(action, KeyboardPressAction):
+            # Update modifiers state
+            if action.key in [Key.ctrl, Key.ctrl_r]:
+                active_modifiers['ctrl'] = True
+            elif action.key in [Key.alt, Key.alt_r]:
+                active_modifiers['alt'] = True
+            elif action.key in [Key.shift, Key.shift_r]:
+                active_modifiers['shift'] = True
+            else:
+                # Try to convert keyboard press actions to tmux actions with current modifiers
+                try:
+                    tmux_action = TmuxSendkeyAction.from_pynput(
+                        action.key, 
+                        active_modifiers=active_modifiers,
+                        strict=strict
+                    )
+                    if tmux_action is not None:
+                        tmux_actions.append(tmux_action)
+                except ValueError as e:
+                    if strict:
+                        raise ValueError(f"Failed to convert action {action}: {e}")
+                    
+        elif isinstance(action, KeyboardReleaseAction):
+            # Update modifiers state on release
+            if action.key in [Key.ctrl, Key.ctrl_r]:
+                active_modifiers['ctrl'] = False
+            elif action.key in [Key.alt, Key.alt_r]:
+                active_modifiers['alt'] = False
+            elif action.key in [Key.shift, Key.shift_r]:
+                active_modifiers['shift'] = False
+                
+        # Skip all other actions (mouse actions)
+        
+    # Merge consecutive delay actions for cleaner output
+    return PynputCasette(tmux_actions).merge_delays()
 
 ##############################################################################
 # P L A Y B A C K
@@ -499,6 +758,7 @@ def playback_actions(actions):
         elif isinstance(action, MouseAction): style = 'gray green yellow bold'
         if isinstance(action, KeyboardReleaseAction): style = 'white blue red blue magenta bold'
         if isinstance(action, KeyboardPressAction): style = 'white blue green blue cyan bold'
+        if isinstance(action, TmuxSendkeyAction): style = 'light orange gray orange bold'
         action_str = rp.fansi(action, style)
         num_str = rp.fansi(f"[{i}/{len(actions)}]", "yellow gray")
         print(f"{num_str} {action_str}")
@@ -602,8 +862,19 @@ class PynputCasette(list):
             out.append(x)
         return PynputCasette(out)
 
-    def cap_all_delays(self,seconds):
-        return self.set_all_delays(lambda x:min(x,seconds))
+    def cap_all_delays(self, seconds):
+        return self.set_all_delays(lambda x: min(x, seconds))
+
+    def round_all_delays(self, ndigits=2):
+        """ Rounds all delays to ndigits decimals; good for compressing via rp.object_to_base64 """
+        return self.set_all_delays(lambda x: round(x, ndigits))
+
+    def to_tmux(self, *, strict=True):
+        return pynput_casette_to_tmux(self, strict=strict)
+
+    @property
+    def duration(self):
+        return sum(x.seconds for x in self if isinstance(x, DelayAction))
 
     def play(self, loop=False):
         for _ in range(1 + 999**999 * loop):
