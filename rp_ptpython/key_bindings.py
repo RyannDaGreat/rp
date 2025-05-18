@@ -3221,6 +3221,7 @@ def load_python_bindings(python_input):
                                 if header=='qualify_rp':
                                     text=buffer.document.text
                                     try:
+                                        import rp
                                         text='import rp\nfrom rp import *\n'+text
                                         text=rp.run_removestar(text,qualify=False)
                                         text=rp.qualify_imports(text,'rp')
