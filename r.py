@@ -47692,7 +47692,7 @@ def load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, 
                 #If we still can't find anything...raise an error.
                 raise FileNotFoundError('rp.load_safetensors: No safetensor files at '+str(path))
 
-        output_tensors, output_metadatas = [gather_args_call(load_safetensors, subpath, metadata=True) for subpath in subpaths]
+        output_tensors, output_metadatas = list_transpose([gather_args_call(load_safetensors, subpath, metadata=True) for subpath in subpaths])
         if keys_only:
             tensors = list_flatten(output_tensors)
         else:
@@ -47719,6 +47719,7 @@ def load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, 
             
                 tensors = as_easydict(tensors)
     
+            if metadata:
                 meta = f.metadata()
                 meta = as_easydict(meta)
 
