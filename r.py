@@ -48253,6 +48253,9 @@ def qualify_imports(code, *module_names):
 
     module_names = detuple(module_names)
 
+    if isinstance(module_names, str):
+        module_names = [module_names]
+
     for module_name in module_names:
         code = _qualify_imports(code, module_name)
 
