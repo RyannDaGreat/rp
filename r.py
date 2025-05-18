@@ -4460,6 +4460,122 @@ def temporary_numpy_random_seed(seed=None):
         np.random.set_state(old_state)
 
 
+@contextlib.contextmanager
+def temporary_torch_random_seed(seed=None):
+    """
+    A context manager that sets PyTorch's random seed for the duration of the context block.
+    If no seed is provided, it does not change the random state.
+    
+    Parameters:
+        seed (int, optional): The seed value to use for generating random numbers.
+                              If None, the random state is not altered.
+    
+    Example:
+        >>> import torch
+        >>> torch.manual_seed(42)
+        >>> print("First random tensor:", torch.rand(2, 2))
+        >>> with temporary_torch_random_seed(seed=99):
+        ...     print("Random tensor in context:", torch.rand(2, 2))
+        >>> print("Second random tensor:", torch.rand(2, 2))
+        
+        >>> # Note how the above acts the same as if there was no context...
+        >>> torch.manual_seed(42)
+        >>> print("First random tensor:", torch.rand(2, 2))
+        >>> print("Second random tensor:", torch.rand(2, 2))
+        
+        OUTPUT:
+            First random tensor     : tensor([[0.8823, 0.9150], [0.3829, 0.9593]])
+            Random tensor in context: tensor([[0.1033, 0.9702], [0.9481, 0.9787]])
+            Second random tensor    : tensor([[0.3904, 0.6009], [0.2566, 0.7936]])
+            First random tensor     : tensor([[0.8823, 0.9150], [0.3829, 0.9593]])
+            Second random tensor    : tensor([[0.3904, 0.6009], [0.2566, 0.7936]])
+    
+    #WRITTEN BY CLAUDE - MAY 18 - DID NOT TEST EVERYTHING YET (i.e. multi-gpu cuda stress testing)
+    """
+    import torch
+    old_rng_state = torch.get_rng_state()
+    old_cuda_rng_state = torch.cuda.get_rng_state() if torch.cuda.is_available() else None
+    old_deterministic = torch.backends.cudnn.deterministic
+    
+    try:
+        if seed is not None:
+            torch.manual_seed(seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(seed)
+                torch.backends.cudnn.deterministic = True
+        yield
+    finally:
+        torch.set_rng_state(old_rng_state)
+        if old_cuda_rng_state is not None and torch.cuda.is_available():
+            torch.cuda.set_rng_state(old_cuda_rng_state)
+        torch.backends.cudnn.deterministic = old_deterministic
+        
+def seed_all(seed=None):
+    """
+    Set random seeds for Python's random, NumPy, and PyTorch.
+    
+    Parameters:
+        seed (int, optional): The seed value to use for all random number generators.
+                              If None, does not set any seeds.
+    
+    Example:
+        >>> seed_all(42)  # Sets all random seeds to 42
+        >>> import random, numpy as np, torch
+        >>> print(random.random(), np.random.rand(), torch.rand(1))
+    """
+    if seed is not None:
+
+        # Standard library random
+        import random
+        random.seed(seed)
+        
+        # NumPy
+        try:
+            import numpy as np
+            np.random.seed(seed)
+        except ImportError:
+            pass
+        
+        # PyTorch
+        try:
+            import torch
+            torch.manual_seed(seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(seed)
+            torch.backends.cudnn.deterministic = True
+        except ImportError:
+            pass
+        
+
+@contextlib.contextmanager
+def temporary_seed_all(seed=None):
+    """
+    A context manager that sets all random seeds (Python random, NumPy, and PyTorch)
+    for the duration of the context block by combining all other temporary seed context managers.
+    If no seed is provided, it does not change any random states.
+    
+    Parameters:
+        seed (int, optional): The seed value to use for all random number generators.
+                              If None, the random states are not altered.
+    """
+
+    contexts = [temporary_random_seed(seed=seed)]
+    
+    try:
+        import numpy
+        contexts+=[temporary_numpy_random_seed(seed=seed)]
+    except ImportError:
+        pass
+    
+    try:
+        import torch
+        contexts+=[temporary_torch_random_seed(seed=seed)]
+    except ImportError:
+        pass
+
+    with contexts:
+        yield
+
 # endregion
 # region rant/ranp: ［run_as_new_thread，run_as_new_process］
 def run_as_new_thread(func,*args,**kwargs):
