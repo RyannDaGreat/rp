@@ -96,9 +96,9 @@
 /Users/Ryan/PycharmProjects
 /Users/Ryan/PycharmProjects/QuickPython/rp
 /Users/Ryan/Desktop/CleanCode/Sandbox
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Users/Ryan/PycharmProjects/QuickPython/rp.egg-info
 /Users/Ryan/PycharmProjects/QuickPython
 /Users/Ryan
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp

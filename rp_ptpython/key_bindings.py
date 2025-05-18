@@ -2896,6 +2896,7 @@ def load_python_bindings(python_input):
                                          '\\diph':'diff_pt_history',
                                          '\\qph':'query_pt_history',
                                          '\\irp':'inline_rp',
+                                         '\\qrp':'qualify_rp',
                                          '\\inm':'if_name_main',
                                          }
                         # header_commands.update(header_jump_commands)
@@ -3215,6 +3216,16 @@ def load_python_bindings(python_input):
                                         text=_inline_rp_code(text)
                                     except:
                                         text='#inline_rp ERROR'
+                                    # replace_buffer_text(buffer, text)
+                                    replace_buffer_text(buffer, text)
+                                if header=='qualify_rp':
+                                    text=buffer.document.text
+                                    try:
+                                        text='from rp import *\n'+text
+                                        text=rp.run_removestar(text,qualify=False)
+                                        text=rp.qualify_imports(text,'rp')
+                                    except Exception as e:
+                                        text='#qualify_rp ERROR: '+str(e)
                                     # replace_buffer_text(buffer, text)
                                     replace_buffer_text(buffer, text)
                                 if header=='if_name_main':

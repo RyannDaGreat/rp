@@ -47719,9 +47719,9 @@ def save_safetensors(tensors, path, metadata=None, *, verbose=False):
     tensors = dict(tensors)
     
     if verbose:
-        print(f"Saving {len(tensors)} tensors to {path}")
+        print("Saving {0} tensors to {1}".format(len(tensors), path))
         for k, v in tensors.items():
-            print(f"    - {k}: {v.shape if hasattr(v, 'shape') else 'no shape'}")
+            print("    - {0}: {1}".format(k, v.shape if hasattr(v, 'shape') else 'no shape'))
     
     make_parent_directory(path)
     
@@ -48324,8 +48324,8 @@ def refactor_fstrings(code):
     """
     Removes f-strings, using str.format notation instead. This is good for making code backwards-compatiable with python 3.5
     """
-    import rp.libs.refactor.string_format
-    return rp.libs.refactor.string_format.fstring_converter(code)
+    from rp.libs.refactor.string_format.fstring_converter import convert_string
+    return convert_string(code)
 
 def file_line_iterator(file_name, *, with_len=False):
     """
