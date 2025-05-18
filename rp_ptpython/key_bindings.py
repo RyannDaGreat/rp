@@ -2198,7 +2198,7 @@ def handle_character(buffer,char,event=None):
             return True
 
         if not after and char==' ' and before.replace('_','').isalpha():
-            autocaps = 'cd py pym apy apym acat cat vim tab fd fda fdt rn run ccat ncat pip take mkdir cdu lss lsr'.split()
+            autocaps = 'cdm cd py pym apy apym acat cat vim tab fd fda fdt rn run ccat ncat pip take mkdir cdu lss lsr'.split()
 
             import rp
             shortcuts = {c:'!'+c for c in rp.r._get_cached_system_commands()}
@@ -2262,6 +2262,7 @@ def handle_character(buffer,char,event=None):
                 'mmi':'!micromamba install',
 
                 'hd':'CDH',
+                'dm':'CDM',
                 'b':'CDH',
                 'inm':'if __name__ == "__main__":',
 

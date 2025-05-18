@@ -14,7 +14,6 @@
 /Users/Ryan/Desktop/CleanCode/SBU/Classes/Undergrad/CSE350
 /Users/Ryan/Desktop/CleanCode/SBU/Classes/CSE548_Algorithms
 /private/etc
-/Users/Ryan/PycharmProjects/RyanBStandards_Python3.5
 /Users/Ryan/Desktop/CleanCode/SBU/LabInACube/Lab-In-A-Cube-Full
 /Users/Ryan/Desktop/CleanCode/SBU/LabInACube/Lab-In-A-Cube
 /Users/Ryan/Documents/Image-Line/FL Studio/Presets
@@ -97,8 +96,11 @@
 /Users/Ryan/Desktop/CleanCode/Sandbox
 /Users/Ryan/PycharmProjects/QuickPython/rp.egg-info
 /Users/Ryan/PycharmProjects/QuickPython
-/Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
+/Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/numpy
+/Users/Ryan/PycharmProjects/RyanBStandards_Python3.5
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/colorama
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp

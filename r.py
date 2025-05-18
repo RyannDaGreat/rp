@@ -15754,6 +15754,7 @@ def _clean_cd_history():
     #It removes all the red entries
     entries=_get_cd_history()
     entries=[entry for entry in entries if path_exists(entry) or _cdh_folder_is_protected(entry)]
+    entries=[entry for entry in entries if not '/rp/outputs/claudecode/workspace_' in entry] #These get spammy...
     string_to_text_file(_cd_history_path,line_join(entries))
 
 def set_prompt_style(style:str=None):
@@ -19817,6 +19818,7 @@ def pseudo_terminal(
         CDH
         CDH FAST
         CDH GIT
+        CDM
         CDZ
         CDQ
         CAT
@@ -22793,6 +22795,7 @@ def pseudo_terminal(
                                 or user_message.startswith("CD ")
                                 or user_message.startswith("CDU ")
                                 or user_message.startswith("CDH ")
+                                or user_message.startswith("CDM ")
                                 or user_message == "CDP"
                                 or not is_valid_python_syntax(user_message) and folder_exists(rp.os.path.expanduser(user_message))
                             )
@@ -22806,6 +22809,22 @@ def pseudo_terminal(
                             if not is_valid_python_syntax(user_message) and folder_exists(rp.os.path.expanduser(user_message)):
                                 #Pasting a folder path and entering CD's to it
                                 user_message = "CD "+user_message
+
+                            if user_message.startswith('CDM '):
+                                module_name = user_message[len("CDM "):].strip()
+                                try:
+                                    module_path = get_module_path_from_name(module_name)
+                                except Exception:
+                                    fuzzy_module_name = _ric_current_candidate_fuzzy_matches(module_name)
+                                    if fuzzy_module_name is not None:
+                                        fansi_print('CDM: Completed module to '+repr(fuzzy_module_name),'blue')
+                                        module_name = fuzzy_module_name
+
+                                    module_path = get_module_path_from_name(module_name)
+                                
+                                if is_a_file(module_path):
+                                    module_path = get_parent_folder(module_path)
+                                user_message = 'CD '+module_path
 
                             if user_message.startswith('CD '):
                                 #Do fuzzy searching
@@ -47609,7 +47628,7 @@ def as_torch_image(image, *, device=None, dtype=None, copy=False):
         assert False,'Unsupported image type: '+str(type(image))
 
 _load_safetensors_cache={}
-def load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, use_cache=False, keys_only=False):
+def load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, use_cache=False, keys_only=False, metadata=False):
     """
     Loads tensors from a .safetensors file.
 
@@ -47619,6 +47638,8 @@ def load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, 
         show_progress (bool, optional): Show progress bar. Defaults to False.
         verbose (bool, optional): Print tensor names. Defaults to False.
         keys_only (bool): If True, returns a list of key strings
+        metadata (bool): If True, returns (regular output, metadata)
+            where metadata is a dict of str -> str
 
     Returns:
         easydict: Easydict of tensors, or if keys_only, a list of strings
@@ -47645,7 +47666,7 @@ def load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, 
     from safetensors import safe_open
 
     # Handle Cache
-    cache_key = handy_hash([path, device, keys_only])
+    cache_key = handy_hash([path, device, keys_only, metadata])
     cache = _load_safetensors_cache
     if use_cache:
         if cache_key not in cache:
@@ -47654,6 +47675,7 @@ def load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, 
     elif cache_key in cache:
         del cache[cache_key]
 
+    #Handle globs/folders of shards
     if not file_exists(path):
         #Sometimes we have multiple shards like ckpt_001.safetensors, ckpt_002.safetensors etc
 
@@ -47664,28 +47686,41 @@ def load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, 
                 #If we still can't find anything...raise an error.
                 raise FileNotFoundError('rp.load_safetensors: No safetensor files at '+str(path))
 
-        outputs = [gather_args_call(load_safetensors, subpath) for subpath in subpaths]
+        output_tensors, output_metadatas = [gather_args_call(load_safetensors, subpath, metadata=True) for subpath in subpaths]
         if keys_only:
-            return list_flatten(outputs)
+            tensors = list_flatten(output_tensors)
         else:
-            return merged_dicts(outputs)
+            tensors = merged_dicts(output_tensors)
+        meta = merged_dicts(output_metadatas)
+            
+    #Handle a single safetensors file
+    else:
+        # Load Safetensors file
+        with safe_open(path, framework="pt", device=device) as f:
+            keys = f.keys()
+            
+            if keys_only:
+                tensors = list(keys)
+            
+            else:
+                tensors = {}
+                if show_progress:
+                    keys = rp.eta(keys, title="rp.load_safetensors")
+                for k in keys:
+                    if verbose:
+                        print("    - " + str(k))
+                    tensors[k] = f.get_tensor(k)
+            
+                tensors = as_easydict(tensors)
+    
+                meta = f.metadata()
+                meta = as_easydict(meta)
 
-    # Load Safetensors file
-    tensors = {}
-    with safe_open(path, framework="pt", device=device) as f:
-        keys = f.keys()
-        
-        if keys_only:
-            return list(keys)
+    if metadata:
+        return tensors, meta
+    else:
+        return tensors
 
-        if show_progress:
-            keys = rp.eta(keys, title="rp.load_safetensors")
-        for k in f.keys():
-            if verbose:
-                print("    - " + str(k))
-            tensors[k] = f.get_tensor(k)
-    tensors = as_easydict(tensors)
-    return tensors
 
 def save_safetensors(tensors, path, metadata=None, *, verbose=False):
     """

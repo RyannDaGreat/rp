@@ -337,6 +337,12 @@ class PythonCompleter(Completer):
             # yield from yield_from_candidates(updirs)
             yield from yield_from_candidates(updirs,displays=updirs,priority=list(range(len(updirs))))
             return 
+        if starts_with_any(before_line,'CDM ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
+            import os
+            import rp
+            names = rp.r.get_all_importable_module_names()
+            yield from yield_from_candidates(names,displays=names,priority=list(range(len(names))))
+            return 
         if starts_with_any(before_line,'CD ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import rp
             import os
