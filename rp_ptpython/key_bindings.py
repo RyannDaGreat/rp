@@ -3221,9 +3221,10 @@ def load_python_bindings(python_input):
                                 if header=='qualify_rp':
                                     text=buffer.document.text
                                     try:
-                                        text='from rp import *\n'+text
+                                        text='import rp\nfrom rp import *\n'+text
                                         text=rp.run_removestar(text,qualify=False)
                                         text=rp.qualify_imports(text,'rp')
+                                        text=text[len('import rp\n'):]
                                     except Exception as e:
                                         text='#qualify_rp ERROR: '+str(e)
                                     # replace_buffer_text(buffer, text)
