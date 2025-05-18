@@ -35960,7 +35960,7 @@ def _get_visible_scope(frames_back=0):
 _all_module_names=set()
 def get_all_importable_module_names(use_cache=True):
     """
-    Returns a set of all names that you can use 'import <name>' on
+    Returns a set of all known names that you can use 'import <name>' on
     """
     if use_cache and _all_module_names:
         return _all_module_names
@@ -35969,7 +35969,13 @@ def get_all_importable_module_names(use_cache=True):
         _all_module_names.add(name)
     for name in sys.builtin_module_names:
         _all_module_names.add(name)
+    for module in sys.modules.values():
+        #Things like numpy.random don't always show up easily, but they do when they're already imported
+        if hasattr(module, '__name__'):
+            name = module.__name__
+            _all_module_names.add(name)
     return _all_module_names
+
 
 def get_module_path_from_name(module_name):
     """

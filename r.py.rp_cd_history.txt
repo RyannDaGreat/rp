@@ -23,7 +23,6 @@
 /Users/Ryan/Desktop/CleanCode/Resume/Attempt1
 /Users/Ryan/Desktop/CleanCode/Resume/Latex
 /Users/Ryan/Desktop/CleanCode/Resume
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/pygments/lexers
 /Users/Ryan/Desktop/Screenshots
 /Users/Ryan/Downloads/halved_photos
 /Users/Ryan/Desktop/CleanCode/Github/robosuite
@@ -103,4 +102,5 @@
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/numpy
 /Users/Ryan/PycharmProjects/RyanBStandards_Python3.5
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/colorama
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/pygments/lexers
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
