@@ -394,7 +394,8 @@ def run_server(server_port:int=None,
                scope:dict=None,
                *,
                sync=True,
-               handler_base_class=SimpleHTTPRequestHandler):
+               handler_base_class=SimpleHTTPRequestHandler,
+               new_thread=False):
     """
     Runs a web_evaluator server, which provides an HTTP interface for remote Python code execution (and can double as a fileserver as well)
 
@@ -412,9 +413,15 @@ def run_server(server_port:int=None,
             accepting code execution requests. This is useful for serving HTML/JS files that can interact with the Python backend.
             If `BaseHTTPRequestHandler`, the server will only support code execution requests and will not serve files.
             You can also provide your own custom handler class to extend the server's functionality.
+            
+        new_thread (bool): If True, starts the server in a new thread and returns an object with a .stop() method.
+            If False (default), blocks indefinitely to handle incoming HTTP requests.
 
     Returns:
-        None. The function will block indefinitely to handle incoming HTTP requests until the process is terminated.
+        If new_thread is False:
+            None. The function will block indefinitely to handle incoming HTTP requests until the process is terminated.
+        If new_thread is True:
+            An object with a .stop() method to stop the server.
 
     The server supports several types of requests, including:
         - Python code execution requests (POST to /webeval/py2py)
@@ -522,12 +529,26 @@ def run_server(server_port:int=None,
     )
     print("Server started at http://%s:%s" % (rp.get_my_local_ip_address(), server_port))
 
-    try:
-        webServer.serve_forever()
-    finally:
-        webServer.server_close()
-
-    print("Server stopped.")
+    if new_thread:
+        server_thread = threading.Thread(target=webServer.serve_forever)
+        server_thread.daemon = True
+        server_thread.start()
+        
+        def stop(self):
+            webServer.shutdown()
+            webServer.server_close()
+            if server_thread.is_alive():
+                server_thread.join()
+            print("Server stopped.")
+        
+        return type('StoppableWebEvaluatorServer', (), {'stop': stop})()
+    else:
+        try:
+            webServer.serve_forever()
+        finally:
+            webServer.server_close()
+        
+        print("Server stopped.")
 
 class Client:
     DEFAULT_PORT = DEFAULT_SERVER_PORT
@@ -1289,40 +1310,38 @@ if __name__ == '__main__':
     try:
         parser = argparse.ArgumentParser(prog='web_evaluator.py', description='Web Evaluator: Remote Python code execution server and client',
                                          formatter_class=argparse.RawTextHelpFormatter)
-        parser.add_argument('-p', '--port', type=int, default=DEFAULT_SERVER_PORT, help='Server port (default: 43234)')
 
         subparsers = parser.add_subparsers(dest='mode', title='Modes', metavar='{server,s,client,c}', help='Select "server" or "client" mode')
 
         # Server mode arguments
         server_parser = subparsers.add_parser('server', aliases=['s'], help='Run the script as a server')
+        server_parser.add_argument('-p', '--port', type=int, default=DEFAULT_SERVER_PORT, help='Server port (default: 43234)')
 
         # Client mode arguments
         client_parser = subparsers.add_parser('client', aliases=['c'], help='Run the script as a client')
         client_parser.add_argument('server_ip', type=str, help='Server IP address (e.g., 192.168.1.10)')
+        client_parser.add_argument('-p', '--port', type=int, default=DEFAULT_SERVER_PORT, help='Server port (default: 43234)')
 
         parser.epilog = '''Examples:
-      Run the script interactively (no arguments):
-        python3 script_name.py
+      Run interactively (no arguments):
+        python -m rp.web_evaluator
 
       Run as a server with the default port:
-        python3 script_name.py server
+        python -m rp.web_evaluator server
 
       Run as a server with a custom port:
-        python3 script_name.py server -p 12345
+        python -m rp.web_evaluator server -p 12345
 
       Run as a client connecting to a server IP and default port:
-        python3 script_name.py client 192.168.1.10
+        python -m rp.web_evaluator client 192.168.1.10
 
       Run as a client connecting to a server IP and custom port:
-        python3 script_name.py client 192.168.1.10 -p 12345
+        python -m rp.web_evaluator client 192.168.1.10 -p 12345
         '''
 
-        args, unknown = parser.parse_known_args()
+        args = parser.parse_args()
 
-        if unknown:
-            print("Unknown arguments provided. Switching to interactive mode.")
-            interactive_mode()
-        elif args.mode in ('server', 's'):
+        if args.mode in ('server', 's'):
             print("Running the server.")
             run_server(server_port=args.port)
         elif args.mode in ('client', 'c'):
@@ -1336,6 +1355,4 @@ if __name__ == '__main__':
 
     except KeyboardInterrupt:
         print("Received KeyboardInterrupt. Exiting.")
-
-
 
