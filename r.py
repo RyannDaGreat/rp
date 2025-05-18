@@ -26847,6 +26847,7 @@ def _omni_load(path):
     if ends_with_any(path, '.tsv'.split()): return load_tsv(path,show_progress=True)
     if ends_with_any(path, '.csv'.split()): return __import__('pandas').read_csv(path)
     if ends_with_any(path, '.parquet'.split()): return load_parquet(path,show_progress=True)
+    if ends_with_any(path, '.safetensors'.split()): return load_safetensors(path)
     if ends_with_any(path, '.pt .pth .ckpt'.split()): return __import__('torch').load(path)
     if is_image_file(path): return load_image(path)
     if is_video_file(path): return load_video(path)
@@ -26861,6 +26862,7 @@ def _omni_save(object, path):
     if ends_with_any(path, '.mp4'.split()): return rp.save_video(object, path)
     if ends_with_any(path, '.npy'.split()): return np.save(path,object)
     if ends_with_any(path, '.pt .pth .ckpt'.split()): return __import__('torch').save(object,path)
+    if ends_with_any(path, '.safetensors'.split()): return save_safetensors(object,path)
     if isinstance(object, str): return save_text_file(object, path)
     if isinstance(object, bytes): return bytes_to_file(object, path)
     return object_to_file(object,path)
@@ -47607,27 +47609,43 @@ def as_torch_image(image, *, device=None, dtype=None, copy=False):
         assert False,'Unsupported image type: '+str(type(image))
 
 _load_safetensors_cache={}
-def load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, use_cache=False):
+def load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, use_cache=False, keys_only=False):
     """
     Loads tensors from a .safetensors file.
 
     Args:
-        path (str): Path to .safetensors file.
+        path (str): Path to .safetensors file, or a glob for safetensor files, or a list of files
         device (str, optional): Device (cpu, cuda, etc.). Defaults to 'cpu'.
         show_progress (bool, optional): Show progress bar. Defaults to False.
         verbose (bool, optional): Print tensor names. Defaults to False.
+        keys_only (bool): If True, returns a list of key strings
 
     Returns:
-        easydict: Easydict of tensors.
+        easydict: Easydict of tensors, or if keys_only, a list of strings
         
     Reference: https://huggingface.co/docs/safetensors/en/index
-    """
 
+    EXAMPLE:
+        >>> LS
+        config.json
+        diffusion_pytorch_model-00001-of-00002.safetensors
+        diffusion_pytorch_model-00002-of-00002.safetensors
+        diffusion_pytorch_model.safetensors.index.json
+        >>> keys = load_safetensors('*.safetensors', keys_only=True)
+        >>> print(len(keys))
+        1024
+        >>> print(keys[:5])
+        ['patch_embed.proj.bias', 'patch_embed.proj.weight', 'patch_embed.text_proj.bias', 'patch_embed.text_proj.weight', 'time_embedding.linear_1.bias']
+        >>> state = load_safetensors('*.safetensors', keys_only=False)
+        >>> print(state[keys[0]].shape)
+        torch.Size([3072])
+
+    """
     pip_import("safetensors")
     from safetensors import safe_open
 
     # Handle Cache
-    cache_key = path, device
+    cache_key = handy_hash([path, device, keys_only])
     cache = _load_safetensors_cache
     if use_cache:
         if cache_key not in cache:
@@ -47636,10 +47654,30 @@ def load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, 
     elif cache_key in cache:
         del cache[cache_key]
 
+    if not file_exists(path):
+        #Sometimes we have multiple shards like ckpt_001.safetensors, ckpt_002.safetensors etc
+
+        subpaths = rp_glob(path)
+        if not subpaths:
+            subpaths = rp_glob(get_absolute_path(path)) #Maybe replacing ~ with /home etc will help? 
+            if not subpaths:
+                #If we still can't find anything...raise an error.
+                raise FileNotFoundError('rp.load_safetensors: No safetensor files at '+str(path))
+
+        outputs = [gather_args_call(load_safetensors, subpath) for subpath in subpaths]
+        if keys_only:
+            return list_flatten(outputs)
+        else:
+            return merged_dicts(outputs)
+
     # Load Safetensors file
     tensors = {}
     with safe_open(path, framework="pt", device=device) as f:
         keys = f.keys()
+        
+        if keys_only:
+            return list(keys)
+
         if show_progress:
             keys = rp.eta(keys, title="rp.load_safetensors")
         for k in f.keys():
@@ -47648,6 +47686,49 @@ def load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, 
             tensors[k] = f.get_tensor(k)
     tensors = as_easydict(tensors)
     return tensors
+
+def save_safetensors(tensors, path, metadata=None, *, verbose=False):
+    """
+    Saves tensors to a .safetensors file.
+
+    Args:
+        tensors (dict or easydict): Dictionary of tensors to save (str -> tensor)
+        path (str): Path to save the .safetensors file
+        metadata (dict, optional): Metadata to include in the file. Defaults to None. (str -> str)
+
+    Returns:
+        str: Path to the saved file
+        
+    Reference: https://huggingface.co/docs/safetensors/en/index
+
+    EXAMPLE:
+        >>> tensors = {"weight": torch.randn(3, 4), "bias": torch.randn(4)}
+        >>> save_safetensors(tensors, "model.safetensors")
+        'model.safetensors'
+        >>> loaded = load_safetensors("model.safetensors")
+        >>> loaded.keys()
+        ['weight', 'bias']
+    """
+    import os
+    from rp.r import pip_import
+    pip_import("safetensors")
+    
+    from safetensors.torch import save_file
+    
+    # Convert to regular dict if it's an easydict
+    tensors = dict(tensors)
+    
+    if verbose:
+        print(f"Saving {len(tensors)} tensors to {path}")
+        for k, v in tensors.items():
+            print(f"    - {k}: {v.shape if hasattr(v, 'shape') else 'no shape'}")
+    
+    make_parent_directory(path)
+    
+    # Save the tensors
+    save_file(tensors, path, metadata)
+    
+    return path
 
 
 class ImageDataset:
