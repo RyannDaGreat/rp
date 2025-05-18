@@ -48119,7 +48119,7 @@ def get_cuda_visible_devices():
             return output
     return []
 
-def _removestar(code:str,max_line_length=100,quiet=False):
+def run_removestar(code:str,max_line_length=100,quiet=False,qualify=False):
     """
     Takes something like:
        from numpy import *
@@ -48132,24 +48132,200 @@ def _removestar(code:str,max_line_length=100,quiet=False):
        asarray([1,2,3])
        display_image(x)
     It removes the stars
+
+
+    EXAMPLE:
+        >>> code='''from rp import *
+        ... 
+        ... # 2025-03-11 02:24:15.105806
+        ... N = 300
+        ... image = load_image(
+        ...     "https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pages/images/emma.png?raw=true",
+        ...     use_cache=True,
+        ... )
+        ... 
+        ... colors = as_rgba_float_colors(
+        ...     "random blue" for _ in range(N)
+        ... )
+        ... rim_colors = as_rgba_float_colors("white randombw dark black randomgray" for _ in range(N))
+        ... y = random_ints(N, get_image_height(image) - 1)
+        ... x = random_ints(N, get_image_width(image) - 1)
+        ... radii = random_floats(N, 1, 30)
+        ... rims = random_floats(N, -10, 10)
+        ... 
+        ... display_image(cv_draw_circles(image, x, y, radii, colors, rims, rim_colors))
+        ... '''
+        ... display_code_cell(run_removestar(code,qualify=False),title='Without Qualify')
+        ... display_code_cell(run_removestar(code,qualify=True),title='With Qualify')
+        ... 
+        ... 
+        ...     ┌─────────────────────────────────────────Without Qualify──────────────────────────────────────────
+        ...    1│from rp import (as_rgba_float_colors, cv_draw_circles, display_image, get_image_height,
+        ...    2│                get_image_width, load_image, random_floats, random_ints)
+        ...    3│
+        ...    4│# 2025-03-11 02:24:15.105806
+        ...    5│N = 300
+        ...    6│image = load_image(
+        ...    7│    "https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pages/images/emma.png?raw=true",
+        ...    8│    use_cache=True,
+        ...    9│)
+        ...   10│
+        ...   11│colors = as_rgba_float_colors(
+        ...   12│    "random blue" for _ in range(N)
+        ...   13│)
+        ...   14│rim_colors = as_rgba_float_colors("white randombw dark black randomgray" for _ in range(N))
+        ...   15│y = random_ints(N, get_image_height(image) - 1)
+        ...   16│x = random_ints(N, get_image_width(image) - 1)
+        ...   17│radii = random_floats(N, 1, 30)
+        ...   18│rims = random_floats(N, -10, 10)
+        ...   19│
+        ...   20│display_image(cv_draw_circles(image, x, y, radii, colors, rims, rim_colors))
+        ... 
+        ... 
+        ...     ┌───────────────────────────────────────────With Qualify───────────────────────────────────────────
+        ...    1│import rp
+        ...    2│
+        ...    3│# 2025-03-11 02:24:15.105806
+        ...    4│N = 300
+        ...    5│image = rp.load_image(
+        ...    6│    "https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pages/images/emma.png?raw=true",
+        ...    7│    use_cache=True,
+        ...    8│)
+        ...    9│
+        ...   10│colors = rp.as_rgba_float_colors(
+        ...   11│    "random blue" for _ in range(N)
+        ...   12│)
+        ...   13│rim_colors = rp.as_rgba_float_colors("white randombw dark black randomgray" for _ in range(N))
+        ...   14│y = rp.random_ints(N, rp.get_image_height(image) - 1)
+        ...   15│x = rp.random_ints(N, rp.get_image_width(image) - 1)
+        ...   16│radii = rp.random_floats(N, 1, 30)
+        ...   17│rims = rp.random_floats(N, -10, 10)
+        ...   18│
+        ...   19│rp.display_image(rp.cv_draw_circles(image, x, y, radii, colors, rims, rim_colors))
     """
     pip_import('removestar')
+
+    if qualify:
+        modules = get_star_modules(code)
+        new_code = gather_args_call(run_removestar, qualify=False)
+        new_code = qualify_imports(new_code, modules)
+        return new_code
+
     from removestar.removestar import fix_code
     return fix_code(code,file='filename is irrelevant',max_line_length=max_line_length,quiet=True)
-        
-#def file_line_iterator(file_name):
-#    #Opens a file and iterates through its lines
-#    #Needs a better name
-#    file=open(file_name)
-#    while True:
-#        line=file.readline()
-#        if not line:
-#            return
-#        #I DONT KNOW WHY THIS ASSERTION DOESN'T ALWAYS WORK BUT SOMETIMES IT FAILS...
-#        if line.endswith('\n'):
-#            yield line[:-1]
-#        else:
-#            yield line
+_removestar = run_removestar
+
+def qualify_imports(code, *module_names):
+    """
+    EXAMPLE:
+        >>> code = '''
+        ... from numpy.random import randn
+        ... from rp import display_image
+        ... 
+        ... display_image(randn(512,512,3))
+        ... '''
+        ... display_code_cell(code)
+        ... display_code_cell(qualify_imports(code,'rp'))
+        ... display_code_cell(qualify_imports(code,'numpy.random'))
+        ... display_code_cell(qualify_imports(code,'rp','numpy.random'))
+        ... 
+        ... #   ┌───────────Code Cell────────────
+        ... #  1│from numpy.random import randn
+        ... #  2│from rp import display_image
+        ... #  3│
+        ... #  4│display_image(randn(512,512,3))
+        ...  
+        ... #   ┌──────────────Code Cell──────────────
+        ... #  1│from numpy.random import randn
+        ... #  2│import rp
+        ... #  3│rp.display_image(randn(512, 512, 3))
+        ...  
+        ... #   ┌───────────────────Code Cell───────────────────
+        ... #  1│import numpy.random
+        ... #  2│from rp import display_image
+        ... #  3│display_image(numpy.random.randn(512, 512, 3))
+        ...  
+        ... #   ┌───────────────────Code Cell───────────────────
+        ... #  1│import numpy.random
+        ... #  2│import rp
+        ... #  3│rp.display_image(numpy.random.randn(512, 512, 3))
+    """
+
+    module_names = detuple(module_names)
+
+    for module_name in module_names:
+        code = _qualify_imports(code, module_name)
+
+    return code
+
+def _qualify_imports(code, *module_names):
+    pip_import('libcst')
+
+    import libcst as cst
+    from libcst import matchers as m
+
+    class QualifyImportsTransformer(cst.CSTTransformer):
+        def __init__(self, module_names):
+            self.module_names = set(module_names)
+            self.replacements = {}
+
+        def get_full_module_name(self, module):
+            parts = []
+            while isinstance(module, cst.Attribute):
+                parts.insert(0, module.attr.value)
+                module = module.value
+            if isinstance(module, cst.Name):
+                parts.insert(0, module.value)
+            return '.'.join(parts)
+
+        def leave_ImportFrom(self, original_node, updated_node):
+            if original_node.module:
+                mod_name = self.get_full_module_name(original_node.module)
+                if mod_name in self.module_names:
+                    for alias in original_node.names:
+                        if isinstance(alias, cst.ImportAlias) and alias.asname is None:
+                            name = alias.name.value
+                            self.replacements[name] = mod_name
+                    return cst.Import(names=[cst.ImportAlias(name=original_node.module)])
+            return updated_node
+
+        def leave_Name(self, original_node, updated_node):
+            if original_node.value in self.replacements:
+                mod_name = self.replacements[original_node.value]
+                attrs = mod_name.split('.') + [original_node.value]
+                attr_node = cst.Name(attrs[0])
+                for attr in attrs[1:]:
+                    attr_node = cst.Attribute(value=attr_node, attr=cst.Name(attr))
+                return attr_node
+            return updated_node
+
+    tree = cst.parse_module(code)
+    transformer = QualifyImportsTransformer(module_names)
+    modified_tree = tree.visit(transformer)
+
+    return modified_tree.code
+
+def get_star_modules(code):
+    '''
+    EXAMPLE:
+        >>> get_star_modules("""from numpy import randn
+        from rp import *
+        from pandas import *
+        import torch as t
+        """)
+        ans = ['pandas', 'rp']
+    '''
+    code=code.splitlines()
+    code=[x for x in code if x.startswith('from ') and x.endswith('import *')]
+    code=[x[len('from '):-len(' import *')].strip() for x in code]
+    return sorted(set(code))
+
+def refactor_fstrings(code):
+    """
+    Removes f-strings, using str.format notation instead. This is good for making code backwards-compatiable with python 3.5
+    """
+    import rp.libs.refactor.string_format
+    return rp.libs.refactor.string_format.fstring_converter(code)
 
 def file_line_iterator(file_name, *, with_len=False):
     """
