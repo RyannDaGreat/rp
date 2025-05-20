@@ -2440,6 +2440,101 @@ def overlay_images(*images,mode='normal'):
         output=blend_images(output,image,mode=mode)
     return output
     
+def laplacian_blend(bot, top, alpha, levels=None):
+    """
+    Uses laplacian pyramid blending on two images with a given alpha mask.
+    Note: Right now only RGB images of equal dimensions are supported (non-rgb will be converted to RGB)
+    
+    Arguments:
+        - levels (int, None): The number of laplacian pyramid levels. Defaults to None, where the max number of levels is selected automatically from the image sizes. No errors will be thrown if you input a level number too high - it will effectively just use the max level.
+    
+    EXAMPLE:
+        >>> top_url = "https://fastly.picsum.photos/id/9/5000/3269.jpg?hmac=cZKbaLeduq7rNB8X-bigYO8bvPIWtT-mh8GRXtU3vPc"
+        ... bot_url = "https://fastly.picsum.photos/id/21/3008/2008.jpg?hmac=T8DSVNvP-QldCew7WD4jj_S3mWwxZPqdF0CNPksSko4"
+        ... 
+        ... S = 512
+        ... alpha = get_checkerboard_image(S, S, tile_size=64,first_color=0,second_color=1)
+        ... 
+        ... bot, top = resize_images_to_fit(crop_images_to_square(load_images(download_urls_to_cache(bot_url, top_url), use_cache=True)), height=S, width=S)
+        ... 
+        ... bot, top, alpha = as_float_images(as_rgb_images([bot, top, alpha]))
+        ... 
+        ... ic("FOR DEBUGGING", alpha.shape, alpha.dtype, bot.shape, bot.dtype, top.shape, top.dtype)
+        ... 
+        ... regular_blended_image = blend_images(bot, top, alpha)
+        ... laplacian_blended_image = laplacian_blend(bot, top, alpha)
+        ... 
+        ... laplacian_levels_anim = [laplacian_blend(bot, top, alpha,levels) for levels in range(10)]
+        ... 
+        ... display_image(grid_concatenated_images([[bot, top, alpha], [regular_blended_image, laplacian_blended_image]]), block=True)
+        ... display_image_slideshow(video_with_progress_bar(laplacian_levels_anim))
+    """
+    pip_import('cv2')
+    pip_import('numpy')
+
+    import numpy as np
+    import cv2
+
+    #Make all inputs RGB float images
+    bot, top, alpha = as_rgb_images(as_float_images([bot, top, alpha], copy=False), copy=False)
+
+    #Input validation: Make sure all images have same shape
+    if not (bot.shape == top.shape == alpha.shape):
+        raise ValueError(
+            "laplacian_blend: All input images must have same dimensions, but got bot.shape==%s and top.shape==%s and alpha.shape==%s" % 
+            (bot.shape, top.shape, alpha.shape)
+        )
+
+    # Calculate max possible levels if None is provided
+    if levels is None:
+        min_dim = min(bot.shape[:2] + top.shape[:2] + alpha.shape[:2])
+        levels = int(np.ceil(np.log2(min_dim)))
+
+    # Generate Gaussian pyramids
+    gaussian_pyr1 = [bot]
+    gaussian_pyr2 = [top]
+    gaussian_alpha = [alpha]
+
+    for _ in range(levels):
+        gaussian_pyr1.append(cv2.pyrDown(gaussian_pyr1[-1]))
+        gaussian_pyr2.append(cv2.pyrDown(gaussian_pyr2[-1]))
+        gaussian_alpha.append(cv2.pyrDown(gaussian_alpha[-1]))
+
+    # Generate Laplacian pyramids directly
+    laplacian_pyr1 = []
+    laplacian_pyr2 = []
+
+    for i in range(levels):
+        src_img1 = gaussian_pyr1[i + 1]
+        src_img2 = gaussian_pyr2[i + 1]
+
+        dst_size1 = (gaussian_pyr1[i].shape[1], gaussian_pyr1[i].shape[0])
+        dst_size2 = (gaussian_pyr2[i].shape[1], gaussian_pyr2[i].shape[0])
+        
+        level_expanded1 = cv2.pyrUp(src_img1, dstsize=dst_size1)
+        level_expanded2 = cv2.pyrUp(src_img2, dstsize=dst_size2)
+
+        laplacian_pyr1.append(cv2.subtract(gaussian_pyr1[i], level_expanded1))
+        laplacian_pyr2.append(cv2.subtract(gaussian_pyr2[i], level_expanded2))
+
+    # Add the smallest level directly (Gaussian level)
+    laplacian_pyr1.append(gaussian_pyr1[-1])
+    laplacian_pyr2.append(gaussian_pyr2[-1])
+
+    # Blend pyramids
+    blended_pyramid = []
+    for lap1, lap2, alpha_mask in zip(laplacian_pyr1, laplacian_pyr2, gaussian_alpha):
+        blended = lap1 * alpha_mask + lap2 * (1 - alpha_mask)
+        blended_pyramid.append(blended)
+
+    # Reconstruct the blended image
+    blended_image = blended_pyramid[-1]
+    for level in reversed(blended_pyramid[:-1]):
+        blended_image = cv2.pyrUp(blended_image, dstsize=(level.shape[1], level.shape[0]))
+        blended_image = cv2.add(blended_image, level)
+
+    return blended_image
+
 def get_checkerboard_image(height=64,
                            width=64,
                            *,
@@ -19221,7 +19316,7 @@ def _convert_powerpoint_file(path,message=None):
 
 
 def _write_default_gitignore():
-    types_to_ignore='pyc bak swo swp swn swm swh swi swj swk swl swm swn swo swp un~ gstmp ipynb_checkpoints DS_Store'.split()
+    types_to_ignore='pyc bak swh swi swj swk swl swm swn swo swp un~ gstmp ipynb_checkpoints DS_Store'.split()
     types_to_ignore=['*.'+x for x in types_to_ignore]
 
     new_lines = (
@@ -20470,9 +20565,9 @@ def pseudo_terminal(
 
         IASM $import_all_submodules(ans,verbose=True);
 
-        SUH $sublime('.')
+        SUH $sublime($get_current_directory())
         SUA $sublime(ans)
-        COH $vscode('.')
+        COH !code .
         COA $vscode(ans)
 
         SG $save_gist(ans)
@@ -40137,7 +40232,7 @@ def inverted_color(color):
     else:
         raise TypeError('Unknown color format: '+repr(color))
 
-def inverted_image(image,invert_alpha=False):
+def inverted_image(image, invert_alpha=False):
     """ Inverts the colors of an image. By default, it doesn't touch the alpha channel (if one exists) """
     assert is_image(image)
     image=image.copy()
@@ -40156,6 +40251,13 @@ def inverted_image(image,invert_alpha=False):
         elif is_binary_image(image):
             image=~image
     return image
+invert_image = inverted_image
+
+def inverted_images(images, invert_alpha=False):
+    if is_numpy_array(images):
+        return as_numpy_array(gather_args_call(inverted_images, list(images)))
+    return [gather_args_call(inverted_image, image) for image in images]
+invert_images = inverted_images
 
 def make_zip_file_from_folder(src_folder:str=None, dst_zip_file:str=None)->str:
     """
