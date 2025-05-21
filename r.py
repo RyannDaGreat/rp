@@ -9757,7 +9757,7 @@ def globalize_locals(func):
     Useful for making reusable cells in a Jupyter notebook.
     
     When a function decorated with @globalize_locals is called, all local variables created
-    within the function become available in the global namespace after execution.
+    within the function become available in the global namespace during execution
     This includes both function parameters and local variables.
     
     The global namespace modification is the primary feature of this decorator,
@@ -9846,54 +9846,25 @@ def globalize_locals(func):
         caller_frame = sys._getframe(1)
         caller_globals = caller_frame.f_globals
         
-        # Create a dictionary to store function's locals
-        func_locals = {}
-        
         # First, bind the arguments to parameter names to ensure parameters are captured
         sig = inspect.signature(func)
         bound_args = sig.bind(*args, **kwargs)
         bound_args.apply_defaults()
-        func_locals.update(bound_args.arguments)
         
-        # Set up trace function to capture variables on each line
-        def trace_func(frame, event, arg):
-            # We're only interested in the function we're decorating
-            if frame.f_code == func.__code__:
-                # Copy all variables from the frame's locals to our dictionary
-                for var_name, value in frame.f_locals.items():
-                    func_locals[var_name] = value
-                # Keep tracing this function
-                return trace_func
-            # Don't trace other functions
-            return None
+        def trace_func(frame, event, arg):            # Set up trace function to capture variables on each line
+            if frame.f_code == func.__code__:         # We're only interested in the function we're decorating
+                caller_globals.update(frame.f_locals) # Push all local variables to globals
+                return trace_func                     # Keep tracing this function
+            return None                               # Don't trace other functions
             
         # Set tracing and execute the function
         original_trace = sys.gettrace()
         sys.settrace(trace_func)
         
-        try:
-            # Call the function and get its result
-            result = func(*args, **kwargs)
-            return result
-        except Exception:
-            # Capture the exception info
-            exc_info = sys.exc_info()
-            # Will re-raise after transferring variables
-            raise_later = True
-        finally:
-            # Restore the original trace function
-            sys.settrace(original_trace)
+        try:     return func(*args, **kwargs) # Call the function and get its result
+        finally: sys.settrace(original_trace) # Restore the original trace function
             
-            # Copy the captured locals to the caller's globals
-            for name, value in func_locals.items():
-                caller_globals[name] = value
-                
-            # If there was an exception, re-raise it
-            if 'raise_later' in locals() and raise_later:
-                raise exc_info[1].with_traceback(exc_info[2])
-    
     return wrapper
-
 
 def _filter_dict_via_fzf(input_dict,*,preview=None):
     """Uses fzf to select a subset of a dict and returns that dict."""
@@ -37994,6 +37965,42 @@ def _sort_imports_via_isort(code):
     import isort
     return isort.code(code)
 sort_imports_via_isort = _sort_imports_via_isort
+
+def clean_imports_via_unimport(code: str) -> str:
+    """
+    Removes dead imports
+
+    EXAMPLE:
+        >>> code = "import numpy\nprint(123)"
+        >>> print(code)
+        import numpy
+        print(123)
+        >>> print(clean_imports_via_unimport(code))
+        print(123)
+    """
+    pip_import('unimport')
+    
+    import unimport
+    from unimport.analyzers.main import MainAnalyzer
+    from unimport.statement import Import
+    import unimport.refactor
+
+    analyzer = MainAnalyzer(source=code)
+    
+    # Analyze the code to find unused imports
+    analyzer.traverse()
+    
+    # Get unused imports
+    unused_imports = list(Import.get_unused_imports())
+    
+    # Remove unused imports from the code
+    result = unimport.refactor.refactor_string(source=code, unused_imports=unused_imports)
+    
+    # Clean up
+    analyzer.clear()
+    
+    return result
+
 
 _ryan_tmux_conf=r'''
 #Ryan Burgert's Tmux config
