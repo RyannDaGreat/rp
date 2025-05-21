@@ -2818,6 +2818,7 @@ def load_python_bindings(python_input):
                                              }
                         header_commands={
                                          '\\sim':'sort_imports',
+                                         '\\cim':'clean_imports',
                                          '\\rms':'remove_star',
                                          '\\bla':'black',
                                          '\\gpt':'gpt',
@@ -3254,10 +3255,17 @@ def load_python_bindings(python_input):
                                     try:
                                         text=buffer.document.text
                                         text=rp.r._sort_imports_via_isort(text)
-                                        # buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
                                         replace_buffer_text(buffer, text)
                                     except BaseException as e:
                                         buffer.insert_text('#sort_imports: Error: '+str(e).replace('\n',' ; '))
+                                if header=='clean_imports':
+                                    import rp
+                                    try:
+                                        text=buffer.document.text
+                                        text=rp.r.clean_imports_via_unimport(text)
+                                        replace_buffer_text(buffer, text)
+                                    except BaseException as e:
+                                        buffer.insert_text('#clean_imports: Error: '+str(e).replace('\n',' ; '))
                                 if header=='remove_star':
                                     try:
                                         from rp.r import _removestar
