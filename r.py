@@ -32277,13 +32277,12 @@ def load_video_streams(
     transpose=False,
 
     show_progress=True,
-    use_cache=False,
-    num_threads=None,
+    num_threads=0, #Sometimes segfaulted when I did it this way...
     strict=True,
     lazy=False,
     buffer_limit=None
 ):
-    """ Plural of load_video_stream """
+    """ Plural of load_video_stream. If transpose==True, returns a single iterator that returns tuples of frames """
 
     paths = detuple(paths)
 
@@ -32299,9 +32298,9 @@ def load_video_streams(
     streams = gather_args_call(load_files, load, range(len(paths)))
         
     if transpose:
-        streams = zip(*streams)
-
         lengths = [(len(x) if hasattr(x, '__len__') else None) for x in streams]
+        
+        streams = zip(*streams)
 
         if all(isinstance(l, int) for l in lengths):
             length = min(lengths) #This is the way we handle it right now, might insert blank frames later
@@ -32309,6 +32308,7 @@ def load_video_streams(
             streams = IteratorWithLen(streams, length)
 
     return streams
+
 
 _load_video_cache = {}
 def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cache=False):
@@ -48646,6 +48646,9 @@ class IteratorWithLen:
 
     def __len__(self):
         return self._length
+
+    def __repr__(self):
+        return '<IteratorWithLen len='+str(self._length)+'>'
     
 @memoized
 def get_system_fonts(filetypes="ttf ttc otf"):
