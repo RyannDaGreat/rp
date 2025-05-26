@@ -2803,6 +2803,8 @@ def load_python_bindings(python_input):
                         #                  '\\el':'el'}#go e
                         header_arg_commands={
                                              '\\re':'replace',
+                                             '\\rre':'replace_varname',
+                                             '\\ev':'extract_variable',
                                              '\\py':'python',
                                              '\\dtl':'delete to line',
                                              '\\go':'goto',
@@ -2897,6 +2899,9 @@ def load_python_bindings(python_input):
                                          '\\dilp':'diff_local_paste',
                                          '\\diph':'diff_pt_history',
                                          '\\qph':'query_pt_history',
+                                         '\\stp':'strip',
+                                         '\\spl':'splitlines',
+                                         '\\lj':'line_join',
                                          '\\irp':'inline_rp',
                                          '\\qrp':'qualify_rp',
                                          '\\inm':'if_name_main',
@@ -2912,7 +2917,7 @@ def load_python_bindings(python_input):
                                 # if command in header_jump_commands:
                                 #     jump_cursor_to_beginning_of_header(chopped_command,header)
                                 if command in header_arg_commands and '`' in before_line:
-                                    if header=='replace':
+                                    if header.startswith('replace'):
                                         #DEMO: Type
                                         #`foo`bar\r
                                         #into the buffer (with a whole bunch of foo's which will be turned into bar's')
@@ -2921,7 +2926,22 @@ def load_python_bindings(python_input):
                                             arg2=before_line.split('`')[2].split('\\')[0]
                                             buffer.delete_before_cursor(len(arg1+'`'+arg2+'`'))
                                             text=buffer.document.text.replace(arg1,arg2)
-                                            buffer.document=Document(text,buffer.document.cursor_position,buffer.document.selection)
+                                            replace_buffer_text(buffer, text)
+                                            if header=='replace_varname':
+                                                buffer.insert_text(arg2)
+                                            # buffer.document=Document(text,buffer.document.cursor_position,buffer.document.selection)
+                                    if header=='extract_variable':
+                                        if before_line.count('`')==2:#dumb assumption im makin
+                                            arg1=before_line.split('`')[1]
+                                            arg2=before_line.split('`')[2].split('\\')[0]
+                                            buffer.delete_before_cursor(len(arg1+'`'+arg2+'`'))
+                                            indent=get_indent(before_line)
+                                            buffer.insert_text(arg2)
+                                            buffer.insert_line_above()
+                                            buffer.insert_text(arg2+' = '+arg1)
+
+                                            # buffer.document=Document(text,buffer.document.cursor_position,buffer.document.selection)
+
                                     if header=='cancel':
                                         #Cancel whatever command you've written and delete it. Beats having to delete it manually.
                                         if before_line.count('`')==2:#dumb assumption im makin
@@ -3106,6 +3126,38 @@ def load_python_bindings(python_input):
                                     buffer.delete_before_cursor(len(before_line))
                                     buffer.delete(len(after_line))
                                     buffer.insert_text(swap_from_import(current_line))
+                                if header=='strip':
+                                    text=buffer.document.text.strip()
+                                    replace_buffer_text(buffer, text)
+                                if header=='splitlines' or header=='line_join':
+                                    import rp
+                                    text=buffer.document.text
+
+                                    def do_linejoin(text):
+                                        import ast
+                                        try:
+                                            lines = ast.literal_eval(text)
+                                            if isinstance(lines, list):
+                                                result = '\n'.join(map(str,lines))
+                                                return result
+                                        except Exception as e:
+                                            pass
+                                            # return str(e)
+                                        return None
+                                    linejoin_result = do_linejoin(text)
+
+                                    if header=='splitlines' or not linejoin_result:
+                                        text='\n'.join([
+                                            '[',
+                                            *['    '+repr(line)+',' for line in text.splitlines()],
+                                            ']',
+                                            ])
+                                        buffer.cursor_down()
+                                    else:
+                                        text=linejoin_result
+                                        # buffer.cursor_up()
+                                    # text=rp.autoformat_python_via_black(text)
+                                    replace_buffer_text(buffer, text)
                                 if header=='enumerate':
                                     def uses_enumerate(line):
                                         ans=line
@@ -3236,7 +3288,7 @@ def load_python_bindings(python_input):
                                     buffer.insert_text('if __name__ == "__main__":\n    ')
                                 if header=='repr':
                                     #A shortcut to `repr\py
-                                    text=buffer.document.text
+                                    text=repr(buffer.document.text)
                                     # buffer.document=Document(repr(text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
                                     replace_buffer_text(buffer, text)
                                 if header=='black':

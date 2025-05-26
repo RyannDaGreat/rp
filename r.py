@@ -20631,6 +20631,12 @@ def pseudo_terminal(
 
         BLA $r._autoformat_python_code_via_black(str(ans))
         SIM $r.sort_imports_via_isort(ans)
+        SIM $r.clean_imports_via_unimport(ans)
+        SW $r.strip_trailing_whitespace(ans)
+        SPC $r.strip_python_comments(ans)
+        SDO $r.strip_python_docstrings(ans)
+        D0L $line_join(x for x in str(ans).splitlines() if x.strip())
+        UND $unindent(ans)
         CBP ans=$string_from_clipboard();ans=$r.autoformat_python_via_black_macchiato(ans);$string_to_clipboard(ans)
         CSP ans=$string_from_clipboard();ans=$sort_imports_via_isort(ans);$string_to_clipboard(ans)
         RMS $r._removestar(ans)
@@ -33156,6 +33162,10 @@ def change_video_file_framerate(video_path, new_framerate, output_path=None):
         fansi_print("Command: " + " ".join(ffmpeg_cmd), "red")
         fansi_print("Error output: " + e.stderr.decode("utf-8"), "red")
         return None
+
+def change_video_file_framerates(video_paths, new_framerate):
+    return [change_video_file_framerate(video_path, new_framerate) for video_path in video_paths]
+
 
 def concat_mp4_files(*input_files, output_file=None):
     """
