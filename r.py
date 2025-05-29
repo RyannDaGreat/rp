@@ -20761,6 +20761,7 @@ def pseudo_terminal(
                     # region Get user_message, xor exit with second keyboard interrupt
                     _update_cd_history()
                     try:
+                        did_cdb=False
                         def evaluable_part(cmd:str):
                             # DOesn't take into account the ';' character
                             cmd=cmd.rstrip().split('\n')[-1]
@@ -23116,6 +23117,7 @@ def pseudo_terminal(
                                     else:
                                         fansi_print("    (Cannot CDB because the CD history is empty)",'red')
                                         cancel=True
+                                    did_cdb=True
                             else:
                                 new_dir=user_message[2:].strip()
                             if cancel:
@@ -23423,6 +23425,9 @@ def pseudo_terminal(
                         #When the folder we're working in is deleted, get_current_directory throws an error
                         #This is ok, just ignore it.
                         pass
+
+                    if did_cdb and len(_cd_history):
+                        _cd_history.pop()
                         
                 except Exception as E:
                     show_error(E)
