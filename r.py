@@ -23015,7 +23015,7 @@ def pseudo_terminal(
                                     module_path = get_parent_folder(module_path)
                                 user_message = 'CD '+module_path
 
-                            if user_message.startswith('CD '):
+                            if user_message.startswith('CD ') and not user_message in ['CD .','CD ..']:
                                 #Do fuzzy searching
                                 old_cd_path = user_message[len('CD '):]
                                 new_cd_path = _pterm_fuzzy_cd(old_cd_path)
