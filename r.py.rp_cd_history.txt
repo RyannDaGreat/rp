@@ -84,7 +84,6 @@
 /Users/Ryan/.vim/bundle/minimap.vim/bin
 /Users/Ryan/.vim/bundle/vim-xtabline
 /Users/Ryan/.vim
-/Users/Ryan/.vim/bundle
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/javascript
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
@@ -92,7 +91,6 @@
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/prompt_toolkit
 /Users/Ryan/PycharmProjects
 /Users/Ryan/PycharmProjects/QuickPython/rp
-/Users/Ryan/Desktop/CleanCode/Sandbox
 /Users/Ryan/PycharmProjects/QuickPython/rp.egg-info
 /Users/Ryan/PycharmProjects/QuickPython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
@@ -102,5 +100,7 @@
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/colorama
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/pygments/lexers
 /Users/Ryan
+/Users/Ryan/.vim/bundle
+/Users/Ryan/Desktop/CleanCode/Sandbox
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
