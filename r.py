@@ -20362,6 +20362,10 @@ def pseudo_terminal(
 
         64P  ans=$printed($string_from_clipboard()) ; $fansi_print($human_readable_file_size(len( ans )), 'bold cyan') ; ans=$base64_to_object(ans)   #Copy object via Base64 String
         64C _ans64=$printed($object_to_base64(ans)) ; $fansi_print($human_readable_file_size(len(_ans64)), 'bold cyan') ; $string_to_clipboard(_ans64) #Copy object via Base64 String
+        64FC  ans=$object_to_base64($r._copy_path_to_bundle(None)); $string_to_clipboard(ans)
+        64FCA ans=$object_to_base64($r._copy_path_to_bundle(ans )); $string_to_clipboard(ans)
+        64FP  ans=$r._paste_path_from_bundle($base64_to_object($string_from_clipboard())) #Copy file via Base64 String
+        64FPA ans=$r._paste_path_from_bundle($base64_to_object(ans                     )) #Copy file via Base64 String
 
         # GO GC
 
@@ -20617,7 +20621,7 @@ def pseudo_terminal(
         RPA $r._relative_path_ans(ans)
         UPA $r._user_path_ans(ans)
 
-        UZA $unzip_to_folder(ans)
+        UZA $unzip_to_folder(ans,show_progress=True)
         ZIH $make_zip_file_from_folder($get_absolute_path('.'))
         ZIA $make_zip_file_from_folder(ans)
 
@@ -29041,11 +29045,7 @@ def get_relative_paths(*paths, root=None):
 
     """
 
-    paths = detuple(paths)
-    if isinstance(paths, str):
-        paths = [paths]
-    else:
-        paths = list(paths)
+    paths = _detuple_paths(paths)
 
     roots = root
     if isinstance(roots, str) or roots is None:
@@ -29067,9 +29067,15 @@ def get_absolute_path(path,*,physical=True):
         path=os.path.realpath(path)#Get rid of any symlinks in the path
     return os.path.abspath(path)
 
+def _detuple_paths(paths):
+    paths=detuple(paths)
+    if isinstance(paths,str):
+        paths=shlex.split(paths)
+    return list(paths)
+
 def get_absolute_paths(*paths,physical=True):
     "Plural of get_absolute_path"
-    return [get_absolute_path(path, physical=physical) for path in detuple(paths)]
+    return [get_absolute_path(path, physical=physical) for path in _detuple_paths(paths)]
 
 def has_file_extension(file_path):
     return get_file_extension(file_path)!=''
@@ -45307,19 +45313,25 @@ def zip_folder_to_bytes(folder_path:str):
 class _BundledPath:
     """ A class used internally by rp for web_copy_path and web_paste_path """
     def __init__(self,is_file,data,path):
+        assert isinstance(data,bytes)
         self.is_file=is_file
         self.is_folder=not is_file
         self.data=data
         self.path=path
+    def __repr__(self):
+        return '<rp.r._BundledPath: is_file='+str(self.is_file)+', data='+human_readable_file_size(len(self.data))+', path='+repr(self.path)+'>'
 
 def web_paste_path(path=None,*,ask_to_replace=True):
     """ FP (file paste) """
-    data=web_paste()
+    data = web_paste()
+    return gather_args_call(_paste_path_from_bundle, data,path=path)
+
+def _paste_path_from_bundle(data,path=None, *,ask_to_replace=True):
     try:
-        data=bytes_to_object(data)
         assert isinstance(data,_BundledPath)
     except Exception:
         raise Exception('web_paste_path error: web_paste data was not created via web_copy_path')
+
     def request_replace(path)->bool:
         return input_yes_no(fansi("Replace "+get_file_name(path)+"?",'yellow'))
     if path is None and data.path=='.' and data.is_folder:
@@ -45359,13 +45371,18 @@ def web_paste_path(path=None,*,ask_to_replace=True):
 
 def web_copy_path(path:str=None, *, show_progress=False):
     """ FC (file copy) """
+    web_copy(_copy_path_to_bundle(path), show_progress=show_progress)
+    return path
+
+def _copy_path_to_bundle(path:str=None):
     if path is None:
         path=input_select_path(message='Select a file or folder for web_copy_path:')
         path=get_relative_path(path)
     assert path_exists(path),'Path does not exist: '+str(path)
     data=file_to_bytes(path) if is_a_file(path) else zip_folder_to_bytes(path)
-    web_copy(object_to_bytes(_BundledPath(is_a_file(path),data,path)), show_progress=show_progress)
-    return path
+    file_object = _BundledPath(is_a_file(path),data,path)
+    return file_object
+
 
 def get_all_local_ip_addresses():
     """
@@ -50552,7 +50569,8 @@ known_pypi_module_package_names={
     'colors': 'ansicolors',
     'compose': 'docker-compose',
     # 'cv2': 'opencv-python',
-    'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? (Update: so far, so good!)
+    # 'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? (Update: so far, so good!)
+    'cv2': 'opencv-python opencv-contrib-python', #But that didn't work for get_edge_drawing...https://github.com/Comfy-Org/ComfyUI-Manager/discussions/708
     'cython': 'Cython',
     'deprecate': 'pyDeprecate',
     'diff_match_patch': 'diff-match-patch',
