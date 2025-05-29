@@ -1341,7 +1341,8 @@ def handle_character(buffer,char,event=None):
         lines=text.splitlines()
         lines=[line[1:] for line in lines]
         text='\n'.join(lines)
-        buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
+        replace_buffer_text(buffer, text)
+        # buffer.document=Document((text),min(len(text),buffer.document.cursor_position),buffer.document.selection)
         return True
 
     if char=='v' and meta_pressed(clear=True):
@@ -2899,6 +2900,9 @@ def load_python_bindings(python_input):
                                          '\\dilp':'diff_local_paste',
                                          '\\diph':'diff_pt_history',
                                          '\\qph':'query_pt_history',
+                                         '\\und':'unindent',
+                                         '\\ind':'indent',
+                                         '\\rcl':'reverse_columns',
                                          '\\stp':'strip',
                                          '\\spl':'splitlines',
                                          '\\lj':'line_join',
@@ -3128,6 +3132,21 @@ def load_python_bindings(python_input):
                                     buffer.insert_text(swap_from_import(current_line))
                                 if header=='strip':
                                     text=buffer.document.text.strip()
+                                    replace_buffer_text(buffer, text)
+                                if header=='unindent':
+                                    import rp
+                                    text=buffer.document.text
+                                    text=rp.unindent(text)
+                                    replace_buffer_text(buffer, text)
+                                if header=='indent':
+                                    import rp
+                                    text=buffer.document.text
+                                    text=rp.indentify(text,'    ')
+                                    replace_buffer_text(buffer, text)
+                                if header=='reverse_columns':
+                                    import rp
+                                    text=buffer.document.text
+                                    text='\n'.join(x[::-1] for x in text.splitlines())
                                     replace_buffer_text(buffer, text)
                                 if header=='splitlines' or header=='line_join':
                                     import rp
