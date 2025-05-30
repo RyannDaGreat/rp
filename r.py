@@ -45901,6 +45901,16 @@ def unwarped_perspective_image(image, from_points, to_points=None, height:int=No
     If you specify to_points, it might be useful in-case you want to adjust the transform etc
     Height and width can be manually specified as well, in case you want to capture parts of the perspectie transform that might have been cropped out
     When to_points is not specified, we assume that the from_points start from the top left of the desired area, and progress clockwise
+
+    The sister function is rp.unwarped_perspective_contour
+
+    If to_points is not specified, from_points should start from the top left and go clockwise to the other 3 points
+
+    from_points and/or to_points are specified as either:
+        - a points array: i.e a list or numpy array in the form [[x0,y0],[x1,y1],[x2,y2],[x3,y3]]
+        - a complex vector, i.e like: [0+0j, 1+0j, 1+1j, 0+1j]
+        - a cv_countour as defined by rp.as_cv_contour
+
     
     EXAMPLE:
         while True:
@@ -45947,6 +45957,92 @@ def unwarped_perspective_image(image, from_points, to_points=None, height:int=No
     # use cv2.warpPerspective() to warp your image to a top-down view
     warped = cv2.warpPerspective(image, M, (width, height), flags=cv2.INTER_LINEAR)
     return warped
+
+def unwarped_perspective_contour(contour, from_points, to_points=None, *, height:int=None, width:int=None):
+    """
+    Transform contour points using perspective transformation.
+    The sister function is rp.unwarped_perspective_image
+    
+    Args:
+        contour: Points to transform (points array, complex vector, or cv_contour).
+        from_points: Source quadrangle points (clockwise from top-left).
+        to_points: Target quadrangle points. If None, uses default rectangle.
+        height: Output height for default to_points calculation.
+        width: Output width for default to_points calculation.
+    
+    Notes:
+        - Points can be specified as arrays [[x0,y0],[x1,y1],...], 
+          complex vectors [0+0j, 1+0j,...], or cv_contours.
+        - Either to_points XOR both height/width must be provided, but not both!
+    
+    Returns:
+        numpy.ndarray: Transformed contour as points array [[x0,y0],[x1,y1],...].
+        
+    EXAMPLE:
+        
+        >>> image = rp.load_image(
+        ...     "https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pages/images/emma.png?raw=true",
+        ...     use_cache=True,
+        ... )
+        ... height, width = get_image_dimensions(image)
+        ... 
+        ... dot_points = [[50, 50], [240, 200], [100, 200], [100, 233]]
+        ... warp_quad = [[10, 10], [300, 0], [350, 400], [0, 250]]
+        ... 
+        ... dots_x, dots_y = list(zip(*dot_points))
+        ... rp.seed_all(123)
+        ... colors = rp.as_rgba_float_colors("randomhue" for _ in dot_points)
+        ... 
+        ... dotted_image = rp.cv_draw_circles(image, dots_x, dots_y, color=colors, rim=3, rim_color='white')
+        ... 
+        ... unwarped_image = rp.unwarped_perspective_image(image, warp_quad)
+        ... unwarped_dotted_image = rp.unwarped_perspective_image(dotted_image, warp_quad)
+        ... quad_image = rp.cv_draw_contour(dotted_image, warp_quad)
+        ... 
+        ... warped_points = unwarped_perspective_contour(dot_points, warp_quad, height=height, width=width)
+        ... warped_x, warped_y = list(zip(*warped_points))
+        ... warped_dots_image = rp.cv_draw_circles(unwarped_image, warped_x, warped_y, color=colors, rim=3, rim_color='white')
+        ... 
+        ... blended_image = blend_images(warped_dots_image, unwarped_dotted_image, .5)
+        ... 
+        ... rp.display_image(
+        ...     rp.horizontally_concatenated_images(
+        ...         quad_image,
+        ...         unwarped_dotted_image,
+        ...         warped_dots_image,
+        ...         blended_image,
+        ...     )
+        ... )
+        
+    """
+    pip_import('cv2')
+    import cv2
+    
+    if to_points is None:
+        assert height is not None and width is not None, 'unwarped_perspective_contour: You must specify either to_points or both width and height, but all three were None'
+        to_points=[[0,0],[width,0],[width,height],[0,height]]
+    else:
+        assert height is None and width is None, 'unwarped_perspective_contour: Both to_points AND height/width were specified - please only give to_points or height/width'
+    
+    from_points=as_points_array(from_points).astype(np.float32)
+    to_points  =as_points_array(to_points  ).astype(np.float32)
+    contour_points = as_points_array(contour).astype(np.float32)
+    
+    assert len(from_points)==4,'unwarped_perspective_contour needs four from_points, but got '+str(len(from_points))
+    assert len(to_points  )==4,'unwarped_perspective_contour needs four to_points, but got '  +str(len(to_points  ))
+    
+    # Get the perspective transformation matrix
+    M = cv2.getPerspectiveTransform(from_points, to_points)
+    
+    # Transform the contour points
+    # Reshape points for cv2.perspectiveTransform (needs shape [N, 1, 2])
+    contour_reshaped = contour_points.reshape(-1, 1, 2)
+    transformed_points = cv2.perspectiveTransform(contour_reshaped, M)
+    
+    # Reshape back to original format [N, 2]
+    transformed_points = transformed_points.reshape(-1, 2)
+    
+    return transformed_points
 
 _rp_folder = get_parent_folder(__file__)
 _rp_downloads_folder = path_join(_rp_folder, "downloads")
