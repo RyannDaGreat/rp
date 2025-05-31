@@ -55,7 +55,7 @@ import copy
 copy.copy.__dict__.update(copy.__dict__)
 copy = copy.copy
 
-
+from rp.libs.stamp_tensor import stamp_tensor
 
 _original_pwd = os.getcwd()
 
