@@ -21735,14 +21735,12 @@ def pseudo_terminal(
 
                     elif user_message=='?e':
                         fansi_print("Running peepdis.peep(ans):","blue",'bold')
-                        pip_import('peepdis')
-                        from peepdis import peep
+                        from rp.libs.peepdis import peep
                         peep(get_ans())
                     elif user_message.endswith('?e') and not '\n' in user_message:
                         user_message=user_message[:-2]
                         fansi_print("running peepdis.peep(%s):"%user_message,"blue",'bold')
-                        pip_import('peepdis')
-                        from peepdis import peep
+                        from rp.libs.peepdis import peep
                         value=eval(user_message,scope())
                         peep(value)
                     elif user_message == "?":
