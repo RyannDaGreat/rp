@@ -2,6 +2,8 @@ import argparse
 import ast
 import os
 import json
+import shlex
+import sys
 import textwrap
 import threading
 import time
@@ -19,6 +21,7 @@ import requests
 
 DEFAULT_SERVER_PORT = 43234 #This is an arbitrary port I chose because its easy to remember and didn't conflict with any known services I could find on https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
 DEFAULT_DELEGATION_SERVER_PORT = 33234 #The port for delegation servers is different, making them easy to find if we have many servers
+DEFAULT_CLUSTER_SESSION_NAME = "Webeval Cluster"
 
 #RP's Web Evaluator
 #    This module provides duct-tape to connect python between computers
@@ -764,6 +767,22 @@ class Client:
         assert isinstance(output, Client)
         return output
 
+    @classmethod
+    def from_client(cls, other_client, **kwargs):
+        """
+        Create a new Client based on another Client, with optional parameter overrides.
+        
+        Args:
+            other_client (Client): The client to copy settings from
+            **kwargs: Parameters to override (server_name, server_port, sync, timeout)
+        
+        Returns:
+            Client: A new Client instance with copied settings and overrides applied
+        """
+        client_kwargs = rp.gather_attrs(other_client, 'server_name server_port sync timeout', as_dict=True)
+        client_kwargs.update(kwargs)
+        return cls(**client_kwargs)
+
     def __hash__(self):
         return hash(repr(self))
 
@@ -1004,6 +1023,27 @@ class ClientDelegator:
         self._update()
 
         try:
+
+            return self._evaluate_client(client, code, **vars)
+
+        finally:
+            client._busy_count-=1
+
+            #TODO: Figure out why this below assertion sometimes triggers. Makes no sense to me. For now I'll ignore it and just make a warning.
+            #assert client._busy_count>=0
+            if client._busy_count<0:
+                rp.fansi_print("rp.web_evaluator.ClientDelegator.evaluate: client._busy_count<0 - this shouldn't be possible. Setting it to 0. Todo: Investigate this.", 'red', 'bold')
+                client.busy_count=0
+
+            self._update()
+
+    def _evaluate_client(self, client, code, options=None, **vars):
+
+        default_options = dict(abandon_on_unregister=False)
+        options = options or {}
+        options = rp.as_easydict(rp.merged_dicts(default_options, options))
+
+        try:
             result = client.evaluate(code, **vars)
             return result
         
@@ -1013,7 +1053,11 @@ class ClientDelegator:
             if self.on_connection_error == 'unregister':
                 #Delete dead clients
                 self.unregister_client(client)
-                return self.evaluate(code, **vars)
+                if not options.abandon_on_unregister:
+                    return self.evaluate(code, **vars)
+                else:
+                    #Used for evaluate_all
+                    return None
             elif self.on_connection_error == 'raise':
                 #Throw an error right away - handle it elsewhere
                 raise
@@ -1026,18 +1070,17 @@ class ClientDelegator:
                         time.sleep(1)
             else:
                 assert False, 'Invalid self.on_connection_error value: '+str(self.on_connection_error)
-
-        finally:
-            client._busy_count-=1
-
-            #TODO: Figure out why this below assertion sometimes triggers. Makes no sense to me. For now I'll ignore it and just make a warning.
-            #assert client._busy_count>=0
-            if client._busy_count<0:
-                rp.fansi_print("rp.web_evaluator.ClientDelegator.evaluate: client._busy_count<0 - this shouldn't be possible. Setting it to 0. Todo: Investigate this.", 'red', 'bold')
-                client.busy_count=0
-
-            self._update()
         
+    def evaluate_all(self, code, **vars):
+        """
+        Submits a job to be executed on all registered clients simultaneously.
+        """
+        def evaluate_on_client(client):
+            return self._evaluate_client(client, code, dict(abandon_on_unregister=True), **vars)
+        
+        output = rp.par_map(evaluate_on_client, self._clients, num_threads=len(self._clients))
+        return [x for x in output if x is not None]
+
 class ClientRoster:
     """
     The ClientRoster class manages a roster of clients for the ClientDelegator.
@@ -1180,8 +1223,8 @@ def run_delegation_server(server_port=None,
                           *,
                           delegator=None,
                           roster=None,
-                          refresh_interval = 5
-                          ):
+                          refresh_interval = 5,
+                          new_thread=False):
 
     """
     Starts a delegation server that manages a pool of web_evaluator servers for distributed computation.
@@ -1209,8 +1252,8 @@ def run_delegation_server(server_port=None,
     """
 
     #If not specified, create the default versions
-    if roster    is None: roster    = ClientRoster()
-    if delegator is None: delegator = ClientDelegator()
+    if roster      is None: roster      = ClientRoster()
+    if delegator   is None: delegator   = ClientDelegator()
     if server_port is None: server_port = DEFAULT_DELEGATION_SERVER_PORT
 
     if rp.get_port_is_taken(server_port):
@@ -1244,7 +1287,7 @@ def run_delegation_server(server_port=None,
             delegator = delegator,
         )
                 
-        run_server(server_port, scope=scope, sync=False)
+        run_server(server_port, scope=scope, sync=False, new_thread=new_thread)
 
     finally:
         #Exiting the server - kill loose threads
@@ -1268,6 +1311,34 @@ class DelegationClient(Client):
     TODO: Make this more efficient - see run_delegation_server's TODO. As a blackbox, the signatures can stay the same
     """
     DEFAULT_PORT = DEFAULT_DELEGATION_SERVER_PORT
+    
+    def local_client(self, **kwargs):
+        """
+        Returns a Client object to control the delegation server process itself.
+        
+        Args:
+            **kwargs: Additional arguments to override (e.g., sync, timeout)
+        
+        Returns:
+            Client: A Client object connected to the delegation server for direct control
+        """
+        return Client.from_client(self, **kwargs)
+
+    @property
+    def roster(self):
+        result = self.local_client().evaluate('roster')
+        if result.errored:
+            raise result.error
+        return result.value
+
+    @property
+    def delegator(self):
+        """ If you think evaluate_all is going to be slow because of bandwidth, condider self.delegator.evaluate_all """
+        result = self.local_client().evaluate('delegator')
+        if result.errored:
+            raise result.error
+        return result.value
+
     def evaluate(self, code, **vars):
         vars_string = ", ".join(x+'='+x for x in vars)
 
@@ -1291,6 +1362,39 @@ class DelegationClient(Client):
 
         return result
 
+    def evaluate_all(self, code, **vars):
+        """
+        Submits a job to be executed on all workers simultaneously via the delegation server.
+        
+        Args:
+            code (str): The Python code to execute on all workers.
+            **vars: Additional variables to pass to all workers.
+
+        Returns:
+            list[Evaluation]: Results from each worker in order.
+        """
+        vars_string = ", ".join(x+'='+x for x in vars)
+
+        delegation_code = rp.unindent(
+            """
+            %private_scope
+            %return result
+            import rp.web_evaluator as we
+            if 'delegator' not in dir():
+                raise we.NotADelegationServerError
+            result = delegator.evaluate_all(CODE, VARS)
+            """
+        ).replace('CODE', repr(code)).replace('VARS', vars_string)
+
+        result = super().evaluate(delegation_code, **vars)
+
+        if not result.errored:
+            result = result.value
+        else:
+            rp.fansi_print("Delegatee Error: "+str(result.error),'red','bold')
+
+        return result
+
 def interactive_mode():
     if rp.input_yes_no("Is this the server? No means this is the client."):
         print("Running the server.")
@@ -1305,6 +1409,141 @@ def interactive_mode():
                 rp.pretty_print(client.evaluate(input(" >>> ")).to_dict())
             except Exception:
                 rp.print_stack_trace()
+
+def launch_tmux_delegation_cluster(num_delegatees:int, *, session_name=None, 
+                               base_port=None, 
+                               python_executable=None,
+                               command_before=None,
+                               attach=False,
+                               roster=None,
+                               delegator_port=None,
+                               ip_address=None,
+                               if_exists='error'):
+    """
+    Starts a tmux session with a cluster of web_evaluator servers for distributed computation.
+
+    Usage notes:
+        To make debugging easier, each server comes with a rp.pterm() repl - so you can debug on the fly
+        This includes the delegator. So, if you want to test all clients for instance, you can run
+            delegator.evaluate_all("print(123)")
+        in the delegator window. 
+
+        The worker servers are all in the same window - so you can also run commands in all of them with
+            tmux setw synchronize-panes
+    
+    Args:
+        num_delegatees (int): Number of server instances to start
+        session_name (str, optional): Name for the tmux session. If None, generates unique name.
+        base_port (int, optional): Starting port number. Defaults to DEFAULT_SERVER_PORT.
+        python_executable (str, optional): Python executable to use. Defaults to sys.executable.
+        command_before (str/list, optional): Commands to run before starting servers (e.g., conda activate).
+        attach (bool, optional): Whether to attach to tmux session. Defaults to False.
+        roster (None/False/ClientRoster/str, optional): Roster handling:
+            - None: Use default roster
+            - False: Don't register clients to any roster  
+            - ClientRoster: Use this roster
+            - str: Evaluate string to get roster
+        delegator_port (int/None/False, optional): Port for delegation server:
+            - None: Auto-choose next available port from DEFAULT_DELEGATION_SERVER_PORT (default)
+            - False: Don't start delegation server
+            - int: Use exactly this port
+        ip_address (str, optional): IP address for clients. Defaults to local IP address.
+        if_exists (str, optional): What to do if session_name is a string, but already exists:
+            - 'error': Raise error if session exists (default)
+            - 'replace': Kill existing session and create new one
+            - 'unique': Create unique session name if name exists
+    
+    Returns:
+        EasyDict: cluster info with 'session_name', 'clients', and optionally 'delegator'
+    
+    Example:
+        >>> cluster = launch_tmux_delegation_cluster(4, session_name="my_cluster")
+        >>> delegator = ClientDelegator(cluster['clients'])
+        >>> delegator.evaluate_all("print('Hello World!')")
+
+    Notes:
+        To make debugging easier, in the sess
+    """
+    if session_name is None:
+        session_name = rp.tmux_get_unique_session_name(DEFAULT_CLUSTER_SESSION_NAME)
+    if base_port is None:
+        base_port = DEFAULT_SERVER_PORT
+    if python_executable is None:
+        python_executable = sys.executable
+    if ip_address is None:
+        ip_address = rp.get_my_local_ip_address()
+    
+    # Handle session name conflicts
+    if rp.tmux_session_exists(session_name):
+        if if_exists == 'error':
+            raise ValueError(f"Tmux session '{session_name}' already exists. Use if_exists='replace' or 'unique'.")
+        elif if_exists == 'replace':
+            rp.tmux_kill_session(session_name)
+            rp.fansi_print(f"Killed existing session '{session_name}'", 'yellow')
+        elif if_exists == 'unique':
+            original_name = session_name
+            session_name = rp.tmux_get_unique_session_name(session_name)
+            rp.fansi_print(f"Session '{original_name}' exists, using '{session_name}' instead", 'yellow')
+        else:
+            raise ValueError(f"Invalid if_exists: {if_exists}. Must be 'error', 'replace', or 'unique'.")
+    
+    # Handle roster parameter
+    if roster is None:
+        roster = ClientRoster()
+    elif roster is False:
+        pass  # Don't register to any roster
+    elif isinstance(roster, ClientRoster):
+        pass  # Use provided roster
+    elif isinstance(roster, str):
+        roster = eval(roster)
+    else:
+        raise ValueError(f"Invalid roster type: {type(roster)}. Must be None, False, ClientRoster, or str.")
+    
+    # Generate ports for each server
+    ports = []
+    for i in range(num_delegatees):
+        port = rp.get_next_free_port(base_port, n=i)
+        if port != base_port + i:
+            rp.fansi_print(f"Warning: Port {base_port + i} taken, using {port}", 'yellow')
+        ports.append(port)
+    
+    # Create windows: servers in first window, delegation server in second if requested
+    # server_commands = [f'{shlex.quote(python_executable)} -m rp.web_evaluator server -p {port}' for port in ports]
+    server_commands = [f'''{shlex.quote(python_executable)} -c "import rp, rp.web_evaluator as we ; we.run_server({port}, new_thread=True) ; rp.pterm(globals(), level_title='Port={port}')"''' for port in ports]
+    windows = {"servers": server_commands}
+    
+    if delegator_port is not False:
+        if delegator_port is None:
+            delegator_port = rp.get_next_free_port(DEFAULT_DELEGATION_SERVER_PORT)
+        elif isinstance(delegator_port, int):
+            if rp.get_port_is_taken(delegator_port):
+                raise ValueError(f"Delegator port {delegator_port} is already taken")
+        else:
+            raise ValueError(f"Invalid delegator_port: {delegator_port}. Must be None, False, or int.")
+        
+        delegation_cmd = f'''{shlex.quote(python_executable)} -c "import rp, rp.web_evaluator; rp.globalize_locals(rp.web_evaluator.run_delegation_server)({delegator_port}, new_thread=True) ; rp.pterm(globals(), level_title='Delegator Port={port}')"'''
+        windows["delegator"] = delegation_cmd
+    
+    yaml_config = rp.tmuxp_create_session_yaml(
+        windows, session_name=session_name, command_before=command_before
+    )
+    rp.tmuxp_launch_session_from_yaml(yaml_config, attach=attach)
+    
+    # Create and register clients
+    clients = [Client(ip_address, port) for port in ports]
+    
+    if roster is not False:
+        for client in clients:
+            roster.register(client.server_port, client.server_name, sync=client.sync)
+    
+    cluster_info = {'session_name': session_name, 'clients': clients}
+    if delegator_port is not False:
+        cluster_info['delegator'] = DelegationClient(ip_address, delegator_port)
+    
+    rp.fansi_print(f"Started cluster '{session_name}' with {len(ports)} servers", 'green', 'bold')
+    return rp.as_easydict(cluster_info)
+
+
 
 if __name__ == '__main__':
     try:

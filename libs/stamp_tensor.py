@@ -198,6 +198,29 @@ def _get_proportional_offset(shape, proportions):
     
     return [-(proportion * (size - 1)) for proportion, size in zip(proportions, shape)]
 
+def _parse_tensor_shape_form(form:str):
+    """
+    'BCHW' -> ['B', 'C', 'H', 'W']
+    'B' -> ['B']
+    'B C H W' -> ['B', 'C', 'H', 'W']
+    'B VC VH VW' -> ['B', 'VC', 'VH', 'VW']
+    """
+    dims = form.split()
+    if len(dims)==1:
+        dims=dims[0].split()
+    return dims
+
+class _StampModes:
+    def add     (x,y): return x + y
+    def replace (x,y): return y
+    def subtract(x,y): return x - y
+    def multiply(x,y): return x * y
+    def divide  (x,y): return x / y
+    def max     (x,y): return rp.r._maximum(x, y)
+    def min     (x,y): return rp.r._minimum(x, y)
+    def mean    (x,y): return (x + y) / 2
+
+stamp_modes = {name : func for name, func in _StampModes.__dict__.items() if not name.startswith('_')}
 
 def stamp_tensor(canvas, sprite, offset=None, *, mutate=False, mode='add', sprite_origin=None, canvas_origin=None, interp='nearest', wrap=False):
     """
@@ -209,8 +232,8 @@ def stamp_tensor(canvas, sprite, offset=None, *, mutate=False, mode='add', sprit
         offset: Position to place the sprite. If None, defaults to origin. Can be shorter than ndim - will be padded with 0s
         mutate: If False, copy canvas before modifying. If True, modify in place.
         mode: How to combine sprite with canvas ('add' or callable)
-        sprite_origin: Proportional coordinates within sprite or named origin ('top left', 'center', etc.). Can be shorter than ndim - will be padded with 0s
-        canvas_origin: Proportional coordinates within canvas or named origin ('top left', 'center', etc.). Can be shorter than ndim - will be padded with 0s
+        sprite_origin: Proportional coordinates within sprite ([0,0], [.5,.5], etc.) or named origin ('top left', 'center', etc.). Can be shorter than ndim - will be padded with 0s
+        canvas_origin: Proportional coordinates within canvas ([0,0], [.5,.5], etc.) or named origin ('top left', 'center', etc.). Can be shorter than ndim - will be padded with 0s
         interp: Interpolation method ('nearest' or 'bilinear')
         wrap: Enable wrapping. True/False for all dims, or list of bools per dimension
                      
@@ -228,7 +251,8 @@ def stamp_tensor(canvas, sprite, offset=None, *, mutate=False, mode='add', sprit
     Works with both numpy arrays and torch tensors (or any array-like with shape attribute
     and standard indexing/arithmetic operations).
     """
-    assert canvas.ndim == sprite.ndim, "Canvas and sprite must have same number of dimensions"
+    if not canvas.ndim == sprite.ndim:
+        raise ValueError("Canvas and sprite must have same number of dimensions but canvas.shape=={0} and sprite.shape=={1}".format(canvas.shape, sprite.shape))
     
     # Default offset to origin if None
     if offset is None:
@@ -267,9 +291,9 @@ def stamp_tensor(canvas, sprite, offset=None, *, mutate=False, mode='add', sprit
     canvas_offset = _get_proportional_offset(canvas.shape, canvas_origin)
     adjusted_offset = [offset[i] + sprite_offset[i] - canvas_offset[i] for i in range(len(offset))]
     
-    # Convert 'add' to lambda function once
-    if mode == 'add':
-        mode = lambda x, y: x + y
+    # Convert 'add', 'replace' etc to lambda function once
+    if mode in stamp_modes:
+        mode = stamp_modes[mode]
     
     if any(wrap):
         return _stamp_with_wrapping(canvas, sprite, adjusted_offset, mode, wrap, interp)
@@ -281,7 +305,6 @@ def stamp_tensor(canvas, sprite, offset=None, *, mutate=False, mode='add', sprit
             # Nearest applies mode directly to canvas regions
             _stamp_nearest(canvas, sprite, adjusted_offset, mode)
         return canvas
-
 
 def test_stamp_tensor():
     import numpy as np
@@ -615,8 +638,6 @@ def test_stamp_tensor():
     
     print("All tests passed!")
 
-
-
 def demo_stamp_tensor():
     import rp
 
@@ -649,8 +670,90 @@ def demo_stamp_tensor():
             )
         )
 
+def crop_tensor(tensor, crop_shape, origin=None, *, crop_offset=None, tensor_offset=None, tensor_origin=None, crop_origin=None, interp='nearest', wrap=False):
+    """
+    Crop a tensor to the specified shape using stamp_tensor's flexible origin system.
+    
+    Args:
+        tensor: Source tensor to crop from
+        crop_shape: Shape of the output cropped tensor
+        origin: Convenience parameter to set both tensor_origin and crop_origin to the same value
+        crop_offset: Position in source tensor to start cropping from. If None, defaults to [0, 0, ...]
+        tensor_offset: Position in crop output to place the tensor. If None, defaults to [0, 0, ...]
+        tensor_origin: Origin point in the source tensor ('top left', 'center', [0.5, 0.5], etc.)
+        crop_origin: Origin point in the crop output ('top left', 'center', [0.5, 0.5], etc.)
+        interp: Interpolation method ('nearest' or 'bilinear')
+        wrap: Enable wrapping behavior (True/False or list of bools per dimension)
+        
+    Returns:
+        Cropped tensor of shape crop_shape
+        
+    This leverages stamp_tensor's origin system for maximum flexibility. Two independent operations:
+    1. crop_offset slides the crop window within the source tensor (what to crop)
+    2. tensor_offset slides the source tensor within the crop output (where to place it)
+    
+    Note: If origin is specified, both tensor_origin and crop_origin will be set to it.
+          Don't specify both origin and tensor_origin/crop_origin simultaneously.
+    
+    Examples:
+        >>> import numpy as np
+        ... arr = np.ones((2, 3))
+        ... print(crop_tensor(arr, (4, 5)))  # Pad: ones in top-left 2x3, zeros elsewhere
+        ... print(crop_tensor(arr, (1, 2)))  # Crop: extract top-left 1x2 region
+        [[1. 1. 1. 0. 0.]
+         [1. 1. 1. 0. 0.]
+         [0. 0. 0. 0. 0.]
+         [0. 0. 0. 0. 0.]]
+        [[1. 1.]]
+        
+        >>> # Advanced: crop from center of large image, place at offset in output
+        ... large_img = np.arange(100).reshape(10, 10)
+        ... cropped = crop_tensor(large_img, (5, 5), crop_offset=[3, 3], tensor_offset=[1, 1])
+        [[22 23 24 25 26]
+         [32 33 34 35 36]
+         [42 43 44 45 46]
+         [52 53 54 55 56]
+         [62 63 64 65 66]]
+    """
+    import rp
+
+    # Handle origin convenience parameter
+    if origin is not None:
+        if tensor_origin is not None or crop_origin is not None:
+            raise ValueError("Don't specify both 'origin' and 'tensor_origin'/'crop_origin' simultaneously")
+        tensor_origin = origin
+        crop_origin = origin
+
+    if len(crop_shape) < tensor.ndim:
+        #In future version of stamp_tensor with broadcasting, this might not be needed
+        crop_shape = tuple(crop_shape) + tuple(tensor.shape[len(crop_shape):])
+    
+    # Create output tensor filled with zeros
+    output = rp.r._zeros_like(tensor, shape=crop_shape)
+    
+    # The key insight: we stamp the source tensor onto the crop-sized output
+    if crop_offset   is None: crop_offset   = []
+    if tensor_offset is None: tensor_offset = []
+    
+    # Pad both to same length as tensor.ndim before subtracting
+    offset_len = max(map(len, [crop_offset, tensor_offset]))
+    crop_offset   = list(crop_offset  ) + [0] * (offset_len - len(crop_offset  ))
+    tensor_offset = list(tensor_offset) + [0] * (offset_len - len(tensor_offset))
+    
+    final_offset = [t - c for t, c in zip(tensor_offset, crop_offset)]
+    
+    return stamp_tensor(
+        output, 
+        tensor, 
+        final_offset, 
+        mutate=True, 
+        mode='replace',               # Replace mode - sprite overwrites canvas
+        sprite_origin=tensor_origin,  # Where in the source tensor to anchor
+        canvas_origin=crop_origin,    # Where in the crop output to place that anchor
+        interp=interp,                # Interpolation method
+        wrap=wrap                     # Wrapping behavior
+    )
 
 if __name__ == "__main__":
     test_stamp_tensor()
-
 

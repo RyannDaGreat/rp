@@ -55,7 +55,12 @@ import copy
 copy.copy.__dict__.update(copy.__dict__)
 copy = copy.copy
 
-from rp.libs.stamp_tensor import stamp_tensor
+try:
+    from rp.libs.stamp_tensor import stamp_tensor, crop_tensor
+except ImportError:
+    #Delete this post-july 2025
+    print("TODO: Update your rp. Couldnt import stamp_tensor and crop_tensor")
+
 
 _original_pwd = os.getcwd()
 
@@ -16451,7 +16456,7 @@ def _print_status(x):
 
     _print_status_prev_len = len(x)
 
-def _eta(total_n,*,min_interval=.3,title="r.eta"):
+def _eta(total_n,*,min_interval,title):
     """
     Example:
         >>> a = eta(2000,title='test')
@@ -16543,7 +16548,7 @@ class eta:
         ...     sleep(.1)
     """
 
-    def __init__(self, x, title='r.eta', min_interval=.3, length=None):
+    def __init__(self, x, title='r.eta', min_interval=.05, length=None):
         assert isinstance(x, int) or hasattr(x, '__len__') or length is not None
 
         if length is not None:
@@ -17610,6 +17615,14 @@ def _delete_pyin_settings_file():
 
 def _set_session_title(title=None):
     pyin=_globa_pyin[0]
+    if pyin is None:
+        #So we can do: rp exec "pterm(level_title='cheese')"
+        @run_as_new_thread
+        def do_when_ready():
+            while _globa_pyin[0] is None:
+                sleep(.1)
+            _set_session_title(title)
+        return
     if title is None:
         if hasattr(pyin,'session_title'):
             current_title=pyin.session_title
@@ -22550,11 +22563,11 @@ def pseudo_terminal(
                             # fansi_print(user_message,"yellow")
                             print(fansi_syntax_highlighting(user_message))
                         elif user_message.startswith("RANT ") or user_message.startswith("RANT\n"):
-                            user_message="run_as_new_thread(exec,"+repr(user_message[5:].strip())+",globals(),locals())"
+                            user_message="__import__('rp').run_as_new_thread(exec,"+repr(user_message[5:].strip())+",globals(),locals())"
                         elif user_message=='RANT':
-                            user_message="run_as_new_thread(exec,"+repr(get_ans())+",globals(),locals());"
+                            user_message="__import__('rp').run_as_new_thread(exec,"+repr(get_ans())+",globals(),locals());"
                         elif user_message.startswith("RANP "):
-                            user_message="run_as_new_process(exec,"+repr(user_message[5:].strip())+",globals(),locals())"
+                            user_message="__import__('rp').run_as_new_process(exec,"+repr(user_message[5:].strip())+",globals(),locals())"
                         elif user_message=='VPASTE':
                             fansi_print("VPASTE --> Vim Paste","blue",'bold')
                             tmux_clipboard=vim_paste()
@@ -25772,6 +25785,57 @@ def cv_manually_selected_contour(contours,image=None):
         #Check to see if we're done
         if done:
             return selected_contour
+
+def cv_distance_transform(mask, distance_to='white', metric='l2', algorithm='precise', ):
+    """
+    Compute distance transform using OpenCV.
+    
+    Args:
+        mask: 2D boolean array
+        distance_to: What are we returning distances to? Options:
+            - 'white': Regions where mask==True
+            - 'black': Regions where mask==False
+        metric: Distance metric. Options:
+            - 'l1': Manhattan distance (cv2.DIST_L1)
+            - 'l2': Euclidean distance (cv2.DIST_L2) 
+            - 'c': Chessboard distance (cv2.DIST_C)
+        algorithm: Algorithm precision. Options:
+            - 'precise': Exact Euclidean (Felzenszwalb algorithm, slowest)
+            - '3': Fast 3x3 mask (Borgefors algorithm)
+            - '5': Better 5x5 mask with knight's moves
+    """
+    pip_import('cv2')
+
+    import cv2
+    
+    mask=as_grayscale_image(mask)
+    mask=as_byte_image(as_binary_image(mask))
+
+    #Are we retuning the distance to white areas or black areas?
+    if distance_to=='white':
+        mask = inverted_image(mask)
+    elif distance_to=='black':
+        pass
+    else:
+        raise ValueError('cv_distance_transform: distance_to should be either "white" or "black" but got %s'%distance_to)
+
+    metric_map = {
+        'l1': cv2.DIST_L1,
+        'l2': cv2.DIST_L2, 
+        'c': cv2.DIST_C
+    }
+    
+    mask_map = {
+        '3': cv2.DIST_MASK_3,
+        '5': cv2.DIST_MASK_5,
+        'precise': cv2.DIST_MASK_PRECISE
+    }
+    
+    distances = cv2.distanceTransform(mask, metric_map[metric], mask_map[algorithm])
+    
+    assert distances.shape==mask.shape
+    return distances
+
 
 def cosine_similarity(x,y):
     return np.sum(normalized(x)*normalized(y).conj())
@@ -32062,7 +32126,7 @@ def download_youtube_video(url_or_id: str,
         preferred_resolution=resolution_preference(resolutions) #Choosing the best resoltion
         best_resolution=str(max(resolutions))+'p' # Like "720p"
         #
-        ys = ys.filter(resolution=best_resolution).get_highest_resolution()
+        ys = ys.filter(resolution=best_resolution).get_highest_resolution(progressive=False)
         print(ys)
     else:
         ys = yt.streams.filter(mime_type='audio/'+filetype).get_audio_only()
@@ -38762,17 +38826,29 @@ def get_port_is_taken(port: int) -> bool:
             return False
 
 
-def get_next_free_port(port):
+def get_next_free_port(port,n=0):
     """
     Find the next free port starting from a given port.
     For example, if port=8080 and port 8080 is taken, it tries port 8081.
     And if that's taken, tries port 8082 until it finds some free, unused port.
+    
+    Args:
+        port (int): Starting port number to check
+        n (int): Number of additional free ports to skip (default: 0)
+                If n=1, returns the second free port found
+                If n=2, returns the third free port found, etc.
     """
+    
+    if n:
+        for _ in range(n):
+            port=get_next_free_port(port)
+            port+=1
 
     assert isinstance(port, int)
     while get_port_is_taken(port):
         port+=1
     return port
+
 
 _get_all_taken_ports_cache = None
 
@@ -39093,19 +39169,14 @@ def tmux_close_other_windows():
 def tmux_close_other_sessions():
     """Closes all tmux sessions except the current one."""
     current_session = tmux_get_current_session_name()
-    all_sessions = _get_all_tmux_sessions()
+    all_sessions = tmux_get_all_session_names()
     sessions_to_close = [s for s in all_sessions if s != current_session]
 
     # Close each session
     for session in sessions_to_close:
-        _run_tmux_command(['tmux', 'kill-session', '-t', session])
+        tmux_kill_session(session)
 
 tmux_kill_other_sessions = tmux_close_other_sessions
-
-def _get_all_tmux_sessions():
-    """Returns a list of all session names in tmux."""
-    sessions = _run_tmux_command(['tmux', 'list-sessions', '-F', '#{session_name}']).split()
-    return list(sessions)
 
 def tmux_detach_other_clients():
     """Detaches all other clients from the current tmux session."""
@@ -42976,6 +43047,8 @@ def _create_array_like(x, *, func_name, shape=None, dtype=None):
             return th.ones(target_shape, dtype=target_dtype, device=device)
         elif func_name == 'randn':
             return th.randn(target_shape, dtype=target_dtype, device=device)
+        elif func_name == 'rand':
+            return th.rand(target_shape, dtype=target_dtype, device=device)
     elif is_numpy_array(x):  # NumPy array
         import numpy as np
         if func_name == 'zeros':
@@ -42984,6 +43057,8 @@ def _create_array_like(x, *, func_name, shape=None, dtype=None):
             return np.ones(target_shape, dtype=target_dtype)
         elif func_name == 'randn':
             return np.random.randn(*target_shape).astype(target_dtype)
+        elif func_name == 'rand':
+            return np.random.rand(*target_shape).astype(target_dtype)
     else:
         assert False, type(x)
             
@@ -43003,49 +43078,109 @@ def _randn_like(x, *, shape=None, dtype=None):
     """Works across libraries - such as numpy, torch"""
     return _create_array_like(x, func_name='randn', shape=shape, dtype=dtype)
 
-def crop_tensor(tensor, new_shape):
-    """
-    Crop or pad tensor to new shape, preserving original data where dimensions overlap.
-    
-    Creates a new tensor/array with the requested shape and copies data from
-    the original tensor where dimensions overlap. Works with both NumPy arrays
-    and PyTorch tensors. Can make tensors larger (padding with zeros) or smaller (cropping).
-    
-    Args:
-        tensor: Input tensor (PyTorch) or array (NumPy)
-        new_shape: Target shape as tuple of dimensions
-        
-    Returns:
-        New tensor/array with requested shape containing original data
-        where dimensions overlap
+def _rand_like(x, *, shape=None, dtype=None):
+    """Works across libraries - such as numpy, torch"""
+    return _create_array_like(x, func_name='rand', shape=shape, dtype=dtype)
 
-    Examples:
-        >>> import numpy as np
-        ... arr = np.ones((2, 3))
-        ... print(crop_tensor(arr, (4, 5)))  # returns array of shape (4, 5) with ones in top-left 2x3 area
-        ... print(crop_tensor(arr, (1, 2)))  # returns array of shape (1, 2) with data cropped from original
-        [[1. 1. 1. 0. 0.]
-         [1. 1. 1. 0. 0.]
-         [0. 0. 0. 0. 0.]
-         [0. 0. 0. 0. 0.]]
-        [[1. 1.]]
-        
-        >>> import torch
-        ... t = torch.ones((2, 3))
-        ... print(crop_tensor(t, (4, 5)))  # returns tensor of shape (4, 5) with ones in top-left 2x3 area
-        ... print(crop_tensor(t, (1, 2))  # returns tensor of shape (1, 2) with data cropped from original
-        tensor([[1., 1., 1., 0., 0.],
-                [1., 1., 1., 0., 0.],
-                [0., 0., 0., 0., 0.],
-                [0., 0., 0., 0., 0.]])
-        tensor([[1., 1.]])
+def _maximum(x, y):
+    """ works across libraries - such as numpy, torch """
+    if is_numpy_array (x):return np.maximum(x, y)
+    if is_torch_tensor(x):return __import__('torch').maximum(x, y)
+    raise ValueError("type not supported: "+str(type(x)))
 
-    """
-    old_shape = tensor.shape
-    new_tensor = _zeros_like(tensor, shape=new_shape)
-    slices = tuple(slice(0, min(o, n)) for o, n in zip(old_shape, new_shape))
-    new_tensor[slices] = tensor[slices]
-    return new_tensor
+def _minimum(x, y):
+    """ works across libraries - such as numpy, torch """
+    if is_numpy_array (x):return np.minimum(x, y)
+    if is_torch_tensor(x):return __import__('torch').minimum(x, y)
+    raise ValueError("type not supported: "+str(type(x)))
+
+def _max(x, dim=None, keepdim=False):
+    """ works across libraries - such as numpy, torch """
+    if is_numpy_array (x):return np.max(x, axis=dim, keepdims=keepdim)
+    if is_torch_tensor(x):
+        if dim is None:return __import__('torch').max(x)
+        result = __import__('torch').max(x, dim=dim, keepdim=keepdim)
+        return result.values if hasattr(result, 'values') else result
+    if dim is None:return max(x) if hasattr(x, '__iter__') else x
+    raise ValueError("type not supported: "+str(type(x)))
+
+def _min(x, dim=None, keepdim=False):
+    """ works across libraries - such as numpy, torch """
+    if is_numpy_array (x):return np.min(x, axis=dim, keepdims=keepdim)
+    if is_torch_tensor(x):
+        if dim is None:return __import__('torch').min(x)
+        result = __import__('torch').min(x, dim=dim, keepdim=keepdim)
+        return result.values if hasattr(result, 'values') else result
+    if dim is None:return min(x) if hasattr(x, '__iter__') else x
+    raise ValueError("type not supported: "+str(type(x)))
+
+def _sum(x, dim=None, keepdim=False):
+    """ works across libraries - such as numpy, torch """
+    if is_numpy_array (x):return np.sum(x, axis=dim, keepdims=keepdim)
+    if is_torch_tensor(x):return __import__('torch').sum(x, dim=dim, keepdim=keepdim)
+    if dim is None:return sum(x) if hasattr(x, '__iter__') else x
+    raise ValueError("type not supported: "+str(type(x)))
+
+def _mean(x, dim=None, keepdim=False):
+    """ works across libraries - such as numpy, torch """
+    if is_numpy_array (x):return np.mean(x, axis=dim, keepdims=keepdim)
+    if is_torch_tensor(x):return __import__('torch').mean(x, dim=dim, keepdim=keepdim)
+    raise ValueError("type not supported: "+str(type(x)))
+
+#NOT Doing std, np and torch behave differently (one has N-1 correction [torch], the other doesn'ti [numpy])
+# def _std(x, dim=None, keepdim=False):
+#     """ works across libraries - such as numpy, torch, pure python """
+#     if is_numpy_array (x):return np.std(x, axis=dim, keepdims=keepdim)
+#     if is_torch_tensor(x):return __import__('torch').std(x, dim=dim, keepdim=keepdim)
+#     if dim is None:
+#         import statistics
+#         return statistics.stdev(x) if hasattr(x, '__iter__') and len(x) > 1 else 0
+#     raise ValueError("dim parameter not supported for Python scalars")
+
+
+# def crop_tensor(tensor, new_shape):
+#     """
+#     Crop or pad tensor to new shape, preserving original data where dimensions overlap.
+#
+#     Creates a new tensor/array with the requested shape and copies data from
+#     the original tensor where dimensions overlap. Works with both NumPy arrays
+#     and PyTorch tensors. Can make tensors larger (padding with zeros) or smaller (cropping).
+#
+#     Args:
+#         tensor: Input tensor (PyTorch) or array (NumPy)
+#         new_shape: Target shape as tuple of dimensions
+#
+#     Returns:
+#         New tensor/array with requested shape containing original data
+#         where dimensions overlap
+#
+#     Examples:
+#         >>> import numpy as np
+#         ... arr = np.ones((2, 3))
+#         ... print(crop_tensor(arr, (4, 5)))  # returns array of shape (4, 5) with ones in top-left 2x3 area
+#         ... print(crop_tensor(arr, (1, 2)))  # returns array of shape (1, 2) with data cropped from original
+#         [[1. 1. 1. 0. 0.]
+#          [1. 1. 1. 0. 0.]
+#          [0. 0. 0. 0. 0.]
+#          [0. 0. 0. 0. 0.]]
+#         [[1. 1.]]
+#
+#         >>> import torch
+#         ... t = torch.ones((2, 3))
+#         ... print(crop_tensor(t, (4, 5)))  # returns tensor of shape (4, 5) with ones in top-left 2x3 area
+#         ... print(crop_tensor(t, (1, 2))  # returns tensor of shape (1, 2) with data cropped from original
+#         tensor([[1., 1., 1., 0., 0.],
+#                 [1., 1., 1., 0., 0.],
+#                 [0., 0., 0., 0., 0.],
+#                 [0., 0., 0., 0., 0.]])
+#         tensor([[1., 1.]])
+#
+#     """
+#     old_shape = tensor.shape
+#     new_tensor = _zeros_like(tensor, shape=new_shape)
+#     slices = tuple(slice(0, min(o, n)) for o, n in zip(old_shape, new_shape))
+#     new_tensor[slices] = tensor[slices]
+#     return new_tensor
 
 
 def get_bilinear_weights(x, y):
