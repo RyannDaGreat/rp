@@ -98,12 +98,13 @@
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/pygments/lexers
 /Users/Ryan/.vim/bundle
 /Users/Ryan/Desktop/CleanCode/Sandbox
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Volumes/CIRCUITPY
 /Users/Ryan/Desktop/lW/generated
 /Users/Ryan/Desktop/lW
-/Users/Ryan
 /Users/Ryan/PycharmProjects/QuickPython/rp/libs
 /Users/Ryan/PycharmProjects/QuickPython
+/Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/peepdis
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
