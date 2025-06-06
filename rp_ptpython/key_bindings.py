@@ -71,8 +71,11 @@ def handle_run_cell(event):
     buffer=event.cli.current_buffer
     def main():
         text=buffer.document.text
+        shell_mode=text.startswith('!')
         cursor_pos=buffer.cursor_position
         cell_code=get_cell_code(text,cursor_pos,cell_boundary_prefix)
+        if shell_mode and not cell_code.startswith('!'):
+            cell_code='!'+cell_code
         from rp import fansi_print
         # fansi_print("RUNNING CODE CELL:",'blue','bold')
         # fansi_print(cell_code,'blue')
@@ -1294,6 +1297,32 @@ def handle_character(buffer,char,event=None):
         meta_pressed(clear=True)
         return True
 
+    if char=='`' and meta_pressed(clear=False):
+        #Toggle shell mode! Couldn't do alt+1 that's taken, so ` is nearby...
+
+        #Too fancy lol adding new lines etc...
+        # if text.startswith('!'):
+        #     text = text[1:]
+        #     lines = text.splitlines()
+        #     if not lines[0].strip():
+        #         del lines[0]
+        # else:
+        #     lines = text.splitlines()
+        #     if not lines[0].strip():
+        #         lines[0]='!'+lines[0]
+        #     else:
+        #         lines=['!']+lines
+        # text='\n'.join(lines)
+
+        if text.startswith('!'):
+            text=text[1:]
+        else:
+            text='!'+text
+
+        replace_buffer_text(buffer,text)
+        meta_pressed(clear=True)
+        return True
+
     if char=='\n' and before_line.lstrip().startswith('except ') and before_line.endswith(' as ') and after_line==':':
         #except Exception as |:      < \n >      ---->    except Exception:\n    |
         buffer.delete_before_cursor(len(' as '))
@@ -1919,6 +1948,11 @@ def handle_character(buffer,char,event=None):
             #Insert a new line if we end with ';' to make life easier
             #on '\n': `single_line_stuff();|`  --->  `single_line_stuff()\n|`
             buffer.delete_before_cursor()
+            buffer.insert_text('\n')
+            return True
+        if char=='\n' and not before and after.startswith('!'):
+            #Insert a new line if we're using shell commands 
+            buffer.cursor_right()
             buffer.insert_text('\n')
             return True
         if (char!='=' and re.fullmatch(r'.*\=',before_line) and not re.fullmatch(r'.*\=\=',before_line) and starts_with_any(after_line,']') and not (len(after_line.strip())==2 and after_line.strip()[1]==':')) and not endswithany(before_line,'==','1=','!='):
@@ -3843,16 +3877,20 @@ def load_python_bindings(python_input):
         " Pasting from clipboard. "
         data = event.data
 
+        buffer=event.cli.current_buffer
+        document=buffer.document
+        before=document.text_before_cursor
+        after= document.text_after_cursor
+
         # Be sure to use \n as line ending.
         # Some terminals (Like iTerm2) seem to paste \r\n line endings in a
         # bracketed paste. See: https://github.com/ipython/ipython/issues/9737
         data = data.replace('\r\n', '\n')
         data = data.replace('\r', '\n')
 
-        buffer=event.cli.current_buffer
-        document=buffer.document
-        before=document.text_before_cursor
-        after= document.text_after_cursor
+        if not buffer.document.text and data.startswith('\n') and not data.startswith('\n\n'):
+            #When we copy a line from rp with contol+c and paste this way don't insert newline above do it below instead
+            data=data[1:]
 
         import rp
         if not data.startswith(' ') and data.split():
