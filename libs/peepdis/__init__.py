@@ -1,3 +1,3 @@
-from peepdis.legacy import peep
+from .legacy import peep
 
 name = "peep-dis"
