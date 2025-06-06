@@ -68,7 +68,6 @@
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/parso
 /Users/Ryan/PycharmProjects/QuickPython/rp/libs/pyflann
 /Users/Ryan/PycharmProjects/QuickPython/rp/libs/parso
-/Users/Ryan/PycharmProjects/QuickPython/rp/libs
 /Users/Ryan/Documents
 /Users/Ryan/Documents/Adobe Scripts
 /Users
@@ -92,7 +91,6 @@
 /Users/Ryan/PycharmProjects
 /Users/Ryan/PycharmProjects/QuickPython/rp
 /Users/Ryan/PycharmProjects/QuickPython/rp.egg-info
-/Users/Ryan/PycharmProjects/QuickPython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/numpy
 /Users/Ryan/PycharmProjects/RyanBStandards_Python3.5
@@ -101,9 +99,11 @@
 /Users/Ryan/.vim/bundle
 /Users/Ryan/Desktop/CleanCode/Sandbox
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
 /Volumes/CIRCUITPY
 /Users/Ryan/Desktop/lW/generated
 /Users/Ryan/Desktop/lW
 /Users/Ryan
+/Users/Ryan/PycharmProjects/QuickPython/rp/libs
+/Users/Ryan/PycharmProjects/QuickPython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
