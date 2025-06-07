@@ -1331,7 +1331,7 @@ def handle_character(buffer,char,event=None):
         return True
 
         
-    if char=='\n' and before_line.lstrip().startswith('except ') and after_line==':':
+    if char=='\n' and before_line.lstrip().startswith('except ') and before_line.endswith(' ') and after_line==':':
         #except |:      < \n >      ---->    except:\n    |
         buffer.delete_before_cursor(len(' '))
         buffer.cursor_right(1)
