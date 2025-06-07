@@ -20647,16 +20647,25 @@ def pseudo_terminal(
         RS  __import__('os').system('reset')
 
         BLA $r._autoformat_python_code_via_black(str(ans))
+        FLY $refactor_flynt(str(ans))
+        ATC $add_trailing_commas(str(ans))
+        23P $python_2_to_3(str(ans))
+        PUP $refactor_pyupgrade(str(ans))
         SIM $r.sort_imports_via_isort(ans)
-        SIM $r.clean_imports_via_unimport(ans)
+        CIM $r.clean_imports_via_unimport(ans)
+        QIM $r._removestar(ans,qualify=True)
+        RMS $r._removestar(ans)
         SW $r.strip_trailing_whitespace(ans)
+        PWS $propagate_whitespace(ans)
         SPC $r.strip_python_comments(ans)
         SDO $r.strip_python_docstrings(ans)
         D0L $line_join(x for x in str(ans).splitlines() if x.strip())
         UND $unindent(ans)
+        IND $indentify(ans,'    ')
         CBP ans=$string_from_clipboard();ans=$r.autoformat_python_via_black_macchiato(ans);$string_to_clipboard(ans)
         CSP ans=$string_from_clipboard();ans=$sort_imports_via_isort(ans);$string_to_clipboard(ans)
-        RMS $r._removestar(ans)
+        RFS  $remove_fstrings(ans)
+        RMFS $remove_fstrings(ans) #Remove FStrings
 
         DAPI __import__('rp.pypi_inspection').pypi_inspection.display_all_pypi_info()
 
@@ -47942,6 +47951,16 @@ def autoformat_html_via_bs4(code: str) -> str:
 
 autoformat_html = autoformat_html_via_bs4
 
+def add_trailing_commas(code: str) -> str:
+    """
+    https://github.com/asottile/add-trailing-comma
+    
+    """
+    pip_import("add_trailing_comma")
+    from add_trailing_comma._main import _fix_src
+
+    return _fix_src(code)
+
 
 def autoformat_json(data, indent=4):
     """
@@ -48851,12 +48870,114 @@ def get_star_modules(code):
     code=[x[len('from '):-len(' import *')].strip() for x in code]
     return sorted(set(code))
 
-def refactor_fstrings(code):
+def remove_fstrings(code):
     """
     Removes f-strings, using str.format notation instead. This is good for making code backwards-compatiable with python 3.5
     """
     from rp.libs.refactor.string_format.fstring_converter import convert_string
     return convert_string(code)
+
+# def refactor_pyupgrade(
+#     code: str,
+#     min_version: tuple[int, ...] = (3,),
+#     keep_percent_format: bool = False,
+#     keep_mock: bool = False,
+#     keep_runtime_typing: bool = False
+# ) -> str:
+#     """Modernize Python code by upgrading syntax to newer versions.
+#
+#     Args:
+#         code: Python source code to modernize
+#         min_version: Target Python version tuple, e.g. (3, 8) for Python 3.8+
+#             - (3,): Basic Python 3 upgrades (dict() → {}, .keys() → list())
+#             - (3, 6): f-strings, variable annotations
+#             - (3, 8): Positional-only params, := operator
+#             - (3, 10): Union[X, Y] → X | Y, match statements
+#         keep_percent_format: Don't upgrade % formatting → .format()
+#             - True: keeps "Hello %s" % name
+#             - False: converts to "Hello {}".format(name)
+#         keep_mock: Don't upgrade mock imports
+#             - True: keeps "from mock import Mock"
+#             - False: converts to "from unittest.mock import Mock"
+#         keep_runtime_typing: Don't remove typing imports only used in annotations
+#             - True: keeps "from typing import List" even if only in type hints
+#             - False: removes unused typing imports when min_version supports built-ins
+#
+#     Returns:
+#         Modernized Python source code
+#     """
+#     import pyupgrade._main
+#     from pyupgrade._data import Settings
+#
+#     settings = Settings(
+#         min_version=min_version,
+#         keep_percent_format=keep_percent_format,
+#         keep_mock=keep_mock,
+#         keep_runtime_typing=keep_runtime_typing,
+#     )
+#
+#     # Apply plugin fixes
+#     refactored_code = pyupgrade._main._fix_plugins(code, settings)
+#
+#     # Apply token fixes
+#     refactored_code = pyupgrade._main._fix_tokens(refactored_code)
+#
+#     return refactored_code
+
+def refactor_flynt(
+    code: str,
+    *,
+    aggressive: bool = False,
+    multiline: bool = True,
+    len_limit: int = None,
+    percent: bool = True,
+    format: bool = True,
+    concat: bool = False,
+    join: bool = False
+) -> str:
+    """
+    Refactor Python code using flynt to convert to f-strings.
+
+    Args:
+        code: Python source code to refactor
+        aggressive: Use aggressive mode for transformations
+        multiline: Allow multiline f-strings
+        len_limit: Length limit for f-strings (None for no limit)
+        percent: Transform %-style formatting to f-strings
+        format: Transform .format() calls to f-strings
+        concat: Transform string concatenations to f-strings
+        join: Transform static string joins to f-strings
+
+    Returns:
+        Refactored Python code as string
+    """
+    from flynt.api import fstringify_code
+    from flynt.state import State
+
+    # Create state with provided options
+    state = State(
+        quiet=True,  # Don't print reports
+        dry_run=False,  # Apply changes
+        stdout=False,  # Don't print to stdout
+        aggressive=aggressive,
+        multiline=multiline,
+        len_limit=len_limit,
+        transform_percent=percent,
+        transform_format=format,
+        transform_concat=concat,
+        transform_join=join,
+    )
+
+    # Apply flynt transformations
+    result = fstringify_code(code, state)
+
+    if result is None:
+        return code  # Return original if transformation failed
+
+    return result.content
+
+
+
 
 def file_line_iterator(file_name, *, with_len=False):
     """
@@ -50780,6 +50901,7 @@ known_pypi_module_package_names={
     '_sentencepiece': 'sentencepiece',
     '_sounddevice': 'sounddevice',
     'absl': 'absl-py',
+    'add_trailing_comma' : 'add-trailing-comma',
     'ahocorasick': 'pyahocorasick',
     'async_timeout': 'async-timeout',
     'atari_py': 'atari-py',
