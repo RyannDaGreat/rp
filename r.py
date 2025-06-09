@@ -16024,7 +16024,7 @@ default_python_input_eventloop = None  # Singleton for python_input
 #     # print_stack_trace(re)
 #     # print("THE DEMON SCREAMS")
 
-def split_into_sublists(l, sublist_len: int, *, strict=False, keep_remainder=True):
+def split_into_sublists(l, sublist_len: int, *, strict=False, keep_remainder=True, lazy=False):
     """
     If strict: sublist_len MUST evenly divide len(l)
     It will return a list of tuples, unless l is a string, in which case it will return a list of strings
@@ -16045,15 +16045,37 @@ def split_into_sublists(l, sublist_len: int, *, strict=False, keep_remainder=Tru
     """
 
     assert is_number(sublist_len),'sublist_len should be an integer, but got type '+repr(type(sublist_len))
-    if strict:
-        assert not len(l)%sublist_len,'len(l)=='+str(len(l))+' and sublist_len=='+str(sublist_len)+': strict mode is turned on but the sublist size doesnt divide the list input evenly. len(l)%sublist_len=='+str(len(l)%sublist_len)+'!=0'
+    if strict and has_len(l):
+        if len(l) % sublist_len != 0:
+            raise ValueError('len(l)=={0} and sublist_len=={1}: strict mode is turned on but the sublist size doesnt divide the list input evenly. len(l)%sublist_len=={2}!=0'.format(len(l), sublist_len, len(l)%sublist_len))
     n=sublist_len
 
-    #This line is rather dense, but it makes sense.
-    output=list(zip(*(iter(l),) * n))+([tuple(l[len(l)-len(l)%n:])] if len(l)%n and keep_remainder else [])
+    #OLD VERSION, DIDNT SUPPORT LAZY: This line is rather dense, but it makes sense.
+    #output=(zip(*(iter(l),) * n))+([tuple(l[len(l)-len(l)%n:])] if len(l)%n and keep_remainder else [])
     
+    #NEW VERSION: INPUT CAN BE ANY GENERATOR
+    def helper():
+        sublist = []
+        for x in l:
+            sublist.append(x)
+            if len(sublist)==sublist_len:
+                yield sublist
+                sublist = []
+        if sublist:
+            if strict:
+                raise ValueError('strict mode is turned on but the sublist size doesnt divide the list input evenly. remaining elements: {0}'.format(len(sublist)))
+            elif keep_remainder:
+                yield sublist
+                
+    output = helper()
+    
+    if not lazy:
+        output=list(output)
+
     if isinstance(l,str):
         output=[''.join(substring) for substring in output]
+    elif not lazy:
+        output=[tuple(sublist) for sublist in output]
 
     return output
 
@@ -32321,7 +32343,7 @@ def _load_video_stream(location, start_frame=0):
                 return
             yield cv_bgr_rgb_swap(frame)
 
-def load_video_stream(path, *, start_frame=0, with_length=True):
+def load_video_stream(path, *, start_frame=0, with_length=True, frame_transform=None):
     """
     Much faster than load_video, which loads all the frames into a numpy array. This means load_video has to iterate through all the frames before you can even use the first frame.
     load_video_stream is a generator, meaning to get the next frame you use python's builtin 'next' function
@@ -32347,6 +32369,9 @@ def load_video_stream(path, *, start_frame=0, with_length=True):
 
     frame_iterator = _load_video_stream(path, start_frame=start_frame)
 
+    if frame_transform is not None:
+        frame_iterator = map(frame_transform, frame_iterator)
+
     if with_length:
         try:
             num_frames = get_video_file_num_frames(path)
@@ -32362,6 +32387,7 @@ def load_video_streams(
     *paths,
     start_frame=0,
     with_length=True,
+    frame_transform=None,
     transpose=False,
 
     show_progress=True,
@@ -32381,7 +32407,7 @@ def load_video_streams(
     assert len(start_frame)==len(paths), 'Must specify start_frame for each video'
 
     def load(i):
-        return load_video_stream(paths[i], start_frame=start_frame[i], with_length=with_length)
+        return load_video_stream(paths[i], start_frame=start_frame[i], with_length=with_length, frame_transform=frame_transform)
 
     streams = gather_args_call(load_files, load, range(len(paths)))
         
@@ -32399,7 +32425,7 @@ def load_video_streams(
 
 
 _load_video_cache = {}
-def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cache=False):
+def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cache=False, frame_transform=None):
     """
     This function does not take into account framerates or audio. It just returns a numpy array full of images.
     It's slower to call than load_video_stream, but it can be cached using use_cache (which would actually make it faster, if applicable)
@@ -32412,6 +32438,7 @@ def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cach
                                         Setting this to False can result in a small performance boost, as it won't 
                                         check the length of the video (which might take a small bit of time)
         use_cache (bool, optional): Whether to cache the loaded video for faster subsequent loading. Defaults to False.
+        frame_transform (callable, optional): If specified, transforms each frame with this function.
 
     Returns:
         numpy.ndarray: A NumPy array containing the loaded video frames in THWC form.
@@ -32439,10 +32466,11 @@ def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cach
     if path_exists(path):
         path = get_absolute_path(path)  # This is important for caching.
     
-    if use_cache and path in _load_video_cache:
-        return _load_video_cache[path]
+    cache_id = (path, start_frame, length, frame_transform)
+    if use_cache and cache_id in _load_video_cache:
+        return _load_video_cache[cache_id]
     
-    stream = load_video_stream(path, start_frame = start_frame, with_length=show_progress)
+    stream = load_video_stream(path, start_frame = start_frame, with_length=show_progress, frame_transform=frame_transform)
     out = []
     
     for i, frame in enumerate(stream):
@@ -32471,7 +32499,7 @@ def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cach
         print(end='done.\r\n')
     
     if use_cache:
-        _load_video_cache[path] = out
+        _load_video_cache[cache_id] = out
     
     return out
 
@@ -32480,6 +32508,7 @@ def load_videos(
     *paths,
     start_frame=0,
     length=None,
+    frame_transform=None,
     show_progress=True,
     use_cache=False,
     num_threads=None,
@@ -32509,6 +32538,7 @@ def load_videos(
             length=length,
             show_progress=False,
             use_cache=use_cache,
+            frame_transform=frame_transform,
         )
 
     return gather_args_call(load_files, load, paths)
@@ -46044,6 +46074,9 @@ def unwarped_perspective_image(image, from_points, to_points=None, height:int=No
     Height and width can be manually specified as well, in case you want to capture parts of the perspectie transform that might have been cropped out
     When to_points is not specified, we assume that the from_points start from the top left of the desired area, and progress clockwise
 
+    Works on byte images and floating point images of float64 or float32
+    Works on RGB, RGBA and grayscale images natively
+
     The sister function is rp.unwarped_perspective_contour
 
     If to_points is not specified, from_points should start from the top left and go clockwise to the other 3 points
@@ -46081,8 +46114,11 @@ def unwarped_perspective_image(image, from_points, to_points=None, height:int=No
     pip_import('cv2')
     import cv2
     
-    image=as_rgb_image (image)
-    image=as_byte_image(image)
+    #Not necessary - it can work on flaying point images, float32 and float64 - on both grayscale matrices, RGB and RGBA images
+    # image=as_rgb_image (image)
+    # image=as_byte_image(image)
+    if is_binary_image(image):
+        image = as_byte_image(image)
     
     if width  is None:width =get_image_width (image)
     if height is None:height=get_image_height(image)
