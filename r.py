@@ -23269,7 +23269,7 @@ def pseudo_terminal(
                         elif not '\n' in user_message and user_message.startswith('.') and len(user_message)>1 and user_message[1].isalpha():
                             user_message='ans'+user_message
                             fansi_print("Transformed command into " + repr(user_message),'magenta')
-                        elif not '\n' in user_message and user_message.startswith('[') and not user_message.strip().endswith(']') and hasattr(get_ans(),'__getitem__'):
+                        elif not '\n' in user_message and user_message.startswith('[') and not user_message.strip().endswith(']') and hasattr(get_ans(),'__getitem__') and not is_valid_python_syntax(user_message):
                             # Input '[0' would be a syntax error. turn it into 'ans[0]'. Only do this if ans is indexable though.
                             user_message='ans'+user_message+']'
                             fansi_print("Transformed command into " + repr(user_message),'magenta')
