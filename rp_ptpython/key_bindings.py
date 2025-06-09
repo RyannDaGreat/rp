@@ -1297,6 +1297,22 @@ def handle_character(buffer,char,event=None):
         meta_pressed(clear=True)
         return True
 
+    if char==' ' and before=='[' and after==']':
+        # [|] --> [ans|]
+        buffer.insert_text('ans')
+        return True
+
+    if char==' ' and before.endswith(']') and after.startswith(']'):
+        # [[ans]|] --> [[ans],|]
+        buffer.insert_text(',')
+        return True
+
+    if char==' ' and before.endswith('],') and after.startswith(']'):
+        # [[ans],|] --> [[ans]]|
+        buffer.delete_before_cursor()
+        buffer.cursor_right()
+        return True
+
     if char=='`' and meta_pressed(clear=False):
         #Toggle shell mode! Couldn't do alt+1 that's taken, so ` is nearby...
 
