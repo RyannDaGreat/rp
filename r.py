@@ -12348,7 +12348,7 @@ def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False, sep="
     import pandas as pd
     import csv
 
-    args_hash = handy_hash((file_path, header))
+    args_hash = handy_hash((file_path, header, num_lines, sep, mode))
     if use_cache and args_hash in _load_tsv_cache:
         return _load_tsv_cache[args_hash]
     
