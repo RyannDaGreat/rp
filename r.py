@@ -40,7 +40,7 @@ import math
 import random
 import re
 from itertools import product as cartesian_product, combinations as all_combinations
-from functools import lru_cache
+from functools import lru_cache, partial
 from multiprocessing.dummy import Pool as ThreadPool  # ⟵ par_map uses ThreadPool. We import it now so we don't have to later, when we use par_map.
 from contextlib import contextmanager
 from math import factorial
@@ -12295,7 +12295,8 @@ def save_json(data,path,*,pretty=False,default=None):
     return string_to_text_file(path,text)
 
 _load_tsv_cache={}
-def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False, sep="\t"):
+_load_tsv_cache={}
+def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False, sep="\t", mode='normal', max_rows=None):
     """
     Read a TSV file with optional progress tracking and flexible header handling.
 
@@ -12310,6 +12311,9 @@ def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False, sep="
             - List: Use the provided list as column names, assuming no header row in the file.
             - str:  Like list, but uses str.split so you can specify headers like 'col1 col2name whatIcall_Col3' etc
         use_cache: If True, will cache the result so you only have to load from drive once
+        sep (str): Column separator. Default is "\t" for tab-separated values.
+        mode (str): File reading mode. Use 'robust' to skip bad lines, 'normal' for standard reading. Default is 'normal'.
+        max_rows (int, optional): If specified, limits the table to this number of rows, reducing loading time. Default is None (load all rows).
 
     Returns:
         pandas.DataFrame: The loaded TSV data as a DataFrame.
@@ -12336,7 +12340,9 @@ def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False, sep="
 
     #Future Parameters:
     #    mode (str): File reading mode. Use 'robust' to skip bad lines. Default is 'robust'.
-    mode = 'robust'
+    # mode = 'robust'
+    
+    assert mode in 'normal robust'.split()
 
     pip_import("pandas")
     import pandas as pd
@@ -12360,7 +12366,6 @@ def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False, sep="
 
     if mode == "robust":
         kwargs.update({"quoting": csv.QUOTE_NONE, "on_bad_lines": "skip"})
-        
 
     iterator = pd.read_csv(file_path, **kwargs)
 
@@ -12371,10 +12376,23 @@ def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False, sep="
         total_lines = number_of_lines_in_file(file_path)
         if isinstance(header, int):
             total_lines -= 1
+        
+        if max_rows is not None:
+            total_lines = min(total_lines, max_rows)
             
         iterator = tqdm(iterator, total=total_lines // chunk_size)
 
-    df = pd.concat(iterator, ignore_index=True)
+    chunks = []
+    rows_collected = 0
+    
+    for chunk in iterator:
+        if max_rows is not None and rows_collected >= max_rows:
+            break
+            
+        chunks.append(chunk)
+        rows_collected += len(chunk)
+
+    df = pd.concat(chunks, ignore_index=True).head(max_rows)
 
     if show_progress:
         _erase_terminal_line()
@@ -12396,6 +12414,9 @@ def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False, sep="
         _load_tsv_cache[args_hash]=df
 
     return df
+
+
+load_csv = partial(load_tsv, sep=',')
 
 
 _load_parquet_cache={}
