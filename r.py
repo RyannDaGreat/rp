@@ -33943,7 +33943,7 @@ def delete_all_files_in_directory(directory,*,recursive=False,permanent=True):
     delete_all_paths_in_directory(directory,permanent=permanent,recursive=recursive,include_folders=False,include_files=True)
 delete_all_files_in_folder=delete_all_files_in_directory
 
-def path_join(*paths):
+def path_join(*paths,show_progress=False,lazy=False):
     """
     Joins given paths, which can be a combination of strings and non-string iterables (like lists, tuples).
     An extension of os.path.join (wherever os.path.join works, so will this)
@@ -33986,7 +33986,6 @@ def path_join(*paths):
 
     """
     import os
-    import itertools
 
     def is_non_str_iterable(x):
         return is_iterable(x) and not isinstance(x,str)
@@ -34006,9 +34005,27 @@ def path_join(*paths):
         for iterable in iterables:
             assert all(isinstance(x,str) for x in iterable), 'Received a list that isn\'t all strings, please see r.path_join\'s docstring. Bad list: '+str(iterable)
 
-        product = itertools.product(*[p if is_non_str_iterable(p) else [p] for p in paths])
-        return [os.path.join(*path_tuple) for path_tuple in product]
+
+        path_factors = [p if is_non_str_iterable(p) else [p] for p in paths]
+        path_product = itertools.product(*path_factors)
+
+        if show_progress:
+            #Add length if we can
+            if all(map(has_len,path_factors)):
+                total_length = math.prod(map(len,path_factors))
+                path_product = eta(path_product, 'rp.path_join', length = total_length)
+            else:
+                print("rp.path_join: show_progress disabled because not all path factors have lengths and eta needs a length right now (Jun 10 2025)...")
+
+        output = (os.path.join(*path_tuple) for path_tuple in path_product)
+    
+        if not lazy:
+            output = list(output)
+
+        return output
+
     else:
+        #The simple case: we just join strings
         return os.path.join(*paths)
 
 joined_paths=path_join#Synonyms for whatever comes into my head at the moment when using the rp terminal
