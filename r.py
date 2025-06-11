@@ -25382,6 +25382,200 @@ def cv_draw_circles(
 
     return image
 
+def cv_draw_arrow(
+    image,
+    start_x,
+    start_y,
+    end_x,
+    end_y,
+    thickness=2,
+    color='white',
+    
+    rim = 0,
+    rim_color='black',
+    tip_length=0.3,
+    *,
+    antialias=True,
+    copy=True
+):
+    """
+    Draws an arrow from (start_x, start_y) to (end_x, end_y) on a given image. If copy=False, it *might* mutate the original image if the given image is an RGB or RGBA byte image.
+
+    Rim draws an outline around the arrow. If it's positive, it draws on the outside of the arrow. If negative, draws on the inside.
+    
+    tip_length controls the ratio of arrow head length to total arrow length. Specifically, it's the proportion of the arrow's length 
+    taken up by the diagonal lines that form the arrowhead. For example:
+    - tip_length = 0.5 creates a diamond shape (head takes up half the arrow)
+    - tip_length = sqrt(2) ≈ 1.414 creates a right isosceles triangle arrowhead
+    - tip_length = 0.3 (default) creates a typical arrow appearance
+
+    EXAMPLE:
+        >>> N = 50
+        ... image = load_image(
+        ...     "https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pages/images/emma.png?raw=true",
+        ...     use_cache=True,
+        ... )
+        ... 
+        ... colors = as_rgba_float_colors("random red" for _ in range(N))
+        ... rim_colors = as_rgba_float_colors("white randomgray" for _ in range(N))
+        ... start_y = random_ints(N, get_image_height(image) - 1)
+        ... start_x = random_ints(N, get_image_width(image) - 1)
+        ... end_y = random_ints(N, get_image_height(image) - 1)
+        ... end_x = random_ints(N, get_image_width(image) - 1)
+        ... thicknesses = random_floats(N, 1, 5)
+        ... rims = random_floats(N, -3, 3)
+        ... tip_lengths = random_floats(N, 0.1, 0.5)
+        ... 
+        ... display_image(cv_draw_arrows(image, start_x, start_y, end_x, end_y, thicknesses, colors, rims, rim_colors, tip_lengths))
+
+    EXAMPLE:
+        >>> # Demonstrating tip_length effect with arrows going down
+        ... N = 10
+        ... image = np.ones((400, 600, 3), dtype=np.uint8) * 255  # White background
+        ... 
+        ... # Create arrows in a row, all pointing down with varying tip_length
+        ... start_x = np.linspace(50, 550, N)
+        ... start_y = np.full(N, 50)
+        ... end_x = start_x  # Same x coordinates (straight down)
+        ... end_y = np.full(N, 350)
+        ... 
+        ... # Vary tip_length from 0.0 to 1.0
+        ... tip_lengths = np.linspace(0.0, 1.0, N)
+        ... colors = ["black"] * N
+        ... thickness = 3
+        ... 
+        ... # Add labels for tip_length values
+        ... for i, (x, tip) in enumerate(zip(start_x, tip_lengths)):
+        ...     cv2.putText(image, f"{tip:.1f}", (int(x)-15, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,0), 1)
+        ... 
+        ... display_image(cv_draw_arrows(image, start_x, start_y, end_x, end_y, thickness, colors, tip_length=tip_lengths))
+
+    """
+
+    cv2 = pip_import("cv2")
+
+    thickness = max(1, thickness)
+    tip_length = max(0.0, min(1.0, tip_length))
+    
+    image, kwargs = _cv_helper(image=image, copy=copy, antialias=antialias)
+
+    if not thickness and not rim:
+        #Fast shortcut
+        return image
+
+    #Handle rim - a ring around the arrow
+    if rim > 0:
+        image = cv_draw_arrow(image, start_x, start_y, end_x, end_y, thickness = thickness + rim, color = rim_color, rim=0, tip_length=tip_length, copy=False, antialias=antialias)
+        image = cv_draw_arrow(image, start_x, start_y, end_x, end_y, thickness = thickness      , color =     color, rim=0, tip_length=tip_length, copy=False, antialias=antialias)
+        return image
+    elif rim < 0:
+        image = cv_draw_arrow(
+            image,
+            start_x,
+            start_y,
+            end_x,
+            end_y,
+            thickness=thickness + rim,
+            color=color,
+            rim=-rim,
+            rim_color=rim_color,
+            tip_length=tip_length,
+            copy=False,
+            antialias=antialias,
+        )
+        return image
+
+    color=as_rgb_float_color(color)
+    color=float_color_to_byte_color(color)
+    
+    if is_binary_image(image):
+        image = rp.as_rgb_image(image, copy=copy)
+    image = as_byte_image(image, copy=copy)
+
+    thickness = int(thickness)        
+    start_x = int(start_x)
+    start_y = int(start_y)
+    end_x = int(end_x)
+    end_y = int(end_y)
+    
+    # cv2.arrowedLine doesn't accept lineType in kwargs, so we need to filter it
+    line_type = kwargs.pop('lineType', cv2.LINE_8)
+    cv2.arrowedLine(image, (start_x, start_y), (end_x, end_y), color, thickness, line_type, tipLength=tip_length)
+    return image
+
+
+def cv_draw_arrows(
+    image,
+    start_x,
+    start_y,
+    end_x,
+    end_y,
+    thickness=2,
+    color='white',
+    
+    rim = 0,
+    rim_color='black',
+    tip_length=0.3,
+    *,
+    antialias=True,
+    show_progress=False,
+    copy=True
+):
+    """
+    Plural of cv_draw_arrow
+    start_x, start_y, end_x, end_y, thickness, color, rim, rim_color, tip_length, antialias are all broadcastable
+
+    EXAMPLE:
+        >>> N = 50
+        ... image = load_image(
+        ...     "https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pages/images/emma.png?raw=true",
+        ...     use_cache=True,
+        ... )
+        ... 
+        ... colors = as_rgba_float_colors("random red" for _ in range(N))
+        ... start_y = random_ints(N, get_image_height(image) - 1)
+        ... start_x = random_ints(N, get_image_width(image) - 1)
+        ... end_y = random_ints(N, get_image_height(image) - 1)
+        ... end_x = random_ints(N, get_image_width(image) - 1)
+        ... thicknesses = random_floats(N, 1, 5)
+        ... tip_lengths = random_floats(N, 0.1, 0.5)
+        ... 
+        ... display_image(cv_draw_arrows(image, start_x, start_y, end_x, end_y, thicknesses, colors, rims, rim_colors, tip_lengths))
+    """
+
+    #broadcast_lists only broadcasts lists - so make any iterables lists
+    try:              color = [as_rgba_float_color(color)]
+    except Exception: color = list(color)
+    try:              rim_color = [as_rgba_float_color(rim_color)]
+    except Exception: rim_color = list(rim_color)
+    if is_iterable(start_x)          : start_x     = list(start_x)
+    if is_iterable(start_y)          : start_y     = list(start_y)
+    if is_iterable(end_x)            : end_x       = list(end_x)
+    if is_iterable(end_y)            : end_y       = list(end_y)
+    if is_iterable(thickness)        : thickness   = list(thickness)
+    if is_iterable(tip_length)       : tip_length  = list(tip_length)
+    if is_iterable(antialias)        : antialias   = list(antialias)
+    if is_iterable(rim)              : rim         = list(rim)
+
+    start_xs, start_ys, end_xs, end_ys, thicknesses, colors, tip_lengths, antialiass, rims, rim_colors = broadcast_lists(
+        start_x, start_y, end_x, end_y, thickness, color, tip_length, antialias, rim, rim_color
+    )
+    assert len(start_xs)==len(start_ys)==len(end_xs)==len(end_ys)==len(thicknesses)==len(colors)==len(tip_lengths)==len(antialiass)==len(rims)==len(rim_colors)
+    
+    bundles = zip(start_xs, start_ys, end_xs, end_ys, thicknesses, colors, tip_lengths, antialiass, rims, rim_colors)
+
+    if show_progress:
+        length = len(start_xs)
+        bundles = eta(bundles, "cv_draw_arrows", length=length)
+
+    image, kwargs = _cv_helper(image=image, copy=copy, antialias=antialias)
+
+    for start_x, start_y, end_x, end_y, thickness, color, tip_length, antialias, rim, rim_color in bundles:
+        image = cv_draw_arrow(image, start_x, start_y, end_x, end_y, thickness, color, rim=rim, rim_color=rim_color, tip_length=tip_length, antialias=antialias, copy=False)
+
+    return image
+
+
 def cv_line_graph(
     y_values,
     x_values=None,
