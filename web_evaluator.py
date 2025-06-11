@@ -1081,6 +1081,48 @@ class ClientDelegator:
         output = rp.par_map(evaluate_on_client, self._clients, num_threads=len(self._clients))
         return [x for x in output if x is not None]
 
+    def _rerank(self):
+        #TODO: This is a work in progress - don't use it yet 
+        results = self.evaluate_all(
+            rp.unindent(
+                """
+                %return _out
+                if 'WEBEVAL_RANK' in vars():
+                    _out = WEBEVAL_RANK
+                else:
+                    _unrank = -__import__("secrets").randbits(1000)-1
+                    _out = _unrank
+                """
+            )
+        )
+
+        values = [x.value for x in results if not x.errored]
+
+        ranks = [x for x in values if x>=0]
+        unranks = [x for x in values if x<0]
+
+        num_ranks = len(values)
+        missing_ranks = sorted(set(range(num_ranks))-set(ranks))
+
+        results = self.evaluate_all(
+            rp.unindent(
+                """
+                %return WEBEVAL_RANK
+
+                if 'WEBEVAL_RANK' not in vars():
+                    _ranks   = [x for x in _values if x >= 0]
+                    _unranks = [x for x in _values if x <  0]
+                    _num_ranks = len(_values)
+                    _missing_ranks = sorted(set(range(_num_ranks)) - set(_ranks))
+                    WEBEVAL_RANK = _missing_ranks[_unranks.index(_unrank)]
+
+                print("WEBEVAL_RANK = {WEBEVAL_RANK}")
+                """
+            ),
+            _values = values,
+        )
+
+
 class ClientRoster:
     """
     The ClientRoster class manages a roster of clients for the ClientDelegator.
