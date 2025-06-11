@@ -28854,6 +28854,7 @@ def download_google_font(font_name, *, skip_existing=True):
 
 
     """
+
     import requests
     import os
     
@@ -28929,6 +28930,8 @@ def download_google_font(font_name, *, skip_existing=True):
         elif method == 'link':
             content = str(requests.get(src).content)
 
+        assert connected_to_internet()
+
         # extract the urls from the content
         urls = get_urls(content)
         print('rp.download_google_font: Fetched {} urls.'.format(len(urls)))
@@ -28974,6 +28977,8 @@ def download_font(url, *, skip_existing=True):
         url = _ryan_fonts[url]
     elif url.startswith('G:'):
         return download_google_font(url)
+
+    assert connected_to_internet()
 
     _download_font_dir=path_join(_rp_folder,"downloads/fonts")
     make_directory(_download_font_dir)
