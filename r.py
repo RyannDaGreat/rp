@@ -49417,30 +49417,26 @@ def file_line_iterator(file_name, *, with_len=False, reverse=False):
         ... assert line_join(file_line_iterator(file)) == line_join(list(file_line_iterator(file,reverse=True))[::-1])
 
     """
-    if reverse:
-        iterator = _reverse_file_line_gen(file_name)
-        if with_len:
-            length = number_of_lines_in_file(file_name)
-            iterator = IteratorWithLen(iterator, length)
-    else:
-        file = open(file_name)
-        if with_len:
-            length = number_of_lines_in_file(file_name)
-            iterator = IteratorWithLen(_file_line_gen(file), length)
-        else:
-            iterator = _file_line_gen(file)
+
+    iterator = (_reverse_file_line_gen if reverse else _file_line_gen)(file_name)
+
+    if with_len:
+        length = number_of_lines_in_file(file_name)
+        iterator = IteratorWithLen(iterator, length)
+
     return iterator
 
-def _file_line_gen(file):
-    while True:
-        line = file.readline()
-        if not line:
-            file.close()
-            return
-        if line.endswith('\n'):
-            yield line[:-1]
-        else:
-            yield line
+def _file_line_gen(file_name):
+    with open(file_name, 'rb') as file:
+        while True:
+            line = file.readline()
+            if not line:
+                file.close()
+                return
+            if line.endswith('\n'):
+                yield line[:-1]
+            else:
+                yield line
 
 def _reverse_file_line_gen(file_name):
     """Generator that yields lines from a file in reverse order using mmap for efficiency."""
