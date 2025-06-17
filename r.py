@@ -49391,9 +49391,7 @@ def refactor_flynt(
     return result.content
 
 
-
-
-def file_line_iterator(file_name, *, with_len=False):
+def file_line_iterator(file_name, *, with_len=False, reverse=False):
     """
     Opens a file and iterates through its lines.
     
@@ -49406,16 +49404,31 @@ def file_line_iterator(file_name, *, with_len=False):
             of lines in the file using the `number_of_lines_in_file` function. 
             This can be useful for tools like tqdm to show progress. 
             Defaults to False.
+        reverse (bool, optional): If set to True, iterates through the file's
+            lines in reverse order (from last line to first). Uses memory-mapped
+            files for efficiency. Defaults to False.
     
     Returns:
         Iterator: An iterator that yields lines from the given file.
+
+    EXAMPLE:
+
+        >>> file=get_module_path(r)
+        ... assert line_join(file_line_iterator(file)) == line_join(list(file_line_iterator(file,reverse=True))[::-1])
+
     """
-    file = open(file_name)
-    if with_len:
-        length = number_of_lines_in_file(file_name)
-        iterator = IteratorWithLen(_file_line_gen(file), length)
+    if reverse:
+        iterator = _reverse_file_line_gen(file_name)
+        if with_len:
+            length = number_of_lines_in_file(file_name)
+            iterator = IteratorWithLen(iterator, length)
     else:
-        iterator = _file_line_gen(file)
+        file = open(file_name)
+        if with_len:
+            length = number_of_lines_in_file(file_name)
+            iterator = IteratorWithLen(_file_line_gen(file), length)
+        else:
+            iterator = _file_line_gen(file)
     return iterator
 
 def _file_line_gen(file):
@@ -49428,6 +49441,40 @@ def _file_line_gen(file):
             yield line[:-1]
         else:
             yield line
+
+def _reverse_file_line_gen(file_name):
+    """Generator that yields lines from a file in reverse order using mmap for efficiency."""
+    import mmap
+    import os
+    
+    with open(file_name, 'rb') as f:
+        # Handle empty file
+        if os.fstat(f.fileno()).st_size == 0:
+            return
+            
+        with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mmapped_file:
+            file_size = len(mmapped_file)
+            
+            # We'll track positions where lines end (including newlines)
+            end_pos = file_size
+            
+            while end_pos > 0:
+                # Find the previous newline (start of current line)
+                start_pos = mmapped_file.rfind(b'\n', 0, end_pos - 1) + 1
+                
+                # Extract the line including potential newline
+                raw_line = mmapped_file[start_pos:end_pos]
+                line = raw_line.decode('utf-8', errors='replace')
+                
+                # Strip trailing newline if present (matching _file_line_gen behavior)
+                if line.endswith('\n'):
+                    yield line[:-1]
+                else:
+                    yield line
+                
+                # Move to the end of the previous line
+                end_pos = start_pos
+
 
 class IteratorWithLen:
     def __init__(self, iterator, length: int):
