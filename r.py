@@ -46812,6 +46812,98 @@ def run_cotracker(
     
     return pred_tracks, pred_visibility
 
+def run_tapnext(
+    video,
+    *,
+    device=None,
+    queries=None,
+    grid_size=None,
+    grid_query_frame=0,
+    model="tapnext",  # "tapir", "bootstapir", or "tapnext"
+    model_dir="~/.cache/tapnet"
+):
+    """
+    Runs the TAPNext/TAPIR model on a video for point tracking.
+    TAPNext is a transformer-based model that can track any point in a video,
+    with state-of-the-art accuracy and speed.
+    
+    Args:
+        video: Input video as either a file path, numpy array (T×H×W×C), or torch tensor (T×C×H×W).
+        device: Torch device to run inference on, defaults to cuda if available
+        queries: Query points of shape (N, 3) in format (t, y, x) for frame index
+                 and pixel coordinates. Can be numpy array or torch tensor. Used for tracking specific points.
+        grid_size: Size M for an N=M×M grid of tracking points on a frame. Must be provided
+                   if queries is None.
+        grid_query_frame: Frame index(es) to start tracking from. Can be int or iterable 
+                          of ints for multi-frame initialization. Only used when grid_size is not None (default: 0)
+        model: Which model to use: "tapir", "bootstapir", or "tapnext"
+        model_dir: Directory to cache downloaded models (default: "~/.cache/tapnet")
+    
+    Returns:
+        tuple: (pred_tracks, pred_visibility) where:
+            - pred_tracks: numpy array of shape (T, N, 2) containing x,y coordinates
+            - pred_visibility: numpy array of shape (T, N) indicating point visibility
+    
+    Track Modes:
+        1. Grid tracking: Set grid_size > 0 to track M×M points from grid_query_frame
+        2. Query tracking: Provide queries tensor to track specific points
+        3. Dense tracking: Default with grid_size=20 if no queries provided
+    
+    EXAMPLE:
+        >>> video = rp.load_video(
+        ...     "https://github.com/facebookresearch/co-tracker/raw/refs/heads/main/assets/apple.mp4",
+        ...     use_cache=True,
+        ... )
+        ...
+        ... # TAPNext
+        ... tracks, visibility = run_tapnext(
+        ...     video,
+        ...     device="cuda",
+        ...     grid_size=10,  # Track 10x10 grid of points
+        ...     model='tapnext',
+        ... )
+        ...
+        ... # Visualization
+        ... colors = [rp.random_rgb_float_color() for _ in tracks[0]]
+        ... new_video = []
+        ... for frame_number in range(len(video)):
+        ...     frame = video[frame_number]
+        ...     track = tracks[frame_number]
+        ...     visible = visibility[frame_number]
+        ...     for idx, (color, (x, y)) in enumerate(zip(colors, track)):
+        ...         if visible[idx]:
+        ...             frame = rp.cv_draw_circle(
+        ...                 frame,
+        ...                 x,
+        ...                 y,
+        ...                 radius=5,
+        ...                 color=color,
+        ...                 antialias=True,
+        ...                 copy=False,
+        ...             )
+        ...     new_video.append(frame)
+        ... rp.fansi_print("SAVED " + rp.save_video_mp4(new_video), "blue cyan", "bold")
+    """
+    #THE ABOVE DOCSTRING SHOULD BE MIRRORED VERBATIM FROM rp.git.tapnet.run_tapnext.run_tapnext.__doc__
+    rp.git_import('tapnet') #https://github.com/RyannDaGreat/tapnet
+    from rp.git.tapnet.run_tapnext import run_tapnext as func
+    try:
+        return func(
+            video,
+            device           = device,
+            queries          = queries,
+            grid_size        = grid_size,
+            grid_query_frame = grid_query_frame,
+            model            = model,  # "tapir", "bootstapir", or "tapnext"
+            model_dir        = model_dir,
+        )
+    except ImportError as e:
+        import sys
+        requirements_path = rp.with_file_name(rp.get_module_path(rp.git.tapnet.run_tapnext), 'requirements.txt')
+        raise ImportError(str(e) + "\nYou might want to run " + sys.executable + " -m pip install -r " + requirements_path) from e
+
+
+
 def _pip_import_pyflow():
     """
     This function attempts to import the 'pyflow' module. If the import fails, 
