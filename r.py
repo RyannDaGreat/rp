@@ -1151,8 +1151,15 @@ def fansi(
         #If not specified, grab the truecolor value from pseudo-terminal
         truecolor = pyin.true_color
 
-    if isinstance(text_color, str) and style is None and background_color is None:
-        text_color, style, background_color = _transform_fansi_arg(text_color)
+    if (
+            #If exactly two of them are None and one is a string...
+            sum(isinstance(x, str) for x in [text_color, style, background_color]) == 1
+        and sum(x is None          for x in [text_color, style, background_color]) == 2
+    ):
+        text_color       = text_color       or ''
+        style            = style            or ''
+        background_color = background_color or ''
+        text_color, style, background_color = _transform_fansi_arg(text_color + style + background_color)
 
     # Ensure text_string is a string
     text_string = str(text_string)
@@ -1418,7 +1425,7 @@ def fansi_print(
     link=None,
     new_line=True,
     reset=True,
-    truecolor=True
+    truecolor=None
 ):
     """
     This function prints colored text in a terminal.
@@ -24299,17 +24306,30 @@ def print_lines(*args, flush=False):
         args=[args]
     print(line_join(map(str,args)),flush=flush)
 
-def fansi_print_lines(*args, text_color=None, background_color=None, style=None, reset=True):
+def fansi_print_lines(
+    *args,
+    text_color=None,
+    style=None,
+    background_color=None,
+    underline_color=None,
+    reset=True,
+    link=None,
+    truecolor=None
+):
     """
-    Shorthand for print(line_join(args)) 
+    Shorthand for print(fansi(line_join(args), style=...))
 
     EXAMPLE:
-        >>> print_lines(1,2,3,4,5)
+        >>> fansi_print_lines(1,2,3,4,5, style='green')
         1
         2
         3
         4
         5
+
+        >>> fansi_print_lines('Hello','World',style='green bold')
+        Hello
+        World
     """
     args=detuple(args)
     if isinstance(args, str):
@@ -24317,10 +24337,13 @@ def fansi_print_lines(*args, text_color=None, background_color=None, style=None,
     print(
         fansi(
             line_join(map(str, args)),
-            text_color=None,
-            background_color=None,
-            style=None,
+            text_color=text_color,
+            background_color=background_color,
+            style=style,
             reset=reset,
+            truecolor=truecolor,
+            link=link,
+            underline_color=underline_color,
         )
     )
 
@@ -31067,6 +31090,28 @@ def float_color_to_byte_color(float_color):
 
 def float_color_to_hex_color(float_color, hashtag=True):
     return byte_color_to_hex_color(float_color_to_byte_color(float_color),hashtag=hashtag)
+def float_color_to_byte_color(float_color):
+    return tuple(round(clamp(x*255,0,255)) for x in float_color)
+
+def float_colors_to_byte_colors(*float_colors):
+    return [float_color_to_byte_color(x) for x in detuple(float_colors)]
+
+def float_colors_to_hex_colors(*float_colors):
+    return [float_color_to_hex_color(x) for x in detuple(float_colors)]
+
+def byte_colors_to_hex_colors(*byte_colors):
+    return [byte_color_to_hex_color(x) for x in detuple(byte_colors)]
+ 
+def byte_colors_to_float_colors(*byte_colors):
+    return [byte_color_to_float_color(x) for x in detuple(byte_colors)]
+ 
+def hex_colors_to_byte_colors(*hex_colors):
+    return [hex_color_to_byte_color(x) for x in detuple(hex_colors)]
+ 
+def hex_colors_to_float_colors(*hex_colors):
+    return [hex_color_to_float_color(x) for x in detuple(hex_colors)]
+ 
+
 
 _altbw_flipflop=False
 def _altbw():
