@@ -36579,17 +36579,22 @@ def get_all_importable_module_names(use_cache=True):
 
 def get_module_path_from_name(module_name):
     """
-    Gets the file path of a module without importing it, given the module's name
+    Gets the file path of a module or package without importing it, given the module's name.
+    
+    For packages (directories with __init__.py), it returns the path to the __init__.py file.
+    For single-file modules (.py files), it returns the path to that .py file.
+
     EXAMPLES:
         >>> get_module_path_from_name('rp')
-       ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/__init__.py
+        ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/__init__.py
         >>> get_module_path_from_name('prompt_toolkit')
-       ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/prompt_toolkit/__init__.py
+        ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/prompt_toolkit/__init__.py
         >>> get_module_path_from_name('numpy')
-       ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/numpy/__init__.py
+        ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/numpy/__init__.py
         >>> get_module_path_from_name('six')
-       ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/six.py
-    FROM: https://stackoverflow.com/questions/4693608/find-path-of-module-without-importing-in-python
+        ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/six.py
+        >>> get_module_path_from_name('rp.experimental.stdin_python_highlighter')
+        ans = /Users/burgert/miniconda3/lib/python3.12/site-packages/rp/experimental/stdin_python_highlighter.py
     """
     import importlib.util
     import os
@@ -36598,14 +36603,22 @@ def get_module_path_from_name(module_name):
     if spec is None:
         return None
 
-    # For packages, submodule_search_locations is a list of directory paths.
+    # If it's a package, spec.submodule_search_locations will be a list of paths (usually just one).
+    # The convention is that the main file for a package is its __init__.py.
     if spec.submodule_search_locations:
-        return spec.submodule_search_locations[0]
+        # We need to construct the path to __init__.py within that directory
+        parent_dir = spec.submodule_search_locations[0]
+        init_file = os.path.join(parent_dir, '__init__.py')
+        
+        if file_exists(init_file):
+            return init_file
+        else:
+            return parent_dir
+        
 
-    # For single-file modules, origin is the full file path.
-    # We can return its directory.
+    # If it's a single-file module, spec.origin will be the full path to the .py file.
     if spec.origin:
-        return os.path.dirname(spec.origin)
+        return spec.origin
 
     return None
 
@@ -36630,7 +36643,12 @@ def get_module_path(module):
 
     import inspect
     assert inspect.ismodule(module),'get_module_path error: The input you gave is not a module type. You gave input of type '+repr(type(module))
-    return inspect.getfile(module)
+
+    try:
+        return inspect.getfile(module)
+    except TypeError:
+        # ERROR: TypeError: <module 'rp.git.tapnet' (namespace) from ['/usr/local/google/home/burgert/.local/lib/python3.12/site-packages/rp/git/tapnet']> is a built-in module
+        return module.__path__[0]
 
 def is_a_module(object):
     import builtins
@@ -46834,7 +46852,7 @@ def run_cotracker(
     
     return pred_tracks, pred_visibility
 
-def run_tapnext(
+def run_tapnet(
     video,
     *,
     device=None,
@@ -46842,24 +46860,30 @@ def run_tapnext(
     grid_size=None,
     grid_query_frame=0,
     model="tapnext",  # "tapir", "bootstapir", or "tapnext"
-    model_dir="~/.cache/tapnet"
+    model_dir=None
 ):
     """
     Runs the TAPNext/TAPIR model on a video for point tracking.
     TAPNext is a transformer-based model that can track any point in a video,
-    with state-of-the-art accuracy and speed.
+    with state-of-the-art accuracy and speed (as of Jun 2025).
+
+    See https://github.com/google-deepmind/tapnet
     
     Args:
-        video: Input video as either a file path, numpy array (T×H×W×C), or torch tensor (T×C×H×W).
+        video: Input video as either a file path string like './video.mp4', glob of image files like '/path/to/*frames.png', 
+               list of PIL images, numpy array (T×H×W×3) with either dtype np.uint8 or floating point values between 0 and 1,
+               or as a torch tensor (T×3×H×W) with values between 0 and 1.
         device: Torch device to run inference on, defaults to cuda if available
         queries: Query points of shape (N, 3) in format (t, y, x) for frame index
                  and pixel coordinates. Can be numpy array or torch tensor. Used for tracking specific points.
         grid_size: Size M for an N=M×M grid of tracking points on a frame. Must be provided
-                   if queries is None.
+                   if queries is None, not used if queries are provided.
         grid_query_frame: Frame index(es) to start tracking from. Can be int or iterable 
                           of ints for multi-frame initialization. Only used when grid_size is not None (default: 0)
-        model: Which model to use: "tapir", "bootstapir", or "tapnext"
-        model_dir: Directory to cache downloaded models (default: "~/.cache/tapnet")
+                          Not used if queries is not None.
+        model: Which model to use: "tapir", "bootstapir", or "tapnext" (default: "tapnext")
+        model_dir: Directory to cache downloaded models (default: "~/.cache/tapnet" from rp.git.tapnet.DEFAULT_MODEL_DIR)
+        show_progress: If True, shows a progress bar during calculation.
     
     Returns:
         tuple: (pred_tracks, pred_visibility) where:
@@ -46870,15 +46894,18 @@ def run_tapnext(
         1. Grid tracking: Set grid_size > 0 to track M×M points from grid_query_frame
         2. Query tracking: Provide queries tensor to track specific points
         3. Dense tracking: Default with grid_size=20 if no queries provided
+
+    Note: As of Jun 18 2025, using the MPS device on Mac yields incorrect results. If on Mac, use CPU.
     
     EXAMPLE:
+
         >>> video = rp.load_video(
         ...     "https://github.com/facebookresearch/co-tracker/raw/refs/heads/main/assets/apple.mp4",
         ...     use_cache=True,
         ... )
         ...
         ... # TAPNext
-        ... tracks, visibility = run_tapnext(
+        ... tracks, visibility = run_tapnet(
         ...     video,
         ...     device="cuda",
         ...     grid_size=10,  # Track 10x10 grid of points
@@ -46905,26 +46932,77 @@ def run_tapnext(
         ...             )
         ...     new_video.append(frame)
         ... rp.fansi_print("SAVED " + rp.save_video_mp4(new_video), "blue cyan", "bold")
+
     """
-    #THE ABOVE DOCSTRING SHOULD BE MIRRORED VERBATIM FROM rp.git.tapnet.run_tapnext.run_tapnext.__doc__
+    #THE ABOVE DOCSTRING SHOULD BE MIRRORED VERBATIM FROM rp.git.tapnet.run_tapnet.run_tapnet.__doc__
+    from rp.git.tapnet.run_tapnet import run_tapnet as func
+
+    model_dir or _ensure_tapnet_installed(model, model_dir=model_dir)
+
+    return func(
+        video,
+        device           = device,
+        queries          = queries,
+        grid_size        = grid_size,
+        grid_query_frame = grid_query_frame,
+        model            = model,  # "tapir", "bootstapir", or "tapnext"
+        model_dir        = model_dir,
+    )
+
+def _ensure_tapnet_installed(*models, model_dir=None):
+    """
+    Gets the code and checkpoints for tapnet
+    models is varargs like "tapir", "bootstapir", or "tapnext"
+    If not specified, downloads all checkpoints (default behaviour)
+
+    To simply preemptively download checkpoints, just run this func with no args
+
+    Returns the directory where we download the models
+    """
+    #First you'll need the tapnet repo
+    rp.git_import('tapnet') #https://github.com/RyannDaGreat/tapnet
+
+    #Try to pip-install everything
+    auto_yes=True
+    pip_import("chex"             , auto_yes=auto_yes)
+    pip_import("jax"              , auto_yes=auto_yes)
+    pip_import("jaxline"          , auto_yes=auto_yes)
+    pip_import("optax"            , auto_yes=auto_yes)
+    pip_import("haiku","dm-haiku" , auto_yes=auto_yes)
+    pip_import("tree","dm-tree"   , auto_yes=auto_yes)
+    pip_import("typing_extensions", auto_yes=auto_yes)
+    pip_import("matplotlib"       , auto_yes=auto_yes)
+    pip_import("mediapy"          , auto_yes=auto_yes)
+    pip_import("cv2"              , auto_yes=auto_yes)
+    pip_import("einshape"         , auto_yes=auto_yes)
+    pip_import("ipympl"           , auto_yes=auto_yes)
+    pip_import("tqdm"             , auto_yes=auto_yes)
+
     try:
-        rp.git_import('tapnet') #https://github.com/RyannDaGreat/tapnet
         sys.path.append(rp.get_module_path_from_name('rp.git.tapnet'))
-        from rp.git.tapnet.run_tapnext import run_tapnext as func
-        return func(
-            video,
-            device           = device,
-            queries          = queries,
-            grid_size        = grid_size,
-            grid_query_frame = grid_query_frame,
-            model            = model,  # "tapir", "bootstapir", or "tapnext"
-            model_dir        = model_dir,
-        )
+        from rp.git.tapnet.run_tapnet import get_tapnet_model, checkpoint_urls
     except (ImportError,ModuleNotFoundError) as e:
-        requirements_path = rp.with_file_name(rp.get_module_path_from_name('rp.git.tapnet.run_tapnext'), 'requirements.txt')
-        raise type(e)(str(e) + "\nYou might want to run " + shlex.quote(sys.executable) + " -m pip install -r " + shlex.quote(requirements_path)) from e
+        requirements_path = rp.path_join(
+            rp.get_module_path_from_name("rp.git.tapnet"),
+            "requirements_inference.txt",
+        )
+        requirements_check_str = strip_ansi_escapes(check_pip_requirements(requirements_path, silent=True))
+        raise type(e)(
+            str(e)
+            + "\nYou might want to run "
+            + shlex.quote(sys.executable)
+            + " -m pip install -r "
+            + shlex.quote(requirements_path)
+            + "\n"
+            + requirements_check_str
+        ) from e
 
+    #Download any models if specified, else download all of them
+    models = models or list(checkpoint_urls)
+    for model_name in models:
+        get_tapnet_model(model_name, model_dir, download_only=True)
 
+    return model_dir
 
 def _pip_import_pyflow():
     """
@@ -46936,10 +47014,6 @@ def _pip_import_pyflow():
 
     WARNING: This didn't work on my M1 Mac!
     """
-    
-
-
-
     try:
         import pyflow
         return pyflow
@@ -50725,9 +50799,6 @@ def print_gpu_summary(
     from rich.table import Table
     import rich
 
-    console = Console(record=True)
-    console.begin_capture()
-
     # Create a table with a pretty border
     table = Table(show_header=True, header_style="bold magenta", title_justify="center")
     table.add_column("GPU ID", style="dim", justify="center")
@@ -50795,17 +50866,16 @@ def print_gpu_summary(
             utilization if include_utilization else "",
             process_column_text,
         )
+    console = Console()
+    with console.capture() as capture:
+        console.print(table)
+    
+    output = capture.get()
 
-
-    console.print(table)
-
-    console.end_capture()
-    output = console.export_text(styles=True)
     if silent:
         return output
     else:
-        rich.print(table)
-
+        print(output)
 
 def print_notebook_gpu_summary():
     """
@@ -51694,9 +51764,18 @@ def git_import(repo,token=None,*,pull=False):
         fansi_print('rp_git_import: Failed to import repo='+repr(repo), 'red', 'bold')
         raise
 
-def check_pip_requirements(file='requirements.txt'):
+
+def check_pip_requirements(file='requirements.txt', silent=False):
     """
     Test availability of required packages from given requirements file.
+    
+    Args:
+        file (str, optional): Path to the requirements file. Defaults to 'requirements.txt'.
+        silent (bool, optional): If True, does not print the output to the console but instead returns it as a string. Defaults to False.
+    
+    Returns:
+        Optional[str]: If silent, returns the requirements table as a string, including ANSI escape sequences for color. Else, returns None.
+                       If you need plain text without ansi_escapes, use rp.strip_ansi_escapes(check_pip_requirements("requirements.txt", silent=True))
     
     EXAMPLE:
 
@@ -51777,11 +51856,17 @@ def check_pip_requirements(file='requirements.txt'):
         table.add_row(str(item[0]), item[1], '[red]Missing[/red]', '')
 
     console = Console()
-    console.print(table)
+    with console.capture() as capture:
+        console.print(table)
+        if not conflicted and not missing:
+            console.print("[bold green]All required packages are already installed[/bold green]")
+    
+    output = capture.get()
 
-    if not conflicted and not missing:
-        console.print("[bold green]All required packages are already installed[/bold green]")
-
+    if silent:
+        return output
+    else:
+        print(output)
 
 
 def get_mask_iou(*masks):
