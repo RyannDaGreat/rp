@@ -49439,7 +49439,7 @@ def file_line_iterator(file_name, *, with_len=False, reverse=False):
     return iterator
 
 def _file_line_gen(file_name):
-    with open(file_name, 'rb') as file:
+    with open(file_name, 'r') as file:
         while True:
             line = file.readline()
             if not line:
