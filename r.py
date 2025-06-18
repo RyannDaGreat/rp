@@ -36581,12 +36581,24 @@ def get_module_path_from_name(module_name):
        ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/six.py
     FROM: https://stackoverflow.com/questions/4693608/find-path-of-module-without-importing-in-python
     """
-    import importlib
-    try:
-        return importlib.util.find_spec(module_name).origin
-    except AttributeError:
-        assert module_exists(module_name),'r.get_module_path_from_name: module %s doesnt exist!'%repr(module_name)
-        raise
+    import importlib.util
+    import os
+
+    spec = importlib.util.find_spec(module_name)
+    if spec is None:
+        return None
+
+    # For packages, submodule_search_locations is a list of directory paths.
+    if spec.submodule_search_locations:
+        return spec.submodule_search_locations[0]
+
+    # For single-file modules, origin is the full file path.
+    # We can return its directory.
+    if spec.origin:
+        return os.path.dirname(spec.origin)
+
+    return None
+
 
 def get_module_path(module):
     """
