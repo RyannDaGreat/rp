@@ -25508,11 +25508,18 @@ def cv_draw_arrow(
         )
         return image
 
-    color=as_rgb_float_color(color)
+    #OpenCV handles arrow alpha not by blending over the original image, but by simply replacing the alpha values...
+    #There is no fast way to alpha-blend the arrows onto the image afaik...
+    color=as_rgba_float_color(color)
+    alpha = color[-1]
     color=float_color_to_byte_color(color)
-    
     if is_binary_image(image):
         image = rp.as_rgb_image(image, copy=copy)
+    if alpha==1 and is_rgb_image(image):
+        color = color[:3] #Make it RGB
+    if len(color)==4:
+        image = as_rgba_image(copy=copy)
+
     image = as_byte_image(image, copy=copy)
 
     thickness = int(thickness)        
