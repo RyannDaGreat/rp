@@ -25540,6 +25540,7 @@ def cv_draw_arrows(
     rim_color='black',
     tip_length=0.3,
     *,
+    visible=True,
     antialias=True,
     show_progress=False,
     copy=True
@@ -25579,13 +25580,14 @@ def cv_draw_arrows(
     if is_iterable(tip_length)       : tip_length  = list(tip_length)
     if is_iterable(antialias)        : antialias   = list(antialias)
     if is_iterable(rim)              : rim         = list(rim)
+    if is_iterable(visible)          : visible     = list(visible)
 
-    start_xs, start_ys, end_xs, end_ys, thicknesses, colors, tip_lengths, antialiass, rims, rim_colors = broadcast_lists(
-        start_x, start_y, end_x, end_y, thickness, color, tip_length, antialias, rim, rim_color
+    start_xs, start_ys, end_xs, end_ys, thicknesses, colors, tip_lengths, antialiass, rims, rim_colors, visible = broadcast_lists(
+        start_x, start_y, end_x, end_y, thickness, color, tip_length, antialias, rim, rim_color, visible
     )
     assert len(start_xs)==len(start_ys)==len(end_xs)==len(end_ys)==len(thicknesses)==len(colors)==len(tip_lengths)==len(antialiass)==len(rims)==len(rim_colors)
     
-    bundles = zip(start_xs, start_ys, end_xs, end_ys, thicknesses, colors, tip_lengths, antialiass, rims, rim_colors)
+    bundles = zip(start_xs, start_ys, end_xs, end_ys, thicknesses, colors, tip_lengths, antialiass, rims, rim_colors, visible)
 
     if show_progress:
         length = len(start_xs)
@@ -25593,8 +25595,9 @@ def cv_draw_arrows(
 
     image, kwargs = _cv_helper(image=image, copy=copy, antialias=antialias)
 
-    for start_x, start_y, end_x, end_y, thickness, color, tip_length, antialias, rim, rim_color in bundles:
-        image = cv_draw_arrow(image, start_x, start_y, end_x, end_y, thickness, color, rim=rim, rim_color=rim_color, tip_length=tip_length, antialias=antialias, copy=False)
+    for start_x, start_y, end_x, end_y, thickness, color, tip_length, antialias, rim, rim_color, visible in bundles:
+        if visible:
+            image = cv_draw_arrow(image, start_x, start_y, end_x, end_y, thickness, color, rim=rim, rim_color=rim_color, tip_length=tip_length, antialias=antialias, copy=False)
 
     return image
 
