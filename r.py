@@ -46897,9 +46897,10 @@ def run_tapnext(
         ... rp.fansi_print("SAVED " + rp.save_video_mp4(new_video), "blue cyan", "bold")
     """
     #THE ABOVE DOCSTRING SHOULD BE MIRRORED VERBATIM FROM rp.git.tapnet.run_tapnext.run_tapnext.__doc__
-    rp.git_import('tapnet') #https://github.com/RyannDaGreat/tapnet
-    from rp.git.tapnet.run_tapnext import run_tapnext as func
     try:
+        rp.git_import('tapnet') #https://github.com/RyannDaGreat/tapnet
+        sys.path.append(rp.get_module_path_from_name('rp.git.tapnet'))
+        from rp.git.tapnet.run_tapnext import run_tapnext as func
         return func(
             video,
             device           = device,
@@ -46909,10 +46910,9 @@ def run_tapnext(
             model            = model,  # "tapir", "bootstapir", or "tapnext"
             model_dir        = model_dir,
         )
-    except ImportError as e:
-        import sys
-        requirements_path = rp.with_file_name(rp.get_module_path(rp.git.tapnet.run_tapnext), 'requirements.txt')
-        raise ImportError(str(e) + "\nYou might want to run " + sys.executable + " -m pip install -r " + requirements_path) from e
+    except (ImportError,ModuleNotFoundError) as e:
+        requirements_path = rp.with_file_name(rp.get_module_path_from_name('rp.git.tapnet.run_tapnext'), 'requirements.txt')
+        raise type(e)(str(e) + "\nYou might want to run " + shlex.quote(sys.executable) + " -m pip install -r " + shlex.quote(requirements_path)) from e
 
 
 
