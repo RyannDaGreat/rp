@@ -521,6 +521,145 @@ TMUX_SPECIAL_CHARS = {
     ',': '\\,',
 }
 
+# macOS special characters to their original Alt/Option keystroke combinations
+# These are the characters that appear when using Alt/Option + key combinations
+MACOS_SPECIAL_CHAR_TO_KEYSTROKE = {
+    # Option + letter combinations
+    'Ω': ('M', 'z'),        # Option + z
+    'π': ('M', 'p'),        # Option + p  
+    'µ': ('M', 'm'),        # Option + m
+    'ß': ('M', 's'),        # Option + s
+    'ç': ('M', 'c'),        # Option + c
+    '√': ('M', 'v'),        # Option + v
+    '≈': ('M', 'x'),        # Option + x
+    '∂': ('M', 'd'),        # Option + d
+    '∆': ('M', 'j'),        # Option + j
+    '∫': ('M', 'b'),        # Option + b
+    '∑': ('M', 'w'),        # Option + w
+    '∞': ('M', '5'),        # Option + 5
+    '≤': ('M', ','),        # Option + comma
+    '≥': ('M', '.'),        # Option + period
+    '÷': ('M', '/'),        # Option + /
+    '≠': ('M', '='),        # Option + =
+    '±': ('M', '+'),        # Option + +
+    '¬': ('M', 'l'),        # Option + l
+    '∧': ('M', 'k'),        # Option + k
+    '∨': ('M', 'v'),        # Option + v (logical or)
+    '⊕': ('M', 'q'),        # Option + q
+    '⊗': ('M', 'r'),        # Option + r
+    '⊙': ('M', 'o'),        # Option + o
+    '⊥': ('M', 'i'),        # Option + i
+    '∪': ('M', 'u'),        # Option + u
+    '∩': ('M', 'n'),        # Option + n
+    '∅': ('M', 'h'),        # Option + h
+    '∈': ('M', 'e'),        # Option + e
+    '∉': ('M', 'f'),        # Option + f
+    '∋': ('M', 'g'),        # Option + g
+    '∌': ('M', 't'),        # Option + t
+    '∠': ('M', 'a'),        # Option + a
+    '£': ('M', '3'),        # Option + 3
+    '¢': ('M', '4'),        # Option + 4
+    '¥': ('M', 'y'),        # Option + y
+    '¡': ('M', '1'),        # Option + 1
+    '«': ('M', '\\'),       # Option + \
+    '"': ('M', '['),        # Option + [
+    "'": ('M', ']'),        # Option + ]
+    '–': ('M', '-'),        # Option + -
+    '…': ('M', ';'),        # Option + ;
+    '†': ('M', 't'),        # Option + t
+    '®': ('M', 'r'),        # Option + r
+    '´': ('M', 'e'),        # Option + e (acute accent dead key)
+    'œ': ('M', 'q'),        # Option + q
+    'å': ('M', 'a'),        # Option + a
+    'ƒ': ('M', 'f'),        # Option + f
+    '©': ('M', 'g'),        # Option + g
+    'ø': ('M', 'o'),        # Option + o
+    'æ': ('M', "'"),        # Option + '
+    '`': ('M', '`'),        # Option + `
+    'ˆ': ('M', 'i'),        # Option + i (circumflex accent dead key)
+    '™': ('M', '2'),        # Option + 2
+    '§': ('M', '6'),        # Option + 6
+    '¶': ('M', '7'),        # Option + 7
+    '•': ('M', '8'),        # Option + 8
+    'ª': ('M', '9'),        # Option + 9
+    'º': ('M', '0'),        # Option + 0
+    
+    # Option + Shift combinations
+    'Ç': ('M', 'S-c'),      # Option + Shift + c
+    '◊': ('M', 'S-v'),      # Option + Shift + v
+    '˛': ('M', 'S-x'),      # Option + Shift + x
+    '¸': ('M', 'S-z'),      # Option + Shift + z
+    '˝': ('M', 'S-w'),      # Option + Shift + w
+    '˚': ('M', 'S-k'),      # Option + Shift + k
+    '¯': ('M', 'S-h'),      # Option + Shift + h
+    '˘': ('M', 'S-g'),      # Option + Shift + g
+    '˙': ('M', 'S-h'),      # Option + Shift + h
+    '¨': ('M', 'S-u'),      # Option + Shift + u
+    '˜': ('M', 'S-n'),      # Option + Shift + n
+    '¦': ('M', 'S-\\'),     # Option + Shift + \
+    '€': ('M', 'S-2'),      # Option + Shift + 2
+    '‰': ('M', 'S-r'),      # Option + Shift + r
+    '°': ('M', 'S-8'),      # Option + Shift + 8
+    '¿': ('M', 'S-/'),      # Option + Shift + /
+    '»': ('M', 'S-\\'),     # Option + Shift + \
+    '"': ('M', 'S-['),      # Option + Shift + [
+    "'": ('M', 'S-]'),      # Option + Shift + ]
+    '—': ('M', 'S--'),      # Option + Shift + -
+    '‚': ('M', 'S-;'),      # Option + Shift + ;
+    '„': ('M', 'S-w'),      # Option + Shift + w
+    '‹': ('M', 'S-3'),      # Option + Shift + 3
+    '›': ('M', 'S-4'),      # Option + Shift + 4
+    'ﬁ': ('M', 'S-5'),      # Option + Shift + 5
+    'ﬂ': ('M', 'S-6'),      # Option + Shift + 6
+    '‡': ('M', 'S-7'),      # Option + Shift + 7
+    '·': ('M', 'S-9'),      # Option + Shift + 9
+    '⁄': ('M', 'S-1'),      # Option + Shift + 1
+    'Œ': ('M', 'S-q'),      # Option + Shift + q
+    'Å': ('M', 'S-a'),      # Option + Shift + a
+    'Í': ('M', 'S-s'),      # Option + Shift + s
+    'Î': ('M', 'S-d'),      # Option + Shift + d
+    'Ï': ('M', 'S-f'),      # Option + Shift + f
+    'Ó': ('M', 'S-h'),      # Option + Shift + h (duplicate with ¯)
+    'Ô': ('M', 'S-j'),      # Option + Shift + j
+    'Ò': ('M', 'S-k'),      # Option + Shift + k (duplicate with ˚)
+    'Ú': ('M', 'S-l'),      # Option + Shift + l
+    'Æ': ('M', 'S-\\'),     # Option + Shift + " (quote key)
+    'Á': ('M', 'S-e'),      # Option + Shift + e
+    'ˇ': ('M', 'S-t'),      # Option + Shift + t
+    '´': ('M', 'S-e'),      # Option + Shift + e (duplicate)
+    'Â': ('M', 'S-i'),      # Option + Shift + i
+    'ı': ('M', 'S-b'),      # Option + Shift + b
+    'Ø': ('M', 'S-o'),      # Option + Shift + o
+    '∏': ('M', 'S-p'),      # Option + Shift + p
+    '\u2019': ('M', 'S-]'),      # Option + Shift + ] (right single quote)
+    '\u2018': ('M', 'S-['),      # Option + Shift + [ (left single quote)
+    '\u201C': ('M', 'S-['),      # Option + Shift + [ (left double quote)
+    '\u201D': ('M', 'S-]'),      # Option + Shift + ] (right double quote)
+}
+
+
+def _convert_macos_special_char(char, cls):
+    """
+    Helper function to convert macOS special characters to TmuxSendkeyAction.
+    
+    Args:
+        char: The character to check and convert
+        cls: The TmuxSendkeyAction class
+        
+    Returns:
+        TmuxSendkeyAction or None: The converted action if char is a special character, None otherwise
+    """
+    if char in MACOS_SPECIAL_CHAR_TO_KEYSTROKE:
+        modifier, keystroke = MACOS_SPECIAL_CHAR_TO_KEYSTROKE[char]
+        # For special characters, we ignore the active_modifiers and use the mapped ones
+        if keystroke.startswith('S-'):
+            # Option + Shift combination
+            return cls(keystroke[2:], [modifier, 'S'])
+        else:
+            # Option only combination
+            return cls(keystroke, [modifier])
+    return None
+
 
 class TmuxSendkeyAction(Action):
     """
@@ -625,12 +764,21 @@ class TmuxSendkeyAction(Action):
         if hasattr(key, 'char') and key.char is not None:
             # KeyCode with character representation
             char = key.char
+            
+            # Check for macOS special characters first
+            if result := _convert_macos_special_char(char, cls):
+                return result
+                    
             if char in TMUX_SPECIAL_CHARS:
                 return cls(TMUX_SPECIAL_CHARS[char], modifiers)
             return cls(char, modifiers)
             
         # String literals
         elif isinstance(key, str):
+            # Check for macOS special characters first
+            if result := _convert_macos_special_char(key, cls):
+                return result
+                    
             # Escape special characters
             if key in TMUX_SPECIAL_CHARS:
                 return cls(TMUX_SPECIAL_CHARS[key], modifiers)
@@ -643,6 +791,11 @@ class TmuxSendkeyAction(Action):
             # Check if it's a quoted character like 'a'
             if key_str.startswith("'") and key_str.endswith("'") and len(key_str) == 3:
                 char = key_str[1]
+                
+                # Check for macOS special characters first
+                if result := _convert_macos_special_char(char, cls):
+                    return result
+                        
                 if char in TMUX_SPECIAL_CHARS:
                     return cls(TMUX_SPECIAL_CHARS[char], modifiers)
                 return cls(char, modifiers)
