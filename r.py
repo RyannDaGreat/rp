@@ -4943,18 +4943,48 @@ def load_animated_gif(location,*,use_cache=True):
 _load_image_cache={}
 
 
-
 def load_image_from_clipboard():
     """ #Grab an image copied from your clipboard """
     pip_import('PIL')
     from PIL import ImageGrab
     assert currently_running_windows() or currently_running_mac(),'load_image_from_clipboard() only works on Mac and Windows right now; sorry. This is because of PIL.'
+
+    if not currently_running_desktop():
+        #Shortcut: If we're not in a desktop environment we can't retrieve image from clipboard
+        #ImageGrab.grabclipboard() can take up to .1 seconds, so this check saves time
+        raise RuntimeError("r.load_image_from_clipboard: Not running in a desktop - not possible to have copied an image")
+        
     ans=ImageGrab.grabclipboard()
+    if ans is None:
+        #No image in clipboard
+        raise RuntimeError("r.load_image_from_clipboard: No image detected in clipboard")
+
     path=temporary_file_path('.png')
     ans.save(path)
     ans=load_image(path)
     delete_file(path)
     return ans
+
+def _paste_from_clipboard():
+    """
+    Auto-detect clipboard contents and return appropriate type.
+    Returns string for text content, image object for image content.
+    Prioritizes speed by checking for text first since image loading is slow.
+    """
+    text_content = string_from_clipboard()
+    if text_content:
+        #If an image is copied, string will be ''
+        return text_content
+    
+    try:
+        image = load_image_from_clipboard()
+        if image is not None:
+            return image
+    except RuntimeError:
+        #No image pasted
+        pass
+    
+    return ''
 
 def copy_image_to_clipboard(image):
     """
@@ -5513,7 +5543,7 @@ def encode_images_to_base64(images,filetype=None,quality=100):
     return [encode_image_to_base64(image, filetype, quality) for image in images]
 
 
-def decode_image_from_bytes(encoded_image:bytes):
+def decode_bytes_to_image(encoded_image:bytes):
     """
     Supports any filetype in r._opencv_supported_image_formats, including jpg, bmp, png, exr and tiff
     TODO: Fix support for opencv, I suspect it will be faster.
@@ -15551,7 +15581,7 @@ def display_image_in_terminal_color(image,*,truecolor=True):
         _helper(timg)
 
 
-def display_image_in_terminal_imgcat(image):
+def display_image_in_terminal_imgcat(image, *, pixels_per_line=24):
     """
     Can display images in some terminals as actual images
     
@@ -15568,7 +15598,7 @@ def display_image_in_terminal_imgcat(image):
     EXAMPLE:
         while True:
             display_image_in_terminal_imgcat(cv_resize_image(load_image_from_webcam(), 0.1))
-             
+
     """
     pip_import("imgcat")
     import imgcat
@@ -15582,14 +15612,16 @@ def display_image_in_terminal_imgcat(image):
         image = as_byte_image(image)
         
         #I don't know the maximum size, but I'm sure this will do just fine
-        image = resize_image_to_fit(image, width=1024, height=1024, allow_growth=False)
+        #After a certain size, it just won't display...
+        # image = resize_image_to_fit(image, width=1024, height=1024, allow_growth=False)
+        # image = resize_image_to_fit(image, width=2048, height=2048, allow_growth=False)
         
         image = as_pil_image(image)
 
-    imgcat.imgcat(image)
+    imgcat.imgcat(image, pixels_per_line=pixels_per_line)
         
 
-def display_video_in_terminal_color(frames, *, loop=True, framerate=None):
+def display_video_in_terminal_color(frames, *, loop=True, framerate=None, display_image=display_image_in_terminal_color):
     """
     Display a video in the terminal with a progress bar.
 
@@ -15600,6 +15632,10 @@ def display_video_in_terminal_color(frames, *, loop=True, framerate=None):
 
     EXAMPLE:
         display_video_in_terminal(load_webcam_stream(), framerate=30)
+
+    EXAMPLE:
+        display_video_in_terminal_imgcat(resize_images(load_webcam_stream(),lazy=True,size=.25))
+             
     """
     import time
 
@@ -15607,7 +15643,7 @@ def display_video_in_terminal_color(frames, *, loop=True, framerate=None):
         for i, f in enumerate(frames):
             start_time = time.time() if framerate else None
 
-            display_image_in_terminal_color(f)
+            display_image(f)
             _terminal_move_cursor_to_top_left()
             w = get_terminal_width()
             if has_len(frames):
@@ -15629,6 +15665,7 @@ def display_video_in_terminal_color(frames, *, loop=True, framerate=None):
         if not loop:
             break
 
+display_video_in_terminal_imgcat = partial(display_video_in_terminal_color, display_image = display_image_in_terminal_imgcat)
 
 def auto_canny(image,sigma=0.33,lower=None,upper=None):
     """ Takes an image, returns the canny-edges of it (a binary matrix) """
@@ -20357,6 +20394,8 @@ def pseudo_terminal(
         FLA   PROF FLAME
         FLAO  PROF FLAME OPEN
         FLAC  PROF FLAME COPY
+        FLAI  PROF FLAME IMAGE COPY
+        FLAIC PROF FLAME IMAGE COPY
         FLAP  PROF FLAME PASTE
 
         N  NEXT
@@ -20400,7 +20439,7 @@ def pseudo_terminal(
         CPR !$PY -m rp call check_pip_requirements
 
         BAA  $os.system('bash '+str(ans))
-        ZSHA $os.system('bash '+str(ans))
+        ZSHA $os.system('bash '+str(ans)O
 
         #PYA and PUA are similar to EA except they run in separate process
         PYA $os.system($sys.executable+' '+$shlex.quote(ans));
@@ -20423,12 +20462,25 @@ def pseudo_terminal(
         SFE $strip_file_extension(ans) if isinstance(ans,str) else $strip_file_extensions(ans)
         GFE $get_file_extension(ans) if isinstance(ans,str) else $get_file_extensions(ans)
 
-        64P  ans=$printed($string_from_clipboard()) ; $fansi_print($human_readable_file_size(len( ans )), 'bold cyan') ; ans=$base64_to_object(ans)   #Copy object via Base64 String
+        64P  ans=$printed($string_from_clipboard()) ; $fansi_print($human_readable_file_size(len( ans )), 'bold cyan') ; ans=$base64_to_object(ans)    #Copy object via Base64 String
         64C _ans64=$printed($object_to_base64(ans)) ; $fansi_print($human_readable_file_size(len(_ans64)), 'bold cyan') ; $string_to_clipboard(_ans64) #Copy object via Base64 String
-        64FC  ans=$object_to_base64($r._copy_path_to_bundle(None)); $string_to_clipboard(ans)
-        64FCA ans=$object_to_base64($r._copy_path_to_bundle(ans )); $string_to_clipboard(ans)
+        64FC  ans=$object_to_base64($r._copy_path_to_bundle(None)); $string_to_clipboard(ans) #Base-64 File Copy
+        64FCA ans=$object_to_base64($r._copy_path_to_bundle(ans )); $string_to_clipboard(ans) #Base-64 File Copy Ans
+        64FCH ans=$object_to_base64($r._copy_path_to_bundle('.' )); $string_to_clipboard(ans) #Base-64 File Copy Here
         64FP  ans=$r._paste_path_from_bundle($base64_to_object($string_from_clipboard())) #Copy file via Base64 String
         64FPA ans=$r._paste_path_from_bundle($base64_to_object(ans                     )) #Copy file via Base64 String
+        IPA   $bytes_to_object($decode_image_to_bytes($load_image_from_clipboard())) #Image Object-Paste
+        IMPA  $bytes_to_object($decode_image_to_bytes($load_image_from_clipboard())) #Image Object-Paste
+        IMP   $bytes_to_object($decode_image_to_bytes($load_image_from_clipboard())) #Image Object-Paste
+        IFP   ans=                                    $r._paste_path_from_bundle($bytes_to_object($decode_image_to_bytes($load_image_from_clipboard()))) #Image File-Paste
+        IFPA  ans=                                    $r._paste_path_from_bundle($bytes_to_object($decode_image_to_bytes($load_image_from_clipboard()))) #Image File-Paste
+        IFPAO ans=$open_file_with_default_application($r._paste_path_from_bundle($bytes_to_object($decode_image_to_bytes($load_image_from_clipboard())))) #Image File-Paste
+        IFPO  ans=$open_file_with_default_application($r._paste_path_from_bundle($bytes_to_object($decode_image_to_bytes($load_image_from_clipboard())))) #Image File-Paste
+        ICO   ($display_image if $running_in_jupyter_notebook() else $partial($display_image_in_terminal_imgcat, pixels_per_line=300))($encode_bytes_to_image($object_to_bytes(ans                          ))) #Image Object-Copy (Works best in ITerm2)
+        IMCO  ($display_image if $running_in_jupyter_notebook() else $partial($display_image_in_terminal_imgcat, pixels_per_line=300))($encode_bytes_to_image($object_to_bytes(ans                          ))) #Image Object-Copy (Works best in ITerm2)
+        IFC   ($display_image if $running_in_jupyter_notebook() else $partial($display_image_in_terminal_imgcat, pixels_per_line=300))($encode_bytes_to_image($object_to_bytes($r._copy_path_to_bundle(None)))) #Image File-Copy (Works best in ITerm2)
+        IFCA  ($display_image if $running_in_jupyter_notebook() else $partial($display_image_in_terminal_imgcat, pixels_per_line=300))($encode_bytes_to_image($object_to_bytes($r._copy_path_to_bundle(ans )))) #Image File-Copy Ans (Works best in ITerm2)
+        IFCH  ($display_image if $running_in_jupyter_notebook() else $partial($display_image_in_terminal_imgcat, pixels_per_line=300))($encode_bytes_to_image($object_to_bytes($r._copy_path_to_bundle('.' )))) #Image File-Copy Here (Works best in ITerm2)
 
         # GO GC
 
@@ -22634,8 +22686,21 @@ def pseudo_terminal(
                             tmux_clipboard=tmux_paste()
                             user_message=repr(tmux_clipboard)
                         elif user_message == 'PASTE':
-                            fansi_print("PASTE --> ans=str(string_from_clipboard()):",'blue','underlined')
-                            user_message=repr(string_from_clipboard())
+                            new_ans = _paste_from_clipboard()
+                            if isinstance(new_ans, str) and len(new_ans)<100000:
+                                fansi_print("PASTE --> ans=str(string_from_clipboard()):",'blue','underlined')
+                                user_message = repr(new_ans)
+
+                            else:
+                                if is_image(new_ans):
+                                    fansi_print("PASTE --> ans=load_image_from_clipboard():",'blue','underlined')
+                                else:
+                                    fansi_print("PASTE --> ans=str(string_from_clipboard()):",'blue','underlined')
+
+                                user_message='#PASTE '+type(new_ans).__name__
+
+                                set_ans(new_ans)
+
                         elif user_message in 'ALS ALSF ALSD'.split():
                             if user_message in 'ALS' :
                                 fansi_print("ALS --> ans LS --> Sets ans to the list of paths in the current directory",'blue','bold')
@@ -39370,6 +39435,64 @@ def bytes_to_object(x:bytes)->object:
     except Exception:
         return x #bytestrings allready are objects. In the event that we have an error, it might make sense just to return the original bytestring
 
+def encode_bytes_to_image(data:bytes):
+    """
+    Encode binary data into a numpy array representing an RGB image.
+    
+    The function packs the data length as an 8-byte little-endian integer,
+    pads it to 8 bytes, then converts the data into RGB pixel values.
+    
+    Args:
+        data (bytes): Binary data to encode into image format
+        
+    Returns:
+        numpy.ndarray: 3D array with shape (side_len, side_len, 3) representing RGB image
+    """
+    import numpy as np
+    import math
+    import struct
+    
+    data_len = len(data)
+    length_bytes = struct.pack('<Q', data_len).ljust(8, b'\x00')
+    data_with_length = length_bytes + data
+    
+    total_len = len(data_with_length)
+    pixels_needed = math.ceil(total_len / 3)
+    side_len = math.ceil(math.sqrt(pixels_needed))
+    total_bytes_needed = side_len * side_len * 3
+    
+    padded_data = data_with_length + b'\x00' * (total_bytes_needed - total_len)
+    
+    image_array = np.frombuffer(padded_data, dtype=np.uint8)
+    image = image_array.reshape((side_len, side_len, 3))
+    
+    return image
+
+def decode_image_to_bytes(image)->bytes:
+    """
+    Decode a numpy array image back to the original binary data.
+    
+    Extracts the data length from the first 8 bytes of the flattened image,
+    then returns the specified number of bytes containing the original data.
+    
+    Args:
+        image (numpy.ndarray): 3D RGB image array to decode
+        
+    Returns:
+        bytes: The original binary data that was encoded in the image
+    """
+    import numpy as np
+    import struct
+    
+    flattened = image.flatten()
+    all_bytes = flattened.tobytes()
+    
+    length_bytes = all_bytes[:8]
+    data_length = struct.unpack('<Q', length_bytes[:8])[0]
+    
+    return all_bytes[8:8+data_length]
+
+
 _web_clipboard_url = 'https://ryanpythonide.pythonanywhere.com'#By sqrtryan@gmail.com account
 
 class _WebCopyProgressTracker:
@@ -42328,17 +42451,21 @@ def cv_resize_images(
     copy=True,
     lazy=False
 ):
-
     images=detuple(images)
-    assert all(is_image(x) for x in images), 'Not all given images satisfy rp.is_image'
 
     as_numpy = is_numpy_array(images)
 
     images=(cv_resize_image(image, size, interp, copy=copy) for image in images)
 
-    if show_progress: images = eta(images, title='rp.cv_resize_images')
+    if show_progress:
+        images = eta(images, title="rp.cv_resize_images")
+
     if not lazy: 
+        assert all(is_image(x) for x in images), 'Not all given images satisfy rp.is_image'
+
+        #Process them all
         images=list(images)
+
         if as_numpy:
             #If the input was a numpy array, convert the output to that too
             if show_progress: print(end="resize_images: Converting to numpy array...")
@@ -45869,6 +45996,8 @@ def _paste_path_from_bundle(data,path=None, *,ask_to_replace=True):
 
 def web_copy_path(path:str=None, *, show_progress=False):
     """ FC (file copy) """
+    if is_a_module(path):
+        path = get_module_path(path)
     web_copy(_copy_path_to_bundle(path), show_progress=show_progress)
     return path
 
@@ -51583,7 +51712,9 @@ known_pypi_module_package_names={
     'smart_open': 'smart-open',
     'spacy_legacy': 'spacy-legacy',
     'speech_recognition': 'SpeechRecognition', #Needs pyaudio, and needs portaudio. I'm not sure if pyaudio needs portaudio?
+    'fontTools':'fonttools',
     'sphinx': 'Sphinx',
+    'skia': 'skia-python',
     'sphinx_rtd_theme': 'sphinx-rtd-theme',
     'sphinxcontrib': 'sphinxcontrib-htmlhelp',
     'spyder_kernels': 'spyder-kernels',
