@@ -4333,6 +4333,24 @@ def random_batch(full_list,batch_size: int = None,*,retain_order: bool = False):
     if isinstance(full_list,set):
         full_list=list(full_list)
 
+    # Optimized path for range objects - avoid materializing the entire range
+    if isinstance(full_list, range):
+        if batch_size is None:
+            batch_size = len(full_list)
+            if retain_order:
+                return list(full_list)  # Return the range as a list
+        else:
+            assert 0 <= batch_size <= len(full_list), "batch_size == " + str(batch_size) + " ⋀ len(full_list) == " + str(len(full_list)) + "，∴  ¬ (0 <= batch_size <= len﹙full_list﹚)   Explanation: We do not allow duplicates, ∴ we cannot generate a larger batch than we have elements to choose from full_list"
+        
+        # Generate random indices directly from range parameters
+        random_indices = random.sample(range(len(full_list)), batch_size)
+        if retain_order:
+            random_indices.sort()
+        
+        # Map indices to actual range values efficiently
+        start, stop, step = full_list.start, full_list.stop, full_list.step
+        return [start + i * step for i in random_indices]
+
     if batch_size is None:  # The default if not specified
         # If we don't specify the batch size, assume that we simply want a shuffled version of the full_list
         if retain_order:
@@ -4348,6 +4366,8 @@ def random_batch(full_list,batch_size: int = None,*,retain_order: bool = False):
     if retain_order:
         ⵁ.sort()
     return list(full_list[i] for i in ⵁ)
+
+
 
 def random_batch_up_to(full_list, max_batch_size=None, retain_order=False):
     """
@@ -42461,8 +42481,6 @@ def cv_resize_images(
         images = eta(images, title="rp.cv_resize_images")
 
     if not lazy: 
-        assert all(is_image(x) for x in images), 'Not all given images satisfy rp.is_image'
-
         #Process them all
         images=list(images)
 
