@@ -1,4 +1,12 @@
 #TODO: This file is NOT comlpete yet. TODO: Complete it and make it useable.
+#TODO: Make a real test for it, docstring how this is meant to be used for heavy preprocessing like captioning videos, getting tracking ponits, warping noise etc on the fly
+#TODO: Make an idle processor: somehow I'd like the dataset to start getting output tickets for 0,1,2,3,4...etc if it's not being queried at a given moment. Might need to modify webevaluator for this
+#TODO: In web evaluator, we might want to add a self-repairing option to the clusters so if one hangs and takes too long we can kill it, and it will reboot
+#TODO: In web evaluator, we might want to add an auto-ranking option to the delegatees so we can divy GPU's if one crashes
+#TODO: Add a light "light_postprocess(input_ticket, output_ticket, sample) function that's meant to be used on the final training dataloader - so that cheap ops that generate large things can be done without having to load from disk (i.e. placing dots on a video - we don't want MP4 compression and its fast enough to calculate, so I don't want to send it over network. The docstrings should specify that this only really matters for the remote dataset options - for local dataset you wont notice a difference between doing it there and putting it directly in the output ticket --> sample function, so beware - if handled right you can make this dataloader sing)
+#TODO: IN docs, note that input tickets CAN be any type - not just json-like objects - but if they're large it will be slow over network
+#TODO: Add some basic common preprocessing things we might want out of the box into a separate module. For example, an easy way to encode videos with cogx's encoder or caption using SA2VA.
+#TODO: A RobustDataset mixin or decorator or something: That when you call __getitem__, and it errors with exception, it chooses a random index and tries again.
 import rp
 rp.pip_import('dict_hash')
 
