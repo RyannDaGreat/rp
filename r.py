@@ -44,6 +44,7 @@ from functools import lru_cache, partial
 from multiprocessing.dummy import Pool as ThreadPool  # ⟵ par_map uses ThreadPool. We import it now so we don't have to later, when we use par_map.
 from contextlib import contextmanager
 from math import factorial
+import datetime
 
 #Make glob both a function and module
 import glob
@@ -9992,7 +9993,7 @@ def list_to_index_dict(l: list) -> dict:
     """ ['a','b','c'] ⟶ {0: 'a', 1: 'b', 2: 'c'} """
     return {i:v for i,v in enumerate(l)}
 
-def invert_dict(d: dict, bijection=True) -> dict:
+def invert_dict(d: dict, bijection=True, precedence='last') -> dict:
     """
     Inverts a dictionary, reversing the mapping of keys to values.
 
@@ -10001,6 +10002,7 @@ def invert_dict(d: dict, bijection=True) -> dict:
         bijection (bool, optional): If True, assumes the dictionary is a bijection (one-to-one mapping)
             and inverts it directly. If False, handles non-bijective dictionaries by grouping keys with
             the same value into tuples. Defaults to True.
+        precedence (str): Either 'first' or 'last' (default). If 'first', we prioritize values that appeared earlier in the dict.
 
     Returns:
         dict: The inverted dictionary.
@@ -10012,10 +10014,14 @@ def invert_dict(d: dict, bijection=True) -> dict:
         >>> invert_dict({0: 'a', 1: 'a', 2: 'b'}, bijection=False)
         {'a': (0, 1), 'b': (2,)}
     """
+    assert precedence in ['first', 'last']
 
     if bijection:
         # {0: 'a', 1: 'b', 2: 'c'} ⟶ {'c': 2, 'b': 1, 'a': 0}
-        return {v:k for v,k in zip(d.values(),d.keys())}
+        items = list(d.items())
+        if precedence=='first':
+            items = items[::-1]
+        return {v:k for v,k in items}
     else:
         # {0: 'a', 1: 'a', 2: 'b'} ⟶ {'a': (0,1), 'b': (2,)}
         out={}
@@ -11088,6 +11094,7 @@ def TemporarilySuppressConsoleOutput():
 
 
 _timezone_translations = {
+    # Translates from  the IANA times
     # North America
     "PST": "America/Los_Angeles",  # Pacific Standard Time
     "PDT": "America/Los_Angeles",  # Pacific Daylight Time
@@ -11306,8 +11313,118 @@ def format_current_date(timezone=None):
 
 _format_datetime = format_date #For compatiability - older code used rp.r._format_datetime
 
+
+def _method_decorator_metaclass(decorator,docstring=None):
+    """
+    Factory that creates a metaclass applying decorator to all methods
+    Used to make more compact and readable source code
+    """
+    class Meta(type):
+        def __new__(cls, name, bases, class_dict):
+            from types import FunctionType
+            new_class_dict = {}
+            for attr_name, attr_value in class_dict.items():
+                if isinstance(attr_value, FunctionType) and not attr_name.startswith('__'):
+                    new_class_dict[attr_name] = decorator(attr_value)
+                else:
+                    new_class_dict[attr_name] = attr_value
+            output=super().__new__(cls, name, bases, new_class_dict)
+            if docstring is not None:
+                output.__doc__=docstring
+            return output
+    return Meta
+
+# Now your original metaclasses become one-liners:
+_ClassMethodMetaclass  = _method_decorator_metaclass(classmethod ,'Automatically apply @classmethod to all non-wrapped subclass funcs')
+_StaticMethodMetaclass = _method_decorator_metaclass(staticmethod,'Automatically apply @staticmethod to all non-wrapped subclass funcs')
+
+class _FormTranslator(metaclass=_ClassMethodMetaclass):
+    """
+    Originally inspired by translation funcs such as 
+        rp.is_image, rp.as_rgba_image, rp.as_rgb_image, as_grayscale_image, rp.as_pil_image etc etc
+    It took O(N^2) code to write, and thought there's gotta be a better way...here it is!
+    Please make a docstring for each child class explaining the methods created, they shouldn't have to look here.
+    """
+    def __init_subclass__(cls):
+        super().__init_subclass__()
+        
+        #The forms this class handles are determined by the collection of is_* methods defined
+        cls.forms = [name[3:] for name in dir(cls) if name.startswith('is_') and not name=='is_form']
+        
+        # Add as_* methods
+        for form in cls.forms:
+            setattr(cls, 'as_'+form, classmethod(lambda c, v, f=form: c.as_form(v, f)))
+            
+        #CLASS VALIDATION: Make sure we have total connectivity - translators from every form to every other form
+        for from_form, to_form in itertools.product(cls.forms, repeat=2):
+            if from_form != to_form:
+                #For all pairs of different forms, we expect to find some method to translate between them
+                translator_name = from_form + "_to_" + to_form
+                if not hasattr(cls, translator_name):
+                    raise RuntimeError(cls.__name__ + ": Can't find a " + translator_name + " method. We have " + str(len(cls.forms)) + " forms: " + str(cls.forms))
+            
     
-def get_current_timezone():
+    def get_form(cls, value):
+        for form in cls.forms:
+            if cls.is_form(value,form):
+                return form
+        raise ValueError(cls.__name__ + ": Unknown form: " + str(value))
+    
+    def as_form(cls, value, form):
+        from_form = cls.get_form(value)
+        
+        if from_form==form:
+            #We don't need to translate anything - they're already the right form
+            return value
+        
+        return getattr(cls, from_form + "_to_" + form)(value)
+    
+    def is_form(cls,value,form):
+        return getattr(cls, "is_" + form)(value)
+
+
+class _TimezoneFormTranslator(_FormTranslator):
+    """
+    Contains functions to help translate beteen timezone data formats
+    
+    human = 'EST', iana = 'America/New_York', and tzinfo = <DstTzInfo 'America/New_York' LMT-1 day, 19:04:00 STD> all represent the same data
+
+    EXAMPLES:
+        
+        >>> print(TimezoneTranslator.as_tzinfo('EST').__repr__())             # --> <DstTzInfo 'America/New_York' LMT-1 day, 19:04:00 STD>
+        ... print(TimezoneTranslator.as_iana('EST').__repr__())               # --> 'America/New_York'
+        ... print(TimezoneTranslator.as_human('America/New_York').__repr__()) # --> 'ET'
+        ... print(TimezoneTranslator.as_iana('ET').__repr__())                # --> 'America/New_York'
+        ... 
+        ... tz='EST'
+        ... 
+        ... print(TimezoneTranslator.as_form(tz,'human').__repr__())  # --> 'EST'
+        ... print(TimezoneTranslator.as_form(tz,'tzinfo').__repr__()) # --> <DstTzInfo 'America/New_York' LMT-1 day, 19:04:00 STD>
+        ... print(TimezoneTranslator.as_form(tz,'iana').__repr__())   # --> 'America/New_York'
+        ... 
+        ... print(TimezoneTranslator.is_human(tz))  # --> True
+        ... print(TimezoneTranslator.is_iana(tz))   # --> False
+        ... print(TimezoneTranslator.is_tzinfo(tz)) # --> False
+        ... 
+        ... print(TimezoneTranslator.get_form(tz))  # -->Human
+        
+    """
+    # Converters
+    def human_to_iana  (cls,tz): return _timezone_translations[tz]
+    def iana_to_tzinfo (cls,tz): return rp.pip_import('pytz').timezone(tz)
+    def iana_to_human  (cls,tz): return rp.invert_dict(_timezone_translations, precedence='first')[tz]
+    def tzinfo_to_iana (cls,tz): return tz.zone
+    def human_to_tzinfo(cls,tz): return cls.iana_to_tzinfo(cls.human_to_iana(tz))
+    def tzinfo_to_human(cls,tz): return cls.iana_to_human(cls.tzinfo_to_iana(tz))
+    
+    # Type checkers - should all be mutually exclusive
+    def is_iana  (cls,tz): return isinstance(tz, str) and '/' in tz #Area/Location - Google "IANA timezone form"
+    def is_human (cls,tz): return isinstance(tz, str) and tz in _timezone_translations
+    def is_tzinfo(cls,tz): return isinstance(tz, datetime.tzinfo)
+
+
+
+def get_current_timezone(*,form='human'):
     """
     EXAMPLE:
         >>> get_current_timezone()
@@ -11322,7 +11439,7 @@ def get_current_timezone():
     for timezone in _timezone_translations:
         result = format_date(date, timezone)
         if result.startswith(target):
-            return timezone
+            return _TimezoneFormTranslator.as_form(timezone, form)
 
 
 _rinsp_temp_object=None
@@ -36834,7 +36951,7 @@ def string_to_date(string):
     # If the parsed date is naive (no timezone was detected in the string),
     # then we attach the current user's timezone.
     if result.tzinfo is None:
-        local_tz = pytz.timezone(_timezone_translations[get_current_timezone()])
+        local_tz = get_current_timezone(form='tzinfo')
         result = local_tz.localize(result)
 
     return result
@@ -38809,6 +38926,8 @@ def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, force=Fa
     elif starts_with_any(command, 'npm ' , 'yes | npm ' ): _ensure_npm_installed()
     elif starts_with_any(command, 'apt ' , 'apt-get '   ): command = 'sudo '+command
     elif starts_with_any(command, 'snap ' ,'yes | snap' ): command = 'sudo '+command
+
+    assert connected_to_internet()
 
     error_code =_run_sys_command(command)
 
@@ -48281,7 +48400,11 @@ def get_git_commit_date(path: str):
     root = get_git_repo_root(path)
     repo = Repo(root)
     latest_commit = repo.head.commit
-    return latest_commit.committed_datetime
+    commit_date = latest_commit.committed_datetime
+    local_tz = get_current_timezone(form='tzinfo')
+    commit_date = commit_date.astimezone(local_tz)
+    return commit_date
+
 
 
 
@@ -48395,6 +48518,8 @@ def git_clone(url, path=None, *, depth=None, branch=None, single_branch=False, s
 def git_pull(path='.', *, branch=None, show_progress=False):
     """Git pulls the latest changes from the remote repository."""
     _ensure_git_installed()
+
+    assert connected_to_internet()
 
     path = get_absolute_path(path)
     
@@ -51939,6 +52064,11 @@ def git_import(repo,token=None,*,pull=False):
     If only the repo name is given, like "CommonSource", it tries to clone from https://github.com/RyannDaGreat/CommonSource (defaults to RyannDaGreat)
     If pull is True, it will attempt to update the module by running "git pull" in it. Use this if you suspect a module might be out of date.
     If pull is a string, like 'Oct 20 2025', it will try to pull if the git repo is out of date - i.e. if the last commit date is before the given pull date
+
+    EXAMPLE:
+
+        >>> git_import('CommonSource',pull='Tue May 13, 2025 at 12:20:50AM EDT')
+
     """
     assert isinstance(repo,str)
     assert token is None or isinstance(token,str)
@@ -51950,10 +52080,11 @@ def git_import(repo,token=None,*,pull=False):
     if folder_exists(path):
         if isinstance(pull, str):
             #Pull is some date we need to be after
-            pull = get_git_commit_date(path) <= string_to_date(pull)
+            pull = get_git_commit_date(path) < string_to_date(pull)
 
         if pull:
             git_pull(path, show_progress=True)
+            fansi_print('git_import('+repr(module_name)+'): Most recent commit date: '+format_date(get_git_commit_date(path)), 'green bold')
 
     try:
         return _import_module(module)
