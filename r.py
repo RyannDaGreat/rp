@@ -36786,29 +36786,59 @@ def string_to_date(string):
     Given a date represented as a string, turn it into a datetime object and return it
     It can handle many different formats - it's very flexible!
 
-    https://stackoverflow.com/questions/466345/converting-string-into-datetime
+    Now uses the modern 'dateparser' library instead of the old 'timestring' library
+    for better timezone handling, midnight parsing, and relative date support.
 
-    >>> string_to_date('monday, aug 15th 2015 at 8:40 pm')
-    datetime.datetime(2015, 8, 15, 20, 40)
-    >>> format_date(string_to_date('now'))
-    ans = Tue Aug 22, 2023 at 1:55:59PM
-    >>> format_date(string_to_date('7pm'))
-    ans = Tue Aug 22, 2023 at 7:00:00PM
-    >>> format_date(string_to_date('7am'))
-    ans = Tue Aug 22, 2023 at 7:00:00AM
-    >>> format_date(string_to_date('tomorrow 7am'))
-    ans = Wed Aug 23, 2023 at 7:00:00AM
-    >>> format_date(string_to_date('jan 18 1975'))
-    ans = Sat Jan 18, 1975 at 12:00:00AM
-    >>> format_date(string_to_date('jan 18 1975 at 4:30pm 35 seconds'))
-    ans = Sat Jan 18, 1975 at 4:30:35PM
-    >>> format_date(string_to_date('Sat Jan 18, 1975 at 4:30:35PM'))
-    ans = Sat Jan 18, 1975 at 4:30:35AM
-    >>> format_date(string_to_date('2023-08-28 00:00:00'))
-    ans = Mon Aug 28, 2023 at 12:00:00AM
+    EXAMPLES:
+
+      >>> print(string_to_date('monday, aug 15th 2015 at 8:40 pm'))       # --> datetime.datetime(2015, 8, 15, 20, 40)
+      >>> print(format_date(string_to_date('now')))               # --> Tue Aug 22, 2023 at 1:55:59PM
+      >>> print(format_date(string_to_date('7pm')))               # --> Tue Aug 22, 2023 at 7:00:00PM
+      >>> print(format_date(string_to_date('7am')))               # --> Tue Aug 22, 2023 at 7:00:00AM
+      >>> print(format_date(string_to_date('tomorrow 7am')))          # --> Wed Aug 23, 2023 at 7:00:00AM
+      >>> print(format_date(string_to_date('jan 18 1975')))           # --> Sat Jan 18, 1975 at 12:00:00AM
+      >>> print(format_date(string_to_date('jan 18 1975 at 4:30pm')))      # --> Sat Jan 18, 1975 at 4:30:35PM
+      >>> print(format_date(string_to_date('Sat Jan 18, 1975 at 4:30:35PM')))  # --> Sat Jan 18, 1975 at 4:30:35AM
+      >>> print(format_date(string_to_date('2023-08-28 00:00:00')))       # --> Mon Aug 28, 2023 at 12:00:00AM
+      >>> print(format_date(string_to_date('now pst')))             # --> Mon Jun 23, 2025 at 8:40:54AM PST
+
     """
-    timestring=pip_import('timestring')
-    return timestring.Date(string).date
+
+    # CHANGE OF LIBRARY AS OF JUN 23 2025:
+    # We used to use the 'timestring' library but it a dead repo
+    # It also handled timezones incorrectly - which is to say not at all
+    # It did handle '5 seconds' which dateparser cannot though
+    # However, it also got many wrong - like condidently returning an incorrect answer for '3 hours after 6pm'
+    # New library will error on dates like that
+    # Old library: http://github.com/codecov/timestring
+    # Where I found old library: https://stackoverflow.com/questions/466345/converting-string-into-datetime
+
+    pip_import("dateparser")
+    pip_import("pytz")
+
+    import dateparser
+    import pytz
+
+    settings = dict(
+        PREFER_DATES_FROM="current_period",
+        PREFER_DAY_OF_MONTH="first",
+        RETURN_AS_TIMEZONE_AWARE=True,
+        LANGUAGE_DETECTION_CONFIDENCE_THRESHOLD=1.0,
+    )
+
+    result = dateparser.parse(string, settings=settings)
+
+    if result is None:
+        raise ValueError("rp.string_to_date: Cannot parse " + repr(string))
+
+    # If the parsed date is naive (no timezone was detected in the string),
+    # then we attach the current user's timezone.
+    if result.tzinfo is None:
+        local_tz = pytz.timezone(_timezone_translations[get_current_timezone()])
+        result = local_tz.localize(result)
+
+    return result
+
 
 def open_file_with_default_application(path):
     """
@@ -48234,26 +48264,44 @@ def get_git_commit_message(folder='.'):
         master = repo.head.reference
         return master.commit.message
 
+def get_git_commit_date(path: str):
+    """
+    Returns the datetime of the latest commit in a Git repository.
+
+    Args:
+        path: The path to the Git repository.
+
+    Returns:
+        A datetime object representing the latest commit date, or None if the
+        path is not a valid Git repository or an error occurs.
+    """
+    pip_import('git')
+    from git import Repo
+
+    root = get_git_repo_root(path)
+    repo = Repo(root)
+    latest_commit = repo.head.commit
+    return latest_commit.committed_datetime
+
+
+
 _is_a_git_repo_cache=dict()
-def is_a_git_repo(folder='.', use_cache=False):
-    """Returns False if it's not a git repo, returns the root .git folder if it is"""
-    if not is_a_folder(folder):
-        return False
+def is_a_git_repo(path='.', use_cache=False):
+    """Returns False if it's not in a git repo, returns the root .git folder if it is"""
     pip_import('git')
     import git
     try:
-        _ = git.Repo(folder,search_parent_directories=True).git_dir
+        _ = git.Repo(path,search_parent_directories=True).git_dir
         output= _
     except git.exc.InvalidGitRepositoryError:
         output= False
-    _is_a_git_repo_cache[folder]=output
+    _is_a_git_repo_cache[path]=output
     return output
 
-def get_git_repo_root(folder='.', use_cache=False):
-    "Returns the git root of folder (the .git folder). If it's not a git repo, it throws an error."
-    assert isinstance(folder, str)
-    output = is_a_git_repo(folder, use_cache)
-    assert output, 'Is not a git repo: '+str(folder)
+def get_git_repo_root(path='.', use_cache=False):
+    "Returns the git root of path (the .git path). If it's not a git repo, it throws an error."
+    output = is_a_git_repo(path, use_cache)
+    assert output, 'Is not a git repo: '+str(path)
     return output
 
 
@@ -48354,7 +48402,7 @@ def git_pull(path='.', *, branch=None, show_progress=False):
     
     if branch is not None: command += ' --branch ' + shlex.quote(branch)
 
-    if show_progress: print(command)
+    if show_progress: rp.fansi_print('rp.git_pull: '+command, 'green bold')
     else            : command += ' > /dev/null'
         
     os.system(command)
@@ -51890,6 +51938,7 @@ def git_import(repo,token=None,*,pull=False):
     If it doesn't exist, it will try to clone it.
     If only the repo name is given, like "CommonSource", it tries to clone from https://github.com/RyannDaGreat/CommonSource (defaults to RyannDaGreat)
     If pull is True, it will attempt to update the module by running "git pull" in it. Use this if you suspect a module might be out of date.
+    If pull is a string, like 'Oct 20 2025', it will try to pull if the git repo is out of date - i.e. if the last commit date is before the given pull date
     """
     assert isinstance(repo,str)
     assert token is None or isinstance(token,str)
@@ -51899,8 +51948,12 @@ def git_import(repo,token=None,*,pull=False):
     path = path_join(_rp_git_dir, module_name)
 
     if folder_exists(path):
+        if isinstance(pull, str):
+            #Pull is some date we need to be after
+            pull = get_git_commit_date(path) <= string_to_date(pull)
+
         if pull:
-            git_pull(path)
+            git_pull(path, show_progress=True)
 
     try:
         return _import_module(module)
