@@ -7,11 +7,40 @@
 #TODO: IN docs, note that input tickets CAN be any type - not just json-like objects - but if they're large it will be slow over network
 #TODO: Add some basic common preprocessing things we might want out of the box into a separate module. For example, an easy way to encode videos with cogx's encoder or caption using SA2VA.
 #TODO: A RobustDataset mixin or decorator or something: That when you call __getitem__, and it errors with exception, it chooses a random index and tries again.
+#TODO: Note that input tickets could be as simple as a single index, referencing some ticket file + an index! (would have to build a cache for that). Like, we could have each worker have a dataset to modify and play with...
+#TODO: If we want to download videos etc, we would want a way to preserve the original downloaded files. Omni save/load should always save an extension if given bytestring always use bytes_to_file. But ideally we'd be able to just download + hardlink or something...
+#TODO: In the ticket processor where we pass it lambdas and stuff right now, but let it handle the paths later...but what if they want to use each other? Then we wouldn't be able to do the file caching thing...we probably want to make a decorator INSIDE that function. EDIT: Done!
+#TODO: Any JSON's etc, containing extra input ticket info might not be recorded...is this ok? We might want a func to invalidate the cache of some samples...think about it...
 import rp
 rp.pip_import('dict_hash')
 
 import dict_hash
 import rp.web_evaluator as wev
+from easydict import EasyDict
+
+class EvaluableEasydict(EasyDict):
+    """
+    EXAMPLE:
+        >>> d=EvaluableEasydict(a=4,b= lambda d:d.a+4)
+        >>> d
+        {'a': 4, 'b': <function <lambda> at 0x1148c07b8>}
+        >>> d.a
+        4
+        >>> d.b
+        8
+        >>> d
+        {'a': 4, 'b': 8}
+    """
+    def __getitem__(self, index):
+        value = super().__getitem__(index)
+        if callable(value):
+            value = value(self)
+            self[index] = value
+        return value
+    def __getattribute__(self,attr):
+        if attr in self:
+            return self[attr]
+        return super().__getattribute__(attr)
 
 class TicketHandler(rp.CachedInstances):
     #Input tickets are json-like easydicts
@@ -28,8 +57,14 @@ class TicketHandler(rp.CachedInstances):
         #THIS BLOCK SHOULD BE ABSTRACTED
         #AND DOCSTRING IT...IT SHOULD BE SIMPLE TO UNDERSTAND IF NOT WE NEED TO RETHINK IT
         output_ticket = rp.as_easydict()
-        processed_ticket = self.process_ticket(input_ticket)
+        processed_ticket = self.ticket_processor(input_ticket)
+        processed_ticket = EvaluableEasydict(processed_ticket)
         sample_folder = self.get_sample_folder(input_ticket)
+
+        #TODO: Turn processed_ticket into a special object where if we access an attr of a callable, it acts like a property and evaluates itself
+        #      and also wrap each one of those funcs so that if it evaluates itself, it replaces its value in the original dict by the returned value
+        #      this lets them cross-reference each other so for example caption_video could call get_video.
+        #UPDATE: Done! We did this todo! See EvaluableEasydict
 
         for name, value in processed_ticket:
             if name in self.CACHE_PATHS:
@@ -44,7 +79,6 @@ class TicketHandler(rp.CachedInstances):
                         value = value()
 
                     #Compute the value and cache it
-                    value = value()
                     self.save_file(value, file_path)
                     output_ticket[value] = file_path
 
@@ -126,7 +160,7 @@ class TicketHandler(rp.CachedInstances):
         input_ticket = 'input_ticket.json',
     )
 
-    def process_ticket(self, input_ticket):
+    def ticket_processor(self, input_ticket):
         #TODO: THIS FUNCTION NEEDS A BETTER NAME
         #TODO: Docstring this func, explain how the output should be dict of namespaceable names to either callables or values
         #And that if in CACHE_PATHS, it will save it in cache as a file 
@@ -138,7 +172,7 @@ class TicketHandler(rp.CachedInstances):
         #We're providing just the basics here
         #Yugly lol this docstring is messy mess ur job to clean it
 
-        def get_video():
+        def get_video(processed_ticket):
             raw_video = rp.load_video(input_ticket.raw_video_path)
             video = rp.resize_list(rp.resize_images(raw_video, size=(480,720)),49)
             with rp.temporary_seed_all(input_ticket.seed):
@@ -146,12 +180,26 @@ class TicketHandler(rp.CachedInstances):
                     #Augmentation via random seed example
                     video = video.flip(2)
             return video
+
+        def get_canny_video(processed_ticket):
+            #For demo purposes, usually we'd save this for postprocessing and put something much more computationally intense here like captioning or tracking
+            video = processed_ticket.video_480p49
+            video = [rp.auto_canny(x) for x in video]
+            return video
             
         return dict(
+            #TODO: Let us choose the ordering using ordereddict or something, so we can choose the order in which these evaluate (if not in cache)
+            #Reminder again, if some func here (like canny, which is actually a pretty bad example), is slower to LOAD than it is to CALCULATE, it should not be here.
+            #Instead, it should be post-processed
+            canny_video = canny_video,
             video_480p49 = get_video,
             input_ticket = input_ticket,
             **input_ticket, #Includes prompt, raw_video_path - passed by value because not in CACHE_PATHS
         )
+
+    def post_process(self, input_ticket, output_ticket, sample):
+        #You might want to do something here like inverting the image etc, cheap ops that take a lot of memory and bandwidth to transfer
+        return sample
     
 class LocalDataset:
     def __init__(self, input_tickets, ticket_handler: TicketHandler):
@@ -180,8 +228,9 @@ class LocalDataset:
     def __getitem__(self, index):
         input_ticket = self.input_tickets[index]
         output_ticket = self.get_output_ticket(input_ticket)
-
-        return self.load_sample(output_ticket)
+        sample=self.load_sample(output_ticket)
+        sample=self.ticket_handler.post_process(input_ticket, output_ticket, sample)
+        return sample
 
     def __len__(self):
         return len(self.input_tickets)
