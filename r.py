@@ -8643,11 +8643,12 @@ def matching_indices(x,l,check=lambda x,y:x == y,key=None)->list:
             out.append(i)
     return out
 
-def gather(iterable,*indices,as_dict=False):
+def gather(iterable,*indices, as_dict=False, strict=True):
     """
     TODO: Add skip_missing or strict option (idk which yet but probably skip_missing if following in lines with gather_vars)
     # indices ∈ list of integers
     """
+    assert isinstance(strict, bool)
     indices=detuple(indices)
     if isinstance(indices,str):
         #Dont treat each char of a string a key thats weird
@@ -8656,9 +8657,9 @@ def gather(iterable,*indices,as_dict=False):
     assert is_iterable(iterable),"The 'iterable' parameter you fed in is not an iterable!"
     assert is_iterable(indices),"You need to feed in a list of indices, not just a single index.  indices == " + str(indices)
     if not as_dict:
-        return [iterable[i] for i in indices]  # ≣list(map(lambda i:iterable[i],indices))
+        return [iterable[i] for i in indices if (not strict or i in iterable)]  # ≣list(map(lambda i:iterable[i],indices))
     else:
-        return {i:iterable[i] for i in indices}
+        return {i:iterable[i] for i in indices if (not strict or i in iterable)}
 
 def pop_gather(x,*indices):
     """
@@ -9900,7 +9901,13 @@ def globalize_locals(func):
     import inspect
     import functools
     import sys
-    import types
+
+    #DISABLED because this can be accomplished just by reordering the decorators appropriately
+    # if hasattr(func, '__wrapped__'):
+    #     #If we're globalizing another func made with functools.wrap,
+    #     #We need to globalize the locals of the innermost function
+    #     func.__wrapped__ = globalize_locals(func)
+    #     return func
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -12303,7 +12310,11 @@ def as_easydict(*args, **kwargs):
     pip_import('easydict') #I might make this a pip requirement of rp...its so useful!
     from easydict import EasyDict
     return EasyDict(*args, **kwargs)
-
+    
+def as_easydicts(*dictlikes):
+    """ Plural of as_easydict """
+    dictlikes = detuple(dictlikes)
+    return [as_easydict(x) for x in dictlikes]
 
 _load_json_cache={}
 def load_json(path, *, use_cache=False):
@@ -12405,7 +12416,7 @@ def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False, sep="
     import pandas as pd
     import csv
 
-    args_hash = handy_hash((file_path, header, num_lines, sep, mode))
+    args_hash = handy_hash((file_path, header, max_rows, sep, mode))
     if use_cache and args_hash in _load_tsv_cache:
         return _load_tsv_cache[args_hash]
     
@@ -27487,7 +27498,7 @@ def _omni_load(path):
     if ends_with_any(path, '.mp4 .avi .mkv .flv .mov .m4v .wmv .webm'.split()): return rp.load_video(path)
     if ends_with_any(path, '.npy'.split()): return np.load(path)
     if ends_with_any(path, '.tsv'.split()): return load_tsv(path,show_progress=True)
-    if ends_with_any(path, '.csv'.split()): return __import__('pandas').read_csv(path)
+    if ends_with_any(path, '.csv'.split()): return load_csv(path,show_progress=True)
     if ends_with_any(path, '.parquet'.split()): return load_parquet(path,show_progress=True)
     if ends_with_any(path, '.safetensors'.split()): return load_safetensors(path)
     if ends_with_any(path, '.pt .pth .ckpt'.split()): return __import__('torch').load(path)
