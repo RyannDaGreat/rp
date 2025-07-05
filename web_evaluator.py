@@ -1375,7 +1375,10 @@ class DelegationClient(Client):
 
     @property
     def delegator(self):
-        """ If you think evaluate_all is going to be slow because of bandwidth, condider self.delegator.evaluate_all """
+        """ 
+        If you think self.evaluate_all is going to be slow because of bandwidth, consider self.delegator.evaluate_all
+        That way, all the workers will report directly to this client, instead of going through the self.delegator's server
+        """
         result = self.local_client().evaluate('delegator')
         if result.errored:
             raise result.error
@@ -1437,44 +1440,45 @@ class DelegationClient(Client):
 
         return result
 
-def interactive_mode():
-    if rp.input_yes_no("Is this the server? No means this is the client."):
-        print("Running the server.")
-        run_server()
-    else:
-        print("Running the client.")
-        import readline
-        address = input("Enter the server's IP: ") or 'localhost'
-        client = Client(address)
-        while True:
-            try:
-                rp.pretty_print(client.evaluate(input(" >>> ")).to_dict())
-            except Exception:
-                rp.print_stack_trace()
-
-def launch_tmux_delegation_cluster(num_delegatees:int, *, session_name=None, 
-                               base_port=None, 
-                               python_executable=None,
-                               command_before=None,
-                               attach=False,
-                               roster=None,
-                               delegator_port=None,
-                               ip_address=None,
-                               if_exists='error'):
+def launch_tmux_delegation_cluster(num_workers:int, *, session_name=None, 
+                                   worker_port=None, 
+                                   python_executable=None,
+                                   command_before=None,
+                                   attach=False,
+                                   roster=None,
+                                   delegator_port=None,
+                                   ip_address=None,
+                                   if_exists='error',
+                                   persistent_workers=False,
+                                   ):
     """
     Starts a tmux session with a cluster of web_evaluator servers for distributed computation.
+    This function makes life easy - it's intended to be general-purpose and feature-rich
+    (This is in contrast to the core web_evaluator Client/server protocol, which is intentionally minimalistic)
 
     Usage notes:
         To make debugging easier, each server comes with a rp.pterm() repl - so you can debug on the fly
+
         This includes the delegator. So, if you want to test all clients for instance, you can run
             delegator.evaluate_all("print(123)")
         in the delegator window. 
 
-        The worker servers are all in the same window - so you can also run commands in all of them with
+        Pro-tip: The worker servers are all in the same window - so you can also run commands in all of them with
             tmux setw synchronize-panes
     
+        The workers that are created have the following python variables:
+            WE_PORT : int #The port of this worker's we.run_server
+            WE_CLUSTER_RANK : int #If created by this function, is the index of the created worker
+
+            So, you can send commands accordingly - useful for things like GPU allocation etc.
+
+        Best practice: Send commands to workers that are self-contained and use singletons to cache any expensive operations
+            Reason why: new workers might be added on the fly, or rebooted - so sending commands that take care of the whole
+            setup process plus the part you want to run is an easy way to develop. Think importing a custom module - the code
+            inside it will only run once, and subsequent calls will be faster.
+
     Args:
-        num_delegatees (int): Number of server instances to start
+        num_workers (int): Number of server instances to start
         session_name (str, optional): Name for the tmux session. If None, generates unique name.
         base_port (int, optional): Starting port number. Defaults to DEFAULT_SERVER_PORT.
         python_executable (str, optional): Python executable to use. Defaults to sys.executable.
@@ -1494,6 +1498,9 @@ def launch_tmux_delegation_cluster(num_delegatees:int, *, session_name=None,
             - 'error': Raise error if session exists (default)
             - 'replace': Kill existing session and create new one
             - 'unique': Create unique session name if name exists
+        persistent_workers (bool, optional): If True, if a worker dies, it will automatically restart
+            with the same port and WE_CLUSTER_RANK and WE_PORT as it used to have. This lets you do things
+            like call delegator.evaluate_all("rp.kill_process(rp.get_process_id())", sync=False) to reboot an entire set of workers
     
     Returns:
         EasyDict: cluster info with 'session_name', 'clients', and optionally 'delegator'
@@ -1503,8 +1510,6 @@ def launch_tmux_delegation_cluster(num_delegatees:int, *, session_name=None,
         >>> delegator = ClientDelegator(cluster['clients'])
         >>> delegator.evaluate_all("print('Hello World!')")
 
-    Notes:
-        To make debugging easier, in the sess
     """
     if session_name is None:
         session_name = rp.tmux_get_unique_session_name(DEFAULT_CLUSTER_SESSION_NAME)
@@ -1543,16 +1548,20 @@ def launch_tmux_delegation_cluster(num_delegatees:int, *, session_name=None,
     
     # Generate ports for each server
     ports = []
-    for i in range(num_delegatees):
+    for i in range(num_workers):
         port = rp.get_next_free_port(base_port, n=i)
         if port != base_port + i:
             rp.fansi_print(f"Warning: Port {base_port + i} taken, using {port}", 'yellow')
         ports.append(port)
     
     # Create windows: servers in first window, delegation server in second if requested
-    # server_commands = [f'{shlex.quote(python_executable)} -m rp.web_evaluator server -p {port}' for port in ports]
-    server_commands = [f'''{shlex.quote(python_executable)} -c "import rp, rp.web_evaluator as we ; we.run_server({port}, new_thread=True) ; rp.pterm(globals(), level_title='Port={port}')"''' for port in ports]
-    windows = {"servers": server_commands}
+    # worker_commands = [f'{shlex.quote(python_executable)} -m rp.web_evaluator server -p {port}' for port in ports]
+    worker_commands = [f'''{shlex.quote(python_executable)} -c "WE_CLUSTER_RANK={rank}; WE_PORT={port}; import rp, rp.web_evaluator as we ; we.run_server({port}, new_thread=True) ; rp.pterm(globals(), level_title='Port={port}')"''' for rank, port in enumerate(ports)]
+    
+    if persistent_workers:
+        worker_commands = [f'while true ; do {command} ; done' for command in worker_commands]
+
+    windows = {"servers": worker_commands}
     
     if delegator_port is not False:
         if delegator_port is None:
@@ -1585,7 +1594,20 @@ def launch_tmux_delegation_cluster(num_delegatees:int, *, session_name=None,
     rp.fansi_print(f"Started cluster '{session_name}' with {len(ports)} servers", 'green', 'bold')
     return rp.as_easydict(cluster_info)
 
-
+def interactive_mode():
+    if rp.input_yes_no("Is this the server? No means this is the client."):
+        print("Running the server.")
+        run_server()
+    else:
+        print("Running the client.")
+        import readline
+        address = input("Enter the server's IP: ") or 'localhost'
+        client = Client(address)
+        while True:
+            try:
+                rp.pretty_print(client.evaluate(input(" >>> ")).to_dict())
+            except Exception:
+                rp.print_stack_trace()
 
 if __name__ == '__main__':
     try:

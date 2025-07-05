@@ -17591,6 +17591,10 @@ def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,ipy
         for k in merged_dict:# If we declared new variables, put them on the top-priority dict
             dicts[0][k]=merged_dict[k]
         return ans,None
+    except SystemExit as e:
+        # Convert SystemExit to _PseudoTerminalReturnException to integrate with existing exit handling
+        fansi_print("Caught SystemExit("+str(e.code)+" - converting to pseudo_terminal RETURN", 'cyan', 'bold')
+        raise _PseudoTerminalReturnException()
     except BaseException as e:
         if ipython:
             pop_exception_traceback(e,1)
@@ -17950,7 +17954,13 @@ def python_input(scope,header='',enable_ptpython=True,iPython=False):
 
             with no_gc(): #One of the bottlenecks of prompt-toolkit is that it triggers the gc so much, something to do with redraws or somethin' idk. But during input let's disable garbage collection.
                 #If this causes memory leaks, make a new context like reduce_gc_frequency(scale_factor=10) etc
-                code_obj = default_python_input_eventloop.run()
+                try:
+                    code_obj = default_python_input_eventloop.run()
+                except ValueError as e:
+                    if "I/O operation on closed file" in str(e):
+                        fansi_print("Stdin disrupted by nested terminal exit - returning gracefully", 'cyan', 'bold')
+                        return "RETURN"
+                    raise
                 
 
         return code_obj.text
@@ -19643,6 +19653,10 @@ def no_gc():
             if _no_gc_disable_count == 0 and _no_gc_was_enabled:
                 gc.enable()
  
+class _PseudoTerminalReturnException(BaseException):
+    pass
+
+
 _user_created_var_names=set()
 _cd_history=[]
 def pseudo_terminal(
@@ -19654,7 +19668,8 @@ def pseudo_terminal(
     eval=eval,
     exec=exec,
     rprc="",
-    level_title=""
+    level_title="",
+    on_return=identity
 ):
   """An interactive terminal session, powered by RP """
   with _PtermLevelTitleContext(level_title):
@@ -20036,6 +20051,8 @@ def pseudo_terminal(
             if error is not None:
                 fansi_print("ERROR in RPRC:",'red','bold')
                 print_verbose_stack_trace(error)
+        except _PseudoTerminalReturnException:
+            raise
         except BaseException as e:
             print("PSEUDO TERMINAL ERROR: FAILED TO IMPORT RP...THIS SHOULD BE IMPOSSIBLE...WAT")
             print_stack_trace(e)
@@ -20727,9 +20744,6 @@ def pseudo_terminal(
 
         ATS $tmux_get_scrollback()
 
-        quit() RETURN
-        exit() RETURN
-
         RETK $fansi_print("RETK: Killing this process forcefully!", 'cyan', 'bold'); $kill_process($get_process_id())
 
         DKH DISKH
@@ -21031,6 +21045,7 @@ def pseudo_terminal(
         try:
             import rp.r_iterm_comm
             rp.r_iterm_comm.globa=scope()#prime it and get it ready to go (before I had to enter some valid command like '1' etc to get autocomplete working at 100%)
+            
             while True:
                 rp.r_iterm_comm.rp_pt_user_created_var_names[:]=list(_user_created_var_names)
                 try:
@@ -21146,17 +21161,7 @@ def pseudo_terminal(
                         if _get_pterm_verbose(): fansi_print("Transformed input to "+repr(user_message)+' because variable '+repr(original_user_message)+' doesn\'t exist but '+user_message+' is a command','magenta','bold')
 
                     if user_message == 'RETURN' or user_message =='RET':
-                        try:
-                            if get_ans() is None:
-                                fansi_print("rp.pseudo_terminal(): Exiting session. No value returned.",'blue','bold')
-                            else:
-                                # fansi_print("rp.pseudo_terminal(): Exiting session. Returning ans = " + str(get_ans()),'blue','bold')
-                                fansi_print("rp.pseudo_terminal(): Exiting session. Returning ans",'blue','bold')
-                            return get_ans()
-                        except Exception as e:
-                            print_verbose_stack_trace(e)
-                            fansi_print("rp.pseudo_terminal(): Exiting session. Failed to call get_ans() (this is a strange, rare error). Returning ans = None",'blue','bold')
-                            return None#Sometimes, calling get_ans() fails
+                        raise _PseudoTerminalReturnException
 
                     elif user_message=='SHORTCUTS':
                         lines=[]
@@ -21363,7 +21368,7 @@ def pseudo_terminal(
                     elif user_message=='GPU':
                         try:
                             pip_import('gpustat').main()
-                        except BaseException as e:
+                        except Exception as e:
                             print_stack_trace(e)
                             pass
 
@@ -22197,9 +22202,12 @@ def pseudo_terminal(
                         _maybe_display_string_in_pager(text)
 
 
-                    elif user_message=='WANS':
+                    elif user_message=='WANS' or user_message.startswith("WANS ") and user_message.strip()!='WANS':
                         fansi_print("WANS -> Write ans to a file (can be text, bytes, or an image)","blue",'bold')
-                        path=input(fansi("(Enter blank path to select and overwrite an existing file)\nPath: ",'blue','bold'))
+                        if user_message.startswith('WANS '):
+                            path = user_message[len('WANS '):]
+                        else:
+                            path=input(fansi("(Enter blank path to select and overwrite an existing file)\nPath: ",'blue','bold'))
                         if not path:
                             path=input_select_file(message='WANS: Select a file to overwrite')
                         if path_exists(path):
@@ -22208,17 +22216,18 @@ def pseudo_terminal(
                         if path is None:
                             fansi_print("WANS cancelled",'red')
                         else:
-                            if is_image(get_ans()):
-                                path=save_image(get_ans(),path)
-                                fansi_print("WANS: Wrote image file to "+path,'blue','bold')
-                            elif get_file_extension(path)=='json' and not isinstance(get_ans(),str):
-                                save_json(get_ans(),path)
-                            elif isinstance(get_ans(),bytes):
-                                bytes_to_file(str(get_ans()),path)
-                                fansi_print("WANS: Wrote binary file to "+path,'blue','bold')
-                            else:
-                                string_to_text_file(path,str(get_ans()))
-                                fansi_print("WANS: Wrote text file to "+path,'blue','bold')
+                            # if is_image(get_ans()):
+                            #     path=save_image(get_ans(),path)
+                            #     fansi_print("WANS: Wrote image file to "+path,'blue','bold')
+                            # elif get_file_extension(path)=='json' and not isinstance(get_ans(),str):
+                            #     save_json(get_ans(),path)
+                            # elif isinstance(get_ans(),bytes):
+                            #     bytes_to_file(str(get_ans()),path)
+                            #     fansi_print("WANS: Wrote binary file to "+path,'blue','bold')
+                            # else:
+                            #     string_to_text_file(path,str(get_ans()))
+                            path = _omni_save(get_ans(), path, auto_extension=True)
+                            fansi_print("WANS: Wrote "+path,'blue','bold')
                             set_ans(path)
                     
                     elif user_message=='WANS+':
@@ -22461,6 +22470,8 @@ def pseudo_terminal(
                                 assert len(split)==2
                                 try:    
                                     value=eval(split[0],scope())
+                                except _PseudoTerminalReturnException:
+                                    raise
                                 except BaseException as e:
                                     print_stack_trace(e)
                                 query=split[1]
@@ -22576,30 +22587,33 @@ def pseudo_terminal(
                                 # elif file_name.endswith('.json'):
                                 #     #This works fine! But currently disabled in favor of "aa aj"
                                 #     user_message="""ans=__import__("rp").load_json(%s)"""%repr(file_name)
-                                elif file_name.endswith('.yaml'):
-                                    user_message="""ans=__import__("rp").load_yaml(%s)"""%repr(file_name)
-                                elif file_name.endswith('.tsv'):
-                                    user_message="""ans=__import__("rp").load_tsv(%s,show_progress=True)"""%repr(file_name)
-                                elif is_image_file(file_name):
-                                    user_message='ans=__import__("rp").load_image(%s)'%repr(file_name)
-                                elif is_video_file(file_name):
-                                    user_message='ans=__import__("rp").load_video(%s)'%repr(file_name)
-                                elif (file_name.endswith('.pt') or file_name.endswith('.pth')) and module_exists('torch'):
-                                    user_message="""ans=__import__("torch").load(%s,map_location='cpu')"""%repr(file_name)
-                                elif is_sound_file(file_name):
-                                    user_message='ans=__import__("rp").load_sound_file(%s)'%repr(file_name)
-                                elif file_name.endswith('.npy') and module_exists('numpy'):
-                                    user_message="""ans=__import__("numpy").load(%s)"""%repr(file_name)
-                                elif file_name.endswith('.pkl'):
-                                    user_message="""ans=__import__("rp").load_pickled_value(%s)"""%repr(file_name)
-                                elif file_name.endswith('.parquet'):
-                                    user_message="""ans=__import__("rp").pip_import("pandas").read_parquet(%s)"""%repr(file_name)
-                                else: 
-                                    text_len_threshold = 10000  # If it's longer than this we just put the load text command to make the history cleaner...
-                                    text_set_command = repr(_load_text_from_file_or_url(file_name))
-                                    if len(text_set_command) > text_len_threshold:
-                                        text_set_command = '__import__("rp").text_file_to_string(%s)'%repr(file_name)
-                                    user_message='ans='+text_set_command
+                                # elif file_name.endswith('.yaml'):
+                                #     user_message="""ans=__import__("rp").load_yaml(%s)"""%repr(file_name)
+                                # elif file_name.endswith('.tsv'):
+                                #     user_message="""ans=__import__("rp").load_tsv(%s,show_progress=True)"""%repr(file_name)
+                                # elif is_image_file(file_name):
+                                #     user_message='ans=__import__("rp").load_image(%s)'%repr(file_name)
+                                # elif is_video_file(file_name):
+                                #     user_message='ans=__import__("rp").load_video(%s)'%repr(file_name)
+                                # elif (file_name.endswith('.pt') or file_name.endswith('.pth')) and module_exists('torch'):
+                                #     user_message="""ans=__import__("torch").load(%s,map_location='cpu')"""%repr(file_name)
+                                # elif is_sound_file(file_name):
+                                #     user_message='ans=__import__("rp").load_sound_file(%s)'%repr(file_name)
+                                # elif file_name.endswith('.npy') and module_exists('numpy'):
+                                #     user_message="""ans=__import__("numpy").load(%s)"""%repr(file_name)
+                                # elif file_name.endswith('.pkl'):
+                                #     user_message="""ans=__import__("rp").load_pickled_value(%s)"""%repr(file_name)
+                                # elif file_name.endswith('.parquet'):
+                                #     user_message="""ans=__import__("rp").pip_import("pandas").read_parquet(%s)"""%repr(file_name)
+                                # else(: 
+                                #     text_len_threshold = 10000  # If it's longer than this we just put the load text command to make the history cleaner...
+                                #     text_set_command = repr(_load_text_from_file_or_url(file_name))
+                                #     if len(text_set_command) > text_len_threshold:
+                                #         text_set_command = '__import__("rp").text_file_to_string(%s)'%repr(file_name)
+                                #     user_message='ans='+text_set_command
+                                else:   
+                                    user_message = "ans=__import__('rp').r._omni_load(%s)"%repr(file_name)
+
                             except UnicodeDecodeError:
                                 user_message='ans=__import__("rp").file_to_bytes(%s)'%repr(file_name)
                                 # assert False,'Failed to read file '+repr(file_name)
@@ -23620,6 +23634,8 @@ def pseudo_terminal(
                                 if _reload:
                                     try:
                                         _reload_modules()
+                                    except _PseudoTerminalReturnException:
+                                        raise
                                     except BaseException as E:
                                         fansi_print('RELOAD Error: Failed to reload modules because: '+str(E),'blue')
                                 result,__error=_pterm_exeval(user_message,
@@ -23723,10 +23739,26 @@ def pseudo_terminal(
                     if allow_keyboard_interrupt_return:
                         print(fansi(': Interrupt again to RETURN','cyan','bold'),end='')
                     print()
+        except _PseudoTerminalReturnException:
+            raise
         except BaseException as E:
             print(fansi('FATAL ERROR: Something went very, very wrong. Printing HISTORY so you can recover!','red','bold'))
             print_stack_trace(E)
             print_history()
+    except _PseudoTerminalReturnException:
+        try:
+            if get_ans() is None:
+                fansi_print("rp.pseudo_terminal(): Exiting session. No value returned.",'blue','bold')
+            else:
+                # fansi_print("rp.pseudo_terminal(): Exiting session. Returning ans = " + str(get_ans()),'blue','bold')
+                fansi_print("rp.pseudo_terminal(): Exiting session. Returning ans",'blue','bold')
+            return on_return(get_ans())
+        except Exception as e:
+            print_verbose_stack_trace(e)
+            fansi_print("rp.pseudo_terminal(): Exiting session. Failed to call get_ans() (this is a strange, rare error). Returning ans = None",'blue','bold')
+            return on_return(None)#Sometimes, calling get_ans() fails
+
+
     finally:
         rp.r_iterm_comm.pseudo_terminal_level-=1
         if level_label():
@@ -25731,7 +25763,7 @@ def cv_draw_arrow(
     if alpha==1 and is_rgb_image(image):
         color = color[:3] #Make it RGB
     if len(color)==4:
-        image = as_rgba_image(copy=copy)
+        image = as_rgba_image(image, copy=copy)
 
     image = as_byte_image(image, copy=copy)
 
@@ -27607,12 +27639,25 @@ def _omni_save_animated_image(video,path):
         return save_video(video, path)
 
 
+def _omni_save_default_extension(x):
+    if is_image(x) or is_pil_image(x): return '.png'
+    if is_numpy_array(x) and x.ndim==4 and x.shape[0]>1 and x.shape[1]>10 and x.shape[2]>10 and x.shape[3] in [3,4]: return '.mp4'
+    if is_torch_tensor(x): return '.pt'
+    if is_numpy_array(x): return '.npy'
+    if len(x) > 50 and is_valid_python_syntax(x): return '.py'
+    if isinstance(x, str): return '.txt'
+    if isinstance(x, list) and all(isinstance(y, str) for y in x) and not any('\n' in line for line in x): return '.lines'
+    if _is_pandas_dataframe(x): return '.csv'
+    return ''
+
+
 def _omni_load(path):
     if ends_with_any(path, '.json'): return rp.load_json(path)
     if ends_with_any(path, '.yaml'): return rp.load_yaml(path)
     if ends_with_any(path, '.png .webp .gif'.split()): return rp._omni_load_animated_image(path)
     if ends_with_any(path, '.jpg .jpeg .jxl .exr .psd .tga .tiff .tif .jp2 .bmp'.split()): return rp.load_image(path)
     if ends_with_any(path, '.mp4 .avi .mkv .flv .mov .m4v .wmv .webm'.split()): return rp.load_video(path)
+    if ends_with_any(path, '.wav .mp3 .ogg .aac .wma .aiff .m4a .flac'.split()): return rp.load_sound_file(path)
     if ends_with_any(path, '.npy'.split()): return np.load(path)
     if ends_with_any(path, '.tsv'.split()): return load_tsv(path,show_progress=True)
     if ends_with_any(path, '.csv'.split()): return load_csv(path,show_progress=True)
@@ -27626,11 +27671,17 @@ def _omni_load(path):
     if is_utf8_file(path): return load_text_file(path)
     return file_to_object(path)
 
-def _omni_save(object, path):
+def _omni_save(object, path, *, auto_extension=False):
+
+    if auto_extension and not has_file_extension(path):
+        path += _omni_save_default_extension(object)
+
     if ends_with_any(path, '.json'): return rp.save_json(object,path)
     if ends_with_any(path, '.yaml'): return rp.save_yaml(object,path)
     if ends_with_any(path, '.png .webp .gif'.split()): return rp._omni_save_animated_image(object, path)
     if ends_with_any(path, '.jpg .jpeg .jxl .exr .psd .tga .tiff .tif .jp2 .bmp'.split()): return rp.save_image(object, path)
+    if ends_with_any(path, '.mp3'.split()): return rp.save_mp3_file(object, path)
+    if ends_with_any(path, '.wav'.split()): return rp.save_wav_file(object, path)
     if ends_with_any(path, '.mp4'.split()): return rp.save_video(object, path)
     if ends_with_any(path, '.npy'.split()): return np.save(path,object)
     if ends_with_any(path, '.pt .pth .ckpt'.split()): return __import__('torch').save(object,path)
@@ -42610,6 +42661,9 @@ def cv_resize_image(image, size, interp="auto", *, alpha_weighted=False, copy=Tr
     
     height=int(height)
     width =int(width)
+
+    if width==0 or height==0:
+        return _zeros_like(image, shape=(height,width,*image.shape[2:]))
 
     #Take a shortcut - and if we don't need to copy it, just return the original tensor for speed's sake
     if (height,width) == rp.get_image_dimensions(image):

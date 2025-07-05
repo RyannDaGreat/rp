@@ -2285,6 +2285,7 @@ def handle_character(buffer,char,event=None):
                 'ac':'ACAT',
                 'ca':'CAT',
                 'mk':'MKDIR',
+                'wa':'WANS',
                 'op':'OPEN',
                 'pipi':'PIP install',
                 'pi':'PIP install',
