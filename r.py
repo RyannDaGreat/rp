@@ -3659,7 +3659,7 @@ def grid2d_map(grid2d_input,value_func=identity) -> list:
 # ⁠⁠⁠               ⎪                                                              ⎩                  ⎭⎪
 # ⁠⁠⁠               ⎩                                                                                  ⎭
 
-def _auto_interp_for_resize_image(resize_func, image, new_size, copy_attr='copy'):
+def _auto_interp_for_resize_image(resize_func, image, new_size):
     """
     A private function used by image resizing functions in rp when their interp=='auto'
 
@@ -3723,7 +3723,7 @@ def _auto_interp_for_resize_image(resize_func, image, new_size, copy_attr='copy'
     out = image
 
     #In the case that both dimensions grow, or both dimensions shrink, we only need to use the resize_func once
-    if   new_height == old_height and new_width == old_width: out = getattr(out, copy_attr)()
+    if   new_height == old_height and new_width == old_width: out = out + 0
     elif new_height >= old_height and new_width >= old_width: out = resize_func(out, size=(new_height, new_width), interp=growth_interp)
     elif new_height <= old_height and new_width <= old_width: out = resize_func(out, size=(new_height, new_width), interp=shrink_interp)
     else:
@@ -4021,6 +4021,10 @@ def _is_pandas_iloc_iterable(x) -> bool:
 
 def is_pil_image(image) -> bool:
     return _is_instance_of_module_class(image, 'PIL.Image', 'Image')
+
+def _is_skia_image(image) -> bool:
+    return _is_instance_of_module_class(image, 'skia', 'Image')
+
 
 def _is_easydict(x) -> bool:
     return _is_instance_of_module_class(x, 'easydict', 'EasyDict')
@@ -12122,6 +12126,44 @@ def load_webcam_stream():
 
 def load_image_from_screenshot():
     """
+    Grabs a screenshot from the main monitor
+    Returns it as a RGB byte image
+
+    EXAMPLE:
+        
+        >>> while True:
+        ...     image = load_image_from_screenshot()
+        ...     image = cv_resize_image(image, 0.25)
+        ...     display_image(image)
+        
+    """
+    pip_import('mss')
+    import mss
+    
+    with mss.mss() as sct:
+
+        img = rp.as_numpy_array(sct.grab(sct.monitors[0]))
+        img = rp.cv_bgr_rgb_swap(img, copy=False)
+
+        return img
+
+def load_screenshot_stream():
+    """
+
+    EXAMPLE:
+
+        >>> while True:
+        ...     display_video(cv_resize_images(load_screenshot_stream(), size=.25, lazy=True))
+
+    """
+    while True:
+        yield load_image_from_screenshot()
+
+def _load_image_from_screenshot_via_pyscreenshot():
+    """
+    REPLACED BY load_image_from_screenshot WHICH IS MUCH FASTER
+    (This still works as a slow version though so I'll keep it as a private fallback)
+
     Take a screeshot, and return the result as a numpy-array-style image
     EXAMPLE: display_image(load_image_from_screenshot())
     TODO: Make this faster. the 'mss' package from pypi got much better performance, so if you need higher FPS try using that for the inner workings of this function.
@@ -17593,7 +17635,7 @@ def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,ipy
         return ans,None
     except SystemExit as e:
         # Convert SystemExit to _PseudoTerminalReturnException to integrate with existing exit handling
-        fansi_print("Caught SystemExit("+str(e.code)+" - converting to pseudo_terminal RETURN", 'cyan', 'bold')
+        fansi_print("Caught SystemExit("+str(e.code)+") - converting to pseudo_terminal RETURN", 'cyan', 'bold')
         raise _PseudoTerminalReturnException()
     except BaseException as e:
         if ipython:
@@ -25196,28 +25238,36 @@ def remove_all_whitespace(string):
 #     return '\n'.join(line for line in string.splitlines() if line.strip())
 
 #region OpenCV Helpers
-def cv_bgr_rgb_swap(image_or_video):
+def cv_bgr_rgb_swap(image_or_video,*,copy=True):
     """
-    Works for both images AND video
+    Works for both images AND video. Mutates the input.
+    Works with RGBA and RGB. If grayscale image, no changes.
     Opencv has an annoying feature: it uses BGR instead of RGB. Heckin' hipsters. This swaps RGB to BGR, vice-versa.
+    If the input array is contiguous, the output array will be too
+    If copy=True, doesn't mutate the input and instead returns a new array
     """
     out = np.asarray(image_or_video)
 
     assert is_image(out)
 
-    if out.ndim==2: return out #Grayscale
+    if out.ndim==2: return out #Grayscale Image
+
+    if copy:
+        out = _copy_tensor(out)
 
     num_channels = out.shape[-1]
 
-    if   num_channels==3: return out[..., [2,1,0]]   #RGB
-    elif num_channels==4: return out[..., [2,1,0,3]] #RGBA
+    #Works for RGBA and RGB images/videos in HWC or THWC form
+    out[..., [0, 2]] = out[..., [2, 0]]
+
+    return out
 
 cv_rgb_bgr_swap=cv_bgr_rgb_swap#In-case you forgot what to type. It's all the same thing though.
 
 _first_time_using_cv_imshow=True
 def cv_imshow(img,label="cvImshow",*,
         img_is_rgb=True,#As opposed to BGR. If this is true, then the R and B channels are swapped before the image is displayed.
-        wait=10,#Set to None to skip waiting all-together (will have to wait at some point or else the images won't display)
+        wait=1,#Set to None to skip waiting all-together (will have to wait at some point or else the images won't display)
         on_mouse_down =None, #Either set to None or some function like lambda x,y:print(x,y)
         on_mouse_move =None, #Either set to None or some function like lambda x,y:print(x,y)
         on_mouse_up   =None, #Either set to None or some function like lambda x,y:print(x,y)
@@ -31572,6 +31622,7 @@ def get_image_height(image):
     if is_torch_image(image): return image.shape[1] #Assumes a CHW image
     assert is_image(image), type(image)
     if is_pil_image(image):return image.height
+    if _is_skia_image(image):return image.height()
     return image.shape[0]
 
 def get_image_width(image):
@@ -31581,6 +31632,7 @@ def get_image_width(image):
     if is_torch_image(image): return image.shape[2] #Assumes a CHW image
     assert is_image(image), type(image)
     if is_pil_image(image):return image.width
+    if _is_skia_image(image):return image.width()
     return image.shape[1]
 
 def get_video_height(video):
@@ -33072,7 +33124,7 @@ def load_videos(
     if show_progress in ['eta', True]: show_progress='eta:rp.load_videos'
 
     paths = detuple(paths)
-    paths = rp_iglob(paths)
+    # paths = rp_iglob(paths)
 
     def load(path):
         return load_video(
@@ -42598,17 +42650,24 @@ def _prepare_cv_image(image):
 def cv_resize_image(image, size, interp="auto", *, alpha_weighted=False, copy=True):
     """
     This function is similar to r.resize_image (which uses scipy), except this uses OpenCV and is much faster
-    Valid sizes:
-        - A single number: Will scale the entire image by that size
-        - A tuple with integers in it: Will scale the image to those dimensions (height, width)
-        - A tuple with None in it: A dimension with None will default to the image's dimension
     Unlike r.resize_image, this function will not always return a floating point image. If given a byte image, the result will also be a byte image
-
-    TODO: Add an alpha-aware arg, like cv_alpha_weighted_gauss_blur. Propogate arg to all funcs that use this.
-          How to do it with expansion aka bilinear interp?
-
     If copy==False, and the size doesn't change the image, just returns the original image as is without copying it
 
+    ARGS:
+        image: An image as defined by rp.is_image
+        size (scalar or (h,w) tuple):
+            - A single number: Will scale the entire image by that size
+            - A tuple with integers in it: Will scale the image to those dimensions (height, width)
+            - A tuple with None in it: A dimension with None will default to the image's dimension
+        interp (str) options:
+            'auto'       Chooses between 'area' and 'bilinear' on a per-axis basis
+            'nearest'    Nearest neighbor interpolation. Very fast, but also very crude and aliased, much cronchy
+            'pyrdown'    Uses cv2.pyrDown and then uses area interp. Results in up to 10x speed boosts over 'area' or 'auto'
+            'bilinear'   Uses bilinear interpolation when making an image larger, but doesn't antialias images getting smaller
+            'bicubic'    Uses bicubic interpolation when making an image larger, but doesn't antialias images getting smaller
+            'area'       Uses mean pooling for shrinking images, but 'nearest' for growing them
+        alpha_weighted (bool): Default False. Takes into consideration the alpha channel and weights RGB operations by it
+        
     EXAMPLE: alpha_weighted:
         >>> # When downscaling this image, we see crusty edges unless alpha_weighted=True
         ...
@@ -42631,6 +42690,35 @@ def cv_resize_image(image, size, interp="auto", *, alpha_weighted=False, copy=Tr
     if alpha_weighted:
         return _alpha_weighted_rgba_image_func(cv_resize_image, image, size, interp)
 
+
+    assert is_image(image)
+    
+    if is_binary_image(image):
+        #OpenCV's resize function doesn't support boolean images
+        image=as_byte_image(image)
+    else:
+        image=_prepare_cv_image(image)
+
+    in_height, in_width = get_image_dimensions(image)
+    height, width = _size_to_height_width(size, in_height, in_width)
+
+    if width==0 or height==0:
+        return _zeros_like(image, shape=(height,width,*image.shape[2:]))
+
+    #Take a shortcut - and if we don't need to copy it, just return the original tensor for speed's sake
+    if (height,width) == (in_height, in_width):
+        if copy: return image.copy()
+        else   : return image
+
+    #For CV2, we can have 'pyrdown' option which makes things much faster
+    if interp=='pyrdown':
+        #Use gaussian subsampling pyrDown to shrink the image as much as we can
+        #This results in massive speed boosts, for large->small images (like 1000x1000 to 10x10) this boost can be up to 10x.
+        #Not sure why this is faster though.
+        while get_image_height(image) >= 2*height and get_image_width(image) >= 2*width:
+            image = cv2.pyrDown(image)
+        interp='auto'
+    
     #Choose an interpolation method
     interp_methods = {
         "bilinear": cv2.INTER_LINEAR,
@@ -42642,39 +42730,31 @@ def cv_resize_image(image, size, interp="auto", *, alpha_weighted=False, copy=Tr
     assert interp in interp_methods, 'cv_resize_image: Interp must be one of the following: %s'%str(list(interp_methods))
     interp_method=interp_methods[interp]
 
-    assert is_image(image)
-    
-    if is_binary_image(image):
-        #OpenCV's resize function doesn't support boolean images
-        image=as_byte_image(image)
-    else:
-        image=_prepare_cv_image(image)
-
-    if is_number(size):
-        assert size>=0, 'Cannot resize an image by a negative factor' #Technically, I suppose this would mean flipping the image...maybe I'll implement that some other day
-        height=np.ceil(get_image_height(image)*size)
-        width =np.ceil(get_image_width (image)*size)
-    else:
-        height,width=size
-        height=get_image_height(image) if height is None else height
-        width =get_image_width (image) if width  is None else width
-    
-    height=int(height)
-    width =int(width)
-
-    if width==0 or height==0:
-        return _zeros_like(image, shape=(height,width,*image.shape[2:]))
-
-    #Take a shortcut - and if we don't need to copy it, just return the original tensor for speed's sake
-    if (height,width) == rp.get_image_dimensions(image):
-        if copy: return image.copy()
-        else   : return image
-    
-    if interp=='auto': return _auto_interp_for_resize_image(cv_resize_image, image, (height, width))
+    if interp == "auto": return _auto_interp_for_resize_image(cv_resize_image, image, (height, width))
 
     out = cv2.resize(image,(width,height),interpolation=interp_method)
     
     return out
+
+def _size_to_height_width(size, in_height, in_width):
+    """
+    Common helper among image resizing funcs
+    Takes in a size (either a scalar or (height, width) tuple
+    Returns a height, width tuple
+    """
+    if is_number(size):
+        assert size>=0, 'Cannot resize an image by a negative factor'
+        height=np.ceil(in_height*size)
+        width =np.ceil(in_width *size)
+    else:
+        height,width=size
+        height=in_height if height is None else height
+        width =in_width  if width  is None else width
+    
+    height=int(height)
+    width =int(width )
+
+    return height, width
 
 def cv_resize_images(
     *images,
@@ -42744,6 +42824,204 @@ def resize_videos(
             if show_progress: print(end="done!")
 
     return output
+
+def skia_resize_image(image, size, interp='auto'):
+    """
+    Resizes a 4-channel (RGBA) uint8 NumPy array using Skia's high-level
+    resize method, which supports mipmapping for high-quality downscaling.
+    
+    WHEN TO USE OVER cv_resize_image:
+        I found this is much faster when shrinking large images with the 'auto' interp,
+        which handles graceful downsampling - sometimes reaching 10x performance differences.
+        However, on medium-sized images, or when not mipmapping, cv_resize_image is faster
+        Usually, use cv_resize_image - but if shrinking images quickly try this function
+    
+    NOTE: You will only ever get a speed-boost over CV2 if the input image is
+          already an RGBA byte image!
+          Also this speed boost comes from mipmaps, so squishing images -> skinny looks bad...
+
+    Args:
+        image: The source NumPy array with shape (H, W, 4) and dtype uint8.
+        size: A tuple (height, width) for the target size, or a scalar
+              If a scalar is provided, scales image proportionally to that scalar
+              If a (height, width) tuple is provided and height is None or width is None, 
+                  that height or width is ignored - so you could scale just height or just width
+        interp: Interpolation mode. Can be 'nearest', 'linear', 'cubic',
+                'area', or 'auto'. 'auto' and 'area' will enable mipmapping
+                when shrinking the image for best quality.
+
+    Returns:
+        A new, resized NumPy array with shape (height, width, 4) and dtype uint8.
+        
+    EXAMPLE (Shows speed + Quality):
+
+        Some example results with the webcam mode uncommented:
+            CV AUTO    FPS: 388.108
+            CV PYRDOWN FPS: 698.399
+            SKIA AUTO  FPS: 1595.684
+
+        >>> @globalize_locals
+        ... def demo_resize_interp():
+        ...     import numpy as np
+        ...     import time
+        ...     
+        ...     FACTOR=10
+        ...     RES=128
+        ... 
+        ...     c = get_checkerboard_image(RES*FACTOR,RES*FACTOR,tile_size=32)
+        ...     original_height,original_width=RES,RES
+        ...     c=as_byte_image(c)
+        ...     c=as_rgba_image(c)
+        ...     c=np.ascontiguousarray(c)
+        ...     frames = 360  # Total number of frames for a smoother and longer animation
+        ...     start_angle = np.pi / 4  # Starting at 45 degrees
+        ...     max_multiplier = 3  # Maximum size multiplier
+        ...     output=[]
+        ...     for _ in range(2):    
+        ...         skia_total_time=0
+        ...         cv_auto_total_time=0
+        ...         cv_pyrdown_total_time=0
+        ...         total_frames=0
+        ...         for frame in range(frames):
+        ... 
+        ...             #UNCOMMENT TO USE WEBCAM DEMO
+        ...             #c=load_image_from_webcam()
+        ...             #c=as_rgba_image(c)
+        ...             #c=np.ascontiguousarray(c)
+        ...         
+        ...             # Calculate the new dimensions using sine and cosine with a 45-degree offset
+        ...             # Amplitude is adjusted to vary directly from 1 to max_multiplier times the original size
+        ...             new_height = int((np.sin(2 * np.pi * frame / frames + start_angle) + 1) / 2 * (max_multiplier - 1) * original_height + 1)
+        ...             new_width = int((np.cos(2 * np.pi * frame / frames + start_angle) + 1) / 2 * (max_multiplier - 1) * original_width + 1)
+        ...         
+        ...             # Resize and display the image
+        ... 
+        ... 
+        ...             #Best but slowest
+        ...             tic()
+        ...             co=c
+        ...             cv_auto_resized_image = cv_resize_image(co, (new_height, new_width), interp='auto')
+        ...             cv_auto_total_time+=toc()
+        ... 
+        ...             #Middle grounds
+        ...             tic()
+        ...             co=c
+        ...             cv_pyrdown_resized_image = resized_image = cv_resize_image(co, (new_height, new_width), interp='pyrdown')
+        ...             cv_pyrdown_total_time+=toc()
+        ...             
+        ...             #Worst but fastest
+        ...             tic()
+        ...             skia_auto_resized_image = skia_resize_image(c, (new_height, new_width), interp='auto')
+        ...             skia_total_time+=toc()
+        ... 
+        ...             total_frames+=1
+        ... 
+        ...             print('-'*10,total_frames,'-'*10)
+        ...             if cv_auto_total_time   :print('CV AUTO    FPS: %.03f'%(total_frames/cv_auto_total_time   ))
+        ...             if cv_pyrdown_total_time:print('CV PYRDOWN FPS: %.03f'%(total_frames/cv_pyrdown_total_time))
+        ...             if skia_total_time      :print('SKIA AUTO  FPS: %.03f'%(total_frames/skia_total_time      ))
+        ...             
+        ...             resized_images = [
+        ...                 cv_auto_resized_image,
+        ...                 cv_pyrdown_resized_image,
+        ...                 skia_auto_resized_image,
+        ...             ]
+        ... 
+        ...             #resized_image=shift_image_hue(resized_image,len(interp)/6) #Different background colors so we can easily see when interp changes
+        ...             color='dark blue'
+        ...             resized_images = crop_images(resized_images, height=300, width=300)
+        ...             resized_images=[blend_images(color,x) for x in resized_images]
+        ...             resized_images=labeled_images(resized_images,['cv_auto_resized_image','cv_pyrdown_resized_image','skia_auto_resized_image'])
+        ...             resized_images=horizontally_concatenated_images(resized_images)
+        ...             output.append(resized_images)
+        ...             display_image(resized_images)
+        ...         return output
+        ...     
+        ... 
+        ... demo_video = demo_resize_interp()
+
+    """
+    pip_import('skia')
+    import skia
+
+    #TODO: MAKE THESE FUNCTIONS EXPOSED TO RP IF WE EVER HAVE REASON TO REUSE THEM
+
+    def _as_skia_image(image):
+        pip_import('skia')
+        import skia
+        
+        if isinstance(image,skia.Image):
+            return image
+        
+        #Conform to the correct input types
+        image=as_numpy_image(image, copy=False)
+        image=as_rgba_image(image,copy=False)
+        image=as_byte_image(image,copy=False)
+        if not image.flags['C_CONTIGUOUS']:
+            image=np.ascontiguousarray(image)
+            
+        #Output Validation
+        assert image.ndim==3
+        assert image.shape[2]==4
+        assert image.dtype==np.uint8
+
+        return skia.Image.fromarray(image,copy=False)
+
+    def _get_skia_sampling(interp: str, mipmap: bool = False) -> skia.SamplingOptions:
+        """
+        Determines the best Skia SamplingOptions based on the interpolation string
+        and mipmap setting.
+
+        interp: Interpolation mode. Can be 'nearest', 'linear', 'cubic',
+                'area', or 'auto'. 'auto' and 'area' will enable mipmapping
+                when mipmap is True for best quality.
+        mipmap: Whether to enable mipmapping for high-quality downscaling.
+        """
+        pip_import('skia')
+        import skia
+
+        # Defaults
+        filter_mode = skia.FilterMode.kLinear
+        mipmap_mode = skia.MipmapMode.kNone  # No mipmapping by default
+
+        if interp in ['linear', 'bilinear']:
+            filter_mode = skia.FilterMode.kLinear
+        elif interp == 'nearest':
+            filter_mode = skia.FilterMode.kNearest
+        elif interp in ['cubic', 'bicubic']:
+            # For high-quality cubic resampling, this is the preferred method.
+            # It ignores filter/mipmap modes.
+            return skia.SamplingOptions(skia.CubicResampler.Mitchell())
+        elif interp == 'area' or interp == 'auto':
+            # 'area' and 'auto' are interpreted as "use high quality for downscaling".
+            # Mipmapping is the Skia way to achieve this.
+            if mipmap:
+                mipmap_mode = skia.MipmapMode.kLinear
+        else:
+            raise ValueError("Unsupported interpolation mode: {0}".format(repr(interp)))
+
+        # Use positional arguments as required by the constructor.
+        return skia.SamplingOptions(filter_mode, mipmap_mode)
+
+    #THE MEAT OF THIS FUNCTION
+    src_image = _as_skia_image(image)
+    src_height, src_width = get_image_dimensions(image)
+    dst_height, dst_width = _size_to_height_width(size,src_height,src_width)
+
+    is_downscaling = dst_width < src_width or dst_height < src_height
+    sampling_options = _get_skia_sampling(
+        interp,
+        mipmap=is_downscaling
+    )
+
+    resized_image = src_image.resize(
+        width=dst_width,
+        height=dst_height,
+        options=sampling_options
+    )
+    
+    return resized_image.toarray()
+
     
 def torch_resize_image(image, size, interp="auto", *, copy=True):
     """
@@ -42767,7 +43045,6 @@ def torch_resize_image(image, size, interp="auto", *, copy=True):
     pip_import('einops')
     pip_import('torch')
 
-    import torch
     import torch.nn.functional as F
     from einops import rearrange
 
@@ -42782,24 +43059,15 @@ def torch_resize_image(image, size, interp="auto", *, copy=True):
     }
     assert interp in interp_methods, 'torch_resize_image: Interp must be one of the following: %s'%str(list(interp_methods))
 
-    if is_number(size):
-        assert size>=0, 'Cannot resize an image by a negative factor'
-        height=np.ceil(get_image_height(image)*size)
-        width =np.ceil(get_image_width (image)*size)
-    else:
-        height,width=size
-        height=get_image_height(image) if height is None else height
-        width =get_image_width (image) if width  is None else width
-    
-    height=int(height)
-    width =int(width )
+    in_height, in_width = get_image_dimensions(image)
+    height, width = _size_to_height_width(size, in_height, in_width)
 
     #Take a shortcut - and if we don't need to copy it, just return the original tensor for speed's sake
-    if (height,width) == rp.get_image_dimensions(image):
+    if (height,width) == (in_height, in_width):
         if copy: return image.clone()
         else   : return image
 
-    if interp=='auto': return _auto_interp_for_resize_image(torch_resize_image, image, (height, width), 'clone')
+    if interp=='auto': return _auto_interp_for_resize_image(torch_resize_image, image, (height, width))
     
     out  = rearrange(
         F.interpolate(
@@ -43790,7 +44058,6 @@ def _zeros_like(x, *, shape=None, dtype=None):
     """Works across libraries - such as numpy, torch"""
     return _create_array_like(x, func_name='zeros', shape=shape, dtype=dtype)
 
-
 def _ones_like(x, *, shape=None, dtype=None):
     """Works across libraries - such as numpy, torch"""
     return _create_array_like(x, func_name='ones', shape=shape, dtype=dtype)
@@ -43848,6 +44115,13 @@ def _mean(x, dim=None, keepdim=False):
     if is_numpy_array (x):return np.mean(x, axis=dim, keepdims=keepdim)
     if is_torch_tensor(x):return __import__('torch').mean(x, dim=dim, keepdim=keepdim)
     raise ValueError("type not supported: "+str(type(x)))
+
+def _copy_tensor(x):
+    """ works across libraries - such as numpy, torch """
+    if is_numpy_array (x): return copy(x) #After benchmarking, I found this is faster than x.copy() or x+0
+    if is_torch_tensor(x): return x.clone() #You cannot use copy(x) or else it doesn't actually copy the data
+    return copy(x)
+
 
 #NOT Doing std, np and torch behave differently (one has N-1 correction [torch], the other doesn'ti [numpy])
 # def _std(x, dim=None, keepdim=False):
@@ -44761,10 +45035,11 @@ def resize_video_to_hold(
     *,
     allow_shrink=True,
     alpha_weighted=False,
-    show_progress=False
+    show_progress=False,
+    lazy=False
 ):
     """ Almost the same as resize_images_to_hold - but height and width and interp can be args and returns numpy arrays if input video is a numpy array too """
-    output = gather_args_call(resize_images_to_hold, images)
+    output = gather_args_call(resize_images_to_hold, video)
 
     if is_numpy_array(video): output = as_numpy_array(output)
 
