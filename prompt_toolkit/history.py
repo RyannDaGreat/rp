@@ -106,36 +106,72 @@ class FileHistory(History):
 
     def _load(self):
         #took .2 seconds with 18000 items in history; 
-        # from rp import sleep,tic,toc,ptoc,ptoctic,ring_terminal_bell,run_as_new_thread,text_to_speech
         from rp import run_as_new_thread
-        # ring_terminal_bell()
-        # tic()
 
-        lines = []
-
-        def add():
-            if lines:
-                # Join and drop trailing newline.
-                string = ''.join(lines)[:-1]
-
-                self.strings.append(string)
-
-        def add_all_lines():
-            nonlocal lines
-            from time import sleep
-            if os.path.exists(self.filename):
+        def load_history():
+            if not os.path.exists(self.filename):
+                return
+            
+            # Phase 1: Load last _fast_pterm_history_size for immediate access  
+            # (This two-phase system which first loads a few history lines then loads them all was written by Claude in Aug 2025. It resulted in a massive speed boost allowing us to get history with the up arrow key immediately after booting rp. This only became noticeable after other improvements to boot time made RP boot faster than it could read the whole history file.)
+            try:
+                import rp
+                fast_size = rp.r._fast_pterm_history_size
                 with open(self.filename, 'rb') as f:
+                    f.seek(0, 2)  # Go to end
+                    file_size = f.tell()
+                    start_pos = max(0, file_size - fast_size)
+                    f.seek(start_pos)
+                    data = f.read().decode('utf-8', errors='ignore')
+                
+                # Parse the tail data quickly
+                lines = []
+                temp_strings = []
+                
+                for line in data.split('\n'):
+                    if line.startswith('+'):
+                        lines.append(line[1:] + '\n')
+                    else:
+                        if lines:
+                            string = ''.join(lines)[:-1]
+                            temp_strings.append(string)
+                        lines = []
+                if lines:
+                    string = ''.join(lines)[:-1]
+                    temp_strings.append(string)
+                
+                # Set partial results immediately
+                self.strings = temp_strings
+            except Exception:
+                pass
+            
+            # Phase 2: Load complete file (overwrites partial results)
+            try:
+                with open(self.filename, 'rb') as f:
+                    lines = []
+                    complete_strings = []
+                    
                     for line in f:
-                        # print(line)
                         line = line.decode('utf-8')
-
                         if line.startswith('+'):
                             lines.append(line[1:])
                         else:
-                            add()
+                            if lines:
+                                string = ''.join(lines)[:-1]
+                                complete_strings.append(string)
                             lines = []
-                    add()
-            # text_to_speech("a")
+                    if lines:
+                        string = ''.join(lines)[:-1]
+                        complete_strings.append(string)
+                
+                # Replace with complete results
+                self.strings = complete_strings
+                
+                # Notify that full loading is complete
+                import rp
+                rp.r._on_history_load_complete(self)
+            except Exception:
+                pass
         # if os.path.exists(self.filename):
         #     with open(self.filename, 'rb') as f:
         #         for line in f:
@@ -147,10 +183,34 @@ class FileHistory(History):
         #                 add()
         #                 lines = []
         #         add()
-        run_as_new_thread(add_all_lines)#Running this as a new thread will save .2 seconds with my 18000 items in history
-        # ptoctic()
-        # sleep(3)
-        # ring_terminal_bell()
+
+        #FIRST ATTEMPT AT GOING REVERSE ORDER. BUT ITS SLOWER AND LAGS A BIT...ALSO WE GOTTA DO PROCESSING CORRECTLY...
+        # def prepend():
+        #     if lines:
+        #         # Join and drop trailing newline.
+        #         string = '\n'.join(lines)
+        #
+        #         self.strings.insert(0,string) #Meh it's fast enough even though it's technically O(n^2) right?
+        #
+        # def add_all_lines():
+        #     import rp
+        #     nonlocal lines
+        #     if os.path.exists(self.filename):
+        #         # with open(self.filename, 'rb') as f:
+        #         #     for line in f:
+        #             for line in rp.file_line_iterator(self.filename, reverse=True):
+        #                 # print(line)
+        #                 # line = line.decode('utf-8')
+        #
+        #                 if line.startswith('+'):
+        #                     lines.append(line[1:])
+        #                 else:
+        #                     prepend()
+        #                     lines = []
+        #             prepend()
+        #     rp.text_to_speech("b")
+                    
+        run_as_new_thread(load_history)  # Single thread with two-phase loading
 
     def append(self, string):
         self.strings.append(string)

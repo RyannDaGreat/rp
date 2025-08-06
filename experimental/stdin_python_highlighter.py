@@ -826,11 +826,37 @@ def print_python_line_summary(code,linum):
     print(fansi('     ',None,None,'black')+out+fansi(' '*1000,None,None,'black'))
     return out
 
+def stdin_read_robust(encoding='utf-8', errors='replace'):
+  """
+  Reads from standard input robustly by handling potential UnicodeDecodeErrors.
+
+  This function reads the raw byte stream from stdin and decodes it into a 
+  string using a specified encoding and error-handling strategy.
+
+  Args:
+    encoding (str): The text encoding to use (e.g., 'utf-8', 'latin-1'). 
+                    Defaults to 'utf-8'.
+    errors (str): The strategy for handling decoding errors. Common options are
+                  'replace' (inserts a placeholder ), 'ignore' (discards the
+                  problematic byte), or 'strict' (raises an error). 
+                  Defaults to 'replace'.
+
+  Returns:
+    str: The decoded string from standard input.
+  """
+  # Read the raw, undecoded bytes from the standard input buffer
+  raw_input = sys.stdin.buffer.read()
+  
+  # Decode the bytes into a string using the specified error handling
+  text_input = raw_input.decode(encoding, errors=errors)
+  
+  return text_input
+
 def start(text=None):
 
     # HARDCODED_WIDTH=None
 
-    text=text or sys.stdin.read()
+    text=text or stdin_read_robust()
 
     lines=text.splitlines()
     if len(lines)==1 and '\\n' in lines[0]:

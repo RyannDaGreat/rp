@@ -424,15 +424,6 @@ class Vt100_Output(Output):
         assert stdout.isatty()
         def get_size():
             rows, columns = _get_size(stdout.fileno())
-            import rp.r_iterm_comm as ric
-            top_space=ric.options['top_space']
-            top_space/=100
-            top_space*=rows
-            top_space=int(top_space)
-            min_rows=ric.options['min_bot_space']
-            if top_space>0:
-                rows=max(min_rows,rows-top_space)
-
             # If terminal (incorrectly) reports its size as 0, pick a reasonable default.
             # See https://github.com/ipython/ipython/issues/10071
             return Size(rows=(rows or 24), columns=(columns or 80))

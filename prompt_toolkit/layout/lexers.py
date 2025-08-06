@@ -14,22 +14,15 @@ from .utils import split_lines
 import re
 import six
 
-# <CLAUDE CODE START: Adding imports for multi-language highlighting>
-from pygments.lexers import Python3Lexer
-from pygments.lexers import (
-    BashLexer, JavascriptLexer, HtmlLexer, SqlLexer, JsonLexer,
-    CssLexer, XmlLexer, YamlLexer, RubyLexer, PhpLexer, CppLexer,
-    CLexer, RustLexer, GoLexer, CSharpLexer, JavaLexer, MakefileLexer,
-    PerlLexer, TypeScriptLexer, SwiftLexer, KotlinLexer, ScalaLexer,
-    ObjectiveCLexer, DartLexer, MarkdownLexer, DiffLexer
-)
-from pygments.token import Token
-# <CLAUDE CODE END: Adding imports for multi-language highlighting>
+# <CLAUDE CODE START: Lazy imports for multi-language highlighting - imports deferred until needed>
+# Lexer imports moved inside LazyLexer classes to avoid slow startup
+# <CLAUDE CODE END: Lazy imports for multi-language highlighting>
 
 __all__ = (
     'Lexer',
     'SimpleLexer',
     'PygmentsLexer',
+    'LazyPygmentsLexer',
     'SyntaxSync',
     'SyncFromStart',
     'RegexSync',
@@ -190,8 +183,82 @@ def longest_common_prefix(a,b):
 
 
 
+class LazyLexer:
+    """
+    Lazy wrapper for Pygments lexers to avoid slow initialization and imports.
+    This class was Lazy lexers written by Claude, Aug 5 2025. Resulted in massive pterm boot speed boost. Pygments initializations were taking the majority of the time.
+    """
+    def __init__(self, lexer_module_path, lexer_class_name, *args, **kwargs):
+        self.lexer_module_path = lexer_module_path
+        self.lexer_class_name = lexer_class_name
+        self.args = args
+        self.kwargs = kwargs
+        self._lexer = None
+        self._lexer_class = None
+    
+    def _get_lexer_class(self):
+        if self._lexer_class is None:
+            import importlib
+            module = importlib.import_module(self.lexer_module_path)
+            self._lexer_class = getattr(module, self.lexer_class_name)
+        return self._lexer_class
+    
+    def _get_lexer(self):
+        if self._lexer is None:
+            lexer_class = self._get_lexer_class()
+            self._lexer = lexer_class(*self.args, **self.kwargs)
+        return self._lexer
+    
+    def get_tokens_unprocessed(self, text):
+        return self._get_lexer().get_tokens_unprocessed(text)
+    
+    def __getattr__(self, name):
+        return getattr(self._get_lexer(), name)
+
+
+class LazyBashLexer(LazyLexer):
+    """
+    Special lazy wrapper for BashLexer that adds system commands on initialization.
+    This class was Lazy lexers written by Claude, Aug 5 2025. Resulted in massive pterm boot speed boost. Pygments initializations were taking the majority of the time.
+    """
+    _system_commands_added = False  # Class variable to track if we've already modified BashLexer globally
+    
+    def _get_lexer(self):
+        if self._lexer is None:
+            # Add system commands to global BashLexer class if not already done
+            if not LazyBashLexer._system_commands_added:
+                self._add_system_commands_to_pterm_bash_highlighter()
+                LazyBashLexer._system_commands_added = True
+            
+            # Now initialize the lexer (which will inherit the modified tokens)
+            lexer_class = self._get_lexer_class()
+            self._lexer = lexer_class(*self.args, **self.kwargs)
+        return self._lexer
+    
+    def _add_system_commands_to_pterm_bash_highlighter(self):
+        """ 
+        This function lets us syntax-highlight any system commands in the !<shell stuff> in pterm seen upon boot 
+        It can't update them over time right now, it's a one-time thing
+        """ 
+        import pygments.lexers.shell as shell
+        import re
+        import rp
+        Name = shell.Name
+        commands = rp.get_system_commands() + ['!']
+        shell.BashLexer.tokens['basic'] += [(r'(^|!|\b)(' + '|'.join(re.escape(x) for x in commands) + r')(?=[\s)\`]|$)', Name.Function),]
+
+
 class FastPygmentsTokenizer:
-    def __init__(self,pygments_lexer=Python3Lexer()):
+    def __init__(self,pygments_lexer=None):
+        if pygments_lexer is None:
+            # Lazy import of default lexer
+            import six
+            if six.PY2:
+                from pygments.lexers import PythonLexer
+                pygments_lexer = PythonLexer()
+            else:
+                from pygments.lexers import Python3Lexer
+                pygments_lexer = Python3Lexer()
         self.old_text=''
         self.token_cache=[]
         self.pygments_lexer=pygments_lexer
@@ -199,34 +266,34 @@ class FastPygmentsTokenizer:
         # <CLAUDE CODE START: Initialize language lexers for multi-language highlighting>
         # Common lexer options
         lexer_options = {'stripnl': False, 'stripall': False, 'ensurenl': False}
-        
-        # Initialize all lexers with the same options
-        self.bash_lexer = BashLexer(**lexer_options)
-        self.javascript_lexer = JavascriptLexer(**lexer_options)
-        self.html_lexer = HtmlLexer(**lexer_options)
-        self.sql_lexer = SqlLexer(**lexer_options)
-        self.json_lexer = JsonLexer(**lexer_options)
-        self.css_lexer = CssLexer(**lexer_options)
-        self.xml_lexer = XmlLexer(**lexer_options)
-        self.yaml_lexer = YamlLexer(**lexer_options)
-        self.ruby_lexer = RubyLexer(**lexer_options)
-        self.php_lexer = PhpLexer(**lexer_options)
-        self.cpp_lexer = CppLexer(**lexer_options)
-        self.c_lexer = CLexer(**lexer_options)
-        self.rust_lexer = RustLexer(**lexer_options)
-        self.go_lexer = GoLexer(**lexer_options)
-        self.csharp_lexer = CSharpLexer(**lexer_options)
-        self.java_lexer = JavaLexer(**lexer_options)
-        self.makefile_lexer = MakefileLexer(**lexer_options)
-        self.perl_lexer = PerlLexer(**lexer_options)
-        self.typescript_lexer = TypeScriptLexer(**lexer_options)
-        self.swift_lexer = SwiftLexer(**lexer_options)
-        self.kotlin_lexer = KotlinLexer(**lexer_options)
-        self.scala_lexer = ScalaLexer(**lexer_options)
-        self.objc_lexer = ObjectiveCLexer(**lexer_options)
-        self.dart_lexer = DartLexer(**lexer_options)
-        self.markdown_lexer = MarkdownLexer(**lexer_options)
-        self.diff_lexer = DiffLexer(**lexer_options)
+
+        # Create lazy lexers - imports and initialization deferred until first use
+        self.bash_lexer = LazyBashLexer('pygments.lexers', 'BashLexer', **lexer_options)
+        self.javascript_lexer = LazyLexer('pygments.lexers', 'JavascriptLexer', **lexer_options)
+        self.html_lexer = LazyLexer('pygments.lexers', 'HtmlLexer', **lexer_options)
+        self.sql_lexer = LazyLexer('pygments.lexers', 'SqlLexer', **lexer_options)
+        self.json_lexer = LazyLexer('pygments.lexers', 'JsonLexer', **lexer_options)
+        self.css_lexer = LazyLexer('pygments.lexers', 'CssLexer', **lexer_options)
+        self.xml_lexer = LazyLexer('pygments.lexers', 'XmlLexer', **lexer_options)
+        self.yaml_lexer = LazyLexer('pygments.lexers', 'YamlLexer', **lexer_options)
+        self.ruby_lexer = LazyLexer('pygments.lexers', 'RubyLexer', **lexer_options)
+        self.php_lexer = LazyLexer('pygments.lexers', 'PhpLexer', **lexer_options)
+        self.cpp_lexer = LazyLexer('pygments.lexers', 'CppLexer', **lexer_options)
+        self.c_lexer = LazyLexer('pygments.lexers', 'CLexer', **lexer_options)
+        self.rust_lexer = LazyLexer('pygments.lexers', 'RustLexer', **lexer_options)
+        self.go_lexer = LazyLexer('pygments.lexers', 'GoLexer', **lexer_options)
+        self.csharp_lexer = LazyLexer('pygments.lexers', 'CSharpLexer', **lexer_options)
+        self.java_lexer = LazyLexer('pygments.lexers', 'JavaLexer', **lexer_options)
+        self.makefile_lexer = LazyLexer('pygments.lexers', 'MakefileLexer', **lexer_options)
+        self.perl_lexer = LazyLexer('pygments.lexers', 'PerlLexer', **lexer_options)
+        self.typescript_lexer = LazyLexer('pygments.lexers', 'TypeScriptLexer', **lexer_options)
+        self.swift_lexer = LazyLexer('pygments.lexers', 'SwiftLexer', **lexer_options)
+        self.kotlin_lexer = LazyLexer('pygments.lexers', 'KotlinLexer', **lexer_options)
+        self.scala_lexer = LazyLexer('pygments.lexers', 'ScalaLexer', **lexer_options)
+        self.objc_lexer = LazyLexer('pygments.lexers', 'ObjectiveCLexer', **lexer_options)
+        self.dart_lexer = LazyLexer('pygments.lexers', 'DartLexer', **lexer_options)
+        self.markdown_lexer = LazyLexer('pygments.lexers', 'MarkdownLexer', **lexer_options)
+        self.diff_lexer = LazyLexer('pygments.lexers', 'DiffLexer', **lexer_options)
         
         # Map language identifiers to lexers
         self.language_lexers = {
@@ -672,17 +739,30 @@ class PygmentsLexer(Lexer):
         self.fast_pygments_lexer=self.pygments_lexer
         self.fast_pygments_tokenizer=FastPygmentsTokenizer(self.pygments_lexer)
 
-        # Instantiate the Bash lexer.
-        self.bash_lexer = BashLexer(
-            stripnl=False,
-            stripall=False,
-            ensurenl=False,
-        )
-        self.fast_bash_lexer=self.bash_lexer
-        self.fast_bash_tokenizer=FastPygmentsTokenizer(self.bash_lexer)
+        # Create lazy Bash lexer and tokenizer - only initialized when needed
+        self._lazy_bash_lexer = None
+        self._lazy_bash_tokenizer = None
 
         # Create syntax sync instance.
         self.syntax_sync = syntax_sync or RegexSync.from_pygments_lexer_cls(pygments_lexer_cls)
+
+    @property
+    def fast_bash_lexer(self):
+        if self._lazy_bash_lexer is None:
+            self._lazy_bash_lexer = LazyBashLexer(
+                'pygments.lexers',
+                'BashLexer',
+                stripnl=False,
+                stripall=False,
+                ensurenl=False,
+            )
+        return self._lazy_bash_lexer
+
+    @property  
+    def fast_bash_tokenizer(self):
+        if self._lazy_bash_tokenizer is None:
+            self._lazy_bash_tokenizer = FastPygmentsTokenizer(self.fast_bash_lexer)
+        return self._lazy_bash_tokenizer
 
     def get_lexer(self, document):
         text = document.text
@@ -826,3 +906,34 @@ class PygmentsLexer(Lexer):
             return []
         self.old_text=document.text#For speed's sake: Ryan Burgert
         return get_line
+
+
+class LazyPygmentsLexer(Lexer):
+    """
+    Lazy wrapper for PygmentsLexer that defers lexer imports until first use.
+    This class was Written by Claude, Aug 5 2025. Resulted in massive pterm boot speed boost. Pygments initializations were taking the majority of the time.
+    """
+    
+    def __init__(self):
+        self._real_lexer = None
+    
+    def _get_real_lexer(self):
+        if self._real_lexer is None:
+            # Import only when needed
+            import six
+            if six.PY2:
+                from pygments.lexers import PythonLexer
+                lexer_class = PythonLexer
+            else:
+                from pygments.lexers import Python3Lexer as PythonLexer
+                lexer_class = PythonLexer
+            
+            # Create the actual PygmentsLexer
+            self._real_lexer = PygmentsLexer(lexer_class)
+        return self._real_lexer
+    
+    def lex_document(self, cli, document):
+        return self._get_real_lexer().lex_document(cli, document)
+    
+    def __getattr__(self, name):
+        return getattr(self._get_real_lexer(), name)

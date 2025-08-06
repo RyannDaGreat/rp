@@ -204,45 +204,186 @@ def random_style():
     style+=' '
     style+='noinherit'
     return style
+class LazyStyleDict(dict):
+    """
+    Dictionary that lazy-loads Pygments styles only when accessed.
+    Class written entirely with Claude: Aug 5 2025. Resulted in big boot speed boost.
+    """
+    def __init__(self):
+        super().__init__()
+        self._pygments_style_names = None  # Defer loading until needed
+        self._loaded = set()
+    
+    def _ensure_pygments_names_loaded(self):
+        """Load Pygments style names only when first needed."""
+        if self._pygments_style_names is None:
+            self._pygments_style_names = set(get_all_styles())
+    
+    def __contains__(self, key):
+        # Check custom styles first (already in dict)
+        if super().__contains__(key):
+            return True
+        # Then check if it's a Pygments style
+        self._ensure_pygments_names_loaded()
+        return key in self._pygments_style_names
+    
+    def __getitem__(self, key):
+        # Try to get from already loaded styles first
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            pass
+        
+        # Check if it's a Pygments style we need to load
+        self._ensure_pygments_names_loaded()
+        if key in self._pygments_style_names and key not in self._loaded:
+            style_data = get_style_by_name(key).styles
+            super().__setitem__(key, style_data)
+            self._loaded.add(key)
+            return style_data
+        
+        # Not found anywhere
+        raise KeyError(key)
+    
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+    
+    def keys(self):
+        """Return all available style names."""
+        self._ensure_pygments_names_loaded()
+        # Combine custom styles (already in dict) with Pygments styles
+        return set(super().keys()) | self._pygments_style_names
+
+class LazyCodeStyleDict(LazyStyleDict):
+    """
+    Specialized lazy dict that also handles custom styles lazily.
+    Class written entirely with Claude: Aug 5 2025. Resulted in big boot speed boost.
+    """
+    def __init__(self):
+        super().__init__()
+        # Define custom styles mapping (name -> variable name)
+        self._custom_styles = {
+            'win32': 'win32_code_style',
+            'ryan': 'ryan_style', 
+            'clara': 'clara_style',
+            'newclara': 'new_clara_style',
+            'viper': 'viper_style',
+            'stratus': 'stratus_style',
+            'snape': 'snape_style',
+            'plain': 'plain_style',
+            'random': 'random_syntax_style',
+            'dracula': 'dracula',
+            'solarized_dark': 'solarized_dark_style',
+            'onedark': 'onedark_style',
+            'nord': 'nord_style',
+            'night_owl': 'night_owl_style',
+            'monokai': 'monokai_style',
+            'github_dark': 'github_dark_style',
+            'tokyo_night': 'tokyo_night_style',
+            'tomorrow': 'tomorrow_style',
+            'tomorrow_night': 'tomorrow_night_style',
+            'tomor_night_blu': 'tomorrow_night_blue_style',
+            'tom_night_brite': 'tomorrow_night_bright_style',
+            'tom_night_80s': 'tomorrow_night_eighties_style',
+            'dejavu': 'dejavu_style',
+            'sunset_warm': 'sunset_warm_style',
+            'sunset_cool': 'sunset_cool_style',
+            'sunset_mono': 'sunset_monokai_style',
+            'clara_mono': 'clara_monokai_style',
+            'synth_mono': 'synthwave_monokai_style',
+        }
+        
+        # Special Pygments styles that are commonly accessed
+        # We'll handle these as "pseudo-custom" styles to avoid triggering get_all_styles()
+        self._common_pygments_styles = {
+            "default",
+            "monokai",
+            # "github",
+            # "vim",
+            # "emacs",
+        }
+        
+        # Add current theme from settings to ensure it's always loaded
+        self._ensure_current_theme_loaded()
+
+    def _ensure_current_theme_loaded(self):
+        """Add current theme from settings to common styles"""
+        try:
+            import rp.r as r
+            current_theme = r._get_pyin_settings()['_current_code_style_name']
+            if current_theme not in self._common_pygments_styles:
+                self._common_pygments_styles.add(current_theme)
+        except Exception:
+            pass
+
+    
+    def __contains__(self, key):
+        # Check already loaded styles
+        if dict.__contains__(self, key):
+            return True
+        # Check if it's a custom style
+        if key in self._custom_styles:
+            return True
+        # Check if it's a common Pygments style we know about
+        if key in self._common_pygments_styles:
+            return True
+        # For other Pygments styles, only check if already loaded
+        if self._pygments_style_names is not None:
+            return key in self._pygments_style_names
+        # Otherwise assume it doesn't exist to avoid expensive loading
+        return False
+    
+    def __getitem__(self, key):
+        # Try already loaded first
+        try:
+            return dict.__getitem__(self, key)
+        except KeyError:
+            pass
+        
+        # Check if it's a custom style we need to load
+        if key in self._custom_styles:
+            # Load the custom style lazily by accessing the global variable
+            import sys
+            current_module = sys.modules[__name__]
+            style_data = getattr(current_module, self._custom_styles[key])
+            dict.__setitem__(self, key, style_data)
+            return style_data
+        
+        # Check if it's a common Pygments style (load without full scan)
+        if key in self._common_pygments_styles:
+            style_data = get_style_by_name(key).styles
+            dict.__setitem__(self, key, style_data)
+            return style_data
+        
+        # Check if it's other Pygments styles (triggers full scan)
+        self._ensure_pygments_names_loaded()
+        if key in self._pygments_style_names and key not in self._loaded:
+            style_data = get_style_by_name(key).styles
+            dict.__setitem__(self, key, style_data)
+            self._loaded.add(key)
+            return style_data
+        
+        raise KeyError(key)
+    
+    def keys(self):
+        """Return all available style names."""
+        # We need to show all styles in the theme menu, so load Pygments names
+        # But we still defer loading the actual style data until accessed
+        self._ensure_pygments_names_loaded()
+        return set(self._custom_styles.keys()) | self._pygments_style_names
+    
+    def __iter__(self):
+        """Make 'for name in dict' work the same as 'for name in dict.keys()'."""
+        return iter(self.keys())
+
 def get_all_code_styles():
     """
     Return a mapping from style names to their classes.
     """
-    result = dict((name, get_style_by_name(name).styles) for name in get_all_styles())
-    # from rp import mini_terminal_for_pythonista
-    # exec(mini_terminal_for_pythonista)
-    result['win32'] = win32_code_style
-    result['ryan']=ryan_style
-    result['clara']=clara_style
-    result['newclara']=new_clara_style
-    result['viper']=viper_style
-    result['stratus']=stratus_style
-    result['snape']=snape_style
-    result['plain']=plain_style
-    result['random']=random_syntax_style
-    result['dracula']=dracula#i have no idea how this came to be lol...it just appeared on ws1 one day, even tho no word 'dracula' was on the original rp or any of its files...
-    # Add new styles
-    # Themes to style code in syntax highlighting
-    result['solarized_dark'] = solarized_dark_style
-    result['onedark'] = onedark_style
-    result['nord'] = nord_style
-    result['night_owl'] = night_owl_style
-    result['monokai'] = monokai_style
-    result['github_dark'] = github_dark_style
-    result['tokyo_night'] = tokyo_night_style
-    result['tomorrow'] = tomorrow_style
-    result['tomorrow_night'] = tomorrow_night_style
-    result['tomor_night_blu'] = tomorrow_night_blue_style
-    result['tom_night_brite'] = tomorrow_night_bright_style
-    result['tom_night_80s'] = tomorrow_night_eighties_style
-    result['dejavu'] = dejavu_style
-    result['sunset_warm'] = sunset_warm_style
-    result['sunset_cool'] = sunset_cool_style
-    result['sunset_mono'] = sunset_monokai_style
-    result['clara_mono'] = clara_monokai_style
-    result['synth_mono'] = synthwave_monokai_style
-    
-    return result
+    return LazyCodeStyleDict()
 from pygments.token import Keyword, Name, Comment, String, Error, \
     Number, Operator, Punctuation, Generic, Whitespace
 """

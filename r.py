@@ -1,30 +1,10 @@
-# -*- coding: UTF-8 -*-
+""" Welcome to RP: Ryan Python """
+
 from __future__ import unicode_literals
-#THINGS TO DO BEFORE OFFICIAL RELEASE:
-#   Rename "path" functions to "2d-somethings" idk what, but it conflicts with file-paths...
-#   Rename "display" functions to "plot" functions. "display" functions should be very simple and library-agnostic, while plot can be matplotlib-based.
-#   Remove useless functions, and categorize them. Probably should split into multiple files; but that's kinda messy...
-#       These functions don't have to be removed from r.py, they just have to be deleted from rp.py (after using from r import *, use something like 'del useless_function')
-
-#TODO: Turn the comments at the beginning of each function into docstrings so they can be read by the builtin help function
-# python /Users/Ryan/PycharmProjects/Py27RyanStandard2.7/Groupie.py ftF11dwbP61OfPf9QsXBfS5usCdQdBkkMieObdvZ -g 'The Think Tank'
-# Imports that are necessary for the 'r' module:
-# Imports I tend to use a lot and include so they their names can be directly imported from th:
-# region Import
-# This is useful for running things on the terminal app or in blender
-# import r# For rinsp searches for functions in the r module, so I don't need to keep typing 'import r' over and over again
-
-# Places I want to access no matter where I launch r.py
-# sys.path.append('/Users/Ryan/PycharmProjects/RyanBStandards_Python3.5')
-# sys.path.append('/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages')
-# endregion
-# region ［entuple， detuple］
-
 import sys
 import threading
-from builtins import *#For autocompletion with pseudo_terminal
+from builtins import *  # For autocompletion with pseudo_terminal
 from time import sleep
-sys.path.append(__file__[:-len("r.py")])
 import rp
 import os
 import time
@@ -32,44 +12,124 @@ import shlex
 import sys
 import random
 import warnings
-import pickle
+import traceback
 import tempfile
 import contextlib
+import cachetools
 import itertools
 import math
 import random
 import re
-from itertools import product as cartesian_product, combinations as all_combinations
+from itertools import product as cartesian_product, chain, combinations as all_combinations
 from functools import lru_cache, partial
-from multiprocessing.dummy import Pool as ThreadPool  # ⟵ par_map uses ThreadPool. We import it now so we don't have to later, when we use par_map.
 from contextlib import contextmanager
 from math import factorial
 import datetime
+from collections.abc import MutableSet
 
 #Make glob both a function and module
 import glob
 glob.glob.__dict__.update(glob.__dict__)
-glob=glob.glob
+glob = glob.glob
 
 # Make copy both a function and module
 import copy
 copy.copy.__dict__.update(copy.__dict__)
 copy = copy.copy
 
-try:
-    from rp.libs.stamp_tensor import stamp_tensor, crop_tensor
-except ImportError:
-    #Delete this post-july 2025
-    print("TODO: Update your rp. Couldnt import stamp_tensor and crop_tensor")
+# Make time both a function and module : Can't because time.time is builtin
 
+# Files that RP maintains
+_rp_folder                    = __file__[: -len("r.py")]
+_site_packages                = _rp_folder[: -len("rp")]
+_local_clipboard_string_path  = os.path.join(_rp_folder, "r.py.rp_local_clipboard")
+_cd_history_path              = os.path.join(_rp_folder, "r.py.rp_cd_history.txt")
+_pyin_settings_file_path      = os.path.join(_rp_folder, "r.py.rp_pyin_settings")
+_prompt_style_path            = os.path.join(_rp_folder, "r.py.rp_prompt_style")
+history_filename              = os.path.join(_rp_folder, "r.py.history.txt")
+rprc_file_path                = os.path.join(_rp_folder, ".rprc")
+_local_obj_clipboard_path     = os.path.join(_rp_folder, ".rp_local_clipboard")
+pterm_history_filename        = os.path.join(_rp_folder, "HISTORY")
+_rp_documentation_file        = os.path.join(_rp_folder, "documentation.py")
+_rp_git_dir                   = os.path.join(_rp_folder, "git")
+_rp_downloads_folder          = os.path.join(_rp_folder, "downloads")
+_rp_boot_cache                = os.path.join(_rp_folder, ".boot_cache")
+_rp_outputs_folder            = os.path.join(_rp_folder, "outputs")
+_old_gists_path               = os.path.join(_rp_folder, "old_gists.txt")
+_claudecode_folder            = os.path.join(_rp_outputs_folder, "claudecode")
+_google_fonts_download_folder = os.path.join(_rp_downloads_folder, "google_fonts")
+_downloaded_font_dir          = os.path.join(_rp_downloads_folder, "fonts")
+_rp_gists_path                = os.path.join(_rp_git_dir, "gists")
+_cached_lexer_path            = os.path.join(_rp_boot_cache, "lexer.rpo")
+_cached_code_styles_path      = os.path.join(_rp_boot_cache, "code_styles.rpo")
+
+#Add RP's libraries to system path
+sys.path.append(_rp_folder)
+from rp.libs.stamp_tensor import stamp_tensor, crop_tensor 
+
+#Lazy load modules for a speed boost
+try:
+    import lazy_loader
+    # ic = lazy_loader.load('icecream')
+    np = lazy_loader.load('numpy')
+    we = lazy_loader.load('web_evaluator')
+    pickle = lazy_loader.load('pickle')
+    multiprocessing = lazy_loader.load('multiprocessing')
+except ImportError:
+    print("r.py: lazy_loader not found, importing modules eagerly")
+
+    try: import numpy as np
+    except Exception as e: print("r.py import error: ",e)
+
+    try: import web_evaluator as we
+    except Exception as e: print("r.py import error: ",e)
+
+#SETTINGS
+_fast_pterm_history_size = 1024 * 1024
+
+#EVER Wondering which part of the code imports numpy first to debug lazy loading speeds on rp import? This will help.
+# class AccessTracer:
+#     """
+#     Wraps a lazy-loaded object to trace the first time an attribute is accessed.
+#     """
+#     def __init__(self, lazy_object, name):
+#         # Use object.__setattr__ to avoid triggering our own __setattr__
+#         object.__setattr__(self, "_lazy_object", lazy_object)
+#         object.__setattr__(self, "_name", name)
+#         object.__setattr__(self, "_triggered", False)
+#     def __getattr__(self, item):
+#         if not self._triggered:
+#             print(f"\n--- LAZY LOADER TRIGGER: First access to '{self._name}.{item}' ---")
+#             traceback.print_stack()
+#             print("----------------------------------------------------------\n")
+#             # Mark as triggered so this only runs once
+#             object.__setattr__(self, "_triggered", True)
+#         # Forward the call to the actual lazy object, which will then load the module
+#         return getattr(self._lazy_object, item)
+#     # This is needed for things like `np += 1` if that ever happens
+#     def __setattr__(self, key, value):
+#         # Trigger the trace if it's the first interaction
+#         self.__getattr__(key)
+#         # Forward the setattr to the now-loaded module
+#         setattr(self._lazy_object, key, value)
+# np = AccessTracer(np,'numpy')
+
+#Let child processes use this rp instance. This is used in my vim config for \wp and \wc for instance
+#There can be many rp's installed on a system. Whatever vim was started from this rp will use this rp.
+os.environ['RP_SYS_EXECUTABLE']        = sys.executable
+os.environ['RP_PUDB_SYS_VERSION_INFO'] = repr(list(sys.version_info)) # For PUDB editing in vim
+os.environ['RP_SITE_PACKAGES']         = _site_packages               # For PUDB editing in vim
 
 _original_pwd = os.getcwd()
+
+# region ［entuple， detuple］
 
 def entuple(x):
     # For pesky petty things.
     if isinstance(x,tuple):
         return x
     return x,
+
 def detuple(x):
     """ 
     For pesky petty things. Code is simpler than explanation here. 
@@ -159,6 +219,7 @@ def _legacy_par_map(func,*iterables,number_of_threads=None,chunksize=None):
 
     # Multi-threaded map function. When I figure out a way to do parallel computations, this def (conveniently high-level) will be replaced.
     try:
+        from multiprocessing.dummy import Pool as ThreadPool  # ⟵ par_map uses ThreadPool. We import it now so we don't have to later, when we use par_map.
         par_pool=ThreadPool(number_of_threads)
         try:
             out=par_pool.map(lambda args:func(*args),zip(*iterables),chunksize=chunksize)  # ⟵ A more complicated version of out=par_pool.map(func,iterable,chunksize=chunksize). Current version lets func accept multiple arguments.
@@ -362,7 +423,6 @@ def list_flatten(list_2d):
     Old, MUCH SLOWER version: list_flatten=lambda list_2d:scoop(lambda old,new:list(old) + list(new),list_2d,[])
     """
 
-    from itertools import chain
     return list(chain.from_iterable(list_2d))
 
 list_pop=list_flatten#Just because I'm used to list_pop, even though it doesn't make much sense lol. Thought of 'popping' the inner brackets of [[a,b],[c,d]] to [a,b,c,d] as if the inner brackets looked like bubbles to be popped. Has no relationship to popping an item off a stack or queue lol
@@ -972,8 +1032,9 @@ _fansi_styles = {
     'underdash'  : '4:5',
 }
 
-def _transform_fansi_arg(spec):
+def _transform_fansi_arg(spec,style_keywords=None):
     """ Allow for 'yellow green underlined on blue bold' """
+    style_keywords = style_keywords or _fansi_styles
     spec = spec.lower()
     style = []
     color = []
@@ -982,7 +1043,7 @@ def _transform_fansi_arg(spec):
     for x in spec.split():
         if x == 'on':
             on = True
-        elif x in _fansi_styles:
+        elif x in style_keywords:
             style.append(x)
         elif on:
             background.append(x)
@@ -994,6 +1055,7 @@ def _transform_fansi_arg(spec):
     background = ' '.join(background) or None
 
     return color, style, background
+
 
 def fansi(
     text_string="",
@@ -1753,7 +1815,6 @@ def fansi_syntax_highlighting(code: str,
             digit_remover=str.maketrans('0123456789', '          ')
             
             prev_line_number=None
-            from itertools import chain
             for kind,text,line_number in chain([[None,'\n',0]],wrapped_line_tokens(classified_text,max_width=max_width)):
                 opener,closer=colors.get(kind,('',''))
                 if show_line_numbers and text.endswith('\n'):
@@ -1844,6 +1905,11 @@ def fansi_pygments(
         raise ValueError("Invalid color mode '{}' specified. Available modes: basic, 256, true".format(color_mode))
     
     highlighted_code = highlight(code, lexer, formatter)
+
+    #Trying to solve a proble with newlines at the end...
+    assert highlighted_code.endswith('\n')
+    highlighted_code = highlighted_code[:-1]
+
     return highlighted_code
 
 def fansi_pygments_demo(code=None):
@@ -1864,7 +1930,7 @@ def fansi_pygments_demo(code=None):
 # endregion
 # region  Copy/Paste: ［string_to_clipboard，string_from_clipboard］
 _local_clipboard_string=''#if we can't access a system OS clipboard, try and fake it with a local clipboard istead. Of course, you need to use the string_to_clipboard and clipboard_to_string functions to make this work, but that's ok
-_local_clipboard_string_path=__file__+'.rp_local_clipboard'
+
 def _get_local_clipboard_string():
     #Try to get the string from a file (so we can share our fake clipboard across processes. THis is important over SSH into headless systems that don't support clipboards, but we still want to keep our clipboard between sessions).
     #If we can't write or read from a file, just keep _local_clipboard_string as a local variable in this process as a last resort.
@@ -2405,10 +2471,13 @@ def blend_images(bot, top, alpha=1, mode="normal"):
     alpha*=top_alpha #Take the top image's alpha channel into consideration
     
     output_alpha=1-((1-alpha)*(1-bot_alpha)) #The alpha channel of the output image. The output image is always more opaque than the input
-    
-    alpha=alpha[:,:,None]
 
-    if   "normal"   in mode.split(): output = bot * (1 - alpha) + top * alpha
+    color_alpha = alpha / np.where(output_alpha == 0, 0.0000001, output_alpha) #Avoid ÷0 errors
+    
+    color_alpha = color_alpha[:,:,None]
+    alpha       = alpha      [:,:,None]
+
+    if   "normal"   in mode.split(): output = bot * (1 - color_alpha) + top * color_alpha
     elif "add"      in mode.split(): output = bot + top * alpha
     elif "multiply" in mode.split(): output = bot * (1 - alpha + top * alpha)
     elif "subtract" in mode.split(): output = bot - top * alpha
@@ -2697,7 +2766,7 @@ def with_corner_radius(image, radius, *, antialias=True, background=None):
     if antialias:
         mask = mask.resize(original_mask_size)
 
-    alpha = as_float_image(get_image_alpha(image),copy=False) * as_float_image(mask,copy=False)
+    alpha = as_float_image(get_image_alpha(image),copy=False) * as_float_image(as_numpy_image(mask),copy=False)
     return with_image_alpha(image, alpha)
 
 def with_image_glow(image, *, blur=None, strength=None):
@@ -2956,6 +3025,7 @@ def video_with_progress_bar(
     video,
     *,
     size=10,
+    length=None,
     bar_color="white",
     background_color="black",
     reverse=False,
@@ -3046,10 +3116,12 @@ def video_with_progress_bar(
         ... display_video(with_alpha_checkerboards(video,lazy=True),loop=True)
 
     """
+
+    if length is None: 
+        length = len(video)
     
     def helper():
         nonlocal size, bar_color, background_color, position, reverse
-        length = len(video)
         assert length > 0, 'Cannot make progress bar on video with only one frame - length='+str(length)
         for index, image in enumerate(video):
             progress = index / (length - 1)
@@ -3059,10 +3131,7 @@ def video_with_progress_bar(
     output = helper()
 
     if lazy:
-        if hasattr(video, '__len__'):
-            length = len(video)
-            output = IteratorWithLen(output, length)
-
+        output = IteratorWithLen(output, length)
     else:
         output = list(output)
 
@@ -4970,6 +5039,7 @@ _load_image_cache={}
 
 def load_image_from_clipboard():
     """ #Grab an image copied from your clipboard """
+    #TODO: Use the "copykitten" library to paste images
     pip_import('PIL')
     from PIL import ImageGrab
     assert currently_running_windows() or currently_running_mac(),'load_image_from_clipboard() only works on Mac and Windows right now; sorry. This is because of PIL.'
@@ -5011,8 +5081,10 @@ def _paste_from_clipboard():
     
     return ''
 
-def copy_image_to_clipboard(image):
+def _copy_image_to_clipboard_via_pyjpgclipboard(image):
     """
+    (This function works fine! But it didnt support RGBA images so it's obsolete now)
+    
     Takes an image or a path/url to an image and copies that image to your system clipboard. If you're using Ubuntu, you must install xclip. 
 
     Note that it only operates on RGB Jpg images right now - so alpha channels will be discarded. In the future, this will be fixed and ideally we will save png images by default.
@@ -5035,8 +5107,39 @@ def copy_image_to_clipboard(image):
         pyjpgclipboard.clipboard_load_jpg(temp_image_path)
     finally:
         squelch_call(delete_file,temp_image_path)
-            
 
+def _copy_image_to_clipboard_via_copykitten(image):
+    """ 
+    Copies an image to the system clipboard
+    Can handle RGBA images
+    https://github.com/Klavionik/copykitten 
+    """
+    pip_import('copykitten')
+    #image=as_byte_image(image)
+    image=as_rgba_image(image)
+    image=as_pil_image(image)
+    
+    import copykitten
+    copykitten.clear()
+    copykitten.copy_image(image.tobytes(), image.width, image.height)
+
+def copy_image_to_clipboard(image,*,backend=None):
+    """
+    Copies an image to the system clipboard
+
+    EXAMPLE:
+
+        >>> ans = get_youtube_video_thumbnail('https://www.youtube.com/watch?v=iu54gTucsiE')
+        ... copy_image_to_clipboard(ans)
+        ... #Try pasting into photoshop or something
+
+    """
+
+    if backend is None: backend = 'copykitten'
+
+    if   backend=='copykitten':     _copy_image_to_clipboard_via_copykitten    (image) #Supports RGBA
+    elif backend=='pyjpgclipboard': _copy_image_to_clipboard_via_pyjpgclipboard(image) #Only supports RGB
+    else: raise ValueError('Invalid backend '+backend)
 
 def load_image(location,*,use_cache=False):
     """ Automatically detect if location is a URL or a file path and try to smartly choose the appropriate function to load the image """
@@ -5162,6 +5265,39 @@ def load_images(*locations,use_cache=False,show_progress=False,num_threads=None,
     """
 
 
+_pdf_to_images_via_pdf2image_cache={}
+def _load_images_via_pdf2image(path, *, dpi=200, use_cache=False):
+    pip_import('pdf2image')
+    import pdf2image
+    
+    # Handle Cache
+    cache_key = handy_hash([path, dpi])
+    cache = _pdf_to_images_via_pdf2image_cache
+    if use_cache:
+        if cache_key not in cache:
+            cache[cache_key] = gather_args_recursive_call(use_cache=False)
+        return cache[cache_key]
+    elif cache_key in cache:
+        del cache[cache_key]
+
+    #It has many other options. Not sure when I'll need to expose them though.
+    output = pdf2image.convert_from_path(path,dpi=dpi)
+    output=as_byte_images(output)
+    return output
+
+def load_pdf_as_images(path):
+    """ Given a PDF, returns a list of images - one for each page """
+    return _load_images_via_pdf2image(path)
+
+def get_pdf_num_pages(path:str)->int:
+    """ Given a path to a PDF file, returns the number of pages in it """
+    pip_import("pdf2image")
+    import pdf2image
+
+    return pdf2image.pdfinfo_from_path(path)["Pages"]
+
+
+
 #     output=[]
 #     for i,location in enumerate(locations):
 #         image=load_image(location,use_cache=use_cache)
@@ -5192,13 +5328,13 @@ def load_image_from_file(file_name):
         return _load_image_from_file_via_PIL(file_name)
 
     try               :return _load_image_from_file_via_imageio(file_name)#Imageio will not forget the alpha channel when loading png files
-    except Exception  :pass #Don't cry over spilled milk...if imageio didn't work we'll try the other libraries.
+    except Exception:pass #Don't cry over spilled milk...if imageio didn't work we'll try the other libraries.
     try               :return _load_image_from_file_via_scipy  (file_name)#Expecting that scipy.misc.imread doesn't exist on the interpereter for whatever reason
     except ImportError:pass
     try               :return _load_image_from_file_via_opencv (file_name)#OpenCV is our last choice here, because when loading png files it forgets the alpha channel...
-    except Exception  :pass
+    except Exception:pass
     try               :return _load_image_from_file_via_PIL    (file_name)
-    except Exception  :raise
+    except Exception:raise
     # assert False,'rp.load_image_from_file: Failed to load image file: '+repr(file_name)
 
 _init_pillow_heif_called=False
@@ -5595,6 +5731,8 @@ def decode_bytes_to_image(encoded_image:bytes):
     #if not success:
     #    raise IOError('Failed to decode image')
     #return decoded_image
+
+decode_image_from_bytes = decode_bytes_to_image
 
 def save_image(image,file_name=None,add_png_extension: bool = True):
     """
@@ -6575,10 +6713,11 @@ def text_to_speech_via_google(text: str,voice='en',*,play_sound: bool = True,run
 # endregion
 text_to_speech_voices_all=text_to_speech_voices_for_apple + text_to_speech_voices_for_google
 text_to_speech_voices_favorites=['da','en-au','zh-yue','hi','sk','zh','en','it','Samantha','Alex','Moira','Tessa','Fiona','Fred']
-def text_to_speech_voices_comparison(text="Hello world",time_per_voice=2,voices=text_to_speech_voices_favorites + shuffled(text_to_speech_voices_all)):
+def text_to_speech_voices_comparison(text="Hello world",time_per_voice=2,voices=None):
     """
     Will cycle through different voices so you can choose which one you like best. I selected my favorite voices to be the beginning, and it will cycle through all available voices by the end.
     """
+    voices = voices or text_to_speech_voices_favorites + shuffled(text_to_speech_voices_all)
     for voice in voices:
         print("Voice: " + voice)
         text_to_speech(text=text,voice=voice,run_as_thread=True)
@@ -6602,15 +6741,17 @@ def text_to_speech(text: str,voice: str = None,run_as_thread=True):
             text_to_speech_via_google(**kwargs)
 # endregion
 # region Audio/Sound Functions: ［load_sound_file，play_sound_from_samples，play_sound_file，play_sound_file_via_afplay，play_sound_file_via_pygame，stop_sound，mp3_to_wav］
-np=None
-def _module_loader():
-    try:
-        import numpy#importing numpy takes bootup time
-        global np
-        np=numpy
-        np.set_printoptions(precision=3)#My personal default print option preference: I don't want to see all those digits.
-    except:
-        pass
+
+# np=None
+# def _module_loader():
+#     try:
+#         import numpy#importing numpy takes bootup time
+#         global np
+#         np=numpy
+#         np.set_printoptions(precision=3)#My personal default print option preference: I don't want to see all those digits.
+#     except:
+#         pass
+# _module_loader()# run_as_new_thread(_module_loader) <--- This caused problems when I tried to show images, so the bootup speed increase (like .1 seconds) is definately not worth it
 
 
 
@@ -6642,7 +6783,6 @@ def set_numpy_print_options(**kwargs):
         assert kwarg in np.get_printoptions(),'set_numpy_print_options: '+repr(kwarg)+' is not a valid argument name. Available print options: '+repr(np.get_printoptions())#Prints something like this: "AssertionError: set_numpy_print_options: 'sodf' is not a valid argument name. Available print options: {'nanstr': 'nan', 'precision': 3, 'floatmode': 'maxprec', 'linewidth': 152, 'formatter': None, 'suppress': False, 'edgeitems': 3, 'infstr': 'inf', 'sign': '-', 'legacy': False, 'threshold': 1000}"
     np.set_printoptions(**{**np.get_printoptions(),**kwargs})
 
-_module_loader()# run_as_new_thread(_module_loader) <--- This caused problems when I tried to show images, so the bootup speed increase (like .1 seconds) is definately not worth it
 
 def load_mp3_file(path):
     """
@@ -10056,7 +10196,7 @@ def list_set(x):
           >>> list_set(l)  ⟵ This method
           ans=[5,4,3,2,1]
     """
-    from  more_itertools import unique_everseen  # http://stackoverflow.com/questions/480214/how-do-you-remove-duplicates-from-a-list-in-whilst-preserving-order
+    from more_itertools import unique_everseen  # http://stackoverflow.com/questions/480214/how-do-you-remove-duplicates-from-a-list-in-whilst-preserving-order
     return list(unique_everseen(x))
 
 # ――――――――――――――――――――――
@@ -11426,6 +11566,29 @@ class _TimezoneFormTranslator(_FormTranslator):
     def is_human (cls,tz): return isinstance(tz, str) and tz in _timezone_translations
     def is_tzinfo(cls,tz): return isinstance(tz, datetime.tzinfo)
 
+class _FilesizeFormTranslator(_FormTranslator):
+    """
+    EXAMPLES:
+        >>> _FilesizeFormTranslator.as_num_bytes('10mb')
+        ans = 10485760
+        >>> _FilesizeFormTranslator.as_num_bytes('1024')
+        ans = 1024
+        >>> _FilesizeFormTranslator.as_human(1024)
+        ans = 1KB
+        >>> _FilesizeFormTranslator.as_human('1024')
+        ans = 1024
+        >>> _FilesizeFormTranslator.as_human('1024kb')
+        ans = 1024kb
+    """
+    # Converters
+    def human_to_num_bytes(cls,size): return string_to_file_size     (size)
+    def num_bytes_to_human(cls,size): return human_readable_file_size(size)
+    
+    # Type checkers - should all be mutually exclusive
+    def is_num_bytes(cls,size): return isinstance(size, int)
+    def is_human    (cls,size): return isinstance(size, str)
+
+
 
 
 def get_current_timezone(*,form='human'):
@@ -12124,6 +12287,32 @@ def load_webcam_stream():
     while True:
         yield load_image_from_webcam()
 
+def load_image_from_screenshot_via_mss(monitor=0,*,cursor:bool=False):
+    """
+    Grabs a screenshot from the main monitor using the 
+    Multiple Screen Shots (MSS) Library
+    Returns it as a RGB byte image
+
+    cursor: If true, included the cursor in the image
+
+    EXAMPLE:
+        
+        >>> while True:
+        ...     image = load_image_from_screenshot_via_mss(cursor=True)
+        ...     image = cv_resize_image(image, 0.25)
+        ...     display_image(image)
+        
+    """
+    pip_import('mss')
+    import mss
+    
+    with mss.mss(with_cursor=cursor) as sct:
+        img = sct.grab(sct.monitors[monitor])
+        img = rp.as_numpy_array(img)
+        img = rp.cv_bgr_rgb_swap(img, copy=False)
+
+        return img
+
 def load_image_from_screenshot():
     """
     Grabs a screenshot from the main monitor
@@ -12137,15 +12326,7 @@ def load_image_from_screenshot():
         ...     display_image(image)
         
     """
-    pip_import('mss')
-    import mss
-    
-    with mss.mss() as sct:
-
-        img = rp.as_numpy_array(sct.grab(sct.monitors[0]))
-        img = rp.cv_bgr_rgb_swap(img, copy=False)
-
-        return img
+    return load_image_from_screenshot_via_mss()
 
 def load_screenshot_stream():
     """
@@ -12479,8 +12660,17 @@ _load_json_cache={}
 def load_json(path, *, use_cache=False):
 
     if use_cache and path in _load_json_cache:
-        from copy import deepcopy
-        return as_easydict(deepcopy(_load_json_cache[path]))
+        output = _load_json_cache[path]
+
+        if use_cache != 'nocopy':
+            #Undocumented functionality for internal RP usage: skip copying the output
+            #Only do this if we're certain it will be treated as read only
+            #Only use this within r.py for now so I can change it later
+            #In the future it might not be specified this way, I might have more elegant solution
+            from copy import deepcopy
+            output = deepcopy(output)
+
+        return as_easydict(output)
 
     text=text_file_to_string(path, use_cache=use_cache)
     import json
@@ -12499,7 +12689,8 @@ def load_jsons(*paths, use_cache=False, strict=True, num_threads=None, show_prog
     Please see load_files and rp_iglob for more information
     Yields the jsons as an iterator
     """
-    paths = rp_iglob(paths)
+    # paths = rp_iglob(paths)
+    paths = detuple(paths) #Not sure how to go between this and URL's...
     load_file = lambda path: load_json(path, use_cache=use_cache)
     if show_progress in ['eta',True]: show_progress='eta:Loading JSON files'
     return load_files(load_file, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
@@ -13200,7 +13391,7 @@ def get_my_public_ip_address():
 # endregion
 # region OSC≣'Open Sound Control' Output ［OSC_output］:
 default_OSC_port=12345
-try:default_OSC_ip=get_my_local_ip_address()
+try:default_OSC_ip='0.0.0.0'
 except Exception:pass
 _OSC_client=None# This is a singleton
 _OSC_values={}
@@ -13540,18 +13731,6 @@ def _get_cached_system_commands():
         rp.run_as_new_thread(update_sys_commands)
 
     return _get_sys_commands_cache
-
-def _add_system_commands_to_pterm_bash_highlighter():
-    """ 
-    This function lets us syntax-highlight any system commands in the !<shell stuff> in pterm seen upon boot 
-    It can't update them over time right now, it's a one-time thing
-    """ 
-    import pygments.lexers.shell as shell
-    import re
-    Name=shell.Name
-    commands=get_system_commands()+['!']
-    shell.BashLexer.tokens['basic']+=[(r'(^|!|\b)(' + '|'.join(re.escape(x) for x in commands) + r')(?=[\s)\`]|$)', Name.Function),]
-_add_system_commands_to_pterm_bash_highlighter()
 
 _system_command_exists_cache = {}
 def system_command_exists(command, *, use_cache=False):
@@ -13985,6 +14164,18 @@ def sorted_by_attr(x, attr, *, key=None, reverse=False):
             e = key(e)
         return e
     return sorted(x, key=new_key, reverse=reverse)
+
+def sorted_dict(dict,*,key=None,reverse=False):
+    """
+    In python, dicts don't necessarily retain order, though they often do.
+    This sorts a dict's by its keys and returns an OrderedDict as a result
+    """
+    from collections import OrderedDict
+    output=OrderedDict()
+    dict_keys=sorted(dict,key=key,reverse=reverse)
+    for dict_key in dict_keys:
+        output[dict_key] = dict[dict_key]
+    return output
 
 # def sync_sorted(*lists_in_descending_sorting_priority,key=identity):
 #         # Sorts main_list and reorders all *lists_in_descending_sorting_priority the same way, in sync with main_list
@@ -15512,6 +15703,8 @@ def save_gist(content:str,*,
         raise
         pass
 
+    _get_all_github_gists_info.cache.expire()
+
     return gist_url
 
 def _fix_CERTIFICATE_VERIFY_FAILED_errors():
@@ -15554,6 +15747,52 @@ def _fix_CERTIFICATE_VERIFY_FAILED_errors():
 
     if __name__ == '__main__':
         main()
+
+# 2025-07-24 21:30:57.084169
+def get_arxiv_bibtex(paper: str) -> str:
+    """
+    Gets the bibtex citation for a given arxiv paper.
+
+    OLD VERSION: https://gist.github.com/SqrtRyan/4c3f1ba7a31ac4a36228b6ce2cd45edf
+        (Adapted from http://www.thamnos.de/misc/look-up-bibliographical-information-from-an-arxiv-id/)
+
+    EXAMPLES:
+        >>> print(get_arxiv_bibtex('2312.03817'))
+        @misc{burgert2023diffusionillusionshidingimages,
+              title={Diffusion Illusions: Hiding Images in Plain Sight},
+              author={Ryan Burgert and Xiang Li and Abe Leite and Kanchana Ranasinghe and Michael S. Ryoo},
+              year={2023},
+              eprint={2312.03817},
+              archivePrefix={arXiv},
+              primaryClass={cs.CV},
+              url={https://arxiv.org/abs/2312.03817},
+        }
+        >>> print(get_arxiv_bibtex('https://arxiv.org/abs/2309.15091'))
+        @misc{lin2024videodirectorgptconsistentmultiscenevideo,
+              title={VideoDirectorGPT: Consistent Multi-scene Video Generation via LLM-Guided Planning},
+              author={Han Lin and Abhay Zala and Jaemin Cho and Mohit Bansal},
+              year={2024},
+              eprint={2309.15091},
+              archivePrefix={arXiv},
+              primaryClass={cs.CV},
+              url={https://arxiv.org/abs/2309.15091},
+        }
+    """
+
+    # Get the Arxiv ID
+    paper = paper.strip()
+    if "arxiv.org/abs/" in paper:
+        xid = paper.split("arxiv.org/abs/")[-1]
+    elif paper.startswith("arxiv:"):
+        xid = paper[6:]  # Remove "arxiv:" prefix
+    else:
+        xid = paper
+
+    # Remove version number if present
+    xid = xid.split("v")[0].strip()
+
+    bibtex_file = download_to_cache("https://arxiv.org/bibtex/" + xid)
+    return load_text_file(bibtex_file, use_cache=True)
 
 
 def random_namespace_hash(n:int=10,chars_to_choose_from:str="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"):
@@ -16042,7 +16281,6 @@ cv2=pip_import('cv2')
 import rp.rp_ptpython.prompt_style as ps
 ps.__all__+=("PseudoTerminalPrompt",)
 
-_prompt_style_path=__file__+'.rp_prompt_style'
 _get_prompt_style_cached=None
 def _get_prompt_style():
     global _get_prompt_style_cached
@@ -16135,7 +16373,6 @@ def _cdh_back_query(query):
 
 
 _cd_history_size_limit=100000#To avoid spamming the console when we use CDH, limit the number of recent directories to this amount #UPDATE: I decided to make this effectively limitless (100000 is very big lol). Why limit it?
-_cd_history_path=__file__+'.rp_cd_history.txt'
 def _get_cd_history():
     try:
         output = line_split(text_file_to_string(_cd_history_path))
@@ -16248,36 +16485,6 @@ class PseudoTerminalPrompt(ps.ClassicPrompt):
         return [(Token.Prompt,_get_prompt_style())]
 setattr(ps,'PseudoTerminalPrompt',PseudoTerminalPrompt)
 default_python_input_eventloop = None  # Singleton for python_input
-# def python_input(namespace):
-#     try:
-#         from rp.prompt_toolkit.shortcuts import create_eventloop
-#         from ptpython.python_input import PythonCommandLineInterface,PythonInput as Pyin
-#         global default_python_input_eventloop
-#         pyin=Pyin(get_globals=lambda:namespace)
-#         pyin.enable_mouse_support=False
-#         pyin.enable_history_search=True
-#         pyin.highlight_matching_parenthesis=True
-#         pyin.enable_input_validation=False
-#         pyin.enable_auto_suggest=False
-#         pyin.show_line_numbers=True
-#         pyin.enable_auto_suggest=True
-#         # exec(mini_terminal)
-#         pyin.all_prompt_styles['Pseudo Terminal']=ps.PseudoTerminalPrompt()
-#         # ps.PseudoTerminalPrompt=PseudoTerminalPrompt
-#         pyin.prompt_style='Pseudo Terminal'
-#
-#         default_python_input_eventloop=default_python_input_eventloop or PythonCommandLineInterface(create_eventloop(),python_input=pyin)
-#         #
-#         # try:
-#         code_obj = default_python_input_eventloop.run()
-#         if code_obj.text is None:
-#             print("THE SHARKMAN SCREAMS")
-#         return code_obj.text
-#     except Exception as E:
-#         print_stack_trace(E)
-#     # except BaseException as re:
-#     # print_stack_trace(re)
-#     # print("THE DEMON SCREAMS")
 
 def split_into_sublists(l, sublist_len: int, *, strict=False, keep_remainder=True, lazy=False):
     """
@@ -16664,10 +16871,10 @@ def open_google_search_in_web_browser(query:str):
     open_url_in_web_browser(url)
     return url
 
-def restart_python():
-    from os import system
-    print("killall Python\nsleep 2\npython3 "+repr(__file__))
-    system("killall Python\nsleep 2\npython3 "+repr(__file__))
+# def restart_python():
+#     from os import system
+#     print("killall Python\nsleep 2\npython3 "+shlex.quote(__file__))
+#     system("killall Python\nsleep 2\npython3 "+shlex.quote(__file__))
 
 def reload_module(module):
     import importlib
@@ -17528,6 +17735,7 @@ def exeval(code:str, scope=None):
     return result
 
 _prev_pterm_profiler = None
+_prev_line_profiler = None
 
 def _display_pterm_flamechart(local=False):
     if _prev_pterm_profiler is None:
@@ -17579,7 +17787,7 @@ def _truncate_string_floats(s, num_sigfigs=4) -> str:
 
     return re.sub(pattern, replace, s)
 
-def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,ipython=False):
+def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,line_profile=False,ipython=False):
     """
     Evaluate or execute within descending hierarchy of dicts
     merged_dict=merged_dicts(*reversed(dicts))# # Will merge them in descending priority of dicts' namespaces
@@ -17589,11 +17797,71 @@ def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,ipy
     print("exeval")
     """
     global _prev_pterm_profiler
+    global _prev_line_profiler
 
     if len(dicts)==0:
       dicts=[get_scope(1)]
     merged_dict=dicts[0]
     # endregion
+
+    if line_profile:
+        # Simple debugger-style line profiler: measure time from line to line
+        import sys
+        import time
+        line_times = {}
+        line_hits = {}
+        prev_line_key = None
+        last_time = None
+        
+        # Track function call timing separately
+        call_stack = []  # Stack of (calling_line, start_time) for function calls
+        
+        def trace_lines(frame, event, arg):
+            nonlocal last_time, line_times, line_hits, prev_line_key, call_stack
+            
+            filename = frame.f_code.co_filename
+            lineno = frame.f_lineno
+            
+            if event == 'call' and filename.startswith('<rp-input-'):
+                # REPL function call - track the calling line for total timing
+                if prev_line_key is not None:
+                    call_stack.append((prev_line_key, time.perf_counter()))
+                return trace_lines
+                
+            elif event == 'return' and filename.startswith('<rp-input-'):
+                # REPL function return - attribute total time to calling line
+                if call_stack:
+                    calling_line, start_time = call_stack.pop()
+                    current_time = time.perf_counter()
+                    elapsed = current_time - start_time
+                    if 0 <= elapsed < 10.0:  # Sanity check
+                        line_times[calling_line] = line_times.get(calling_line, 0) + elapsed
+                return trace_lines
+                
+            elif event == 'line':
+                current_time = time.perf_counter()
+                current_key = (filename, lineno)
+                
+                # Track ALL REPL lines for line-to-line timing
+                if filename.startswith('<rp-input-'):
+                    # Track this REPL line
+                    line_hits[current_key] = line_hits.get(current_key, 0) + 1
+                    
+                    # If we have a previous REPL line, attribute elapsed time to it
+                    if prev_line_key is not None and last_time is not None:
+                        elapsed = current_time - last_time
+                        if 0 <= elapsed < 10.0:  # Sanity check
+                            line_times[prev_line_key] = line_times.get(prev_line_key, 0) + elapsed
+                    
+                    # Update tracking for this REPL line
+                    prev_line_key = current_key
+                    last_time = current_time
+                    
+            return trace_lines
+        
+        # Store original tracer
+        original_tracer = sys.gettrace()
+        sys.settrace(trace_lines)
 
     if profile:
         pyinstrument=pip_import('pyinstrument')#https://github.com/joerick/pyinstrument
@@ -17610,12 +17878,10 @@ def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,ipy
             if is_valid_python_syntax(code,mode='eval'):
                 _start_time=_time()
                 ans=patch.run_code(code,'eval',merged_dict,eval)
-                # ans=eval(code,merged_dict,merged_dict)
                 _end_time=_time()
             else:
                 _start_time=_time()
                 ans=patch.run_code(code,'exec',merged_dict,exec)
-                # ans=exec(code,merged_dict,merged_dict)# ans = None unless using ipython, in which case it might not be
                 _end_time=_time()
         finally:
             if tictoc:
@@ -17635,7 +17901,7 @@ def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,ipy
         return ans,None
     except SystemExit as e:
         # Convert SystemExit to _PseudoTerminalReturnException to integrate with existing exit handling
-        fansi_print("Caught SystemExit("+str(e.code)+") - converting to pseudo_terminal RETURN", 'cyan', 'bold')
+        fansi_print("Caught SystemExit({0}) - converting to pseudo_terminal RETURN".format(e.code), 'cyan', 'bold')
         raise _PseudoTerminalReturnException()
     except BaseException as e:
         if ipython:
@@ -17654,8 +17920,191 @@ def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,ipy
                 profiler.stop()#Something tells me its not a good idea to leave stray _pterm_profilers running...
             global _prev_pterm_profiler
             _prev_pterm_profiler = profiler
+        
+        if line_profile:
+            # Cleanup: handle any remaining function calls and final line timing
+            current_time = _time()
+            
+            # Complete any remaining function calls on the stack
+            while call_stack:
+                calling_line, start_time = call_stack.pop()
+                elapsed = current_time - start_time
+                if 0 <= elapsed < 10.0:
+                    line_times[calling_line] = line_times.get(calling_line, 0) + elapsed
+            
+            # Attribute remaining time to the last REPL line
+            if prev_line_key is not None and last_time is not None:
+                final_elapsed = current_time - last_time
+                if 0 <= final_elapsed < 10.0:
+                    line_times[prev_line_key] = line_times.get(prev_line_key, 0) + final_elapsed
+            
+            # Restore original tracer
+            sys.settrace(original_tracer)
+            
+            if (_end_time or _time())-_start_time>1/1000:#Only show line profiler data if it takes more than a millisecond to run your code...
+                lp_display_start_time=_time()
+                fansi_print("Preparing the LINEPROF display (the line profiler, toggle with LINEPROF)...",'blue','underlined')
+                
+                if line_times:
+                    _rp_show_custom_line_profile(line_times, line_hits, _start_time, _end_time)
+                else:
+                    fansi_print("No line profiling data collected",'yellow','bold')
+                    
+                fansi_print("...took "+str(_time()-lp_display_start_time)+" seconds to display the LINEPROF output",'blue','underlined')
+            
+            global _prev_line_profiler
+            # Store results in a more structured format for external access
+            _prev_line_profiler = {
+                'line_times': line_times,
+                'line_hits': line_hits,
+                'total_time': sum(line_times.values()),
+                'total_hits': sum(line_hits.values()),
+                'files_profiled': list(set(filename for filename, lineno in line_times.keys())),
+                'num_lines_profiled': len(line_times)
+            }
 
 _PROF_DEEP=True
+def _rp_show_custom_line_profile(line_times, line_hits, start_time, end_time):
+    """
+    Display custom line profiler results with visual enhancements
+    TODO: This is a work in progress. Currently made with AI (Claude Sonnet 4)
+    While it does work nicely, the coloring seems to be a bit off and the code is a bit hard to read
+    TODO: FINISH THIS LINEPROF
+    """
+    import sys
+    import time
+    import linecache
+    
+    # Group by filename
+    files = {}
+    for (filename, lineno), time_spent in line_times.items():
+        if filename not in files:
+            files[filename] = []
+        hits = line_hits.get((filename, lineno), 0)
+        files[filename].append((lineno, hits, time_spent))
+    
+    # Use wall clock time - handle case where end_time is None (e.g., Ctrl+C)
+    actual_end_time = end_time if end_time is not None else time.time()
+    total_time = actual_end_time - start_time
+    
+    print('Timer unit: 1 s\n')
+    print('Total time: {0:.6f} s\n'.format(total_time))
+    
+    for filename in sorted(files.keys()):
+        # Only show REPL input files, skip internal Python library code
+        if not filename.startswith('<rp-input-'):
+            continue
+        print('File: {0}'.format(filename))
+        
+        # Get source lines
+        all_lines = linecache.getlines(filename)
+        
+        # Sort by line number
+        line_data = sorted(files[filename])
+        
+        if not line_data:
+            continue
+            
+        # Calculate max values for heat mapping
+        max_hits = max(ld[1] for ld in line_data) if line_data else 1
+        max_time = max(ld[2] for ld in line_data) if line_data else 1
+        
+        # Calculate column widths
+        max_line = max(ld[0] for ld in line_data)
+        line_width = max(6, len(str(max_line)))
+        hits_width = max(9, len(str(max_hits)))
+        
+        # Header with visual bar column
+        header = "{'Line #':<{line_width<<<RIGHTBRACE>>> {'Hits':<{hits_width<<<RIGHTBRACE>>> {'Time':<12} {'Per Hit':<8} {'% Time':<8} {'Bar':<20}  Line Contents"
+        print(header)
+        print('=' * len(header))
+        
+        # Calculate relative bar lengths using full_range  
+        all_times = [ld[2] for ld in line_data]
+        if all_times and max(all_times) > 0:
+            if len(all_times)<=1:
+                relative_bar_lengths = [18*8]
+            else:
+                relative_bar_lengths = full_range(all_times, min=0, max=18*8)
+        else:
+            relative_bar_lengths = [0] * len(line_data)
+        
+        # Show lines with timing data
+        for i, (lineno, hits, time_spent) in enumerate(line_data):
+            if total_time > 0:
+                percent = 100 * time_spent / total_time
+            else:
+                percent = 0
+                
+            per_hit = time_spent / hits if hits > 0 else 0
+            
+            # Use the properly normalized bar length (with NaN safety check)
+            bar_value = relative_bar_lengths[i]
+            bar_length = int(bar_value) if not (bar_value != bar_value) else 0  # NaN check
+            time_bar = unicode_loading_bar(bar_length)
+            
+            # Calculate heat intensity based on hits and time
+            hit_intensity = hits / max_hits if max_hits > 0 else 0
+            time_intensity = time_spent / max_time if max_time > 0 else 0
+            heat_intensity = (hit_intensity + time_intensity) / 2
+            
+            # Get heat color using continuous spectrum interpolation
+            # Define color spectrum from cool to hot using English color names
+            color_names = [
+                'dark blue',          # Cool start
+                'navy',               # Dark blue
+                'blue cyan',          # Blue-cyan
+                'dark cyan',          # Dark cyan  
+                'teal',               # Blue-green
+                'dark green',         # Dark green
+                'olive',              # Dark yellow-green
+                'orange',             # Orange
+                'dark orange',        # Dark orange
+                'maroon'              # Dark red - hot end
+            ]
+            
+            # Convert color names to RGB tuples
+            color_spectrum = [as_rgb_float_color(color_name) for color_name in color_names]
+            
+            # Use linterp to get smooth color transition
+            # Define custom blend function for RGB tuples
+            def blend_rgb(color1, color2, alpha):
+                r1, g1, b1 = color1
+                r2, g2, b2 = color2
+                return (
+                    (1 - alpha) * r1 + alpha * r2,
+                    (1 - alpha) * g1 + alpha * g2,
+                    (1 - alpha) * b1 + alpha * b2
+                )
+            
+            spectrum_index = heat_intensity * (len(color_spectrum) - 1)
+            heat_color = linterp(color_spectrum, spectrum_index, blend_func=blend_rgb)
+            
+            # Get the actual line content
+            if lineno <= len(all_lines):
+                line_content = all_lines[lineno - 1].rstrip()
+                # Apply syntax highlighting to the code
+                try:
+                    highlighted_code = fansi_pygments(line_content, language='python', style='monokai')
+                    # Apply heat map background color
+                    final_code = fansi(highlighted_code, background_color=heat_color)
+                except:
+                    # Fallback if syntax highlighting fails
+                    final_code = fansi(line_content, background_color=heat_color)
+            else:
+                final_code = ""
+            
+            # Format the row with visual bar
+            print("{lineno:<{line_width<<<RIGHTBRACE>>> {hits:<{hits_width<<<RIGHTBRACE>>> {time_spent:<12.6f} {per_hit:<8.6f} {percent:<8.1f} {time_bar:<20}  {final_code}")
+        
+        print()  # Empty line between files
+
+
+def get_last_line_profile_results():
+    """Get the results from the most recent line profiling session"""
+    global _prev_line_profiler
+    return _prev_line_profiler
+
 
 # def parse(code):
 #     # Takes care ofmillisecond to run your code...:
@@ -17696,26 +18145,7 @@ def run_until_complete(x):
 
 if __name__=='__main__':fansi_print("Booting rp...",'blue','bold',new_line=False)
 import rp.rp_ptpython.prompt_style as ps
-from rp.prompt_toolkit.shortcuts import create_eventloop#Unless this can be sped up (inlining just pushes the problem to the next imoprt)
-        # def create_eventloop(inputhook=None, recognize_win32_paste=True):
-        #     """
-        #     Create and return an
-        #     :class:`~prompt_toolkit.eventloop.base.EventLoop` instance for a
-        #     :class:`~prompt_toolkit.interface.CommandLineInterface`.
-        #     """
-        #     def is_windows():
-        #         """
-        #         True when we are using Windows.
-        #         """
-        #         return sys.platform.startswith('win')  # E.g. 'win32', not 'darwin' or 'linux2'
 
-        #     if is_windows():
-        #         from rp.prompt_toolkit.eventloop.win32 import Win32EventLoop as Loop
-        #         return Loop(inputhook=inputhook, recognize_paste=recognize_win32_paste)
-        #     else:
-        #         from rp.prompt_toolkit.eventloop.posix import PosixEventLoop as Loop
-        #         return Loop(inputhook=inputhook)
-from rp.rp_ptpython.python_input import PythonCommandLineInterface,PythonInput as Pyin
 default_python_input_eventloop = None  # Singleton for python_input
 default_ipython_shell = None  # Singleton for python_input
 pyin=None# huge speed increase when using this as a singleton
@@ -17796,7 +18226,7 @@ _default_pyin_settings=dict(
     # _current_ui_style_name='stars',
     _current_ui_style_name='adventure',
     # _current_code_style_name='default',
-    _current_code_style_name='dracula',
+    _current_code_style_name='monokai',
 
     show_docstring=False,
     show_realtime_input=False,
@@ -17852,24 +18282,39 @@ _default_pyin_settings=dict(
 
     session_title='',
 )
-_pyin_settings_file_path=__file__+'.rp_pyin_settings'
 _globa_pyin=[None]
+
+def _get_pyin_settings():
+    """Get current pyin settings with smart caching"""
+    try:
+        if _globa_pyin[0] is not None:
+            # Always read from live pyin object - this is current truth
+            pyin = _globa_pyin[0]
+            settings = {}
+            for attr in _default_pyin_settings:
+                if hasattr(pyin, attr):
+                    settings[attr] = getattr(pyin, attr)
+            return settings
+        else:
+            # Use smart caching that auto-invalidates on file changes
+            settings = eval(text_file_to_string(_pyin_settings_file_path, use_cache=True))
+            settings.update(_rprc_pterm_settings_overrides)
+            return settings
+    except Exception:
+        return _default_pyin_settings.copy()
 
 
 _rprc_pterm_settings_overrides={}#Modify this as you wish in an rprc.
 
 def _load_pyin_settings_file():
     # print("BOOTLEGER",pyin)
+    
+    # Load settings from file before assigning pyin to global
+    # (so _get_pyin_settings uses file path, not uninitialized pyin object)
+    settings = _get_pyin_settings()
+    
+    # Now assign pyin to global after we've loaded the settings
     _globa_pyin[0]=pyin
-
-    try:
-        settings=eval(text_file_to_string(_pyin_settings_file_path))
-        assert isinstance(settings,dict)
-        settings.update(_rprc_pterm_settings_overrides)
-        # for setting in _default_pyin_settings:
-            # assert setting in settings
-    except Exception:
-        settings=_default_pyin_settings.copy()
 
     def _load_pyin_settings_from_dict(d):
         pyin.use_ui_colorscheme(d['_current_ui_style_name'])
@@ -17886,9 +18331,7 @@ def _load_pyin_settings_file():
     _set_default_session_title()
 
 def _save_pyin_settings_file():
-    settings={}
-    for attr in _default_pyin_settings:
-        settings[attr]=getattr(pyin,attr)
+    settings = _get_pyin_settings()
     string_to_text_file(_pyin_settings_file_path,repr(settings))
 
 def _delete_pyin_settings_file():
@@ -17941,8 +18384,9 @@ def _set_pterm_theme(ui_theme_name=None,code_theme_name=None):
     import rp.r as r    
     import rp.rp_ptpython.style as s
     
-    if ui_theme_name   is None:ui_theme_name=_current_ui_style_name
-    if code_theme_name is None:ui_theme_name=_current_code_style_name
+    settings = _get_pyin_settings()
+    if ui_theme_name   is None:ui_theme_name=settings['_current_ui_style_name']
+    if code_theme_name is None:code_theme_name=settings['_current_code_style_name']
     
     #r.pyin._current_code_style_name='vim'
     #r.pyin._current_code_style_name='gruvbox-dark'
@@ -17951,11 +18395,12 @@ def _set_pterm_theme(ui_theme_name=None,code_theme_name=None):
 
 
 _pt_pseudo_terminal_init_settings=False
-history_filename=__file__ + ".history.txt"
+
 def python_input(scope,header='',enable_ptpython=True,iPython=False):
     import rp.rp_ptpython.completer as completer
     # print(completer.completion_cache_pre_origin_doc.keys())
     completer.completion_cache_pre_origin_doc={'':tuple(scope())}#clear the cache because variables might change between inputs (in fact, almost certainly they will). BUT for a speed boost, we'll pre-calculate the initial autocompletion now, because we know it starts with an empty string and should be the scope when doing that.
+    from rp.rp_ptpython.python_input import PythonCommandLineInterface,PythonInput as Pyin
     global Pyin
     global pyin,_iPython
     global _printed_a_big_annoying_pseudo_terminal_error
@@ -17992,6 +18437,7 @@ def python_input(scope,header='',enable_ptpython=True,iPython=False):
             #I don't want anything printed to the console while we're typing...it's super annoying
             #Usually these warnings come from autocomplete stumbling upon some property of some library which is deprecated
             #I don't care about this, and it interrupts the typing experience
+            from rp.prompt_toolkit.shortcuts import create_eventloop
             default_python_input_eventloop=default_python_input_eventloop or PythonCommandLineInterface(create_eventloop(),python_input=pyin)
 
             with no_gc(): #One of the bottlenecks of prompt-toolkit is that it triggers the gc so much, something to do with redraws or somethin' idk. But during input let's disable garbage collection.
@@ -18030,6 +18476,7 @@ def python_input(scope,header='',enable_ptpython=True,iPython=False):
             _printed_a_big_annoying_pseudo_terminal_error=True
 
         return input(header)
+
 class pseudo_terminal_style:
     def __init__(self):
         self.message=lambda:"pseudo_terminal() --> Entering interactive session! "
@@ -18230,6 +18677,10 @@ def with_line_numbers(string, prefix="%i. ", *, start_from=0, align=False):
         13. where the
         14. shadows lie.
     """
+    if not string:
+        #Don't error on align
+        return ''
+
     lines=string.splitlines()
     prefixes=[prefix%(i+start_from) for i in range(len(lines))]
 
@@ -19258,7 +19709,11 @@ def _input_select_multiple_history_multiline(history_filename=history_filename,o
         lines=paragraph.splitlines()
         lines[1:]=[x[1:] for x in lines[1:]]
         return line_join(lines)
-    paragraphs=[process_paragraph(x) for x in paragraphs]
+    paragraphs=(process_paragraph(x) for x in paragraphs)
+    return _input_select_multiple_paragraphs(paragraphs, old_code=old_code)
+
+
+def _input_select_multiple_paragraphs(paragraphs,old_code=None):
 
     # if fansi_is_enabled():
     #     paragraphs=map(fansi_syntax_highlighting,paragraphs)
@@ -19282,8 +19737,8 @@ def _input_select_multiple_history_multiline(history_filename=history_filename,o
     if old_code is None:
         if fansi_is_enabled():
             lines=_iterfzf(lines,multi=True,exact=True,preview='echo {} | %s %s %i '%(
-                json.dumps(sys.executable),
-                json.dumps(get_module_path("rp.experimental.stdin_python_highlighter")),
+                shlex.quote(sys.executable),
+                shlex.quote(get_module_path("rp.experimental.stdin_python_highlighter")),
                 preview_width),
             ) #
         else:
@@ -19294,11 +19749,11 @@ def _input_select_multiple_history_multiline(history_filename=history_filename,o
         #We're gonna do diffs and merge them
         #No support for fansi_disabled right now
         lines=_iterfzf(lines,multi=True,exact=True,preview='echo {} | %s %s %i %s %s'%(
-                json.dumps(sys.executable),
-                json.dumps(get_module_path("rp.experimental.stdin_python_highlighter")),
+                shlex.quote(sys.executable),
+                shlex.quote(get_module_path("rp.experimental.stdin_python_highlighter")),
                 preview_width,
                 "diff_mode",
-                json.dumps(json.dumps(old_code)),
+                shlex.quote(json.dumps(old_code)),
                 ),
         ) #
         if lines is None:
@@ -19530,6 +19985,74 @@ def _ric_current_candidate_fuzzy_matches(query):
         return None
 
 
+
+
+
+
+
+@cachetools.cached(cache=cachetools.TTLCache(maxsize=1000, ttl=10))
+def get_number_of_github_gists(username="SqrtRyan"):
+    return load_json("https://api.github.com/users/" + username).public_gists
+_get_all_github_gists_info__prev_num_github_gists = {}
+@cachetools.cached(cache=cachetools.TTLCache(maxsize=1000, ttl=60))
+def _get_all_github_gists_info(username="SqrtRyan",use_cache=True):
+    entries_per_page = 100
+
+    num_gists = get_number_of_github_gists(username)
+    num_pages = math.ceil(num_gists / entries_per_page)
+
+    num_gists_changed = _get_all_github_gists_info__prev_num_github_gists.get(username,None)!=num_gists
+    if num_gists_changed:
+        _get_all_github_gists_info__prev_num_github_gists[username]=num_gists
+        
+    def load_page(page_index):
+        #Url Explanation:   &direction=asc     makes it so that older entries come first! Important for caching reliably. DOESNT WORK THOUGH!! :(
+        page_url = "https://api.github.com/users/{0}/gists?per_page={1}&page={2}&direction=asc".format(username, entries_per_page, page_index+1)
+        is_last_page = page_index + 1 == num_pages
+        do_cache = use_cache and not (is_last_page and num_gists_changed)
+        
+        #I was unable to sort pages by date. 
+        # if do_cache:
+        #     page_loc = download_url_to_cache(page_url)
+        # else:
+        #     page_loc = page_url
+        page_loc = page_url
+        
+        page=load_json(page_loc,use_cache=do_cache and 'nocopy')
+        return page
+        
+    page_indices = range(num_pages)
+    
+    pages = load_files(load_page, page_indices, show_progress='eta:'+get_current_function_name())
+    pages = list_flatten(pages)
+    pages = list_flatten(page['files'].values() for page in pages)
+    return pages
+
+def _download_rp_gists(max_filesize='10mb'):
+    """
+    Fetches all public gists from SqrtRyan by handling API pagination.
+    """
+    # The rest of your code remains the same, but now uses the complete list
+    max_filesize=_FilesizeFormTranslator.as_num_bytes(max_filesize)
+    gist_pages= _get_all_github_gists_info("SqrtRyan")
+    raw_gist_urls = [page['raw_url'] for page in gist_pages if page['size']<=max_filesize]
+    raw_gist_paths = download_urls_to_cache(raw_gist_urls, show_progress=True)
+    return raw_gist_paths
+    #return load_text_files(raw_gist_paths, show_progress=True, use_cache=True)
+def _input_select_rp_gists(ans=None):
+    return _input_select_multiple_paragraphs(
+        (
+            x[:1000000]
+            for x in load_text_files(
+                _download_rp_gists(),
+                use_cache=True,
+                lazy=True,
+                show_progress=False,
+            )
+        ),
+        old_code=ans if isinstance(ans, str) else None,
+    )
+
             
 
 
@@ -19705,7 +20228,7 @@ def pseudo_terminal(
     *dicts,
     get_user_input=python_input,
     modifier=None,
-    style=pseudo_terminal_style(),
+    style=None,
     enable_ptpython=True,
     eval=eval,
     exec=exec,
@@ -19714,6 +20237,7 @@ def pseudo_terminal(
     on_return=identity
 ):
   """An interactive terminal session, powered by RP """
+  if style is None:style = pseudo_terminal_style()
   with _PtermLevelTitleContext(level_title):
     try:
         import signal
@@ -19944,8 +20468,8 @@ def pseudo_terminal(
                 except TypeError as error:
                     val_str='(Error when converting ans to string: %s)'%error
                 try:
-                    import numpy as np
-                    set_numpy_print_options(linewidth=max(0,get_terminal_width()-len('ans = ')))#Make for prettier numpy printing, by dynamically adjusting the linewidth each time we enter a command
+                    if 'numpy' in str(type(get_ans)) and is_numpy_array(get_ans()):
+                        set_numpy_print_options(linewidth=max(0,get_terminal_width()-len('ans = ')))#Make for prettier numpy printing, by dynamically adjusting the linewidth each time we enter a command
 
                     if type(val).__name__ in 'ndarray DataFrame Series Tensor'.split() and len(line_split(val_str))>1:#Recognize pandas dataframes, series, numpy Arrays, pytorch Tensors
                     # if isinstance(val,np.ndarray) and len(line_split(val_str))>1:
@@ -20031,6 +20555,7 @@ def pseudo_terminal(
         ans_history=[]
         _tictoc=False
         _profiler=False
+        _line_profiler=False
         _use_ipython_exeval=False
         global _user_created_var_names
         _user_created_var_names=set()
@@ -20605,6 +21130,8 @@ def pseudo_terminal(
         FLAIC PROF FLAME IMAGE COPY
         FLAP  PROF FLAME PASTE
 
+        LO LINEPROF
+
         N  NEXT
         P  PREV
         NN NEXT
@@ -20867,7 +21394,8 @@ def pseudo_terminal(
         SG $save_gist(ans)
         LG $load_gist(input($fansi('URL:','blue','bold')))
         LGA $load_gist(ans)
-        OG $load_gist($input_select(options=$line_split($text_file_to_string($path_join($get_parent_folder($get_module_path($rp)),'old_gists.txt')))))
+        OG  $load_gist($input_select(options=$line_split($text_file_to_string($path_join($get_parent_folder($get_module_path($rp)),'old_gists.txt')))))
+        OGM $r._input_select_rp_gists(ans=ans)
 
         # CAH  $copy_path(ans,'.')
         # CPAH $copy_path(ans,'.')
@@ -20946,8 +21474,10 @@ def pseudo_terminal(
 
         RWC $web_copy($get_source_code($r))
 
-        CCA $r._run_claude_code(ans).code
-        CCH $r._run_claude_code('.')
+        CCA  $r._run_claude_code(ans).code
+        CCH  $r._run_claude_code('.')
+        GEM  $r._run_gemini_cli('.')
+        GEMA $r._run_gemini_cli(ans).code
 
         RST __import__('os').system('reset')
         RS  __import__('os').system('reset')
@@ -21003,10 +21533,8 @@ def pseudo_terminal(
         CLS CLEAR
         VV !vim
 
-        RCLAHF $os.system($printed("rclone copy --progress --transfers 128 --metadata %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself! The 'F' stands for fast, which is because this skips checksums - it wont overwrite any files ever!
-        RCLAH $os.system($printed("rclone copy --checksum --progress --transfers 128 --metadata %s ."%('"'+ans+'"'))); #Quickly copy a network drive folder. Copies the contents, not the folder itself!
-
-        WEV import rp.web_evaluator as wev
+        RCLAHF $r._ensure_rclone_installed() ; $r._run_sys_command("rclone copy --progress --transfers 128 --metadata {$shlex.quote(ans)} ." #Quickly copy a network drive folder. Copies the contents, not the folder itself! The 'F' stands for fast, which is because this skips checksums - it wont overwrite any files ever!
+        RCLAH  $r._ensure_rclone_installed() ; $r._run_sys_command("rclone copy --checksum --progress --transfers 128 --metadata {$shlex.quote(ans)} ." #Quickly copy a network drive folder. Copies the contents, not the folder itself!
 
         DR $r._display_columns(dir(),'dir():')
         DUSHA $fansi_print($human_readable_file_size(sum($get_file_size(x,False)for x in $enlist(ans))),'cyan','bold')
@@ -21145,7 +21673,9 @@ def pseudo_terminal(
                             fansi_print("PWD: "+_fansi_highlight_path(get_current_directory()),"blue",'bold')
 
                         user_message=get_user_input(lambda:scope(),header=_get_prompt_style(),enable_ptpython=enable_ptpython)
-                        try:set_numpy_print_options(linewidth=max(0,get_terminal_width()-len('ans = ')))#Make for prettier numpy printing, by dynamically adjusting the linewidth each time we enter a command
+                        try:
+                            if 'numpy' in str(type(get_ans)) and is_numpy_array(get_ans()):
+                                set_numpy_print_options(linewidth=max(0,get_terminal_width()-len('ans = ')))#Make for prettier numpy printing, by dynamically adjusting the linewidth each time we enter a command
                         except Exception:pass#print("Failed to set numpy width")
                         if not user_message:
                             continue# A bit of optimization for aesthetic value when we hold down the enter key
@@ -21219,10 +21749,8 @@ def pseudo_terminal(
                     elif user_message=='HHELP':
                         fansi_print("HHELP --> Displaying full documentation for rp:",'blue','bold')
                         import rp
-                        ans=rp.__file__
-                        ans=get_parent_directory(ans)
-                        ans=path_join(ans,'documentation.py')
-                        ans=text_file_to_string(ans)
+
+                        ans=text_file_to_string(_rp_documentation_file)
                         ans=ans.replace('\t','    ')
                         try:
                             string_pager(ans)
@@ -21290,7 +21818,7 @@ def pseudo_terminal(
         Sometimes, you can use "some_variable/v" in place of "some_variable?v" when variable v doesn't exist, to save you from having to reach for the shift key. This also works for "/s"-->"?s", "/p"-->"?e" etc.
         The ?. command has some variations. r?.image will print a list of results. But, just r?. alone will enter FZF. r?.3 will enter FZF with a max search depth of 3.
         ALL COMMANDS:\n"""*0+indentify(command_list,' '*4*0), "blue")
-        # Other commands: 'MOD ON', 'MOD OFF', 'SMOD SET', 'MOD SET', 'VARS', 'MORE', 'MMORE', 'RETURN NOW', 'EDIT', 'AHISTORY', GHISTORY', 'COPY', 'PASTE', 'CHISTORY', 'DITTO', 'LEVEL', 'PREV', 'NEXT', 'UNDO', 'PT ON', 'PT OFF', 'RANT', '!', '!!', '?/', '?.', '?', '??', '???', '????', '?????','SHELL', 'IPYTHON', 'UNDO ALL', 'PREV ALL', 'UNDO ON', 'UNDO OFF', 'PREV ON', 'PREV OFF', 'PREV CLEAR', 'UNDO CLEAR', 'GC ON', 'GC OFF', 'SUSPEND', 'TICTOC ON', 'TICTOC OFF', 'TICTOC', 'FANSI ON', 'FANSI OFF', 'RUN', 'CD', 'PROF ON', 'PROF OFF', 'PROF', 'IPYTHON ON', 'IPYTHON OFF', 'PROF DEEP', 'SET STYLE', 'PT SAVE', 'PT RESET', 'RELOAD ON', 'RELOAD OFF', 'PWD', 'CPWD', 'LS', 'FORK'
+        # Other commands: 'MOD ON', 'MOD OFF', 'SMOD SET', 'MOD SET', 'VARS', 'MORE', 'MMORE', 'RETURN NOW', 'EDIT', 'AHISTORY', GHISTORY', 'COPY', 'PASTE', 'CHISTORY', 'DITTO', 'LEVEL', 'PREV', 'NEXT', 'UNDO', 'PT ON', 'PT OFF', 'RANT', '!', '!!', '?/', '?.', '?', '??', '???', '????', '?????','SHELL', 'IPYTHON', 'UNDO ALL', 'PREV ALL', 'UNDO ON', 'UNDO OFF', 'PREV ON', 'PREV OFF', 'PREV CLEAR', 'UNDO CLEAR', 'GC ON', 'GC OFF', 'SUSPEND', 'TICTOC ON', 'TICTOC OFF', 'TICTOC', 'FANSI ON', 'FANSI OFF', 'RUN', 'CD', 'PROF ON', 'PROF OFF', 'PROF', 'IPYTHON ON', 'IPYTHON OFF', 'PROF DEEP', 'LINEPROF ON', 'LINEPROF OFF', 'LINEPROF', 'SET STYLE', 'PT SAVE', 'PT RESET', 'RELOAD ON', 'RELOAD OFF', 'PWD', 'CPWD', 'LS', 'FORK'
 
                     elif user_message =='SET TITLE':
                         _set_session_title()
@@ -21401,6 +21929,21 @@ def pseudo_terminal(
                             fansi_print("Turned PROFILER on. This will profile each command you run.", 'blue', 'underlined')
                         else:
                             fansi_print("Turned PROFILER off.",'blue','underlined')
+
+                    elif user_message == 'LINEPROF ON':
+                        fansi_print("Turned LINE PROFILER on. This will show line-by-line timing for each command you run. Note: Commands that take under a millisecond to run will not be profiled.", 'blue', 'underlined')
+                        _line_profiler=True
+
+                    elif user_message == 'LINEPROF OFF':
+                        fansi_print("Turned LINE PROFILER off.", 'blue', 'underlined')
+                        _line_profiler=False
+                        
+                    elif user_message == 'LINEPROF':
+                        _line_profiler=not _line_profiler
+                        if _line_profiler:
+                            fansi_print("Turned LINE PROFILER on. This will show line-by-line timing for each command you run.", 'blue', 'underlined')
+                        else:
+                            fansi_print("Turned LINE PROFILER off.",'blue','underlined')
 
                     elif user_message=='MONITOR':
                         fansi_print("MONITOR -> Entering a system monitoring tool to show you cpu usage/memory etc of the current computer...", 'blue', 'bold',new_line=False)
@@ -22754,21 +23297,33 @@ def pseudo_terminal(
                             #This isn't in the help documentation, because it's something I made for myself. You can use it too though!
                             if user_message=='RYAN RPRC YES' or input_yes_no('Would you like to add Ryan Burgert\'s default settings to your rprc?'):
                                 # _get_ryan_rprc_path() #This already exists!
-                                rprc_lines = [
-                                    "",
-                                    "# < Ryan RPRC Start >",
-                                    "from rp import *",
-                                    # "__import__('rp').r._set_default_session_title()", # now handled in _load_pyin_settings_file
-                                    "#__import__('rp').r._default_timezone=rp.get_current_timezone()",
-                                    "__import__('rp').r._pip_import_autoyes=True",
-                                    "__import__('rp').r._pip_install_needs_sudo=False",
+                                rprc_lines = unindent(
+                                    '''
 
-                                    "# < Ryan RPRC End >",
-                                    "",
-                                ]
-                                for line in rprc_lines:
-                                    append_line_to_file(line,rprc_file_path)
-                                user_message=line_join(rprc_lines+['ans='+repr(rprc_file_path)])
+                                    # < Ryan RPRC Start >
+                                    from rp import *
+
+                                    #__import__('rp').r._set_default_session_title() # now handled in _load_pyin_settings_file
+                                    #__import__('rp').r._default_timezone=rp.get_current_timezone() #Or 'PST', 'EST', etc
+                                    __import__('rp').r._pip_import_autoyes=True
+                                    __import__('rp').r._pip_install_needs_sudo=False
+
+                                    ## Custom pterm commands
+                                    #__import__('rp').r._add_pterm_command_shortcuts("""
+                                    #     CLC $r._pterm_cd("~/CleanCode")
+                                    #     RZG $os.system(f"cd {$get_path_parent($get_module_path(rp)} ; lazygit")
+                                    #""")
+
+                                    ##Custom command prefix shortcuts
+                                    #__import__('rp').r._add_pterm_prefix_shortcut("fu","!!fileutil")
+                                    #__import__('rp').r._add_pterm_prefix_shortcut("rcl",["!rclone copy --progress --transfers 128 --metadata --checksum "," ."])
+
+                                    # < Ryan RPRC End >
+
+                                    '''
+                                )
+                                append_line_to_file(rprc_lines,rprc_file_path)
+                                user_message=rprc_lines+'\nans='+repr(rprc_file_path)
 
                         elif user_message == 'GMORE':
                             fansi_print("GMORE --> 'google-search MORE' --> Searching the web for your error...","red",'bold')
@@ -23346,6 +23901,7 @@ def pseudo_terminal(
                                 module_name = user_message[len("CDM "):].strip()
                                 try:
                                     module_path = get_module_path_from_name(module_name)
+
                                 except Exception:
                                     fuzzy_module_name = _ric_current_candidate_fuzzy_matches(module_name)
                                     if fuzzy_module_name is not None:
@@ -23686,6 +24242,7 @@ def pseudo_terminal(
                                                       eval=eval,
                                                       tictoc=_tictoc,
                                                       profile=_profiler,
+                                                      line_profile=_line_profiler,
                                                       ipython=_use_ipython_exeval)
                                 if __error is not None:
                                     if isinstance(__error,IndentationError):
@@ -24012,7 +24569,7 @@ def total_disc_bytes(path):
     else:
         assert False,'r.get_disc_space ERROR: '+path+' is neither a folder nor a file!'
 
-def human_readable_file_size(file_size:int):
+def human_readable_file_size(file_size:int,):
     """
     Given a file size in bytes, return a string that represents how large it is in megabytes, gigabytes etc - whatever's easiest to interperet
     EXAMPLES:
@@ -25355,7 +25912,9 @@ def _cv_helper(*,image,copy,antialias):
     if copy     :image=image.copy();#as_byte_image(as_rgb_image(image))#Decide whether we should mutate an image or create a new one (which is less efficient but easier to write in my opinion)
     return image,kwargs
 
-try:
+Contour = None
+def _init_contour_class():
+    global Contour
     class Contour(np.ndarray):
         """ Used in the output of cv_find_contours - gives extra info, more than a simply numpy array """
         # __slots__ = ['parent','children','_descendants_cache','_is_inner_cache']#Prevent adding new attriutes. This makes it faster.
@@ -25390,8 +25949,6 @@ try:
                 yield self
             self._descendants_cache = list(helper())
             return self._descendants_cache
-except Exception:
-    pass
 
 def cv_find_contours(image,*,include_every_pixel=False):
     """
@@ -25409,6 +25966,7 @@ def cv_find_contours(image,*,include_every_pixel=False):
     raw_contours, hierarchy = cv2.findContours(image,cv2.RETR_CCOMP,cv2.CHAIN_APPROX_NONE if include_every_pixel else cv2.CHAIN_APPROX_SIMPLE)[-2:]
 
 
+    _init_contour_class()
     contours=[as_points_array(raw_contour).view(Contour) for raw_contour in raw_contours]#This is how we subclass numpy arrays (by using (some ndarray).view(wrapper class))
 
     for contour in contours:
@@ -27531,19 +28089,6 @@ def handy_hash(value):
 __secret_number=71852436691752251090#Used for hashing things. Don't use this value anywhere! It's not generated dynamically (aka it doesnt use randint) because we want consistent hash values across python processes.
 __hashers={}#Used by handy_hash
 
-try:#Attempt to add numpy arrays to the hashers used by handy_hash
-    import numpy as np
-    def _numpy_hash(x):
-        assert isinstance(x,np.ndarray)
-        return hash((__secret_number,'_numpy_hash',x.tobytes()))#Strings such as '_numpy_hash' are put in here to distinguish this function's output from some other hasher which, by some strange coincidence, generate a (__secret_number,‹same bytestring›) but isnt a numpy array. This same technique is also used in the other hasher functions near this one.
-    __hashers[np.ndarray]=_numpy_hash
-except ImportError:pass
-except BaseException as e:
-    try:
-        fansi_print('Upon booting rp, failed to import numpy. Stack trace shown below:','red','bold')
-        print_stack_trace(e)
-    except:
-        pass#Don't prevent rp from booting no matter what
 
 def _set_hash(x):
     assert isinstance(x,set)
@@ -27716,6 +28261,7 @@ def _omni_load(path):
     if ends_with_any(path, '.pt .pth .ckpt'.split()): return __import__('torch').load(path)
     if ends_with_any(path, '.lines'.split()): return load_file_lines(path)
     if ends_with_any(path, '.pkl'.split()): return load_pickled_value(path)
+    if ends_with_any(path, '.rpo'.split()): return file_to_object(path) #RP Object File
     if is_image_file(path): return load_image(path)
     if is_video_file(path): return load_video(path)
     if is_utf8_file(path): return load_text_file(path)
@@ -27728,7 +28274,7 @@ def _omni_save(object, path, *, auto_extension=False):
 
     if ends_with_any(path, '.json'): return rp.save_json(object,path)
     if ends_with_any(path, '.yaml'): return rp.save_yaml(object,path)
-    if ends_with_any(path, '.png .webp .gif'.split()): return rp._omni_save_animated_image(object, path)
+    if ends_with_any(path, '.png .webp .gif'.split()): return rp.r._omni_save_animated_image(object, path)
     if ends_with_any(path, '.jpg .jpeg .jxl .exr .psd .tga .tiff .tif .jp2 .bmp'.split()): return rp.save_image(object, path)
     if ends_with_any(path, '.mp3'.split()): return rp.save_mp3_file(object, path)
     if ends_with_any(path, '.wav'.split()): return rp.save_wav_file(object, path)
@@ -27738,6 +28284,7 @@ def _omni_save(object, path, *, auto_extension=False):
     if ends_with_any(path, '.safetensors'.split()): return save_safetensors(object,path)
     if ends_with_any(path, '.lines'.split()): return save_file_lines(object,path)
     if ends_with_any(path, '.pkl'.split()): return save_pickled_value(object,path)
+    if ends_with_any(path, '.rpo'.split()): return object_to_file(object,path) #RP Object File
     if isinstance(object, str): return save_text_file(object, path)
     if isinstance(object, bytes): return bytes_to_file(object, path)
     return object_to_file(object,path)
@@ -27748,6 +28295,7 @@ def file_cache_call(
     *args,
     save=None,
     load=None,
+    invalid=None,
     **kwargs
 ):
     """
@@ -27765,6 +28313,10 @@ def file_cache_call(
               Expected signature: save(obj, path)
         load: Function to load result from file
               Expected signature: load(path) -> obj
+        invalid: Chooses whether to invalidate the cache
+            None (default): Never invalidates the cache, if the cache file exists it always will used
+            float or int: Invalidates if path is older than that number of seconds
+            bool: Forces invalidation if True
         
     Returns:
         The result of func(*args, **kwargs) or the cached result
@@ -27774,7 +28326,21 @@ def file_cache_call(
 
     path = get_absolute_path(path, physical=False)
 
-    if path_exists(path):
+    #Cache Invalidation Logic
+    if invalid == True:
+        #Simply force invalidation by setting it to True
+        overwrite = True
+    elif invalid is None:
+        overwrite = not file_exists(path)
+    elif not file_exists(path):
+        overwrite = True
+    elif is_number(invalid):
+        #If file is older than "invalid" number of seconds, overwrite it
+        overwrite = time.time() - date_modified(path).timestamp() > invalid
+    else:
+        raise ValueError(get_current_function_name() + ": Unsupported 'invalid' argument of type " + str(type(invalid)))
+
+    if not overwrite:
         return load(path)
     
     result = func(*args, **kwargs)
@@ -28949,25 +29515,88 @@ _ryan_fonts = {
     "R:Palatino"    : "https://github.com/RyannDaGreat/Images/blob/master/fonts/Palatino.ttc", 
 }
 
-def _get_font_path(font):
-    if isinstance(font,str):
+@memoized
+def _get_font_path(font, strict=False):
+    if isinstance(font, str):
 
         if font.startswith("G:"):
-            #"G:Quicksand" or "G:Zilla Slab" from google fonts
-            font = download_google_font(font[len("G:"):])
+            # "G:Quicksand" or "G:Zilla Slab" from google fonts
+            font = download_google_font(font[len("G:") :])
         elif font in _ryan_fonts:
             # Starts with R: by convention
             # "R:Futura" from _ryan_fonts
             font = _ryan_fonts[font]
 
         if is_valid_url(font):
-            #A proper URL
+            # A proper URL
             font = download_font(font)
-        else:
-            #Just return the font as is. It's actually ok if its not a path, as long as it's a system font, like "Arial" etc
-            pass
+        elif not has_file_extension(font):
+            matching_paths = [
+                path
+                for path in get_system_fonts()
+                if get_file_name(path, include_file_extension=False) == font
+            ]
+            if matching_paths:
+                # If we have any system fonts that match this name, return their path
+                # For example, font="Futura" --> matching_paths=['/System/Library/Fonts/Supplemental/Futura.ttc']
+                font = matching_paths[0]
+            elif strict:
+                raise FileNotFoundError("Cannot get font path: " + repr(font))
+            else:
+                # Just return the font as is. It's actually ok if its not a path, as long as it's a system font, like "Arial" etc. Often this is ok.
+                pass
 
         return font
+
+@memoized
+def get_font_supported_chars(font):
+    """
+    Get supported characters of a given font
+    
+    EXAMPLE:
+        
+        >>> font = '/Users/ryan/Library/Fonts/Ubuntu Mono Nerd Font Complete.ttf'
+        ... 
+        ... char_to_name = get_font_supported_chars(font)
+        ... 
+        ... #Simple: Do it in black/white
+        ... print(' '.join(char_to_name))·
+        ... 
+        ... #Pretty: Do it in color in an evenly spaced grid
+        ... from wcwidth import wcwidth
+        ... items = [
+        ...     fansi(
+        ...         char.rjust(max(0, 3 - wcwidth(char))),
+        ...         text_color=hsv_to_rgb_float_color(hash(name[:2]) / 10000 % 1, 0.2, 1),
+        ...         #style='underline',#Slowed down alacritty too much
+        ...     )
+        ...     for char, name in char_to_name.items()
+        ... ]
+        ... rows = split_into_sublists(items, get_terminal_width() // 2)
+        ... rows = ["".join(x).strip() for x in rows]
+        ... print_lines(rows)
+        ... 
+        ... #Skia was unable to render nerd fonts last time I checked
+
+    """
+    rp.pip_import('fontTools')
+    
+    font_path=_get_font_path(font,strict=True)
+    
+    from fontTools.ttLib import TTFont
+    from collections import OrderedDict
+    font_obj = TTFont(font_path,fontNumber=0)
+    
+    char_to_name = {}
+    
+    # Iterate through the font's character map (cmap) tables
+    for table in font_obj.get("cmap").tables:
+        if table.isUnicode():
+            char_to_name.update(
+                {chr(char_id): char_name for char_id, char_name in table.cmap.items()}
+            )
+    
+    return char_to_name
 
 @lru_cache(maxsize=128)
 def pil_text_to_image(
@@ -29072,6 +29701,430 @@ def pil_text_to_image(
     image = (image * color) + (1 - image) * background_color
     
     return image
+
+@lru_cache(maxsize=128)
+def skia_text_to_image(
+    text,
+    *,
+    size=64, #Size of the font in pixels - is approximate
+    font="Futura",  # Primary font
+    width=None, #Width in pixels of the ourput
+    style=None, #A string that specifies style
+    #Can be controlled by style:
+    align=None,
+    color=None,
+    background_color=None,
+    fallback_fonts=None
+):
+    """
+    Renders multiline text via python-skia - a very fast graphics library that powers Google Chrome.
+    Supports color emoji rendering and Unicode characters.
+    Returns RGBA byte images.
+
+    This function covers a small subset of what python-skia can do, but in a very easy to use way.
+    See the following link to customize text further.
+    See https://github.com/kyamagu/skia-python/blob/main/notebooks/Paint-Overview.ipynb
+    
+    Args:
+        text (str): The text content to render
+        size (int, optional): Font size in pixels (approximate). Defaults to 64.
+        font (str, optional): Primary font name. Defaults to "Futura".
+        width (int, optional): Output width in pixels. If None, calculated from text.
+        style (str or set, optional): Text styling - can include alignment (left/right/center),
+            formatting (bold/italic), and decorations (underline/strike/undercurl/underdash/underdots).
+            Is intentionally similar to rp.fansi - i.e. you can do "bold yellow on dark blue" to specify
+            background/foreground colors.
+        align (str, optional): Text alignment override (left/right/center). Overrides style if specified.
+        color (str, optional): Text color. Defaults to 'white'. Overrides style if specified.
+        background_color (str, optional): Background color. Defaults to 'transparent'. Overrides style if specified.
+        fallback_fonts (list, optional): List of fallback font names. If None, uses default emoji fonts.
+    
+    Returns:
+        numpy.ndarray: RGBA image array with rendered text
+        
+    Note:
+        Automatically handles color emoji rendering through font fallbacks including
+        Apple Color Emoji, Noto Emoji, and Segoe UI Emoji.
+        
+    Example:
+        >>> image = skia_text_to_image("Hello World", style="bold center blue on white")
+        >>> image = skia_text_to_image("Multi\nLine\nText", font="Arial", size=32)
+        >>> image = skia_text_to_image("Text with emojis 👍🔥🍋", style="center")
+
+    EXAMPLE:
+        
+        >>> text = "Never Gonna Give\nYou Up Never Gonna Let You Down\nHere are some emojis\n👍🇺🇸🔥🍋\nAnd here are some unicode characters ⮕.Ǝ❄😼"
+        ... text += (
+        ...     "\n"
+        ...     + '''
+        ... ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣠⣤⣤⣤⣤⣤⣀⣀
+        ... ⠀⠀⠀⠀⠀⠀⣠⣴⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣤⡀
+        ... ⠀⠀⠀⢀⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⡄
+        ... ⠀⠀⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠋
+        ... ⠀⣰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠿⠿⠿⣿⣿⣿⣿⡿⠋⠀⠀⢄⠪⣐
+        ... ⢠⣿⣿⣿⣿⣿⣿⣿⣿⣿⠋⠁⠀⠀⠀⠀⠀⠉⠻⠉⡀⢄⢌⢎⢎⢎⢮⢕
+        ... ⣼⣿⣿⣿⣿⣿⣿⣿⡿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠐⣎⣮⣺⣪⣗⡯⣯⢯⡆
+        ... ⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣷⣷⣿⣾⣷⣿⣟⣯⡇
+        ... ⣿⣿⣿⣿⣿⣿⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⣾⣿⣿⣿⡇
+        ... ⢸⣿⣿⣿⣿⣿⣿⣿⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿
+        ... ⠀⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣤⣤⣤⣤⣴⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃
+        ... ⠀⠈⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠃
+        ... ⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠁
+        ... ⠀⠀⠀⠀⠀⠙⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠟⠁
+        ... ⠀⠀⠀⠀⠀⠀⠀⠀⠉⠛⠻⠿⠿⣿⣿⢿⠿⠿⠋⠋⠁
+        ... 
+        ... ⠀⠠⠂⠁⠑⠀⠀⠀⠈⠢⡀⠔⠁⠀⠀⠀⠜⡄⠀⠀⠀⠀⠨⢢⠀⠀⠢
+        ... ⠀⢃⠀⠀⠀⠀⠀⠀⠀⠀⢍⠀⠀⠀⠀⡸⠠⠔⡄⠀⠀⠀⢨⠀⠑⢄⢑
+        ... ⠀⠈⠒⠐⠂⠁⠀⠀⠀⠀⠑⠀⠀⠀⠐⠀⠀⠀⠐⠀⠀⠀⠐⠀⠀⠈⠂'''
+        ... )
+        ... 
+        ... styles = [
+        ...     "center white on navy blue",
+        ...     "right white on navy blue",
+        ...     "left white on navy blue",
+        ...     "navy blue on black",
+        ...     "cyan on translucent gray",
+        ...     "yellow on dark green",
+        ...     "bold yellow on dark green",
+        ...     "bold italic yellow on dark green",
+        ...     "italic yellow on dark green",
+        ...     "yellow on dark green",
+        ...     "yellow on translucent dark green",
+        ...     "white on navy blue underdash",
+        ...     "white on navy blue underline",
+        ...     "white on navy blue strike",
+        ...     "white on navy blue undercurl",
+        ...     "white on navy blue underdash",
+        ...     "white on navy blue underdots",
+        ... ]
+        ... 
+        ... import rp, time
+        ... 
+        ... for style in styles:
+        ...     print("=" * 100)
+        ...     rp.fansi_print(text + "\n" + style, style)
+        ...     image = rp.skia_text_to_image(
+        ...         text + "\n" + style,
+        ...         style=style,
+        ...         font="Futura",
+        ...     )
+        ...     rp.display_alpha_image(image)
+        ...     time.sleep(1)
+
+    """
+    #Requirements
+    pip_import('skia')
+    pip_import('numpy')
+    import skia
+    import numpy as np
+    import math
+
+    text = str(text)
+    
+    #0. Text styling options - similar to fansi. This section lets us parse the style argument
+    basic_options = {'bold','italic'}
+    align_options = {'left','right','center'}
+    underline_options = {'undercurl','underdouble','underline','overline','strike','underdash','underdots'}
+    all_style_options = basic_options | align_options | underline_options
+    #
+    if style is None:
+        style = set()
+    elif isinstance(style, str):    
+        #
+        style = style.lower()
+        #
+        _color, _style, _background_color = _transform_fansi_arg(style,all_style_options)
+        _style = set(_style.split()) if _style else set()
+        #
+        _unused = _style - all_style_options #Validate the style args
+        if _unused:
+            raise ValueError("rp.skia_text_to_image: Invalid style options detected: "+', '.join(_unused))
+        #
+        _align = align_options & _style
+        if len(_align) > 1: raise ValueError("rp.skia_text_to_image: Multiple align options detected: "+', '.join(_align))
+        _align = _align.pop() if _align else None
+        #
+        _underline = align_options & _style
+        if len(_underline) > 1: raise ValueError("rp.skia_text_to_image: Multiple underline options detected: "+', '.join(_underline))
+        _underline = _underline.pop() if _underline else None
+        #
+        if color            is None: color            = _color
+        if background_color is None: background_color = _background_color
+        if align            is None: align            = _align
+        #
+        style = _style
+    # 
+    style=BoolSet(style) #Syntactic Sugar
+    assert style <= all_style_options
+
+    #Default Options
+    if color            is None: color            = 'white'
+    if background_color is None: background_color = 'transparent'
+    if align            is None: align            = 'left'
+    if fallback_fonts   is None: fallback_fonts   = ["Apple Color Emoji", "Noto Emoji", "Segoe UI Emoji"]
+
+    #Standard RP Coloring
+    color            = float_color_to_byte_color(as_rgba_float_color(color           ))
+    background_color = float_color_to_byte_color(as_rgba_float_color(background_color))
+
+    # Load/Download the font, such as Helvetica, a font URL, a path to a font, or shorthand like R:Futura etc
+    font = _get_font_path(font)
+
+    # 1. SETUP PARAGRAPH AND FONT STYLES
+    # The FontCollection is the key to finding multiple system fonts.
+    font_collection = skia.textlayout.FontCollection()
+    font_collection.setDefaultFontManager(skia.FontMgr.RefDefault())
+
+    p_style = skia.textlayout.ParagraphStyle()
+    t_style = skia.textlayout.TextStyle()
+
+    # Set font size and color
+    t_style.setFontSize(size)
+    t_style.setColor(skia.Color(*color))
+
+    # Set alignment from argument
+    if   align=='left'  : p_style.setTextAlign(skia.textlayout.TextAlign.kLeft  )
+    elif align=='right' : p_style.setTextAlign(skia.textlayout.TextAlign.kRight )
+    elif align=='center': p_style.setTextAlign(skia.textlayout.TextAlign.kCenter)
+    else:
+        raise ValueError(
+            "rp.skia_text_to_image: Invalid skia text alignment"
+            + repr(align)
+            + ", please choose from r._skia_text_alignments: "
+            + repr(align_options)
+        )
+
+    # Set bold/italic options
+    if style.bold and style.italic: t_style.setFontStyle(skia.FontStyle.BoldItalic())
+    elif style.bold               : t_style.setFontStyle(skia.FontStyle.Bold      ())
+    elif style.italic             : t_style.setFontStyle(skia.FontStyle.Italic    ())
+    else: assert not basic_options & style, 'Should be impossible'
+
+    #You can make more options than these. I restrict it to these for simplicity. It closely resembles fansi.
+    if   style.undercurl  : t_style.setDecorationStyle(skia.textlayout.TextDecorationStyle.kWavy  ) ; t_style.setDecoration(skia.textlayout.TextDecoration.kUnderline  )
+    elif style.underdouble: t_style.setDecorationStyle(skia.textlayout.TextDecorationStyle.kDouble) ; t_style.setDecoration(skia.textlayout.TextDecoration.kUnderline  )
+    elif style.underline  : t_style.setDecorationStyle(skia.textlayout.TextDecorationStyle.kSolid ) ; t_style.setDecoration(skia.textlayout.TextDecoration.kUnderline  )
+    elif style.underdash  : t_style.setDecorationStyle(skia.textlayout.TextDecorationStyle.kDashed) ; t_style.setDecoration(skia.textlayout.TextDecoration.kUnderline  )
+    elif style.underdots  : t_style.setDecorationStyle(skia.textlayout.TextDecorationStyle.kDotted) ; t_style.setDecoration(skia.textlayout.TextDecoration.kUnderline  )
+    elif style.strike     : t_style.setDecorationStyle(skia.textlayout.TextDecorationStyle.kSolid ) ; t_style.setDecoration(skia.textlayout.TextDecoration.kLineThrough)
+    else: assert not underline_options & style, 'Should be impossible'
+    
+    # Provide a list of font fallback families. Skia will try them in order.
+    t_style.setFontFamilies([font] + fallback_fonts)
+
+    # 2. BUILD AND LAYOUT THE PARAGRAPH
+    builder = skia.textlayout.ParagraphBuilder(p_style, font_collection, skia.Unicode())
+    builder.pushStyle(t_style)
+    builder.addText(text)
+    #builder.pop()  # TODO: Removing this line doesn't seem to affect anything. Do we need it?
+    paragraph = builder.Build()
+
+    #Calculate the width of the image
+    if width is None:
+        paragraph.layout(99999)  # Let the max line length be super long. It will be recalculated.
+        width = paragraph.MaxIntrinsicWidth
+    paragraph.layout(width+1)
+    #
+    width  = math.ceil(width           )
+    height = math.ceil(paragraph.Height)
+
+    # Edge case: Skia will break otherwise
+    if width == 0 or height == 0:
+        return np.zeros((height, width, 4), dtype=np.uint8)
+
+    # 3. DRAW THE PARAGRAPH ONTO A SINGLE CANVAS
+    surface = skia.Surface(width, height)
+    with surface as canvas:
+        canvas.clear(skia.Color(*background_color))
+        paragraph.paint(canvas, 0, 0)
+
+    return surface.toarray()
+
+
+def skia_stamp_image(
+    canvas,
+    sprite,
+    offset = None,
+    *,
+    copy: bool = False,
+    mode: str = "blend",
+    sprite_origin = None,
+    canvas_origin = None
+):
+    """
+    Stamps a sprite onto a canvas using the high-performance Skia library.
+    Signature based on rp.stamp_tensor
+
+    NOTE: To take full advantage of Skia's speed, please make sure the given sprite is a contiguous RGBA byte image
+    If you do repeated stamps, set copy=False - but please use the output! The output MIGHT not be mutated, particularly
+    if you feed it an RGB or RGBA float image - so always use the output of this function. Repeated use with copy=False will
+    result in speed boosts though, as it converts to RGBA byte images.
+
+    Args:
+        canvas: Target RGBA uint8 NumPy array to stamp onto.
+        sprite: Source RGBA uint8 NumPy array to stamp. NOTE: You will get massive speed boost if this is contiguous!
+            If stamping the same sprite many times, convert it via np.ascontiguousarray(rp.as_byte_image(rp.as_rgba_image(sprite))) first
+        offset: (x, y) position to place the sprite. Defaults to (0, 0).
+        copy: False by default. If True, a copy of the canvas is made. If False, it might modify the canvas in place.
+        mode: Blend mode to use. See SKIA_BLEND_MODES for options like 'blend', 'add', 'multiply', etc.
+        sprite_origin: The anchor point on the sprite. E.g., 'center', 'top-left', or proportional (0.5, 0.5).
+        canvas_origin: The reference point on the canvas for the offset.
+
+    Returns:
+        An RGBA Byte image (i.e. a HW4 numpy array of type np.uint8)
+    
+    EXAMPLE:
+
+        >>> def demo_video(emojis):
+        ...     image = rp.uniform_float_color_image(1024, 1024, "blue")
+        ...     for _ in range(100):
+        ...         for _ in range(10):
+        ...             x, y = rp.random_floats(2)
+        ...             text_image = rp.skia_text_to_image(
+        ...                 rp.random_element(emojis),
+        ...                 size=rp.random_float(64, 256),
+        ...             )
+        ...             image = skia_stamp_image(
+        ...                 image,
+        ...                 text_image,
+        ...                 copy=False,
+        ...                 sprite_origin=(x, y),
+        ...                 canvas_origin=(1 - x, 1 - y),
+        ...                 mode="blend",
+        ...             )
+        ...         yield image.copy()
+        ... 
+        ... 
+        ... emojis = (
+        ...     "🎉🥳🤩✨💫🌟🚀🌈🦄🦋🌺🌸🌼🌻🌞🌝🌍🌎🌏☄️💥🔥💧🌊"
+        ...     "🌬🌀⚡☔❄☃⛄🏔🏖🏝🌵🌴🌳🌲🌱🌿🌾🍄🌰🍞🥐🥖🥨🧀🥓"
+        ...     "🥩🍗🍖🍔🍟🍕🌮🌯🥙🍝🍜🍲🍛🍣🍤🍙🍚🥟🍢🍡🍦🍧🍨🍩🍪"
+        ...     "🎂🍰🧁🥧🍫🍬🍭🍮🍯🍼🥛☕🍵🍶🍾🍷🍸🍹🍺🍻🥂🥃🧉🧂🌶"
+        ...     "🧅🥔🍠🥕🌽🥦🥒🥬🥑🍆🧄🥜"
+        ... )
+        ... 
+        ... 
+        ... rp.display_video(
+        ...     rp.video_with_progress_bar(
+        ...         demo_video(emojis),
+        ...         length=100,
+        ...         size=30,
+        ...         lazy=True,
+        ...     ),
+        ...     loop=True,
+        ... )
+
+    """
+
+    import rp
+    rp.pip_import('skia')
+    import skia
+    import numpy as np
+
+    sprite = rp.as_rgba_image(rp.as_byte_image(sprite, copy=False), copy=False)
+    canvas = rp.as_rgba_image(rp.as_byte_image(canvas, copy=False), copy=False)
+    canvas = np.ascontiguousarray(canvas) #Makes it faster for subsequent calls
+
+    SKIA_BLEND_MODES = {
+        # --- Common Modes ---
+        "blend": skia.BlendMode.kSrcOver,  # Default alpha blending (foreground over background)
+        "replace": skia.BlendMode.kSrc,  # Replace canvas with sprite, ignoring alpha
+        "add": skia.BlendMode.kPlus,  # Additive blending, good for lighting effects
+        # --- Photoshop/CSS Blend Modes ---
+        "multiply": skia.BlendMode.kMultiply,  # Multiply the colors, resulting in a darker image
+        "screen": skia.BlendMode.kScreen,  # Opposite of multiply, resulting in a brighter image
+        "overlay": skia.BlendMode.kOverlay,  # Combines multiply and screen for contrast
+        "darken": skia.BlendMode.kDarken,  # Selects the darker of the two pixels
+        "lighten": skia.BlendMode.kLighten,  # Selects the lighter of the two pixels
+        # --- Other Useful Modes ---
+        "difference": skia.BlendMode.kDifference,  # Subtracts the darker color from the lighter one
+        "exclusion": skia.BlendMode.kExclusion,  # Similar to difference but with lower contrast
+    }
+
+    def _parse_origin_to_pixels(origin, shape):
+        """Converts a proportional or named origin into pixel coordinates."""
+        if origin is None:
+            return (0.0, 0.0)
+
+        # (Height, Width) from shape
+        h, w = shape[0], shape[1]
+
+        if isinstance(origin, str):
+            origin_map = {
+                "top left": (0.0, 0.0),
+                "top": (0.5, 0.0),
+                "top right": (1.0, 0.0),
+                "left": (0.0, 0.5),
+                "center": (0.5, 0.5),
+                "right": (1.0, 0.5),
+                "bottom left": (0.0, 1.0),
+                "bottom": (0.5, 1.0),
+                "bottom right": (1.0, 1.0),
+            }
+            prop_x, prop_y = origin_map.get(origin.lower().replace(" ", ""), (0.0, 0.0))
+        else:
+            # Assumes a tuple/list of proportional coordinates (x, y)
+            prop_x, prop_y = origin[0], origin[1]
+
+        # Return pixel offset (x, y)
+        return (w * prop_x, h * prop_y)
+
+    # --- 1. Input Validation and Setup ---
+    if not (
+        canvas.ndim == 3
+        and canvas.shape[2] == 4
+        and sprite.ndim == 3
+        and sprite.shape[2] == 4
+    ):
+        raise ValueError(
+            "Both canvas and sprite must be 3D RGBA NumPy arrays (H, W, 4)."
+        )
+
+    blend_mode = SKIA_BLEND_MODES.get(mode.lower())
+    if blend_mode is None:
+        raise ValueError(
+            "Unknown blend mode '" + mode + "'. Available modes are: " + str(list(SKIA_BLEND_MODES.keys()))
+        )
+
+    if copy:
+        canvas = canvas.copy()
+
+    if 0 in sprite.shape:
+        # Edge case: Don't draw anything
+        # Skia will error
+        return canvas
+
+    # --- 2. Calculate Final Stamping Position ---
+    offset = offset or (0, 0)
+
+    # Get pixel offsets from origins
+    canvas_origin_px = _parse_origin_to_pixels(canvas_origin, canvas.shape)
+    sprite_origin_px = _parse_origin_to_pixels(sprite_origin, sprite.shape)
+
+    # Combine offsets to get the final top-left drawing coordinate for the sprite
+    final_x = canvas_origin_px[0] + offset[0] - sprite_origin_px[0]
+    final_y = canvas_origin_px[1] + offset[1] - sprite_origin_px[1]
+
+    # --- 3. Perform Stamping with Skia ---
+    # Create a Skia Surface that wraps the NumPy array's memory directly.
+    # This is highly efficient as it avoids a full data copy.
+    surface = skia.Surface(canvas)
+
+    # Convert sprite NumPy array to a Skia Image object
+    sprite = np.ascontiguousarray(sprite)
+    sprite_image = skia.Image.fromarray(sprite, copy=False)
+
+    # Create a Paint object to define how to draw (e.g., blend mode)
+    paint = skia.Paint(BlendMode=blend_mode)
+
+    # Use the surface's canvas to perform the drawing operation
+    with surface as skia_canvas:
+        skia_canvas.drawImage(
+            sprite_image, float(final_x), float(final_y), skia.SamplingOptions(), paint
+        )
+
+    return canvas
+
 
 def download_google_font(font_name, *, skip_existing=True):
     """
@@ -29327,9 +30380,8 @@ def download_font(url, *, skip_existing=True):
 
     assert connected_to_internet()
 
-    _download_font_dir=path_join(_rp_folder,"downloads/fonts")
-    make_directory(_download_font_dir)
-    return download_url(url, _download_font_dir, skip_existing=skip_existing)
+    make_directory(_downloaded_font_dir)
+    return download_url(url, _downloaded_font_dir, skip_existing=skip_existing)
 
 def download_fonts(
     *font_names,
@@ -29376,7 +30428,7 @@ def get_downloaded_fonts():
             )
         except FileNotFoundError:
             return []
-    return get(_fonts_download_folder) + get(_google_fonts_download_folder)
+    return get(_downloaded_font_dir) + get(_google_fonts_download_folder)
 
 
 #All Google fonts I'm aware of - this is NOT exhaustive! It keeps changing! See https://fonts.google.com
@@ -31657,6 +32709,7 @@ def get_video_widths(*videos):
 
 #endregion
 
+@memoized
 def running_in_ipython():
     try:
         #Can detect if we're in a jupyter notebook
@@ -34722,8 +35775,6 @@ def get_unique_copy_path(path: str, *, suffix: str = "_copy%i") -> str:
         num_copies += 1
 
     return path
-
-_old_gists_path=path_join(get_parent_folder(__file__),'old_gists.txt') #This has to come after path_join and get_parent_folder are defined
 
 _get_cutscene_frame_numbers_cache={}
 def get_cutscene_frame_numbers(video_path,*,use_cache=False):
@@ -38588,9 +39639,6 @@ def propagate_whitespace(string):
 
 
 
-____file=path_join(get_parent_directory(__file__),'.'+get_file_name(__file__))#/usr/local/lib/python3.7/site-packages/rp/.r.py
-rprc_file_path=strip_file_extension(____file)+'.rprc.py'
-rprc_file_path=path_join(get_parent_directory(__file__),'.rprc')
 ## /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/.rprc
 _default_rprc="""## %s
 ## This is the rprc file. Like .bashrc, or .vimrc, this file is run each time you boot rp from the command line.
@@ -39029,6 +40077,7 @@ def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, force=Fa
     elif starts_with_any(command, 'npm ' , 'yes | npm ' ): _ensure_npm_installed()
     elif starts_with_any(command, 'apt ' , 'apt-get '   ): command = 'sudo '+command
     elif starts_with_any(command, 'snap ' ,'yes | snap' ): command = 'sudo '+command
+    elif starts_with_any(command, 'winget '): command = command + ' -e --accept-source-agreements'
 
     assert connected_to_internet()
 
@@ -39053,7 +40102,7 @@ def _ensure_wget_installed():
         'wget',
         mac='brew install wget',
         linux='apt install wget --yes',
-        windows='winget install --id=JernejSimoncic.Wget  -e --accept-source-agreements', #https://winstall.app/apps/JernejSimoncic.Wget
+        windows='winget install --id=JernejSimoncic.Wget', #https://winstall.app/apps/JernejSimoncic.Wget
     )
 
 def _ensure_curl_installed():
@@ -39061,7 +40110,15 @@ def _ensure_curl_installed():
         'curl',
         mac='brew install curl',
         linux='apt install curl --yes',
-        windows='winget install --id=cURL.cURL -e --accept-source-agreements', #https://winstall.app/apps/cURL.cURL
+        windows='winget install --id=cURL.cURL', #https://winstall.app/apps/cURL.cURL
+    )
+
+def _ensure_rclone_installed():
+    _ensure_installed(
+        'rclone',
+        mac='brew install rclone',
+        linux='apt install rclone --yes',
+        windows='winget install --id=Rclone.Rclone', #https://rclone.org/install/
     )
 
 def _ensure_ffmpeg_installed():
@@ -39069,7 +40126,7 @@ def _ensure_ffmpeg_installed():
         'ffmpeg',
         mac='brew install ffmpeg',
         linux='apt install ffmpeg --yes',
-        windows='winget install --id=Gyan.FFmpeg  -e --accept-source-agreements', #https://winstall.app/apps/Gyan.FFmpeg
+        windows='winget install --id=Gyan.FFmpeg ', #https://winstall.app/apps/Gyan.FFmpeg
     )
     if not system_command_exists("ffmpeg"):
         if   currently_running_windows(): assert False, "Please install ffmpeg! https://www.ffmpeg.org/download.html"
@@ -39084,6 +40141,15 @@ def _ensure_claudecode_installed():
         mac    ='npm install -g @anthropic-ai/claude-code',
         linux  ='npm install -g @anthropic-ai/claude-code',
         windows='npm install -g @anthropic-ai/claude-code',
+    )
+
+def _ensure_gemini_cli_installed():
+    _ensure_installed(
+        'gemini',
+        # https://github.com/google-gemini/gemini-cli
+        mac    ='npm install -g @google/gemini-cli',
+        linux  ='npm install -g @google/gemini-cli',
+        windows='npm install -g @google/gemini-cli',
     )
 
 def _ensure_snap_installed():
@@ -39139,7 +40205,7 @@ def _ensure_npm_installed():
         'npm',
         mac='brew install npm',
         linux='apt install npm --yes',
-        windows='winget install -e --id OpenJS.NodeJS --accept-source-agreements',#https://winget.run/pkg/OpenJS/NodeJS
+        windows='winget install --id OpenJS.NodeJS',#https://winget.run/pkg/OpenJS/NodeJS
     )
     _ensure_node_installed() #https://github.com/anthropics/claude-code/issues/113 - taupirho's response
 
@@ -39149,7 +40215,7 @@ def _ensure_nvm_installed():
         'nvm',
         mac  ='curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash',
         linux='curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash',
-        windows='winget install -e --id CoreyButler.NVMforWindows', #https://winget.run/pkg/CoreyButler/NVMforWindows
+        windows='winget install --id CoreyButler.NVMforWindows', #https://winget.run/pkg/CoreyButler/NVMforWindows
     )
 
 def _ensure_node_installed():
@@ -39166,7 +40232,7 @@ def _ensure_git_installed():
         'git',
         mac='brew install git',
         linux='apt install git --yes',
-        windows='winget install --id=Git.Git  -e --accept-source-agreements',#https://winstall.app/apps/Git.Git
+        windows='winget install --id=Git.Git',#https://winstall.app/apps/Git.Git
     )
     pip_import('git',auto_yes=True)
 
@@ -39175,7 +40241,7 @@ def _install_ollama(force=False):
         'ollama',
         mac='brew install ollama',
         linux='curl -fsSL https://ollama.com/install.sh | sh',
-        windows='winget install --id=Ollama.Ollama  -e  --accept-source-agreements', #https://winstall.app/apps/Ollama.Ollama
+        windows='winget install --id=Ollama.Ollama', #https://winstall.app/apps/Ollama.Ollama
         force=force,
     )
     pip_import('ollama',auto_yes=True)
@@ -39406,9 +40472,9 @@ def _terminal_move_cursor_to_bottom_and_new_line():
     _terminal_move_cursor_to_bottom_left()
     print()
 
-def _run_claude_code(code):
+def _run_ai_cli_coder(code, command='claude'):
     """
-    Given code as either a path or a string, edits that code using claudecode.
+    Given code as either a path or a string, edits that code using a cli-based coder (such as gemini-cli or claudecode).
     
     If the given code is a file path, makes a temporary directory and works there,
     creating an editme.py file. If the code is a string, it creates a temporary
@@ -39424,7 +40490,6 @@ def _run_claude_code(code):
     """
     import subprocess
     
-    _ensure_claudecode_installed()
     _ensure_git_installed()
 
     if file_exists(code):
@@ -39432,7 +40497,7 @@ def _run_claude_code(code):
 
     if directory_exists(code):
         with SetCurrentDirectoryTemporarily(code):
-            _run_sys_command('claude')
+            _run_sys_command(command)
         return
 
     if not isinstance(code, str):
@@ -39444,7 +40509,7 @@ def _run_claude_code(code):
     filetype = 'bash' if code.startswith('!') else 'py'
     filename = "editme." + filetype
 
-    display_code_cell(code, title=" Claude " + filename + " ", language=filetype)
+    display_code_cell(code, title=" "+command.capitalize()+" " + filename + " ", language=filetype)
     workdir = path_join(_claudecode_folder, 'workspace_%i'%millis())
     make_directory(workdir)
 
@@ -39496,6 +40561,16 @@ def _run_claude_code(code):
             return gather_vars("code workdir")
         else:
             return gather_vars("workdir")
+
+def _run_claude_code(code):
+    """ See rp.r._run_ai_cli_coder.__doc__ """
+    _ensure_claudecode_installed()
+    return _run_ai_cli_coder(code,'claude')
+
+def _run_gemini_cli(code):
+    """ See rp.r._run_ai_cli_coder.__doc__ """
+    _ensure_gemini_cli_installed()
+    return _run_ai_cli_coder(code,'gemini')
 
 
 def _configure_filebrowser():
@@ -39852,13 +40927,12 @@ def tmux_paste():
     tmux_clipboard=shell_command('tmux show-buffer')
     return tmux_clipboard
 
-_local_dill_clipboard_string_path=__file__+'.rp_local_dill_clipboard'
 def local_copy(data:object):
     """
     Works just like web_copy, but is local to one's computer
     This makes copying large python objects between processes practical
     """
-    file=open(_local_dill_clipboard_string_path,'wb')
+    file=open(_local_obj_clipboard_path,'wb')
     file.write(object_to_bytes(data))
     file.close()
 
@@ -39867,7 +40941,7 @@ def local_paste():
     Works just like web_paste, but is local to one's computer
     This makes copying large python objects between processes practical
     """
-    file=open(_local_dill_clipboard_string_path,'rb')
+    file=open(_local_obj_clipboard_path,'rb')
     return bytes_to_object(file.read())
     
 def _run_tmux_command(command):
@@ -42614,11 +43688,7 @@ def launch_visidata(target):
 
         return output
 
-
 #Pseudo-terminal HISTORY files
-# pterm_history_folder=path_join(get_parent_directory(__file__),'pterm_history')
-# pterm_history_filename=path_join(pterm_history_folder,str(millis())+'.txt')
-pterm_history_filename=path_join(get_parent_directory(__file__),'HISTORY')
 _pterm_hist_file=None
 def _write_to_pterm_hist(entry):
     assert isinstance(entry,str)
@@ -46649,11 +47719,6 @@ def get_mac_address_vendor(address:str)->str:
     return MacLookup().lookup(address)
 
 try:
-    #Don't pester people to death to download icrecream...
-    from icecream import ic#This is a nice library...I reccomend it for debugging. It's really simple to use, too. EXAMPLE: a=1;b=2;ic(a,b)
-except Exception:pass
-
-try:
     # import numpy as np
     def autoimportable_module(module_name):
         class LazyloadedModule(type(rp)):
@@ -46927,7 +47992,7 @@ def _fdt_for_command_line():
         pass
 
 
-def _fzf_multi_grep(extensions='',print_instructions=True,text_files=None):
+def _fzf_multi_grep(extensions='',print_instructions=True,text_files=None,single_line=False):
     pip_import('iterfzf')
 
     heap=_MinFileSizeHeap()
@@ -47183,14 +48248,6 @@ def unwarped_perspective_contour(contour, from_points, to_points=None, *, height
     transformed_points = transformed_points.reshape(-1, 2)
     
     return transformed_points
-
-_rp_folder = get_parent_folder(__file__)
-_rp_downloads_folder = path_join(_rp_folder, "downloads")
-_google_fonts_download_folder = _rp_downloads_folder + "/google_fonts"
-_fonts_download_folder        = _rp_downloads_folder + "/fonts"
-_rp_outputs_folder = path_join(_rp_folder, "outputs")
-_claudecode_folder            = _rp_outputs_folder + "/claudecode"
-
 
 def _pip_import_depth_pro(autoyes=False):
 
@@ -50290,6 +51347,93 @@ def get_system_fonts(filetypes="ttf ttc otf"):
     else:
         assert False,'Unsupported operating system: not mac, windows or linux'
 
+
+class BoolSet(MutableSet):
+    """
+    A hybrid between EasyDict and the set class that lets you check for items via attributes
+    It behaves exactly like a set, except with a simple addition:
+    You can check and set existence via indexing and attributes, similar to EasyDict
+    
+    EXAMPLE:
+        >>> ans = BoolSet(['A','B','C'])
+        >>> ans |= {'D'}   #Adds D to the set
+        >>> ans.E=True     #Adds E to the set
+        >>> ans['Z']=True  #Adds Z to the set
+        >>> del ans.A      #Removes A from the set
+        >>> ans.B=False    #Removes B from the set
+        >>> ans['Y']=False #Does nothing cause Y is not in the set
+        >>> print(ans)
+        BoolSet({'D', 'E', 'C'})
+        >>> print(ans.A)
+        False
+        >>> print(ans.C)
+        True
+        
+    """
+    def __init__(self, iterable=None):
+        object.__setattr__(self, '_data', set(iterable) if iterable is not None else set())
+
+    # --- Abstract methods required by MutableSet ---
+    def __contains__(self, item):
+        return item in self._data
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __len__(self):
+        return len(self._data)
+
+    def add(self, item):
+        self._data.add(item)
+
+    def discard(self, item):
+        self._data.discard(item)
+
+    # --- Combined boolean-style interface ---
+    def __getitem__(self, item):
+        return item in self
+
+    def __setitem__(self, item, value):
+        if not isinstance(value, (bool, int)):
+            raise TypeError("Value must be a boolean (True to add, False to remove)")
+        
+        if value:
+            self.add(item)
+        else:
+            self.discard(item)
+            
+    # --- Easydict-like attribute access ---
+    def __getattr__(self, name):
+        return self[name]
+
+    def __delattr__(self, name):
+        self[name]=False
+
+    def __setattr__(self, name, value):
+        """
+        Allows `my_set.item = True` assignments for new items, but raises
+        an error if the attribute or method already exists.
+        """
+        # First, check if an attribute with this name already exists on the
+        # object, its class, or its parent classes. hasattr() is perfect for this.
+        try:
+            object.__getattribute__(self, name)
+            error = True
+        except AttributeError:
+            error = False
+        
+        if error:
+            raise AttributeError(
+                "Cannot overwrite existing attribute or method "+repr(name)+". Try using index assignment instead."
+            )
+
+        # If the attribute does not exist, treat it as a set item operation.
+        self[name] = value
+
+    def __repr__(self):
+        return self.__class__.__name__+'('+repr(self._data)+')'
+
+
 class DictReader:
     """ Like a read-only EasyDict - with a super simple implementation """
     #Note: This class is similar in functionality to the python libraries "easydict" and "addict". You can find them on pypi.
@@ -52132,6 +53276,7 @@ known_pypi_module_package_names={
     # 'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? (Update: so far, so good!)
     'cv2': 'opencv-python opencv-contrib-python', #But that didn't work for get_edge_drawing...https://github.com/Comfy-Org/ComfyUI-Manager/discussions/708
     'cython': 'Cython',
+    'lazy_loader': 'lazy-loader',
     'deprecate': 'pyDeprecate',
     'diff_match_patch': 'diff-match-patch',
     'dns': 'dnspython',
@@ -52148,6 +53293,7 @@ known_pypi_module_package_names={
     'examples': 'test-tube',
     'faiss': 'faiss-gpu',
     'ffmpeg': 'ffmpeg-python',
+    'fontTools': 'fonttools',
     'getmac': 'get-mac',
     'git': 'GitPython',
     'github': 'PyGithub',
@@ -52385,7 +53531,6 @@ def _import_module(module_name):
     return exeval(line_join("%return module", "import " + module_name + " as module"))
 
 _rp_git_token=None #Set in RPRC
-_rp_git_dir=path_join(get_parent_directory(__file__),'git')
 def git_import(repo,token=None,*,pull=False):
     """
     Attempts to import a module from rp.git.some_module_name
@@ -52680,14 +53825,8 @@ def killport(port: int, strict=True):
         else:
             print("No process found on port "+str(port))
 
+del re #re is random element
 
-#Let child processes use this rp instance. This is used in my vim config for \wp and \wc for instance
-#There can be many rp's installed on a system. Whatever vim was started from this rp will use this rp.
-os.environ['RP_SYS_EXECUTABLE'] = sys.executable
-os.environ['RP_PUDB_SYS_VERSION_INFO']=repr(list(sys.version_info)) #For PUDB editing in vim
-os.environ['RP_SITE_PACKAGES']=get_path_parent(get_path_parent(__file__))#For PUDB editing in vim
-
-del re
 
 #TODO: Fix this. It can help extract function defs among other useful thins
 #    def semantic_lines(python_code:str)->list:

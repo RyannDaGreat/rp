@@ -612,6 +612,10 @@ def meta_enter_message(python_input):
         filter=visible)
 
 
+
+
+
+
 def create_layout(python_input,
                   lexer=PythonLexer,
                   extra_body=None, extra_toolbars=None,
@@ -716,111 +720,122 @@ def create_layout(python_input,
         except:
             return Window(height=D.exact(1),content=FillControl(fill,token=Token.Separator))
     import rp
+    
+    # Create the main content area 
+    main_content_inner = HSplit([
+        VSplit([
+            HSplit([
+                FloatContainer(
+                    content=HSplit(
+                        [create_python_input_window()] + extra_body
+                    ),
+                    floats=[
+                        Float(xcursor=True,
+                              ycursor=True,
+                              content=CompletionsMenu(
+                                  scroll_offset=Integer.from_callable(
+                                      lambda:python_input.completion_menu_scroll_offset),
+                                  max_height=12,
+                                  extra_filter=show_completions_menu(python_input))),
+                        Float(xcursor=True,
+                              ycursor=True,
+                              content=MultiColumnCompletionsMenu(
+                                  extra_filter=show_multi_column_completions_menu(python_input))),
+                        Float(xcursor=True,
+                              ycursor=True,
+                              content=signature_toolbar(python_input)),
+                        Float(left=2,
+                              bottom=1,
+                              content=exit_confirmation(python_input)),
+                        Float(bottom=0,right=0,height=1,
+                              content=meta_enter_message(python_input),
+                              hide_when_covering_content=True),
+                        Float(bottom=1,left=1,right=0,content=python_sidebar_help(python_input)),
+                    ]),
+                ArgToolbar(),
+                SearchToolbar(),
+                SystemToolbar(),
+                ValidationToolbar(),
+                CompletionsToolbar(extra_filter=show_completions_toolbar(python_input)),
+                # Docstring region.
+                ConditionalContainer(
+                    content=Window(height=D.exact(1),
+                                   content=FillControl('\u2500',token=Token.Separator)),
+                    filter=HasSignature(python_input) & ShowDocstring(python_input) & ~IsDone()),
+                ConditionalContainer(
+                    content=Window(
+                        BufferControl(
+                            buffer_name='docstring',
+                            lexer=SimpleLexer(default_token=Token.Docstring),
+                            # lexer=PythonLexer,
+                        ),
+                        height=D(max=12)),
+                    filter=HasSignature(python_input) & ShowDocstring(python_input) & ~IsDone(),
+                ),
+                # realtime display region RYAN BURGERT CODE zone
+                # ConditionalContainer(
+                #     content=Window(height=D.exact(1),content=FillControl('\u2500',token=Token.Separator)),
+                #     filter=ShowVarSpaceOrShowRealtimeInput(python_input) & ~IsDone()),
+                ConditionalContainer(
+
+
+                    content=
+                    HSplit([
+                        # title_fill("Parenthesis Automator"),
+                        # Window(BufferControl(buffer_name='parenthesizer_buffer',lexer=lexer,),wrap_lines=False,height=D(max=rp.r_iterm_comm.parenthesized_line.count('\n'),min=rp.r_iterm_comm.parenthesized_line.count('\n')    ))
+                        Window(BufferControl(buffer_name='parenthesizer_buffer',lexer=lexer,),wrap_lines=False)
+                        # title_fill(rp.r_iterm_comm.parenthesized_line),
+                    ]),
+                    filter=ShowParenthesisAutomator(python_input) & ~IsDone(),
+                ),
+                VSplit([
+                    ConditionalContainer(
+                        content=
+                        HSplit([
+                            # title_fill("Realtime Evaluator"),
+                            Window(BufferControl(buffer_name='realtime_display',
+                                                 # lexer=SimpleLexer(default_token=Token.Docstring)
+                                                 lexer=lexer
+                                                 ,),wrap_lines=True,height=D(weight=2))
+                        ]),
+                        filter=ShowRealtimeInput(python_input) & ~IsDone(),
+                    ),
+                    ConditionalContainer(
+                        content=Window(width=D.exact(1),
+                                       content=FillControl('│',token=Token.Window.TIItleV2)),
+                        filter=ShowVarSpaceAndShowRealtimeInput(python_input) & ~IsDone()),
+                    ConditionalContainer(
+
+
+                        content=
+                        HSplit([
+                            # title_fill("VARS"),
+                            Window(BufferControl(buffer_name='vars',
+                                                 lexer=SimpleLexer(default_token=Token.Docstring)
+                                                 # lexer=lexer
+                                                 ,),wrap_lines=True)
+                        ]),
+                        filter=ShowVarSpace(python_input) & ~IsDone(),
+                    ),
+                  ]),
+            ]),
+            HSplit([
+                python_sidebar(python_input),
+                python_sidebar_navigation(python_input),
+            ])
+        ]),
+    ] + extra_toolbars)
+    
+    # Use the original main content without additional constraints
+    # Height constraint is now handled by ConstrainedHeightOutput wrapper
+    main_content = main_content_inner
+    
+    # For now, let's just return the constrained layout without spacer
+    # The height constraint should limit the interface size
     return HSplit([
-                      VSplit([
-                          HSplit([
-                              FloatContainer(
-                                  content=HSplit(
-                                      [create_python_input_window()] + extra_body
-                                  ),
-                                  floats=[
-                                      Float(xcursor=True,
-                                            ycursor=True,
-                                            content=CompletionsMenu(
-                                                scroll_offset=Integer.from_callable(
-                                                    lambda:python_input.completion_menu_scroll_offset),
-                                                max_height=12,
-                                                extra_filter=show_completions_menu(python_input))),
-                                      Float(xcursor=True,
-                                            ycursor=True,
-                                            content=MultiColumnCompletionsMenu(
-                                                extra_filter=show_multi_column_completions_menu(python_input))),
-                                      Float(xcursor=True,
-                                            ycursor=True,
-                                            content=signature_toolbar(python_input)),
-                                      Float(left=2,
-                                            bottom=1,
-                                            content=exit_confirmation(python_input)),
-                                      Float(bottom=0,right=0,height=1,
-                                            content=meta_enter_message(python_input),
-                                            hide_when_covering_content=True),
-                                      Float(bottom=1,left=1,right=0,content=python_sidebar_help(python_input)),
-                                  ]),
-                              ArgToolbar(),
-                              SearchToolbar(),
-                              SystemToolbar(),
-                              ValidationToolbar(),
-                              CompletionsToolbar(extra_filter=show_completions_toolbar(python_input)),
-                              # Docstring region.
-                              ConditionalContainer(
-                                  content=Window(height=D.exact(1),
-                                                 content=FillControl('\u2500',token=Token.Separator)),
-                                  filter=HasSignature(python_input) & ShowDocstring(python_input) & ~IsDone()),
-                              ConditionalContainer(
-                                  content=Window(
-                                      BufferControl(
-                                          buffer_name='docstring',
-                                          lexer=SimpleLexer(default_token=Token.Docstring),
-                                          # lexer=PythonLexer,
-                                      ),
-                                      height=D(max=12)),
-                                  filter=HasSignature(python_input) & ShowDocstring(python_input) & ~IsDone(),
-                              ),
-                              # realtime display region RYAN BURGERT CODE zone
-                              # ConditionalContainer(
-                              #     content=Window(height=D.exact(1),content=FillControl('\u2500',token=Token.Separator)),
-                              #     filter=ShowVarSpaceOrShowRealtimeInput(python_input) & ~IsDone()),
-                              ConditionalContainer(
-
-
-                                  content=
-                                  HSplit([
-                                      # title_fill("Parenthesis Automator"),
-                                      # Window(BufferControl(buffer_name='parenthesizer_buffer',lexer=lexer,),wrap_lines=False,height=D(max=rp.r_iterm_comm.parenthesized_line.count('\n'),min=rp.r_iterm_comm.parenthesized_line.count('\n')    ))
-                                      Window(BufferControl(buffer_name='parenthesizer_buffer',lexer=lexer,),wrap_lines=False)
-                                      # title_fill(rp.r_iterm_comm.parenthesized_line),
-                                  ]),
-                                  filter=ShowParenthesisAutomator(python_input) & ~IsDone(),
-                              ),
-                              VSplit([
-                                  ConditionalContainer(
-                                      content=
-                                      HSplit([
-                                          # title_fill("Realtime Evaluator"),
-                                          Window(BufferControl(buffer_name='realtime_display',
-                                                               # lexer=SimpleLexer(default_token=Token.Docstring)
-                                                               lexer=lexer
-                                                               ,),wrap_lines=True,height=D(weight=2))
-                                      ]),
-                                      filter=ShowRealtimeInput(python_input) & ~IsDone(),
-                                  ),
-                                  ConditionalContainer(
-                                      content=Window(width=D.exact(1),
-                                                     content=FillControl('│',token=Token.Window.TIItleV2)),
-                                      filter=ShowVarSpaceAndShowRealtimeInput(python_input) & ~IsDone()),
-                                  ConditionalContainer(
-
-
-                                      content=
-                                      HSplit([
-                                          # title_fill("VARS"),
-                                          Window(BufferControl(buffer_name='vars',
-                                                               lexer=SimpleLexer(default_token=Token.Docstring)
-                                                               # lexer=lexer
-                                                               ,),wrap_lines=True)
-                                      ]),
-                                      filter=ShowVarSpace(python_input) & ~IsDone(),
-                                  ),
-                                ]),
-                          ]),
-                          HSplit([
-                              python_sidebar(python_input),
-                              python_sidebar_navigation(python_input),
-                          ])
-                      ]),
-                  ] + extra_toolbars + [
-                      VSplit([
-                          status_bar(python_input),
-                          show_sidebar_button_info(python_input),
-                      ])
-                  ])
+        main_content,
+        VSplit([
+            status_bar(python_input),
+            show_sidebar_button_info(python_input),
+        ])
+    ])

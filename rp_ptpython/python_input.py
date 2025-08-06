@@ -25,6 +25,7 @@ from rp.prompt_toolkit.shortcuts import create_output
 from rp.prompt_toolkit.styles import DynamicStyle
 from rp.prompt_toolkit.utils import is_windows
 from rp.prompt_toolkit.validation import ConditionalValidator
+from rp.prompt_toolkit.output import Output
 
 from .completer import PythonCompleter
 from .history_browser import create_history_application
@@ -42,10 +43,7 @@ import rp.r_iterm_comm as r_iterm_comm
 import six
 import __future__
 
-if six.PY2:
-    from pygments.lexers import PythonLexer
-else:
-    from pygments.lexers import Python3Lexer as PythonLexer
+# PythonLexer import moved to LazyPygmentsLexer for faster startup
 
 __all__=(
     'PythonInput',
@@ -134,6 +132,7 @@ class Option(object):
         """
         self.activate_next(_previous=True)
 
+
 class PythonInput(object):
     """
     Prompt for reading Python input.
@@ -164,7 +163,12 @@ class PythonInput(object):
         self._completer=_completer or PythonCompleter(self.get_globals,self.get_locals)
         self._validator=_validator or PythonValidator(self.get_compiler_flags)
         self.history=FileHistory(history_filename) if history_filename else InMemoryHistory()
-        self._lexer=_lexer or PygmentsLexer(PythonLexer)
+        # Use lazy lexer creation to defer imports until needed
+        if _lexer is None:
+            from rp.prompt_toolkit.layout.lexers import LazyPygmentsLexer
+            self._lexer = LazyPygmentsLexer()
+        else:
+            self._lexer = _lexer
         self._extra_buffers=_extra_buffers
         self._accept_action=_accept_action
         self._on_exit=_on_exit
@@ -259,8 +263,8 @@ class PythonInput(object):
         self._current_style=self._generate_style()
         self.true_color=False
 
-        # Options to be configurable from the sidebar.
-        self.options=self._create_options()
+        # Options to be configurable from the sidebar - lazy loaded
+        self._options = None
         self.selected_option_index=0
 
         #: Incremeting integer counting the current statement.
@@ -294,6 +298,13 @@ class PythonInput(object):
         # Boolean indicating whether we have a signatures thread running.
         # (Never run more than one at the same time.)
         self._get_signatures_thread_running=False
+
+    @property
+    def options(self):
+        """Lazy-loaded options for the sidebar."""
+        if self._options is None:
+            self._options = self._create_options()
+        return self._options
 
     @property
     def option_count(self):
@@ -1217,6 +1228,166 @@ class PythonInput(object):
         cli.run_sub_application(create_history_application(
             self,cli.buffers[DEFAULT_BUFFER].document),done)
 
+class ConstrainedHeightRenderer:
+    """
+    Entire class written by Claude on MacX, Jul 14 2025 to solve the prompt height percent glitchiness
+    Custom renderer that handles height constraints properly.
+    """
+    def __init__(self, original_renderer, output):
+        self._original_renderer = original_renderer
+        self._output = output
+    
+    @property 
+    def height_is_known(self):
+        # Always return True when we have height constraints to ensure status bar shows
+        if hasattr(self._output, 'get_real_size'):
+            import rp.r_iterm_comm as ric
+            top_space_percent = ric.options.get('top_space', 0)
+            if top_space_percent > 0:
+                return True
+        return self._original_renderer.height_is_known
+    
+    def __getattr__(self, name):
+        return getattr(self._original_renderer, name)
+
+
+class ConstrainedHeightOutput(Output):
+    """
+    Entire class written by Claude on MacX, Jul 14 2025 to solve the prompt height percent glitchiness
+    Output wrapper that modifies get_size() to implement Prompt Height Percent
+    without affecting actual terminal output.
+    """
+    def __init__(self, output):
+        self._output = output
+    
+    def get_size(self):
+        """Override get_size to apply height constraints for layout."""
+        real_size = self._output.get_size()
+        
+        import rp.r_iterm_comm as ric
+        top_space_percent = ric.options.get('top_space', 0)
+        min_rows = ric.options.get('min_bot_space', 15)
+        
+        if top_space_percent <= 0:
+            # No constraint
+            return real_size
+        
+        # Check if this is being called for renderer height detection
+        # In that case, we want to return real size for proper calculation
+        import inspect
+        frame = inspect.currentframe()
+        try:
+            for _ in range(5):  # Check a few frames up
+                frame = frame.f_back
+                if frame is None:
+                    break
+                # If called from request_absolute_cursor_position, return real size    
+                if frame.f_code.co_name == 'request_absolute_cursor_position':
+                    return real_size
+        finally:
+            del frame
+        
+        # Apply the same logic as the original hack for layout
+        total_rows = real_size.rows
+        top_space_rows = int(total_rows * top_space_percent / 100)
+        constrained_rows = max(min_rows, total_rows - top_space_rows)
+        
+        from rp.prompt_toolkit.layout.screen import Size
+        return Size(rows=constrained_rows, columns=real_size.columns)
+    
+    def get_real_size(self):
+        """Get the actual terminal size without height constraints."""
+        return self._output.get_size()
+    
+    # Implement all Output interface methods by delegating to wrapped output
+    def fileno(self):
+        return self._output.fileno()
+    
+    def encoding(self):
+        return self._output.encoding()
+    
+    def write(self, data):
+        return self._output.write(data)
+    
+    def write_raw(self, data):
+        return self._output.write_raw(data)
+    
+    def set_title(self, title):
+        return self._output.set_title(title)
+    
+    def clear_title(self):
+        return self._output.clear_title()
+    
+    def flush(self):
+        return self._output.flush()
+    
+    def erase_screen(self):
+        return self._output.erase_screen()
+    
+    def enter_alternate_screen(self):
+        return self._output.enter_alternate_screen()
+    
+    def quit_alternate_screen(self):
+        return self._output.quit_alternate_screen()
+    
+    def enable_mouse_support(self):
+        return self._output.enable_mouse_support()
+    
+    def disable_mouse_support(self):
+        return self._output.disable_mouse_support()
+    
+    def erase_end_of_line(self):
+        return self._output.erase_end_of_line()
+    
+    def erase_down(self):
+        return self._output.erase_down()
+    
+    def reset_attributes(self):
+        return self._output.reset_attributes()
+    
+    def set_attributes(self, attrs):
+        return self._output.set_attributes(attrs)
+    
+    def disable_autowrap(self):
+        return self._output.disable_autowrap()
+    
+    def enable_autowrap(self):
+        return self._output.enable_autowrap()
+    
+    def cursor_goto(self, row=0, column=0):
+        return self._output.cursor_goto(row, column)
+    
+    def cursor_up(self, amount):
+        return self._output.cursor_up(amount)
+    
+    def cursor_down(self, amount):
+        return self._output.cursor_down(amount)
+    
+    def cursor_forward(self, amount):
+        return self._output.cursor_forward(amount)
+    
+    def cursor_backward(self, amount):
+        return self._output.cursor_backward(amount)
+    
+    def hide_cursor(self):
+        return self._output.hide_cursor()
+    
+    def show_cursor(self):
+        return self._output.show_cursor()
+    
+    def ask_for_cpr(self):
+        return self._output.ask_for_cpr()
+    
+    def bell(self):
+        return self._output.bell()
+    
+    def enable_bracketed_paste(self):
+        return self._output.enable_bracketed_paste()
+    
+    def disable_bracketed_paste(self):
+        return self._output.disable_bracketed_paste()
+
+
 class PythonCommandLineInterface(CommandLineInterface):
     def __init__(self,eventloop=None,python_input=None,input=None,output=None):
         assert python_input is None or isinstance(python_input,PythonInput)
@@ -1227,9 +1398,16 @@ class PythonCommandLineInterface(CommandLineInterface):
         # 'true_color' property of PythonInput.
         if output is None:
             output=create_output(true_color=Condition(lambda:python_input.true_color))
+        
+        # Wrap the output to apply height constraints
+        output = ConstrainedHeightOutput(output)
 
         super(PythonCommandLineInterface,self).__init__(
             application=python_input.create_application(),
             eventloop=eventloop,
             input=input,
             output=output)
+            
+        # If we're using a constrained output, wrap the renderer to fix height detection
+        if isinstance(output, ConstrainedHeightOutput):
+            self.renderer = ConstrainedHeightRenderer(self.renderer, output)

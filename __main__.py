@@ -19,7 +19,11 @@ def arg_eval(code):
 
 def pop_kwargs():
     kwargs = {}
-    while len(sys.argv) > 3 and rp.starts_with_any(sys.argv[-2], "--", "---"):
+    while (
+        len(sys.argv) > 3
+        and rp.starts_with_any(sys.argv[-2], "--", "---")
+        and sys.argv[-2] not in ["--", "---"]
+    ):
         #While we might have a "--kwarg value" at the end
         value = sys.argv.pop()
         name  = sys.argv.pop()
@@ -44,7 +48,13 @@ def pop_args():
     args = []
     while len(sys.argv) > 3:
         value = sys.argv.pop()
-        value = arg_eval(value)
+
+        if sys.argv[-1] == '---':
+            #Treat --- as string literal arg
+            del sys.argv[-1]
+        else:
+            value = arg_eval(value)
+
         args.insert(0, value)
     return args
 
@@ -61,7 +71,9 @@ HELP:
               Format: rp exec <code> --variable1 value1 --variable2 value2
       
     Note: All kwargs whose keys start with -- are evaluated as python code, 
-        and all that start with --- are treated as string literals
+          and all that start with --- are treated as string literals
+          Positional args are treated as string literals if --- precedes them
+          For example, `rp call list 123` is an error, but `rp call list --- 123` --> ['1', '2', '3']
 
     If no command is provided, an interactive Python terminal (rp.pterm) is started.
 """

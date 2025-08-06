@@ -32,6 +32,13 @@ from rp.prompt_toolkit.keys                        import Keys,Key
 from rp.prompt_toolkit.buffer                      import Buffer
 from rp.prompt_toolkit.key_binding.input_processor import KeyPressEvent
 
+from rp import *
+__all__ = (
+    'load_python_bindings',
+    'load_sidebar_bindings',
+    'load_confirm_exit_bindings',
+)
+
 def get_all_function_names(code:str):        
     #Return all the names of all functions defined in the given code, in the order that they appear
     from rp import lrstrip_all_lines,line_split
@@ -410,14 +417,6 @@ def do_string_paste(buffer):
     buffer.insert_text(repr(rp.string_from_clipboard()))
 import rp.r_iterm_comm as ric
 enable_space_autocompletions=ric.enable_space_autocompletions#This variable is a list that's mutated between being empty and being full, which toggles it's truth value. This feature isn't completely figured out yet...I suppose it's better to disable it for the time being...
-
-from rp import *
-__all__ = (
-    'load_python_bindings',
-    'load_sidebar_bindings',
-    'load_confirm_exit_bindings',
-)
-from rp import *
 
 def toggle_top_line_text(buffer,top_line='debug()\n'):
     text=buffer.document.text
