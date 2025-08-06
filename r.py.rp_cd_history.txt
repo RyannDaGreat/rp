@@ -62,7 +62,6 @@
 /Users/Ryan/PycharmProjects/QuickPython/rp-0.1.676/rp
 /Users/Ryan/Desktop
 /Users/Ryan/Desktop/CleanCode
-/Users/Ryan/Desktop/CleanCode/LightWave
 /Users/Ryan/Desktop/CleanCode/LightWave/NextGen
 /Users/Ryan/Desktop/CleanCode/LightWave/NextGen/axoloti
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/parso
@@ -84,7 +83,6 @@
 /Users/Ryan/.vim
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/javascript
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5
-/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/prompt_toolkit/layout
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/prompt_toolkit
 /Users/Ryan/PycharmProjects
@@ -99,12 +97,16 @@
 /Volumes/CIRCUITPY
 /Users/Ryan/Desktop/lW/generated
 /Users/Ryan/Desktop/lW
-/Users/Ryan/PycharmProjects/QuickPython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs/peepdis
 /Users/Ryan/PycharmProjects/QuickPython/rp/libs
-/Users/Ryan/PycharmProjects/QuickPython/rp
 /
-/Users/Ryan
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/libs
+/Users/Ryan/Desktop/CleanCode/LightWave
+/Users/Ryan/Desktop/CleanCode/LightWave/Jul13_2025_LightboardBackup_DebugCalibration
+/Users/Ryan
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/experimental
+/Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpdb
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp/rp_ptpython
+/Users/Ryan/PycharmProjects/QuickPython/rp
+/Users/Ryan/PycharmProjects/QuickPython
 /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/rp
