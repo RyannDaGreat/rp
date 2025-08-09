@@ -30,4 +30,5 @@ rp.prompt_toolkit.contrib.regular_languages
 rp.prompt_toolkit.contrib.validators
 rp.prompt_toolkit.contrib.telnet
 rp.prompt_toolkit.key_binding.bindings
+rp.misc
 rp
