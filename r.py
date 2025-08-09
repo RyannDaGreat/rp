@@ -16750,6 +16750,35 @@ def _is_valid_exeval_python_syntax(code, mode='exec'):
     return is_valid_python_syntax(code)
 
 
+def is_valid_shell_syntax(code,*, silent=True, command=None):
+    """
+    Returns True if the code is valid shell syntax for your default shell. If command is specified (such as '/bin/zsh' or rp.get_default_shell()), checks that shell instead.
+
+    EXAMPLE:
+        >>> is_valid_shell_syntax('asoidj')
+        ans = True
+        >>> is_valid_shell_syntax('asoidj("')
+        ans = False
+    """
+    import subprocess
+    
+    if command is None:
+        command=get_default_shell()
+    else:
+        assert isinstance(command,str)
+
+    try:
+        # Running the shell code with 'sh -n' which checks for syntax without execution
+        process = subprocess.run(
+            [command, "-n"], input=code, text=True, stderr=subprocess.PIPE, check=True
+        )
+        # If the shell command succeeds without error, the syntax is valid
+        return True
+    except subprocess.CalledProcessError as e:
+        # If there's a syntax error, print the error and return False
+        if not silent:
+            print("Syntax error:", e.stderr)
+        return False
 
 def is_valid_sh_syntax(code, *,silent=True, command="sh"):
     """Returns True if the code is valid bash syntax, False otherwise. If silent=False, will print out more information."""
@@ -39510,6 +39539,7 @@ def _ensure_ollama_server_running():
             "italic bold black black on green cyan",
         )
 
+ 
 #THIS FUNCTION INSTALLS IT FINE! BUT I DIDN'T FINISH MAKING IT USEFUL YET. UNCOMMENT ONCE I HAVE WRAPPERS FOR IT.
 # def _install_grounded_sam_2(grounded_sam_dir: str = None, force=False):
 #     """
@@ -41049,11 +41079,27 @@ def explore_torch_module(module):
         ... # ╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
     """
 
-    #pip install rp textual textual[syntax]
+    # _ensure_textual_syntax_installed() # ---> pip install rp textual textual[syntax]
+    # def _ensure_textual_syntax_installed():
+    #     pip_import('textual')
+    #     try:
+    #         import textual.widgets
+    #         textual.widgets._text_area.TextArea(language='python')
+    #     except TypeError:
+    #         #TypeError: Language.__init__() missing 1 required positional argument: 'name'
+    #         if r._pip_import_autoyes or input_yes_no('Can we please "pip install textual[syntax]" to upgrade your current textual version so you can have syntax highlighting?'):
+    #             _run_sys_command(shlex.quote(os.system),' pip install textual[syntax] --upgrade')
+    #             fansi_print("Please restart your python instance - a new version of textual was just installed!",'green green bold underlined italic on dark dark yellow')
 
-    # https://github.com/RyannDaGreat/torchviewer.git
-    import rp.libs.pytorch_module_explorer as pme
-    pme.explore_module(module)
+    try:
+        # https://github.com/RyannDaGreat/torchviewer.git
+        import rp.libs.pytorch_module_explorer as pme
+        pme.explore_module(module)
+    except TypeError:
+        fansi_print(
+            "Please run 'pip install textual[syntax] --upgrade' - this might resolve your issue, as it appears you have textual installed but not with syntax highlighting support, which this viewer needs",
+            "green green bold underlined italic on dark dark yellow",
+        )
 
 def record_torch_module_forward_stats(module):
     """
@@ -52576,6 +52622,7 @@ known_pypi_module_package_names={
     # 'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? (Update: so far, so good!)
     'cv2': 'opencv-python opencv-contrib-python', #But that didn't work for get_edge_drawing...https://github.com/Comfy-Org/ComfyUI-Manager/discussions/708
     'cython': 'Cython',
+    'textual' : 'textual[syntax]',
     'lazy_loader': 'lazy-loader',
     'deprecate': 'pyDeprecate',
     'diff_match_patch': 'diff-match-patch',
