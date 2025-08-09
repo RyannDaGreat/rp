@@ -83,3 +83,11 @@ libs/.pytorch_module_explorer.py.un~
 .r.py.sw*
 *.un~
 
+
+r.py.rp_local_clipboard
+r.py.rp_local_dill_clipboard
+.rp_local_clipboard
+.session.vim
+r.py.history.txt.meta
+rp_public_namespace.py
+grep
