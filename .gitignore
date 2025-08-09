@@ -79,3 +79,7 @@ libs/jedi/common/__pycache__
 
 
 libs/.pytorch_module_explorer.py.un~
+
+.r.py.sw*
+*.un~
+
