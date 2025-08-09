@@ -6,6 +6,7 @@ import threading
 from builtins import *  # For autocompletion with pseudo_terminal
 from time import sleep
 import rp
+from rp.libs.graveyard import *
 import os
 import time
 import shlex
@@ -211,24 +212,6 @@ def seq_map(func,*iterables):
 
 
 
-def _legacy_par_map(func,*iterables,number_of_threads=None,chunksize=None):
-    #THE OLD IMPLEMENTATION: There's nothing wrong with it, it was just old and messy.
-    #REST IN PEACE OLD FRIEND! (Made this early in freshman year like 7 years ago lol - its 2023 now)
-    #TODO: Test the new one in python3.5!! Just in case its still useful, for compatiability I leave it in here as _legacy_par_map
-
-
-    # Multi-threaded map function. When I figure out a way to do parallel computations, this def (conveniently high-level) will be replaced.
-    try:
-        from multiprocessing.dummy import Pool as ThreadPool  # ⟵ par_map uses ThreadPool. We import it now so we don't have to later, when we use par_map.
-        par_pool=ThreadPool(number_of_threads)
-        try:
-            out=par_pool.map(lambda args:func(*args),zip(*iterables),chunksize=chunksize)  # ⟵ A more complicated version of out=par_pool.map(func,iterable,chunksize=chunksize). Current version lets func accept multiple arguments.
-        except Exception:
-            out=par_pool.map(func,iterables,chunksize=chunksize)
-        par_pool.terminate()  # ⟵ If we don't have this line here, the number of threads running AKA threading.active_count() will continue to grow even after this def has returned, ∴ eventually causing the RunTime error exception mentioned below.
-        return out
-    except RuntimeError:  # ⟵ Assuming we got "RuntimeError: can't start new thread", we will calculate it sequentially instead. It will give the same result, but it won't be in parallel.
-        return seq_map(func,*iterables)
 
 
 
@@ -438,20 +421,6 @@ def product(x):
     #     return 1# x has no indices
     # for y in x[1:]:
     #     out*=y
-    # return out
-def summation(x,start=None):
-    # Useful because this literally uses the '+' operator over and over again instead of necessarily treating the elements as numbers.
-    # list_flatten(l)≣summation(l)
-    # sum(x,[])≣summation(x)
-    # sum(x)≣summation(x)
-    return scoop(lambda 𝓍,𝓎:𝓍 + 𝓎,x,start if start is not None else x[0]) if len(x) else start
-    # assert is_iterable(x)
-    # try:
-    #     out=x[0]
-    # except Exception:
-    #     return 0# x has no indices
-    # for y in x[1:]:
-    #     out+=y
     # return out
 
 def unique(iterable, *, key=identity, lazy=False):
@@ -905,30 +874,6 @@ class PrintBeforeAfter:
 
         
 #THIS IS DEPRECATED IN FAVOR OF get_all_paths
-# def get_all_file_names(file_name_ending: str = '',file_name_must_contain: str = '',folder_path: str = get_current_directory(),show_debug_narrative: bool = False):
-#     # SUMMARY: This method returns a list of all file names files in 'folder_path' that meet the specifications set by 'file_name_ending' and 'file_name_must_contain'
-#     # Leave file_name_ending blank to return all file names in the folder.
-#     # To find all file names of a specific extension, make file_name_ending ﹦ '.jpg' or 'png' etc.
-#     # Note: It does not matter if you have '.png' vs 'png'! It will return a list of all files whose name's ends…
-#     #     …with file_name_ending (whether that comes from the file type extension or not). Note that you can use this to search…
-#     #     …for specific types of file names that YOU made arbitrarily, like 'Apuppy.png','Bpuppy.png' ⟵ Can both be found with…
-#     #     …file_name_ending ﹦ 'puppy.png'
-#     # file_name_must_contain ⟶ all names in the output list must contain this character sequence
-#     # show_debug_narrative ⟶ controls whether to print out details about what this function is doing that might help to debug something.
-#     #     …By default this is disabled to avoid spamming the poor programmer who dares use this function.
-#     # ;;::O(if)OOO
-#     os.chdir(folder_path)
-#     if show_debug_narrative:
-#         print(get_all_file_names.__name__ + ": (Debug Narrative) Search Directory ﹦ " + folder_path)
-#     output=[]
-#     for file_name in glob.glob("*" + file_name_ending):
-#         if file_name_must_contain in file_name:
-#             output.append(file_name)  # I tried doing it with the '+' operator, but it returned a giant list of individual characters. This way works better.
-#             if show_debug_narrative:
-#                 print(get_all_file_names.__name__ + ": (Debug Narrative) Found '" + file_name + "'")
-#     if show_debug_narrative:
-#         print(get_all_file_names.__name__ + ' (Debug Narrative) Output ﹦ ' + str(output))
-#     return output
 
 
 # endregion
@@ -2101,10 +2046,6 @@ def accumulate_clipboard_text(*, wipe=False, unique=False):
 # noinspection PyShadowingNames
 
 #The following functions are very, very deprecated. Please don't use them.
-# def width(image) -> int:
-#     return len(image)
-# def height(image) -> int:
-#     return len(image[0])
 
 def _rgb_to_grayscale(image):  # A demonstrative implementation of this pair
     """
@@ -2132,6 +2073,14 @@ def _rgb_to_grayscale(image):  # A demonstrative implementation of this pair
 def grayscale_to_rgb(matrix,number_of_channels=3):
     return np.stack((matrix,) * number_of_channels,-1)
 def gauss_blur(image,σ,single_channel: bool = False,mode: str = 'reflect',shutup: bool = False):
+    """Apply Gaussian blur to image. Accepts any image type, returns NumPy array.
+    
+    Args:
+        image: Any valid image (NumPy, PIL, etc)
+        σ: Standard deviation for Gaussian kernel (0 = no blur)
+        single_channel: If False, blurs each channel separately (preserves colors)
+        mode: Edge handling: 'reflect', 'constant', 'nearest', 'mirror', or 'wrap'
+    """
     # NOTE: order refers to the derivative of the gauss curve; for edge detection etc.
     if σ == 0:
         return image
@@ -2859,6 +2808,14 @@ def get_alpha_outline(image,*,inner_radius=0,outer_radius=0,include_edges=True,a
     return outline
 
 def with_alpha_outline(image,*,inner_radius=0,outer_radius=0,include_edges=True,color=(1,1,1,1),allow_growth=False):
+    """Add colored outline around alpha edges of image. Useful for text, logos, sprites.
+    
+    Args:
+        inner_radius: Outline extends inward from alpha edges
+        outer_radius: Outline extends outward from alpha edges  
+        color: RGBA color tuple (values 0-1)
+        allow_growth: If True, image can grow to accommodate outer outline
+    """
     if allow_growth and outer_radius:
         image=bordered_image_solid_color(image,color=(0,0,0,0),thickness=outer_radius)
         
@@ -3720,13 +3677,13 @@ def grid2d_map(grid2d_input,value_func=identity) -> list:
         return len(image)
     def height(image) -> int:
         return len(image[0])
-# ⁠⁠⁠⁠               ⎧                                                                                  ⎫
-# ⁠⁠⁠⁠               ⎪                                                              ⎧                  ⎫⎪
-# ⁠⁠⁠⁠               ⎪     ⎧            ⎫       ⎧            ⎫                      ⎪            ⎧ ⎫⎧ ⎫⎪⎪
+    #            ⎧                                                                                  ⎫
+    #            ⎪                                                              ⎧                  ⎫⎪
+    #            ⎪     ⎧            ⎫       ⎧            ⎫                      ⎪            ⎧ ⎫⎧ ⎫⎪⎪
     return grid2d(width(grid2d_input),height(grid2d_input),lambda x,y:value_func(grid2d_input[x][y]))
-# ⁠⁠⁠               ⎪     ⎩            ⎭       ⎩            ⎭                      ⎪            ⎩ ⎭⎩ ⎭⎪⎪
-# ⁠⁠⁠               ⎪                                                              ⎩                  ⎭⎪
-# ⁠⁠⁠               ⎩                                                                                  ⎭
+    #            ⎪     ⎩            ⎭       ⎩            ⎭                      ⎪            ⎩ ⎭⎩ ⎭⎪⎪
+    #            ⎪                                                              ⎩                  ⎭⎪
+    #            ⎩                                                                                  ⎭
 
 def _auto_interp_for_resize_image(resize_func, image, new_size):
     """
@@ -3807,139 +3764,62 @@ def _auto_interp_for_resize_image(resize_func, image, new_size):
 
     return out
 
+def _resize_image_via_skimage(image,scale,interp='bilinear'):
+    """Resize using scikit-image (slower but handles more cases)."""
+    assert is_image(image)
+    pip_import("skimage")
+    from skimage.transform import resize
+    if not isinstance(scale,tuple):
+        height,width=image.shape[:2]
+        height=int(height*scale)
+        width =int(width *scale)
+    else:
+        height,width=scale
+
+        if not height or not width:
+            #If the user specifies (100,None) it means to rescale the image to a height of 100, and scale the width proportionally
+            from math import ceil
+            assert height or width
+            if not height: height=ceil(get_image_height(image)/get_image_width (image)*width )
+            if not width : width =ceil(get_image_width (image)/get_image_height(image)*height)
+
+    order={'nearest':0,'bilinear':1,'bicubic':3}[interp]
+    return resize(image,(height,width),order=order)
+
 def resize_image(image,scale,interp='bilinear'):
     """
     resize_image resizes images. Who woulda thunk it? Stretchy-squishy image resizing!
+    Now uses cv_resize_image by default (faster). Falls back to skimage if needed.
     :param image: a numpy array, preferably. But it can also handle pure-python list-of-lists if that fails.
     :param scale: can either be a scalar (get it? for SCALE? lol ok yeah that died quickly) or a tuple of integers to specify the new dimensions we want like (128,128)
     :param interp: ONLY APPLIES FOR numpy arrays! interp ∈ {'auto','nearest','bilinear','bicubic','cubic'}
     :return: returns the resized image
-    Note: Auto here is kinda redundant: scipy or skimage does nice interp on its own
     """
     if interp=='auto': interp='bilinear'
     assert interp in {'nearest','bilinear','bicubic'}
     if scale == 1:
         return image
+    
+    # Try fast OpenCV first
     try:
-        from scipy.misc import imresize
-        return imresize(image,float(scale),interp)#We multiply scale by 100 because it's measured in percent
-    except Exception:pass
+        return cv_resize_image(image, scale, interp)
+    except Exception:
+        pass
+    
+    # Fall back to skimage
     try:
-        assert is_image(image)
-        pip_import("skimage")
-        from skimage.transform import resize
-        if not isinstance(scale,tuple):
-            height,width=image.shape[:2]
-            height=int(height*scale)
-            width =int(width *scale)
-        else:
-            height,width=scale
-
-            if not height or not width:
-                #If the user specifies (100,None) it means to rescale the image to a height of 100, and scale the width proportionally
-                from math import ceil
-                assert height or width
-                if not height: height=ceil(get_image_height(image)/get_image_width (image)*width )
-                if not width : width =ceil(get_image_width (image)/get_image_height(image)*height)
-        # return resize(image,(height,width))
-
-        # if interp=='auto': return _auto_interp_for_resize_image(resize_image, image, (height, width))
-
-        order={'nearest':0,'bilinear':1,'bicubic':3}[interp]
-        return resize(image,(height,width),order=order)
-    except Exception:pass
+        return _resize_image_via_skimage(image, scale, interp)
+    except Exception:
+        pass
+    
+    # Last resort - pure Python (slowest)
     if is_number(scale):
-        #Now we're in kinda bad janky territory...though it will still work...it will be slow because now its runnning in pure python...
-        try:
-            return cv_apply_affine_to_image(dog,scale_affine_2d(scale),output_resolution=scale)#Doesn't support 'interp'
-        except Exception:pass
-    return grid2d(int(len(image) * scale),int(len(image[0]) * scale),lambda x,y:image[int(x / scale)][int(y / scale)])#The slowest method of all...doesn't support 'interp'
+        return grid2d(int(len(image) * scale),int(len(image[0]) * scale),lambda x,y:image[int(x / scale)][int(y / scale)])
 # endregion
 # region  xyrgb lists ⟷ image:［image_to_xyrgb_lists，xyrgb_lists_to_image，xyrgb_normalize，image_to_all_normalized_xy_rgb_training_pairs，extract_patches］     (Invertible Pair)
 
 # try:from sklearn.feature_extraction.image import extract_patches
 # except Exception:pass
-def image_to_xyrgb_lists(image):
-    # expects an array like, for example 'image=[[[1,2,3],[4,5,6]],[[7,8,9],[10,11,12]]]'
-    out_x=[]
-    out_y=[]
-    out_r=[]
-    out_g=[]
-    out_b=[]
-    for x_index,x_val in enumerate(image):
-        for y_index,y_val in enumerate(x_val):
-            out_x.append(x_index)
-            out_y.append(y_index)
-            out_r.append(y_val[0])
-            out_g.append(y_val[1])
-            out_b.append(y_val[2])
-    return out_x,out_y,out_r,out_g,out_b
-def xyrgb_lists_to_image(*xyrgb_lists_as_tuple):
-    xyrgb_lists_as_tuple=detuple(xyrgb_lists_as_tuple)  # So we can either accept 5 arguments or one tuple argument with 5 elements.
-    assert len(xyrgb_lists_as_tuple) == 5,"One element:list for each channel: X Y R G B"
-    x,y,r,g,b=xyrgb_lists_as_tuple
-    assert len(x) == len(y) == len(r) == len(g) == len(b),"An outside-noise assumption. If this assertion fails then there is something wrong with the input parameters --> this def is not to blame."
-    xyrgb_length=len(x)  # =len(y)=len(r)=len(g)=len(b) etc. We rename it 'xyrgb_length' to emphasize this symmetry.
-    out_image=deepcopy_multiply([[None] * (max(y) + 1)],(max(x) + 1))  # Pre-allocating the pixels. [R,G,B] is inserted into each pixel later.
-    for index in range(xyrgb_length):
-        out_image[x[index]][y[index]]=[r[index],g[index],b[index]]
-    return out_image
-def xyrgb_normalize(*xyrgb,rgb_old_max=255,rgb_new_max=1,x_new_max=1,y_new_max=1):
-    # Converts the (X and Y values, originally ﹙integers: the pixel X and Y indexes﹚) into float values between 0 and 1
-    # Also converts the R,G, and B values from the range ［0‚255］⋂ ℤ into the range ［0‚1］⋂ ℝ
-    x,y,r,g,b=detuple(xyrgb)
-    x_factor=x_new_max / max(x)
-    y_factor=y_new_max / max(y)
-    x=list(ⵁ * x_factor for ⵁ in x)
-    y=list(ⵁ * y_factor for ⵁ in y)
-
-    rgb_factor=rgb_new_max / rgb_old_max
-    r=list(ⵁ * rgb_factor for ⵁ in r)
-    g=list(ⵁ * rgb_factor for ⵁ in g)
-    b=list(ⵁ * rgb_factor for ⵁ in b)
-
-    return x,y,r,g,b
-def image_to_all_normalized_xy_rgb_training_pairs(image):
-    x,y,r,g,b=xyrgb_normalize(image_to_xyrgb_lists(image))
-    return list(zip(x,y)),list(zip(r,g,b))
-
-    # NOTE: This def exists for efficiency purposes.
-    # To create a training batch from the image, the minimal syntax would be:
-    #     random_parallel_batch(*image_to_all_normalized_xy_rgb_training_pairs(image),a,b)
-    # BUT NOTE: It is very inneficient to recalculate this def over and over again.
-    # Store the output of this as a vairable, and use like so:
-    # precalculated=image_to_all_normalized_xy_rgb_training_pairs(image)
-    # new_batch=random_parallel_batch(*precalculated,a,b)
-
-
-    # region Explanatory Example:
-    # # Goal: create input and output from XY to RGB from image and turn them into a random batch for NN input outputs
-    # #from r import *
-    # x=['x₁','x₂','x₃']
-    # y=['y₁','y₂','y₃']
-    # r=['r₁','r₂','r₃']
-    # g=['g₁','g₂','g₃']
-    # b=['b₁','b₂','b₃']
-    #
-    # inputs=list(zip(x,y))
-    # outputs=list(zip(r,g,b))
-    # io_pairs=list(zip(inputs,outputs))
-    #
-    #      ⎧                                    ⎫
-    #      ⎪    ⎧                              ⎫⎪
-    #      ⎪    ⎪   ⎧                         ⎫⎪⎪
-    # print(list(zip(*random_batch(io_pairs,2))))
-    #      ⎪    ⎪   ⎩                         ⎭⎪⎪
-    #      ⎪    ⎩                              ⎭⎪
-    #      ⎩                                    ⎭
-    #
-    #   ⎧                                                                      ⎫
-    #   ⎪⎧                          ⎫  ⎧                                      ⎫⎪
-    # # [(('x₂', 'y₂'), ('x₃', 'y₃')), (('r₂', 'g₂', 'b₂'), ('r₃', 'g₃', 'b₃'))]
-    #   ⎪⎩                          ⎭  ⎩                                      ⎭⎪
-    #   ⎩                                                                      ⎭
-    # endregion
-# endregion
 
 
 def xy_float_images(
@@ -4089,6 +3969,12 @@ def _is_pandas_iloc_iterable(x) -> bool:
     return _is_pandas_series(x) or _is_pandas_dataframe(x)
 
 def is_pil_image(image) -> bool:
+    """Check if input is a PIL Image instance.
+    
+    PIL images have limited dtype support compared to NumPy.
+    Most RP functions accept PIL but convert to NumPy internally.
+    See also: as_pil_image, is_image
+    """
     return _is_instance_of_module_class(image, 'PIL.Image', 'Image')
 
 def _is_skia_image(image) -> bool:
@@ -5624,6 +5510,8 @@ def encode_image_to_bytes(image,filetype=None,quality=100):
         
     Returns:
         str: a byttestring that contains the encoded image file
+    
+    See also: decode_bytes_to_image to decode back to image
 
     EXAMPLE:
         ans='https://upload.wikimedia.org/wikipedia/commons/6/6e/Golde33443.jpg'
@@ -5667,6 +5555,8 @@ def encode_image_to_bytes(image,filetype=None,quality=100):
 
 
 def encode_images_to_bytes(images, filetype=None, quality=100):
+    """Batch encode multiple images to bytes. See encode_image_to_bytes for single images.
+    To decode, use decode_images_from_bytes."""
     object = [encode_image_to_bytes(x, filetype=filetype, quality=quality) for x in images]
     return object_to_bytes(object)
 
@@ -5693,6 +5583,8 @@ def encode_image_to_base64(image,filetype=None,quality=100):
         quality (int): If applicable, defines the image quality (useful when filetype=='jpg' for instance)
     Returns:
         str: a base-64 string containing the image
+    
+    See also: decode_image_from_base64 to decode back
     """
     import base64
     
@@ -5701,8 +5593,21 @@ def encode_image_to_base64(image,filetype=None,quality=100):
     return base64.b64encode(byte_data).decode("utf-8")
 
 def encode_images_to_base64(images,filetype=None,quality=100):
+    """Batch encode multiple images to base64 strings. See encode_image_to_base64 for single images.
+    To decode: decode_images_from_base64"""
     return [encode_image_to_base64(image, filetype, quality) for image in images]
 
+def decode_image_from_base64(base64_string):
+    """Decode a base64 string back to an image.
+    Convenience function combining base64_to_bytes and decode_bytes_to_image.
+    See also: encode_image_to_base64"""
+    return decode_bytes_to_image(base64_to_bytes(base64_string))
+
+def decode_images_from_base64(base64_strings):
+    """Decode multiple base64 strings back to images.
+    Convenience function for batch decoding base64 encoded images.
+    See also: encode_images_to_base64"""
+    return decode_images_from_bytes([base64_to_bytes(s) for s in base64_strings])
 
 def decode_bytes_to_image(encoded_image:bytes):
     """
@@ -7744,6 +7649,11 @@ def with_alpha_checkerboards(*images, tile_size=8, first_color=1.0, second_color
 
 
 def display_alpha_image(image, block=False, tile_size=8, first_color=1.0, second_color=0.75):
+    """Display image with checkerboard background to visualize transparency.
+    
+    Shows transparent areas as checkerboard pattern (like Photoshop).
+    Useful for viewing PNG/RGBA images with alpha channels.
+    """
     alpha_checkerboard_image = with_alpha_checkerboard(
         image, 
         tile_size=tile_size,
@@ -8033,17 +7943,7 @@ def display_image_slideshow(images='.',display=None,use_cache=True):
     
 
 
-def brutish_display_image(image):
-    from copy import deepcopy
-    global plt
-    plt=get_plt()
-    image=deepcopy(image)
-    for x_index,x in enumerate(image):
-        for y_index,y in enumerate(x):
-            for channel_index,channel in enumerate(y):
-                image[x_index][y_index][channel_index]=max(0,min(1,channel))
-    display_image(image)
-    plt.show(block=True)
+
 def display_color_255(*color: list):
     """ Example: display_color_255(255,0,0)# ⟵ Displays Red """
     # noinspection PyUnresolvedReferences
@@ -8053,17 +7953,6 @@ def display_float_color(*color):
     color=detuple(color)
     image=uniform_float_color_image(height=128, width=128, color=color)
     display_alpha_image(image,first_color=1,second_color=0)
-
-def display_grayscale_image(matrix,pixel_interpolation_method_name: str = 'bicubic',refresh=True):
-    pixel_interpolation_method_name=str(pixel_interpolation_method_name).lower()  # Note that None⟶'none'
-    assert pixel_interpolation_method_name in [None,'none','nearest','bilinear','bicubic','spline16','spline36','hanning','hamming','hermite','kaiser','quadric','catrom','gaussian','bessel','mitchell','sinc','lanczos']  # These are the options. See http://stackoverflow.com/questions/14722540/smoothing-between-pixels-of-imagesc-imshow-in-matlab-like-the-matplotlib-imshow/14728122#14728122
-    global plt
-    plt=get_plt()
-    plt.imshow(matrix,cmap=plt.get_cmap('gray'),interpolation=pixel_interpolation_method_name)  # "cmap=plt.get_cmap('gray')" makes it show a black/white image instead of a color map.
-    if refresh:
-        plt.draw()
-        plt.show(block=False)  # You can also use the r.block() method at any time if you want to make the plot usable.
-        plt.pause(0.0001)  # This is nessecary, keep it here or it will crash. I don't know WHY its necessary, but empirically speaking it seems to be.
 
 def bar_graph(values,*,width=.9,align='center',block=False,xlabel=None,ylabel=None,title=None,label_bars=False,**kwargs):
     """
@@ -10962,214 +10851,6 @@ def display_code_cell(code, *, title="Code Cell", language=None):
         display(HTML(html_output))
 
 # endregion
-# region  'youtube_dl'﹣dependent methods: ［rip_music，rip_info］
-# noinspection SpellCheckingInspection
-
-default_rip_music_output_filename="rip_music_temp"
-def rip_music(URL: str,output_filename: str = default_rip_music_output_filename,desired_output_extension: str = 'wav',quiet=False):
-    """
-    Ryan Burgert Jan 15 2017
-    Rips a music file off of streaming sites and downloads it to the default directory…
-    URL: Can take URL's from youtube, Vimeo, SoundCloud...apparently youtube_dl supports over 400 sites!!
-    output_filename: Shouldn't include an extension, though IDK if it would hurt. By default the output file is saved to the default directory.
-    desired_output_extension: Could be 'wav', or 'mp3', or 'ogg' etc. You have the freedom to choose the type of file you want to download regardless of the type of the original online file; it will be converted automatically (because youtube is a huge mess of file types)
-      NOTE: ‘brew install ffmpeg’ (run command in terminal) is necessary for some desired_output_extension types.
-    This method returns the name of the file it created.
-    Dependency: youtube_dl  ﹙See: https://rg3.github.io/youtube-dl/﹚
-    Quiet: If this is true, then nothing will display on the console as this method downloads and converts the file.
-    NOTE: youtube_dl has MANY more cool capabilities such as extracting the title/author/cover picture of the songs…
-      …as well as breing able to download entire play-lists at once! youtube_dl can also rip videos; which could be very useful in another context!
-    EXAMPLE: play_sound_file_via_afplay(rip_music('https://www.youtube.com/watch?v=HcgEHrwdSO4'))
-    """
-    pip_import('youtube_dl')
-    import youtube_dl
-    ydl_opts= \
-        {
-            'format':'bestaudio/best',  # Basically, grab the highest quality that we can get.
-            'outtmpl':output_filename + ".%(ext)s",  # https://github.com/rg3/youtube-dl/issues/7870  ⟵ Had to visit this because it kept corrupting the audio files: Now I know why! Don't change this line.
-            'postprocessors':
-                [{
-                    'key':'FFmpegExtractAudio',
-                    'preferredcodec':desired_output_extension,
-                    # 'preferredquality': '192',
-                }],
-            'quiet':quiet,  # If this is not enough, you can add a new parameter, 'verbose', to make it jabber even more. You can find these parameters in the documentation of the module that contains the 'YoutubeDL' method (used in a line below this one)
-            'noplaylist':True,  # only download single song, not playlist
-        }
-    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([URL])
-    return output_filename + "." + desired_output_extension
-
-def rip_info(URL: str):
-    """
-    A companion method for rip_music, this will give you all the meta-data of each youtube video or vimeo or soundcloud etc.
-    It will give you this information in the form of a dictionary.
-    Known keys:
-    ［abr，acodec，age_limit，alt_title，annotations，automatic_captions，average_rating，…
-    … categories，creator，description，dislike_count，display_id，duration，end_time，ext，…
-    … extractor，extractor_key，format，format_id，formats，fps，height，id，is_live，license，…
-    … like_count，playlist，playlist_index，requested_formats，requested_subtitles，resolution，…
-    … start_time，stretched_ratio，subtitles，tags，thumbnail，thumbnails，title，upload_date，…
-    … uploader，uploader_id，uploader_url，vbr，vcodec，view_count，webpage_url，webpage_url_basename，width］
-    """
-    pip_import('youtube_dl')
-    from youtube_dl import YoutubeDL
-    return YoutubeDL().extract_info(URL,download=False)
-# endregion
-# region  Sending and receiving emails: ［send_gmail_email，gmail_inbox_summary，continuously_scan_gmail_inbox］
-
-    #This region is commented out because it's broken
-            ## from rp.r_credentials import default_gmail_address   # ⟵ The email address we will send emails from and whose inbox we will check in the methods below.
-            ## from rp.r_credentials import default_gmail_password  # ⟵ Please don't be an asshole: Don't steal this account! This is meant for free use!
-            # default_gmail_address=''
-            # default_gmail_password=''
-            # default_max_ↈ_emails=100  # ≣ _default_max_number_of_emails to go through in the gmail_inbox_summary method.
-            # def send_gmail_email(recipientⳆrecipients,subject: str = "",body: str = "",gmail_address: str = default_gmail_address,password: str = default_gmail_password,attachmentⳆattachments=None,shutup=False):
-            #     # For attachmentⳆattachments, include either a single string or iterable of strings containing file paths that you'd like to upload and send.
-            #     # param recipientⳆrecipients: Can be either a string or a list of strings: all the emails we will be sending this message to.
-            #     # Heavily modified but originally from https://www.linkedin.com/pulse/python-script-send-email-attachment-using-your-gmail-account-singh
-            #     from email.mime.text import MIMEText
-            #     from email.mime.application import MIMEApplication
-            #     from email.mime.multipart import MIMEMultipart
-            #     import smtplib
-            #     emaillist=[x.strip().split(',') for x in enlist(recipientⳆrecipients)]
-            #     msg=MIMEMultipart()
-            #     msg['Subject']=subject
-            #     # msg['From']='presidentstanely@gmail.com'# ⟵       I couldn't find any visible effect from keeping this active, so I decided to remove it.
-            #     # msg['Reply-to']='ryancentralorg@gmail.com' # ⟵    I couldn't find any visible effect from keeping this active, so I decided to remove it.
-            #     # msg.preamble='Multipart massage mushrooms.\n' # ⟵ I couldn't find any visible effect from keeping this active, so I decided to remove it.
-            #     msg.attach(MIMEText(body))
-            #     if attachmentⳆattachments:
-            #         for filename in enlist(attachmentⳆattachments):
-            #             assert isinstance(filename,str)  # These should be file paths.
-            #             part=MIMEApplication(open(filename,"rb").read())
-            #             part.add_header('Content-Disposition','attachment',filename=filename)  # ⟵ I tested getting rid of this line. If you get rid of the line, it simply lists the attachment as a file on the bottom of the email, …
-            #             # … and wouldn't show (for example) an image. With it, though, the image is displayed. Also, for files it really can't display (like .py files), it will simply act as if this line weren't here and won't cause any sort of error.
-            #             msg.attach(part)
-            #     try:
-            #         with smtplib.SMTP("smtp.gmail.com:587") as server:
-            #             server.ehlo()
-            #             server.starttls()
-            #             server.login(gmail_address,password)
-            #             server.sendmail(gmail_address,emaillist,msg.as_string())
-            #             server.close()
-            #         if not shutup:
-            #             print('r.send_gmail_email: successfully sent your email to ' + str(recipientⳆrecipients))
-            #     except Exception as E:
-            #         if not shutup:
-            #             print('r.send_gmail_email: failed to send your email to ' + str(recipientⳆrecipients) + ". Error message: " + str(E))
-# # region Old version of send_gmail_email (doesn't support attachments):
-            # """def send_gmail_email(recipientⳆrecipients, subject:str="", body:str="",gmail_address:str=default_gmail_address,password:str=default_gmail_password,shutup=False):
-            #     # param recipientⳆrecipients: Can be either a string or a list of strings: all the emails we will be sending this message to.
-            #     import smtplib
-            #     FROM = gmail_address
-            #     TO = enlist(recipientⳆrecipients)# Original code: recipient if type(recipient) is list else [recipient]
-            #     SUBJECT = subject
-            #     TEXT = body
-
-            #     # Prepare actual message
-            #     message = "From: %s\nTo: %s\nSubject: %s\n\n%s\n" % (FROM, ", ".join(TO), SUBJECT, TEXT)
-            #     try:
-            #         server = smtplib.SMTP("smtp.gmail.com", 587)
-            #         server.ehlo()
-            #         server.starttls()
-            #         server.login(gmail_address, password)
-            #         server.sendmail(FROM, TO, message)
-            #         server.close()
-            #         if not shutup:
-            #             print('r: send_gmail_email: successfully sent the mail')
-            #     except:
-            #         if not shutup:
-            #             print( "r: send_gmail_email: failed to send mail")"""
-# # endregion
-            # def gmail_inbox_summary(gmail_address: str = default_gmail_address,password: str = default_gmail_password,max_ↈ_emails: int = default_max_ↈ_emails,just_unread_emails: bool = True):
-            #     # Parameters captured in this summary include the fields (for the dicts in the output list) of
-            #     # TODO［millis，sender，receiver，subject，sender_email，sender_name］  (Just using a TODO so that it's a different color in the code so it stands out more)  (all accessed as strings, of course)
-            #     # returns a list of dictionaries. The length of this list ﹦ the number of emails in the inbox (both read and unread).
-            #     # max_ↈ_emails ≣ max_number_of_emails --> caps the number of emails in the summary, starting with the most recent ones.
-            #     '''Example output:
-            #     [{'sender_email': 'notification+kjdmmk_1v73_@facebookmail.com', 'sender': '"Richard McKenna" <notification+kjdmmk_1v73_@facebookmail.com>', 'millis': 1484416777000, 'sender_name': '"Richard McKenna"', 'subject': '[Stony Brook Computing Society] 10 games in 10 days. Today\'s game is "Purple...', 'receiver': 'Stony Brook Computing Society <sb.computing@groups.facebook.com>'},
-            #     {'sender_email': 'notification+kjdmmk_1v73_@facebookmail.com', 'sender': '"Richard McKenna" <notification+kjdmmk_1v73_@facebookmail.com>', 'millis': 1484368779000, 'sender_name': '"Richard McKenna"', 'subject': '[Stony Brook Game Developers (SBGD)] New link', 'receiver': '"Stony Brook Game Developers (SBGD)" <sbgamedev@groups.facebook.com>'},
-            #     {'sender_email': 'no-reply@accounts.google.com', 'sender': 'Google <no-reply@accounts.google.com>', 'millis': 1484366367000, 'sender_name': 'Google', 'subject': 'New sign-in from Safari on iPhone', 'receiver': 'ryancentralorg@gmail.com'},
-            #     {'sender_email': 'notification+kjdmmk_1v73_@facebookmail.com', 'sender': '"Richard McKenna" <notification+kjdmmk_1v73_@facebookmail.com>', 'millis': 1484271805000, 'sender_name': '"Richard McKenna"', 'subject': '[Stony Brook Computing Society] 10 games in 10 days. Today\'s game is "Jet LIfe"....', 'receiver': 'Stony Brook Computing Society <sb.computing@groups.facebook.com>'},
-            #     {'sender_email': 'noreply@sendowl.com', 'sender': 'imitone sales <noreply@sendowl.com>', 'millis': 1484240836000, 'sender_name': 'imitone sales', 'subject': 'A new version of imitone is available!', 'receiver': 'ryancentralorg@gmail.com'}]'''
-            #     # The following code I got of the web somewhere and modified a lot, I don't remember where though. Whatevs.
-            #     import datetime
-            #     import email
-            #     import imaplib
-
-            #     with imaplib.IMAP4_SSL('imap.gmail.com') as mail:
-            #         # ptoc()
-            #         mail.login(gmail_address,password)
-            #         # ptoc()
-            #         mail.list()
-            #         # ptoc()
-            #         mail.select('inbox')
-            #         # ptoc()
-            #         result,data=mail.uid('search',None,"UNSEEN" if just_unread_emails else "ALL")  # (ALL/UNSEEN)
-            #         # ptoc()
-
-            #         email_summaries=[]  # A list of dictionaries. Will be added to in the for loop shown below.
-            #         ↈ_emails=len(data[0].split())
-            #         for x in list(reversed(range(ↈ_emails)))[:min(ↈ_emails,max_ↈ_emails)]:
-            #             latest_email_uid=data[0].split()[x]
-            #             result,email_data=mail.uid('fetch',latest_email_uid,'(RFC822)')
-            #             # result, email_data = conn.store(num,'-FLAGS','\\Seen')
-            #             # this might work to set flag to seen, if it doesn't already
-            #             raw_email=email_data[0][1]
-            #             raw_email_string=raw_email.decode('utf-8')
-            #             email_message=email.message_from_string(raw_email_string)
-
-            #             # Header Details
-            #             date_tuple=email.utils.parsedate_tz(email_message['Date'])
-            #             if date_tuple:
-            #                 local_date=datetime.datetime.fromtimestamp(email.utils.mktime_tz(date_tuple))
-            #                 # local_message_date=local_date.ctime()# formats the date in a nice readable way
-            #                 local_message_date=local_date.timestamp()  # Gets seconds since 1970
-            #                 local_message_date=int(1000 * local_message_date)  # millis since 1970
-            #             email_from=str(email.header.make_header(email.header.decode_header(email_message['From'])))
-            #             email_to=str(email.header.make_header(email.header.decode_header(email_message['To'])))
-            #             subject=str(email.header.make_header(email.header.decode_header(email_message['Subject'])))
-            #             # noinspection PyUnboundLocalVariable
-            #             email_summaries.append(dict(millis=local_message_date,sender=email_from,receiver=email_to,subject=subject,sender_email=email_from[1 + email_from.find('<'):-1] if '<' in email_from else email_from,sender_name=email_from[:email_from.find('<') - 1]))
-            #             # print('\n'.join(map(str,email_summaries)))//⟵Would display all email summaries in console
-            #     return email_summaries
-            # def _default_what_to_do_with_unread_emails(x):
-            #     # An arbitrary default as an example example so that 'continuously_scan_gmail_inbox' can be run with no arguments
-            #     # Example: continuously_scan_gmail_inbox()
-            #     # By default, the continuous email scan will print out the emails and also read their subjects aloud via text-to-speech. (Assumes you're using a mac for that part).
-            #     print(x)
-            #     text_to_speech_via_apple(x['subject'],run_as_thread=False)
-            #     send_gmail_email(x['sender_email'],'EMAIL RECEIVED: ' + x['subject'])
-            # def continuously_scan_gmail_inbox(what_to_do_with_unread_emails: callable = _default_what_to_do_with_unread_emails,gmail_address: str = default_gmail_address,password: str = default_gmail_password,max_ↈ_emails: int = default_max_ↈ_emails,include_old_but_unread_emails: bool = False):
-            #     # returns a new thread that is ran constantly unless you kill it. It will constantly scan the subjects of all emails received
-            #     #  …AFTER the thread has been started. When it received a new email, it will run the summary of that email through the
-            #     #  …'what_to_do_with_unread_emails' method, as a triggered event. It returns the thread it's running on so you can do stuff with it later on.
-            #     #  …Unfortunately, I don't know how to make it stop though...
-            #     # include_old_but_unread_emails: If this is false, we ignore any emails that were sent before this method was called. Otherwise, if include_old_but_unread_emails is true, …
-            #     #  …we look at all emails in the inbox (note: this is only allowed to be used in this context because python marks emails as 'read' when it accesses them, …
-            #     #  …and we hard-code just_unread_emails=True in this method so thfat we never read an email twice.)
-            #     return run_as_new_thread(_continuously_scan_gmail_inbox,what_to_do_with_unread_emails,gmail_address,password,max_ↈ_emails,include_old_but_unread_emails)
-            # def _continuously_scan_gmail_inbox(what_to_do_with_unread_emails,gmail_address,password,max_ↈ_emails,include_old_but_unread_emails):
-            #     # This is a helper method because it loops infinitely and is therefore run on a new thread each time.
-            #     exclusive_millis_min=millis()
-
-            #     # times=[] # ⟵ For debugging. Look at the end of the while loop block to see more.
-            #     while True:
-            #         tic()
-            #         # max_millis=exclusive_millis_min
-            #         for x in gmail_inbox_summary(gmail_address,password,max_ↈ_emails):
-            #             assert isinstance(x,dict)  # x's type is determined by gmail_inbox_summary, which is a blackbox that returns dicts. This assertion is for type-hinting.
-            #             if x['millis'] > exclusive_millis_min or include_old_but_unread_emails:
-            #                 #     if x['millis']>max_millis:
-            #                 #         max_millis=x['millis']
-            #                 what_to_do_with_unread_emails(x)
-            #                 # exclusive_millis_min=max_millis
-
-            #                 # times.append(toc())
-            #                 # line_graph(times)
-            #                 # ptoctic()# UPDATE: It's fine. Original (disproved) thought ﹦ (I don't know why, but the time here just keeps growing and growing...)
-# endregion
 # region Suppress/Restore all console output/warnings: ［suppress_console_output，restore_console_output，force_suppress_console_output，force_restore_console_output，force_suppress_warnings，force_restore_warnings］
 # b=sys.stdout.write;sys.stdout.write=None;sys.stdout.write=b
 _original_stdout_write=sys.stdout.write  # ⟵ DO NOT ALTER THIS! It will cause your code to crash.
@@ -12082,81 +11763,6 @@ def rinsp(object,search_or_show_documentation:bool=False,show_source_code:bool=F
         except Exception as e:
             print(2 * tab + errortext("[Cannot retrieve __doc__! Error: " + str(e) + "]"))
     _maybe_display_string_in_pager(''.join(printed_lines),with_line_numbers=False)
-# endregion
-# region Arduino: ［arduino，read_line］
-def arduino(baudrate: int = 115200,port_description_keywords:list=['arduino','USB2.0-Serial'],timeout: float = .1,manually_chosen_port: str = None,shutup: bool = False,return_serial_instead_of_read_write=False,marco_polo_timeout=0) -> (callable,callable):# 'USB2.0-Serial' is for a cheap knock-off arduino I got
-    """
-    NOTE: This function uses a library called 'serial', got from 'pip install pyserial'.
-    BUT THERE'S A SECOND LIBRARY: 'pip install serial' will give errors, as it's module is also called 'serial'. If you get this error, uninstall 'pip uninstall serial' then 'pip install pyserial'
-     Finds an arduino, connects to it, and returns the read/write methods you use to communicate with it.
-     Example: read,write=arduino()
-     read() ⟵ Returns a single byte (of length 1)
-     write(x:bytes) ⟵ Writes bytes to the arduino, which reads them as individual characters (the 'char' primitive)
-     If you don't want this method to automatically locate an arduino, set manually_chosen_port to the port name you wish to connect to.
-     marco_polo_timeout is optional: It's used for a situation where the arduino responds marco-polo style with the python code
-    """
-    '''
-    //Simple example code for the arduino to go along with this method: It simply parrots back the bytes you write to it.
-    void setup()
-    {
-      Serial.begin(115200);// set the baud rate
-    }
-    void loop()
-    {
-      if (Serial.available())// only send data back if data has been sent
-      {
-        char inByte = Serial.read(); // read the incoming data
-        Serial.write(inByte); // send the data back as a single byte.
-      }
-    }
-    '''
-    serial=pip_import('serial','pyserial')
-    def speak(x: str) -> None:
-        if not shutup:
-            print("r.arduino: " + x)
-    def find_arduino_port(keywords: list = port_description_keywords) -> str:
-        # Attempts to automatically determine which port the arduino is on.
-        import serial.tools.list_ports
-        port_list=serial.tools.list_ports.comports()
-        port_descriptions=[port.description for port in port_list]
-        keyword_in_port_descriptions=[any(keyword.lower() in port_description.lower()for keyword in keywords) for port_description in port_descriptions]
-        number_of_arduinos_detected=sum(keyword_in_port_descriptions)
-        assert number_of_arduinos_detected > 0,'r.arduino: No arduinos detected! Port descriptions = ' + str(port_descriptions)
-        arduino_port_indices=max_valued_indices(keyword_in_port_descriptions)  # All ports that have 'arduino' in their description.
-        if number_of_arduinos_detected > 1:
-            speak("Warning: Multiple arduinos detected. Choosing the leftmost of these detected arduino ports: " + str(gather(port_descriptions,arduino_port_indices)))
-        chosen_arduino_device=port_list[arduino_port_indices[0]]
-        speak("Chosen arduino device: " + chosen_arduino_device.device)
-        return chosen_arduino_device.device
-    ser=serial.Serial(manually_chosen_port or find_arduino_port(),baudrate=baudrate,timeout=timeout)  # Establish the connection on a specific port. NOTE: manually_chosen_port or find_arduino_port() ≣ manually_chosen_port if manually_chosen_port is not None else find_arduino_port()
-    if return_serial_instead_of_read_write:
-        return ser
-    read_bytes,_write_bytes=ser.read,ser.write  # NOTE: If read_bytes()==b'', then there is nothing to read at the moment.
-    def write_bytes(x,new_line=False):
-        _write_bytes(printed((x if isinstance(x,bytes) else str(x).encode())+(b'\n'if new_line else b'')))
-    start=tic()
-    # (next 4 lines) Make sure that the arduino is able to accept write commands before we release it into the wild (the return function):
-    arbitrary_bytes=b'_'  # It doesn't matter what this is, as long as it's not empty
-    assert arbitrary_bytes != b''  # ⟵ This is the only requirement for that read_bytes must be.
-    if marco_polo_timeout:
-        while not read_bytes() and start()<marco_polo_timeout: write_bytes(arbitrary_bytes)  # ≣ while read_bytes()==b''
-        while read_bytes() and start()<marco_polo_timeout: pass  # ≣ while read_bytes()!=b''. Basically the idea is to clear the buffer so it's primed and ready-to-go as soon as we return it.
-        if start()>marco_polo_timeout and not shutup:
-            print("Marco Polo Timed Out")
-    speak("Connection successful! Returning read and write methods.")
-    return read_bytes,write_bytes  # Returns the methods that you use to read and write from the arduino
-    # NOTE: read_bytes() returns 1 byte; but read_byte(n ∈ ℤ) returns n bytes (all in one byte―string)!
-    # Future: Possibly helpful resources: http://stackoverflow.com/questions/24420246/c-function-to-convert-float-to-byte-array  ⨀ ⨀ ⨀   http://forum.arduino.cc/index.php?topic=43222.0
-def read_line(getCharFunction,return_on_blank=False) -> bytes:
-    # Example: read,write=arduino();print(read_line(read))
-    f=getCharFunction
-    t=tic()
-    o=b''
-    while True:
-        n=new=f()
-        if n == b'\n' or return_on_blank and n == b'':
-            return o
-        o+=n
 # endregion
 # region Webcam: ［load_image_from_webcam, load_image_from_webcam_in_jupyter_notebook］
 
@@ -13161,91 +12767,6 @@ def touch_file(path):
     return path
 
 # endregion
-# region MATLAB Integration: ［matlab_session，matlab，matlab_pseudo_terminal］
-def matlab_session(matlabroot: str = '/Applications/MATLAB_R2016a.app/bin/matlab',print_matlab_stdout: bool = True):  # PLEASE NOTE: this 'matlabroot' was created on my Macbook Pro, and is unlikely to work on your computer unless you specify your own matlab path!
-    """
-    This method is used as an easy-to-use wrapper for creating MATLAB sessions using the pymatbridge module
-    Worth noting: There's a legit purpose for creating a new matlab session before using it:
-      Each session you create will be separate and will have a separate namespace!
-      In other words, you can run them simultaneously/separately. For example:
-            >>> sess1=matlab_session();sess2=matlab_session();
-            >>> sess1.run_code("x=1");sess2.run_code("x=1");
-            >>> sess1.get_variable("x"),sess2.get_variable("x")
-            ans=(1,2)
-    Also worth noting: You can use whatever functions you normally use in MATLAB, including .m files that you wrote and kept in your default matlab function/script saving directory.
-    """
-    fansi_print("(A message from Ryan): About to try connecting to MATLAB. Please be a patient, this can take a few seconds! (There is a timeout though, so you won't be kept waiting forever if it fails). Another message will be printed when it's done loading.",None,'bold')
-    pip_import('pymatbridge')
-    import pymatbridge  # pip3 install pymatbridge     (see https://arokem.github.io/python-matlab-bridge/ )
-    session=pymatbridge.Matlab(executable=matlabroot,maxtime=60)  # maxtime=60-->Wait 1 minute to get a connection before timing out. I got this 'matlabroot' parameter by running "matlabroot" ﹙without quotes﹚in my Matlab IDE (and copy/pasting the output)
-    session.start()  # If wait_for_matlab_to_load is true, then this method won't return anything until it'_s made a connection, which will time out if it takes more than max_loading_time_before_giving_up_in_seconds seconds.
-    assert session.is_connected(),'(A message from Ryan): MATLAB failed to connect! (So we gotta stop here). I made this assertion error to prevent any further confusion if you try to write methods that use me. If I get too annoying, feel free to delete me (the assertion). \n' \
-                                  'Troubleshooting: Perhaps the path you specified in the "matlabroot" argument of this method isn\'t really your matlab root? See the comments in this method for further information.'
-
-    print_matlab_stdout=[print_matlab_stdout]  # Turn the value into a list make it mutable
-    def handle_matlab_stdout(x: dict):
-        # x will look something like this: ans = {'result': [], 'success': True, 'content': {'datadir': '/private/tmp/MatlabData/', 'stdout': 'a =\n     5\n', 'figures': []}}
-        nonlocal print_matlab_stdout
-        is_error=not x['success']  # Is a boolean.
-        if print_matlab_stdout[0]:
-            if is_error:
-                fansi_print("MATLAB ERROR: ",'red','bold',new_line=False)
-            fansi_print(x['content']['stdout'],'red' if is_error else'gray')
-        else:
-            return x  # If we're not printing out the output, we give them ALL the data
-    def wrapper(code: str = '',**assignments):
-        assert isinstance(code,str),'The "Code" parameter should always be a string. If you wish to assign values to variables in the MATLAB namespace, use this method\'_s kwargs instead.'
-        assert len(assignments) == 1 or not assignments,'Either one variable assignment or no variable assignments.'
-        assert not (code and assignments),'You should either use this method as a way to get values/execute code, XOR to assign variables to non-strings like numpy arrays. NOT both! That could be very confusing to read, and make it difficult for new people to learn how to use this function of the r class. NOTE: This method limits you to a single variable assignment because sessions returns things when you do that, and this wrapper has to return that output. '
-        # Note that code and va can be used like booleans, because we know that code is a string and we know that va is a dict that has string-based keys (because of the nature of kwargs).
-        nonlocal session,handle_matlab_stdout
-        if code:
-            eval_attempt=session.get_variable(code)
-            return handle_matlab_stdout(session.run_code(code)) if eval_attempt is None else eval_attempt  # If eval_attempt is None, it means MATLAB didn't return a value for the code you gave it (like saying disp('Hello World')), or resulted in an error or something (like saying a=1/0).
-        if assignments:
-            for var_name in assignments:
-                return handle_matlab_stdout(session.set_variable(var_name,assignments[var_name]))
-        return session  # If we receive no arguments, return the raw session (generated by the pymatbridge module).
-
-    session.print_matlab_stdout=[print_matlab_stdout]  # A list to make it mutable
-    def enable_stdout():  # Enables the pseudo-matlab to print out, on the python console, what a real matlab would print.
-        nonlocal print_matlab_stdout
-        print_matlab_stdout[0]=True
-    def disable_stdout():
-        nonlocal print_matlab_stdout
-        print_matlab_stdout[0]=False
-    wrapper.disable_stdout=disable_stdout
-    wrapper.enable_stdout=enable_stdout
-    wrapper.reboot=lambda *_:[fansi_print("Rebooting this MATLAB session...",None,'bold'),session.stop(),session.start(),fansi_print("...reboot complete!",None,'bold')] and None  # wrapper.reboot() in case you accidentally call an infinite loop or something
-    wrapper.stop=session.stop  # I put this here explicitly, so you don't have to hunt around before figuring out that wrapper().stop() does the same thing as (what now is) wrapper.stop()
-    wrapper.start=session.start  # This exists for the same reason that the one above it exists.
-
-    return wrapper
-
-_static_matlab_session=matlab_disable_stdout=matlab_enable_stdout=matlab_reboot=matlab_stop=matlab_start=None  # Should be None by default. This is the default Matlab session, which is kept in the r module.
-# noinspection PyUnresolvedReferences
-def _initialize_static_matlab_session():
-    global _static_matlab_session,matlab_disable_stdout,matlab_enable_stdout,matlab_reboot,matlab_stop,matlab_start
-    _static_matlab_session=matlab_session()
-    matlab_disable_stdout=_static_matlab_session.disable_stdout
-    matlab_enable_stdout=_static_matlab_session.enable_stdout
-    matlab_reboot=_static_matlab_session.reboot
-    matlab_stop=_static_matlab_session.stop
-    matlab_start=_static_matlab_session.start
-# noinspection PyUnresolvedReferences
-def matlab(*code,**assignments):  # Please note: you can create simultaneous MATLAB sessions by using the matlab_session method!
-    """ This method seriously bends over-back to make using matlab in python more convenient. You don't even have to create a new session when using this method, it takes care of that for you ya lazy bastard! (Talking about myself apparently...) """
-    global _static_matlab_session,matlab_disable_stdout,matlab_enable_stdout,matlab_reboot,matlab_stop,matlab_start
-    if _static_matlab_session is None:
-        fansi_print("r.matlab: Initializing the static matlab session...",None,'bold')
-        _initialize_static_matlab_session()
-    return _static_matlab_session(*code,**assignments)
-
-def matlab_pseudo_terminal(pseudo_terminal):  # Gives a flavour to a given pseudo_terminal function
-    # Example usage: matlab_pseudo_terminal(pseudo_terminal)
-    _initialize_static_matlab_session()
-    pseudo_terminal("pseudo_terminal() --> Entering interactive MATLAB console! (Running inside of the 'r' module)",lambda x:"matlab('" + x + "')")
-# endregion
 # region Mini-Terminal: ［mini_terminal:str］
 # PLEASE READ: This is not meant to be called from the r class.
 # Example usage: import r;exec(r.mini_terminal)
@@ -13286,56 +12807,28 @@ while True:
         print("Miniterminal: Caught keyboard interrupt (type END to exit)")
 """
 # endregion
-# region socketWrapper: ［socket_writer，socket_reader，socket_read，socket_write，socket_reading_thread，get_my_ip］
-default_socket_port=13000
-_socket_writers={}# A whole bunch of singletons
-def socket_writer(targetIP: str,port: int = None):
-    if (targetIP,port) in _socket_writers:
-        return _socket_writers[(targetIP,port)]
-    from socket import AF_INET,SOCK_DGRAM,socket
-    # Message Sender
-    host=targetIP  # IP address of target computer. Find yours with print_my_ip
-    port=port or default_socket_port
-    addr=(host,port)
-    UDPSock=socket(AF_INET,SOCK_DGRAM)  # UDPSock.close()
-    def write(asciiData: str):
-        UDPSock.sendto(str(asciiData).encode("ascii"),addr)
-    write.targetIP=targetIP# A bit of decorating...
-    write.port=port# A bit of decorating...
-    _socket_writers[(targetIP,port)]=write
-    assert socket_writer(targetIP,port) is write  # Should have been added to _socket_writers
-    return write
-def socket_write(targetIP,port,message):
-    socket_writer(targetIP,port)(message)# Takes advantage of the singleton structure of _socket_writers
-_socket_readers={}# A whole bunch of singletons
-def socket_reader(port: int = None):# Blocks current thread until it gets a response
-    if port in _socket_readers:
-        return _socket_readers[port]
-    # Message Receiver
-    from socket import AF_INET,socket,SOCK_DGRAM
-    host=""
-    port=port or default_socket_port
-    buf=1024
-    addr=(host,port)
-    UDPSock=socket(AF_INET,SOCK_DGRAM)  # UDPSock.close()
-    UDPSock.bind(addr)
-    # UDPSock.close()
-    def read(just_data_if_true_else_tuple_with_data_then_ip_addr:bool=True):
-        data,addr=UDPSock.recvfrom(buf)
-        data=data.decode("ascii")
-        return data if just_data_if_true_else_tuple_with_data_then_ip_addr else (data,addr[0])# addr[0] is a string for ip. addr=tuple(string,int)
-    read.port=port# A bit of decorating
-    _socket_readers[port]=read
-    assert socket_reader(port) is read
-    return read
-def socket_read(port,just_data_if_true_else_tuple_with_data_then_ip_addr:bool=True):
-    return socket_reader(port)(just_data_if_true_else_tuple_with_data_then_ip_addr) # Takes advantage of the singleton structure of _socket_readers
-def socket_reading_thread(handler,port:int=None,just_data_if_true_else_tuple_with_data_then_ip_addr:bool=True):
-    read=socket_reader(port)
-    def go():
-        while True:
-            handler(read(just_data_if_true_else_tuple_with_data_then_ip_addr=just_data_if_true_else_tuple_with_data_then_ip_addr))
-    return run_as_new_thread(go)
+# Intended for use everywhere; including inside other functions (places with variables that pseudo_terminal can't reach)
+# endregion
+# Other stuff I don't know which category to put in:
+
+def is_iterable(x):
+    try:
+        #MOST PROPER WAY:
+        # from collections.abc import Iterable
+        # return isinstance(x,Iterable)
+
+        #PREVIOUS WAY:
+        from collections.abc import Iterable
+        if isinstance(x,Iterable) or hasattr(x,'__iter__') or hasattr(x,'__getitem__'):
+            return True
+        
+        #OLDEST WAY:
+        # for _ in x: pass
+        # return True
+    except:
+        return False
+
+# region Network Utilities: ［get_my_local_ip_address，get_my_ip，get_my_mac_address，get_my_public_ip_address］  
 def get_my_local_ip_address() -> str:
     import socket
     s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -13344,7 +12837,9 @@ def get_my_local_ip_address() -> str:
         return s.getsockname()[0]
     finally:
         s.close()
+        
 get_my_ip=get_my_local_ip_address #Legacy: Some of my old code might depend on this function. It's deprecated because it's a bad name
+
 def get_my_mac_address()->str:
     """
     EXAMPLE:
@@ -13379,6 +12874,7 @@ def get_my_mac_address()->str:
         pip_import('getmac','get-mac')
         import getmac
         return getmac.get_mac_address()
+
 def get_my_public_ip_address():
     assert connected_to_internet(),'Cannot get our public IP address because we are not connected to the internet'
     pip_import('requests')
@@ -13389,110 +12885,7 @@ def get_my_public_ip_address():
     except Exception:
         return get('http://ipgrab.io').text.strip()
 # endregion
-# region OSC≣'Open Sound Control' Output ［OSC_output］:
-default_OSC_port=12345
-try:default_OSC_ip='0.0.0.0'
-except Exception:pass
-_OSC_client=None# This is a singleton
-_OSC_values={}
-def OSC_output(address,value):
-    address=str(address)
-    if not address[0]=='/':
-        address='/'+address
-    global default_OSC_ip
-    default_OSC_ip=default_OSC_ip or get_my_local_ip_address()
-    from rp.TestOSC import SimpleUDPClient
-    global _OSC_client
-    if not _OSC_client:
-        _OSC_client=SimpleUDPClient(address=default_OSC_ip,port=default_OSC_port)
-    _OSC_client.send_message(address=address,value=value)
-    _OSC_values[address]=value# Attempt to keep track of them (though it might sometimes drift out of sync etc idk i haven't tested it as of writing this)
-def OSC_jiggle(address):
-    address=str(address)
-    if address in _OSC_values:
-        original_value=_OSC_values[address]
-    OSC_output(address,1)
-    sleep(.1)
-    OSC_output(address,0)
-    sleep(.1)
-    if address in _OSC_values:
-        # noinspection PyUnboundLocalVariable
-        OSC_output(address,original_value)
-# endregion
-# Intended for use everywhere; including inside other functions (places with variables that pseudo_terminal can't reach)
-mini_terminal_for_pythonista="""
-_history=[]
-print("Ryan's Mini-Terminal For Pythonista: A microscopic pseudo-terminal for running inside functions; optimized for Pythonista!")
-print("\\tValid commands: ［PASTE，END，HISTORY］")
-while True:
-    _header=">>> "
-    _s=input(_header).replace(_header,"").lstrip()
-    if not _s:
-        continue
-    if _s == "PASTE":
-        import clipboard
-        print("PASTE: Entering command from clipboard",'blue')
-        _s=clipboard.get()
-    if _s == 'END':
-        print("END: Ending mini-terminal session",'blue')
-        break
-    elif _s == 'HISTORY':
-        print("HISTORY: Printing out list of commands you entered that didn't cause errors",'blue')
-        print('\\n'.join(_history))
-    else:
-        try:
-            _temp=eval(_s)
-            if _temp is not None:
-                _=_temp
-                print('_ = ' + str(_))
-            _history.append(_s)
-        except:
-            try:
-                exec(_s)
-                _history.append(_s)
-            except BaseException as _error:
-                print("ERROR: " + str(_error))"""
-# endregion
-# Other stuff I don't know which category to put in:
-def k_means_analysis(data_vectors,k_or_initial_centroids,iterations,tries):
-    pip_import('scipy')
-    from scipy.cluster.vq import kmeans,vq
-    centroids,total_distortion=kmeans(obs=data_vectors,k_or_guess=k_or_initial_centroids,iter=iterations)  # [0] returns a list of the centers of the means of each centroid. TRUE. [1] returns the 'distortion' ＝ ∑||𝓍﹣μ(𝓍ʹs cluster)||² ＝ the sum of the squared distances between each point and it's respective cluster's mean
-    for _ in range(tries - 1):
-        proposed_centroids,proposed_total_distortion=kmeans(obs=data_vectors,k_or_guess=k_or_initial_centroids,iter=iterations)
-        if proposed_total_distortion < total_distortion:
-            total_distortion=proposed_total_distortion
-            centroids=proposed_centroids
-    parent_centroid_indexes,parent_centroid_distances=vq(data_vectors,centroids)  # ⟵ assign each sample to a cluster
-    # The rCode Identities section should answer most questions you may have about this def.
-    # rCode Identities: Let c≣centroids  ⋀  i≣parent_centroid_indexes  ⋀  d≣parent_centroid_distances …
-    # … ⋀  v≣data_vectors  ⋀  dist(a,b)≣﹙the euclidean distance between vectors a and b﹚  ⋀  k≣k_or_initial_centroids
-    #   ∴ len(v) == len(i) == len(d)
-    #   ∴ ∀ 𝓍 ∈ i， d[𝓍] == dist(v[𝓍],c[𝓍])
-    #   ∴ total_distortion == ∑d²
-    #   ∴ len(c) == k ⨁ len(c) == len(k)
-    return centroids,total_distortion,parent_centroid_indexes,parent_centroid_distances
 
-def is_iterable(x):
-    try:
-        #MOST PROPER WAY:
-        # from collections.abc import Iterable
-        # return isinstance(x,Iterable)
-
-        #PREVIOUS WAY:
-        from collections.abc import Iterable
-        if isinstance(x,Iterable) or hasattr(x,'__iter__') or hasattr(x,'__getitem__'):
-            return True
-        
-        #OLDEST WAY:
-        # for _ in x: pass
-        # return True
-    except:
-        return False
-
-def space_split(x: str) -> list:
-    """ Please don't use this - it's old and made it before I knew python well. Just use x.split().  """
-    return list(filter(lambda y:y != '',x.split(" ")))  # Splits things by spaces but doesn't allow empty parts
 def deepcopy_multiply(iterable,factor: int):
     """
     Used for multiplying lists without copying their addresses
@@ -13821,61 +13214,14 @@ def add_to_env_path(path):
             os.environ["PATH"] = path
 
 
-def printed(message,value_to_be_returned=None,end='\n'):  # For debugging...perhaps this is obsolete now that I have pseudo_terminal though.
+def printed(message,value_to_be_returned=None,end='\n'):
+    """Print a message and return a value. Useful for inline debugging.
+    
+    Example: result = some_function(printed("Debug info", complex_value))
+    """
     print(str(value_to_be_returned if value_to_be_returned is not None else message),end=end)
     return value_to_be_returned or message
-def blob_coords(image,small_end_radius=10,big_start_radius=50):
-    #TODO: wtf is this? lollll should I delete it?
-    # small_end_radius is the 'wholeness' that we look for. Without it we might-as-well pickthe global max pixel we start with, which is kinda junky.
-    assert big_start_radius >= small_end_radius
-    if len(image.shape) == 3:
-        image=tofloat(_rgb_to_grayscale(image))
-    def global_max(image):
-        # Finds max-valued coordinates. Randomly chooses if multiple equal maximums. Assumes image is SINGLE CHANNEL!!
-        assert isinstance(image,np.ndarray)
-        assert len(image.shape) == 2  # SHOULD BE SINGLE CHANNEL!!
-        return random_element(np.transpose(np.where(image == image.max()))).tolist()
-    def get(x,y):
-        try:
-            return image[x,y]
-        except IndexError:
-            return 0
-    def local_max(image,x0,y0):
-        # Gradient ascent pixel-wise. Assumes image is SINGLE CHANNEL!!
-        assert isinstance(image,np.ndarray)
-        assert len(image.shape) == 2  # SHOULD BE SINGLE CHANNEL!!
-        def get(x,y):
-            try:
-                return image[x,y]
-            except IndexError:
-                return 0
-        def step(x,y):  # A single gradient ascent step
-            best_val=0  # We're aiming to maximize this
-            best_x=x
-            best_y=y
-            for Δx in [-1,0,1]:
-                for Δy in [-1,0,1]:
-                    if get(x + Δx,y + Δy) > best_val:
-                        best_val=get(x + Δx,y + Δy)
-                        best_x,best_y=x + Δx,y + Δy
-            return best_x,best_y
-        while step(x0,y0) != (x0,y0):
-            x0,y0=step(x0,y0)
-        return x0,y0
-    # image is now a single channel.
-    def blurred(radius):
-        return gauss_blur(image,radius,single_channel=True)  # ,mode='constant')
-    x,y=global_max(blurred(big_start_radius))
-    for r in reversed(range(small_end_radius,big_start_radius)):
-        x,y=local_max(blurred(r + 1),x,y)
-    return x,y
 
-def tofloat(ndarray):
-    """
-    Things like np.int16 or np.int64 will all be scaled down by their max values; resulting in
-    elements that in sound files would be floats ∈ [-1,1] and in images [0,255] ⟶ [0-1]
-    """
-    return np.ndarray.astype(ndarray,float) / np.iinfo(ndarray.dtype).max
 
 def get_plt():
     pip_import('matplotlib')
@@ -17375,53 +16721,9 @@ def vim(file_or_object=None,line_number=None):
 #     _edit(file_or_object,editor_command='X')""".replace('X',__editor))
 # del __known_editors,__editor# This is just a setup section to create methods for us, so get rid of the leftovers. __known_editors and __editor are assumed to be unused anywhere else in our current namespace!dz
 
-def xo(file_or_object):
-    # FYI: 'xo' stands for 'exofrills', a console editor. I haven't used it much though. I don't really use console based editors much…
-    import xo
-    try:
-        if not isinstance(file_or_object,str):
-            file_or_object=get_source_file(file_or_object)
-        xo.main([file_or_object])
-    except Exception:
-        print("Failed to start exofrills editor")
-del xo #I don't ever use this lol. Undelete this if I encounter any code that needs it.
 
 # endregion
 
-def graph_resistance_distance(n, d, x, y):
-    """
-    Originally from Fodor's CSE307 HW 2, Spring 2018
-    d is dictionary to contain graph edges
-    n is number of nodes
-    x is entry node
-    y is exit node
-    Reference: wikipedia.org/wiki/Resistance_distance
-    Example from acmgnyr.org/year2017/problems/G-SocialDist.pdf
-        graph_resistance_distance(6,{2:(0,1,3),3:(1,4,5),4:(1,5)},1,0) ⟶ 34/21
-    """
-    e=[[] for _ in range(n)]
-    for k in d:
-        for i in d[k]:
-            e[k].append(i)
-            e[i].append(k)
-    c = []
-    s = len(e)
-    for i, l in enumerate(e):
-        v = [0]*s
-        for j in l:
-            v[i] += 1
-            v[j] -= 1
-        c.append(v)
-    r = [0] * s
-    r[x] =  1
-    r[y] = -1
-    m = max(x,y)
-    c = [x[:m] + x[m + 1:] for x in c]
-    c.pop(0)
-    r.pop(0)
-    M = [c[i] + [r[i]] for i in range(len(c))]
-    M=reduced_row_echelon_form(M)
-    return abs(M[min(x,y)][-1])
 
 namespace="set(list(locals())+list(globals())+list(dir()))"  # eval-uable
 xrange=range  # To make it more compatiable when i copypaste py2 code
@@ -17448,35 +16750,6 @@ def _is_valid_exeval_python_syntax(code, mode='exec'):
     return is_valid_python_syntax(code)
 
 
-def is_valid_shell_syntax(code,*, silent=True, command=None):
-    """
-    Returns True if the code is valid shell syntax for your default shell. If command is specified (such as '/bin/zsh' or rp.get_default_shell()), checks that shell instead.
-
-    EXAMPLE:
-        >>> is_valid_shell_syntax('asoidj')
-        ans = True
-        >>> is_valid_shell_syntax('asoidj("')
-        ans = False
-    """
-    import subprocess
-    
-    if command is None:
-        command=get_default_shell()
-    else:
-        assert isinstance(command,str)
-
-    try:
-        # Running the shell code with 'sh -n' which checks for syntax without execution
-        process = subprocess.run(
-            [command, "-n"], input=code, text=True, stderr=subprocess.PIPE, check=True
-        )
-        # If the shell command succeeds without error, the syntax is valid
-        return True
-    except subprocess.CalledProcessError as e:
-        # If there's a syntax error, print the error and return False
-        if not silent:
-            print("Syntax error:", e.stderr)
-        return False
 
 def is_valid_sh_syntax(code, *,silent=True, command="sh"):
     """Returns True if the code is valid bash syntax, False otherwise. If silent=False, will print out more information."""
@@ -17514,6 +16787,7 @@ def _ipython_exeval_maker(scope={}):
         return result.result
     return ipython_exeval
 _ipython_exeval=None
+
 
 # region This section MUST come last! This is for if we're running the 'r' class as the main thread (runs pseudo_terminal)―――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――
 
@@ -18989,6 +18263,12 @@ def _guess_mimetype(file_path)->str:
     return mimetype.split('/')[0]
 
 def is_image_file(file_path):
+    """Check if file path points to an image file based on extension/mimetype.
+    
+    Checks file extension and mimetype to determine if it's an image.
+    Special handling for .exr (OpenEXR) files.
+    Does NOT check if file exists or is valid.
+    """
     if not isinstance(file_path,str): return False
     if get_file_extension(file_path) in 'exr'.split():
         return True
@@ -20025,31 +19305,23 @@ def _get_all_github_gists_info(username="SqrtRyan",use_cache=True):
     
     pages = load_files(load_page, page_indices, show_progress='eta:'+get_current_function_name())
     pages = list_flatten(pages)
-    pages = list_flatten(page['files'].values() for page in pages)
-    return pages
+    files = []
+    for page in pages:
+        for file_info in page['files'].values():
+            file_info['gist_url'] = page['html_url']
+            files.append(file_info)
+    return files
 
 def _download_rp_gists(max_filesize='10mb'):
-    """
-    Fetches all public gists from SqrtRyan by handling API pagination.
-    """
-    # The rest of your code remains the same, but now uses the complete list
     max_filesize=_FilesizeFormTranslator.as_num_bytes(max_filesize)
-    gist_pages= _get_all_github_gists_info("SqrtRyan")
-    raw_gist_urls = [page['raw_url'] for page in gist_pages if page['size']<=max_filesize]
-    raw_gist_paths = download_urls_to_cache(raw_gist_urls, show_progress=True)
-    return raw_gist_paths
+    gists = [g for g in _get_all_github_gists_info("SqrtRyan") if g['size']<=max_filesize]
+    paths = download_urls_to_cache([g['raw_url'] for g in gists], show_progress=True)
+    return list(zip([g['gist_url'] for g in gists], paths))
     #return load_text_files(raw_gist_paths, show_progress=True, use_cache=True)
 def _input_select_rp_gists(ans=None):
     return _input_select_multiple_paragraphs(
-        (
-            x[:1000000]
-            for x in load_text_files(
-                _download_rp_gists(),
-                use_cache=True,
-                lazy=True,
-                show_progress=False,
-            )
-        ),
+        (("# " + url + "\n" + text_file_to_string(path))[:1000000] 
+         for url, path in _download_rp_gists()),
         old_code=ans if isinstance(ans, str) else None,
     )
 
@@ -25196,67 +24468,7 @@ def reduced_row_echelon_form(M):
     import sympy
     return sympy.matrix2numpy(sympy.Matrix(M).rref()[0])
 
-def qterm():
-    # Enables both vispy and
-    def _exeval(f,*x,**y):
-        nonlocal _error
-        assert _done == _todo == []
-        # _todo.insert(0,fog(print,'Hello wurlzy'))
-        _todo.insert(0,fog(f,*x,**y))
-        while not _done and not _error:
-            pass
-        assert _todo == []
-        if _error:
-            assert not _done
-            temp=_error
-            _error=None
-            raise temp
-        out=_done.pop()
-        assert not _done
-        return out
-    def _exec(*x,**y):
-        return _exeval(exec,*x,**y)
-    def _eval(*x,**y):
-        return _exeval(eval,*x,**y)
 
-    _error=None
-    _todo=[]
-    _done=[]  # Results of _todo
-
-    import rp.r_iterm_comm as ric
-    _level=ric.pseudo_terminal_level
-    run_as_new_thread(pseudo_terminal,globals(),exec=_exec,eval=_eval)
-    while ric.pseudo_terminal_level==_level:
-        pass
-    while 1:
-        if ric.pseudo_terminal_level==_level:
-            break
-        try:
-            from vispy import app
-            app.process_events()
-        except:
-            print("harry potwar strikes again! keep chuggin...")
-            pass
-        if _todo:
-            try:
-                _done.append(_todo.pop()())
-            except BaseException as e:
-                _error=e
-        assert not _todo
-    print('...aaaannndddd were DONE chuggin.')
-    app.quit()  # NOT nessecary but PERHAPS its nicer than having a crashy window...make this optional though!!!
-
-def UCB1(w,n,N,c=2**.5):
-    """
-    w ÷ n + c √(㏑(N) ÷ n)
-    From wikipedia.org/wiki/Monte_Carlo_tree_search:
-       · w﹦number of wins for the node
-       · n﹦number of simulations for the node
-       · N﹦total number of simulations among all nodes
-       · c﹦the exploration parameter—theoretically equal to √2; in practice usually chosen empirically
-    """
-    from math import log as ln
-    return w/n+c*(ln(N)/n)**.5
 
 def all_rolls(vector,axis=None):
     """
@@ -31098,8 +30310,6 @@ def get_all_folders(*args,**kwargs):
     return get_all_paths(*args,**{'include_folders':True,'include_files':False,**kwargs})
 get_all_directories=get_all_folders
 
-def get_file_paths(*args,**kwargs):
-    assert False,'This function is deprecated. Use get_all_files instead - its the same function with a new name.'
 
 def get_subfolders(folder,*,relative=False,sort_by=None):
     """ Take a folder, and return a list of all of its subfolders """
@@ -32063,6 +31273,12 @@ def is_image(image):
            (is_float_image    (image) or is_byte_image(image) or is_binary_image(image))
 
 def is_grayscale_image(image):
+    """Check if image is grayscale (2D array with shape HW).
+    
+    Returns True for 2-dimensional numpy arrays or convertible inputs.
+    Returns False for color images, torch tensors, or invalid inputs.
+    See also: is_rgb_image, is_rgba_image, as_grayscale_image
+    """
     try:
         image=as_numpy_array(image)
     except Exception:
@@ -32070,6 +31286,12 @@ def is_grayscale_image(image):
     return len(image.shape)==2
 
 def is_rgb_image(image):
+    """Check if image is RGB (3D array with shape HW3).
+    
+    Returns True for arrays with exactly 3 color channels.
+    Returns False for grayscale, RGBA, torch tensors, or invalid inputs.
+    See also: is_grayscale_image, is_rgba_image, as_rgb_image
+    """
     try:
         image=as_numpy_array(image)
     except Exception:
@@ -32080,6 +31302,12 @@ def is_rgb_image(image):
     return number_of_channels==3
 
 def is_rgba_image(image):
+    """Check if image is RGBA (3D array with shape HW4).
+    
+    Returns True for arrays with exactly 4 channels (RGB + alpha).
+    Returns False for grayscale, RGB, torch tensors, or invalid inputs.
+    See also: is_rgb_image, is_grayscale_image, as_rgba_image
+    """
     try:
         image=as_numpy_array(image)
     except Exception:
@@ -32339,7 +31567,9 @@ def as_byte_images     (images,*,copy=True): return _images_conversion(as_byte_i
 def as_binary_images   (images,*,copy=True): return _images_conversion(as_binary_image   , images, copy=copy, copy_check=is_binary_image   )  
 def as_rgb_images      (images,*,copy=True): return _images_conversion(as_rgb_image      , images, copy=copy, copy_check=is_rgb_image      )  
 def as_rgba_images     (images,*,copy=True): return _images_conversion(as_rgba_image     , images, copy=copy, copy_check=is_rgba_image     )  
-def as_grayscale_images(images,*,copy=True): return _images_conversion(as_grayscale_image, images, copy=copy, copy_check=is_grayscale_image)  
+def as_grayscale_images(images,*,copy=True):
+    """Convert list of images to grayscale. See as_grayscale_image for single images."""
+    return _images_conversion(as_grayscale_image, images, copy=copy, copy_check=is_grayscale_image)  
 
 def _common_image_channel_converter(images):
     """Given a list of images, choose the cheapest as_*_image function that preserves as much data as possible"""
@@ -34774,6 +34004,8 @@ def save_video(images, path, *, framerate=60):
 
 
 def encode_video_to_bytes(video,filetype:str='.avi',framerate=30):
+    """Encode video to bytes without saving to disk.
+    See also: decode_video_from_bytes"""
     video_file=temporary_file_path(filetype)
     
     try:
@@ -34784,7 +34016,19 @@ def encode_video_to_bytes(video,filetype:str='.avi',framerate=30):
     finally:
         if file_exists(video_file):
             delete_file(video_file)
-    
+
+def decode_video_from_bytes(encoded_video:bytes, filetype:str='.avi'):
+    """Decode bytes back to video array.
+    See also: encode_video_to_bytes"""
+    video_file = temporary_file_path(filetype)
+    try:
+        bytes_to_file(encoded_video, video_file)
+        return load_video(video_file)
+    finally:
+        if file_exists(video_file):
+            delete_file(video_file)
+
+decode_bytes_to_video = decode_video_from_bytes  # Alias for consistency
 
 def add_audio_to_video_file(video_path, audio_path, output_path=None):
     """
@@ -36257,6 +35501,7 @@ def crop_image(image, height: int = None, width: int = None, origin=None, copy=F
 
 
 def crop_images(images, height:int = None, width:int=None, origin='top left', *, show_progress=False, lazy=False):
+    """Batch crop multiple images to specified dimensions. See crop_image for single images."""
     output = (crop_image(image, height=height, width=width, origin=origin) for image in images)
 
     if show_progress:
@@ -42196,6 +41441,7 @@ def inverted_image(image, invert_alpha=False):
 invert_image = inverted_image
 
 def inverted_images(images, invert_alpha=False):
+    """Batch invert colors of multiple images. See inverted_image for single images."""
     if is_numpy_array(images):
         return as_numpy_array(gather_args_call(inverted_images, list(images)))
     return [gather_args_call(inverted_image, image) for image in images]
@@ -43835,6 +43081,8 @@ def cv_resize_images(
     copy=True,
     lazy=False
 ):
+    """Batch resize images using OpenCV. Faster than resize_image for multiple images.
+    See cv_resize_image for single images."""
     images=detuple(images)
 
     as_numpy = is_numpy_array(images)
@@ -44153,6 +43401,8 @@ def torch_resize_image(image, size, interp="auto", *, copy=True):
     return out
 
 def torch_resize_images(*images, size, interp="auto", copy=True):
+    """Batch resize images using PyTorch. GPU-accelerated when available.
+    See torch_resize_image for single images."""
     images = detuple(images)
     as_tensor = is_torch_tensor(images)
     resized = [gather_args_call(torch_resize_image, x) for x in images]
@@ -51059,14 +50309,45 @@ def _qualify_imports(code, *module_names):
             if original_node.module:
                 mod_name = self.get_full_module_name(original_node.module)
                 if mod_name in self.module_names:
-                    for alias in original_node.names:
-                        if isinstance(alias, cst.ImportAlias) and alias.asname is None:
-                            name = alias.name.value
-                            self.replacements[name] = mod_name
-                    return cst.Import(names=[cst.ImportAlias(name=original_node.module)])
+                    # Handle "from module import *" case
+                    if isinstance(original_node.names, cst.ImportStar):
+                        # For star imports, we mark this module for aggressive qualification
+                        # All bare names that could be from this module will be qualified
+                        self.star_imported_modules = getattr(self, 'star_imported_modules', set())
+                        self.star_imported_modules.add(mod_name)
+                        return cst.Import(names=[cst.ImportAlias(name=original_node.module)])
+                    else:
+                        # Handle specific imports like "from module import name1, name2"
+                        for alias in original_node.names:
+                            if isinstance(alias, cst.ImportAlias) and alias.asname is None:
+                                name = alias.name.value
+                                self.replacements[name] = mod_name
+                        return cst.Import(names=[cst.ImportAlias(name=original_node.module)])
+            return updated_node
+
+        def leave_Call(self, original_node, updated_node):
+            """Handle function calls - this is where we want to qualify star import names."""
+            # Only process if the function being called is a bare name (not already qualified)
+            if isinstance(updated_node.func, cst.Name):
+                func_name = updated_node.func.value
+                
+                # Check if this should be qualified due to star imports
+                star_imported_modules = getattr(self, 'star_imported_modules', set())
+                if star_imported_modules and self._is_likely_module_function(func_name):
+                    # Qualify the function call
+                    mod_name = next(iter(star_imported_modules))
+                    attrs = mod_name.split('.') + [func_name]
+                    attr_node = cst.Name(attrs[0])
+                    for attr in attrs[1:]:
+                        attr_node = cst.Attribute(value=attr_node, attr=cst.Name(attr))
+                    
+                    # Return the call with qualified function name
+                    return updated_node.with_changes(func=attr_node)
+            
             return updated_node
 
         def leave_Name(self, original_node, updated_node):
+            # Handle explicit replacements (non-star imports)
             if original_node.value in self.replacements:
                 mod_name = self.replacements[original_node.value]
                 attrs = mod_name.split('.') + [original_node.value]
@@ -51074,7 +50355,26 @@ def _qualify_imports(code, *module_names):
                 for attr in attrs[1:]:
                     attr_node = cst.Attribute(value=attr_node, attr=cst.Name(attr))
                 return attr_node
+            
             return updated_node
+        
+        def _is_likely_module_function(self, name):
+            """Determine if a name is likely a function from a module (not a built-in)."""
+            # Don't qualify obvious built-ins and common Python names
+            builtins_and_common = {
+                'print', 'len', 'str', 'int', 'float', 'bool', 'list', 'dict', 'set', 'tuple',
+                'range', 'enumerate', 'zip', 'map', 'filter', 'sum', 'min', 'max', 'abs',
+                'isinstance', 'hasattr', 'getattr', 'setattr', 'type', 'super', 'next',
+                'open', 'round', 'sorted', 'reversed', 'any', 'all', 'iter', 'format',
+                'Exception', 'ValueError', 'TypeError', 'KeyError', 'IndexError',
+                'True', 'False', 'None', 'self', 'cls'
+            }
+            
+            # Also don't qualify single letters or very short names (likely variables)
+            if len(name) <= 2:
+                return False
+                
+            return name not in builtins_and_common
 
     tree = cst.parse_module(code)
     transformer = QualifyImportsTransformer(module_names)

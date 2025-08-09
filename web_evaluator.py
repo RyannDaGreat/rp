@@ -20,6 +20,7 @@ rp.pip_import('requests')
 import requests
 
 DEFAULT_SERVER_PORT = 43234 #This is an arbitrary port I chose because its easy to remember and didn't conflict with any known services I could find on https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
+DEFAULT_WORKER_PORT = 53234 #The starting default port for delegation worker servers launched by launch_tmux_delegation_cluster
 DEFAULT_DELEGATION_SERVER_PORT = 33234 #The port for delegation servers is different, making them easy to find if we have many servers
 DEFAULT_CLUSTER_SESSION_NAME = "Webeval Cluster"
 
@@ -1480,7 +1481,7 @@ def launch_tmux_delegation_cluster(num_workers:int, *, session_name=None,
     Args:
         num_workers (int): Number of server instances to start
         session_name (str, optional): Name for the tmux session. If None, generates unique name.
-        base_port (int, optional): Starting port number. Defaults to DEFAULT_SERVER_PORT.
+        worker_port (int, optional): Starting port number. Defaults to DEFAULT_WORKER_PORT.
         python_executable (str, optional): Python executable to use. Defaults to sys.executable.
         command_before (str/list, optional): Commands to run before starting servers (e.g., conda activate).
         attach (bool, optional): Whether to attach to tmux session. Defaults to False.
@@ -1513,8 +1514,8 @@ def launch_tmux_delegation_cluster(num_workers:int, *, session_name=None,
     """
     if session_name is None:
         session_name = rp.tmux_get_unique_session_name(DEFAULT_CLUSTER_SESSION_NAME)
-    if base_port is None:
-        base_port = DEFAULT_SERVER_PORT
+    if worker_port is None:
+        worker_port = DEFAULT_WORKER_PORT
     if python_executable is None:
         python_executable = sys.executable
     if ip_address is None:
@@ -1549,9 +1550,9 @@ def launch_tmux_delegation_cluster(num_workers:int, *, session_name=None,
     # Generate ports for each server
     ports = []
     for i in range(num_workers):
-        port = rp.get_next_free_port(base_port, n=i)
-        if port != base_port + i:
-            rp.fansi_print(f"Warning: Port {base_port + i} taken, using {port}", 'yellow')
+        port = rp.get_next_free_port(worker_port, n=i)
+        if port != worker_port + i:
+            rp.fansi_print(f"Warning: Port {worker_port + i} taken, using {port}", 'yellow')
         ports.append(port)
     
     # Create windows: servers in first window, delegation server in second if requested
@@ -1572,7 +1573,7 @@ def launch_tmux_delegation_cluster(num_workers:int, *, session_name=None,
         else:
             raise ValueError(f"Invalid delegator_port: {delegator_port}. Must be None, False, or int.")
         
-        delegation_cmd = f'''{shlex.quote(python_executable)} -c "import rp, rp.web_evaluator; rp.globalize_locals(rp.web_evaluator.run_delegation_server)({delegator_port}, new_thread=True) ; rp.pterm(globals(), level_title='Delegator Port={port}')"'''
+        delegation_cmd = f'''{shlex.quote(python_executable)} -c "import rp, rp.web_evaluator; rp.globalize_locals(rp.web_evaluator.run_delegation_server)({delegator_port}, new_thread=True) ; rp.pterm(globals(), level_title='Delegator Port={delegator_port}')"'''
         windows["delegator"] = delegation_cmd
     
     yaml_config = rp.tmuxp_create_session_yaml(
