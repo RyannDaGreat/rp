@@ -382,6 +382,13 @@ function! Fansi()
     set t_Co=256 "Enable 256 colors in vim
     
     if !exists("g:colors_name")
+
+        colorscheme        sublime256
+    elseif g:colors_name=='sublime256'
+    
+    "Sublime256 is a better version of this
+    "     colorscheme        monokai
+    " elseif g:colors_name=='monokai'
         
         colorscheme wombat256mod
     elseif g:colors_name=='wombat256mod'
@@ -403,13 +410,6 @@ function! Fansi()
         
         colorscheme        miramare
     elseif g:colors_name=='miramare'
-        
-        colorscheme        sublime256
-    elseif g:colors_name=='sublime256'
-    
-    "Sublime256 is a better version of this
-    "     colorscheme        monokai
-    " elseif g:colors_name=='monokai'
         
         colorscheme        tokyonight
     elseif g:colors_name=='tokyonight'
@@ -900,7 +900,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             nmap <leader>hp <Plug>(GitGutterPreviewHunk)
             " Git Gutter"
             set updatetime=250
-            let g:gitgutter_max_signs = 500
+            let g:gitgutter_max_signs = 50000
             let g:gitgutter_map_keys = 0 " No mapping
             let g:gitgutter_override_sign_column_highlight = 0 " Colors
             let g:gitgutter_sign_allow_clobber = 0 " Let other plugins take priority over gutter
