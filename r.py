@@ -19719,7 +19719,7 @@ class _pseudo_terminal_style:
         timestamp=lambda:datetime.datetime.now().strftime("%B %d, %Y at %I:%M:%S %p")
         import sys,platform
         version=platform.python_implementation()+' '+str(sys.version_info.major)+'.'+str(sys.version_info.minor)+'.'+str(sys.version_info.micro)
-        self.message=lambda:"rp.pseudo_terminal() in %s: Welcome! "%version+timestamp()
+        self.message=lambda:"rp.pterm() in %s: Welcome! "%version+timestamp()
 
 def _dhistory_helper(history:str)->list:
     #Take some python code, rip out just the function definitions, and return them in a list
