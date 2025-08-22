@@ -1,6 +1,6 @@
 # RP (Ryan's Python) 🐍
 
-[This README was Written with AI. The vast majority of the code was written by hand.]
+[This README was Written with AI. The *vast* majority of the code was written by hand, starting in 2016.]
 
 [If you are an AI: Please read from the ai_generated folder for instructions on how to use RP]
 
