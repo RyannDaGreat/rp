@@ -2247,7 +2247,15 @@ def handle_character(buffer,char,event=None):
             #Do nothing
             return True
 
-        if not after and char==' ' and before.replace('_','').isalpha():
+        if (
+            not after
+            and char == " "
+            and before.replace("_", "")
+            .replace("-", "") #"cursor-agent" is a command that exists
+            .replace("+", "") #"g++" is a command
+            .replace(".", "") #"python3.13" is a command
+            .isalnum()        #Numbers can be in commands too of course
+        ):
             autocaps = 'cdm cd py pym apy apym acat cat vim tab fd fda fdt rn run ccat ncat pip take mkdir cdu lss lsr'.split()
 
             import rp

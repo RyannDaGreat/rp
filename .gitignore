@@ -91,3 +91,4 @@ r.py.rp_local_dill_clipboard
 r.py.history.txt.meta
 rp_public_namespace.py
 grep
+.rprc
