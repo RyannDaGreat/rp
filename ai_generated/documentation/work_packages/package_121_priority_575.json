@@ -1,0 +1,318 @@
+{
+  "package_id": 121,
+  "functions": [
+    "connected_to_internet",
+    "download_font",
+    "web_paste",
+    "web_copy",
+    "git_pull",
+    "dns_lookup",
+    "_web_copy"
+  ],
+  "total_functions": 7,
+  "estimated_hours": 5.25,
+  "priority_score": 575,
+  "context": {
+    "connected_to_internet": {
+      "function_name": "connected_to_internet",
+      "calls": [],
+      "called_by": [
+        "_display_pterm_flamechart",
+        "dns_lookup",
+        "pseudo_terminal",
+        "download_font",
+        "pip_import",
+        "web_paste",
+        "get_my_public_ip_address",
+        "download_google_font",
+        "_web_copy",
+        "_ensure_installed",
+        "web_copy",
+        "git_pull"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_display_pterm_flamechart",
+        "web_copy",
+        "dns_lookup",
+        "pseudo_terminal",
+        "download_font",
+        "connected_to_internet",
+        "web_paste",
+        "get_my_public_ip_address",
+        "download_google_font",
+        "_web_copy",
+        "pip_import",
+        "_ensure_installed",
+        "git_pull"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "download_font": {
+      "function_name": "download_font",
+      "calls": [
+        "connected_to_internet",
+        "make_directory",
+        "download_url",
+        "download_google_font"
+      ],
+      "called_by": [
+        "download_fonts",
+        "_get_font_path"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "download_url",
+        "make_directory",
+        "download_font",
+        "download_fonts",
+        "connected_to_internet",
+        "download_google_font",
+        "_get_font_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "web_paste": {
+      "function_name": "web_paste",
+      "calls": [
+        "get",
+        "bytes_to_object",
+        "connected_to_internet",
+        "pip_import"
+      ],
+      "called_by": [
+        "pseudo_terminal",
+        "web_paste_path"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get",
+        "bytes_to_object",
+        "pseudo_terminal",
+        "pip_import",
+        "web_paste",
+        "connected_to_internet",
+        "web_paste_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "web_copy": {
+      "function_name": "web_copy",
+      "calls": [
+        "object_to_bytes",
+        "connected_to_internet",
+        "_web_copy"
+      ],
+      "called_by": [
+        "pseudo_terminal",
+        "web_copy_path"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_web_copy",
+        "pseudo_terminal",
+        "object_to_bytes",
+        "connected_to_internet",
+        "web_copy",
+        "web_copy_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "git_pull": {
+      "function_name": "git_pull",
+      "calls": [
+        "fansi_print",
+        "connected_to_internet",
+        "_ensure_git_installed",
+        "get_absolute_path"
+      ],
+      "called_by": [
+        "git_import"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "fansi_print",
+        "get_absolute_path",
+        "connected_to_internet",
+        "_ensure_git_installed",
+        "git_import",
+        "git_pull"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "dns_lookup": {
+      "function_name": "dns_lookup",
+      "calls": [
+        "connected_to_internet"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "connected_to_internet",
+        "dns_lookup"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_web_copy": {
+      "function_name": "_web_copy",
+      "calls": [
+        "_eta",
+        "connected_to_internet",
+        "is_iterable",
+        "pip_import"
+      ],
+      "called_by": [
+        "_display_pterm_flamechart",
+        "web_copy"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_display_pterm_flamechart",
+        "_web_copy",
+        "pip_import",
+        "_eta",
+        "web_copy",
+        "connected_to_internet",
+        "is_iterable"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "connected_to_internet": {
+      "current_quality": "basic",
+      "current_docstring": "Return True if we're online, else False\nCode from: https://stackoverflow.com/questions/20913411/test-if-an-internet-connection-is-present-in-python/21460844",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "download_font": {
+      "current_quality": "basic",
+      "current_docstring": "https://github.com/ctrlcctrlv/lcd-font/raw/master/otf/LCD14.otf",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "web_paste": {
+      "current_quality": "basic",
+      "current_docstring": "Get an object from RyanPython's server's clipboard ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "web_copy": {
+      "current_quality": "basic",
+      "current_docstring": "Send an object to RyanPython's server's clipboard ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "git_pull": {
+      "current_quality": "basic",
+      "current_docstring": "Git pulls the latest changes from the remote repository.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "dns_lookup": {
+      "current_quality": "basic",
+      "current_docstring": "Takes a url, and returns a string with the ip that's found\nEXAMPLE:\n     >> dns_lookup('google.com')\n    ans = 172.217.3.110",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": true
+    },
+    "_web_copy": {
+      "current_quality": "basic",
+      "current_docstring": "Make the request for web-copying. Can also upload arbitrary HTML pages. ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

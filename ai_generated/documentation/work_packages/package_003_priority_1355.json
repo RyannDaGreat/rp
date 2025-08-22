@@ -1,0 +1,482 @@
+{
+  "package_id": 3,
+  "functions": [
+    "is_numpy_array",
+    "_crop_images_to_max_or_min_size",
+    "resize_videos",
+    "set_ans",
+    "as_numpy_video",
+    "as_numpy_videos",
+    "resize_lists_to_min_len",
+    "resize_lists_to_max_len"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 1355,
+  "context": {
+    "is_numpy_array": {
+      "function_name": "is_numpy_array",
+      "calls": [
+        "_is_instance_of_module_class"
+      ],
+      "called_by": [
+        "_clip",
+        "_nan_to_num",
+        "_floor",
+        "_images_are_all_same_size",
+        "_asin",
+        "_omni_save_default_extension",
+        "_create_array_like",
+        "as_numpy_videos",
+        "_ceil",
+        "get_min_image_dimensions",
+        "_crop_images_to_max_or_min_size",
+        "_minimum",
+        "_softmax",
+        "rinsp",
+        "pseudo_terminal",
+        "_trim_videos_to_same_length",
+        "_exp",
+        "_sum",
+        "_atan",
+        "resize_videos",
+        "_log10",
+        "_copy_tensor",
+        "inverted_images",
+        "_round",
+        "_log",
+        "_min",
+        "with_alpha_checkerboards",
+        "crop_images_to_square",
+        "resize_video_to_hold",
+        "resize_video_to_fit",
+        "_max",
+        "resize_lists_to_min_len",
+        "_sin",
+        "set_ans",
+        "get_max_image_dimensions",
+        "as_rgba_float_color",
+        "validate_tensor_shapes",
+        "_cos",
+        "_tanh",
+        "_relu",
+        "get_max_video_dimensions",
+        "accumulate_flows",
+        "_sigmoid",
+        "_atan2",
+        "resize_list",
+        "resize_lists_to_max_len",
+        "as_numpy_video",
+        "_pow",
+        "_acos",
+        "get_video_width",
+        "get_video_height",
+        "_fft",
+        "_tensorify",
+        "cv_resize_images",
+        "trim_video",
+        "_sign",
+        "labeled_videos",
+        "_degrees",
+        "_radians",
+        "_maximum",
+        "_abs",
+        "_sqrt",
+        "list_transpose",
+        "_ifft",
+        "_sinh",
+        "resize_lists",
+        "_cosh",
+        "_tan",
+        "_mean",
+        "get_min_video_dimensions",
+        "vertically_concatenated_images",
+        "handy_hash",
+        "_log2"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_clip",
+        "_omni_save_default_extension",
+        "as_numpy_videos",
+        "get_min_image_dimensions",
+        "_crop_images_to_max_or_min_size",
+        "_minimum",
+        "rinsp",
+        "_trim_videos_to_same_length",
+        "_exp",
+        "_sum",
+        "_atan",
+        "_copy_tensor",
+        "_log",
+        "crop_images_to_square",
+        "resize_lists_to_min_len",
+        "_max",
+        "set_ans",
+        "as_rgba_float_color",
+        "_cos",
+        "_relu",
+        "resize_lists_to_max_len",
+        "accumulate_flows",
+        "get_max_video_dimensions",
+        "_sigmoid",
+        "_atan2",
+        "as_numpy_video",
+        "_acos",
+        "get_video_width",
+        "cv_resize_images",
+        "_is_instance_of_module_class",
+        "trim_video",
+        "_degrees",
+        "_maximum",
+        "_abs",
+        "_sqrt",
+        "list_transpose",
+        "_ifft",
+        "resize_lists",
+        "_cosh",
+        "vertically_concatenated_images",
+        "_nan_to_num",
+        "_floor",
+        "_images_are_all_same_size",
+        "_asin",
+        "_create_array_like",
+        "_ceil",
+        "_softmax",
+        "pseudo_terminal",
+        "resize_videos",
+        "_log10",
+        "inverted_images",
+        "_round",
+        "_min",
+        "resize_video_to_hold",
+        "with_alpha_checkerboards",
+        "resize_video_to_fit",
+        "_sin",
+        "get_max_image_dimensions",
+        "validate_tensor_shapes",
+        "_tanh",
+        "resize_list",
+        "is_numpy_array",
+        "_pow",
+        "get_video_height",
+        "_fft",
+        "_tensorify",
+        "_sign",
+        "labeled_videos",
+        "_radians",
+        "_sinh",
+        "_tan",
+        "_mean",
+        "get_min_video_dimensions",
+        "handy_hash",
+        "_log2"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_crop_images_to_max_or_min_size": {
+      "function_name": "_crop_images_to_max_or_min_size",
+      "calls": [
+        "get_image_dimensions",
+        "is_numpy_array",
+        "detuple",
+        "crop_image",
+        "is_torch_tensor"
+      ],
+      "called_by": [
+        "crop_images_to_max_height",
+        "crop_images_to_max_width",
+        "crop_images_to_min_size",
+        "crop_images_to_min_height",
+        "crop_images_to_min_width",
+        "crop_images_to_max_size"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_image_dimensions",
+        "crop_images_to_max_height",
+        "detuple",
+        "is_numpy_array",
+        "crop_images_to_max_width",
+        "is_torch_tensor",
+        "crop_images_to_min_size",
+        "crop_image",
+        "crop_images_to_min_height",
+        "crop_images_to_min_width",
+        "_crop_images_to_max_or_min_size",
+        "crop_images_to_max_size"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "resize_videos": {
+      "function_name": "resize_videos",
+      "calls": [
+        "is_numpy_array",
+        "detuple",
+        "as_numpy_array",
+        "print"
+      ],
+      "called_by": [
+        "resize_videos_to_max_size",
+        "resize_videos_to_min_size"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_numpy_array",
+        "resize_videos_to_max_size",
+        "resize_videos_to_min_size",
+        "print",
+        "detuple",
+        "resize_videos",
+        "as_numpy_array"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "set_ans": {
+      "function_name": "set_ans",
+      "calls": [
+        "print_verbose_stack_trace",
+        "dupdate",
+        "set_numpy_print_options",
+        "is_numpy_array",
+        "line_split",
+        "get_ans",
+        "take_snapshot",
+        "get_terminal_width",
+        "fansi_print",
+        "print"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "print_verbose_stack_trace",
+        "dupdate",
+        "set_numpy_print_options",
+        "pseudo_terminal",
+        "is_numpy_array",
+        "line_split",
+        "get_ans",
+        "take_snapshot",
+        "get_terminal_width",
+        "fansi_print",
+        "print",
+        "set_ans"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "as_numpy_video": {
+      "function_name": "as_numpy_video",
+      "calls": [
+        "as_numpy_image",
+        "pip_import",
+        "is_numpy_array",
+        "is_torch_tensor",
+        "as_numpy_array"
+      ],
+      "called_by": [
+        "as_numpy_videos"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_numpy_image",
+        "as_numpy_videos",
+        "pip_import",
+        "is_numpy_array",
+        "as_numpy_video",
+        "is_torch_tensor",
+        "as_numpy_array"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "as_numpy_videos": {
+      "function_name": "as_numpy_videos",
+      "calls": [
+        "pip_import",
+        "is_numpy_array",
+        "as_numpy_video",
+        "is_torch_tensor",
+        "as_numpy_array"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_numpy_videos",
+        "pip_import",
+        "is_numpy_array",
+        "as_numpy_video",
+        "is_torch_tensor",
+        "as_numpy_array"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "resize_lists_to_min_len": {
+      "function_name": "resize_lists_to_min_len",
+      "calls": [
+        "is_numpy_array",
+        "detuple",
+        "resize_list"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_numpy_array",
+        "resize_lists_to_min_len",
+        "resize_list",
+        "detuple"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "resize_lists_to_max_len": {
+      "function_name": "resize_lists_to_max_len",
+      "calls": [
+        "is_numpy_array",
+        "detuple",
+        "resize_list"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_numpy_array",
+        "resize_lists_to_max_len",
+        "resize_list",
+        "detuple"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "is_numpy_array": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_crop_images_to_max_or_min_size": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "resize_videos": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "set_ans": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "as_numpy_video": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "as_numpy_videos": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "resize_lists_to_min_len": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "resize_lists_to_max_len": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

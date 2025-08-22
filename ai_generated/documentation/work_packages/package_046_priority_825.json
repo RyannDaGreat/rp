@@ -1,0 +1,374 @@
+{
+  "package_id": 46,
+  "functions": [
+    "as_rgba_image",
+    "_rgb_image_to_rgba_image",
+    "_as_skia_image",
+    "_rgba_image_to_rgba_image",
+    "_grayscale_image_to_rgba_image",
+    "extract_alpha_channel",
+    "shift_image",
+    "_copy_image_to_clipboard_via_copykitten"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 825,
+  "context": {
+    "as_rgba_image": {
+      "function_name": "as_rgba_image",
+      "calls": [
+        "_rgba_image_to_rgba_image",
+        "is_rgba_image",
+        "is_grayscale_image",
+        "is_rgb_image",
+        "_grayscale_image_to_rgba_image",
+        "is_image",
+        "_rgb_image_to_rgba_image"
+      ],
+      "called_by": [
+        "save_image",
+        "bordered_image_solid_color",
+        "with_image_glow",
+        "display_cv_color_histogram",
+        "skia_stamp_image",
+        "shift_image",
+        "rotate_image",
+        "cv_draw_arrow",
+        "extract_alpha_channel",
+        "_encode_image_to_bytes",
+        "_alpha_weighted_rgba_image_func",
+        "temp_saved_image",
+        "skia_resize_image",
+        "get_checkerboard_image",
+        "with_alpha_channel",
+        "blend_images",
+        "_copy_image_to_clipboard_via_copykitten",
+        "_as_skia_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "bordered_image_solid_color",
+        "as_rgba_image",
+        "is_rgba_image",
+        "display_cv_color_histogram",
+        "is_rgb_image",
+        "cv_draw_arrow",
+        "is_image",
+        "_grayscale_image_to_rgba_image",
+        "temp_saved_image",
+        "skia_resize_image",
+        "_copy_image_to_clipboard_via_copykitten",
+        "_as_skia_image",
+        "save_image",
+        "_rgba_image_to_rgba_image",
+        "with_image_glow",
+        "skia_stamp_image",
+        "shift_image",
+        "is_grayscale_image",
+        "rotate_image",
+        "extract_alpha_channel",
+        "_encode_image_to_bytes",
+        "_alpha_weighted_rgba_image_func",
+        "with_alpha_channel",
+        "get_checkerboard_image",
+        "blend_images",
+        "_rgb_image_to_rgba_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_rgb_image_to_rgba_image": {
+      "function_name": "_rgb_image_to_rgba_image",
+      "calls": [
+        "is_byte_image"
+      ],
+      "called_by": [
+        "as_rgba_image",
+        "_grayscale_image_to_rgba_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_byte_image",
+        "_rgb_image_to_rgba_image",
+        "as_rgba_image",
+        "_grayscale_image_to_rgba_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_as_skia_image": {
+      "function_name": "_as_skia_image",
+      "calls": [
+        "as_byte_image",
+        "pip_import",
+        "as_rgba_image",
+        "as_numpy_image"
+      ],
+      "called_by": [
+        "skia_resize_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_byte_image",
+        "as_rgba_image",
+        "skia_resize_image",
+        "pip_import",
+        "_as_skia_image",
+        "as_numpy_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_rgba_image_to_rgba_image": {
+      "function_name": "_rgba_image_to_rgba_image",
+      "calls": [
+        "as_numpy_array"
+      ],
+      "called_by": [
+        "as_rgba_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_rgba_image_to_rgba_image",
+        "as_rgba_image",
+        "as_numpy_array"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_grayscale_image_to_rgba_image": {
+      "function_name": "_grayscale_image_to_rgba_image",
+      "calls": [
+        "_rgb_image_to_rgba_image",
+        "_grayscale_image_to_rgb_image"
+      ],
+      "called_by": [
+        "as_rgba_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_rgb_image_to_rgba_image",
+        "_grayscale_image_to_rgb_image",
+        "as_rgba_image",
+        "_grayscale_image_to_rgba_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "extract_alpha_channel": {
+      "function_name": "extract_alpha_channel",
+      "calls": [
+        "as_rgba_image"
+      ],
+      "called_by": [
+        "with_image_brightness",
+        "with_image_hue",
+        "with_image_saturation",
+        "rgb_to_hsv",
+        "hsv_to_rgb"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "with_image_hue",
+        "with_image_saturation",
+        "rgb_to_hsv",
+        "as_rgba_image",
+        "with_image_brightness",
+        "hsv_to_rgb",
+        "extract_alpha_channel"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "shift_image": {
+      "function_name": "shift_image",
+      "calls": [
+        "get_image_dimensions",
+        "bordered_image_solid_color",
+        "as_rgba_image",
+        "crop_image",
+        "is_image",
+        "as_float_image",
+        "uniform_float_color_image"
+      ],
+      "called_by": [
+        "with_drop_shadow"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_image_dimensions",
+        "bordered_image_solid_color",
+        "as_rgba_image",
+        "with_drop_shadow",
+        "crop_image",
+        "shift_image",
+        "is_image",
+        "as_float_image",
+        "uniform_float_color_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_copy_image_to_clipboard_via_copykitten": {
+      "function_name": "_copy_image_to_clipboard_via_copykitten",
+      "calls": [
+        "clear",
+        "as_pil_image",
+        "pip_import",
+        "as_rgba_image"
+      ],
+      "called_by": [
+        "copy_image_to_clipboard"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_pil_image",
+        "copy_image_to_clipboard",
+        "as_rgba_image",
+        "clear",
+        "_copy_image_to_clipboard_via_copykitten",
+        "pip_import"
+      ],
+      "multiplexing": [],
+      "is_via_variant": true,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "as_rgba_image": {
+      "current_quality": "basic",
+      "current_docstring": "Returns a 3-dimensional numpy array in HW4 form (height, width, channels) ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Document supported image types and formats",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_rgb_image_to_rgba_image": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_as_skia_image": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_rgba_image_to_rgba_image": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_grayscale_image_to_rgba_image": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "extract_alpha_channel": {
+      "current_quality": "basic",
+      "current_docstring": "Gets teh alpha channel of a given image, returned as grayscale image (i.e. numpy matrix) ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "shift_image": {
+      "current_quality": "basic",
+      "current_docstring": "Shifts an image on the x and y axes, in image coordinates\n\nAs y increases the image moves down\nAs x increases the image moves to the right\n\n\nEXAMPLE: Random Sticker Placement\n\n    sticker=cv_resize_im...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Document supported image types and formats"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_copy_image_to_clipboard_via_copykitten": {
+      "current_quality": "basic",
+      "current_docstring": "Copies an image to the system clipboard\nCan handle RGBA images\nhttps://github.com/Klavionik/copykitten ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Explain backend-specific behavior and when to use this variant"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document backend-specific behavior and when to use each _via_ variant"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

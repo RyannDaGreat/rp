@@ -1,0 +1,107 @@
+{
+  "package_id": 13,
+  "functions": [
+    "par",
+    "par_map"
+  ],
+  "total_functions": 2,
+  "estimated_hours": 1.5,
+  "priority_score": 415,
+  "context": {
+    "par": {
+      "function_name": "par",
+      "calls": [
+        "par_map"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "par",
+        "par_map"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "par_map": {
+      "function_name": "par_map",
+      "calls": [
+        "lazy_par_map"
+      ],
+      "called_by": [
+        "precache_all",
+        "pseudo_terminal",
+        "save_images",
+        "_nbca",
+        "par"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "precache_all",
+        "lazy_par_map",
+        "pseudo_terminal",
+        "_nbca",
+        "par",
+        "save_images",
+        "par_map"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "par": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "par_map": {
+      "current_quality": "basic",
+      "current_docstring": "See lazy_par_map for doc. \nbuffer_limit defaults to 0 because we return everything all at once anyway and therefore don't care about how long we wait for the first item, and we have to store all the o...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: These are core RP pattern functions - provide extensive examples showing how they enable RP's functional programming style"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

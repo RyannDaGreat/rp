@@ -1,0 +1,183 @@
+{
+  "package_id": 107,
+  "functions": [
+    "trim_videos_to_max_length",
+    "_concatenated_videos",
+    "tiled_videos",
+    "_trim_videos_to_same_length"
+  ],
+  "total_functions": 4,
+  "estimated_hours": 3.0,
+  "priority_score": 330,
+  "context": {
+    "trim_videos_to_max_length": {
+      "function_name": "trim_videos_to_max_length",
+      "calls": [
+        "_trim_videos_to_same_length"
+      ],
+      "called_by": [
+        "_concatenated_videos",
+        "tiled_videos"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_trim_videos_to_same_length",
+        "_concatenated_videos",
+        "trim_videos_to_max_length",
+        "tiled_videos"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_concatenated_videos": {
+      "function_name": "_concatenated_videos",
+      "calls": [
+        "detuple",
+        "trim_videos_to_max_length",
+        "crop_images_to_max_size"
+      ],
+      "called_by": [
+        "vertically_concatenated_videos",
+        "horizontally_concatenated_videos"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_concatenated_videos",
+        "vertically_concatenated_videos",
+        "detuple",
+        "trim_videos_to_max_length",
+        "crop_images_to_max_size",
+        "horizontally_concatenated_videos"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "tiled_videos": {
+      "function_name": "tiled_videos",
+      "calls": [
+        "trim_videos_to_max_length",
+        "tiled_images",
+        "get_current_function_name",
+        "as_numpy_array"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "tiled_images",
+        "get_current_function_name",
+        "tiled_videos",
+        "trim_videos_to_max_length",
+        "as_numpy_array"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_trim_videos_to_same_length": {
+      "function_name": "_trim_videos_to_same_length",
+      "calls": [
+        "trim_videos",
+        "is_numpy_array",
+        "detuple",
+        "is_torch_tensor",
+        "as_numpy_array"
+      ],
+      "called_by": [
+        "trim_videos_to_max_length",
+        "trim_videos_to_min_length"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "trim_videos",
+        "_trim_videos_to_same_length",
+        "detuple",
+        "is_numpy_array",
+        "is_torch_tensor",
+        "trim_videos_to_max_length",
+        "trim_videos_to_min_length",
+        "as_numpy_array"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "trim_videos_to_max_length": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_concatenated_videos": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "tiled_videos": {
+      "current_quality": "basic",
+      "current_docstring": "Tiles videos together. \nUses same args and kwargs as rp.tiled_images - see its docstring for what they do\nAssumes videos are in BTI form, where I is image (so I is like HWC or CHW or PIL etc)\n\nTodo: A...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_trim_videos_to_same_length": {
+      "current_quality": "good",
+      "current_docstring": "If mode = max, adds blank frames to the end of videos to make sure they're all the same number of frames\nIf mode = min, cuts off every video to become the shortest of all lengths\nIf possible, returns ...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

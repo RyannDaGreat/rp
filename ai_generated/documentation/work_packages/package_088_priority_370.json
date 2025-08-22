@@ -1,0 +1,247 @@
+{
+  "package_id": 88,
+  "functions": [
+    "_iterfzf",
+    "_ISM",
+    "input_select",
+    "_filter_dict_via_fzf"
+  ],
+  "total_functions": 4,
+  "estimated_hours": 3.0,
+  "priority_score": 370,
+  "context": {
+    "_iterfzf": {
+      "function_name": "_iterfzf",
+      "calls": [
+        "replace",
+        "pip_import"
+      ],
+      "called_by": [
+        "pseudo_terminal",
+        "_input_select_multiple_paragraphs",
+        "_filter_dict_via_fzf",
+        "_fzf_multi_grep",
+        "_input_select_multiple_history",
+        "_ISM",
+        "input_select"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "pseudo_terminal",
+        "_input_select_multiple_paragraphs",
+        "_filter_dict_via_fzf",
+        "_iterfzf",
+        "_fzf_multi_grep",
+        "_input_select_multiple_history",
+        "_ISM",
+        "pip_import",
+        "replace",
+        "input_select"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_ISM": {
+      "function_name": "_ISM",
+      "calls": [
+        "_filter_dict_via_fzf",
+        "line_split",
+        "_iterfzf",
+        "_ISM",
+        "line_join"
+      ],
+      "called_by": [
+        "_ism_whiches",
+        "_ISM"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "line_split",
+        "_ISM",
+        "line_join",
+        "_filter_dict_via_fzf",
+        "_ism_whiches",
+        "_iterfzf"
+      ],
+      "multiplexing": [
+        "_filter_dict_via_fzf",
+        "_iterfzf",
+        "line_join",
+        "line_join"
+      ],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "input_select": {
+      "function_name": "input_select",
+      "calls": [
+        "strip_ansi_escapes",
+        "input_conditional",
+        "string_pager",
+        "_highlighted_query_results",
+        "display_more_options",
+        "_iterfzf",
+        "display_options_with_pager",
+        "replace",
+        "line_join",
+        "display_query_options",
+        "print",
+        "_maybe_display_string_in_pager"
+      ],
+      "called_by": [
+        "input_select_path",
+        "pseudo_terminal",
+        "input_select_serial_device_id",
+        "set_prompt_style",
+        "_vimore",
+        "input_select_multiple",
+        "send_facebook_message",
+        "select_git_commit",
+        "get_all_facebook_messages"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "input_select_path",
+        "strip_ansi_escapes",
+        "input_select_serial_device_id",
+        "input_conditional",
+        "_highlighted_query_results",
+        "_iterfzf",
+        "_maybe_display_string_in_pager",
+        "display_options_with_pager",
+        "line_join",
+        "input_select_multiple",
+        "replace",
+        "display_query_options",
+        "send_facebook_message",
+        "pseudo_terminal",
+        "string_pager",
+        "display_more_options",
+        "set_prompt_style",
+        "_vimore",
+        "print",
+        "select_git_commit",
+        "input_select",
+        "get_all_facebook_messages"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_filter_dict_via_fzf": {
+      "function_name": "_filter_dict_via_fzf",
+      "calls": [
+        "list_transpose",
+        "pip_import",
+        "sync_sorted",
+        "_iterfzf",
+        "fansi_print",
+        "make_string_rectangular",
+        "line_join",
+        "horizontally_concatenated_strings",
+        "gather"
+      ],
+      "called_by": [
+        "_ISM"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "list_transpose",
+        "sync_sorted",
+        "line_join",
+        "_filter_dict_via_fzf",
+        "_iterfzf",
+        "horizontally_concatenated_strings",
+        "fansi_print",
+        "_ISM",
+        "pip_import",
+        "make_string_rectangular",
+        "gather"
+      ],
+      "multiplexing": [],
+      "is_via_variant": true,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "_iterfzf": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_ISM": {
+      "current_quality": "basic",
+      "current_docstring": "Input Select Multi\nTODO make it for things other than lists of strings, like lists of ints. To do this make it into a line-numbered string dict -> values then use those values to look up keys ->  get ...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "input_select": {
+      "current_quality": "good",
+      "current_docstring": "Example: Try running 'input_select_option(options=['Hello','Goodbye','Bonjour'])'\n\nTODO: In order to make this truly customizable, such as adding multi-select options for fuzzy searching or fuzzy sear...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_filter_dict_via_fzf": {
+      "current_quality": "basic",
+      "current_docstring": "Uses fzf to select a subset of a dict and returns that dict.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Explain backend-specific behavior and when to use this variant",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document backend-specific behavior and when to use each _via_ variant",
+    "7. SPECIAL: Document the multiplexing pattern - how the base function dispatches to specific implementations"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

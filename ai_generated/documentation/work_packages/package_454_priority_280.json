@@ -1,0 +1,147 @@
+{
+  "package_id": 454,
+  "functions": [
+    "_refresh_autocomplete_module_list",
+    "pip_install",
+    "get_all_importable_module_names"
+  ],
+  "total_functions": 3,
+  "estimated_hours": 2.25,
+  "priority_score": 280,
+  "context": {
+    "_refresh_autocomplete_module_list": {
+      "function_name": "_refresh_autocomplete_module_list",
+      "calls": [
+        "get_all_importable_module_names"
+      ],
+      "called_by": [
+        "pip_install",
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_all_importable_module_names",
+        "pip_install",
+        "_refresh_autocomplete_module_list",
+        "pseudo_terminal"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "pip_install": {
+      "function_name": "pip_install",
+      "calls": [
+        "_run_sys_command",
+        "_refresh_autocomplete_module_list",
+        "_ensure_uv_installed"
+      ],
+      "called_by": [
+        "_ensure_uv_installed",
+        "adjust_samplerate",
+        "pip_import",
+        "update_rp"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_run_sys_command",
+        "_ensure_uv_installed",
+        "pip_import",
+        "adjust_samplerate",
+        "pip_install",
+        "_refresh_autocomplete_module_list",
+        "update_rp"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_all_importable_module_names": {
+      "function_name": "get_all_importable_module_names",
+      "calls": [
+        "add"
+      ],
+      "called_by": [
+        "_refresh_autocomplete_module_list",
+        "_update_cd_history"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "add",
+        "_refresh_autocomplete_module_list",
+        "_update_cd_history",
+        "get_all_importable_module_names"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "_refresh_autocomplete_module_list": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "pip_install": {
+      "current_quality": "basic",
+      "current_docstring": "Try to install a python package ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_all_importable_module_names": {
+      "current_quality": "basic",
+      "current_docstring": "Returns a set of all known names that you can use 'import <name>' on",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

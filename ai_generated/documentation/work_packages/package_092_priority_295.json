@@ -1,0 +1,137 @@
+{
+  "package_id": 92,
+  "functions": [
+    "decorator",
+    "__new__",
+    "_method_decorator_metaclass"
+  ],
+  "total_functions": 3,
+  "estimated_hours": 2.25,
+  "priority_score": 295,
+  "context": {
+    "decorator": {
+      "function_name": "decorator",
+      "calls": [
+        "delete_file",
+        "file_cache_call"
+      ],
+      "called_by": [
+        "_method_decorator_metaclass",
+        "rebind_globals_to_module",
+        "__new__"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_method_decorator_metaclass",
+        "rebind_globals_to_module",
+        "__new__",
+        "file_cache_call",
+        "decorator",
+        "delete_file"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "__new__": {
+      "function_name": "__new__",
+      "calls": [
+        "decorator",
+        "__new__"
+      ],
+      "called_by": [
+        "_method_decorator_metaclass",
+        "__new__"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "decorator",
+        "_method_decorator_metaclass",
+        "__new__"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_method_decorator_metaclass": {
+      "function_name": "_method_decorator_metaclass",
+      "calls": [
+        "decorator",
+        "__new__"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "decorator",
+        "_method_decorator_metaclass",
+        "__new__"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "decorator": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "__new__": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_method_decorator_metaclass": {
+      "current_quality": "basic",
+      "current_docstring": "Factory that creates a metaclass applying decorator to all methods\nUsed to make more compact and readable source code",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

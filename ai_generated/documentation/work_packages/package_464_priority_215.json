@@ -1,0 +1,221 @@
+{
+  "package_id": 464,
+  "functions": [
+    "parse",
+    "string_to_date",
+    "extract_imports",
+    "strip_python_docstrings",
+    "bundle_vars"
+  ],
+  "total_functions": 5,
+  "estimated_hours": 3.75,
+  "priority_score": 215,
+  "context": {
+    "parse": {
+      "function_name": "parse",
+      "calls": [
+        "is_valid_python_syntax",
+        "strip"
+      ],
+      "called_by": [
+        "_inline_rp_code",
+        "strip_python_docstrings",
+        "replace_if_none",
+        "extract_imports",
+        "destructure",
+        "bundle_vars",
+        "string_to_date",
+        "is_valid_python_syntax"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_inline_rp_code",
+        "strip_python_docstrings",
+        "replace_if_none",
+        "extract_imports",
+        "destructure",
+        "bundle_vars",
+        "string_to_date",
+        "parse",
+        "is_valid_python_syntax",
+        "strip"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "string_to_date": {
+      "function_name": "string_to_date",
+      "calls": [
+        "parse",
+        "get_current_timezone",
+        "pip_import"
+      ],
+      "called_by": [
+        "git_import"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "string_to_date",
+        "parse",
+        "pip_import",
+        "git_import",
+        "get_current_timezone"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "extract_imports": {
+      "function_name": "extract_imports",
+      "calls": [
+        "add",
+        "parse"
+      ],
+      "called_by": [
+        "_inline_rp_code",
+        "unarpy"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_inline_rp_code",
+        "add",
+        "parse",
+        "extract_imports",
+        "unarpy"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "strip_python_docstrings": {
+      "function_name": "strip_python_docstrings",
+      "calls": [
+        "walk",
+        "parse",
+        "pip_import"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "strip_python_docstrings",
+        "walk",
+        "parse",
+        "pip_import"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "bundle_vars": {
+      "function_name": "bundle_vars",
+      "calls": [
+        "walk",
+        "update",
+        "strip",
+        "parse",
+        "pip_import",
+        "gather_vars"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "bundle_vars",
+        "walk",
+        "parse",
+        "pip_import",
+        "strip",
+        "update",
+        "gather_vars"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "parse": {
+      "current_quality": "basic",
+      "current_docstring": "Validates that all directives are supported by exeval.\nCurrently supported:\n    %return <var namet\n    %private_scope",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "string_to_date": {
+      "current_quality": "good",
+      "current_docstring": "Given a date represented as a string, turn it into a datetime object and return it\nIt can handle many different formats - it's very flexible!\n\nNow uses the modern 'dateparser' library instead of the o...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "extract_imports": {
+      "current_quality": "excellent",
+      "current_docstring": "Extracts imports from Python code and returns them as a dictionary.\n\nThe dictionary has two top-level keys, 'import' and 'from', corresponding\nto the two ways to import modules in Python. The values f...",
+      "suggestions": [
+        "Document function parameters and their types"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": true
+    },
+    "strip_python_docstrings": {
+      "current_quality": "excellent",
+      "current_docstring": "    This function removes all docstrings from functions and classes in the input Python code. \n    The code is first parsed into an abstract syntax tree (AST), and then each function and class in the ...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "bundle_vars": {
+      "current_quality": "excellent",
+      "current_docstring": "Collect the given variables from the calling scope into an EasyDict.\n\nThis function takes any number of local variable names as arguments and\ncollects them into an EasyDict. Optionally, you can also p...",
+      "suggestions": [
+        "Document function parameters and their types"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

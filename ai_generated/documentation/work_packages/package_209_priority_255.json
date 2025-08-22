@@ -1,0 +1,164 @@
+{
+  "package_id": 209,
+  "functions": [
+    "print_process_info",
+    "human_readable_file_size",
+    "format_date"
+  ],
+  "total_functions": 3,
+  "estimated_hours": 2.25,
+  "priority_score": 255,
+  "context": {
+    "print_process_info": {
+      "function_name": "print_process_info",
+      "calls": [
+        "print",
+        "pip_import",
+        "format",
+        "human_readable_file_size",
+        "format_date"
+      ],
+      "called_by": [
+        "rinsp"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "format",
+        "print",
+        "human_readable_file_size",
+        "format_date",
+        "pip_import",
+        "print_process_info",
+        "rinsp"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "human_readable_file_size": {
+      "function_name": "human_readable_file_size",
+      "calls": [],
+      "called_by": [
+        "_waste_gpu",
+        "_display_filetype_size_histogram",
+        "num_bytes_to_human",
+        "pseudo_terminal",
+        "ram_to_string",
+        "rinsp",
+        "print_process_info",
+        "print_gpu_summary",
+        "print_notebook_gpu_summary"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_waste_gpu",
+        "_display_filetype_size_histogram",
+        "print_notebook_gpu_summary",
+        "num_bytes_to_human",
+        "pseudo_terminal",
+        "ram_to_string",
+        "rinsp",
+        "print_gpu_summary",
+        "human_readable_file_size",
+        "print_process_info"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "format_date": {
+      "function_name": "format_date",
+      "calls": [
+        "_translate_timezone",
+        "pip_import",
+        "format"
+      ],
+      "called_by": [
+        "git_import",
+        "select_git_commit",
+        "get_current_timezone",
+        "format_current_date",
+        "print_process_info"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "git_import",
+        "pip_import",
+        "select_git_commit",
+        "get_current_timezone",
+        "format",
+        "format_current_date",
+        "_translate_timezone",
+        "format_date",
+        "print_process_info"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "print_process_info": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "human_readable_file_size": {
+      "current_quality": "good",
+      "current_docstring": "Given a file size in bytes, return a string that represents how large it is in megabytes, gigabytes etc - whatever's easiest to interperet\nEXAMPLES:\n     >>> human_readable_file_size(0)\n    ans = 0B\n ...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "format_date": {
+      "current_quality": "good",
+      "current_docstring": "EXAMPLES:\n    >>> get_current_date()\n    ans = 2024-07-11 01:12:59.200330\n    >>> print(type(ans))                \u2013\u2013>   <class 'datetime.datetime'>\n    >>> print(format_date(ans))         \u2013\u2013>   Thu Ju...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

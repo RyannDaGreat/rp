@@ -1,0 +1,182 @@
+{
+  "package_id": 131,
+  "functions": [
+    "explore",
+    "generator",
+    "_get_all_paths_fast",
+    "join_with_separator"
+  ],
+  "total_functions": 4,
+  "estimated_hours": 3.0,
+  "priority_score": 315,
+  "context": {
+    "explore": {
+      "function_name": "explore",
+      "calls": [
+        "should_include",
+        "add",
+        "postprocess_path",
+        "should_explore"
+      ],
+      "called_by": [
+        "generator",
+        "_get_all_paths_fast"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "explore",
+        "should_include",
+        "add",
+        "postprocess_path",
+        "generator",
+        "should_explore",
+        "_get_all_paths_fast"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "generator": {
+      "function_name": "generator",
+      "calls": [
+        "explore"
+      ],
+      "called_by": [
+        "_get_all_paths_fast",
+        "join_with_separator"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "explore",
+        "_get_all_paths_fast",
+        "generator",
+        "join_with_separator"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_get_all_paths_fast": {
+      "function_name": "_get_all_paths_fast",
+      "calls": [
+        "add",
+        "postprocess_path",
+        "should_explore",
+        "explore",
+        "should_include",
+        "generator"
+      ],
+      "called_by": [
+        "breadth_first_path_iterator",
+        "get_all_runnable_python_files",
+        "_pterm_fuzzy_cd",
+        "get_downloaded_fonts",
+        "get_system_fonts"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "add",
+        "postprocess_path",
+        "should_explore",
+        "breadth_first_path_iterator",
+        "_get_all_paths_fast",
+        "get_all_runnable_python_files",
+        "explore",
+        "should_include",
+        "_pterm_fuzzy_cd",
+        "generator",
+        "get_downloaded_fonts",
+        "get_system_fonts"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "join_with_separator": {
+      "function_name": "join_with_separator",
+      "calls": [
+        "generator"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "generator",
+        "join_with_separator"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "explore": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "generator": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_get_all_paths_fast": {
+      "current_quality": "good",
+      "current_docstring": "TODO: Make this multi-threaded!!!!\nRetrieves all paths in the given directory according to the specified parameters.\nThis function is designed to be faster than get_all_paths by reducing feature compl...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax"
+      ],
+      "has_examples": false,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "join_with_separator": {
+      "current_quality": "excellent",
+      "current_docstring": "Intersperse a separator between elements of an iterable.\n\nArgs:\n    iterable (iterable): The iterable to intersperse.\n    separator: The separator to intersperse between elements.\n    lazy (bool, opti...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

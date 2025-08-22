@@ -1,0 +1,151 @@
+{
+  "package_id": 86,
+  "functions": [
+    "input_select_folder",
+    "_mv",
+    "make_zip_file_from_folder"
+  ],
+  "total_functions": 3,
+  "estimated_hours": 2.25,
+  "priority_score": 315,
+  "context": {
+    "input_select_folder": {
+      "function_name": "input_select_folder",
+      "calls": [
+        "input_select_path"
+      ],
+      "called_by": [
+        "_mv",
+        "make_zip_file_from_folder",
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "input_select_path",
+        "make_zip_file_from_folder",
+        "pseudo_terminal",
+        "input_select_folder",
+        "_mv"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_mv": {
+      "function_name": "_mv",
+      "calls": [
+        "input_select_path",
+        "fansi",
+        "fansi_print",
+        "input_select_folder",
+        "print"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "fansi_print",
+        "input_select_path",
+        "pseudo_terminal",
+        "input_select_folder",
+        "_mv",
+        "print",
+        "fansi"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "make_zip_file_from_folder": {
+      "function_name": "make_zip_file_from_folder",
+      "calls": [
+        "delete_file",
+        "get_unique_copy_path",
+        "input_select_folder",
+        "print",
+        "temporary_file_path"
+      ],
+      "called_by": [
+        "zip_folder_to_bytes"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "make_zip_file_from_folder",
+        "delete_file",
+        "input_select_folder",
+        "zip_folder_to_bytes",
+        "print",
+        "get_unique_copy_path",
+        "temporary_file_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "input_select_folder": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_mv": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "make_zip_file_from_folder": {
+      "current_quality": "basic",
+      "current_docstring": "Creates a .zip file on your hard drive.\nZip the contents of some src_folder and return the output zip file's path",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

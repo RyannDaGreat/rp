@@ -1,0 +1,279 @@
+{
+  "package_id": 120,
+  "functions": [
+    "_get_inflect_engine",
+    "singular_noun",
+    "is_singular_noun",
+    "number_to_words",
+    "plural_noun",
+    "is_singular_noun_of",
+    "is_plural_noun_of"
+  ],
+  "total_functions": 7,
+  "estimated_hours": 5.25,
+  "priority_score": 580,
+  "context": {
+    "_get_inflect_engine": {
+      "function_name": "_get_inflect_engine",
+      "calls": [
+        "pip_import"
+      ],
+      "called_by": [
+        "number_to_words",
+        "plural_noun",
+        "is_singular_noun_of",
+        "singular_noun",
+        "is_plural_noun_of",
+        "is_singular_noun"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "number_to_words",
+        "plural_noun",
+        "is_singular_noun_of",
+        "singular_noun",
+        "_get_inflect_engine",
+        "pip_import",
+        "is_plural_noun_of",
+        "is_singular_noun"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "singular_noun": {
+      "function_name": "singular_noun",
+      "calls": [
+        "singular_noun",
+        "_get_inflect_engine"
+      ],
+      "called_by": [
+        "singular_noun",
+        "is_singular_noun"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "singular_noun",
+        "_get_inflect_engine",
+        "is_singular_noun"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_singular_noun": {
+      "function_name": "is_singular_noun",
+      "calls": [
+        "singular_noun",
+        "_get_inflect_engine"
+      ],
+      "called_by": [
+        "is_plural_noun",
+        "is_singular_noun_of"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_plural_noun",
+        "is_singular_noun_of",
+        "singular_noun",
+        "_get_inflect_engine",
+        "is_singular_noun"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "number_to_words": {
+      "function_name": "number_to_words",
+      "calls": [
+        "number_to_words",
+        "replace",
+        "_get_inflect_engine"
+      ],
+      "called_by": [
+        "number_to_words"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "number_to_words",
+        "replace",
+        "_get_inflect_engine"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "plural_noun": {
+      "function_name": "plural_noun",
+      "calls": [
+        "is_plural_noun",
+        "plural_noun",
+        "_get_inflect_engine"
+      ],
+      "called_by": [
+        "plural_noun"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_plural_noun",
+        "plural_noun",
+        "_get_inflect_engine"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_singular_noun_of": {
+      "function_name": "is_singular_noun_of",
+      "calls": [
+        "_get_inflect_engine",
+        "is_singular_noun"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_singular_noun",
+        "is_singular_noun_of",
+        "_get_inflect_engine"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_plural_noun_of": {
+      "function_name": "is_plural_noun_of",
+      "calls": [
+        "is_plural_noun",
+        "_get_inflect_engine"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_plural_noun_of",
+        "is_plural_noun",
+        "_get_inflect_engine"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "_get_inflect_engine": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "singular_noun": {
+      "current_quality": "basic",
+      "current_docstring": "Returns the singular form of a plural word\nEXAMPLE:\n    singular_noun('houses')            -> 'house'\n    singular_noun('mice')              -> 'mouse'\n    singular_noun('sheep')             -> 'sheep...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "is_singular_noun": {
+      "current_quality": "basic",
+      "current_docstring": "Return True if the given noun is in singular form, and False otherwise ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "number_to_words": {
+      "current_quality": "basic",
+      "current_docstring": "Returns the english representation of a number (can be an integer, negative, or even floating point. But can NOT be a complex number right now, because it will mess that up)\n    number_to_words(0)    ...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "plural_noun": {
+      "current_quality": "basic",
+      "current_docstring": "Returns the plural form of a singular word\nIf force is true, it will not check to see if this noun is allready plural.\nIf force is true, we guarentee that the result is different from the  orignal\nRig...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "is_singular_noun_of": {
+      "current_quality": "basic",
+      "current_docstring": "Returns true if singular_word is the signular-form of plural_word ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "is_plural_noun_of": {
+      "current_quality": "basic",
+      "current_docstring": "Returns true if plural_word is the plural-form of singular_word ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

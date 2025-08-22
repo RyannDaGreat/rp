@@ -1,0 +1,75 @@
+{
+  "package_id": 981,
+  "functions": [
+    "_get_youtube_video_data_via_embeddify"
+  ],
+  "total_functions": 1,
+  "estimated_hours": 0.75,
+  "priority_score": 35,
+  "context": {
+    "_get_youtube_video_data_via_embeddify": {
+      "function_name": "_get_youtube_video_data_via_embeddify",
+      "calls": [
+        "pip_import",
+        "is_valid_url"
+      ],
+      "called_by": [
+        "get_youtube_video_thumbnail",
+        "get_youtube_video_title"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_youtube_video_thumbnail",
+        "get_youtube_video_title",
+        "pip_import",
+        "_get_youtube_video_data_via_embeddify",
+        "is_valid_url"
+      ],
+      "multiplexing": [],
+      "is_via_variant": true,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "_get_youtube_video_data_via_embeddify": {
+      "current_quality": "good",
+      "current_docstring": "See https://pypi.org/project/embeddify/\nUses a specification called 'oembed', which lets us get info such as title/author etc without an api key (it's perfectly legal, and an intended use-case by goog...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Explain backend-specific behavior and when to use this variant"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document backend-specific behavior and when to use each _via_ variant"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

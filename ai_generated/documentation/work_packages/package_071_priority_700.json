@@ -1,0 +1,459 @@
+{
+  "package_id": 71,
+  "functions": [
+    "is_number",
+    "as_rgba_float_color",
+    "uniform_float_color_image",
+    "unicode_loading_bar",
+    "with_image_hue",
+    "with_image_brightness",
+    "cv_apply_affine_to_image",
+    "with_image_saturation"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 700,
+  "context": {
+    "is_number": {
+      "function_name": "is_number",
+      "calls": [],
+      "called_by": [
+        "cv_apply_affine_to_image",
+        "with_image_saturation",
+        "is_byte_color",
+        "image_with_progress_bar",
+        "load_sound_file",
+        "set_os_volume",
+        "_size_to_height_width",
+        "with_alpha_channel",
+        "split_into_sublists",
+        "_with_image_channel",
+        "blend_images",
+        "resize_image",
+        "with_image_brightness",
+        "as_rgba_float_color",
+        "is_float_color",
+        "unicode_loading_bar",
+        "linterp",
+        "optical_flow_to_image",
+        "least_squares_regression_line_coeffs",
+        "is_color",
+        "file_cache_call",
+        "is_binary_color",
+        "with_image_hue",
+        "uniform_float_color_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "resize_image",
+        "with_image_brightness",
+        "as_rgba_float_color",
+        "is_float_color",
+        "cv_apply_affine_to_image",
+        "with_image_saturation",
+        "is_byte_color",
+        "unicode_loading_bar",
+        "image_with_progress_bar",
+        "load_sound_file",
+        "linterp",
+        "set_os_volume",
+        "optical_flow_to_image",
+        "least_squares_regression_line_coeffs",
+        "_size_to_height_width",
+        "is_color",
+        "with_alpha_channel",
+        "split_into_sublists",
+        "file_cache_call",
+        "is_binary_color",
+        "_with_image_channel",
+        "with_image_hue",
+        "is_number",
+        "blend_images",
+        "uniform_float_color_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "as_rgba_float_color": {
+      "function_name": "as_rgba_float_color",
+      "calls": [
+        "hex_color_to_float_color",
+        "is_numpy_array",
+        "color_name_to_float_color",
+        "strip",
+        "is_torch_tensor",
+        "is_number",
+        "replace"
+      ],
+      "called_by": [
+        "as_rgb_float_color",
+        "labeled_image",
+        "cv_line_graph",
+        "bordered_image_solid_color",
+        "rgb_histogram_image",
+        "cv_draw_circles",
+        "get_progress_bar_image",
+        "with_alpha_outline",
+        "pil_text_to_image",
+        "cv_draw_arrow",
+        "inverted_color",
+        "cv_draw_arrows",
+        "as_rgba_float_colors",
+        "skia_text_to_image",
+        "blend_images",
+        "uniform_float_color_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "bordered_image_solid_color",
+        "rgb_histogram_image",
+        "hex_color_to_float_color",
+        "inverted_color",
+        "as_rgba_float_color",
+        "is_numpy_array",
+        "cv_draw_arrow",
+        "color_name_to_float_color",
+        "cv_draw_arrows",
+        "strip",
+        "is_torch_tensor",
+        "as_rgba_float_colors",
+        "skia_text_to_image",
+        "replace",
+        "as_rgb_float_color",
+        "labeled_image",
+        "cv_line_graph",
+        "cv_draw_circles",
+        "get_progress_bar_image",
+        "with_alpha_outline",
+        "pil_text_to_image",
+        "is_number",
+        "blend_images",
+        "uniform_float_color_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "uniform_float_color_image": {
+      "function_name": "uniform_float_color_image",
+      "calls": [
+        "is_rgba_image",
+        "as_rgba_float_color",
+        "is_grayscale_image",
+        "is_color",
+        "is_rgb_image",
+        "as_numpy_array",
+        "is_number",
+        "_float_image_dtype"
+      ],
+      "called_by": [
+        "grid_concatenated_images",
+        "labeled_image",
+        "bordered_image_solid_color",
+        "with_drop_shadow",
+        "get_progress_bar_image",
+        "tiled_images",
+        "shift_image",
+        "display_float_color",
+        "with_alpha_channel",
+        "get_checkerboard_image",
+        "blend_images"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "grid_concatenated_images",
+        "bordered_image_solid_color",
+        "is_rgba_image",
+        "as_rgba_float_color",
+        "is_rgb_image",
+        "labeled_image",
+        "with_drop_shadow",
+        "get_progress_bar_image",
+        "tiled_images",
+        "is_grayscale_image",
+        "is_color",
+        "shift_image",
+        "display_float_color",
+        "with_alpha_channel",
+        "_float_image_dtype",
+        "as_numpy_array",
+        "get_checkerboard_image",
+        "is_number",
+        "blend_images",
+        "uniform_float_color_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "unicode_loading_bar": {
+      "function_name": "unicode_loading_bar",
+      "calls": [
+        "is_number"
+      ],
+      "called_by": [
+        "_rp_show_custom_line_profile",
+        "display_video_in_terminal_color"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_rp_show_custom_line_profile",
+        "unicode_loading_bar",
+        "is_number",
+        "display_video_in_terminal_color"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "with_image_hue": {
+      "function_name": "with_image_hue",
+      "calls": [
+        "as_rgb_image",
+        "is_rgba_image",
+        "extract_alpha_channel",
+        "with_alpha_channel",
+        "as_float_image",
+        "as_grayscale_image",
+        "rgb_to_hsv",
+        "is_number",
+        "hsv_to_rgb"
+      ],
+      "called_by": [
+        "shift_image_hue"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_rgb_image",
+        "is_rgba_image",
+        "shift_image_hue",
+        "extract_alpha_channel",
+        "with_alpha_channel",
+        "with_image_hue",
+        "as_float_image",
+        "as_grayscale_image",
+        "rgb_to_hsv",
+        "is_number",
+        "hsv_to_rgb"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "with_image_brightness": {
+      "function_name": "with_image_brightness",
+      "calls": [
+        "as_rgb_image",
+        "is_rgba_image",
+        "extract_alpha_channel",
+        "with_alpha_channel",
+        "as_float_image",
+        "as_grayscale_image",
+        "rgb_to_hsv",
+        "is_number",
+        "hsv_to_rgb"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_rgb_image",
+        "with_image_brightness",
+        "is_rgba_image",
+        "extract_alpha_channel",
+        "with_alpha_channel",
+        "as_float_image",
+        "as_grayscale_image",
+        "rgb_to_hsv",
+        "is_number",
+        "hsv_to_rgb"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "cv_apply_affine_to_image": {
+      "function_name": "cv_apply_affine_to_image",
+      "calls": [
+        "pip_import",
+        "is_number"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "pip_import",
+        "cv_apply_affine_to_image",
+        "is_number"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "with_image_saturation": {
+      "function_name": "with_image_saturation",
+      "calls": [
+        "as_rgb_image",
+        "is_rgba_image",
+        "extract_alpha_channel",
+        "with_alpha_channel",
+        "as_float_image",
+        "as_grayscale_image",
+        "rgb_to_hsv",
+        "is_number",
+        "hsv_to_rgb"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_rgb_image",
+        "is_rgba_image",
+        "extract_alpha_channel",
+        "with_alpha_channel",
+        "with_image_saturation",
+        "as_float_image",
+        "as_grayscale_image",
+        "rgb_to_hsv",
+        "is_number",
+        "hsv_to_rgb"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "is_number": {
+      "current_quality": "excellent",
+      "current_docstring": "returns true if x is a number\nVerified to work with numpy values as well as vanilla Python values\nAlso works with torch tensors\nExamples:\n   is_number(float)              ==True\n   is_number(np.uint8)...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": true
+    },
+    "as_rgba_float_color": {
+      "current_quality": "good",
+      "current_docstring": "TODO: use this all over RP!\n\nEXAMPLE:\n\n    >>> as_rgba_float_color(1)\n    ans = (1, 1, 1, 1)\n    >>> as_rgba_float_color((1,.5,0))\n    ans = (1, 0.5, 0, 1)\n\n    >>> colors = '''\n    ... //Generating a...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "uniform_float_color_image": {
+      "current_quality": "good",
+      "current_docstring": "Returns an image with the given height and width, where all pixels are the given color\nIf the given color is a number, it returns a grayscale image\nOtherwise, the given color must be either an RGB or ...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document supported image types and formats"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": true
+    },
+    "unicode_loading_bar": {
+      "current_quality": "basic",
+      "current_docstring": "EXAMPLE 1: for _ in range(200):print(end='\r'+unicode_loading_bar(_));sleep(.05)\nEXAMPLE 2:\n    for _ in range(1500):\n        sleep(1/30)#30fps\n        x=_/1000#_ is between 0 and 1\n        x**=2#Frequ...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "with_image_hue": {
+      "current_quality": "basic",
+      "current_docstring": "Sets the image hue. The hue can either be given as an image, or as a number.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Document supported image types and formats",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "with_image_brightness": {
+      "current_quality": "basic",
+      "current_docstring": "Sets the image brightness. The brightness can either be given as an image, or as a number.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Document supported image types and formats",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "cv_apply_affine_to_image": {
+      "current_quality": "basic",
+      "current_docstring": "Warps an image to the affine matrix provided (of shape 2,3)\noutput_resolution is to speed things up when we don't want the full resolution of the original image. It can be specified as None to get the...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Document supported image types and formats"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "with_image_saturation": {
+      "current_quality": "basic",
+      "current_docstring": "Sets the image saturation. The saturation can either be given as an image, or as a number.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Document supported image types and formats",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "package_id": 1012,
+  "functions": [
+    "split_into_n_sublists",
+    "split_into_n_subdicts"
+  ],
+  "total_functions": 2,
+  "estimated_hours": 1.5,
+  "priority_score": 50,
+  "context": {
+    "split_into_n_sublists": {
+      "function_name": "split_into_n_sublists",
+      "calls": [
+        "split_into_n_sublists"
+      ],
+      "called_by": [
+        "split_into_n_subdicts",
+        "split_into_n_sublists"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "split_into_n_subdicts",
+        "split_into_n_sublists"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "split_into_n_subdicts": {
+      "function_name": "split_into_n_subdicts",
+      "calls": [
+        "split_into_n_sublists"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "split_into_n_subdicts",
+        "split_into_n_sublists"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "split_into_n_sublists": {
+      "current_quality": "excellent",
+      "current_docstring": "Splits the input sequence `l` into `n` sublists as evenly as possible.\nSupports any sequence `l` that implements slicing.\n\nParameters:\nl (sequence): The sequence to be split.\nn (int): The number of su...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "split_into_n_subdicts": {
+      "current_quality": "excellent",
+      "current_docstring": "Splits a dictionary into a list of n subdictionaries as evenly as possible.\n\nParameters:\nd (dict): The dictionary to be split.\nn (int): The number of subdictionaries to split `d` into.\n\nReturns:\nlist:...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

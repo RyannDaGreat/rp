@@ -1,0 +1,208 @@
+{
+  "package_id": 60,
+  "functions": [
+    "get_platform",
+    "get_gpu_info",
+    "get_nvidia_driver_version",
+    "get_os",
+    "get_cudnn_version"
+  ],
+  "total_functions": 5,
+  "estimated_hours": 3.75,
+  "priority_score": 580,
+  "context": {
+    "get_platform": {
+      "function_name": "get_platform",
+      "calls": [],
+      "called_by": [
+        "get_gpu_info",
+        "get_cudnn_version",
+        "get_nvidia_driver_version",
+        "get_nvidia_smi",
+        "get_os",
+        "_get_env_info"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_platform",
+        "get_nvidia_smi",
+        "get_gpu_info",
+        "get_os",
+        "_get_env_info",
+        "get_cudnn_version",
+        "get_nvidia_driver_version"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_gpu_info": {
+      "function_name": "get_gpu_info",
+      "calls": [
+        "get_nvidia_smi",
+        "get_platform"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_nvidia_smi",
+        "get_platform",
+        "get_gpu_info"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_nvidia_driver_version": {
+      "function_name": "get_nvidia_driver_version",
+      "calls": [
+        "get_nvidia_smi",
+        "get_platform",
+        "run_and_parse_first_match"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_nvidia_smi",
+        "get_platform",
+        "run_and_parse_first_match",
+        "get_nvidia_driver_version"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_os": {
+      "function_name": "get_os",
+      "calls": [
+        "format",
+        "check_release_file",
+        "get_lsb_version",
+        "get_platform",
+        "get_windows_version",
+        "get_mac_version"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_platform",
+        "format",
+        "get_os",
+        "check_release_file",
+        "get_lsb_version",
+        "get_windows_version",
+        "get_mac_version"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_cudnn_version": {
+      "function_name": "get_cudnn_version",
+      "calls": [
+        "get",
+        "get_platform",
+        "format",
+        "add"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get",
+        "get_platform",
+        "format",
+        "add",
+        "get_cudnn_version"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "get_platform": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_gpu_info": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_nvidia_driver_version": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_os": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_cudnn_version": {
+      "current_quality": "basic",
+      "current_docstring": "This will return a list of libcudnn.so; it's hard to tell which one is being used",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

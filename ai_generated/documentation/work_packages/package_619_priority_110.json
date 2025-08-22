@@ -1,0 +1,105 @@
+{
+  "package_id": 619,
+  "functions": [
+    "combined_affine",
+    "append_zeros_row"
+  ],
+  "total_functions": 2,
+  "estimated_hours": 1.5,
+  "priority_score": 110,
+  "context": {
+    "combined_affine": {
+      "function_name": "combined_affine",
+      "calls": [
+        "append_zeros_row"
+      ],
+      "called_by": [
+        "icp_least_squares_euclidean_affine",
+        "rotation_affine_2d"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "icp_least_squares_euclidean_affine",
+        "append_zeros_row",
+        "combined_affine",
+        "rotation_affine_2d"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "append_zeros_row": {
+      "function_name": "append_zeros_row",
+      "calls": [
+        "append_uniform_row"
+      ],
+      "called_by": [
+        "inverse_affine",
+        "combined_affine"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "append_zeros_row",
+        "inverse_affine",
+        "combined_affine",
+        "append_uniform_row"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "combined_affine": {
+      "current_quality": "basic",
+      "current_docstring": "Return the affine matrix needed to apply all matrices in 'affines' in the order they were given\nTODO: Add more input assertions, such as all affines must have same shape, etc\napply_affine(points,combi...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "append_zeros_row": {
+      "current_quality": "excellent",
+      "current_docstring": "Adds a row of zeros to the bottom of a matrix\nExample: append_zeros_row([[1,2,3],[4,5,6],[7,8,9]])   ====   [[1,2,3,0],[4,5,6,0],[7,8,9,0]]\nMeant for use with numpy, and returns a numpy array.\nDoes NO...",
+      "suggestions": [
+        "Document function parameters and their types"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

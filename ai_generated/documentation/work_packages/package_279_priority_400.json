@@ -1,0 +1,306 @@
+{
+  "package_id": 279,
+  "functions": [
+    "list_flatten",
+    "matrix_to_tuples",
+    "_get_files_from_paths",
+    "random_batch_with_replacement",
+    "pip_install_multiple",
+    "load_safetensors",
+    "dict_transpose"
+  ],
+  "total_functions": 7,
+  "estimated_hours": 5.25,
+  "priority_score": 400,
+  "context": {
+    "list_flatten": {
+      "function_name": "list_flatten",
+      "calls": [],
+      "called_by": [
+        "grid_concatenated_images",
+        "random_batch_with_replacement",
+        "matrix_to_tuples",
+        "process_command",
+        "load_safetensors",
+        "_get_files_from_paths",
+        "tmuxp_create_session_yaml",
+        "pip_install_multiple",
+        "dict_transpose",
+        "_get_all_github_gists_info"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "list_flatten",
+        "grid_concatenated_images",
+        "random_batch_with_replacement",
+        "matrix_to_tuples",
+        "process_command",
+        "load_safetensors",
+        "_get_files_from_paths",
+        "tmuxp_create_session_yaml",
+        "pip_install_multiple",
+        "dict_transpose",
+        "_get_all_github_gists_info"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "matrix_to_tuples": {
+      "function_name": "matrix_to_tuples",
+      "calls": [
+        "list_flatten"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "list_flatten",
+        "matrix_to_tuples"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_get_files_from_paths": {
+      "function_name": "_get_files_from_paths",
+      "calls": [
+        "list_flatten"
+      ],
+      "called_by": [
+        "convert_image_files"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "list_flatten",
+        "convert_image_files",
+        "_get_files_from_paths"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "random_batch_with_replacement": {
+      "function_name": "random_batch_with_replacement",
+      "calls": [
+        "list_flatten",
+        "random_batch",
+        "shuffled"
+      ],
+      "called_by": [
+        "get_random_files",
+        "get_random_folders"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "list_flatten",
+        "random_batch_with_replacement",
+        "random_batch",
+        "shuffled",
+        "get_random_folders",
+        "get_random_files"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "pip_install_multiple": {
+      "function_name": "pip_install_multiple",
+      "calls": [
+        "is_iterable",
+        "list_flatten",
+        "print",
+        "file_exists",
+        "text_file_to_string",
+        "fansi_print",
+        "line_split",
+        "fansi",
+        "strip",
+        "format",
+        "run"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_iterable",
+        "list_flatten",
+        "print",
+        "file_exists",
+        "text_file_to_string",
+        "fansi_print",
+        "pip_install_multiple",
+        "line_split",
+        "fansi",
+        "strip",
+        "format",
+        "run"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "load_safetensors": {
+      "function_name": "load_safetensors",
+      "calls": [
+        "list_flatten",
+        "gather_args_call",
+        "rp_glob",
+        "merged_dicts",
+        "as_easydict",
+        "print",
+        "file_exists",
+        "get_absolute_path",
+        "pip_import",
+        "keys",
+        "gather_args_recursive_call",
+        "list_transpose",
+        "handy_hash"
+      ],
+      "called_by": [
+        "_omni_load"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "list_flatten",
+        "gather_args_call",
+        "rp_glob",
+        "merged_dicts",
+        "as_easydict",
+        "print",
+        "file_exists",
+        "load_safetensors",
+        "get_absolute_path",
+        "pip_import",
+        "_omni_load",
+        "keys",
+        "gather_args_recursive_call",
+        "list_transpose",
+        "handy_hash"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "dict_transpose": {
+      "function_name": "dict_transpose",
+      "calls": [
+        "list_flatten",
+        "unique"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "list_flatten",
+        "unique",
+        "dict_transpose"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "list_flatten": {
+      "current_quality": "basic",
+      "current_docstring": "Example Speed boost over scoop:\nList size: 21000\n   Time taken by list comprehension: 0.032008200883865356 seconds\n   Time taken by itertools.chain: 0.016012614592909813 seconds\n   Time taken by scoop...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "matrix_to_tuples": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_get_files_from_paths": {
+      "current_quality": "basic",
+      "current_docstring": "Takes a folder, a list of files, or a list of files and folders as input - all of which can be globbed. \nIt applies all globbings, then for each folder it fetches releveant files and includes them in ...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "random_batch_with_replacement": {
+      "current_quality": "excellent",
+      "current_docstring": "Like random_batch, but it handles batch_size larger than len(full_list) by nicely repeating elements.\nIt supports different sampling methods specified by the 'method' argument.\n\nArgs:\n    full_list: T...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "pip_install_multiple": {
+      "current_quality": "good",
+      "current_docstring": "Install multiple packages via pip.\n\nIf shotgun is True:\n    Try to install each package individually. If a package fails, the function\n    continues with the next package.\n\nIf shotgun is False:\n    At...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax"
+      ],
+      "has_examples": false,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "load_safetensors": {
+      "current_quality": "excellent",
+      "current_docstring": "Loads tensors from a .safetensors file.\n\nArgs:\n    path (str): Path to .safetensors file, or a glob for safetensor files, or a list of files\n    device (str, optional): Device (cpu, cuda, etc.). Defau...",
+      "suggestions": [
+        "Add supported file formats and common usage patterns"
+      ],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "dict_transpose": {
+      "current_quality": "excellent",
+      "current_docstring": "Transposes a nested dictionary, reversing the roles of keys and sub-keys.\nSkips keys that do not exist in all sub-dictionaries.\n\nExample 1:\n    >>> d = {\n    ...     'a': {'q': 1, 'w': 2},\n    ...    ...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

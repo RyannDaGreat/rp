@@ -1,0 +1,343 @@
+{
+  "package_id": 28,
+  "functions": [
+    "get_current_function_name",
+    "labeled_images",
+    "read_symlinks",
+    "tiled_videos",
+    "get_cache_file_paths",
+    "labeled_videos",
+    "resize_videos_to_hold",
+    "resize_images_to_fit"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 695,
+  "context": {
+    "get_current_function_name": {
+      "function_name": "get_current_function_name",
+      "calls": [
+        "get_current_function"
+      ],
+      "called_by": [
+        "read_symlinks",
+        "tiled_videos",
+        "get_cache_file_paths",
+        "labeled_videos",
+        "_cv_save_video_mp4",
+        "resize_videos_to_hold",
+        "resize_images_to_fit",
+        "get_all_taken_ports",
+        "file_cache_call",
+        "resize_videos_to_fit",
+        "make_symlinks_absolute",
+        "labeled_images",
+        "resize_images_to_hold",
+        "waste_gpus",
+        "_get_all_github_gists_info",
+        "make_symlinks_relative"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_cache_file_paths",
+        "labeled_videos",
+        "get_current_function",
+        "make_symlinks_absolute",
+        "labeled_images",
+        "make_symlinks_relative",
+        "read_symlinks",
+        "tiled_videos",
+        "resize_videos_to_hold",
+        "_cv_save_video_mp4",
+        "get_current_function_name",
+        "resize_images_to_fit",
+        "get_all_taken_ports",
+        "file_cache_call",
+        "resize_videos_to_fit",
+        "waste_gpus",
+        "resize_images_to_hold",
+        "_get_all_github_gists_info"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "labeled_images": {
+      "function_name": "labeled_images",
+      "calls": [
+        "is_iterable",
+        "labeled_image",
+        "get_current_function_name"
+      ],
+      "called_by": [
+        "labeled_videos"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_iterable",
+        "labeled_image",
+        "labeled_images",
+        "labeled_videos",
+        "get_current_function_name"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "read_symlinks": {
+      "function_name": "read_symlinks",
+      "calls": [
+        "detuple",
+        "gather_args_call",
+        "get_current_function_name"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "read_symlinks",
+        "detuple",
+        "gather_args_call",
+        "get_current_function_name"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "tiled_videos": {
+      "function_name": "tiled_videos",
+      "calls": [
+        "tiled_images",
+        "as_numpy_array",
+        "trim_videos_to_max_length",
+        "get_current_function_name"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_numpy_array",
+        "trim_videos_to_max_length",
+        "tiled_videos",
+        "tiled_images",
+        "get_current_function_name"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_cache_file_paths": {
+      "function_name": "get_cache_file_paths",
+      "calls": [
+        "load_files",
+        "gather_args_bind",
+        "get_current_function_name"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_cache_file_paths",
+        "get_current_function_name",
+        "gather_args_bind",
+        "load_files"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "labeled_videos": {
+      "function_name": "labeled_videos",
+      "calls": [
+        "is_iterable",
+        "is_numpy_array",
+        "get_current_function_name",
+        "is_torch_tensor",
+        "labeled_images"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_iterable",
+        "is_numpy_array",
+        "is_torch_tensor",
+        "labeled_images",
+        "labeled_videos",
+        "get_current_function_name"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "resize_videos_to_hold": {
+      "function_name": "resize_videos_to_hold",
+      "calls": [
+        "detuple",
+        "get_current_function_name",
+        "resize_video_to_hold"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "resize_videos_to_hold",
+        "detuple",
+        "get_current_function_name",
+        "resize_video_to_hold"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "resize_images_to_fit": {
+      "function_name": "resize_images_to_fit",
+      "calls": [
+        "detuple",
+        "get_current_function_name",
+        "resize_image_to_fit"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "detuple",
+        "get_current_function_name",
+        "resize_images_to_fit",
+        "resize_image_to_fit"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "get_current_function_name": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "labeled_images": {
+      "current_quality": "basic",
+      "current_docstring": "The plural of labeled_image\nSee rp.labeled_image's documentation\nTODO: Optimize this when video is numpy array",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "read_symlinks": {
+      "current_quality": "basic",
+      "current_docstring": "Plural of rp.read_symlink ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "tiled_videos": {
+      "current_quality": "basic",
+      "current_docstring": "Tiles videos together. \nUses same args and kwargs as rp.tiled_images - see its docstring for what they do\nAssumes videos are in BTI form, where I is image (so I is like HWC or CHW or PIL etc)\n\nTodo: A...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_cache_file_paths": {
+      "current_quality": "basic",
+      "current_docstring": "Plural of get_cache_file_path, supporting a `lazy` option",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "labeled_videos": {
+      "current_quality": "basic",
+      "current_docstring": "The plural of labeled_images\nSee rp.labeled_image's documentation\nTODO: Optimize this when videos are numpy arrays",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "resize_videos_to_hold": {
+      "current_quality": "basic",
+      "current_docstring": "Plural of resize_image_to_hold ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "resize_images_to_fit": {
+      "current_quality": "basic",
+      "current_docstring": "Plural of resize_image_to_fit ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Document supported image types and formats",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

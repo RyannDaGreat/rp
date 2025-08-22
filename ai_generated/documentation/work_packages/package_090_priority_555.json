@@ -1,0 +1,335 @@
+{
+  "package_id": 90,
+  "functions": [
+    "_init_nvml",
+    "_get_gpu_handle",
+    "_get_gpu_memory_info",
+    "get_gpu_count",
+    "get_gpu_pids",
+    "get_gpu_utilization",
+    "get_gpu_temperature",
+    "get_gpu_uuid"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 555,
+  "context": {
+    "_init_nvml": {
+      "function_name": "_init_nvml",
+      "calls": [
+        "pip_import"
+      ],
+      "called_by": [
+        "get_gpu_utilization",
+        "get_gpu_temperature",
+        "get_gpu_pids",
+        "_get_gpu_memory_info",
+        "get_gpu_count",
+        "get_gpu_uuid",
+        "_get_gpu_handle"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_gpu_utilization",
+        "get_gpu_temperature",
+        "pip_import",
+        "_init_nvml",
+        "get_gpu_pids",
+        "_get_gpu_memory_info",
+        "get_gpu_count",
+        "get_gpu_uuid",
+        "_get_gpu_handle"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_get_gpu_handle": {
+      "function_name": "_get_gpu_handle",
+      "calls": [
+        "_init_nvml"
+      ],
+      "called_by": [
+        "get_gpu_utilization",
+        "get_gpu_temperature",
+        "get_gpu_pids",
+        "_get_gpu_memory_info",
+        "get_gpu_uuid",
+        "get_gpu_name",
+        "get_used_vram"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_gpu_utilization",
+        "get_gpu_temperature",
+        "_init_nvml",
+        "get_gpu_pids",
+        "_get_gpu_memory_info",
+        "get_gpu_uuid",
+        "get_gpu_name",
+        "_get_gpu_handle",
+        "get_used_vram"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_get_gpu_memory_info": {
+      "function_name": "_get_gpu_memory_info",
+      "calls": [
+        "_init_nvml",
+        "_get_gpu_handle"
+      ],
+      "called_by": [
+        "get_used_vram",
+        "get_total_vram",
+        "get_free_vram"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_free_vram",
+        "get_total_vram",
+        "_init_nvml",
+        "_get_gpu_handle",
+        "get_used_vram",
+        "_get_gpu_memory_info"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "get_gpu_count": {
+      "function_name": "get_gpu_count",
+      "calls": [
+        "_init_nvml"
+      ],
+      "called_by": [
+        "get_all_gpu_ids"
+      ],
+      "aliases": [
+        "get_num_gpus"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "get_all_gpu_ids",
+        "get_gpu_count",
+        "_init_nvml",
+        "get_num_gpus"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_gpu_pids": {
+      "function_name": "get_gpu_pids",
+      "calls": [
+        "get_all_gpu_ids",
+        "filter_pids_exist",
+        "_init_nvml",
+        "get_gpu_pids",
+        "_get_gpu_handle"
+      ],
+      "called_by": [
+        "print_gpu_summary",
+        "get_used_vram",
+        "get_gpu_ids_used_by_process",
+        "get_gpu_pids"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_all_gpu_ids",
+        "filter_pids_exist",
+        "_init_nvml",
+        "get_gpu_pids",
+        "print_gpu_summary",
+        "get_gpu_ids_used_by_process",
+        "_get_gpu_handle",
+        "get_used_vram"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_gpu_utilization": {
+      "function_name": "get_gpu_utilization",
+      "calls": [
+        "get_gpu_utilization",
+        "get_all_gpu_ids",
+        "_init_nvml",
+        "_get_gpu_handle"
+      ],
+      "called_by": [
+        "get_gpu_utilization",
+        "print_gpu_summary"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_gpu_utilization",
+        "get_all_gpu_ids",
+        "print_gpu_summary",
+        "_init_nvml",
+        "_get_gpu_handle"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_gpu_temperature": {
+      "function_name": "get_gpu_temperature",
+      "calls": [
+        "get_all_gpu_ids",
+        "get_gpu_temperature",
+        "_init_nvml",
+        "_get_gpu_handle"
+      ],
+      "called_by": [
+        "print_gpu_summary",
+        "get_gpu_temperature"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_all_gpu_ids",
+        "print_gpu_summary",
+        "get_gpu_temperature",
+        "_init_nvml",
+        "_get_gpu_handle"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_gpu_uuid": {
+      "function_name": "get_gpu_uuid",
+      "calls": [
+        "get_gpu_uuid",
+        "get_all_gpu_ids",
+        "_init_nvml",
+        "_get_gpu_handle"
+      ],
+      "called_by": [
+        "get_gpu_uuid"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_all_gpu_ids",
+        "get_gpu_uuid",
+        "_init_nvml",
+        "_get_gpu_handle"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "_init_nvml": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_get_gpu_handle": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_get_gpu_memory_info": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_gpu_count": {
+      "current_quality": "good",
+      "current_docstring": "Returns the number of available GPUs.\n\nExample:\n>>> get_gpu_count()\n4",
+      "suggestions": [
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_gpu_pids": {
+      "current_quality": "excellent",
+      "current_docstring": "Returns a list of process IDs running on the given GPU.\n\nArgs:\n    gpu_id (int): The ID of the GPU.\n    existing_only (bool): If True, only return processes that exist on the current machine\n         ...",
+      "suggestions": [
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": false
+    },
+    "get_gpu_utilization": {
+      "current_quality": "excellent",
+      "current_docstring": "Returns a % of how busy a GPU is.\n\nReturns the utilization of a GPU in percentage given its ID.\nIf gpu_id is None, returns a list of utilization for all GPUs.\n\nGives the percent of time over the past ...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "get_gpu_temperature": {
+      "current_quality": "excellent",
+      "current_docstring": "Returns the temperature of a GPU in celcius given its ID.\nIf gpu_id is None, returns a list of temperatures for all GPUs.\n\nArgs:\n    gpu_id (int, optional): The ID of the GPU. Default is None.\n\nExampl...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "get_gpu_uuid": {
+      "current_quality": "excellent",
+      "current_docstring": "Returns the UUID of a GPU given its ID.\nIf gpu_id is None, returns a list of UUIDs for all GPUs.\nThis value is hardware-specific and is unique for every GPU.\nIt is persistent upon rebooting as well.\n\n...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

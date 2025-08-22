@@ -1,0 +1,431 @@
+{
+  "package_id": 15,
+  "functions": [
+    "is_iterable",
+    "path_join",
+    "is_color",
+    "process_command",
+    "is_non_str_iterable",
+    "save_file_lines",
+    "is_binary_color",
+    "cv_best_match_contours"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 1245,
+  "context": {
+    "is_iterable": {
+      "function_name": "is_iterable",
+      "calls": [],
+      "called_by": [
+        "process_command",
+        "labeled_videos",
+        "is_byte_color",
+        "get_sinusoidal_positional_encodings",
+        "gather",
+        "cv_best_match_contours",
+        "set_cuda_visible_devices",
+        "cluster_by_key",
+        "chunk_by_key",
+        "_web_copy",
+        "is_non_str_iterable",
+        "random_permutation",
+        "save_file_lines",
+        "playback_mouse_positions",
+        "copy_paths",
+        "is_float_color",
+        "_get_function_names",
+        "pam",
+        "pip_install_multiple",
+        "cv_draw_arrows",
+        "labeled_images",
+        "cv_best_match_contour",
+        "linterp",
+        "squelch_call",
+        "load_video_streams",
+        "find_and_replace_text_files",
+        "cv_draw_circles",
+        "as_numpy_images",
+        "is_color",
+        "tmuxp_create_session_yaml",
+        "is_binary_color",
+        "_load_files",
+        "convert_image_files",
+        "broadcast_lists",
+        "path_join",
+        "sync_sorted",
+        "rotate_images"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "process_command",
+        "labeled_videos",
+        "is_byte_color",
+        "get_sinusoidal_positional_encodings",
+        "gather",
+        "cv_best_match_contours",
+        "set_cuda_visible_devices",
+        "cluster_by_key",
+        "chunk_by_key",
+        "_web_copy",
+        "is_non_str_iterable",
+        "random_permutation",
+        "is_iterable",
+        "save_file_lines",
+        "playback_mouse_positions",
+        "copy_paths",
+        "is_float_color",
+        "_get_function_names",
+        "pam",
+        "pip_install_multiple",
+        "cv_draw_arrows",
+        "labeled_images",
+        "cv_best_match_contour",
+        "linterp",
+        "squelch_call",
+        "load_video_streams",
+        "find_and_replace_text_files",
+        "cv_draw_circles",
+        "as_numpy_images",
+        "is_color",
+        "tmuxp_create_session_yaml",
+        "is_binary_color",
+        "_load_files",
+        "convert_image_files",
+        "broadcast_lists",
+        "path_join",
+        "sync_sorted",
+        "rotate_images"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "path_join": {
+      "function_name": "path_join",
+      "calls": [
+        "is_iterable",
+        "is_non_str_iterable",
+        "product",
+        "print"
+      ],
+      "called_by": [
+        "display_file_tree",
+        "_set_ryan_ranger_config",
+        "make_symlink",
+        "save_images",
+        "move_path",
+        "_get_depth_pro_model",
+        "_fzf_multi_grep",
+        "copy_file",
+        "_run_ai_cli_coder",
+        "with_file_name",
+        "pseudo_terminal",
+        "_write_default_gitignore",
+        "_pterm_fuzzy_cd",
+        "download_url",
+        "copy_directory",
+        "get_vim_python_executable",
+        "apply_suffix_to_path",
+        "get_cache_file_path",
+        "copy_paths",
+        "files_walk",
+        "walk",
+        "get_unique_copy_path",
+        "copy_to_folder",
+        "with_folder_name",
+        "make_hardlink",
+        "convert_image_file",
+        "_get_executable",
+        "_pip_import_depth_pro",
+        "git_import",
+        "get_random_files",
+        "download_google_font",
+        "_get_select_torch_device_lock_file",
+        "_ensure_tapnet_installed",
+        "_is_python_exe_root"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "display_file_tree",
+        "_set_ryan_ranger_config",
+        "make_symlink",
+        "save_images",
+        "move_path",
+        "_get_depth_pro_model",
+        "_fzf_multi_grep",
+        "copy_file",
+        "_run_ai_cli_coder",
+        "with_file_name",
+        "pseudo_terminal",
+        "_write_default_gitignore",
+        "is_non_str_iterable",
+        "_pterm_fuzzy_cd",
+        "product",
+        "download_url",
+        "copy_directory",
+        "is_iterable",
+        "get_vim_python_executable",
+        "apply_suffix_to_path",
+        "print",
+        "get_cache_file_path",
+        "copy_paths",
+        "files_walk",
+        "walk",
+        "get_unique_copy_path",
+        "copy_to_folder",
+        "with_folder_name",
+        "make_hardlink",
+        "convert_image_file",
+        "_get_executable",
+        "_pip_import_depth_pro",
+        "git_import",
+        "get_random_files",
+        "download_google_font",
+        "_get_select_torch_device_lock_file",
+        "path_join",
+        "_ensure_tapnet_installed",
+        "_is_python_exe_root"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_color": {
+      "function_name": "is_color",
+      "calls": [
+        "is_iterable",
+        "is_number"
+      ],
+      "called_by": [
+        "blend_images",
+        "uniform_float_color_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_iterable",
+        "is_number",
+        "blend_images",
+        "is_color",
+        "uniform_float_color_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "process_command": {
+      "function_name": "process_command",
+      "calls": [
+        "is_iterable",
+        "list_flatten"
+      ],
+      "called_by": [
+        "tmuxp_create_session_yaml"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "process_command",
+        "list_flatten",
+        "tmuxp_create_session_yaml",
+        "is_iterable"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_non_str_iterable": {
+      "function_name": "is_non_str_iterable",
+      "calls": [
+        "is_iterable"
+      ],
+      "called_by": [
+        "path_join"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_iterable",
+        "is_non_str_iterable",
+        "path_join"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "save_file_lines": {
+      "function_name": "save_file_lines",
+      "calls": [
+        "is_iterable",
+        "line_join",
+        "string_to_text_file"
+      ],
+      "called_by": [
+        "_omni_save"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_iterable",
+        "save_file_lines",
+        "line_join",
+        "_omni_save",
+        "string_to_text_file"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_binary_color": {
+      "function_name": "is_binary_color",
+      "calls": [
+        "is_iterable",
+        "as_numpy_array",
+        "is_number"
+      ],
+      "called_by": [
+        "inverted_color"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_binary_color",
+        "is_iterable",
+        "as_numpy_array",
+        "is_number",
+        "inverted_color"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "cv_best_match_contours": {
+      "function_name": "cv_best_match_contours",
+      "calls": [
+        "is_iterable",
+        "cv_contour_match"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_iterable",
+        "cv_contour_match",
+        "cv_best_match_contours"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "is_iterable": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "path_join": {
+      "current_quality": "excellent",
+      "current_docstring": "Joins given paths, which can be a combination of strings and non-string iterables (like lists, tuples).\nAn extension of os.path.join (wherever os.path.join works, so will this)\n\nArguments:\n*paths -- A...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "is_color": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "process_command": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "is_non_str_iterable": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "save_file_lines": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "is_binary_color": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "cv_best_match_contours": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

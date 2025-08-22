@@ -1,0 +1,133 @@
+{
+  "package_id": 179,
+  "functions": [
+    "fourier",
+    "riemann_mean",
+    "riemann_sum"
+  ],
+  "total_functions": 3,
+  "estimated_hours": 2.25,
+  "priority_score": 325,
+  "context": {
+    "fourier": {
+      "function_name": "fourier",
+      "calls": [
+        "riemann_mean",
+        "complex_to_polar"
+      ],
+      "called_by": [
+        "discrete_fourier"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "fourier",
+        "riemann_mean",
+        "complex_to_polar",
+        "discrete_fourier"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "riemann_mean": {
+      "function_name": "riemann_mean",
+      "calls": [
+        "riemann_sum"
+      ],
+      "called_by": [
+        "fourier"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "fourier",
+        "riemann_sum",
+        "riemann_mean"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "riemann_sum": {
+      "function_name": "riemann_sum",
+      "calls": [
+        "f"
+      ],
+      "called_by": [
+        "riemann_mean"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "f",
+        "riemann_sum",
+        "riemann_mean"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "fourier": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "riemann_mean": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "riemann_sum": {
+      "current_quality": "basic",
+      "current_docstring": "Desmos: https://www.desmos.com/calculator/tgyr42ezjq\nleft_to_right_sum_ratio\ufe660  --> left hand sum\nleft_to_right_sum_ratio\ufe66.5 --> midpoint hand sum\nleft_to_right_sum_ratio\ufe661  --> right hand sum\nThe x1 ...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

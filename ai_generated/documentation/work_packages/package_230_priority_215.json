@@ -1,0 +1,108 @@
+{
+  "package_id": 230,
+  "functions": [
+    "count_leading",
+    "unindent"
+  ],
+  "total_functions": 2,
+  "estimated_hours": 1.5,
+  "priority_score": 215,
+  "context": {
+    "count_leading": {
+      "function_name": "count_leading",
+      "calls": [],
+      "called_by": [
+        "unindent"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "unindent",
+        "count_leading"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "unindent": {
+      "function_name": "unindent",
+      "calls": [
+        "line_join",
+        "strip",
+        "count_leading"
+      ],
+      "called_by": [
+        "_load_ryan_lazygit_config",
+        "fansi_pygments_demo",
+        "_install_lazygit",
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "unindent",
+        "count_leading",
+        "pseudo_terminal",
+        "strip",
+        "_load_ryan_lazygit_config",
+        "fansi_pygments_demo",
+        "_install_lazygit",
+        "line_join"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "count_leading": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "unindent": {
+      "current_quality": "basic",
+      "current_docstring": "Removes common leading indentation from a multi-line string. Similar to textwrap.dedent - but allows you to specify your own indent characters.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

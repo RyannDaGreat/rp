@@ -1,0 +1,93 @@
+{
+  "package_id": 1060,
+  "functions": [
+    "get_identity_uv_map",
+    "xy_float_images"
+  ],
+  "total_functions": 2,
+  "estimated_hours": 1.5,
+  "priority_score": 55,
+  "context": {
+    "get_identity_uv_map": {
+      "function_name": "get_identity_uv_map",
+      "calls": [
+        "xy_float_images"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_identity_uv_map",
+        "xy_float_images"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "xy_float_images": {
+      "function_name": "xy_float_images",
+      "calls": [],
+      "called_by": [
+        "get_identity_uv_map"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_identity_uv_map",
+        "xy_float_images"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "get_identity_uv_map": {
+      "current_quality": "good",
+      "current_docstring": "Returns an RGB UV-Map image with the form uv_form\n\nEXAMPLE:\n    >>> display_image(\n    ...     with_alpha_checkerboard(\n    ...         with_drop_shadow(\n    ...             tiled_images(\n    ...     ...",
+      "suggestions": [
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "xy_float_images": {
+      "current_quality": "excellent",
+      "current_docstring": "Returns a pair of grayscale images: x, y\nWhere they increase from 0 to 1 on that axis\n\nArgs:\n    height (int): Height of the output images.\n    width (int): Width of the output images.\n    min_x, max_...",
+      "suggestions": [
+        "Document supported image types and formats"
+      ],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

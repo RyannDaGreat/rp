@@ -1,0 +1,201 @@
+{
+  "package_id": 457,
+  "functions": [
+    "strip_file_extension",
+    "strip_file_extensions",
+    "with_file_name",
+    "extract_zip_file"
+  ],
+  "total_functions": 4,
+  "estimated_hours": 3.0,
+  "priority_score": 275,
+  "context": {
+    "strip_file_extension": {
+      "function_name": "strip_file_extension",
+      "calls": [],
+      "called_by": [
+        "extract_zip_file",
+        "with_file_extension",
+        "get_unique_copy_path",
+        "apply_suffix_to_path",
+        "strip_file_extensions",
+        "_get_executable",
+        "with_file_name",
+        "get_path_name"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "extract_zip_file",
+        "with_file_extension",
+        "with_file_name",
+        "get_unique_copy_path",
+        "apply_suffix_to_path",
+        "strip_file_extensions",
+        "_get_executable",
+        "strip_file_extension",
+        "get_path_name"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "strip_file_extensions": {
+      "function_name": "strip_file_extensions",
+      "calls": [
+        "detuple",
+        "strip_file_extension"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "detuple",
+        "strip_file_extensions",
+        "strip_file_extension"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "with_file_name": {
+      "function_name": "with_file_name",
+      "calls": [
+        "path_join",
+        "get_absolute_path",
+        "with_file_extension",
+        "get_file_extension",
+        "strip_file_extension",
+        "has_file_extension"
+      ],
+      "called_by": [
+        "rename_path",
+        "concat_mp4_files",
+        "change_video_file_framerate",
+        "with_folder_name",
+        "add_audio_to_video_file"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "path_join",
+        "rename_path",
+        "concat_mp4_files",
+        "get_absolute_path",
+        "with_file_extension",
+        "strip_file_extension",
+        "get_file_extension",
+        "has_file_extension",
+        "change_video_file_framerate",
+        "with_file_name",
+        "with_folder_name",
+        "add_audio_to_video_file"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "extract_zip_file": {
+      "function_name": "extract_zip_file",
+      "calls": [
+        "_extract_archive_via_pyunpack",
+        "_maybe_unbury_folder",
+        "make_directory",
+        "get_file_extension",
+        "strip_file_extension"
+      ],
+      "called_by": [],
+      "aliases": [
+        "unzip_to_folder"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "_extract_archive_via_pyunpack",
+        "_maybe_unbury_folder",
+        "unzip_to_folder",
+        "extract_zip_file",
+        "make_directory",
+        "strip_file_extension",
+        "get_file_extension"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "strip_file_extension": {
+      "current_quality": "basic",
+      "current_docstring": "'x.png'        --> 'x'\n'text.txt'     --> 'text'\n'text'         --> 'text'\n'text.jpg.txt' --> 'text.jpg'\n'a/b/c.png'    --> 'a/b/c'\n'a/b/c'        --> 'a/b/c'\n For more, see: https://stackoverflow.com...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "strip_file_extensions": {
+      "current_quality": "basic",
+      "current_docstring": "Plural of strip_file_extension",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "with_file_name": {
+      "current_quality": "good",
+      "current_docstring": "Returns the path with a new file name, keeping the old file extension\nIf the file extension in 'name' is specified though, it will keep the new extension\n\nEXAMPLE:\n   >>> with_file_name('some/parent/f...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "extract_zip_file": {
+      "current_quality": "good",
+      "current_docstring": "Extracts a zip or tar file to a specified folder. If the folder doesn't exist, it is created.\n\nParameters:\n    - zip_file_path (str): The path to the zip or tar file to extract.\n    - folder_path (str...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax"
+      ],
+      "has_examples": false,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

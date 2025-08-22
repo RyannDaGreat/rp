@@ -1,0 +1,540 @@
+{
+  "package_id": 14,
+  "functions": [
+    "as_numpy_array",
+    "is_grayscale_image",
+    "is_rgba_image",
+    "is_rgb_image",
+    "is_float_color",
+    "is_byte_color",
+    "_images_conversion",
+    "decode_images_from_bytes"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 1390,
+  "context": {
+    "as_numpy_array": {
+      "function_name": "as_numpy_array",
+      "calls": [
+        "as_numpy_array"
+      ],
+      "called_by": [
+        "resize_videos",
+        "as_torch_images",
+        "_load_image_from_file_via_PIL",
+        "get_mask_iou",
+        "is_rgba_image",
+        "is_rgb_image",
+        "is_image",
+        "is_byte_color",
+        "decode_images_from_bytes",
+        "slowmo_video_via_rife",
+        "graham_scan",
+        "apply_uv_map",
+        "crop_images_to_square",
+        "accumulate_flows",
+        "_rgba_image_to_rgba_image",
+        "_rgb_to_grayscale",
+        "_grayscale_image_to_grayscale_image",
+        "cv_resize_images",
+        "is_grayscale_image",
+        "_cv_save_video_mp4",
+        "as_numpy_image",
+        "run_cotracker",
+        "delaunay_interpolation_weights",
+        "load_image_from_screenshot_via_mss",
+        "_rgba_image_to_rgb_image",
+        "squared_euclidean_distance",
+        "is_float_color",
+        "_images_conversion",
+        "as_numpy_video",
+        "_rgb_image_to_rgb_image",
+        "resize_video_to_fit",
+        "as_numpy_videos",
+        "optical_flow_to_image",
+        "tiled_videos",
+        "least_squares_regression_line_coeffs",
+        "histogram_in_terminal",
+        "as_numpy_images",
+        "_tensorify",
+        "save_video_avi",
+        "is_binary_color",
+        "load_animated_gif",
+        "with_alpha_checkerboards",
+        "as_numpy_array",
+        "resize_lists",
+        "resize_video_to_hold",
+        "inverted_images",
+        "run_depth_pro",
+        "_trim_videos_to_same_length",
+        "uniform_float_color_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "resize_videos",
+        "as_torch_images",
+        "_load_image_from_file_via_PIL",
+        "get_mask_iou",
+        "is_rgba_image",
+        "is_rgb_image",
+        "is_image",
+        "is_byte_color",
+        "decode_images_from_bytes",
+        "slowmo_video_via_rife",
+        "graham_scan",
+        "apply_uv_map",
+        "crop_images_to_square",
+        "accumulate_flows",
+        "_rgba_image_to_rgba_image",
+        "_rgb_to_grayscale",
+        "_grayscale_image_to_grayscale_image",
+        "cv_resize_images",
+        "is_grayscale_image",
+        "_cv_save_video_mp4",
+        "as_numpy_image",
+        "run_cotracker",
+        "delaunay_interpolation_weights",
+        "load_image_from_screenshot_via_mss",
+        "_rgba_image_to_rgb_image",
+        "squared_euclidean_distance",
+        "is_float_color",
+        "_images_conversion",
+        "_rgb_image_to_rgb_image",
+        "resize_video_to_fit",
+        "as_numpy_videos",
+        "optical_flow_to_image",
+        "tiled_videos",
+        "least_squares_regression_line_coeffs",
+        "histogram_in_terminal",
+        "as_numpy_images",
+        "_tensorify",
+        "_trim_videos_to_same_length",
+        "save_video_avi",
+        "is_binary_color",
+        "load_animated_gif",
+        "as_numpy_array",
+        "with_alpha_checkerboards",
+        "resize_lists",
+        "resize_video_to_hold",
+        "inverted_images",
+        "run_depth_pro",
+        "as_numpy_video",
+        "uniform_float_color_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_grayscale_image": {
+      "function_name": "is_grayscale_image",
+      "calls": [
+        "as_numpy_array"
+      ],
+      "called_by": [
+        "as_rgba_image",
+        "is_image",
+        "cv_equalize_histogram",
+        "apply_uv_map",
+        "byte_image_histogram",
+        "save_image_webp",
+        "crop_image",
+        "preprocess_frame",
+        "encode_float_matrix_to_rgba_byte_image",
+        "is_opaque_image",
+        "get_image_blue",
+        "_with_image_channel",
+        "save_image_avif",
+        "get_image_green",
+        "_binary_floyd_steinburg_dithering",
+        "_rotate_rgb_image",
+        "get_optical_flow_via_pyflow",
+        "compose_rgba_image",
+        "save_openexr_image",
+        "as_rgb_image",
+        "apply_image_function_per_channel",
+        "save_image_jxl",
+        "compose_rgb_image",
+        "get_apriltag_image",
+        "as_pil_image",
+        "get_image_red",
+        "cv_floodfill_mask",
+        "sobel_edges",
+        "crop_image_zeros",
+        "as_grayscale_image",
+        "remove_duplicate_frames",
+        "uniform_float_color_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_rgba_image",
+        "is_image",
+        "cv_equalize_histogram",
+        "apply_uv_map",
+        "byte_image_histogram",
+        "save_image_webp",
+        "crop_image",
+        "is_grayscale_image",
+        "preprocess_frame",
+        "encode_float_matrix_to_rgba_byte_image",
+        "is_opaque_image",
+        "get_image_blue",
+        "_with_image_channel",
+        "save_image_avif",
+        "get_image_green",
+        "_binary_floyd_steinburg_dithering",
+        "_rotate_rgb_image",
+        "get_optical_flow_via_pyflow",
+        "compose_rgba_image",
+        "save_openexr_image",
+        "as_rgb_image",
+        "apply_image_function_per_channel",
+        "save_image_jxl",
+        "compose_rgb_image",
+        "get_apriltag_image",
+        "as_pil_image",
+        "get_image_red",
+        "cv_floodfill_mask",
+        "sobel_edges",
+        "crop_image_zeros",
+        "as_numpy_array",
+        "as_grayscale_image",
+        "remove_duplicate_frames",
+        "uniform_float_color_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_rgba_image": {
+      "function_name": "is_rgba_image",
+      "calls": [
+        "as_numpy_array"
+      ],
+      "called_by": [
+        "as_rgba_image",
+        "is_image",
+        "with_image_saturation",
+        "cv_equalize_histogram",
+        "crop_image",
+        "extract_image_channels",
+        "is_opaque_image",
+        "_rotate_rgb_image",
+        "inverted_image",
+        "as_rgb_image",
+        "with_image_brightness",
+        "decode_float_matrix_from_rgba_byte_image",
+        "cv_inpaint_image",
+        "encode_image_to_bytes",
+        "with_image_hue",
+        "crop_image_zeros",
+        "as_grayscale_image",
+        "rgb_to_hsv",
+        "hsv_to_rgb",
+        "uniform_float_color_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "inverted_image",
+        "is_rgba_image",
+        "as_rgba_image",
+        "as_rgb_image",
+        "with_image_brightness",
+        "is_image",
+        "with_image_saturation",
+        "cv_equalize_histogram",
+        "decode_float_matrix_from_rgba_byte_image",
+        "cv_inpaint_image",
+        "encode_image_to_bytes",
+        "crop_image",
+        "extract_image_channels",
+        "with_image_hue",
+        "crop_image_zeros",
+        "as_numpy_array",
+        "is_opaque_image",
+        "as_grayscale_image",
+        "rgb_to_hsv",
+        "hsv_to_rgb",
+        "uniform_float_color_image",
+        "_rotate_rgb_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_rgb_image": {
+      "function_name": "is_rgb_image",
+      "calls": [
+        "as_numpy_array"
+      ],
+      "called_by": [
+        "get_rgb_byte_color_identity_mapping_image",
+        "as_rgb_image",
+        "as_rgba_image",
+        "crop_image",
+        "extract_image_channels",
+        "cv_draw_arrow",
+        "is_image",
+        "_encode_image_to_bytes",
+        "crop_image_zeros",
+        "as_grayscale_image",
+        "is_opaque_image",
+        "cv_equalize_histogram",
+        "cv_inpaint_image",
+        "uniform_float_color_image",
+        "_rotate_rgb_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_rgb_byte_color_identity_mapping_image",
+        "as_rgb_image",
+        "as_rgba_image",
+        "is_rgb_image",
+        "cv_draw_arrow",
+        "is_image",
+        "cv_equalize_histogram",
+        "cv_inpaint_image",
+        "crop_image",
+        "extract_image_channels",
+        "_encode_image_to_bytes",
+        "crop_image_zeros",
+        "as_numpy_array",
+        "as_grayscale_image",
+        "is_opaque_image",
+        "uniform_float_color_image",
+        "_rotate_rgb_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_float_color": {
+      "function_name": "is_float_color",
+      "calls": [
+        "is_iterable",
+        "as_numpy_array",
+        "is_number"
+      ],
+      "called_by": [
+        "inverted_color",
+        "get_color_saturation",
+        "blend_images",
+        "get_color_hue",
+        "get_color_brightness"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_iterable",
+        "inverted_color",
+        "is_float_color",
+        "as_numpy_array",
+        "get_color_saturation",
+        "is_number",
+        "blend_images",
+        "get_color_hue",
+        "get_color_brightness"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_byte_color": {
+      "function_name": "is_byte_color",
+      "calls": [
+        "is_iterable",
+        "as_numpy_array",
+        "is_number"
+      ],
+      "called_by": [
+        "byte_color_to_hex_color",
+        "inverted_color"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_iterable",
+        "byte_color_to_hex_color",
+        "is_byte_color",
+        "as_numpy_array",
+        "is_number",
+        "inverted_color"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_images_conversion": {
+      "function_name": "_images_conversion",
+      "calls": [
+        "mean",
+        "as_numpy_array",
+        "as_numpy_image"
+      ],
+      "called_by": [
+        "as_byte_images",
+        "as_grayscale_images",
+        "as_binary_images",
+        "as_rgb_images",
+        "as_rgba_images",
+        "as_float_images"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_byte_images",
+        "as_grayscale_images",
+        "as_numpy_image",
+        "_images_conversion",
+        "as_binary_images",
+        "mean",
+        "as_rgb_images",
+        "as_numpy_array",
+        "as_rgba_images",
+        "as_float_images"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "decode_images_from_bytes": {
+      "function_name": "decode_images_from_bytes",
+      "calls": [
+        "bytes_to_object",
+        "as_numpy_array"
+      ],
+      "called_by": [
+        "decode_images_from_base64"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "bytes_to_object",
+        "as_numpy_array",
+        "decode_images_from_bytes",
+        "decode_images_from_base64"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "as_numpy_array": {
+      "current_quality": "basic",
+      "current_docstring": "Will convert x into type np.ndarray\nThis should convert anything that can be converted into a numpy array\nShould work for torch tensors, python lists of numbers, etc.\nIn particular, this works even if...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "is_grayscale_image": {
+      "current_quality": "basic",
+      "current_docstring": "Check if image is grayscale (2D array with shape HW).\n\nReturns True for 2-dimensional numpy arrays or convertible inputs.\nReturns False for color images, torch tensors, or invalid inputs.\nSee also: is...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "is_rgba_image": {
+      "current_quality": "basic",
+      "current_docstring": "Check if image is RGBA (3D array with shape HW4).\n\nReturns True for arrays with exactly 4 channels (RGB + alpha).\nReturns False for grayscale, RGB, torch tensors, or invalid inputs.\nSee also: is_rgb_i...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "is_rgb_image": {
+      "current_quality": "basic",
+      "current_docstring": "Check if image is RGB (3D array with shape HW3).\n\nReturns True for arrays with exactly 3 color channels.\nReturns False for grayscale, RGBA, torch tensors, or invalid inputs.\nSee also: is_grayscale_ima...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "is_float_color": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "is_byte_color": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_images_conversion": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "decode_images_from_bytes": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "package_id": 595,
+  "functions": [
+    "get_current_date",
+    "format_current_date"
+  ],
+  "total_functions": 2,
+  "estimated_hours": 1.5,
+  "priority_score": 140,
+  "context": {
+    "get_current_date": {
+      "function_name": "get_current_date",
+      "calls": [],
+      "called_by": [
+        "_write_to_pterm_hist",
+        "get_current_timezone",
+        "format_current_date",
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_current_date",
+        "format_current_date",
+        "_write_to_pterm_hist",
+        "pseudo_terminal",
+        "get_current_timezone"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "format_current_date": {
+      "function_name": "format_current_date",
+      "calls": [
+        "get_current_date",
+        "format_date"
+      ],
+      "called_by": [
+        "_set_ryan_vimrc",
+        "commit_process",
+        "waste_gpus",
+        "_run_ai_cli_coder"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_current_date",
+        "_set_ryan_vimrc",
+        "format_date",
+        "waste_gpus",
+        "format_current_date",
+        "_run_ai_cli_coder",
+        "commit_process"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "get_current_date": {
+      "current_quality": "basic",
+      "current_docstring": "This is annoying to type...so I added this function as a bit of sugar.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "format_current_date": {
+      "current_quality": "good",
+      "current_docstring": "EXAMPLES:\n    >>> format_current_date()#I'm in California\n    ans = \"Thu Jun 27, 2024 at 8:15:24PM\"\n    >>> format_current_date('PST')\n    ans = \"Thu Jun 27, 2024 at 8:15:29PM PDT\"\n    >>> format_curr...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

@@ -1,0 +1,197 @@
+{
+  "package_id": 624,
+  "functions": [
+    "get_video_file_framerate",
+    "_get_video_file_framerate_via_moviepy",
+    "_get_video_file_framerate_via_ffprobe",
+    "convert_to_gif_via_ffmpeg"
+  ],
+  "total_functions": 4,
+  "estimated_hours": 3.0,
+  "priority_score": 265,
+  "context": {
+    "get_video_file_framerate": {
+      "function_name": "get_video_file_framerate",
+      "calls": [
+        "pip_import",
+        "_get_video_file_framerate_via_moviepy",
+        "_get_video_file_framerate_via_ffprobe"
+      ],
+      "called_by": [
+        "convert_to_gif_via_ffmpeg",
+        "change_video_file_framerate"
+      ],
+      "aliases": [],
+      "via_variants": [
+        "_get_video_file_framerate_via_moviepy",
+        "_get_video_file_framerate_via_ffprobe"
+      ],
+      "cluster": [
+        "convert_to_gif_via_ffmpeg",
+        "_get_video_file_framerate_via_moviepy",
+        "change_video_file_framerate",
+        "pip_import",
+        "_get_video_file_framerate_via_ffprobe",
+        "get_video_file_framerate"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_get_video_file_framerate_via_moviepy": {
+      "function_name": "_get_video_file_framerate_via_moviepy",
+      "calls": [
+        "get_absolute_path",
+        "_moviepy_VideoFileClip"
+      ],
+      "called_by": [
+        "get_video_file_framerate"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_absolute_path",
+        "_get_video_file_framerate_via_moviepy",
+        "_moviepy_VideoFileClip",
+        "get_video_file_framerate"
+      ],
+      "multiplexing": [],
+      "is_via_variant": true,
+      "is_private": true
+    },
+    "_get_video_file_framerate_via_ffprobe": {
+      "function_name": "_get_video_file_framerate_via_ffprobe",
+      "calls": [
+        "get_absolute_path",
+        "_ensure_ffmpeg_installed",
+        "get_system_commands"
+      ],
+      "called_by": [
+        "get_video_file_framerate"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_ensure_ffmpeg_installed",
+        "get_system_commands",
+        "get_absolute_path",
+        "_get_video_file_framerate_via_ffprobe",
+        "get_video_file_framerate"
+      ],
+      "multiplexing": [],
+      "is_via_variant": true,
+      "is_private": true
+    },
+    "convert_to_gif_via_ffmpeg": {
+      "function_name": "convert_to_gif_via_ffmpeg",
+      "calls": [
+        "number_of_lines",
+        "path_exists",
+        "print",
+        "_ensure_ffmpeg_installed",
+        "delete_file",
+        "with_file_extension",
+        "get_unique_copy_path",
+        "temporary_file_path",
+        "get_video_file_framerate"
+      ],
+      "called_by": [
+        "convert_to_gifs_via_ffmpeg",
+        "run"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "convert_to_gif_via_ffmpeg",
+        "number_of_lines",
+        "path_exists",
+        "print",
+        "_ensure_ffmpeg_installed",
+        "delete_file",
+        "convert_to_gifs_via_ffmpeg",
+        "with_file_extension",
+        "get_unique_copy_path",
+        "run",
+        "temporary_file_path",
+        "get_video_file_framerate"
+      ],
+      "multiplexing": [],
+      "is_via_variant": true,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "get_video_file_framerate": {
+      "current_quality": "basic",
+      "current_docstring": "Given a (str) path to a video file, returns a number (framerate) ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": true
+    },
+    "_get_video_file_framerate_via_moviepy": {
+      "current_quality": "basic",
+      "current_docstring": "Given a (str) path to a video file, returns a number (framerate) ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Explain backend-specific behavior and when to use this variant",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": true
+    },
+    "_get_video_file_framerate_via_ffprobe": {
+      "current_quality": "basic",
+      "current_docstring": "Slower than _get_video_file_framerate_via_moviepy but no extra python dependencies\nGiven a (str) path to a video file, returns a number (framerate)",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Explain backend-specific behavior and when to use this variant"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": true
+    },
+    "convert_to_gif_via_ffmpeg": {
+      "current_quality": "excellent",
+      "current_docstring": "Converts a video file to a GIF using FFmpeg.\nIt does a really good job - with dithering! If you set custom_palette=False, the colors will be worse but it will be sometimes more than 2x smaller.\nIn any...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document backend-specific behavior and when to use each _via_ variant"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

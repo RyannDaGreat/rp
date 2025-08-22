@@ -1,0 +1,213 @@
+{
+  "package_id": 58,
+  "functions": [
+    "save_video",
+    "_omni_save",
+    "encode_video_to_bytes",
+    "_omni_save_animated_image"
+  ],
+  "total_functions": 4,
+  "estimated_hours": 3.0,
+  "priority_score": 410,
+  "context": {
+    "save_video": {
+      "function_name": "save_video",
+      "calls": [],
+      "called_by": [
+        "_display_video_in_notebook",
+        "_omni_save_animated_image",
+        "_omni_save",
+        "encode_video_to_bytes"
+      ],
+      "aliases": [
+        "save_video"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "save_video",
+        "_display_video_in_notebook",
+        "_omni_save_animated_image",
+        "_omni_save",
+        "encode_video_to_bytes"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_omni_save": {
+      "function_name": "_omni_save",
+      "calls": [
+        "save",
+        "object_to_file",
+        "_omni_save_animated_image",
+        "bytes_to_file",
+        "save_pickled_value",
+        "save_image",
+        "save_file_lines",
+        "ends_with_any",
+        "save_text_file",
+        "_omni_save_default_extension",
+        "save_video",
+        "save_json",
+        "save_safetensors",
+        "has_file_extension"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "object_to_file",
+        "_omni_save_animated_image",
+        "save_image",
+        "ends_with_any",
+        "_omni_save_default_extension",
+        "save_video",
+        "save_safetensors",
+        "has_file_extension",
+        "save",
+        "bytes_to_file",
+        "pseudo_terminal",
+        "save_pickled_value",
+        "save_file_lines",
+        "save_text_file",
+        "save_json",
+        "_omni_save"
+      ],
+      "multiplexing": [
+        "save_safetensors",
+        "save_file_lines",
+        "save_pickled_value",
+        "object_to_file",
+        "save_text_file",
+        "bytes_to_file"
+      ],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "encode_video_to_bytes": {
+      "function_name": "encode_video_to_bytes",
+      "calls": [
+        "delete_file",
+        "file_exists",
+        "save_video",
+        "file_to_bytes",
+        "temporary_file_path"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "save_video",
+        "file_to_bytes",
+        "delete_file",
+        "file_exists",
+        "temporary_file_path",
+        "encode_video_to_bytes"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_omni_save_animated_image": {
+      "function_name": "_omni_save_animated_image",
+      "calls": [
+        "is_image",
+        "save_video",
+        "save_image"
+      ],
+      "called_by": [
+        "_omni_save"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "save_video",
+        "_omni_save_animated_image",
+        "is_image",
+        "save_image",
+        "_omni_save"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "save_video": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_omni_save": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "encode_video_to_bytes": {
+      "current_quality": "basic",
+      "current_docstring": "Encode video to bytes without saving to disk.\nSee also: decode_video_from_bytes",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_omni_save_animated_image": {
+      "current_quality": "basic",
+      "current_docstring": "gif and webp and png can be either a video or image depending on context... ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document supported image types and formats",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document the multiplexing pattern - how the base function dispatches to specific implementations"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

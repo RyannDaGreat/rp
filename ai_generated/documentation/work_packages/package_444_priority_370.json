@@ -1,0 +1,254 @@
+{
+  "package_id": 444,
+  "functions": [
+    "strip_ansi_escapes",
+    "fansi_highlight_path",
+    "visible_string_length",
+    "_ensure_tapnet_installed",
+    "select_torch_device"
+  ],
+  "total_functions": 5,
+  "estimated_hours": 3.75,
+  "priority_score": 370,
+  "context": {
+    "strip_ansi_escapes": {
+      "function_name": "strip_ansi_escapes",
+      "calls": [],
+      "called_by": [
+        "fansi_highlight_path",
+        "pseudo_terminal",
+        "visible_string_length",
+        "parenthesizer_automator",
+        "input_select",
+        "rinsp",
+        "display_query_options",
+        "select_torch_device",
+        "_ensure_tapnet_installed"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "fansi_highlight_path",
+        "pseudo_terminal",
+        "visible_string_length",
+        "parenthesizer_automator",
+        "input_select",
+        "rinsp",
+        "strip_ansi_escapes",
+        "display_query_options",
+        "select_torch_device",
+        "_ensure_tapnet_installed"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "fansi_highlight_path": {
+      "function_name": "fansi_highlight_path",
+      "calls": [
+        "fansi",
+        "strip_ansi_escapes"
+      ],
+      "called_by": [
+        "_run_ai_cli_coder"
+      ],
+      "aliases": [
+        "_fansi_highlight_path"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "fansi",
+        "strip_ansi_escapes",
+        "fansi_highlight_path",
+        "_run_ai_cli_coder",
+        "_fansi_highlight_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "visible_string_length": {
+      "function_name": "visible_string_length",
+      "calls": [
+        "strip_ansi_escapes",
+        "line_split"
+      ],
+      "called_by": [
+        "visible_string_ljust",
+        "visible_string_center",
+        "visible_string_rjust"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "strip_ansi_escapes",
+        "visible_string_ljust",
+        "visible_string_rjust",
+        "visible_string_length",
+        "visible_string_center",
+        "line_split"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_ensure_tapnet_installed": {
+      "function_name": "_ensure_tapnet_installed",
+      "calls": [
+        "git_import",
+        "pip_import",
+        "strip_ansi_escapes",
+        "check_pip_requirements",
+        "get_module_path_from_name",
+        "path_join"
+      ],
+      "called_by": [
+        "run_tapnet"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "git_import",
+        "pip_import",
+        "strip_ansi_escapes",
+        "run_tapnet",
+        "check_pip_requirements",
+        "get_module_path_from_name",
+        "path_join",
+        "_ensure_tapnet_installed"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "select_torch_device": {
+      "function_name": "select_torch_device",
+      "calls": [
+        "currently_running_mac",
+        "print",
+        "get_visible_gpu_ids",
+        "fansi_print",
+        "pip_import",
+        "get_gpu_with_most_free_vram",
+        "_get_select_torch_device_lock_file",
+        "print_gpu_summary",
+        "fansi",
+        "strip",
+        "get_gpu_ids_used_by_process",
+        "select_torch_device",
+        "strip_ansi_escapes",
+        "line_join"
+      ],
+      "called_by": [
+        "run_cotracker",
+        "select_torch_device"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "print",
+        "pip_import",
+        "print_gpu_summary",
+        "fansi",
+        "strip",
+        "get_gpu_ids_used_by_process",
+        "select_torch_device",
+        "currently_running_mac",
+        "get_visible_gpu_ids",
+        "fansi_print",
+        "get_gpu_with_most_free_vram",
+        "_get_select_torch_device_lock_file",
+        "strip_ansi_escapes",
+        "line_join",
+        "run_cotracker"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "strip_ansi_escapes": {
+      "current_quality": "basic",
+      "current_docstring": "Undoes anything fansi might do to a string\nCode from https://www.tutorialspoint.com/How-can-I-remove-the-ANSI-escape-sequences-from-a-string-in-python#targetText=You%20can%20use%20regexes%20to,%5B%40-...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "fansi_highlight_path": {
+      "current_quality": "basic",
+      "current_docstring": "Syntax-highlights a path like \"/path/to/thing/\" - it colors the /'s differently from the rest. Returns a string with ansi escapes for printing in a terminal. ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "visible_string_length": {
+      "current_quality": "basic",
+      "current_docstring": "Give the visible string length when printed into a terminal.\nIgnores ansi escape seqences and zero-width characters",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_ensure_tapnet_installed": {
+      "current_quality": "basic",
+      "current_docstring": "Gets the code and checkpoints for tapnet\nmodels is varargs like \"tapir\", \"bootstapir\", or \"tapnext\"\nIf not specified, downloads all checkpoints (default behaviour)\n\nTo simply preemptively download che...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "select_torch_device": {
+      "current_quality": "excellent",
+      "current_docstring": "Returns the appropriate PyTorch device based on the available hardware and system configuration.\n\nThis function selects the best device for running PyTorch operations based on the user's\nhardware, OS,...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

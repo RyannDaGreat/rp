@@ -1,0 +1,98 @@
+{
+  "package_id": 1112,
+  "functions": [
+    "set_cuda_visible_devices",
+    "_torch_device_to_index"
+  ],
+  "total_functions": 2,
+  "estimated_hours": 1.5,
+  "priority_score": 25,
+  "context": {
+    "set_cuda_visible_devices": {
+      "function_name": "set_cuda_visible_devices",
+      "calls": [
+        "is_iterable",
+        "detuple",
+        "get",
+        "_torch_device_to_index"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_iterable",
+        "detuple",
+        "_torch_device_to_index",
+        "get",
+        "set_cuda_visible_devices"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_torch_device_to_index": {
+      "function_name": "_torch_device_to_index",
+      "calls": [
+        "pip_import"
+      ],
+      "called_by": [
+        "set_cuda_visible_devices"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_torch_device_to_index",
+        "pip_import",
+        "set_cuda_visible_devices"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "set_cuda_visible_devices": {
+      "current_quality": "excellent",
+      "current_docstring": "Sets the CUDA_VISIBLE_DEVICES environment variable.\n\nThis configuration restricts which GPUs are visible to libraries like PyTorch, TensorFlow, etc.\nThe function should be used before any GPU-specific...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "_torch_device_to_index": {
+      "current_quality": "excellent",
+      "current_docstring": "Convert a given device specifier into its corresponding index.\n\nThe function handles multiple formats for specifying devices, \nsuch as \"cuda:3\", torch.device(3), or int(3).\n\nArgs:\n    device (str, int...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

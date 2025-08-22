@@ -1,0 +1,547 @@
+{
+  "package_id": 24,
+  "functions": [
+    "get_image_dimensions",
+    "get_image_width",
+    "get_image_height",
+    "crop_image",
+    "with_alpha_channel",
+    "is_torch_image",
+    "resize_image_to_fit",
+    "get_max_image_dimensions"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 1040,
+  "context": {
+    "get_image_dimensions": {
+      "function_name": "get_image_dimensions",
+      "calls": [
+        "gather_vars",
+        "get_image_height",
+        "is_torch_image",
+        "get_image_width",
+        "is_image"
+      ],
+      "called_by": [
+        "resize_image_to_hold",
+        "get_rgb_byte_color_identity_mapping_image",
+        "get_mask_iou",
+        "with_alpha_checkerboard",
+        "apply_uv_map",
+        "get_min_image_dimensions",
+        "cv_remap_image",
+        "with_drop_shadow",
+        "get_max_image_dimensions",
+        "_images_are_all_same_size",
+        "crop_image",
+        "with_alpha_channel",
+        "_with_image_channel",
+        "torch_resize_image",
+        "with_corner_radius",
+        "get_optical_flow_via_pyflow",
+        "crop_image_at_random_position",
+        "get_min_video_dimensions",
+        "crop_image_to_square",
+        "skia_resize_image",
+        "cv_inpaint_image",
+        "get_max_video_dimensions",
+        "cv_floodfill_mask",
+        "labeled_image",
+        "resize_image_to_fit",
+        "cv_resize_image",
+        "shift_image",
+        "_display_image_slideshow_animated",
+        "_auto_interp_for_resize_image",
+        "_crop_images_to_max_or_min_size"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "resize_image_to_hold",
+        "get_rgb_byte_color_identity_mapping_image",
+        "get_mask_iou",
+        "get_image_height",
+        "with_alpha_checkerboard",
+        "is_image",
+        "apply_uv_map",
+        "get_min_image_dimensions",
+        "cv_remap_image",
+        "get_image_dimensions",
+        "with_drop_shadow",
+        "get_max_image_dimensions",
+        "_images_are_all_same_size",
+        "crop_image",
+        "with_alpha_channel",
+        "_with_image_channel",
+        "torch_resize_image",
+        "with_corner_radius",
+        "get_optical_flow_via_pyflow",
+        "gather_vars",
+        "crop_image_at_random_position",
+        "get_min_video_dimensions",
+        "crop_image_to_square",
+        "skia_resize_image",
+        "cv_inpaint_image",
+        "get_max_video_dimensions",
+        "cv_floodfill_mask",
+        "labeled_image",
+        "resize_image_to_fit",
+        "is_torch_image",
+        "cv_resize_image",
+        "get_image_width",
+        "shift_image",
+        "_display_image_slideshow_animated",
+        "_auto_interp_for_resize_image",
+        "_crop_images_to_max_or_min_size"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_image_width": {
+      "function_name": "get_image_width",
+      "calls": [
+        "is_torch_image",
+        "width",
+        "is_image",
+        "is_pil_image",
+        "_is_skia_image"
+      ],
+      "called_by": [
+        "grid_concatenated_images",
+        "labeled_image",
+        "get_image_dimensions",
+        "bordered_image_solid_color",
+        "unwarped_perspective_image",
+        "get_max_image_dimensions",
+        "crop_image",
+        "cv_resize_image",
+        "save_video_avi",
+        "display_image_slideshow",
+        "write_frame",
+        "_display_image_in_notebook_via_ipyplot",
+        "image_with_progress_bar",
+        "get_min_image_dimensions",
+        "zoom_crop_origin",
+        "display_image_in_terminal",
+        "_resize_image_via_skimage"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "grid_concatenated_images",
+        "bordered_image_solid_color",
+        "_is_skia_image",
+        "is_image",
+        "width",
+        "is_pil_image",
+        "write_frame",
+        "_display_image_in_notebook_via_ipyplot",
+        "image_with_progress_bar",
+        "get_min_image_dimensions",
+        "display_image_in_terminal",
+        "labeled_image",
+        "get_image_dimensions",
+        "unwarped_perspective_image",
+        "get_max_image_dimensions",
+        "crop_image",
+        "is_torch_image",
+        "cv_resize_image",
+        "get_image_width",
+        "save_video_avi",
+        "display_image_slideshow",
+        "zoom_crop_origin",
+        "_resize_image_via_skimage"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_image_height": {
+      "function_name": "get_image_height",
+      "calls": [
+        "is_torch_image",
+        "is_image",
+        "is_pil_image",
+        "height",
+        "_is_skia_image"
+      ],
+      "called_by": [
+        "labeled_image",
+        "get_image_dimensions",
+        "bordered_image_solid_color",
+        "unwarped_perspective_image",
+        "get_max_image_dimensions",
+        "crop_image",
+        "cv_resize_image",
+        "save_video_avi",
+        "display_image_in_terminal_color",
+        "display_image_slideshow",
+        "write_frame",
+        "get_min_image_dimensions",
+        "zoom_crop_origin",
+        "_resize_image_via_skimage"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "bordered_image_solid_color",
+        "get_image_height",
+        "_is_skia_image",
+        "is_image",
+        "is_pil_image",
+        "write_frame",
+        "height",
+        "get_min_image_dimensions",
+        "labeled_image",
+        "get_image_dimensions",
+        "unwarped_perspective_image",
+        "get_max_image_dimensions",
+        "crop_image",
+        "is_torch_image",
+        "cv_resize_image",
+        "save_video_avi",
+        "display_image_in_terminal_color",
+        "display_image_slideshow",
+        "zoom_crop_origin",
+        "_resize_image_via_skimage"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "crop_image": {
+      "function_name": "crop_image",
+      "calls": [
+        "get_image_dimensions",
+        "is_rgba_image",
+        "get_image_height",
+        "horizontally_flipped_image",
+        "vertically_flipped_image",
+        "crop_image",
+        "is_grayscale_image",
+        "get_image_width",
+        "is_rgb_image",
+        "as_numpy_image",
+        "is_image"
+      ],
+      "called_by": [
+        "grid_concatenated_images",
+        "labeled_image",
+        "crop_image",
+        "shift_image",
+        "crop_images",
+        "_cv_char_to_image",
+        "write_frame",
+        "_crop_images_to_max_or_min_size",
+        "crop_image_to_square"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "grid_concatenated_images",
+        "is_rgba_image",
+        "get_image_height",
+        "horizontally_flipped_image",
+        "vertically_flipped_image",
+        "is_rgb_image",
+        "is_image",
+        "crop_images",
+        "_cv_char_to_image",
+        "write_frame",
+        "crop_image_to_square",
+        "labeled_image",
+        "get_image_dimensions",
+        "crop_image",
+        "shift_image",
+        "is_grayscale_image",
+        "get_image_width",
+        "as_numpy_image",
+        "_crop_images_to_max_or_min_size"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "with_alpha_channel": {
+      "function_name": "with_alpha_channel",
+      "calls": [
+        "get_image_dimensions",
+        "as_rgba_image",
+        "is_image",
+        "as_float_image",
+        "as_grayscale_image",
+        "is_number",
+        "uniform_float_color_image"
+      ],
+      "called_by": [
+        "with_drop_shadow",
+        "with_image_brightness",
+        "rotate_image",
+        "_alpha_weighted_rgba_image_func",
+        "with_image_hue",
+        "with_image_saturation",
+        "rgb_to_hsv",
+        "hsv_to_rgb"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_rgba_image",
+        "with_image_brightness",
+        "is_image",
+        "with_image_saturation",
+        "get_image_dimensions",
+        "with_drop_shadow",
+        "rotate_image",
+        "with_alpha_channel",
+        "_alpha_weighted_rgba_image_func",
+        "with_image_hue",
+        "as_float_image",
+        "as_grayscale_image",
+        "rgb_to_hsv",
+        "is_number",
+        "hsv_to_rgb",
+        "uniform_float_color_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_torch_image": {
+      "function_name": "is_torch_image",
+      "calls": [
+        "is_torch_tensor"
+      ],
+      "called_by": [
+        "run_depth_pro",
+        "get_image_dimensions",
+        "get_image_height",
+        "torch_remap_image",
+        "get_image_width",
+        "torch_scatter_add_image",
+        "torch_resize_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "run_depth_pro",
+        "get_image_dimensions",
+        "get_image_height",
+        "is_torch_image",
+        "torch_remap_image",
+        "get_image_width",
+        "is_torch_tensor",
+        "torch_scatter_add_image",
+        "torch_resize_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "resize_image_to_fit": {
+      "function_name": "resize_image_to_fit",
+      "calls": [
+        "cv_resize_image",
+        "get_image_dimensions",
+        "as_numpy_image",
+        "is_image"
+      ],
+      "called_by": [
+        "labeled_image",
+        "resize_images_to_fit",
+        "display_image_in_terminal_color",
+        "preprocess_frame",
+        "remove_duplicate_frames",
+        "edit_image_in_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "labeled_image",
+        "get_image_dimensions",
+        "resize_image_to_fit",
+        "cv_resize_image",
+        "resize_images_to_fit",
+        "as_numpy_image",
+        "is_image",
+        "display_image_in_terminal_color",
+        "preprocess_frame",
+        "remove_duplicate_frames",
+        "edit_image_in_terminal"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_max_image_dimensions": {
+      "function_name": "get_max_image_dimensions",
+      "calls": [
+        "detuple",
+        "get_image_dimensions",
+        "get_image_height",
+        "is_numpy_array",
+        "get_image_width",
+        "is_torch_tensor"
+      ],
+      "called_by": [
+        "blend_images",
+        "save_video_mp4",
+        "resize_images_to_max_size"
+      ],
+      "aliases": [
+        "get_video_dimensions"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "detuple",
+        "get_image_dimensions",
+        "get_max_image_dimensions",
+        "resize_images_to_max_size",
+        "get_image_height",
+        "is_numpy_array",
+        "get_image_width",
+        "save_video_mp4",
+        "is_torch_tensor",
+        "get_video_dimensions",
+        "blend_images"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "get_image_dimensions": {
+      "current_quality": "basic",
+      "current_docstring": "Return (height,width) of an image ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Document supported image types and formats",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_image_width": {
+      "current_quality": "basic",
+      "current_docstring": "Return the image's width measured in pixels",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Document supported image types and formats",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_image_height": {
+      "current_quality": "basic",
+      "current_docstring": "Return the image's height measured in pixels",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Document supported image types and formats",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "crop_image": {
+      "current_quality": "basic",
+      "current_docstring": "Returns a cropped image to the specified width and height\nIf either hieght or width aren't specified (and left as None), their size will be untouched\n    (This means you can crop an image only by heig...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Document supported image types and formats"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "with_alpha_channel": {
+      "current_quality": "basic",
+      "current_docstring": "Assigns an alpha channel to an image\nThe alpha can either be given as a number between 0 and 1,\nor a grayscale image whose brigtness will be used as alpha\n\nWill output an RGBA float image\n\nTODO: Mutat...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "is_torch_image": {
+      "current_quality": "basic",
+      "current_docstring": "Returns True if image could be a CHW torch image",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Document supported image types and formats",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "resize_image_to_fit": {
+      "current_quality": "basic",
+      "current_docstring": "Scale image on both axes evenly to fit in this bounding box\nIf not allow_growth, it won't modify the image if height and width are larger than the input image",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Document supported image types and formats"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_max_image_dimensions": {
+      "current_quality": "basic",
+      "current_docstring": "Given a set of images, return the maximum height and width seen across all of them ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Document supported image types and formats",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

@@ -1,0 +1,251 @@
+{
+  "package_id": 451,
+  "functions": [
+    "gather",
+    "min_valued_elements",
+    "max_valued_elements",
+    "dict_to_list",
+    "pop_gather",
+    "gather_args_bind"
+  ],
+  "total_functions": 6,
+  "estimated_hours": 4.5,
+  "priority_score": 375,
+  "context": {
+    "gather": {
+      "function_name": "gather",
+      "calls": [
+        "is_iterable",
+        "detuple"
+      ],
+      "called_by": [
+        "_filter_dict_via_fzf",
+        "gather_vars",
+        "validate_tensor_shapes",
+        "pop_gather",
+        "gather_args_bind",
+        "min_valued_elements",
+        "max_valued_elements",
+        "dict_to_list"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_iterable",
+        "detuple",
+        "_filter_dict_via_fzf",
+        "gather_vars",
+        "validate_tensor_shapes",
+        "pop_gather",
+        "gather_args_bind",
+        "min_valued_elements",
+        "max_valued_elements",
+        "dict_to_list",
+        "gather"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "min_valued_elements": {
+      "function_name": "min_valued_elements",
+      "calls": [
+        "min_valued_indices",
+        "gather"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "min_valued_elements",
+        "min_valued_indices",
+        "gather"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "max_valued_elements": {
+      "function_name": "max_valued_elements",
+      "calls": [
+        "gather",
+        "max_valued_indices"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "gather",
+        "max_valued_elements",
+        "max_valued_indices"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "dict_to_list": {
+      "function_name": "dict_to_list",
+      "calls": [
+        "gather",
+        "keys"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "dict_to_list",
+        "gather",
+        "keys"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "pop_gather": {
+      "function_name": "pop_gather",
+      "calls": [
+        "detuple",
+        "gather"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "detuple",
+        "pop_gather",
+        "gather"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "gather_args_bind": {
+      "function_name": "gather_args_bind",
+      "calls": [
+        "gather",
+        "update",
+        "pop",
+        "line_join",
+        "gather_args"
+      ],
+      "called_by": [
+        "get_cache_file_paths"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "pop",
+        "gather",
+        "get_cache_file_paths",
+        "gather_args_bind",
+        "gather_args",
+        "line_join",
+        "update"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "gather": {
+      "current_quality": "basic",
+      "current_docstring": "TODO: Add skip_missing or strict option (idk which yet but probably skip_missing if following in lines with gather_vars)\n# indices \u2208 list of integers",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "min_valued_elements": {
+      "current_quality": "basic",
+      "current_docstring": "Returns the elements with the smallest values ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "max_valued_elements": {
+      "current_quality": "basic",
+      "current_docstring": "Returns the elements with the largest values ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "dict_to_list": {
+      "current_quality": "basic",
+      "current_docstring": "Assumes keys should be in ascending order ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "pop_gather": {
+      "current_quality": "good",
+      "current_docstring": "Uses CSE214 definition of 'pop', in the context of popping stacks.\nIt is difficult to simultaneously delete multiple indices in a list.\nMy algorithm goes through the indices chronologically, compensat...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "gather_args_bind": {
+      "current_quality": "excellent",
+      "current_docstring": "Like gather_args_wrap, but binds the values in the namespace upon creation.\nHere's an example to show the difference:\n\nTODO: Use inspect.signature instead of inspect.getfullargspec, because getfullarg...",
+      "suggestions": [
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

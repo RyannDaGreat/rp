@@ -1,0 +1,155 @@
+{
+  "package_id": 10,
+  "functions": [
+    "fog",
+    "f",
+    "text_to_speech_via_apple"
+  ],
+  "total_functions": 3,
+  "estimated_hours": 2.25,
+  "priority_score": 595,
+  "context": {
+    "fog": {
+      "function_name": "fog",
+      "calls": [
+        "f"
+      ],
+      "called_by": [
+        "text_to_speech_via_apple"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "f",
+        "text_to_speech_via_apple",
+        "fog"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "f": {
+      "function_name": "f",
+      "calls": [],
+      "called_by": [
+        "split_tensor_into_regions",
+        "_minmax_indices",
+        "riemann_sum",
+        "pam",
+        "circular_convolve",
+        "itc",
+        "print_to_string",
+        "max_filter",
+        "med_filter",
+        "run_func",
+        "min_filter",
+        "fog"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "split_tensor_into_regions",
+        "_minmax_indices",
+        "riemann_sum",
+        "pam",
+        "circular_convolve",
+        "f",
+        "itc",
+        "print_to_string",
+        "max_filter",
+        "med_filter",
+        "run_func",
+        "min_filter",
+        "fog"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "text_to_speech_via_apple": {
+      "function_name": "text_to_speech_via_apple",
+      "calls": [
+        "fansi_print",
+        "fog"
+      ],
+      "called_by": [
+        "text_to_speech"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "text_to_speech",
+        "text_to_speech_via_apple",
+        "fansi_print",
+        "fog"
+      ],
+      "multiplexing": [],
+      "is_via_variant": true,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "fog": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "f": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "text_to_speech_via_apple": {
+      "current_quality": "basic",
+      "current_docstring": "Alex                en_US    # Most people recognize me by my voice.\nAlice               it_IT    # Salve, mi chiamo Alice e sono una voce italiana.\nAlva                sv_SE    # Hej, jag heter Alva....",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Explain backend-specific behavior and when to use this variant"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: These are core RP pattern functions - provide extensive examples showing how they enable RP's functional programming style",
+    "7. SPECIAL: Document backend-specific behavior and when to use each _via_ variant"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

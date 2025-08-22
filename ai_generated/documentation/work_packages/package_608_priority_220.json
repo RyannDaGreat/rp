@@ -1,0 +1,149 @@
+{
+  "package_id": 608,
+  "functions": [
+    "is_builtin",
+    "analyze_python",
+    "_old_fansi_syntax_highlighting"
+  ],
+  "total_functions": 3,
+  "estimated_hours": 2.25,
+  "priority_score": 220,
+  "context": {
+    "is_builtin": {
+      "function_name": "is_builtin",
+      "calls": [],
+      "called_by": [
+        "analyze_python",
+        "_old_fansi_syntax_highlighting",
+        "fansi_syntax_highlighting"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "fansi_syntax_highlighting",
+        "_old_fansi_syntax_highlighting",
+        "analyze_python",
+        "is_builtin"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "analyze_python": {
+      "function_name": "analyze_python",
+      "calls": [
+        "combine_range",
+        "is_builtin"
+      ],
+      "called_by": [
+        "_old_fansi_syntax_highlighting",
+        "fansi_syntax_highlighting"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "fansi_syntax_highlighting",
+        "combine_range",
+        "_old_fansi_syntax_highlighting",
+        "is_builtin",
+        "analyze_python"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_old_fansi_syntax_highlighting": {
+      "function_name": "_old_fansi_syntax_highlighting",
+      "calls": [
+        "get",
+        "ansi_highlight",
+        "update",
+        "analyze_python",
+        "combine_range",
+        "is_builtin"
+      ],
+      "called_by": [
+        "fansi_syntax_highlighting"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get",
+        "ansi_highlight",
+        "update",
+        "analyze_python",
+        "combine_range",
+        "_old_fansi_syntax_highlighting",
+        "is_builtin",
+        "fansi_syntax_highlighting"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "is_builtin": {
+      "current_quality": "basic",
+      "current_docstring": "Return True if s is the name of a builtin",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "analyze_python": {
+      "current_quality": "basic",
+      "current_docstring": "Generate and classify chunks of Python for syntax highlighting.\nYields tuples in the form: (category, categorized_text).",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_old_fansi_syntax_highlighting": {
+      "current_quality": "basic",
+      "current_docstring": "PLEASE NOTE THAT I DID NOT WRITE SOME OF THIS CODE!!! IT CAME FROM https://github.com/akheron/cpython/blob/master/Tools/scripts/highlight.py\nAssumes code was written in python.\nMethod mainly intended ...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

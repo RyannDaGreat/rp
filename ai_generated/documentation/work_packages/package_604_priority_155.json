@@ -1,0 +1,110 @@
+{
+  "package_id": 604,
+  "functions": [
+    "get_english_related_words_via_datamuse",
+    "_datamuse_words_request"
+  ],
+  "total_functions": 2,
+  "estimated_hours": 1.5,
+  "priority_score": 155,
+  "context": {
+    "get_english_related_words_via_datamuse": {
+      "function_name": "get_english_related_words_via_datamuse",
+      "calls": [
+        "_datamuse_words_request"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_english_related_words_via_datamuse",
+        "_datamuse_words_request"
+      ],
+      "multiplexing": [],
+      "is_via_variant": true,
+      "is_private": false
+    },
+    "_datamuse_words_request": {
+      "function_name": "_datamuse_words_request",
+      "calls": [
+        "pip_import",
+        "get"
+      ],
+      "called_by": [
+        "get_english_related_words_via_datamuse",
+        "get_english_rhymes_via_datamuse",
+        "get_english_antonyms_via_datamuse",
+        "get_english_synonyms_via_datamuse"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_english_related_words_via_datamuse",
+        "get_english_rhymes_via_datamuse",
+        "get_english_antonyms_via_datamuse",
+        "get",
+        "pip_import",
+        "_datamuse_words_request",
+        "get_english_synonyms_via_datamuse"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "get_english_related_words_via_datamuse": {
+      "current_quality": "basic",
+      "current_docstring": "EXAMPLE: get_english_synonyms_via_datamuse('food')\nUses https://www.datamuse.com/api/",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Explain backend-specific behavior and when to use this variant",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_datamuse_words_request": {
+      "current_quality": "basic",
+      "current_docstring": "Uses https://www.datamuse.com/api/ ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document backend-specific behavior and when to use each _via_ variant"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

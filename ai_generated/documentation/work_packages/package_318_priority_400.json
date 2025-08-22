@@ -1,0 +1,191 @@
+{
+  "package_id": 318,
+  "functions": [
+    "_contains_func_y",
+    "contains_all",
+    "in_any",
+    "contains_any",
+    "in_all"
+  ],
+  "total_functions": 5,
+  "estimated_hours": 3.75,
+  "priority_score": 400,
+  "context": {
+    "_contains_func_y": {
+      "function_name": "_contains_func_y",
+      "calls": [
+        "detuple"
+      ],
+      "called_by": [
+        "contains_all",
+        "in_any",
+        "in_all",
+        "contains_any"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "detuple",
+        "contains_all",
+        "_contains_func_y",
+        "in_any",
+        "in_all",
+        "contains_any"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "contains_all": {
+      "function_name": "contains_all",
+      "calls": [
+        "_contains_func_y"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "contains_all",
+        "_contains_func_y"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "in_any": {
+      "function_name": "in_any",
+      "calls": [
+        "_contains_func_y"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_contains_func_y",
+        "in_any"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "contains_any": {
+      "function_name": "contains_any",
+      "calls": [
+        "_contains_func_y"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_contains_func_y",
+        "contains_any"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "in_all": {
+      "function_name": "in_all",
+      "calls": [
+        "_contains_func_y"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_contains_func_y",
+        "in_all"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "_contains_func_y": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "contains_all": {
+      "current_quality": "basic",
+      "current_docstring": "Returns True if x contains all of y.\n\nEXAMPLES:\n    assert contains_all('texture','t', 'e', 'x') == True\n    assert contains_all('texture','z') == False\n    assert contains_all('texture',['t', 'e', 'x...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "in_any": {
+      "current_quality": "basic",
+      "current_docstring": "Returns True if x is in any of y.\n\nTODO: Add a return_match=False optional arg, like in starts_with_any and ends_with_any\n\nEXAMPLES:\n    assert in_any('tex','texture', 'textbook') == True\n    assert i...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "contains_any": {
+      "current_quality": "basic",
+      "current_docstring": "Returns True if x contains any of y.\n\nTODO: Add a return_match=False optional arg, like in starts_with_any and ends_with_any\n\nEXAMPLES:\n    assert contains_any('texture','tex') == True\n    assert cont...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "in_all": {
+      "current_quality": "basic",
+      "current_docstring": "Returns True if x is in all of y.\n\nEXAMPLES:\n    assert in_all('tex','texture', 'textbook') == False\n    assert in_all('t','texture', 'textbook') == True\n    assert in_all(1,[1,2,3], [1,3,4]) == True\n...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

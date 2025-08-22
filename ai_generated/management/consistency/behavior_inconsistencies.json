@@ -1,0 +1,4984 @@
+[
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "x",
+    "different_validations": [
+      "assert y is None, 'scatter_plot: x is a complex vector but y is not None. This is an invalid input combination as the imaginary part of x ARE the y-values' | x=np.linspace | x = as_points_array",
+      "isinstance(x, class_)",
+      "x == rp.r_iterm_comm.try_eval_mem_text | rp.r_iterm_comm.try_eval_mem_text = x | x = x.split",
+      "assert is_torch_tensor(x) and is_a_matrix(x), 'x must be a torch tensor with shape [H_out, W_out]' | assert x.shape == y.shape, 'x and y must have the same shape, but got x.shape={} and y.shape={}'.format(x.shape, y.shape) | assert image.device == x.device == y.device, 'all inputs must be on the same device'",
+      "isinstance(x, list)",
+      "x < 0 | x > 0",
+      "x=x | x=x | x=x",
+      "y == x | x = y",
+      "x > zero | x < zero",
+      "x=1 | x = x.astype | x = x",
+      "assert rp.is_a_matrix(x), 'x must be a matrix' | assert rp.get_image_dimensions(x) == rp.get_image_dimensions(y) | x = x.astype",
+      "mouse_x = x",
+      "x=0 | x=random_int | x=random_int",
+      "l = x",
+      "isinstance(x, str)",
+      "is_hidden = x",
+      "x = str",
+      "assert isinstance(x, str) | isinstance(x, str) | x = x.upper",
+      "assert False, type(x) | device = x",
+      "assert x.shape == y.shape, 'x and y must have the same shape' | assert X.shape == (4, *shape), 'Expected X.shape == (4, *x.shape), but got {}'.format(X.shape) | assert W.shape == (4, *shape), 'Expected W.shape == (4, *x.shape), but got {}'.format(W.shape)",
+      "assert isinstance(x, str) | isinstance(x, str)",
+      "assert is_torch_tensor(x) and is_a_matrix(x), 'x must be a torch matrix, but got x with type {} and shape {}'.format(type(x), x.shape) | assert x.shape == y.shape, 'x and y must have the same shape, but got x.shape={} and y.shape={}'.format(x.shape, y.shape) | assert image.device == x.device == y.device, 'all inputs must be on the same device, but got image.device={}, x.device={}, and y.device={}'.format(image.device, x.device, y.device)",
+      "x == y",
+      "isinstance(x, str) | isinstance(x, list)",
+      "assert isinstance(x, list) | isinstance(x, list)",
+      "x = x.path | x = x",
+      "assert hasattr(x, '__contains__'), 'x cannot contain anything. type(x)==' + repr(type(x))",
+      "x = random_ints | x = int",
+      "x = as_numpy_array",
+      "x = np.asarray",
+      "assert isinstance(x, tuple) | isinstance(x, tuple)",
+      "isinstance(x, types.ModuleType)",
+      "x = np.exp",
+      "isinstance(x, tuple)",
+      "x = detuple",
+      "isinstance(x, (list, tuple)",
+      "assert False, 'as_numpy_array: Error: Could not convert x into a numpy array. type(x)=' + repr(type(x)) + ' and x=' + repr(x) | isinstance(x, list) | x = x.float",
+      "isinstance(x, Iterable)",
+      "isinstance(x, type) | x = type",
+      "assert isinstance(x, slice) | isinstance(x, slice)",
+      "out = x",
+      "assert isinstance(x, dict) | isinstance(x, dict)",
+      "assert is_iterable(x) | isinstance(x,dict) | isinstance(x,set)",
+      "x = random_ints | x = list",
+      "x=0",
+      "assert len(x.shape) == 1, 'Currently, only vectors are supported. This may change in the future.' | x = np.asarray | x > r",
+      "x = np.argmin",
+      "assert isinstance(x, set) | isinstance(x, set)",
+      "number_of_lines = x | new_x = x",
+      "assert contains_all('texture','t', 'e', 'x') == True | assert contains_all('texture',['t', 'e', 'x']) == True | assert hasattr(x, '__contains__'), 'x cannot contain anything. type(x)==' + repr(type(x))",
+      "isinstance(x, Number) | isinstance(x, type)"
+    ],
+    "functions": [
+      "entuple",
+      "detuple",
+      "enlist",
+      "itc",
+      "with_drop_shadow",
+      "_is_instance_of_module_class",
+      "random_element",
+      "matching_keys",
+      "matching_indices",
+      "_muted_stdout_write",
+      "_translate_timezone",
+      "sign",
+      "is_iterable",
+      "contains_any",
+      "contains_all",
+      "full_range",
+      "_print_status",
+      "string_transpose",
+      "circular_extrema_indices",
+      "is_number",
+      "cv_closest_contour_point",
+      "cv_draw_circle",
+      "cv_draw_circles",
+      "scatter_plot",
+      "is_complex_vector",
+      "is_points_array",
+      "is_cv_contour",
+      "_set_hash",
+      "_dict_hash",
+      "_list_hash",
+      "_tuple_hash",
+      "_slice_hash",
+      "_omni_save_default_extension",
+      "normalized",
+      "as_numpy_array",
+      "shift_image",
+      "_tensorify",
+      "torch_remap_image",
+      "_softmax",
+      "_sign",
+      "_create_array_like",
+      "get_bilinear_weights",
+      "torch_scatter_add_image",
+      "cv_remap_image",
+      "linerino",
+      "parent_class_names",
+      "_parenthesizer_automator",
+      "mouse_callback",
+      "on_mouse_move",
+      "is_non_str_iterable",
+      "is_listlike",
+      "should_include",
+      "postprocess_path",
+      "to_str",
+      "p",
+      "is_module",
+      "try_eval"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "f",
+    "different_validations": [
+      "assert callable(f)",
+      "f >= 1 | f > 0 | f < 1",
+      "spec = f",
+      "f=None",
+      "y = f"
+    ],
+    "functions": [
+      "itc",
+      "_minmax_indices",
+      "dec2bin",
+      "num_args",
+      "print_to_string"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "func",
+    "different_validations": [
+      "func_name = func",
+      "func\n        >>> def | placeholder = func",
+      "frame.f_code == func",
+      "new_value = func",
+      "target=func",
+      "weight = func | color = func",
+      "result = func",
+      "func == as_float_image | func == as_byte_image | func == as_byte_image",
+      "func=func",
+      "value = func"
+    ],
+    "functions": [
+      "lazy_par_map",
+      "run_as_new_thread",
+      "run_as_new_process",
+      "line_graph_live",
+      "gather_args",
+      "gather_args_bind",
+      "globalize_locals",
+      "_alpha_weighted_rgba_image_func",
+      "file_cache_call",
+      "_images_conversion",
+      "func_call_to_shell_command",
+      "run_test"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "num_threads",
+    "different_validations": [
+      "num_threads=num_threads",
+      "num_threads=0",
+      "num_threads=None",
+      "num_threads=None | num_threads=num_threads",
+      "assert num_threads is None or (isinstance(num_threads, int) and num_threads >= 0), 'Must have at least 1 thread, or set num_threads=0 to run in the main thread only' | isinstance(num_threads, int) | num_threads >= 0",
+      "num_threads=None | num_threads=None",
+      "isinstance(num_threads, int) | num_threads=None | num_threads=3"
+    ],
+    "functions": [
+      "par_map",
+      "lazy_par_map",
+      "_load_files",
+      "load_images",
+      "load_text_files",
+      "load_jsons",
+      "load_yaml_files",
+      "read_symlinks",
+      "make_symlinks_relative",
+      "make_symlinks_absolute",
+      "replace_symlinks_with_hardlinks",
+      "download_fonts",
+      "download_google_fonts",
+      "load_video_streams",
+      "load_videos",
+      "convert_to_gifs_via_ffmpeg",
+      "copy_paths",
+      "download_urls",
+      "download_urls_to_cache",
+      "get_all_taken_ports"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "buffer_limit",
+    "different_validations": [
+      "assert ans==sorted(ans),'lazy_par_map failed to preserve order with a non-zero buffer_limit' | isinstance(buffer_limit, int) | buffer_limit=None",
+      "buffer_limit=None",
+      "buffer_limit=None | buffer_limit=buffer_limit",
+      "buffer_limit=0 | buffer_limit=buffer_limit"
+    ],
+    "functions": [
+      "par_map",
+      "lazy_par_map",
+      "load_files",
+      "_load_files",
+      "load_video_streams",
+      "load_videos",
+      "download_urls",
+      "download_urls_to_cache"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "l",
+    "different_validations": [
+      "isinstance(l, str) | L = l",
+      "isinstance(l, dict) | check=l",
+      "isinstance(l, str) | output = l",
+      "assert len(set(l)) == len(l), 'r.dict_of_values_to_indices: l contains duplicate values, so we cannot return a 1-to-1 function",
+      "isinstance(l, str)",
+      "isinstance(l, dict)",
+      "d=l"
+    ],
+    "functions": [
+      "shuffled",
+      "_minmax_indices",
+      "max_valued_index",
+      "min_valued_index",
+      "matching_indices",
+      "invert_list_to_dict",
+      "display_list",
+      "split_into_sublists",
+      "split_into_n_sublists"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "title",
+    "different_validations": [
+      "title=None | title = pyin.session_title | title = input_default",
+      "title = title",
+      "title=None | title=title",
+      "title=None",
+      "assert isinstance(title, str) | isinstance(title, str)"
+    ],
+    "functions": [
+      "bar_graph",
+      "line_graph",
+      "shorten_github_url",
+      "_eta",
+      "_set_session_title",
+      "_display_columns",
+      "scatter_plot",
+      "display_pandas_correlation_heatmap",
+      "line_graph_via_bokeh",
+      "histogram_via_bokeh"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "seconds",
+    "different_validations": [
+      "seconds=gtoc",
+      "seconds=None"
+    ],
+    "functions": [
+      "seconds",
+      "millis",
+      "micros",
+      "nanos",
+      "play_tone",
+      "play_semitone"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "pid",
+    "different_validations": [
+      "pid=None | pid = get_process_id",
+      "pid = process.ppid",
+      "assert isinstance(pid, int), pid | isinstance(pid, int) | pid=None",
+      "pid == os.getpid",
+      "pid = get_process_id",
+      "pid=None | pid=12345 | pid=pid"
+    ],
+    "functions": [
+      "get_current_directory",
+      "get_process_memory",
+      "get_process_exists",
+      "get_process_start_date",
+      "get_gpu_ids_used_by_process",
+      "get_used_vram",
+      "print_process_info"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "path",
+    "different_validations": [
+      "path=None | path = save_image_jpg | path=f",
+      "path = as_points_array",
+      "path = get_unique_copy_path | path = with_file_extension",
+      "path = get_git_repo_root | cwd=path",
+      "assert path==with_file_extension(path,get_file_extension(path)) | assert path==with_file_extension(path,get_file_extension(path)) | assert path==with_file_extension(path,get_file_extension(path))",
+      "path = get_absolute_path | wrapper.cache_path = path",
+      "assert file_exists(path)",
+      "assert path is None or isinstance(path, str), 'path should be either None or a string, but got type ' + repr(type(path)) | isinstance(path, str) | path=None",
+      "path = get_module_path",
+      "assert isinstance(path, str), 'rp.load_video_stream: path must be a string, got {}'.format(type(path).__name__) | isinstance(path, str)",
+      "assert isinstance(path, str) | isinstance(path, str) | 21bd83bc0315\n        >>> path",
+      "path = get_absolute_path",
+      "assert isinstance(path, str), 'rp.load_video: path must be a string, got {}'.format(type(path).__name__) | isinstance(path, str) | path = get_absolute_path",
+      "assert output, 'Is not a git repo: ' + str(path)",
+      "assert os.path.exists(path), \"r.delete_folder: There is no folder to delete. The path you specified, '\" + path + \"', does not exist!\" | assert folder_exists(path), 'r.delete_folder: The path you selected exists, but is not a folder: %s' % path | assert is_empty_folder(path), 'delete_folder: Cannot delete folder because its not empty and recursive==False. Folder: ' + repr(path)",
+      "path=None | path = get_unique_copy_path",
+      "path = as_complex_vector | path = circ_diff_inverse | path = np.exp",
+      "path = str | path = save_image | path = maybe_path",
+      "assert False, 'Cannot convert 2d path: path=' + repr(path) | isinstance(path, set) | isinstance(path, dict)",
+      "assert get_absolute_path(path) == get_absolute_path(path_join(parent_folder, file_name)) | output = path",
+      "assert is_symlink(path)",
+      "path = np.asarray | path = as_points_array | path = path.T",
+      "assert isinstance(path, str) | isinstance(path, str) | path = path.rstrip",
+      "assert os.path.exists(path), \"r.delete_path: There is no folder or file to delete. The path you specified, '\" + path + \"', does not exist!\" | assert False, 'This should be impossible...it appears that path %s exists but is neither a file nor a folder.' % path",
+      "path = strip_ansi_escapes | path = path.split",
+      "assert isinstance(path, str), type(path) | isinstance(path, str) | new_path = path",
+      "assert False, 'r.get_disc_space ERROR: ' + path + ' is neither a folder nor a file!' | path = os.path.join",
+      "path == parent | path = get_folder_name | path = get_file_name",
+      "path=None | path=path",
+      "isinstance(path, str) | path = os.path.dirname | path = os.environ.get",
+      "path = make_directory",
+      "assert os.path.exists(path), \"r.delete_file: There is no file to delete. The path you specified, '\" + path + \"', does not exist!\" | assert file_exists(path), 'r.delete_file: The path you selected exists, but is not a file: %s' % path",
+      "assert cursor.is_dir(), 'make_directory: failed to make directory at path ' + repr(path) + ' because ' + repr(cursor) + ' is the path of an existing file that is not a directory'",
+      "path = with_file_name | path = os.path.join",
+      "assert path_exists(path), 'Path does not exist: ' + str(path) | path = input_select_path | path = get_relative_path",
+      "assert get_file_extension(path) == filetype | path=None | path = get_youtube_video_title",
+      "assert isinstance(root, str), 'root must be a string representing the root path to compare the given path against'",
+      "path=None | path = _get_repo_name_from_url | path = get_absolute_path",
+      "path = _get_default_video_path | path = rp.get_absolute_path",
+      "isinstance(path, str)",
+      "path = os.path.expanduser | path = os.path.realpath",
+      "new_path = path",
+      "assert path is not None | assert not is_a_file(path), 'Path already exists as a file | path=None",
+      "path = temporary_file_path",
+      "path=None | path = get_unique_copy_path | path = with_file_extension",
+      "assert get_file_extension(path) == 'ipynb', 'clear_jupyter_notebook_outputs: You must select a .ipynb file' | path = input_select_file | path = get_absolute_path",
+      "assert not isinstance(frames, str), 'The first argument should be the sequence of video frames, not the path!' | path=None",
+      "path = as_complex_vector | path = circ_diff | path = circ_quot"
+    ],
+    "functions": [
+      "fansi_highlight_path",
+      "save_image_jpg",
+      "save_image_webp",
+      "save_image_avif",
+      "save_image_jxl",
+      "save_animated_webp",
+      "display_polygon",
+      "load_yaml_file",
+      "load_dyaml_file",
+      "add_to_env_path",
+      "read_symlink",
+      "symlink_is_broken",
+      "is_symbolic_link",
+      "save_animated_png",
+      "total_disc_bytes",
+      "evenly_split_path",
+      "as_complex_vector",
+      "as_points_array",
+      "as_cv_contour",
+      "file_cache_call",
+      "file_cache_wrap",
+      "with_file_extension",
+      "with_file_name",
+      "get_relative_path",
+      "get_absolute_path",
+      "r_transform",
+      "r_transform_inverse",
+      "download_youtube_video",
+      "get_video_file_duration",
+      "_get_video_file_framerate_via_moviepy",
+      "_get_video_file_framerate_via_ffprobe",
+      "load_video_stream",
+      "load_video",
+      "save_video_avi",
+      "_cv_save_video_mp4",
+      "save_video_mp4",
+      "save_video_gif_via_pil",
+      "directory_exists",
+      "is_empty_folder",
+      "file_exists",
+      "path_exists",
+      "rename_path",
+      "delete_file",
+      "delete_folder",
+      "delete_symlink",
+      "delete_path",
+      "make_directory",
+      "take_directory",
+      "path_split",
+      "get_unique_copy_path",
+      "download_url",
+      "get_video_file_shape",
+      "bytes_to_file",
+      "web_paste_path",
+      "_paste_path_from_bundle",
+      "web_copy_path",
+      "_copy_path_to_bundle",
+      "clear_jupyter_notebook_outputs",
+      "get_git_branch",
+      "get_git_is_dirty",
+      "get_git_repo_root",
+      "git_clone",
+      "git_pull",
+      "_save_image",
+      "apply_suffix_to_path",
+      "format_path"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "text_string",
+    "different_validations": [
+      "text_string = str",
+      "text_string = str | lines = text_string"
+    ],
+    "functions": [
+      "fansi",
+      "_legacy_fansi"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "text_color",
+    "different_validations": [
+      "text_color=None | text_color=text_color",
+      "text_color=text_color",
+      "text_color = as_rgba_float_color | text_color=text_color",
+      "isinstance(text_color, str) | isinstance(text_color, str) | isinstance(text_color, int)",
+      "assert 0 <= text_color <= 7, 'text_color == ' + str(text_color) + ' \u2234 \u00ac\ufe590 <= text_color <= 7\ufe5a \u2234 AssertionError' | isinstance(text_color, str) | text_color=None"
+    ],
+    "functions": [
+      "fansi",
+      "_legacy_fansi",
+      "fansi_print",
+      "fansi_print_lines",
+      "labeled_image"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "style",
+    "different_validations": [
+      "style=None | style = get_style_by_name | style = list",
+      "assert 0 <= style <= 7, 'style == ' + str(style) + ' \u2234 \u00ac\ufe590 <= style <= 7\ufe5a \u2234 AssertionError' | isinstance(style, str) | style=None",
+      "style=style",
+      "style=None | style=... | style=style",
+      "assert isinstance(repr(style), str) | style = input | style = option",
+      "assert style <= all_style_options | assert not basic_options & style, 'Should be impossible' | assert not underline_options & style, 'Should be impossible'",
+      "isinstance(style, str) | style=None | style=style_a",
+      "style=None | style = pseudo_terminal_style"
+    ],
+    "functions": [
+      "fansi",
+      "_legacy_fansi",
+      "fansi_print",
+      "fansi_pygments",
+      "set_prompt_style",
+      "pseudo_terminal",
+      "fansi_print_lines",
+      "skia_text_to_image"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "background_color",
+    "different_validations": [
+      "background_color=None | bg=background_color",
+      "background_color = float_color_to_byte_color",
+      "background_color=background_color | background_color=background_color",
+      "background_color = as_rgba_float_color | background_color = np.asarray",
+      "background_color=None | background_color = _background_color | background_color = float_color_to_byte_color",
+      "background_color = as_rgba_float_color | background_color=background_color",
+      "isinstance(background_color, str) | isinstance(background_color, int) | isinstance(background_color, int)",
+      "background_color = as_rgba_float_color",
+      "assert 0 <= background_color <= 7, 'background_color == ' + str(background_color) + ' \u2234 \u00ac\ufe590 <= background_color <= 7\ufe5a \u2234 AssertionError' | isinstance(background_color, str) | background_color=None",
+      "background_color=background_color",
+      "background_color=None | background_color=background_color",
+      "color=background_color"
+    ],
+    "functions": [
+      "fansi",
+      "_legacy_fansi",
+      "fansi_print",
+      "get_progress_bar_image",
+      "line_graph_via_plotille",
+      "fansi_print_lines",
+      "cv_line_graph",
+      "labeled_image",
+      "cv_text_to_image",
+      "_slow_pil_text_to_image",
+      "pil_text_to_image",
+      "skia_text_to_image"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "underline_color",
+    "different_validations": [
+      "underline_color=None | underline_color=underline_color",
+      "isinstance(underline_color, str) | isinstance(underline_color, int) | isinstance(underline_color, int)"
+    ],
+    "functions": [
+      "fansi",
+      "fansi_print",
+      "fansi_print_lines"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "reset",
+    "different_validations": [
+      "reset=True | reset=reset",
+      "reset=True | reset=False | reset=False"
+    ],
+    "functions": [
+      "fansi",
+      "fansi_print",
+      "fansi_print_lines"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "truecolor",
+    "different_validations": [
+      "truecolor=None | truecolor=truecolor",
+      "truecolor=None | truecolor==True | truecolor=True",
+      "truecolor=True"
+    ],
+    "functions": [
+      "fansi",
+      "fansi_print",
+      "display_image_in_terminal_color",
+      "fansi_print_lines"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "string",
+    "different_validations": [
+      "assert len(string) >= length",
+      "lines = string",
+      "string != strip_ansi_escapes | string = strip_ansi_escapes",
+      "assert isinstance(string, str), 'word2number error: please input a string. You gave me a ' + repr(type(string)) | assert string.count(' over ') == 1, 'word2number error: Cant have a fraction with two denominators, but was given ' + repr(string) | assert string.count('point ') == 1, \"word2number error: Cant have more than one decimal point in a number but string said 'point' twice in \" + repr(string)",
+      "string = _line_numbered_string | string = fansi",
+      "string = str",
+      "string = str | string = string.replace | string = repr_multiline",
+      "string = string.lower",
+      "assert string_width(string) <= width | assert string_height(string) <= height",
+      "assert len(fillchar) == 1, 'fillchar should be a length 1 string, but got fillchar=' + repr(fillchar) | width = string",
+      "string = strip_ansi_escapes | out = string",
+      "_local_clipboard_string = string",
+      "i = string | s = string",
+      "isinstance(string, str)",
+      "isinstance(string, str) | string = base64.b64encode",
+      "string = str | text=string",
+      "lines = string | original_lines = string",
+      "max_line_length = string",
+      "assert isinstance(string, str), 'You can only copy a string to the tmux clipboard' | isinstance(string, str)",
+      "string = string.expandtabs"
+    ],
+    "functions": [
+      "_set_local_clipboard_string",
+      "_copy_text_over_terminal",
+      "random_substring",
+      "unindent",
+      "with_line_numbers",
+      "parenthesizer_automator",
+      "repr_multiline",
+      "_highlighted_query_results",
+      "make_string_rectangular",
+      "string_is_rectangular",
+      "visible_string_length",
+      "_pad_string_height",
+      "pad_string_to_dims",
+      "words_to_number",
+      "_string_pager_via_pypager",
+      "string_pager",
+      "fuzzy_string_match",
+      "propagate_whitespace",
+      "tmux_copy",
+      "_maybe_display_string_in_pager",
+      "vim_copy",
+      "fansi_progress",
+      "highlighted"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "code",
+    "different_validations": [
+      "code = _qualify_imports",
+      "assert isinstance(code, str), 'Code should be a string' | isinstance(code, str)",
+      "code <python_expression | code <python_expression | code = exeval",
+      "assert is_valid_python_syntax(code) | lines = code",
+      "code = code.rstrip | code_lines = code | escaped_code = code",
+      "isinstance(code, str) | code = get_parent_directory | code = get_source_code",
+      "code=None | code = unindent",
+      "code = strip_docstrings",
+      "input=code",
+      "code = code.splitlines",
+      "lines = code",
+      "assert is_valid_python_syntax(code) | lines = code | code = _removestar",
+      "code = gather_args_call | code = qualify_imports",
+      "assert isinstance(code, str), 'code should be a string but got type ' + repr(type(code)) | isinstance(code, str) | input=code",
+      "assert isinstance(code, str) | isinstance(code, str)",
+      "code=True",
+      "code = _removestar | code = code | code = remove_first_import_line",
+      "s = code",
+      "code=code.strip | code=code.splitlines | code=code.strip",
+      "code = soup.prettify",
+      "code = highlight | code = highlighted_code",
+      "code=get_source_code | num_code_lines = code",
+      "source=code | source=code"
+    ],
+    "functions": [
+      "fansi_syntax_highlighting",
+      "fansi_pygments",
+      "fansi_pygments_demo",
+      "display_code_cell",
+      "is_valid_python_syntax",
+      "is_valid_shell_syntax",
+      "_parse_exeval_code",
+      "exeval",
+      "_pterm_exeval",
+      "as_example_comment",
+      "javascript",
+      "python_2_to_3",
+      "strip_python_docstrings",
+      "clean_imports_via_unimport",
+      "_run_ai_cli_coder",
+      "autoformat_html_via_bs4",
+      "run_removestar",
+      "qualify_imports",
+      "get_star_modules",
+      "_inline_rp_code",
+      "remove_first_import_line",
+      "unarpy",
+      "print_code"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "lazy",
+    "different_validations": [
+      "lazy=False | lazy=lazy_frames",
+      "lazy==True | lazy=True",
+      "lazy=False",
+      "lazy=False | lazy=lazy",
+      "lazy=False | lazy=True | lazy=False",
+      "lazy=False | lazy=True | lazy=True",
+      "lazy=False | lazy=True"
+    ],
+    "functions": [
+      "fansi_syntax_highlighting",
+      "video_with_progress_bar",
+      "load_files",
+      "with_alpha_checkerboards",
+      "load_text_files",
+      "load_jsons",
+      "load_yaml_files",
+      "split_into_sublists",
+      "join_with_separator",
+      "rotate_images",
+      "read_symlinks",
+      "make_symlinks_relative",
+      "make_symlinks_absolute",
+      "replace_symlinks_with_hardlinks",
+      "labeled_images",
+      "labeled_videos",
+      "download_fonts",
+      "download_google_fonts",
+      "get_all_runnable_python_files",
+      "load_video_streams",
+      "load_videos",
+      "copy_paths",
+      "path_join",
+      "remove_duplicate_frames",
+      "crop_images",
+      "crop_videos",
+      "crop_videos_to_min_size",
+      "crop_videos_to_max_size",
+      "s3_list_objects",
+      "download_urls",
+      "download_urls_to_cache",
+      "get_cache_file_paths",
+      "get_all_taken_ports",
+      "cv_resize_images",
+      "resize_videos",
+      "resize_images_to_hold",
+      "resize_images_to_fit",
+      "resize_video_to_hold",
+      "resize_video_to_fit",
+      "resize_videos_to_fit",
+      "resize_videos_to_hold",
+      "_get_all_paths_fast",
+      "calculate_flows"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "language",
+    "different_validations": [
+      "language=None | language = language",
+      "language=None",
+      "assert language in _get_punkt_languages(), 'Language %s is not supported. Please choose from: %s' % (language, _get_punkt_languages())"
+    ],
+    "functions": [
+      "fansi_pygments",
+      "display_code_cell",
+      "split_sentences"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "image",
+    "different_validations": [
+      "assert is_image(image) | image = image.copy | image = 255",
+      "image=load_image_from_webcam | image=unwarped_perspective_image | image = as_byte_image",
+      "assert not is_grayscale_image(image), 'A grayscale UV map is pretty dang useless. You sure you didnt make a mistake?' | assert not is_binary_image(image), 'A binary UV map is pretty dang useless. You sure you didnt make a mistake?' | assert not is_grayscale_image(image), 'A grayscale UV map is pretty dang useless. You sure you didnt make a mistake?'",
+      "flattened = image",
+      "assert is_image(image) | assert filetype[1:] in _opencv_supported_image_formats, 'Unsupported image format: ' + repr(filetype) + ', please choose from [.' + ', .'.join(_opencv_supported_image_formats) + ']' | image = as_byte_image",
+      "image = as_rgba_image",
+      "300\n            >>>     image | image\n            >>> sigma | image=create_test_image",
+      "image = load_image | image=resize_image_to_fit | image=as_float_image",
+      "image = as_binary_image",
+      "image=load_image | image = as_numpy_image | image = as_rgb_image",
+      "image = load_image | image = np.ones | image=image",
+      "image = as_numpy_image | image = as_rgb_image | image = as_byte_image",
+      "image = as_numpy_array | shape = image",
+      "assert is_image(image), 'Input must be an image as defined by rp.is_image' | assert is_image(kernel), 'The kernel must also be an image as defined by rp.is_image' | image = _prepare_cv_image",
+      "assert rp.r.is_torch_image(image), 'image must be a torch tensor with shape [C, H, W], but got image with type {}'.format(type(image)) | assert image.device == x.device == y.device, 'all inputs must be on the same device, but got image.device={}, x.device={}, and y.device={}'.format(image.device, x.device, y.device) | assert y.shape == x.shape == (in_height, in_width), 'x and y should have the same height and width as the input image, aka {} but x.shape=={} and y.shape=={}'.format((in_height, in_width), x.shape, y.shape)",
+      "image = np.zeros | image = create_test_image | image = np.asarray",
+      "assert rp.is_image(image) | image = as_numpy_image | height < image",
+      "assert is_image(image) or isinstance(image, str) | isinstance(image, str) | isinstance(image, str)",
+      "image=None | image = contours_to_image | image = as_byte_image",
+      "assert is_rgba_image(image) | assert is_byte_image(image)",
+      "assert in_height == out_height, 'rp.cv_remap_image: If using relative=True, the UV map must be the same shape as the input image' | assert in_width == out_width, 'rp.cv_remap_image: If using relative=True, the UV map must be the same shape as the input image' | image = as_byte_image",
+      "image = as_numpy_image | image = full_range",
+      "assert isinstance(image, str) or is_image(image) | assert is_image(image) | isinstance(image, str)",
+      "assert is_image(image)",
+      "assert image.ndim == 3 | assert image.shape[2] == 4 | assert image.dtype == np.uint8",
+      "image = bordered_image_solid_color",
+      "image = as_rgb_image | image = as_byte_image | text = image",
+      "image = as_rgba_image | image = as_pil_image",
+      "assert is_image(image), 'as_pil_image: Input is not an image as defined by rp.is_image' | assert is_image(image), image.shape | image = as_numpy_image",
+      "assert is_image(image) | image=load_image | image = as_numpy_image",
+      "assert is_image(image) | image = pil_text_to_image | image = as_byte_image",
+      "assert is_image(image) | assert get_image_dimensions(mask) == get_image_dimensions(image) | image = load_image",
+      "assert is_image(image) | image=load_image | image=cv_resize_image",
+      "image = with_alpha_checkerboard",
+      "assert is_float_image(image) | image = np.clip",
+      "image = as_byte_image | original_dtype = image | image = image.copy",
+      "image = rp.encode_image_to_base64",
+      "assert is_image(image), 'Error: input is not an image as defined by rp.is_image()' | assert False, 'This line should be impossible to reach because is_image(image).'",
+      "assert is_image(image) | isinstance(image, str) | image = open",
+      "assert mode in {'constant', 'nearest', 'reflect', 'mirror', 'wrap'}, 'r.max_filter: Invalid mode for max-filtering edge-areas of image. mode=' + str(mode)",
+      "assert is_image(image) | image = crop_image",
+      "assert is_image(image), 'Error: input is not an image as defined by rp.is_image()'",
+      "image = as_numpy_image | image = as_rgb_image",
+      "assert (image==new_image).all() | assert rp.r.is_torch_image(image), 'image must be a torch tensor with shape [C, H, W]' | assert image.device == x.device == y.device, 'all inputs must be on the same device'",
+      "image = cv_resize_image | image = resize_image | image = crop_image",
+      "image = load_image | image=resize_image_to_fit | image = as_numpy_image",
+      "image = np.asarray",
+      "image = load_image | image=image | image = cv_draw_circle",
+      "image=load_image | image=cv_draw_rectangle | image = as_byte_image",
+      "image = load_image",
+      "image = as_byte_image | image = as_rgb_image",
+      "isinstance(image, str) | image=stars | image=image",
+      "image = as_float_image | image = as_rgba_image",
+      "assert is_image(image) | assert (image_height, image_width) == image.shape[:2] | image = as_numpy_image",
+      "assert is_rgba_image(image), 'cv_inpaint_image: Warning: no mask was given, and the input image doesnt have transparency - which means nothing will be inpainted. If making this an error is an issue this might be downgraded to a warning or removed, but right now I assume youve likely made a mistake. Are you sure you didnt mean to pass in an RGBA image or give a mask?' | assert is_image(image) and is_image(mask) | assert get_image_dimensions(mask) == get_image_dimensions(image), 'mask and image must have same height and width'",
+      "assert is_rgb_image(image) or is_rgba_image(image)",
+      "image = bordered_image_solid_color | image = bordered_image_solid_color",
+      "assert is_image(image) | assert is_rgb_image(image) or is_rgba_image(image) | image = as_numpy_image",
+      "assert ndim in {2, 3}, 'Image tensor must have either two or three dimensions (either a grayscale image or RGB or RGBA image)' | isinstance(image, str) | isinstance(image, np.ndarray)",
+      "assert mode in {'constant', 'nearest', 'reflect', 'mirror', 'wrap'}, 'r.med_filter: Invalid mode for blurring edge-areas of image. mode=' + str(mode)",
+      "assert output in 'image bounds'.split(), 'output is a string indicating what the output type is - it can be either image or bounds but you gave type ' + str(type(output)) + ' ' + str(output) | assert is_image(image), 'Error: input is not an image as defined by rp.is_image()' | assert False, 'crop_image_zeros cannot handle this image type and this function needs to be updated'",
+      "assert False, 'Unsupported image type: ' + str(type(image)) | isinstance(image, np.ndarray)",
+      "assert isinstance(image, str) or is_image(image) | assert is_image_file(image) | isinstance(image, str)",
+      "assert is_image(image) | assert is_rgba_image(image) | image = as_byte_image",
+      "image = as_numpy_image | image = as_rgba_image | image = as_float_image",
+      "assert is_image(image) | image=load_image_from_webcam | image = load_image",
+      "image = as_grayscale_image | image = as_byte_image",
+      "image=image",
+      "assert is_image(image) | image = as_float_image | image = np.expand_dims",
+      "image = as_rgb_image | image = as_float_image",
+      "assert is_image(image) | image = as_byte_image | image = dither",
+      "image = load_image | image = gather_args_call | image = rotate_image",
+      "image = as_numpy_array",
+      "image = np.asarray | output_resolution = image",
+      "assert is_image(image) or is_torch_image(image), type(image)",
+      "assert rp.is_image(image) | assert height or width, 'If allow_shrink is True, at least one dimension must be nonzero. Scaling an image to a factor of 0 is not allowed.' | image = as_numpy_image",
+      "image = as_numpy_image | image = as_float_image",
+      "image = image.copy",
+      "assert is_image(image), type(image)",
+      "isinstance(image, str) | image = load_image",
+      "image = as_numpy_image | image = as_rgba_image",
+      "assert is_image_file(image) or is_image(image), 'The input image must either be a path to an image, or a numpy array representing an image' | assert file_exists(image), 'Cannot find a file at path ' + repr(image) | assert is_image_file(image), 'There is a file, but its not an image: ' + repr(path)",
+      "scaled_image = image | image = cv_resize_image | image = scales",
+      "image = load_image | image=image | image = cv_draw_arrow",
+      "assert is_image(image) | image = as_rgb_image | img_width=image",
+      "assert mode in {'constant', 'nearest', 'reflect', 'mirror', 'wrap'}, 'r.med_filter: Invalid mode for med-filtering edge-areas of image. mode=' + str(mode)",
+      "assert is_image(image) | image = as_numpy_image | image = image.astype",
+      "isinstance(image, str) | image = load_image | image = as_rgba_image",
+      "image = as_byte_image | image = image | num_channels = image",
+      "assert is_image(image) | assert len(image.shape) == 3 | image = as_rgb_image",
+      "assert rp.r.is_torch_image(image) | assert out.shape == (image.shape[0], height, width) | image = load_image",
+      "assert is_image(image) | assert get_image_dimensions(image) == get_image_dimensions(alpha) | image = as_rgba_image",
+      "image=load_image_from_webcam | image=unwarped_perspective_image | image = as_grayscale_image",
+      "assert is_image(image) | isinstance(image, str) | device = image",
+      "assert mode in {'constant', 'nearest', 'reflect', 'mir3ror', 'wrap'}, 'r.min_filter: Invalid mode for min-filtering edge-areas of image. mode=' + str(mode)",
+      "assert image.ndim == 3 | image = as_numpy_array",
+      "assert is_image(image) | assert get_image_dimensions(image) == get_image_dimensions(color_img_or_value), 'Images must be the same size' | image = as_rgb_image",
+      "assert is_image(image) | cropped_image = image"
+    ],
+    "functions": [
+      "_rgb_to_grayscale",
+      "gauss_blur",
+      "with_drop_shadow",
+      "with_corner_radius",
+      "with_image_glow",
+      "get_alpha_outline",
+      "with_alpha_outline",
+      "image_with_progress_bar",
+      "crop_image_to_square",
+      "crop_image_at_random_position",
+      "max_filter",
+      "min_filter",
+      "med_filter",
+      "_auto_interp_for_resize_image",
+      "_resize_image_via_skimage",
+      "_copy_image_to_clipboard_via_pyjpgclipboard",
+      "_copy_image_to_clipboard_via_copykitten",
+      "_encode_image_to_bytes",
+      "encode_image_to_bytes",
+      "save_image",
+      "save_image_to_imgur",
+      "save_image_jpg",
+      "save_image_webp",
+      "save_image_avif",
+      "save_image_jxl",
+      "save_openexr_image",
+      "_display_image_in_notebook_via_ipyplot",
+      "_image_to_html",
+      "display_image",
+      "display_alpha_image",
+      "display_cv_color_histogram",
+      "decode_float_matrix_from_rgba_byte_image",
+      "display_image_in_terminal",
+      "display_image_in_terminal_color",
+      "display_image_in_terminal_imgcat",
+      "auto_canny",
+      "_skimage_skeletonize",
+      "rotate_image",
+      "_rotate_rgb_image",
+      "_view_image_via_textual_imageview",
+      "_cv_helper",
+      "cv_find_contours",
+      "cv_draw_contours",
+      "cv_draw_rectangle",
+      "cv_draw_circle",
+      "cv_draw_circles",
+      "cv_draw_arrow",
+      "cv_draw_arrows",
+      "byte_image_histogram",
+      "cv_apply_affine_to_image",
+      "cv_manually_selected_contours",
+      "cv_manually_selected_contour",
+      "_cv_morphological_helper",
+      "cv_gauss_blur",
+      "_alpha_weighted_rgba_image_func",
+      "labeled_image",
+      "_binary_floyd_steinburg_dithering",
+      "is_image",
+      "is_grayscale_image",
+      "is_rgb_image",
+      "is_rgba_image",
+      "as_grayscale_image",
+      "as_rgb_image",
+      "as_rgba_image",
+      "is_float_image",
+      "is_byte_image",
+      "is_binary_image",
+      "_clamp_float_image",
+      "as_float_image",
+      "as_byte_image",
+      "as_binary_image",
+      "get_image_dimensions",
+      "get_image_height",
+      "get_image_width",
+      "bordered_image_solid_color",
+      "cv_box_blur",
+      "shift_image",
+      "roll_image",
+      "crop_image",
+      "crop_image_zeros",
+      "edit_image_in_terminal",
+      "decode_image_to_bytes",
+      "inverted_image",
+      "sobel_edges",
+      "get_image_hue",
+      "get_image_saturation",
+      "get_image_value",
+      "get_image_red",
+      "get_image_green",
+      "get_image_blue",
+      "_with_image_channel",
+      "with_image_hue",
+      "with_image_saturation",
+      "with_image_brightness",
+      "apply_colormap_to_image",
+      "cv_image_filter",
+      "_prepare_cv_image",
+      "cv_resize_image",
+      "skia_resize_image",
+      "torch_resize_image",
+      "torch_remap_image",
+      "apply_uv_map",
+      "torch_scatter_add_image",
+      "resize_image_to_hold",
+      "resize_image_to_fit",
+      "cv_inpaint_image",
+      "cv_floodfill_mask",
+      "image_to_text",
+      "cv_equalize_histogram",
+      "extract_image_channels",
+      "extract_alpha_channel",
+      "apply_image_function_per_channel",
+      "with_alpha_channel",
+      "unwarped_perspective_image",
+      "run_depth_pro",
+      "cv_remap_image",
+      "detect_apriltags",
+      "as_pil_image",
+      "as_numpy_image",
+      "as_torch_image",
+      "zoom_crop_origin",
+      "_get_html",
+      "_as_skia_image"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "matrix",
+    "different_validations": [
+      "matrix = _tensorify",
+      "matrix = np.asarray",
+      "assert is_a_square_matrix(matrix) | matrix = _tensorify"
+    ],
+    "functions": [
+      "append_uniform_row",
+      "append_uniform_column",
+      "is_a_matrix",
+      "is_a_square_matrix",
+      "square_matrix_size"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "mode",
+    "different_validations": [
+      "assert mode in 'normal robust'.split()",
+      "assert mode in {'constant', 'nearest', 'reflect', 'mirror', 'wrap'}, 'r.med_filter: Invalid mode for med-filtering edge-areas of image. mode=' + str(mode) | mode = mode.lower | mode=mode",
+      "assert mode in ['saturation', 'brightness'], \"mode must be either 'saturation' or 'brightness'\"",
+      "mode=0",
+      "mode = SKIA_BLEND_MODES.get",
+      "assert mode in {'constant', 'nearest', 'reflect', 'mirror', 'wrap'}, 'r.max_filter: Invalid mode for max-filtering edge-areas of image. mode=' + str(mode) | mode = mode.lower | mode=mode",
+      "assert mode in {'constant', 'nearest', 'reflect', 'mirror', 'wrap'}, 'r.med_filter: Invalid mode for blurring edge-areas of image. mode=' + str(mode) | mode = mode.lower | mode=mode",
+      "mode=max | mode = max | mode = min",
+      "assert mode in {'constant', 'nearest', 'reflect', 'mir3ror', 'wrap'}, 'r.min_filter: Invalid mode for min-filtering edge-areas of image. mode=' + str(mode) | mode = mode.lower | mode=mode",
+      "mode=mode",
+      "assert mode in blend_modes, 'Please choose a blend mode from the following options: ' + str(blend_modes)",
+      "assert False, 'Invalid mode: ' + mode"
+    ],
+    "functions": [
+      "gauss_blur",
+      "blend_images",
+      "overlay_images",
+      "trim_video",
+      "_trim_videos_to_same_length",
+      "max_filter",
+      "min_filter",
+      "med_filter",
+      "load_tsv",
+      "is_valid_python_syntax",
+      "skia_stamp_image",
+      "optical_flow_to_image",
+      "addstr_wordwrap"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "diameter",
+    "different_validations": [
+      "diameter=3 | diameter=diameter | width = diameter",
+      "diameter == 0",
+      "diameter=2"
+    ],
+    "functions": [
+      "max_filter",
+      "min_filter",
+      "med_filter",
+      "_cv_morphological_helper",
+      "cv_erode",
+      "cv_dilate",
+      "cv_box_blur"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "size",
+    "different_validations": [
+      "size=12 | size=size",
+      "size=128 | size=64 | size=120",
+      "isinstance(size, int)",
+      "size=256",
+      "size=64",
+      "size=21 | num=size",
+      "size=128 | size=64 | size=32",
+      "assert size >= 0, 'Cannot resize an image by a negative factor' | size >= 0",
+      "size=size",
+      "size = len",
+      "size=32",
+      "isinstance(size, str)",
+      "assert isinstance(size, float) or isinstance(size, int) | assert isinstance(size, int) | isinstance(size, float)",
+      "size=3 | markersize=size",
+      "assert is_number(size) | size=10 | size == 0",
+      "size=1 | size=size",
+      "size=10 | size=10"
+    ],
+    "functions": [
+      "gaussian_kernel",
+      "image_with_progress_bar",
+      "video_with_progress_bar",
+      "display_dot",
+      "labeled_image",
+      "_slow_pil_text_to_image",
+      "pil_text_to_image",
+      "skia_text_to_image",
+      "cv_resize_image",
+      "_size_to_height_width",
+      "resize_videos",
+      "skia_resize_image",
+      "torch_resize_image",
+      "get_apriltag_image",
+      "get_apriltag_images",
+      "read",
+      "is_human",
+      "is_num_bytes"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "sigma",
+    "different_validations": [
+      "sigma=1 | sigma == 0 | sigma=sigma",
+      "sigma=3",
+      "sigma=0.33",
+      "sigma=1 | image\n            >>> sigma | sigma = int"
+    ],
+    "functions": [
+      "gaussian_kernel",
+      "auto_canny",
+      "circular_gaussian_blur",
+      "cv_gauss_blur"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "dim",
+    "different_validations": [
+      "assert dim == 2 or dim == 1, 'Only 1d and 2d gaussians are supported right now' | dim=2 | dim == 2",
+      "dim=3",
+      "dim=None | dim=False | axis=dim",
+      "axis=dim | axis=dim | dim=dim"
+    ],
+    "functions": [
+      "gaussian_kernel",
+      "random_rotation_matrix",
+      "_softmax",
+      "_max",
+      "_min",
+      "_sum",
+      "_mean"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "height",
+    "different_validations": [
+      "isinstance(height, int) | height < 0 | top_pad = height",
+      "height=256",
+      "height=1080",
+      "height=128 | height=256 | height=height",
+      "height=400",
+      "height = 400",
+      "height=256 | height=256 | num=height",
+      "height=None | height = weight | top = height",
+      "assert string_height(string) <= height | delta_height = height",
+      "height=None | height=thickness | height=400",
+      "assert width >= 0 and height >= 0 | height=None | height = width",
+      "height=None | height=height",
+      "height=512 | height=height",
+      "height = get_image_height",
+      "height > img_height",
+      "assert height >= 0 and width >= 0, \"Images can't have a negative height or width\" | height = get_image_height | height = image_height",
+      "height=10",
+      "assert height is not None and width is not None, 'unwarped_perspective_contour: You must specify either to_points or both width and height, but all three were None' | assert height is None and width is None, 'unwarped_perspective_contour: Both to_points AND height/width were specified - please only give to_points or height/width' | height=height",
+      "assert height >= 0 and width >= 0 | height=randint | height >= 0",
+      "assert height is not None or width is not None | height = 999999 | height < image_height",
+      "assert height is None or (isinstance(height, int) and height > 0), 'height must be a positive integer or None, but got {}'.format(height) | assert y.shape == x.shape == (in_height, in_width), 'x and y should have the same height and width as the input image, aka {} but x.shape=={} and y.shape=={}'.format((in_height, in_width), x.shape, y.shape) | isinstance(height, int)",
+      "assert resize_image_to_hold(im, height=100 ,width=None,allow_shrink=True ).shape == ( 100,  150, 3)  | assert resize_image_to_hold(im, height=100 ,width=100 ,allow_shrink=True ).shape == ( 100,  150, 3) | assert resize_image_to_hold(im, height=None,width=100 ,allow_shrink=True ).shape == (  67,  100, 3)",
+      "height=None | height = int | height=100",
+      "height=64",
+      "height=None | effect!\n    height | height = None",
+      "height=height",
+      "height=None",
+      "height=256 | height=256"
+    ],
+    "functions": [
+      "uniform_float_color_image",
+      "get_checkerboard_image",
+      "get_progress_bar_image",
+      "crop_image_at_random_position",
+      "xy_float_images",
+      "xy_torch_matrices",
+      "line_graph_via_plotille",
+      "load_image_from_webcam",
+      "cv_line_graph",
+      "rgb_histogram_image",
+      "_cv_char_to_image",
+      "launch_terminal_in_colab",
+      "bordered_image_solid_color",
+      "bordered_images_solid_color",
+      "cv_box_blur",
+      "save_video_mp4",
+      "crop_image",
+      "crop_images",
+      "crop_videos",
+      "bordered_string",
+      "_pad_string_height",
+      "pad_string_to_dims",
+      "wordcloud_image",
+      "get_identity_uv_map",
+      "torch_scatter_add_image",
+      "resize_image_to_hold",
+      "resize_image_to_fit",
+      "unwarped_perspective_image",
+      "unwarped_perspective_contour",
+      "line_graph_via_bokeh",
+      "histogram_via_bokeh"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "width",
+    "different_validations": [
+      "width=256 | width=256 | num=width",
+      "assert height is not None and width is not None, 'unwarped_perspective_contour: You must specify either to_points or both width and height, but all three were None' | assert height is None and width is None, 'unwarped_perspective_contour: Both to_points AND height/width were specified - please only give to_points or height/width' | width = get_image_dimensions",
+      "width=256 | width=256",
+      "width=None | width = paragraph.MaxIntrinsicWidth | width = math.ceil",
+      "assert string_width(string) <= width | delta_width = width",
+      "assert width is None or (isinstance(width, int) and width > 0), 'width must be a positive integer or None, but got {}'.format(width) | assert y.shape == x.shape == (in_height, in_width), 'x and y should have the same height and width as the input image, aka {} but x.shape=={} and y.shape=={}'.format((in_height, in_width), x.shape, y.shape) | isinstance(width, int)",
+      "width=400",
+      "width=width",
+      "width = get_image_width",
+      "assert height >= 0 and width >= 0 | width=randint | width >= 0",
+      "assert width >= 0, 'Cannot have negative width' | width >= 0",
+      "width=None | width = get_terminal_width | width=width",
+      "width=None | width = None | width = max_width",
+      "width=256 | width = get_image_width | width=width",
+      "width=None | width=width",
+      "assert height >= 0 and width >= 0, \"Images can't have a negative height or width\" | width = get_image_width | width = image_width",
+      "width = max",
+      "width=256",
+      "width=100 | width=10 | width = progress",
+      "assert width >= 0 and height >= 0 | width=None | height = width",
+      "width=None | width = weight | left = width",
+      "width=400 | width=2 | width=2",
+      "width=1",
+      "width=0.9 | width=width",
+      "width=None",
+      "assert resize_image_to_hold(im, height=100 ,width=None,allow_shrink=True ).shape == ( 100,  150, 3)  | assert resize_image_to_hold(im, height=100 ,width=100 ,allow_shrink=True ).shape == ( 100,  150, 3) | assert resize_image_to_hold(im, height=None,width=100 ,allow_shrink=True ).shape == (  67,  100, 3)",
+      "width=512 | width=width",
+      "width=1920",
+      "width=64 | width=get_image_dimensions",
+      "width > img_width",
+      "width=None | width=400 | width = thickness",
+      "width=None | width = int | width=500",
+      "assert height is not None or width is not None | width = 999999 | width < image_width"
+    ],
+    "functions": [
+      "uniform_float_color_image",
+      "get_checkerboard_image",
+      "get_progress_bar_image",
+      "crop_image_at_random_position",
+      "xy_float_images",
+      "xy_torch_matrices",
+      "bar_graph",
+      "line_graph_via_plotille",
+      "load_image_from_webcam",
+      "print_rich_stack_trace",
+      "get_rich_traceback_string",
+      "cv_draw_contours",
+      "cv_line_graph",
+      "rgb_histogram_image",
+      "_cv_char_to_image",
+      "skia_text_to_image",
+      "bordered_image_solid_color",
+      "bordered_images_solid_color",
+      "cv_box_blur",
+      "save_video_mp4",
+      "crop_image",
+      "crop_images",
+      "crop_videos",
+      "visible_string_ljust",
+      "visible_string_rjust",
+      "visible_string_center",
+      "wrap_string_to_width",
+      "bordered_string",
+      "pad_string_to_dims",
+      "wordcloud_image",
+      "get_identity_uv_map",
+      "torch_scatter_add_image",
+      "resize_image_to_hold",
+      "resize_image_to_fit",
+      "unwarped_perspective_image",
+      "unwarped_perspective_contour",
+      "line_graph_via_bokeh",
+      "histogram_via_bokeh"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "color",
+    "different_validations": [
+      "color=color",
+      "color=None | color=color",
+      "isinstance(color, str) | hashtag = color | color = color",
+      "color = list | color = list | color=rim_color",
+      "color=random_rgb_byte_color | color = as_rgb_float_color | color = float_color_to_byte_color",
+      "assert is_float_color(color), 'For now, get_color_hue only works with float_colors and returns a float between 0 and 1' | hue = color",
+      "color=color | color=background_color | color=color",
+      "assert is_float_color(color), 'For now, get_color_saturation only works with float_colors and returns a float between 0 and 1' | hue = color",
+      "color = random_rgb_float_color | color=color | color=tuple",
+      "assert is_float_color(color), 'For now, get_color_brightness only works with float_colors and returns a float between 0 and 1' | hue = color",
+      "color = as_rgb_float_color | color = float_color_to_byte_color",
+      "color=rim_color | color=color | color=color",
+      "color=background_color | fill=color",
+      "color=None | color=None | color = _color",
+      "assert len(color) == 4, 'Color must be rgba floats' | color = as_rgba_float_color",
+      "assert is_number(color) or (is_color(color) and len(color) in {3, 4}), 'Color should be a number, an RGB float color, or an RGBA float color' | assert len(color) == 3 and is_rgb_image(output) or (len(color) == 4 and is_rgba_image(output)) | color=random_rgb_float_color",
+      "color = as_rgba_float_color",
+      "assert background.ndim == 3 and background.shape[2] == 3, 'Background must be a color image (HWC format)' | color = as_rgb_float_color | color = float_color_to_byte_color",
+      "assert color.shape in [(), (3,), (4,)] | assert isinstance(color, (tuple, list, str)) or is_number(color) | assert len(color) == 4"
+    ],
+    "functions": [
+      "uniform_float_color_image",
+      "with_alpha_outline",
+      "display_dot",
+      "display_path",
+      "cv_draw_contours",
+      "cv_draw_rectangle",
+      "cv_draw_circle",
+      "cv_draw_circles",
+      "cv_draw_arrow",
+      "cv_draw_arrows",
+      "scatter_plot",
+      "cv_text_to_image",
+      "_slow_pil_text_to_image",
+      "as_rgba_float_color",
+      "pil_text_to_image",
+      "skia_text_to_image",
+      "get_color_hue",
+      "get_color_saturation",
+      "get_color_brightness",
+      "bordered_image_solid_color",
+      "inverted_color",
+      "optical_flow_to_arrow_grid"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "top",
+    "different_validations": [
+      "assert is_image(top) or (is_color(top) and len(top) in {3, 4}) or is_number(top) or isinstance(top, str) | assert is_float_color(top) | assert is_image(top)",
+      "top=None | top = height | top < 0",
+      "top=None | top=0 | top = height",
+      "top=None",
+      "top = resize_images_to_fit | bot.shape == top"
+    ],
+    "functions": [
+      "blend_images",
+      "laplacian_blend",
+      "bordered_image_solid_color",
+      "bordered_images_solid_color",
+      "bordered_string"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "alpha",
+    "different_validations": [
+      "alpha=1 | alpha=alpha",
+      "alpha = get_checkerboard_image | alpha = as_float_images | top.shape == alpha",
+      "alpha=1 | alpha=.5",
+      "assert is_image(alpha) or is_number(alpha) | assert is_image(alpha) | alpha=1",
+      "assert is_image(alpha) | assert get_image_dimensions(image) == get_image_dimensions(alpha) | alpha = uniform_float_color_image"
+    ],
+    "functions": [
+      "blend_images",
+      "laplacian_blend",
+      "display_polygon",
+      "display_cv_color_histogram",
+      "display_path",
+      "with_alpha_channel"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "levels",
+    "different_validations": [
+      "levels=None | levels = int",
+      "assert levels >= 0 | levels=1 | levels >= 0",
+      "levels=1"
+    ],
+    "functions": [
+      "laplacian_blend",
+      "get_path_parent",
+      "get_paths_parents"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "tile_size",
+    "different_validations": [
+      "isinstance(tile_size, int) | tile_size=8",
+      "tile_size=8 | tile_size=tile_size"
+    ],
+    "functions": [
+      "get_checkerboard_image",
+      "with_alpha_checkerboard",
+      "with_alpha_checkerboards",
+      "display_alpha_image"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "second_color",
+    "different_validations": [
+      "second_color=0.75 | second_color=second_color",
+      "second_color=.75"
+    ],
+    "functions": [
+      "get_checkerboard_image",
+      "with_alpha_checkerboard",
+      "with_alpha_checkerboards",
+      "display_alpha_image"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "y",
+    "different_validations": [
+      "y=distance",
+      "y=True | y=False | y = random_ints",
+      "assert x.shape == y.shape, 'x and y must have the same shape' | assert Y.shape == (4, *shape), 'Expected Y.shape == (4, *y.shape), but got {}'.format(Y.shape) | x.shape == y",
+      "y = id",
+      "y=None",
+      "y = detuple",
+      "assert is_torch_tensor(y) and is_a_matrix(y), 'y must be a torch tensor with shape [H_out, W_out]' | assert x.shape == y.shape, 'x and y must have the same shape, but got x.shape={} and y.shape={}'.format(x.shape, y.shape) | assert image.device == x.device == y.device, 'all inputs must be on the same device'",
+      "y=True | y = random_ints | y = list",
+      "assert rp.is_a_matrix(y), 'y must be a matrix' | assert rp.get_image_dimensions(x) == rp.get_image_dimensions(y) | y = y.astype",
+      "assert is_torch_tensor(y) and is_a_matrix(y), 'y must be a torch matrix, but got y with type {} and shape {}'.format(type(y), y.shape) | assert x.shape == y.shape, 'x and y must have the same shape, but got x.shape={} and y.shape={}'.format(x.shape, y.shape) | assert image.device == x.device == y.device, 'all inputs must be on the same device, but got image.device={}, x.device={}, and y.device={}'.format(image.device, x.device, y.device)",
+      "mouse_y = y",
+      "y=y | y=y | y=y",
+      "y=0 | y=random_int | y=random_int",
+      "assert y is None, 'scatter_plot: x is a complex vector but y is not None. This is an invalid input combination as the imaginary part of x ARE the y-values' | y=None | x = y",
+      "y=0 | y=1 | y=False"
+    ],
+    "functions": [
+      "with_drop_shadow",
+      "display_dot",
+      "_contains_func_y",
+      "cv_closest_contour",
+      "cv_draw_circle",
+      "cv_draw_circles",
+      "scatter_plot",
+      "shift_image",
+      "torch_remap_image",
+      "get_bilinear_weights",
+      "torch_scatter_add_image",
+      "cv_remap_image",
+      "mouse_callback",
+      "on_mouse_move",
+      "on_mouse_down"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "blur",
+    "different_validations": [
+      "blur=None | blur=blur",
+      "blur=None | blur=50 | blur = 10",
+      "blur=10 | sigma=blur"
+    ],
+    "functions": [
+      "with_drop_shadow",
+      "with_image_glow",
+      "with_image_glows"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "images",
+    "different_validations": [
+      "assert len(images.shape) != 3, 'Grayscale images are not yet supported' | images = images | images = as_numpy_array",
+      "assert len(paths) == len(images), 'Must have exactly one path to go with every image' | assert all(map(is_image, images)), 'All images must be images as defined by rp.is_image' | assert all((isinstance(path, str) or path is None for path in paths)), 'All paths must be strings. They are where the images are saved to.'",
+      "assert len(images) | assert len(images.shape) == 4, images.shape | assert len(images.shape) == 4, images.shape",
+      "assert isinstance(images, torch.Tensor) | assert len(images.shape) == 4, 'Should be 4d tensor: (batch size, num channels, height, width)' | isinstance(images, torch.Tensor)",
+      "assert is_iterable(images), type(images) | assert len(images) == len(labels) | images = list",
+      "assert all((isinstance(path, str) for path in images)) | assert all((is_image(image) or is_image_file(image) for image in images)) | assert len(images) > 0, 'Must have at least one image to create a slideshow'",
+      "assert len(images) > 0, 'Must have at least one image to display, but len(images)==%i' % len(images)",
+      "images = list | images = split_into_sublists"
+    ],
+    "functions": [
+      "save_images",
+      "_display_image_slideshow_animated",
+      "display_image_slideshow",
+      "labeled_images",
+      "tiled_images",
+      "_images_conversion",
+      "as_numpy_images",
+      "as_torch_images"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "radius",
+    "different_validations": [
+      "radius=5 | radius = list",
+      "radius=5 | radius = max | radius=radius",
+      "assert isinstance(radius, int) and radius >= 1 | isinstance(radius, int) | radius=3",
+      "assert radius >= 0 | radius = round | radius >= 0"
+    ],
+    "functions": [
+      "with_corner_radius",
+      "cv_draw_circle",
+      "cv_draw_circles",
+      "cv_inpaint_image"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "antialias",
+    "different_validations": [
+      "antialias=True | antialias = list | antialias=antialias",
+      "antialias=True | antialias=antialias | antialias=antialias",
+      "antialias=True | antialias=True",
+      "antialias=True",
+      "antialias=True | antialias=antialias"
+    ],
+    "functions": [
+      "with_corner_radius",
+      "with_corner_radii",
+      "cv_draw_contours",
+      "cv_draw_rectangle",
+      "cv_draw_circle",
+      "cv_draw_circles",
+      "cv_draw_arrow",
+      "cv_draw_arrows",
+      "cv_line_graph"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "background",
+    "different_validations": [
+      "assert isinstance(background, np.ndarray), 'Background must be a numpy array' | assert background.ndim == 3 and background.shape[2] == 3, 'Background must be a color image (HWC format)' | isinstance(background, np.ndarray)",
+      "background=None"
+    ],
+    "functions": [
+      "with_corner_radius",
+      "optical_flow_to_arrow_grid"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "allow_growth",
+    "different_validations": [
+      "allow_growth=False | allow_growth=False",
+      "allow_growth=True",
+      "allow_growth=True | allow_growth=allow_growth",
+      "allow_growth=True | allow_growth=False",
+      "allow_growth=False"
+    ],
+    "functions": [
+      "get_alpha_outline",
+      "with_alpha_outline",
+      "shift_image",
+      "resize_image_to_fit",
+      "resize_images_to_fit",
+      "resize_video_to_fit",
+      "resize_videos_to_fit"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "reverse",
+    "different_validations": [
+      "reverse=False | order = reverse",
+      "reverse=True | reverse=reverse | reverse=reverse",
+      "reverse=True | reverse=reverse",
+      "reverse=False | reverse=reverse",
+      "reverse=False | reverse=True | reverse=True",
+      "assert line_join(file_line_iterator(file)) == line_join(list(file_line_iterator(file,reverse=True))[::-1]) | reverse=False | reverse=True",
+      "reverse=False",
+      "reverse=False | reverse=True | reverse=False",
+      "reverse=False | reverse=not | reverse=not"
+    ],
+    "functions": [
+      "get_progress_bar_image",
+      "image_with_progress_bar",
+      "video_with_progress_bar",
+      "sorted_by_number",
+      "sorted_by_len",
+      "sorted_by_attr",
+      "sorted_dict",
+      "contains_sort",
+      "powerset",
+      "input_select",
+      "input_select_multiple",
+      "input_select_path",
+      "input_select_folder",
+      "input_select_file",
+      "accumulate_flows",
+      "file_line_iterator"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "position",
+    "different_validations": [
+      "assert isinstance(position, str) | assert False, 'rp.image_with_progress_bar: position should be \"top\", \"bottom\", \"left\" or \"right\", not ' + repr(position) | isinstance(position, str)",
+      "assert position in ['top', 'bottom', 'left', 'right']"
+    ],
+    "functions": [
+      "image_with_progress_bar",
+      "labeled_image"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "video",
+    "different_validations": [
+      "assert video.ndim == 4, video.ndim | isinstance(video, str) | isinstance(video, torch.Tensor)",
+      "video = create_video",
+      "video = as_rgba_images | video = as_byte_images | video = as_pil_images",
+      "video = rp.as_numpy_images | video = rp.as_rgb_images | video = rp.as_byte_images",
+      "assert length > 0, 'Cannot make progress bar on video with only one frame - length=' + str(length) | video = load_video | video=resize_list",
+      "assert is_video_file(video) or ends_with_any(video, '.gif', '.png') | isinstance(video, str) | video = load_video_stream",
+      "video = rp.load_video | frame = video",
+      "video = rp.crop_images_to_max_size | video = rp.crop_images",
+      "assert is_valid_url(video) or file_exists(video), 'rp.display_video_in_notebook: Video file {0} does not exist'.format(video) | isinstance(video, str) | isinstance(video, str)",
+      "assert has_len(video), 'Cannot show progress because video doesnt have a length, type(video)=' + str(type(video))",
+      "video = as_rgb_images | video = as_byte_images | video = as_numpy_array",
+      "assert is_video_file(video), repr(video) + ' is not a video file' | isinstance(video, str) | video = load_video_stream",
+      "video = eta",
+      "video = load_images | video = as_numpy_array",
+      "isinstance(video, str) | video = load_video | video = list",
+      "assert length >= 0, 'Cannot trim a video to a negative length' | assert is_numpy_array(video) or isinstance(video, list), 'Only list-videos and numpy-videos are supported right now' | assert len(video), 'Cannot extend a video with no frames - we need an example frame to determine the width and height'",
+      "video = rp.load_video"
+    ],
+    "functions": [
+      "video_with_progress_bar",
+      "boomerang_video",
+      "slowmo_video_via_rife",
+      "trim_video",
+      "save_animated_webp",
+      "display_video",
+      "_make_video_dimensions_even",
+      "_display_video_via_mediapy",
+      "display_video_in_notebook",
+      "_display_video_in_notebook",
+      "display_video_in_notebook_webp",
+      "_cv_save_video_mp4",
+      "save_video_gif_via_pil",
+      "remove_duplicate_frames",
+      "run_cotracker",
+      "run_tapnet",
+      "calculate_flows"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "length",
+    "different_validations": [
+      "assert length is None or (isinstance(length, int) and length >= 0), 'rp.load_video: length must be None or a non-negative integer, got {}'.format(length) | isinstance(length, int) | length=None",
+      "length=None | length=length",
+      "assert length > 0, 'Cannot make progress bar on video with only one frame - length=' + str(length) | length=None | length = len",
+      "isinstance(length, float) | length=None | length=length",
+      "assert len(string) >= length | assert length >= 0 | length = random_int",
+      "length=None | length=100 | length=100",
+      "assert isinstance(length, int), 'Length must be an integer, but got %s instead' % repr(type(length)) | assert length >= 0, 'Length must be a non-negative integer, but got %i instead' % length | isinstance(length, int)",
+      "assert length >= 0, 'Cannot trim a video to a negative length' | length >= 0 | number_of_extra_frames = length"
+    ],
+    "functions": [
+      "video_with_progress_bar",
+      "trim_video",
+      "random_substring",
+      "line_graph_live",
+      "tiled_images",
+      "load_video",
+      "load_videos",
+      "resize_list"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "name",
+    "different_validations": [
+      "name = match.group",
+      "name = get_file_name | name = strip_file_extension | file_name = name",
+      "candidate_name = name | candidate_name = name",
+      "assert isinstance(name, str) | isinstance(name, str)",
+      "name=None"
+    ],
+    "functions": [
+      "with_file_name",
+      "_get_rp_color",
+      "_ensure_installed",
+      "tmux_get_unique_session_name",
+      "monkey_patch",
+      "match"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "origin",
+    "different_validations": [
+      "assert isinstance(origin, str) | isinstance(origin, str) | origin=origin",
+      "origin=None",
+      "origin=None | origin=origin",
+      "assert isinstance(origin, str) | isinstance(origin, str) | origin=None",
+      "origin=None | origin=origin | origin=origin",
+      "origin=origin",
+      "isinstance(origin, str)",
+      "assert origin in origins, 'Invalid origin: %s. Please select from %s' % (repr(origin), repr(origins)) | origin=None",
+      "origin=origin | origin=top | origin=center"
+    ],
+    "functions": [
+      "_crop_images_to_max_or_min_size",
+      "crop_images_to_max_size",
+      "crop_images_to_min_size",
+      "crop_images_to_max_height",
+      "crop_images_to_max_width",
+      "crop_images_to_min_height",
+      "crop_images_to_min_width",
+      "crop_image_to_square",
+      "crop_images_to_square",
+      "_concatenated_videos",
+      "horizontally_concatenated_videos",
+      "vertically_concatenated_videos",
+      "vertically_concatenated_images",
+      "grid_concatenated_images",
+      "tiled_images",
+      "crop_image",
+      "crop_images",
+      "crop_videos",
+      "_pad_string_height",
+      "pad_to_same_number_of_lines",
+      "_parse_origin_to_pixels"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "copy",
+    "different_validations": [
+      "copy=True | copy=True",
+      "copy=False",
+      "copy=True",
+      "copy=True | copy=copy | copy=copy",
+      "copy=False | copy=False",
+      "copy=True | copy==False",
+      "copy=False | copy=copy",
+      "copy=True | copy=False | copy=copy",
+      "copy=True | copy=copy | copy=False",
+      "copy=True | copy=False | copy=False",
+      "copy=True | copy=False",
+      "copy=True | copy=copy",
+      "copy=False | copy=False | copy=False"
+    ],
+    "functions": [
+      "_crop_images_to_max_or_min_size",
+      "crop_images_to_max_size",
+      "crop_images_to_min_size",
+      "crop_images_to_max_height",
+      "crop_images_to_max_width",
+      "crop_images_to_min_height",
+      "crop_images_to_min_width",
+      "crop_image_to_square",
+      "crop_images_to_square",
+      "trim_video",
+      "_trim_videos_to_same_length",
+      "trim_videos_to_max_length",
+      "trim_videos_to_min_length",
+      "cv_bgr_rgb_swap",
+      "cv_draw_contours",
+      "cv_draw_rectangle",
+      "cv_draw_circle",
+      "cv_draw_circles",
+      "cv_draw_arrow",
+      "cv_draw_arrows",
+      "cv_erode",
+      "cv_dilate",
+      "skia_stamp_image",
+      "as_grayscale_image",
+      "as_rgb_image",
+      "as_rgba_image",
+      "as_float_image",
+      "as_byte_image",
+      "as_binary_image",
+      "_images_conversion",
+      "as_float_images",
+      "as_byte_images",
+      "as_binary_images",
+      "as_rgb_images",
+      "as_rgba_images",
+      "as_grayscale_images",
+      "crop_image",
+      "cv_resize_image",
+      "cv_resize_images",
+      "torch_resize_image",
+      "torch_resize_images",
+      "with_alpha_channel",
+      "with_image_rgb",
+      "as_numpy_images",
+      "as_numpy_image",
+      "as_torch_videos",
+      "as_torch_images",
+      "as_torch_image",
+      "converter"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "videos",
+    "different_validations": [
+      "videos = detuple | videos = trim_videos_to_max_length",
+      "videos = torch.stack",
+      "assert is_iterable(videos), type(images) | assert len(videos) == len(labels), (len(videos), len(labels)) | videos = list",
+      "videos = trim_videos_to_max_length"
+    ],
+    "functions": [
+      "_concatenated_videos",
+      "labeled_videos",
+      "tiled_videos",
+      "as_torch_videos"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "scale",
+    "different_validations": [
+      "scale=2 | scale=scale | scale=scale",
+      "scale=1",
+      "isinstance(scale, tuple)",
+      "scale=10000.0 | scale=100 | scale=10000",
+      "scale == 1"
+    ],
+    "functions": [
+      "_resize_image_via_skimage",
+      "resize_image",
+      "contours_to_image",
+      "cv_text_to_image",
+      "get_sinusoidal_positional_encodings"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "interp",
+    "different_validations": [
+      "isinstance(interp, str) | interp = list | interp=interp",
+      "assert interp in interp_methods, 'cv_resize_image: Interp must be one of the following: %s' % str(list(interp_methods)) | interp_method = interp | flags=interp",
+      "interp=interp",
+      "assert interp in interp_methods, 'torch_resize_image: Interp must be one of the following: %s' % str(list(interp_methods)) | mode=interp",
+      "assert interp in ['floor', 'ceil', 'round', 'bilinear'], \"interp must be one of 'floor', 'ceil', 'round', or 'bilinear', but got {}\".format(interp) | assert interp == 'floor' | interp=interp",
+      "assert interp in interp_methods, 'rp.cv_remap_image: interp=%s is not valid. Please choose from %s' % (interp, list(interp_methods)) | interp_method = interp",
+      "assert interp in interp_methods, 'torch_remap_image: interp must be one of the following: {}'.format(list(interp_methods)) | interp_mode = interp | mode=interp",
+      "interp=interp | interp=interp",
+      "assert interp in interp_methods, 'cv_resize_image: Interp must be one of the following: %s' % str(list(interp_methods)) | interp_method = interp | interpolation=interp",
+      "assert interp in {'nearest', 'bilinear', 'bicubic'} | arrays! interp"
+    ],
+    "functions": [
+      "resize_image",
+      "rotate_images",
+      "_rotate_rgb_image",
+      "roll_image",
+      "cv_resize_image",
+      "resize_videos",
+      "torch_resize_image",
+      "torch_remap_image",
+      "apply_uv_map",
+      "torch_scatter_add_image",
+      "resize_image_to_hold",
+      "resize_image_to_fit",
+      "resize_images_to_hold",
+      "resize_images_to_fit",
+      "resize_videos_to_fit",
+      "resize_videos_to_hold",
+      "resize_images_to_max_size",
+      "resize_images_to_min_size",
+      "resize_videos_to_min_size",
+      "resize_videos_to_max_size",
+      "cv_remap_image"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "dtype",
+    "different_validations": [
+      "dtype=None | target_dtype = dtype | dtype=target_dtype",
+      "dtype=None | dtype=dtype",
+      "dtype=None",
+      "dtype=None | dtype == np.uint8 | dtype = torch.float32",
+      "dtype=None | dtype = torch.float32 | dtype=dtype"
+    ],
+    "functions": [
+      "xy_torch_matrices",
+      "_create_array_like",
+      "_zeros_like",
+      "_ones_like",
+      "_randn_like",
+      "_rand_like",
+      "_get_cotracker_model",
+      "as_torch_videos",
+      "as_torch_images",
+      "as_torch_image"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "device",
+    "different_validations": [
+      "device=None | device=device | device=device",
+      "device=None | device = image.device",
+      "device=None",
+      "device=None | device = video.device | device = rp.select_torch_device",
+      "device=device",
+      "isinstance(device, int) | isinstance(device, str)",
+      "device=None | device=device"
+    ],
+    "functions": [
+      "xy_torch_matrices",
+      "_get_depth_pro_model",
+      "run_depth_pro",
+      "_get_cotracker_model",
+      "run_cotracker",
+      "run_tapnet",
+      "as_torch_videos",
+      "as_torch_images",
+      "as_torch_image",
+      "load_safetensors",
+      "_torch_device_to_index"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "use_cache",
+    "different_validations": [
+      "use_cache=False | use_cache=False",
+      "use_cache=True | use_cache=use_cache",
+      "use_cache=False",
+      "use_cache=False | use_cache=use_cache",
+      "use_cache=False | use_cache=True",
+      "use_cache=True",
+      "assert isinstance(path,str)\\n        \\n        nonlocal cancelled\\n        if cancelled:\\n            if isinstance(cancelled,Exception):\\n                raise cancelled\\n            else:\\n                return None\\n\\n        try:\\n            image=load_image(path,use_cache=use_cache)\\n        except Exception as e:\\n            if strict==True:\\n                cancelled=e\\n                raise\\n            else:\\n                image=None\\n\\n        if cancelled:\\n            return image\\n\\n        if show_progress:\\n            nonlocal number_of_images_loaded\\n            number_of_images_loaded+=1\\n            show_time_remaining(number_of_images_loaded)\\n        \\n        return image\\n\\n    try:\\n        assert all(isinstance(x,str) for x in locations)\\n        images = par_map(_load_image,locations)#This is fast because it's multithreaded\\n\\n        if strict is False:\\n            #When strict is False (as opposed to None), we skip any images that failed to load | use_cache=False | use_cache=use_cache",
+      "use_cache=True | do_cache = use_cache | use_cache=do_cache",
+      "use_cache=True | use_cache=True",
+      "use_cache=False | use_cache=True | use_cache=False",
+      "use_cache=False | use_cache=False | use_cache=use_cache"
+    ],
+    "functions": [
+      "xy_torch_matrices",
+      "load_animated_gif",
+      "load_image",
+      "load_rgb_image",
+      "load_images",
+      "_load_images_via_pdf2image",
+      "display_image_slideshow",
+      "text_file_to_string",
+      "load_file_lines",
+      "load_text_files",
+      "load_json",
+      "load_jsons",
+      "load_tsv",
+      "load_parquet",
+      "load_yaml_file",
+      "load_yaml_files",
+      "get_system_commands",
+      "system_command_exists",
+      "_get_all_github_gists_info",
+      "get_youtube_video_thumbnail",
+      "get_video_file_duration",
+      "_get_video_file_framerate_via_moviepy",
+      "_get_video_file_framerate_via_ffprobe",
+      "get_video_file_framerate",
+      "load_video",
+      "load_videos",
+      "get_cutscene_frame_numbers",
+      "get_all_importable_module_names",
+      "get_all_taken_ports",
+      "get_video_file_shape",
+      "get_video_file_num_frames",
+      "get_video_file_height",
+      "get_video_file_width",
+      "file_to_bytes",
+      "file_to_base64",
+      "file_to_object",
+      "is_a_git_repo",
+      "get_git_repo_root",
+      "load_safetensors"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_error_handling",
+    "arg_name": "use_cache",
+    "different_patterns": [
+      "try_except",
+      "try_except,conditional_raise,return_none"
+    ],
+    "functions": [
+      "load_images",
+      "display_image_slideshow",
+      "get_video_file_framerate"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "module_name",
+    "different_validations": [
+      "module_info = module_name",
+      "assert isinstance(module_name, str), 'pip_import: error: module_name must be a string, but got type ' + repr(type(module_name)) | assert module_exists(module_name), \"pip_import: error: Internal assertion failed (rp thought we successfully installed your package, but perhaps it didnt actually work, or maybe this package isn't compatiable with this version of python. Right now I dont know how to detect this).\" | isinstance(module_name, str)"
+    ],
+    "functions": [
+      "pip_import",
+      "try_import"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "n",
+    "different_validations": [
+      "assert n >= 0 | n >= 0 | n < 71",
+      "n=1 | n <module | n <module",
+      "COMPLETED_SO_FAR=n",
+      "n=0 | n >= number | n=0",
+      "n <= 0",
+      "n=1 | coefficients = n",
+      "assert n is None or n >= 0 | n=3 | n >= 0",
+      "n=None",
+      "n=70",
+      "n=0 | n=1 | n=2",
+      "assert is_number(n), 'Input assumption' | assert n >= 0, 'Input assumption' | x=n",
+      "n=0"
+    ],
+    "functions": [
+      "pop_exception_traceback",
+      "split_into_n_sublists",
+      "split_into_n_subdicts",
+      "cv_best_match_contours",
+      "fractional_integral_in_frequency_domain",
+      "best_flann_dict_matches",
+      "unicode_loading_bar",
+      "fibonacci",
+      "inverse_fibonacci",
+      "get_next_free_port",
+      "select_torch_device",
+      "get_gpu_with_most_free_vram",
+      "out"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "N",
+    "different_validations": [
+      "assert N >= 0 and N == int(N), 'Cannot have a non-counting-number length: N=' + repr(N) | N >= 0 | N == int",
+      "left_to_right_sum_ratio=N"
+    ],
+    "functions": [
+      "randints",
+      "random_floats",
+      "riemann_sum",
+      "riemann_mean"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "exclusive_max",
+    "different_validations": [
+      "exclusive_max=exclusive_max | exclusive_max=exclusive_max",
+      "exclusive_max=1"
+    ],
+    "functions": [
+      "random_float_complex",
+      "random_floats"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "inclusive_min",
+    "different_validations": [
+      "inclusive_min=0",
+      "inclusive_min=0 | inclusive_min=inclusive_min | inclusive_min=inclusive_min"
+    ],
+    "functions": [
+      "random_float",
+      "random_float_complex",
+      "random_floats"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "full_list",
+    "different_validations": [
+      "assert len(full_list) > 0 | full_list = list",
+      "assert 0 <= batch_size <= len(full_list), 'batch_size must be between 0 and the number of rows in the DataFrame' | assert 0 <= batch_size <= len(full_list), 'batch_size == ' + str(batch_size) + ' \u22c0 len(full_list) == ' + str(len(full_list)) + '\uff0c\u2234  \u00ac (0 <= batch_size <= len\ufe59full_list\ufe5a)   Explanation: We do not allow duplicates, \u2234 we cannot generate a larger batch than we have elements to choose from full_list' | assert 0 <= batch_size <= len(full_list), 'batch_size == ' + str(batch_size) + ' \u22c0 len(full_list) == ' + str(len(full_list)) + '\uff0c\u2234  \u00ac (0 <= batch_size <= len\ufe59full_list\ufe5a)   Explanation: We do not allow duplicates, \u2234 we cannot generate a larger batch than we have elements to choose from full_list'"
+    ],
+    "functions": [
+      "random_batch",
+      "random_batch_with_replacement"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "batch_size",
+    "different_validations": [
+      "batch_size=batch_size",
+      "assert 0 <= batch_size <= len(full_list), 'batch_size must be between 0 and the number of rows in the DataFrame' | assert 0 <= batch_size <= len(full_list), 'batch_size == ' + str(batch_size) + ' \u22c0 len(full_list) == ' + str(len(full_list)) + '\uff0c\u2234  \u00ac (0 <= batch_size <= len\ufe59full_list\ufe5a)   Explanation: We do not allow duplicates, \u2234 we cannot generate a larger batch than we have elements to choose from full_list' | assert 0 <= batch_size <= len(full_list), 'batch_size == ' + str(batch_size) + ' \u22c0 len(full_list) == ' + str(len(full_list)) + '\uff0c\u2234  \u00ac (0 <= batch_size <= len\ufe59full_list\ufe5a)   Explanation: We do not allow duplicates, \u2234 we cannot generate a larger batch than we have elements to choose from full_list'",
+      "assert batch_size >= 0 | batch_size >= 0 | repeats = batch_size"
+    ],
+    "functions": [
+      "random_batch",
+      "random_batch_with_replacement",
+      "random_parallel_batch"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "retain_order",
+    "different_validations": [
+      "retain_order=True | retain_order=True | retain_order=True",
+      "retain_order=retain_order",
+      "retain_order=False | retain_order=retain_order"
+    ],
+    "functions": [
+      "random_batch",
+      "random_batch_up_to",
+      "random_parallel_batch"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "method",
+    "different_validations": [
+      "method=method",
+      "method=None | method = copy_path"
+    ],
+    "functions": [
+      "_cpah",
+      "display_pandas_correlation_heatmap"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "seed",
+    "different_validations": [
+      "seed=None | seed=99",
+      "seed=None | seed=seed | seed=seed",
+      "seed=None"
+    ],
+    "functions": [
+      "temporary_random_seed",
+      "temporary_numpy_random_seed",
+      "temporary_torch_random_seed",
+      "seed_all",
+      "temporary_seed_all"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "url",
+    "different_validations": [
+      "assert is_valid_url(url), 'Invalid url: %s' % url",
+      "isinstance(url, str)",
+      "parsed = url",
+      "url = _ryan_fonts",
+      "assert is_valid_url(url)",
+      "assert isinstance(url, str), 'Need url string, but got type ' + str(type(url)) | assert is_valid_url(url), 'Not a valid url: ' + repr(url) | isinstance(url, str)",
+      "isinstance(url, str) | result = url",
+      "url = _distill_github_url",
+      "isinstance(url, str) | isinstance(url, str)",
+      "assert isinstance(url, str) | isinstance(url, str)",
+      "assert is_valid_url(url) | url = _distill_github_url | url = url.strip",
+      "assert url.startswith('data:image') or is_valid_url(url), 'load_image_from_url error: invalid url: ' + repr(url)",
+      "assert isinstance(url, str), 'url should be a string, but got type ' + repr(type(url)) | isinstance(url, str)"
+    ],
+    "functions": [
+      "is_valid_url",
+      "load_image_from_url",
+      "display_website_in_terminal",
+      "shorten_github_url",
+      "download_font",
+      "_get_youtube_video_data_via_embeddify",
+      "is_s3_url",
+      "is_gs_url",
+      "download_url",
+      "download_url_to_cache",
+      "get_cache_file_path",
+      "curl_bytes",
+      "_distill_github_url",
+      "_get_repo_name_from_url",
+      "git_clone"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "show_progress",
+    "different_validations": [
+      "show_progress=False | show_progress=False",
+      "show_progress=show_progress",
+      "show_progress=True",
+      "show_progress=True | show_progress=False | show_progress=False",
+      "show_progress=True | show_progress=False",
+      "show_progress = show_progress | show_progress=show_progress",
+      "show_progress=True | with_length=show_progress",
+      "assert show_progress in {True, False, 'tqdm', 'eta'} or (isinstance(show_progress, str) and starts_with_any(show_progress, 'eta:')), \"The 'show_progress' parameter must be either True, False, or 'tqdm'.\" | isinstance(show_progress, str) | isinstance(show_progress, str)",
+      "show_progress=True | show_progress=show_progress | show_progress=show_progress",
+      "show_progress=False | show_progress=show_progress",
+      "show_progress=True | show_progress=False | show_progress=show_progress",
+      "show_progress=False | show_progress == True",
+      "show_progress=False",
+      "show_progress=False | show_progress=True",
+      "assert isinstance(path,str)\\n        \\n        nonlocal cancelled\\n        if cancelled:\\n            if isinstance(cancelled,Exception):\\n                raise cancelled\\n            else:\\n                return None\\n\\n        try:\\n            image=load_image(path,use_cache=use_cache)\\n        except Exception as e:\\n            if strict==True:\\n                cancelled=e\\n                raise\\n            else:\\n                image=None\\n\\n        if cancelled:\\n            return image\\n\\n        if show_progress:\\n            nonlocal number_of_images_loaded\\n            number_of_images_loaded+=1\\n            show_time_remaining(number_of_images_loaded)\\n        \\n        return image\\n\\n    try:\\n        assert all(isinstance(x,str) for x in locations)\\n        images = par_map(_load_image,locations)#This is fast because it's multithreaded\\n\\n        if strict is False:\\n            #When strict is False (as opposed to None), we skip any images that failed to load | show_progress=False | show_progress=show_progress",
+      "show_progress=False | show_progress = False"
+    ],
+    "functions": [
+      "load_files",
+      "_load_files",
+      "load_images",
+      "save_images",
+      "convert_image_files",
+      "load_text_files",
+      "load_jsons",
+      "load_tsv",
+      "load_parquet",
+      "load_yaml_files",
+      "rotate_images",
+      "read_symlinks",
+      "make_symlinks_relative",
+      "make_symlinks_absolute",
+      "replace_symlinks_with_hardlinks",
+      "search_processes",
+      "cv_draw_circles",
+      "cv_draw_arrows",
+      "get_md5_hash",
+      "get_sha256_hash",
+      "labeled_images",
+      "labeled_videos",
+      "download_fonts",
+      "download_google_fonts",
+      "download_all_google_fonts",
+      "tiled_videos",
+      "download_youtube_video",
+      "load_video_streams",
+      "load_video",
+      "load_videos",
+      "save_video_mp4",
+      "convert_to_gif_via_ffmpeg",
+      "convert_to_gifs_via_ffmpeg",
+      "_delete_paths_helper",
+      "delete_paths",
+      "delete_files",
+      "delete_folders",
+      "copy_paths",
+      "path_join",
+      "remove_duplicate_frames",
+      "crop_images",
+      "crop_videos",
+      "crop_videos_to_min_size",
+      "crop_videos_to_max_size",
+      "s3_list_objects",
+      "download_url",
+      "download_urls",
+      "download_url_to_cache",
+      "download_urls_to_cache",
+      "get_cache_file_paths",
+      "get_all_taken_ports",
+      "_web_copy",
+      "web_copy",
+      "extract_zip_file",
+      "cv_resize_images",
+      "resize_videos",
+      "resize_images_to_hold",
+      "resize_images_to_fit",
+      "resize_video_to_hold",
+      "resize_video_to_fit",
+      "resize_videos_to_fit",
+      "resize_videos_to_hold",
+      "web_copy_path",
+      "calculate_flows",
+      "git_clone",
+      "git_pull",
+      "load_safetensors",
+      "refresh"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_error_handling",
+    "arg_name": "show_progress",
+    "different_patterns": [
+      "try_except",
+      "try_except,conditional_raise,return_none"
+    ],
+    "functions": [
+      "load_images",
+      "convert_image_files",
+      "search_processes",
+      "download_url"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "strict",
+    "different_validations": [
+      "strict=False | strict==True",
+      "assert strict in {True, False, None}, \"load_images: The 'strict' parameter must be set to either True, False, or None. See the documentation for this function to see what that means.\" | assert isinstance(path,str)\\n        \\n        nonlocal cancelled\\n        if cancelled:\\n            if isinstance(cancelled,Exception):\\n                raise cancelled\\n            else:\\n                return None\\n\\n        try:\\n            image=load_image(path,use_cache=use_cache)\\n        except Exception as e:\\n            if strict==True:\\n                cancelled=e\\n                raise\\n            else:\\n                image=None\\n\\n        if cancelled:\\n            return image\\n\\n        if show_progress:\\n            nonlocal number_of_images_loaded\\n            number_of_images_loaded+=1\\n            show_time_remaining(number_of_images_loaded)\\n        \\n        return image\\n\\n    try:\\n        assert all(isinstance(x,str) for x in locations)\\n        images = par_map(_load_image,locations)#This is fast because it's multithreaded\\n\\n        if strict is False:\\n            #When strict is False (as opposed to None), we skip any images that failed to load | strict=True",
+      "strict=True | strict=strict",
+      "strict=True",
+      "assert strict in {True, False, None}, \"The 'strict' parameter must be set to either True, False, or None.\" | strict=True",
+      "assert not len(d) % subdict_size, 'len(d)==' + str(len(d)) + ' and subdict_size==' + str(subdict_size) + \": strict mode is turned on but the subdict size doesn't divide the dictionary evenly. len(d)%subdict_size==\" + str(len(d) % subdict_size) + '!=0' | strict=False | strict=True",
+      "assert strict is True or strict is False or strict is None, \"The 'strict' parameter must be set to either True, False, or None.\" | assert strict is None | strict=True",
+      "strict=False",
+      "strict=strict",
+      "strict=True | strict=True | strict=None",
+      "strict=False | strict==True | strict==False",
+      "assert not strict or path_exists(original_path), \"Can't create symlink to %s because that path does not exist!\" % original_path | strict=True",
+      "assert isinstance(strict, bool) | isinstance(strict, bool) | strict=True"
+    ],
+    "functions": [
+      "load_files",
+      "_load_files",
+      "load_images",
+      "convert_image_files",
+      "gather",
+      "load_text_files",
+      "load_jsons",
+      "load_yaml_files",
+      "split_into_sublists",
+      "split_into_subdicts",
+      "read_symlinks",
+      "make_symlinks_relative",
+      "make_symlinks_absolute",
+      "replace_symlinks_with_hardlinks",
+      "make_symlink",
+      "kill_processes",
+      "_get_font_path",
+      "download_fonts",
+      "download_google_fonts",
+      "split_tensor_into_regions",
+      "load_video_streams",
+      "load_videos",
+      "delete_file",
+      "_delete_paths_helper",
+      "delete_paths",
+      "delete_files",
+      "delete_folders",
+      "copy_paths",
+      "download_urls",
+      "download_urls_to_cache",
+      "get_process_using_port",
+      "tmux_kill_session",
+      "tmux_kill_sessions",
+      "import_all_submodules",
+      "broadcast_lists",
+      "killport"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_error_handling",
+    "arg_name": "strict",
+    "different_patterns": [
+      "try_except",
+      "try_except,conditional_raise,return_none"
+    ],
+    "functions": [
+      "_load_files",
+      "load_images",
+      "convert_image_files"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "location",
+    "different_validations": [
+      "assert False, 'Neither a text file nor a url: ' + repr(location) + '\\nERROR: This is neither a valid url nor a text file' | url = location",
+      "assert file_exists(location), 'No such file exists: ' + repr(location) | location = get_absolute_path",
+      "assert isinstance(location, str), 'load_image error: location should be a string representing a URL or file path. However, location is not a string. type(location)==' + repr(type(location)) + ' and location==' + repr(location) | isinstance(location, str) | location = get_absolute_path"
+    ],
+    "functions": [
+      "load_animated_gif",
+      "load_image",
+      "_load_text_from_file_or_url"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "backend",
+    "different_validations": [
+      "assert backend in ['pip', 'uv'] | backend=None | backend = _pip_install_default_backend",
+      "backend=None",
+      "assert backend in ('ffmpeg', 'cv2'), backend | backend=None | backend = _save_video_mp4_default_backend",
+      "assert backend in ('ffmpeg', 'cv2'), backend | _save_video_mp4_default_backend = backend"
+    ],
+    "functions": [
+      "copy_image_to_clipboard",
+      "set_save_video_mp4_default_backend",
+      "save_video_mp4",
+      "pip_install"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "file_name",
+    "different_validations": [
+      "assert False, 'OpenCV failed to load image file at the path: ' + file_name",
+      "file_name = with_file_extension",
+      "file_name=None | file_name == None | file_name = get_unique_copy_path",
+      "assert file_exists(file_name), 'No such image file exists: ' + repr(file_name)"
+    ],
+    "functions": [
+      "load_image_from_file",
+      "_load_image_from_file_via_opencv",
+      "save_image",
+      "_display_downloadable_image_in_notebook_via_ipython"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "file_path",
+    "different_validations": [
+      "assert file_exists(file_path), 'File %s does not exist' % file_path | file_path = get_absolute_path | file_path = get_absolute_path",
+      "assert isinstance(file_path, str), 'r.load_sound_file: file_path must be a string, but you gave it a %s' % str(type(file_path)) | assert has_file_extension(file_path), \"r.load_sound_file: Your file doesnt have an extension, so I'm not sure what to do with it. Your file path: %s. Supported filetypes include: %s\" % (repr(file_path), ', '.join(supported_filetypes)) | isinstance(file_path, str)",
+      "isinstance(file_path, str)",
+      "assert False, 'rp.load_openexr_image: Image %s is not a valid OpenEXR file' % file_path | assert False, 'rp.load_openexr_image: This image (aka %s) is neither RGB nor RGBA. Please specify the channels manually, such as channels==%s' % (file_path, str(get_openexr_channels(input_file)))",
+      "file_path = get_absolute_path",
+      "isinstance(file_path, OpenEXR.InputFile) | input_file = file_path",
+      "file_path = _get_file_path",
+      "assert isinstance(file_path, str) | isinstance(file_path, str)"
+    ],
+    "functions": [
+      "_get_openexr_image_dimensions",
+      "get_openexr_channels",
+      "load_openexr_image",
+      "save_openexr_image",
+      "load_sound_file",
+      "string_to_text_file",
+      "text_file_to_string",
+      "is_image_file",
+      "get_file_extension"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "channels",
+    "different_validations": [
+      "assert False, 'rp.load_openexr_image: This image (aka %s) is neither RGB nor RGBA. Please specify the channels manually, such as channels==%s' % (file_path, str(get_openexr_channels(input_file))) | assert set(channels) <= input_channels, 'rp.load_openexr_image: OpenEXR file is missing the following channels: ' + repr(set(channels) - input_channels) | channels=None",
+      "channels=channels | channels=channels",
+      "assert result.shape == (*shape, sum(channels)) | assert position_encoding.shape == (shape, channels) | assert position_encoding.shape == (shape, channels)"
+    ],
+    "functions": [
+      "load_openexr_image",
+      "display_cv_color_histograms",
+      "get_sinusoidal_positional_encodings"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "filetype",
+    "different_validations": [
+      "filetype=None | filetype = get_file_extension",
+      "filetype=None | filetype=filetype",
+      "filetype=None",
+      "assert filetype in ['mp4', 'webm'], 'filetype=' + str(filetype) + ' but should be either \"mp4\" or \"webm\"' | assert get_file_extension(path) == filetype | assert ys is not None, 'Could not find a youtube video that satisfied the given contsraints (url=%s, need_audio=%s, need_video=%s, max_resolution=%s, min_resolution=%s, filetype=%s). Try relaxing a contstraint, such as not requiring audio, not requiring video or using a different filetype etc.' % (repr(url), need_audio, need_video, max_resolution, min_resolution, repr(filetype)) + '\\nAvailable Options:\\n' + '\\n'.join(('    ' + str(x) for x in yt.streams))",
+      "assert isinstance(filetype, str) | assert filetype.startswith('.') | assert filetype[1:] in _opencv_supported_image_formats, 'Unsupported image format: ' + repr(filetype) + ', please choose from [.' + ', .'.join(_opencv_supported_image_formats) + ']'",
+      "filetype = filetype.strip | filetype = get_file_extension"
+    ],
+    "functions": [
+      "_encode_image_to_bytes",
+      "encode_image_to_bytes",
+      "encode_images_to_bytes",
+      "encode_image_to_base64",
+      "encode_images_to_base64",
+      "_display_video_in_notebook",
+      "download_youtube_video"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "quality",
+    "different_validations": [
+      "quality=100 | quality=100 | quality == 100",
+      "assert 0 <= quality <= 100, 'AVIF quality is measured in percent' | quality=100 | 0 <= quality",
+      "quality=100",
+      "quality=0.8",
+      "assert 0 <= quality <= 100, 'Jpg quality is measured in percent' | quality=100 | 0 <= quality",
+      "assert 0 <= quality <= 100, 'JpgXL quality is measured in percent' | quality=100 | quality=100",
+      "quality=100 | quality=quality",
+      "quality = _as_video_quality",
+      "assert 0 <= quality <= 100, 'WebP quality is measured in percent' | quality=100 | 0 <= quality"
+    ],
+    "functions": [
+      "encode_image_to_bytes",
+      "encode_images_to_bytes",
+      "encode_image_to_base64",
+      "encode_images_to_base64",
+      "save_image_jpg",
+      "save_image_webp",
+      "save_image_avif",
+      "save_image_jxl",
+      "save_animated_webp",
+      "display_video_in_notebook_webp",
+      "_cv_save_video_mp4",
+      "take_photo"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "paths",
+    "different_validations": [
+      "isinstance(paths, str) | paths = list_flatten | paths = list_flatten",
+      "isinstance(paths, str) | paths = line_split",
+      "isinstance(paths, str) | isinstance(paths, str)",
+      "isinstance(paths, str) | paths = detuple | paths = shlex.split",
+      "assert len(paths) == len(images), 'Must have exactly one path to go with every image' | assert all((isinstance(path, str) or path is None for path in paths)), 'All paths must be strings. They are where the images are saved to.' | isinstance(paths, str)",
+      "isinstance(paths, str) | isinstance(paths, str) | paths = line_split"
+    ],
+    "functions": [
+      "save_images",
+      "_get_files_from_paths",
+      "_cpah",
+      "_detuple_paths",
+      "find_and_replace_text_files",
+      "_nbca"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "framerate",
+    "different_validations": [
+      "framerate=60 | framerate=30",
+      "fps=framerate",
+      "framerate=60 | framerate=framerate",
+      "framerate=30",
+      "framerate=30 | framerate=framerate",
+      "framerate=None | framerate=30",
+      "assert framerate is None or (isinstance(framerate, int) and framerate >= 1), framerate | isinstance(framerate, int) | framerate=None",
+      "framerate=None | framerate=bundle.framerate",
+      "framerate=None",
+      "framerate=60",
+      "framerate=framerate"
+    ],
+    "functions": [
+      "save_animated_webp",
+      "display_video",
+      "_display_video_via_mediapy",
+      "display_video_in_notebook",
+      "_display_video_in_notebook",
+      "display_video_in_notebook_webp",
+      "line_graph_live",
+      "display_video_in_terminal_color",
+      "save_animated_png",
+      "save_video_mp4",
+      "save_video_gif_via_pil",
+      "convert_to_gif_via_ffmpeg",
+      "convert_to_gifs_via_ffmpeg",
+      "save_video",
+      "encode_video_to_bytes"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "loop",
+    "different_validations": [
+      "loop=False | loop=loop",
+      "loop=False | loop=False | loop=True",
+      "assert not loop, 'This function cannot currently play looped audio when running in Jupyter' | loop=False | loop=loop",
+      "loop=False | video = loop",
+      "loop=True | loop=0",
+      "loop=True",
+      "assert loop.shape[1] == 2, 'loop_direction_2d is for 2d loops only' | loop = as_points_array",
+      "loop=False"
+    ],
+    "functions": [
+      "save_animated_webp",
+      "play_sound_from_samples",
+      "display_video",
+      "display_video_in_terminal_color",
+      "loop_direction_2d",
+      "differential_euclidean_distances",
+      "cumulative_euclidean_distances",
+      "evenly_split_path"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "input_file",
+    "different_validations": [
+      "isinstance(input_file, str) | output_file_name = input_file",
+      "output_file == input_file"
+    ],
+    "functions": [
+      "convert_image_file",
+      "convert_audio_file"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "parallel",
+    "different_validations": [
+      "parallel==False | parallel==True",
+      "parallel=True",
+      "parallel=False"
+    ],
+    "functions": [
+      "convert_image_files",
+      "play_sound_file_via_afplay",
+      "_nbca"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "text",
+    "different_validations": [
+      "text=False | text = str | text=text",
+      "text!\n    EXAMPLE | text = art.text2art",
+      "text = str",
+      "self.text = text | self.text_parts = text | text=text",
+      "assert isinstance(text, str), type(text) | isinstance(text, str)",
+      "text = str | text_lines = text",
+      "text=text | text=text",
+      "assert isinstance(text, str) | isinstance(text, str)",
+      "text=text",
+      "text = delimiter_text",
+      "lines = text"
+    ],
+    "functions": [
+      "text_to_speech_via_apple",
+      "text_to_speech_via_google",
+      "text_to_speech_voices_comparison",
+      "text_to_speech",
+      "labeled_image",
+      "cv_text_to_image",
+      "_single_line_cv_text_to_image",
+      "_slow_pil_text_to_image",
+      "pil_text_to_image",
+      "skia_text_to_image",
+      "split_sentences",
+      "zalgo_text",
+      "big_ascii_text"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "voice",
+    "different_validations": [
+      "voice=voice | lang = voice",
+      "assert voice in text_to_speech_voices_for_apple",
+      "voice=voice | voice = random_element"
+    ],
+    "functions": [
+      "text_to_speech_via_apple",
+      "text_to_speech_via_google",
+      "text_to_speech"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "run_as_thread",
+    "different_validations": [
+      "run_as_thread=True | run_as_thread=False | run_as_thread=False",
+      "run_as_thread=False",
+      "run_as_thread=True"
+    ],
+    "functions": [
+      "text_to_speech_via_apple",
+      "text_to_speech_via_google",
+      "text_to_speech"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "samples",
+    "different_validations": [
+      "samples = samples.astype",
+      "samples = int"
+    ],
+    "functions": [
+      "adjust_samplerate",
+      "save_wav"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "samplerate",
+    "different_validations": [
+      "samplerate=None | samplerate = samplerate",
+      "assert False, 'r.load_sound_file: samplerate must either be True (which will return both the samples and the samplerate), None (which will return the audio at its original samplerate)elif , or an integer representing the desired samplerate.' | samplerate != original_samplerate",
+      "samplerate=None",
+      "samplerate=default_samplerate",
+      "samplerate=None | samplerate=samplerate | rate=samplerate"
+    ],
+    "functions": [
+      "load_sound_file",
+      "save_wav",
+      "play_sound_from_samples",
+      "mp3_to_wav",
+      "record_mono_audio",
+      "sine_tone_sampler",
+      "triangle_tone_sampler",
+      "sawtooth_tone_sampler",
+      "square_tone_sampler",
+      "play_tone",
+      "play_semitone"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "blocking",
+    "different_validations": [
+      "blocking=False | blocking=blocking",
+      "assert not blocking, 'This function cannot currently block while playing audio when running in Jupyter' | blocking=False | blocking=blocking",
+      "blocking=False"
+    ],
+    "functions": [
+      "play_sound_from_samples",
+      "play_tone",
+      "play_semitone"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "rate",
+    "different_validations": [
+      "assert rate > 0 | rate=60 | rate > 0",
+      "assert rate > 0, 'r.play_sound_file_via_afplay: Playback rate cannot rate=' + str(rate) | rate > 0 | rate==None"
+    ],
+    "functions": [
+      "play_sound_file_via_afplay",
+      "record_mouse_positions",
+      "playback_mouse_positions"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "skip_existing",
+    "different_validations": [
+      "skip_existing=True",
+      "skip_existing=True | skip_existing=skip_existing",
+      "skip_existing=False",
+      "skip_existing=False | skip_existing=skip_existing"
+    ],
+    "functions": [
+      "convert_audio_file",
+      "download_google_font",
+      "download_font",
+      "download_fonts",
+      "download_google_fonts",
+      "download_youtube_video",
+      "copy_paths",
+      "download_url",
+      "download_urls",
+      "download_url_to_cache",
+      "download_urls_to_cache"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "block",
+    "different_validations": [
+      "block=False",
+      "block=False | block=block",
+      "block=False | block=True | block=block",
+      "block=True | blocking=block",
+      "block=block",
+      "block=False | block=True | block=None"
+    ],
+    "functions": [
+      "display_image",
+      "display_alpha_image",
+      "bar_graph",
+      "line_graph",
+      "display_polygon",
+      "display_update",
+      "display_cv_color_histogram",
+      "display_cv_color_histograms",
+      "display_dot",
+      "display_path",
+      "play_chord",
+      "scatter_plot",
+      "display_pandas_correlation_heatmap"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "values",
+    "different_validations": [
+      "y=values",
+      "values = as_numpy_array",
+      "assert is_iterable(values), \"The 'values' parameter should be a list of values you'd like to interpolate between, but type \" + str(type(index)) + ' is not iterable and does not have numerical indices' | l = values",
+      "isinstance(values, dict) | y = values"
+    ],
+    "functions": [
+      "bar_graph",
+      "histogram_in_terminal",
+      "linterp",
+      "line_graph_via_bokeh"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "align",
+    "different_validations": [
+      "align=None | _align = align | align = _align.pop",
+      "align=align",
+      "assert align in ['left', 'right', 'center']",
+      "align=False | align=True",
+      "assert align in align_methods, 'String alignment must be left, right or center, but got align=' + repr(align) | align_method = align",
+      "assert align in ['left', 'right', 'center'] | align=align | align=align",
+      "align=align | align=align",
+      "assert align in {'center', 'left', 'right'} | align=align",
+      "align=False"
+    ],
+    "functions": [
+      "bar_graph",
+      "format_date",
+      "with_line_numbers",
+      "_labeled_image_text_to_image",
+      "labeled_image",
+      "pil_text_to_image",
+      "skia_text_to_image",
+      "make_string_rectangular",
+      "simple_boxed_string"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "xlabel",
+    "different_validations": [
+      "xlabel=None",
+      "X_label=xlabel",
+      "assert isinstance(xlabel, str) | isinstance(xlabel, str)"
+    ],
+    "functions": [
+      "bar_graph",
+      "line_graph_via_plotille",
+      "scatter_plot",
+      "line_graph_via_bokeh",
+      "histogram_via_bokeh"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "ylabel",
+    "different_validations": [
+      "Y_label=ylabel",
+      "assert isinstance(ylabel, str) | isinstance(ylabel, str)",
+      "ylabel=None"
+    ],
+    "functions": [
+      "bar_graph",
+      "line_graph_via_plotille",
+      "scatter_plot",
+      "line_graph_via_bokeh",
+      "histogram_via_bokeh"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "line_color",
+    "different_validations": [
+      "line_color=None | lc=line_color",
+      "line_color = float_color_to_byte_color | color=line_color",
+      "line_color=None"
+    ],
+    "functions": [
+      "line_graph_via_plotille",
+      "display_polygon",
+      "cv_line_graph"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "silent",
+    "different_validations": [
+      "silent=False | silent=True",
+      "silent=False",
+      "silent=True",
+      "silent=False | silent=silent | silent=True",
+      "silent=True | silent=False | silent=silent"
+    ],
+    "functions": [
+      "line_graph_via_plotille",
+      "is_valid_shell_syntax",
+      "is_valid_sh_syntax",
+      "is_valid_bash_syntax",
+      "is_valid_zsh_syntax",
+      "_fd",
+      "select_torch_device",
+      "print_gpu_summary",
+      "check_pip_requirements"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "clf",
+    "different_validations": [
+      "clf=True",
+      "clf=True | clf=clf | clf=False"
+    ],
+    "functions": [
+      "display_cv_color_histogram",
+      "display_cv_color_histograms"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "logx",
+    "different_validations": [
+      "logx=False | logx=True | logx=True",
+      "logx = 2 | base=logx"
+    ],
+    "functions": [
+      "line_graph",
+      "line_graph_via_bokeh"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "logy",
+    "different_validations": [
+      "logy = 2 | base=logy",
+      "logy=True | logy=True | logy=True"
+    ],
+    "functions": [
+      "line_graph",
+      "line_graph_via_bokeh"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "key",
+    "different_validations": [
+      "key=None | key=key",
+      "key=lambda | ka = key | kb = key",
+      "key=None | key = identity",
+      "assert key is None or callable(key) or (is_iterable(key) and all((callable(x) or x is None for x in key))), 'The given key must be None, a key function, or a list of keys' | key=None | key=identity",
+      "assert key.shape == self._key_shape, \"FlannDict: error: you can't use inconsistently-shaped keys -- how are we supposed to compare them? key.shape==\" + repr(key.shape) + ' but self._key_shape==' + repr(self._key_shape) | assert not np.iscomplexobj(key), \"FlannDict: error: you can' use complex keys with this FlannDict. Please create another with 'complex_keys' set to True in the constructor.\" | key = np.asarray",
+      "assert key in self._data, key",
+      "assert callable(key) | k = key",
+      "key=None | key=key | key=key",
+      "key=None",
+      "assert callable(key) | key=lambda | key=str.lower",
+      "key=None | e = key | key=new_key"
+    ],
+    "functions": [
+      "_minmax_indices",
+      "min_valued_indices",
+      "max_valued_indices",
+      "min_valued_elements",
+      "max_valued_elements",
+      "max_valued_index",
+      "matching_keys",
+      "matching_indices",
+      "sync_sorted",
+      "sorted_by_attr",
+      "sorted_dict",
+      "contains_sort",
+      "cluster_by_key",
+      "chunk_by_key",
+      "_get_openai_api_key",
+      "_keyify",
+      "__getattr__"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "index",
+    "different_validations": [
+      "assert is_number(index), \"The 'index' parameter should be a single number (which can be a float, but doesnt have to be), but got type \" + str(type(index)) | assert is_iterable(values), \"The 'values' parameter should be a list of values you'd like to interpolate between, but type \" + str(type(index)) + ' is not iterable and does not have numerical indices' | x0 <= index",
+      "index=0"
+    ],
+    "functions": [
+      "linterp",
+      "_cv_print_cam_props"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "d",
+    "different_validations": [
+      "pyin.true_color = d",
+      "isinstance(d, dict)",
+      "q = d",
+      "key_color=d | arrow_color=d | value_color=d",
+      "y = d | z = d | blue = d",
+      "assert isinstance(d, dict) | isinstance(d, dict)",
+      "assert not len(d) % subdict_size, 'len(d)==' + str(len(d)) + ' and subdict_size==' + str(subdict_size) + \": strict mode is turned on but the subdict size doesn't divide the dictionary evenly. len(d)%subdict_size==\" + str(len(d) % subdict_size) + '!=0'",
+      "assert should_traverse(current_dict), 'rp.dict_walk: Input type %s is not one of the travesable types %s' % (type(d), types) | current_dict = d"
+    ],
+    "functions": [
+      "matching_keys",
+      "destructure",
+      "display_dict",
+      "split_into_subdicts",
+      "dict_walk",
+      "_load_pyin_settings_from_dict",
+      "dictify",
+      "deep_dark_dict_copy"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "iterable",
+    "different_validations": [
+      "assert is_iterable(iterable)",
+      "iterable = map",
+      "assert is_iterable(iterable), \"The 'iterable' parameter you fed in is not an iterable!\""
+    ],
+    "functions": [
+      "gather",
+      "cluster_by_key",
+      "chunk_by_key",
+      "_iterfzf"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "as_dict",
+    "different_validations": [
+      "assert not skip_missing, 'rp.gather_vars: Cannot have as_dict and skip_missing. If we return a list of vars instead of a dict, there cannot be any gaps' | as_dict=True",
+      "as_dict=False",
+      "as_dict=False | as_dict=as_dict"
+    ],
+    "functions": [
+      "gather",
+      "gather_vars",
+      "gather_attrs",
+      "cluster_by_key",
+      "cluster_by_attr",
+      "chunk_by_attr",
+      "get_image_dimensions"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "frames_back",
+    "different_validations": [
+      "assert isinstance(frames_back, int), 'frames_back must be an integer' | assert frames_back >= 0, 'frames_back cannot be negative' | isinstance(frames_back, int)",
+      "frames_back=0 | frames_back=frames_back",
+      "frames_back=0",
+      "isinstance(frames_back, int) | frames_back=0 | frames_back < 1",
+      "frames_back=0 | frames_back=2",
+      "assert isinstance(frames_back, int), 'frames_back must be an integer (fractions dont make any sense | assert frames_back >= 0, 'frames_back cannot be negative' | isinstance(frames_back, int)",
+      "assert frames_back == ... or frames_back >= 1, \"gather_vars is useless if we don't look at least one frame back\" | frames_back=1 | frames_back = ...",
+      "frames_back=1 | frames_back=frames_back",
+      "assert frames_back >= 1, \"gather_args is useless if we don't look at least one frame back\" | frames_back=1 | frames_back=1"
+    ],
+    "functions": [
+      "gather_vars",
+      "gather_args",
+      "gather_args_call",
+      "gather_args_wrap",
+      "gather_args_bind",
+      "get_current_function",
+      "get_current_function_name",
+      "gather_args_recursive_call",
+      "get_rich_traceback_string",
+      "repr_vars",
+      "get_scope",
+      "_get_visible_scope"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "value",
+    "different_validations": [
+      "isinstance(value, (bool, int)",
+      "x = value",
+      "value = float_clamp",
+      "value = eval",
+      "isinstance(value, str) | isinstance(value, str) | isinstance(value, str)",
+      "isinstance(value, str) | value = load_image"
+    ],
+    "functions": [
+      "replace_if_none",
+      "MIDI_control_precisely",
+      "proportion_to_digits",
+      "__setitem__",
+      "pterm_pretty_print",
+      "_display_pterm_image"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "module",
+    "different_validations": [
+      "assert is_a_module(module), 'rebind_globals_to_module is a decorator' | module = obj.__module__",
+      "assert isinstance(module, types.ModuleType), 'This function accepts a module as an input, but you gave it type ' + repr(type(module)) | isinstance(module, types.ModuleType) | prefix = module",
+      "assert is_a_module(module) or isinstance(module, str), 'import_all_submodules: the \"module\" parameter should be either a string or a module, but got type ' + repr(type(module)) | assert module_exists(module), \"Module doesn't exist: \" + repr(module) | isinstance(module, str)",
+      "isinstance(module, cst.Attribute) | isinstance(module, cst.Name) | module = module.value",
+      "assert inspect.ismodule(module), 'get_module_path error:\\xa0The input you gave is not a module type. You gave input of type ' + repr(type(module)) | isinstance(module, str) | isinstance(module, str)",
+      "module! Records"
+    ],
+    "functions": [
+      "rebind_globals_to_module",
+      "get_all_submodule_names",
+      "get_module_path",
+      "record_torch_module_forward_stats",
+      "import_all_submodules",
+      "get_full_module_name"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "print_it",
+    "different_validations": [
+      "print_it=True",
+      "print_it=True | print_it=print_it"
+    ],
+    "functions": [
+      "display_dict",
+      "display_list",
+      "print_stack_trace"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "form",
+    "different_validations": [
+      "target = form | result = form",
+      "form = cls.get_form | from_form == form"
+    ],
+    "functions": [
+      "get_current_timezone",
+      "as_form"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "object",
+    "different_validations": [
+      "isinstance(object, bytes) | isinstance(object, str) | isinstance(object, str)",
+      "isinstance(object, str) | isinstance(object, bytes)",
+      "isinstance(object, type) | object = object.__class__"
+    ],
+    "functions": [
+      "rinsp",
+      "_omni_save",
+      "get_parent_hierarchy"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "message",
+    "different_validations": [
+      "assert isinstance(message, str), type(message) | isinstance(message, str)",
+      "message = client.messages.create | body=message",
+      "m = message",
+      "message=None | message=message",
+      "message=None",
+      "message=message"
+    ],
+    "functions": [
+      "mini_editor",
+      "_convert_powerpoint_file",
+      "send_text_message",
+      "input_select_path",
+      "input_select_folder",
+      "input_select_file",
+      "send_facebook_message",
+      "run_llm_api"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "line",
+    "different_validations": [
+      "original_line = line | line = line.strip | line = line",
+      "line = int",
+      "line = line | line = line | line = line",
+      "line = line.split | timestamp = line",
+      "line = line.strip | line = line.split | line = line"
+    ],
+    "functions": [
+      "process_line",
+      "is_valid_line",
+      "get_lines",
+      "get_timestamp",
+      "strip_braces"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "data",
+    "different_validations": [
+      "assert all((len(data[key]) == length for key in keys)), 'Right now all contained lists must be same length' | assert all((set(data[i]) == keys for i in range(length))), 'Right now all contained lists must be same length'",
+      "assert isinstance(data, _BundledPath) | isinstance(data, _BundledPath)",
+      "isinstance(data, str) | data = load_json | data = load_yaml_file",
+      "padded_data = data",
+      "assert isinstance(data, bytes), 'Expected bytes, got ' + str(type(data)) | isinstance(data, bytes)",
+      "isinstance(data, str) | data = json.loads",
+      "isinstance(data, str)",
+      "assert isinstance(data, bytes) | isinstance(data, bytes) | data = _WebCopyProgressTracker"
+    ],
+    "functions": [
+      "_view_with_pyfx",
+      "_view_interactive_json",
+      "encode_bytes_to_image",
+      "_web_copy",
+      "bytes_to_file",
+      "view_table",
+      "_paste_path_from_bundle",
+      "autoformat_json",
+      "list_dict_transpose"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "default",
+    "different_validations": [
+      "default=None",
+      "default=None | default=default"
+    ],
+    "functions": [
+      "save_json",
+      "dupdate"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "attr",
+    "different_validations": [
+      "assert isinstance(attr, (str, int)), type(attr) | assert not '...' in attr, 'attr has syntax error - it has ... in it, only . and .. are allowed: ' + repr(attr) | isinstance(attr, (str, int)",
+      "attr = eval"
+    ],
+    "functions": [
+      "get_nested_attr",
+      "color"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "command",
+    "different_validations": [
+      "assert is_iterable(command) | isinstance(command, str) | isinstance(command, str)",
+      "assert isinstance(command, str) | isinstance(command, str) | command=None",
+      "isinstance(command, str) | than \n        >>> command",
+      "command=command"
+    ],
+    "functions": [
+      "system_command_exists",
+      "is_valid_shell_syntax",
+      "is_valid_sh_syntax",
+      "is_valid_bash_syntax",
+      "is_valid_zsh_syntax",
+      "process_command"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "end",
+    "different_validations": [
+      "end=out",
+      "end=end",
+      "head < end | tail < end"
+    ],
+    "functions": [
+      "printed",
+      "print",
+      "animate_rain"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "shape",
+    "different_validations": [
+      "shape=None | target_shape = shape",
+      "shape=None | shape=shape",
+      "assert result.shape == (*shape, sum(channels)) | assert position_encoding.shape == (shape, channels) | assert position_encoding.shape == (shape, channels)",
+      "marker=shape"
+    ],
+    "functions": [
+      "display_dot",
+      "get_sinusoidal_positional_encodings",
+      "_create_array_like",
+      "_zeros_like",
+      "_ones_like",
+      "_randn_like",
+      "_rand_like"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "\u0192",
+    "different_validations": [
+      "\u0192=None",
+      "\u0192=None | \u0192 = \u0192 | \u2188\u03bb = \u0192"
+    ],
+    "functions": [
+      "sine_tone_sampler",
+      "triangle_tone_sampler",
+      "sawtooth_tone_sampler",
+      "square_tone_sampler"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "T",
+    "different_validations": [
+      "T=None | T = T",
+      "T=None"
+    ],
+    "functions": [
+      "sine_tone_sampler",
+      "triangle_tone_sampler",
+      "sawtooth_tone_sampler",
+      "square_tone_sampler"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "s",
+    "different_validations": [
+      "s = s.replace | s = s.replace",
+      "s = s | i = s | ss = s",
+      "s = finditer",
+      "s = string_transpose | l = s",
+      "s=4",
+      "assert isinstance(s, str) | isinstance(s, str) | s = eval"
+    ],
+    "functions": [
+      "split_camel_case",
+      "is_string_literal",
+      "search_replace_simul",
+      "_truncate_string_floats",
+      "pretty_lines",
+      "print_fansi_colors_in_curses"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "exception",
+    "different_validations": [
+      "exception.__traceback__ = exception",
+      "exception=None | exception = get_current_exception",
+      "error = exception | tb = exception"
+    ],
+    "functions": [
+      "pop_exception_traceback",
+      "print_verbose_stack_trace",
+      "_all_files_listed_in_exception_traceback"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "error",
+    "different_validations": [
+      "assert isinstance(error, NameError) | isinstance(error, NameError) | ans = error",
+      "error = get_current_exception"
+    ],
+    "functions": [
+      "print_stack_trace",
+      "print_highlighted_stack_trace",
+      "get_name_from_name_error"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "indent",
+    "different_validations": [
+      "indent=4 | indent=indent",
+      "isinstance(indent, int)"
+    ],
+    "functions": [
+      "indentify",
+      "autoformat_json"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "frames",
+    "different_validations": [
+      "frames = as_byte_images",
+      "frames = as_numpy_array",
+      "assert not isinstance(frames, str), 'The first argument should be the sequence of video frames, not the path!' | isinstance(frames, str) | isinstance(frames, str)"
+    ],
+    "functions": [
+      "save_animated_png",
+      "save_video_avi",
+      "save_video_mp4"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "img",
+    "different_validations": [
+      "img = as_numpy_image | dtype=img",
+      "assert ndim in {2, 3}, 'Cannot display img, because img.shape == ' + str(img.shape) | assert len(img) | img = as_numpy_image",
+      "img = img.astype | img = img.copy | skel = img"
+    ],
+    "functions": [
+      "_cv_skeletonize",
+      "cv_imshow",
+      "heightify"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "ans",
+    "different_validations": [
+      "isinstance(ans, dict) | isinstance(ans, str) | ans = dict",
+      "isinstance(ans, str) | ans = os.path.expanduser",
+      "isinstance(ans, str) | ans=None | old_code=ans",
+      "ans = ans.splitlines | ans = line_join",
+      "isinstance(ans, str) | isinstance(ans, list) | isinstance(ans, list)",
+      "isinstance(ans, str)",
+      "isinstance(ans, (list, tuple) | ans = str | ans = get_absolute_path"
+    ],
+    "functions": [
+      "_user_path_ans",
+      "_absolute_path_ans",
+      "_relative_path_ans",
+      "_rma",
+      "_ISM",
+      "_input_select_rp_gists",
+      "_get_function_names",
+      "print_fix"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "query",
+    "different_validations": [
+      "query = query.lower",
+      "query = str",
+      "isinstance(query, str)",
+      "assert isinstance(query, str) | isinstance(query, str)"
+    ],
+    "functions": [
+      "_cdh_back_query",
+      "google_search_url",
+      "_rinsp_search_helper",
+      "_fd",
+      "find_and_replace_text_files"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "angle",
+    "different_validations": [
+      "angle=range | angle = list | angle_in_degrees=angle",
+      "theta = angle"
+    ],
+    "functions": [
+      "rotate_images",
+      "rotation_matrix"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "scope",
+    "different_validations": [
+      "user_ns=scope",
+      "scope=None | scope = get_scope | scope = scope.copy",
+      "get_globals=scope | get_globals=scope",
+      "scope=None | scope = get_scope"
+    ],
+    "functions": [
+      "_ipython_exeval_maker",
+      "exeval",
+      "python_input",
+      "exec_ipynb"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "recursive",
+    "different_validations": [
+      "recursive=True",
+      "recursive=False | recursive=recursive",
+      "assert is_empty_folder(path), 'delete_folder: Cannot delete folder because its not empty and recursive==False. Folder: ' + repr(path) | recursive=True | recursive==False.",
+      "recursive=False",
+      "recursive=True | recursive=recursive"
+    ],
+    "functions": [
+      "read_symlink",
+      "make_symlink_absolute",
+      "make_symlink_relative",
+      "read_symlinks",
+      "make_symlinks_relative",
+      "make_symlinks_absolute",
+      "make_hardlink",
+      "get_all_paths",
+      "get_all_runnable_python_files",
+      "delete_folder",
+      "delete_all_paths_in_directory",
+      "delete_all_files_in_directory",
+      "s3_list_objects",
+      "_get_all_paths_fast",
+      "import_all_submodules"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "symlink_path",
+    "different_validations": [
+      "assert isinstance(symlink_path, str), 'replace_symlink_with_hardlink: Input path must be a string' | assert is_symlink(symlink_path), 'replace_symlink_with_hardlink: Path is not a symlink: ' + symlink_path | assert not is_a_folder(read_path), 'Cannot hardlink to a folder from symlink ' + symlink_path + '   -->   ' + read_path",
+      "assert replace or not path_exists(symlink_path), \"Can't create symlink at %s because a file already exists there!\" % symlink_path | symlink_path = path_join"
+    ],
+    "functions": [
+      "replace_symlink_with_hardlink",
+      "make_symlink"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "physical",
+    "different_validations": [
+      "physical=True",
+      "physical=None | physical = not | physical=False",
+      "physical=True | physical=physical"
+    ],
+    "functions": [
+      "make_symlink_absolute",
+      "get_absolute_path",
+      "get_absolute_paths",
+      "get_all_paths"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "relative",
+    "different_validations": [
+      "relative=False | relative=relative | relative=relative",
+      "assert in_height == out_height, 'For relative warping, input and output heights must match, but got in_height={} and out_height={}'.format(in_height, out_height) | assert in_width == out_width, 'For relative warping, input and output widths must match, but got in_width={} and out_width={}'.format(in_width, out_width) | relative=False",
+      "assert in_height == out_height, 'rp.cv_remap_image: If using relative=True, the UV map must be the same shape as the input image' | assert in_width == out_width, 'rp.cv_remap_image: If using relative=True, the UV map must be the same shape as the input image' | relative=False",
+      "relative=False | relative=relative",
+      "assert in_height == out_height, 'For relative scatter adding, input and output heights must match, but got in_height={} and out_height={}'.format(in_height, out_height) | assert in_width == out_width, 'For relative scatter adding, input and output widths must match, but got in_width={} and out_width={}'.format(in_width, out_width) | relative=False",
+      "isinstance(relative, str) | relative=False | relative_to = relative",
+      "relative=False"
+    ],
+    "functions": [
+      "make_symlink",
+      "symlink_move",
+      "get_all_paths",
+      "get_subfolders",
+      "torch_remap_image",
+      "apply_uv_map",
+      "torch_scatter_add_image",
+      "cv_remap_image"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "replace",
+    "different_validations": [
+      "replace=False | replace=replace",
+      "replace=False | replace=False | replace=True",
+      "assert replace or not path_exists(symlink_path), \"Can't create symlink at %s because a file already exists there!\" % symlink_path | replace=False"
+    ],
+    "functions": [
+      "make_symlink",
+      "with_file_extension",
+      "with_file_extensions"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "from_path",
+    "different_validations": [
+      "from_path=None | from_path = input_select_path",
+      "assert path_exists(from_path), from_path | from_path = get_absolute_path",
+      "assert path_exists(from_path), 'rp.copy_directory error: Cant copy from path ' + repr(from_path) + ' because that path does not exist' | assert is_a_directory(from_path), 'rp.copy_directory error: from_path=' + repr(from_path) + ' is not a directory, and this function is specifically meant to copy directories.' | assert not file_exists(to_path), 'rp.copy_directory error: Cant copy a directory into a file. from_path=' + repr(from_path) + ' is a directory and to_path=' + repr(to_path) + ' is a file.'",
+      "assert path_exists(from_path), 'Cannot copy from from_path=' + repr(from_path) + ' because that path does not exist'",
+      "assert file_exists(from_path), 'copy_file copies a file from from_path to to_path, but from_path=' + repr(from_path) + ' is not a file'"
+    ],
+    "functions": [
+      "symlink_move",
+      "_mv",
+      "copy_path",
+      "copy_directory",
+      "copy_file"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "to_path",
+    "different_validations": [
+      "assert not file_exists(to_path), 'rp.copy_directory error: Cant copy a directory into a file. from_path=' + repr(from_path) + ' is a directory and to_path=' + repr(to_path) + ' is a file.' | assert not folder_exists(to_path), 'rp.copy_directory error: Will not overwrite existing folder (extract is False). from_path=' + repr(from_path) + ' is a directory and to_path=' + repr(to_path) + ' is also already a directory.' | assert not file_exists(to_path), 'rp.copy_directory error: Cant copy a directory into a file. from_path=' + repr(from_path) + ' is a directory and to_path=' + repr(to_path) + ' is a file.'",
+      "assert file_exists(from_path), 'copy_file copies a file from from_path to to_path, but from_path=' + repr(from_path) + ' is not a file' | to_path = path_join",
+      "new_path = to_path",
+      "to_path = get_absolute_path | to_path = move_path",
+      "assert is_a_folder(to_path), 'to_path must be a folder, but ' + repr(to_path) + ' either does not exist or is not a folder'"
+    ],
+    "functions": [
+      "symlink_move",
+      "move_path",
+      "copy_to_folder",
+      "copy_directory",
+      "copy_file"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "root",
+    "different_validations": [
+      "root=None | root\n        >>> get_relative_paths | roots = root",
+      "root=None",
+      "assert isinstance(root, str), 'root must be a string representing the root path to compare the given path against' | isinstance(root, str) | root=None",
+      "root=None | root=root",
+      "root_dir=root",
+      "assert is_a_folder(root)",
+      "assert root is None or is_a_folder(root) | root=None | root = get_current_directory",
+      "root=root"
+    ],
+    "functions": [
+      "display_file_tree",
+      "get_relative_path",
+      "get_relative_paths",
+      "_rinsp_search_helper",
+      "input_select_path",
+      "input_select_folder",
+      "input_select_file",
+      "breadth_first_path_iterator",
+      "_display_filetype_size_histogram"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "replacement",
+    "different_validations": [
+      "assert isinstance(replacement, str) or (isinstance(replacement, list) and len(replacement) == 2), replacement | isinstance(replacement, str) | isinstance(replacement, list)",
+      "isinstance(replacement, str)"
+    ],
+    "functions": [
+      "_add_pterm_prefix_shortcut",
+      "find_and_replace_text_files"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "fill",
+    "different_validations": [
+      "fill=False",
+      "fill=fill",
+      "assert len(fill) == 1 | assert isinstance(fill, str) | isinstance(fill, str)",
+      "fill=None | fill=None | fill=None"
+    ],
+    "functions": [
+      "string_transpose",
+      "cv_draw_contours",
+      "bordered_string",
+      "pad_string_to_dims"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "vector",
+    "different_validations": [
+      "assert len(vector.shape) == 1, 'Right now input must be a vector. This may change in the future.' | assert len(kernel) == len(vector), 'Internal logic assertion to circular_gaussian_blur' | vector = np.asarray",
+      "vector = np.asarray | vector = np.roll"
+    ],
+    "functions": [
+      "all_rolls",
+      "circular_gaussian_blur"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "axis",
+    "different_validations": [
+      "axis=0 | axis=axis",
+      "axis=None | axis=axis"
+    ],
+    "functions": [
+      "all_rolls",
+      "circular_diff",
+      "circular_quotient",
+      "normalized"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "a",
+    "different_validations": [
+      "assert len(a.shape) == len(b.shape) == 1, 'Right now, circ_conv requires that both inputs are vectors. This may be generalized in the future to n-d convolutions.' | assert a.shape == b.shape, 'Right now, circ_conv requires that both vectors are the same length. This may change in the future.' | a = np.asarray",
+      "isinstance(a, str)",
+      "assert is_grayscale_image(r), 'Each channel must be a matrix, not a tensor' | assert is_grayscale_image(g), 'Each channel must be a matrix, not a tensor' | assert is_grayscale_image(b), 'Each channel must be a matrix, not a tensor'",
+      "a = key | a > kb | a < kb",
+      "a = str | o = a",
+      "assert a[:s] == b[:s] | a = len",
+      "isinstance(a, np.ndarray) | isinstance(a, np.ndarray) | isinstance(a, np.ndarray)"
+    ],
+    "functions": [
+      "circular_convolve",
+      "longest_common_prefix",
+      "longest_common_suffix",
+      "compose_rgba_image",
+      "cmp",
+      "format",
+      "equal"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "b",
+    "different_validations": [
+      "assert len(a.shape) == len(b.shape) == 1, 'Right now, circ_conv requires that both inputs are vectors. This may be generalized in the future to n-d convolutions.' | assert a.shape == b.shape, 'Right now, circ_conv requires that both vectors are the same length. This may change in the future.' | b = np.asarray",
+      "b = circular_cross_correlate | b = ifft",
+      "isinstance(b, str)",
+      "assert is_grayscale_image(b), 'Each channel must be a matrix, not a tensor' | assert r.shape == g.shape == b.shape, 'All channels must have the same shape' | b = as_grayscale_image",
+      "b = key",
+      "assert is_grayscale_image(b), 'Each channel must be a matrix, not a tensor' | assert r.shape == g.shape == b.shape == a.shape, 'All channels must have the same shape' | b = as_grayscale_image",
+      "assert a[:s] == b[:s] | b = len",
+      "isinstance(b, np.ndarray) | isinstance(b, np.ndarray) | isinstance(b, np.ndarray)"
+    ],
+    "functions": [
+      "circular_convolve",
+      "circular_cross_correlate",
+      "longest_common_prefix",
+      "longest_common_suffix",
+      "compose_rgb_image",
+      "compose_rgba_image",
+      "cmp",
+      "equal"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "r",
+    "different_validations": [
+      "r=True",
+      "r = min | numer = r | denom = r",
+      "assert is_grayscale_image(r), 'Each channel must be a matrix, not a tensor' | assert r.shape == g.shape == b.shape, 'All channels must have the same shape' | r = as_grayscale_image",
+      "assert is_grayscale_image(r), 'Each channel must be a matrix, not a tensor' | assert r.shape == g.shape == b.shape == a.shape, 'All channels must have the same shape' | r = as_grayscale_image"
+    ],
+    "functions": [
+      "ncr",
+      "compose_rgb_image",
+      "compose_rgba_image",
+      "p"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "blinking",
+    "different_validations": [
+      "blinking=False",
+      "blinking=True"
+    ],
+    "functions": [
+      "set_cursor_to_bar",
+      "set_cursor_to_box",
+      "set_cursor_to_underscore"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "contour",
+    "different_validations": [
+      "points = contour",
+      "contour = as_complex_vector",
+      "contour_reshaped = contour",
+      "contour = as_cv_contour",
+      "contour = as_cv_contour | contour = cv2.approxPolyDP | contour = as_points_array"
+    ],
+    "functions": [
+      "cv_simplify_contour",
+      "cv_distance_to_contour",
+      "cv_closest_contour_point",
+      "cv_contour_length",
+      "cv_contour_area",
+      "cv_contour_to_segment",
+      "unwarped_perspective_contour"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "contours",
+    "different_validations": [
+      "assert len(contours) != 0, 'manually_selected_contours: error: There are no contours to pick from because len(contours)==0' | image = contours | contours = dict",
+      "contours = list",
+      "assert is_iterable(contours)",
+      "assert len(contours) != 0, 'cv_closest_contour: error: There are no contours to pick from because len(contours)==0'",
+      "assert len(contours) != 0, 'manually_selected_contours: error: There are no contours to pick from because len(contours)==0' | image = contours",
+      "img=contours | contours = list | contours = list"
+    ],
+    "functions": [
+      "cv_closest_contour",
+      "cv_draw_contours",
+      "cv_manually_selected_contours",
+      "cv_manually_selected_contour",
+      "cv_best_match_contour",
+      "cv_best_match_contours",
+      "contours_to_image"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "thickness",
+    "different_validations": [
+      "thickness=1",
+      "thickness=2 | thickness=thickness | thickness=thickness",
+      "thickness=1 | thickness=10 | height=thickness",
+      "thickness=1 | thickness=None | thickness = int",
+      "thickness=2 | thickness = 3 | thickness = max",
+      "thickness=2 | thickness = list"
+    ],
+    "functions": [
+      "cv_draw_rectangle",
+      "cv_draw_arrow",
+      "cv_draw_arrows",
+      "cv_line_graph",
+      "cv_text_to_image",
+      "bordered_image_solid_color",
+      "bordered_images_solid_color"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "rim",
+    "different_validations": [
+      "rim=0 | rim = list | rim=rim",
+      "rim=0 | rim > 0 | color=rim"
+    ],
+    "functions": [
+      "cv_draw_circle",
+      "cv_draw_circles",
+      "cv_draw_arrow",
+      "cv_draw_arrows"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "rim_color",
+    "different_validations": [
+      "color=rim_color | rim_color=rim_color",
+      "rim_color = list | rim_color=rim_color"
+    ],
+    "functions": [
+      "cv_draw_circle",
+      "cv_draw_circles",
+      "cv_draw_arrow",
+      "cv_draw_arrows"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "affine",
+    "different_validations": [
+      "assert len(affine.shape) == 2, 'Affine should be a matrix, but affine.shape==' + str(affine.shape) | assert affine.shape == (ndim, ndim + 1), 'An affine transform matrix for ' + str(ndim) + '-dimensional points should have shape ' + str((ndim, ndim + 1)) + ', but instead affine.shape==' + str(affine.shape) | affine = np.asarray",
+      "affine = append_zeros_row",
+      "affine = np.asarray",
+      "assert is_euclidean_affine_matrix(affine), 'The given affine is not a euclidean transform. affine==' + repr(affine) | m = affine | b = affine"
+    ],
+    "functions": [
+      "cv_apply_affine_to_image",
+      "inverse_affine",
+      "apply_affine",
+      "is_euclidean_affine_matrix",
+      "is_affine_matrix",
+      "euclidean_affine_to_complex_linear_coeffs"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "algorithm",
+    "different_validations": [
+      "flow = algorithm | flow = algorithm",
+      "assert algorithm in algorithms, repr(algorithm) + ' is not in ' + repr(list(algorithms)) | algorithm = algorithms | flags=algorithm"
+    ],
+    "functions": [
+      "cv_inpaint_image",
+      "cv_optical_flow"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "iterations",
+    "different_validations": [
+      "iterations=iterations | iterations=iterations",
+      "iterations=1 | iterations=iterations"
+    ],
+    "functions": [
+      "_cv_morphological_helper",
+      "cv_erode",
+      "cv_dilate"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "alpha_weighted",
+    "different_validations": [
+      "alpha_weighted=False | alpha_weighted=True | alpha_weighted=True",
+      "alpha_weighted=False | alpha_weighted=True | alpha_weighted=False",
+      "alpha_weighted=False",
+      "alpha_weighted=False | alpha_weighted=alpha_weighted"
+    ],
+    "functions": [
+      "cv_gauss_blur",
+      "cv_box_blur",
+      "cv_resize_image",
+      "cv_resize_images",
+      "resize_videos",
+      "resize_image_to_hold",
+      "resize_image_to_fit",
+      "resize_images_to_hold",
+      "resize_images_to_fit",
+      "resize_video_to_hold",
+      "resize_video_to_fit",
+      "resize_videos_to_fit",
+      "resize_videos_to_hold",
+      "resize_images_to_max_size",
+      "resize_images_to_min_size"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "points",
+    "different_validations": [
+      "assert points.shape[1] == 2 | points = np.asarray | points = points",
+      "points = np.matrix",
+      "assert len(points.shape) == 2, 'Input should be a matrix, aka a list of points. But your input has shape ' + str(points.shape) | points=np.random.randn | points=apply_affine",
+      "assert len(points.shape) == 2, 'Points should be a matrix, but points.shape==' + str(points.shape) | assert affine.shape == (ndim, ndim + 1), 'An affine transform matrix for ' + str(ndim) + '-dimensional points should have shape ' + str((ndim, ndim + 1)) + ', but instead affine.shape==' + str(affine.shape) | points = np.asarray",
+      "points = np.asarray | points = np.asarray"
+    ],
+    "functions": [
+      "differential_euclidean_distances",
+      "apply_affine",
+      "whiten_points_covariance",
+      "complex_descriptors",
+      "complex_descriptor",
+      "point_cloud_angle"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "from_points",
+    "different_validations": [
+      "assert len(from_points) == 4, 'unwarped_perspective_image needs four from_points, but got ' + str(len(from_points)) | from_points = as_points_array",
+      "to_points = from_points | from_points = as_points_array | from_points = np.expand_dims",
+      "assert len(from_points) == 4, 'unwarped_perspective_contour needs four from_points, but got ' + str(len(from_points)) | from_points = as_points_array",
+      "from_points = np.asarray",
+      "assert from_points.shape[1] == to_points.shape[1] == 2, 'All points must be two dimensional. from_points and to_points should both have shapes like (N,2), where N is any integer >=2. from_points.shape==' + str(from_points.shape) + ' and to_points.shape==' + str(to_points.shape) | assert len(from_points >= 2) and len(to_points >= 2), 'To fit a euclidean 2d transform (including only translation, rotation and scale), we must have at least two points. However, len(from_points)=' + str(len(from_points)) + ' and len(to_points)=' + str(len(to_points)) | assert len(from_points) == len(to_points), 'You must have the same number of points in both from_points and to_points, or else it doesnt make sense to say theres a 1-to-1 correspondence between the to_points and from_points. len(from_points)=' + str(len(from_points)) + ' and len(to_points)=' + str(len(to_points))"
+    ],
+    "functions": [
+      "squared_distance_matrix",
+      "closest_points",
+      "least_squares_euclidean_affine",
+      "least_squares_affine",
+      "icp_least_squares_euclidean_affine",
+      "unwarped_perspective_image",
+      "unwarped_perspective_contour"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "to_points",
+    "different_validations": [
+      "to_points=None | to_points = from_points | to_points = as_points_array",
+      "assert len(to_points) == 4, 'unwarped_perspective_image needs four to_points, but got ' + str(len(to_points)) | to_points=None | to_points = as_points_array",
+      "assert from_points.shape[1] == to_points.shape[1] == 2, 'All points must be two dimensional. from_points and to_points should both have shapes like (N,2), where N is any integer >=2. from_points.shape==' + str(from_points.shape) + ' and to_points.shape==' + str(to_points.shape) | assert len(from_points >= 2) and len(to_points >= 2), 'To fit a euclidean 2d transform (including only translation, rotation and scale), we must have at least two points. However, len(from_points)=' + str(len(from_points)) + ' and len(to_points)=' + str(len(to_points)) | assert len(from_points) == len(to_points), 'You must have the same number of points in both from_points and to_points, or else it doesnt make sense to say theres a 1-to-1 correspondence between the to_points and from_points. len(from_points)=' + str(len(from_points)) + ' and len(to_points)=' + str(len(to_points))",
+      "to_points=None | to_points = np.asarray",
+      "to_points = np.asarray",
+      "to_points=None",
+      "assert height is not None and width is not None, 'unwarped_perspective_contour: You must specify either to_points or both width and height, but all three were None' | assert height is None and width is None, 'unwarped_perspective_contour: Both to_points AND height/width were specified - please only give to_points or height/width' | assert len(to_points) == 4, 'unwarped_perspective_contour needs four to_points, but got ' + str(len(to_points))"
+    ],
+    "functions": [
+      "squared_distance_matrix",
+      "distance_matrix",
+      "closest_points",
+      "least_squares_euclidean_affine",
+      "least_squares_affine",
+      "icp_least_squares_euclidean_affine",
+      "unwarped_perspective_image",
+      "unwarped_perspective_contour"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "function",
+    "different_validations": [
+      "assert callable(function), \"You can't memoize something that isn't a function (you tried to memoize \" + repr(function) + \", which isn't callable)\" | memoized_function.original_function = function",
+      "assert callable(function), type(function)",
+      "assert callable(function), 'Cant hash the inputs of function because function isnt callable and therefore doesnt receive arguments. repr(function)==' + repr(function)"
+    ],
+    "functions": [
+      "args_hash",
+      "memoized",
+      "apply_image_function_per_channel"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "source",
+    "different_validations": [
+      "isinstance(source, bytes) | isinstance(source, str)",
+      "lines = source"
+    ],
+    "functions": [
+      "_get_hash",
+      "analyze_python"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "format",
+    "different_validations": [
+      "transform_format=format",
+      "format=format"
+    ],
+    "functions": [
+      "get_md5_hash",
+      "get_sha256_hash",
+      "refactor_flynt"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "font",
+    "different_validations": [
+      "assert font is None or isinstance(font, str) | isinstance(font, str) | font=None",
+      "assert font is not None | font = ImageFont.truetype | font = ImageFont.load_default",
+      "font=None | font=font | font=font",
+      "assert False, 'labeled_image: font must be a string or an int between 0 and 8' | isinstance(font, int) | isinstance(font, str)",
+      "font = _get_font_path",
+      "font=3 | font=font | font=font",
+      "assert font in art.FONT_NAMES, 'Please choose from the following fonts:' + '\\n' + repr(art.FONT_NAMES)",
+      "isinstance(font, str) | font = download_google_font | font = _ryan_fonts",
+      "assert isinstance(font, int), type(font) | isinstance(font, int)"
+    ],
+    "functions": [
+      "_labeled_image_text_to_image",
+      "labeled_image",
+      "cv_text_to_image",
+      "_single_line_cv_text_to_image",
+      "_slow_pil_text_to_image",
+      "_get_font_path",
+      "pil_text_to_image",
+      "skia_text_to_image",
+      "big_ascii_text"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "lazy_frames",
+    "different_validations": [
+      "lazy_frames=False",
+      "lazy_frames=False | lazy=lazy_frames"
+    ],
+    "functions": [
+      "labeled_videos",
+      "crop_videos",
+      "crop_videos_to_min_size",
+      "crop_videos_to_max_size",
+      "resize_videos",
+      "resize_videos_to_fit",
+      "resize_videos_to_hold"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "clamp",
+    "different_validations": [
+      "clamp=True | clamp=clamp",
+      "clamp=True"
+    ],
+    "functions": [
+      "as_rgba_float_color",
+      "as_rgb_float_color",
+      "as_rgba_float_colors",
+      "as_rgb_float_colors"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "extension",
+    "different_validations": [
+      "assert False, 'Please specify a file extension' | extension = paths",
+      "extension = extension"
+    ],
+    "functions": [
+      "with_file_extension",
+      "with_file_extensions"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "sort_by",
+    "different_validations": [
+      "assert type(sort_by) == str, 'sort_by should either be None or be a string, but instead repr(type(sort_by))==' + repr(type(sort_by)) | assert sort_by in sort_by_options, 'get_file_paths: sort_by specifies how to sort the files. Please set sort_by to one of the following strings: ' + ', '.join(map(repr, sorted(sort_by_options))) + '. (You chose repr(sort_by)==' + repr(sort_by) + ' with repr(type(sort_by))==' + repr(type(sort_by)) | sort_by = sort_by.lower",
+      "sort_by=sort_by",
+      "sort_by=sort_by | sort_by=sort_by | sort_by=sort_by",
+      "sort_by=None | sort_by=sort_by"
+    ],
+    "functions": [
+      "get_all_paths",
+      "get_subfolders",
+      "input_select_path",
+      "input_select_folder",
+      "input_select_file"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "file_extension_filter",
+    "different_validations": [
+      "assert type(file_extension_filter) == str, 'get_file_paths: For file_extension_filter, right now only space-split whitelists are supported, such as \"png jpg bmp gif\"' | file_extension_filter=None | file_extension_whitelist = file_extension_filter",
+      "file_extension_filter=file_extension_filter",
+      "file_extension_filter=None | file_extension_filter=file_extension_filter"
+    ],
+    "functions": [
+      "get_all_paths",
+      "input_select_path",
+      "input_select_folder",
+      "input_select_file"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "include_files",
+    "different_validations": [
+      "include_files=True | include_files=include_files",
+      "include_files=True",
+      "assert include_files or include_folders, \"Both include_files and include_folders are False, which means the user can't select anything!\" | include_files=True | include_files=True",
+      "include_files=True | include_symlink_files = include_files"
+    ],
+    "functions": [
+      "get_all_paths",
+      "delete_all_paths_in_directory",
+      "input_select_path",
+      "_get_all_paths_fast"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "include_folders",
+    "different_validations": [
+      "include_folders=True",
+      "include_folders=True | include_folders=include_folders",
+      "include_folders=True | include_symlink_folders = include_folders",
+      "assert include_files or include_folders, \"Both include_files and include_folders are False, which means the user can't select anything!\" | include_folders=True | include_folders=True"
+    ],
+    "functions": [
+      "get_all_paths",
+      "delete_all_paths_in_directory",
+      "input_select_path",
+      "_get_all_paths_fast"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "ignore_permission_errors",
+    "different_validations": [
+      "ignore_permission_errors=False",
+      "ignore_permission_errors=True | ignore_permission_errors=ignore_permission_errors"
+    ],
+    "functions": [
+      "get_all_paths",
+      "get_all_runnable_python_files",
+      "_get_all_paths_fast"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "include_hidden",
+    "different_validations": [
+      "include_hidden=False | include_hidden=include_hidden",
+      "include_hidden=True"
+    ],
+    "functions": [
+      "get_all_paths",
+      "get_all_runnable_python_files",
+      "get_random_folders",
+      "get_random_folder",
+      "_get_all_paths_fast"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "include_symlinks",
+    "different_validations": [
+      "include_symlinks=True | include_symlink_folders=include_symlinks",
+      "include_symlinks=True"
+    ],
+    "functions": [
+      "get_all_paths",
+      "get_random_folders",
+      "get_random_folder"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "explore_symlinks",
+    "different_validations": [
+      "explore_symlinks=False | explore_symlinks=explore_symlinks",
+      "explore_symlinks=True"
+    ],
+    "functions": [
+      "get_all_paths",
+      "get_all_runnable_python_files",
+      "_get_all_paths_fast"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "folder",
+    "different_validations": [
+      "folder=None | folder=folder",
+      "assert folder_exists(folder), 'Folder ' + repr(folder) + ' doesnt exist!'",
+      "folder = paths",
+      "isinstance(folder, str) | True\n\n        >>> folder",
+      "assert isinstance(folder, str) or folder is None | assert folder_exists(folder), 'rp.random_file: Folder does not exist: ' + repr(folder) | assert not len(files) == 0, 'rp.random_file: There are no files in ' + repr(folder)",
+      "assert folder_exists(folder) | assert is_a_git_repo(folder), 'Not in a git repo'"
+    ],
+    "functions": [
+      "get_subfolders",
+      "folder_is_empty",
+      "get_random_file",
+      "get_random_files",
+      "_maybe_unbury_folder",
+      "get_current_git_hash",
+      "get_git_commit_message"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "queries",
+    "different_validations": [
+      "queries=None | queries=None | queries = as_numpy_array",
+      "queries=None | queries=queries"
+    ],
+    "functions": [
+      "run_cotracker",
+      "run_tapnet"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "hashtag",
+    "different_validations": [
+      "hashtag=True | hashtag=hashtag",
+      "hashtag=True"
+    ],
+    "functions": [
+      "random_hex_color",
+      "random_hex_colors",
+      "byte_color_to_hex_color",
+      "float_color_to_hex_color"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "bottom",
+    "different_validations": [
+      "bottom=None | bottom = height | bottom < 0",
+      "bottom=None | bottom = height | bottom_right_fill = bottom",
+      "bottom=None"
+    ],
+    "functions": [
+      "bordered_image_solid_color",
+      "bordered_images_solid_color",
+      "bordered_string"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "left",
+    "different_validations": [
+      "left=None",
+      "left=None | left = width | left < 0",
+      "left=None | left = width"
+    ],
+    "functions": [
+      "bordered_image_solid_color",
+      "bordered_images_solid_color",
+      "bordered_string"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "right",
+    "different_validations": [
+      "right=None",
+      "right=None | right = width | right < 0",
+      "right=None | right=3 | right=1"
+    ],
+    "functions": [
+      "bordered_image_solid_color",
+      "bordered_images_solid_color",
+      "bordered_string"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "depth",
+    "different_validations": [
+      "depth=10 | depth=depth",
+      "depth=10",
+      "depth=None"
+    ],
+    "functions": [
+      "_rinsp_search_helper",
+      "rinsp_search",
+      "git_clone"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "question",
+    "different_validations": [
+      "assert isinstance(question, str), 'The \"question\" should be a string' | isinstance(question, str)",
+      "options = question | question = True | question = True"
+    ],
+    "functions": [
+      "input_conditional",
+      "input_select"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "url_or_id",
+    "different_validations": [
+      "assert isinstance(url_or_id, str), type(url_or_id) | isinstance(url_or_id, str)",
+      "url = url_or_id"
+    ],
+    "functions": [
+      "get_youtube_video_url",
+      "get_youtube_video_transcript"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "start_frame",
+    "different_validations": [
+      "start_frame=0",
+      "assert len(start_frame) == len(paths), 'Must specify start_frame for each video' | start_frame=0 | start_frame=start_frame",
+      "assert isinstance(start_frame, int) and start_frame >= 0, 'rp.load_video_stream: start_frame must be a non-negative integer, got {}'.format(start_frame) | isinstance(start_frame, int) | start_frame=0",
+      "assert isinstance(start_frame, int) and start_frame >= 0, 'rp.load_video: start_frame must be a non-negative integer, got {}'.format(start_frame) | isinstance(start_frame, int) | start_frame=0",
+      "start_frame=0 | start_frame=start_frame"
+    ],
+    "functions": [
+      "_load_video_stream",
+      "load_video_stream",
+      "load_video_streams",
+      "load_video",
+      "load_videos"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "frame_transform",
+    "different_validations": [
+      "frame_transform=None",
+      "frame_transform=None | frame_transform=frame_transform"
+    ],
+    "functions": [
+      "load_video_stream",
+      "load_video_streams",
+      "load_video",
+      "load_videos"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "video_path",
+    "different_validations": [
+      "assert isinstance(video_path, str), type(video_path) | assert number_of_lines(video_path) == 1, number_of_lines(video_path) | assert path_exists(video_path), 'r._convert_to_gif_via_ffmpeg: Input file does not exist: ' + str(video_path)[:1000]",
+      "video_path=download_youtube_video | video_path = get_absolute_path"
+    ],
+    "functions": [
+      "convert_to_gif_via_ffmpeg",
+      "get_cutscene_frame_numbers"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "output_path",
+    "different_validations": [
+      "output_path=None | output_path = get_unique_copy_path",
+      "output_path=None | output_path = with_file_extension | output_path = get_unique_copy_path"
+    ],
+    "functions": [
+      "convert_to_gif_via_ffmpeg",
+      "add_audio_to_video_file",
+      "change_video_file_framerate"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "path_a",
+    "different_validations": [
+      "path_a = get_unique_copy_path",
+      "path_a = as_points_array",
+      "path_a = as_complex_vector"
+    ],
+    "functions": [
+      "swap_paths",
+      "paths_intersect",
+      "path_intersections"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "path_b",
+    "different_validations": [
+      "path_b = as_points_array",
+      "path_b = as_complex_vector",
+      "path_b = get_unique_copy_path"
+    ],
+    "functions": [
+      "swap_paths",
+      "paths_intersect",
+      "path_intersections"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "permanent",
+    "different_validations": [
+      "permanent=True | permanent=True | permanent=False",
+      "permanent=True | permanent=permanent"
+    ],
+    "functions": [
+      "delete_file",
+      "delete_folder",
+      "delete_path",
+      "_delete_paths_helper",
+      "delete_paths",
+      "delete_files",
+      "delete_folders",
+      "delete_all_paths_in_directory",
+      "delete_all_files_in_directory"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "extract",
+    "different_validations": [
+      "extract=False | extract=extract",
+      "assert not folder_exists(to_path), 'rp.copy_directory error: Will not overwrite existing folder (extract is False). from_path=' + repr(from_path) + ' is a directory and to_path=' + repr(to_path) + ' is also already a directory.' | extract=False"
+    ],
+    "functions": [
+      "copy_path",
+      "copy_directory",
+      "copy_paths"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "directory",
+    "different_validations": [
+      "assert directory_exists(directory)",
+      "assert directory_exists(directory), 'No such directory exists: ' + repr(directory)"
+    ],
+    "functions": [
+      "delete_all_paths_in_directory",
+      "delete_all_files_in_directory"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "suffix",
+    "different_validations": [
+      "assert isinstance(suffix, str), type(suffix) | isinstance(suffix, str) | new_suffix = suffix",
+      "new_suffix = suffix | suffix = new_suffix.replace | new_suffix = suffix"
+    ],
+    "functions": [
+      "get_unique_copy_path",
+      "apply_suffix_to_name"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "number",
+    "different_validations": [
+      "number = str",
+      "assert number >= 1, 'number must be a positive integer' | assert int(number) == number, 'number must be a positive integer' | number >= 1"
+    ],
+    "functions": [
+      "send_text_message",
+      "prime_factors"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "dx",
+    "different_validations": [
+      "dx=0 | dx = radius | dx=x",
+      "assert rp.is_a_matrix(dx), 'dx must be a matrix' | assert rp.is_float_image(dx), 'dx must be a float image' | assert dx.shape == dy.shape, 'dx and dy must have the same shape'",
+      "assert isinstance(dx, np.ndarray) and isinstance(dy, np.ndarray), 'dx and dy must be numpy arrays' | assert dx.shape == dy.shape, 'dx and dy must have the same shape' | isinstance(dx, np.ndarray)"
+    ],
+    "functions": [
+      "roll_image",
+      "optical_flow_to_image",
+      "optical_flow_to_arrow_grid"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "dy",
+    "different_validations": [
+      "assert isinstance(dx, np.ndarray) and isinstance(dy, np.ndarray), 'dx and dy must be numpy arrays' | assert dx.shape == dy.shape, 'dx and dy must have the same shape' | isinstance(dy, np.ndarray)",
+      "assert rp.is_a_matrix(dy), 'dy must be a matrix' | assert rp.is_float_image(dy), 'dy must be a float image' | assert dx.shape == dy.shape, 'dx and dy must have the same shape'",
+      "dy=0 | dy = radius | dy=y"
+    ],
+    "functions": [
+      "roll_image",
+      "optical_flow_to_image",
+      "optical_flow_to_arrow_grid"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "fillchar",
+    "different_validations": [
+      "fillchar=fillchar",
+      "assert len(fillchar) == 1, 'fillchar should be a length 1 string, but got fillchar=' + repr(fillchar)"
+    ],
+    "functions": [
+      "make_string_rectangular",
+      "horizontally_concatenated_strings"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "force",
+    "different_validations": [
+      "force=False | force=False | force=True",
+      "force=False | force=force",
+      "force=False | force==False.",
+      "force=False"
+    ],
+    "functions": [
+      "plural_noun",
+      "_ensure_installed",
+      "_install_ollama",
+      "_install_lazygit"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "timeout",
+    "different_validations": [
+      "assert timeout is None or isinstance(timeout, (int, float)), 'timeout should be a number or None, but got type ' + repr(type(timeout)) | isinstance(timeout, (int, float) | timeout=None",
+      "timeout=None | timeout=timeout"
+    ],
+    "functions": [
+      "download_url",
+      "download_urls",
+      "download_url_to_cache",
+      "download_urls_to_cache"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "cache_dir",
+    "different_validations": [
+      "cache_dir=None",
+      "cache_dir=None | cache_dir=cache_dir",
+      "assert cache_dir is None or isinstance(cache_dir, str) | assert isinstance(cache_dir, str), type(cache_dir) | isinstance(cache_dir, str)"
+    ],
+    "functions": [
+      "download_url_to_cache",
+      "download_urls_to_cache",
+      "get_cache_file_path",
+      "get_cache_file_paths"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "hash_func",
+    "different_validations": [
+      "hash_func=None",
+      "hash_func=None | hash_func=get_file_name | hash_func=get_parent_folder",
+      "hash_func=None | hash_func=hash_func"
+    ],
+    "functions": [
+      "download_url_to_cache",
+      "download_urls_to_cache",
+      "get_cache_file_path",
+      "get_cache_file_paths"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "file_extension",
+    "different_validations": [
+      "assert file_extension is None or isinstance(file_extension, str) | assert isinstance(file_extension, str) | isinstance(file_extension, str)",
+      "file_extension=None"
+    ],
+    "functions": [
+      "get_cache_file_path",
+      "get_cache_file_paths"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "target",
+    "different_validations": [
+      "target = target.lower",
+      "isinstance(target, str)"
+    ],
+    "functions": [
+      "fuzzy_string_match",
+      "launch_visidata"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "port",
+    "different_validations": [
+      "port=8080 | port = get_next_free_port",
+      "assert isinstance(port, int) | isinstance(port, int)",
+      "assert get_port_is_taken(port) | isinstance(port, int) | 8080\n        >>> port",
+      "assert isinstance(port, int) | isinstance(port, int) | port=8080"
+    ],
+    "functions": [
+      "_run_filebrowser",
+      "get_port_is_taken",
+      "get_next_free_port",
+      "get_process_using_port"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "session_name",
+    "different_validations": [
+      "assert isinstance(session_name, str), 'Session name must be a string.' | isinstance(session_name, str)",
+      "assert isinstance(session_name, str) or session_name is None | isinstance(session_name, str) | session_name=None"
+    ],
+    "functions": [
+      "tmux_session_exists",
+      "tmux_kill_session",
+      "tmuxp_create_session_yaml"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "notebook_path",
+    "different_validations": [
+      "notebook_path=None | notebook_path = input_select_file | notebook_path = os.path.expanduser",
+      "notebook_path=None"
+    ],
+    "functions": [
+      "_extract_code_cells_from_ipynb",
+      "extract_code_from_ipynb"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "model",
+    "different_validations": [
+      "model_dir=model | model=model | model_dir=model",
+      "assert isinstance(model, torch.nn.Module) | isinstance(model, torch.nn.Module) | model = torchvision.models.vgg16",
+      "assert isinstance(model, str), type(model) | isinstance(model, str)"
+    ],
+    "functions": [
+      "visualize_pytorch_model",
+      "run_llm_api",
+      "run_tapnet"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "folder_path",
+    "different_validations": [
+      "assert isinstance(folder_path, str) | assert folder_exists(folder_path) | isinstance(folder_path, str)",
+      "assert path_exists(folder_path), 'zip_folder_to_bytes error: Path does not exist: ' + str(folder_path) | assert is_a_folder(folder_path), 'zip_folder_to_bytes error: Path exists but is not a folder: ' + str(folder_path)"
+    ],
+    "functions": [
+      "extract_zip_file",
+      "zip_folder_to_bytes"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "verbose",
+    "different_validations": [
+      "verbose=False",
+      "isinstance(verbose, str) | verbose=False",
+      "verbose=False | verbose=True"
+    ],
+    "functions": [
+      "currently_running_desktop",
+      "validate_tensor_shapes",
+      "import_all_submodules",
+      "load_safetensors",
+      "save_safetensors"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "hsv_image",
+    "different_validations": [
+      "assert is_image(hsv_image) | hsv_image = as_rgb_image",
+      "dtype=hsv_image"
+    ],
+    "functions": [
+      "_hsv_to_rgb_via_numpy",
+      "_hsv_to_rgb_via_numba",
+      "hsv_to_rgb"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "allow_shrink",
+    "different_validations": [
+      "assert resize_image_to_hold(im, height=100 ,width=None,allow_shrink=True ).shape == ( 100,  150, 3)  | assert resize_image_to_hold(im, height=100 ,width=100 ,allow_shrink=True ).shape == ( 100,  150, 3) | assert resize_image_to_hold(im, height=None,width=100 ,allow_shrink=True ).shape == (  67,  100, 3)",
+      "allow_shrink=True | allow_shrink=allow_shrink",
+      "allow_shrink=True"
+    ],
+    "functions": [
+      "resize_image_to_hold",
+      "resize_images_to_hold",
+      "resize_video_to_hold",
+      "resize_videos_to_hold"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "family",
+    "different_validations": [
+      "assert isinstance(family, str) | isinstance(family, str)",
+      "family=family",
+      "assert family in supported_families, 'detect_apriltags only supports the following apriltag families' + str(supported_families) | family = family.lower | families=family"
+    ],
+    "functions": [
+      "detect_apriltags",
+      "get_apriltag_image",
+      "get_apriltag_images"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "auto_yes",
+    "different_validations": [
+      "auto_yes=False",
+      "auto_yes=False | auto_yes=auto_yes"
+    ],
+    "functions": [
+      "_nbca",
+      "clear_jupyter_notebook_outputs",
+      "pip_import"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "gpu_id",
+    "different_validations": [
+      "gpu_id=None | gpu_id=i",
+      "assert isinstance(gpu_id, int) | isinstance(gpu_id, int) | gpu_id=None",
+      "gpu_id=None | gpu_id=gpu_id"
+    ],
+    "functions": [
+      "get_gpu_uuid",
+      "get_gpu_pids",
+      "get_free_vram",
+      "get_total_vram",
+      "get_used_vram",
+      "get_gpu_name",
+      "get_vram_used_by_current_process",
+      "get_gpu_temperature",
+      "get_gpu_utilization"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "file",
+    "different_validations": [
+      "assert file_exists(file), 'check_pip_requirements: requirements file not found: ' + str(file)",
+      "assert path_exists(file)",
+      "tfile = file"
+    ],
+    "functions": [
+      "check_pip_requirements",
+      "formula_as_file",
+      "push"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "frame",
+    "different_validations": [
+      "filename = frame | lineno = frame",
+      "frame = as_byte_image | frame = cv2.cvtColor | frame = resize_image_to_fit",
+      "name = frame",
+      "assert is_image(frame) or isinstance(frame, str) | isinstance(frame, str) | isinstance(frame, str)",
+      "isinstance(frame, str)"
+    ],
+    "functions": [
+      "is_comprehension",
+      "write_frame",
+      "load_frame",
+      "preprocess_frame",
+      "trace_lines"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "item",
+    "different_validations": [
+      "item = str",
+      "assert callable(item) | sig = item",
+      "item = _image_to_html"
+    ],
+    "functions": [
+      "format_string",
+      "convert_grid_item",
+      "format_signature"
+    ],
+    "severity": "medium"
+  },
+  {
+    "type": "inconsistent_validation",
+    "arg_name": "tz",
+    "different_validations": [
+      "isinstance(tz, datetime.tzinfo)",
+      "isinstance(tz, str)"
+    ],
+    "functions": [
+      "is_iana",
+      "is_tzinfo"
+    ],
+    "severity": "medium"
+  }
+]

@@ -1,0 +1,224 @@
+{
+  "package_id": 75,
+  "functions": [
+    "wrapper",
+    "mini_editor",
+    "file_cache_call",
+    "lazy_par_map",
+    "ConditionalContext"
+  ],
+  "total_functions": 5,
+  "estimated_hours": 3.75,
+  "priority_score": 310,
+  "context": {
+    "wrapper": {
+      "function_name": "wrapper",
+      "calls": [
+        "file_cache_call"
+      ],
+      "called_by": [
+        "play_the_matrix_animation",
+        "mini_editor",
+        "lazy_par_map",
+        "ConditionalContext"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "wrapper",
+        "lazy_par_map",
+        "file_cache_call",
+        "play_the_matrix_animation",
+        "ConditionalContext",
+        "mini_editor"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "mini_editor": {
+      "function_name": "mini_editor",
+      "calls": [
+        "addstr_wordwrap",
+        "fansi_syntax_highlighting",
+        "print_fansi_colors_in_curses",
+        "words_and_spaces",
+        "wrapper",
+        "print",
+        "refresh"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "addstr_wordwrap",
+        "pseudo_terminal",
+        "mini_editor",
+        "fansi_syntax_highlighting",
+        "print_fansi_colors_in_curses",
+        "words_and_spaces",
+        "wrapper",
+        "print",
+        "refresh"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "file_cache_call": {
+      "function_name": "file_cache_call",
+      "calls": [
+        "date_modified",
+        "save",
+        "is_number",
+        "get_absolute_path",
+        "file_exists",
+        "get_current_function_name",
+        "load"
+      ],
+      "called_by": [
+        "decorator",
+        "file_cache_wrap",
+        "wrapper"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "date_modified",
+        "save",
+        "is_number",
+        "file_cache_call",
+        "get_absolute_path",
+        "decorator",
+        "file_exists",
+        "file_cache_wrap",
+        "get_current_function_name",
+        "wrapper",
+        "load"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "lazy_par_map": {
+      "function_name": "lazy_par_map",
+      "calls": [
+        "add",
+        "wrapper"
+      ],
+      "called_by": [
+        "par_map",
+        "_load_files"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "par_map",
+        "_load_files",
+        "lazy_par_map",
+        "add",
+        "wrapper"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "ConditionalContext": {
+      "function_name": "ConditionalContext",
+      "calls": [
+        "condition",
+        "wrapper"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "condition",
+        "wrapper",
+        "ConditionalContext"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "wrapper": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "mini_editor": {
+      "current_quality": "basic",
+      "current_docstring": "Has syntax highlighting. Creates a curses pocket-universe where you can edit text, and then press fn+enter to enter the results. It's like like a normal input() except multiline and editable.\nmessage=...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "file_cache_call": {
+      "current_quality": "good",
+      "current_docstring": "Caches the result of a function call to a file.\nIf the file exists, return its contents. Otherwise, call the function and save the result.\n\nArgs:\n    path: Path to the cache file\n\n    func: Function t...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax"
+      ],
+      "has_examples": false,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "lazy_par_map": {
+      "current_quality": "excellent",
+      "current_docstring": "A parallelized version of the built-in map using ThreadPoolExecutor.\n\nParameters:\n    - func: The function to apply to the items.\n    - *iterables: Input iterables. The function is applied to the resu...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "ConditionalContext": {
+      "current_quality": "excellent",
+      "current_docstring": "A context manager to conditionally enter another context based on a given condition.\n\nThis utility facilitates cleaner and concise management of conditional contexts without deep nesting.\n\nParameters:...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

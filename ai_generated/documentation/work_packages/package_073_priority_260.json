@@ -1,0 +1,131 @@
+{
+  "package_id": 73,
+  "functions": [
+    "is_empty_folder",
+    "delete_folder",
+    "is_empty_directory"
+  ],
+  "total_functions": 3,
+  "estimated_hours": 2.25,
+  "priority_score": 260,
+  "context": {
+    "is_empty_folder": {
+      "function_name": "is_empty_folder",
+      "calls": [
+        "get_all_paths"
+      ],
+      "called_by": [
+        "delete_folder",
+        "pseudo_terminal"
+      ],
+      "aliases": [
+        "is_empty_directory"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "is_empty_folder",
+        "is_empty_directory",
+        "pseudo_terminal",
+        "get_all_paths",
+        "delete_folder"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "delete_folder": {
+      "function_name": "delete_folder",
+      "calls": [
+        "is_empty_folder",
+        "pip_import"
+      ],
+      "called_by": [
+        "_maybe_unbury_folder",
+        "_paste_path_from_bundle",
+        "slowmo_video_via_rife",
+        "delete_path"
+      ],
+      "aliases": [
+        "delete_directory"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "_maybe_unbury_folder",
+        "_paste_path_from_bundle",
+        "slowmo_video_via_rife",
+        "delete_path",
+        "is_empty_folder",
+        "pip_import",
+        "delete_folder",
+        "delete_directory"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_empty_directory": {
+      "function_name": "is_empty_directory",
+      "calls": [],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_empty_directory"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "is_empty_folder": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "delete_folder": {
+      "current_quality": "basic",
+      "current_docstring": "Will recursively delete a folder and all of its contents\n permanent exists for safety reasons. It can be False in case you make a stupid mistake like deleting this file. When false, it will send your ...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

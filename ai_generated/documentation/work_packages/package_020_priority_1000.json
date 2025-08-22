@@ -1,0 +1,402 @@
+{
+  "package_id": 20,
+  "functions": [
+    "run",
+    "_view_image_via_textual_imageview",
+    "commit_process",
+    "python_input",
+    "_view_with_pyfx",
+    "_profile_vim_startup_plugins",
+    "_run_tmux_command",
+    "shell_command"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 1000,
+  "context": {
+    "run": {
+      "function_name": "run",
+      "calls": [
+        "convert_to_gif_via_ffmpeg"
+      ],
+      "called_by": [
+        "change_video_file_framerate",
+        "wav_to_mp3",
+        "tmux_get_scrollback",
+        "_tmux_reset_all_panes",
+        "_profile_vim_startup_plugins",
+        "_view_image_via_textual_imageview",
+        "commit_process",
+        "is_valid_shell_syntax",
+        "_string_pager_via_pypager",
+        "_run_ai_cli_coder",
+        "pseudo_terminal",
+        "add_ipython_kernel",
+        "convert_audio_file",
+        "tmux_type_in_all_panes",
+        "_view_with_pyfx",
+        "pip_install_multiple",
+        "concat_mp4_files",
+        "_view_json_via_jtree",
+        "python_input",
+        "select_git_commit",
+        "get_git_date_modified",
+        "add_audio_to_video_file",
+        "shell_command",
+        "_run_tmux_command"
+      ],
+      "aliases": [
+        "run_lambda"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "change_video_file_framerate",
+        "wav_to_mp3",
+        "pip_install_multiple",
+        "tmux_get_scrollback",
+        "_tmux_reset_all_panes",
+        "_profile_vim_startup_plugins",
+        "_view_image_via_textual_imageview",
+        "concat_mp4_files",
+        "commit_process",
+        "is_valid_shell_syntax",
+        "_view_json_via_jtree",
+        "convert_to_gif_via_ffmpeg",
+        "_string_pager_via_pypager",
+        "_run_ai_cli_coder",
+        "pseudo_terminal",
+        "python_input",
+        "select_git_commit",
+        "add_ipython_kernel",
+        "convert_audio_file",
+        "tmux_type_in_all_panes",
+        "get_git_date_modified",
+        "run_lambda",
+        "add_audio_to_video_file",
+        "_view_with_pyfx",
+        "shell_command",
+        "run",
+        "_run_tmux_command"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_view_image_via_textual_imageview": {
+      "function_name": "_view_image_via_textual_imageview",
+      "calls": [
+        "save_image",
+        "pip_import",
+        "delete_file",
+        "is_image",
+        "_view_image_via_textual_imageview",
+        "run",
+        "temporary_file_path"
+      ],
+      "called_by": [
+        "pseudo_terminal",
+        "_view_image_via_textual_imageview"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "save_image",
+        "pseudo_terminal",
+        "delete_file",
+        "pip_import",
+        "is_image",
+        "_view_image_via_textual_imageview",
+        "run",
+        "temporary_file_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": true,
+      "is_private": true
+    },
+    "commit_process": {
+      "function_name": "commit_process",
+      "calls": [
+        "get_current_directory",
+        "run",
+        "format_current_date"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_current_directory",
+        "commit_process",
+        "run",
+        "format_current_date"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "python_input": {
+      "function_name": "python_input",
+      "calls": [
+        "running_in_ipython",
+        "running_in_google_colab",
+        "print_verbose_stack_trace",
+        "scope",
+        "fansi_print",
+        "no_gc",
+        "currently_running_windows",
+        "_load_pyin_settings_file",
+        "print_stack_trace",
+        "run",
+        "_multi_line_python_input"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "running_in_ipython",
+        "_multi_line_python_input",
+        "python_input",
+        "print_verbose_stack_trace",
+        "scope",
+        "fansi_print",
+        "no_gc",
+        "currently_running_windows",
+        "_load_pyin_settings_file",
+        "print_stack_trace",
+        "run",
+        "running_in_google_colab"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_view_with_pyfx": {
+      "function_name": "_view_with_pyfx",
+      "calls": [
+        "load_yaml_file",
+        "load_json",
+        "is_utf8_file",
+        "run"
+      ],
+      "called_by": [
+        "_view_interactive_json"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "load_json",
+        "_view_interactive_json",
+        "is_utf8_file",
+        "_view_with_pyfx",
+        "load_yaml_file",
+        "run"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_profile_vim_startup_plugins": {
+      "function_name": "_profile_vim_startup_plugins",
+      "calls": [
+        "run"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "run",
+        "_profile_vim_startup_plugins"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_run_tmux_command": {
+      "function_name": "_run_tmux_command",
+      "calls": [
+        "strip",
+        "run"
+      ],
+      "called_by": [
+        "tmux_get_current_window_index",
+        "tmux_get_current_window_name",
+        "tmux_get_current_session_name",
+        "tmux_get_current_pane_index",
+        "tmux_detach_other_clients",
+        "_tmux_close_windows",
+        "_get_current_tmux_client",
+        "_get_all_tmux_clients",
+        "tmux_get_current_session_index",
+        "_get_all_tmux_windows"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "tmux_get_current_window_index",
+        "tmux_get_current_window_name",
+        "tmux_get_current_session_name",
+        "tmux_get_current_pane_index",
+        "tmux_detach_other_clients",
+        "_tmux_close_windows",
+        "strip",
+        "_get_current_tmux_client",
+        "_get_all_tmux_clients",
+        "tmux_get_current_session_index",
+        "_get_all_tmux_windows",
+        "run",
+        "_run_tmux_command"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "shell_command": {
+      "function_name": "shell_command",
+      "calls": [
+        "run"
+      ],
+      "called_by": [
+        "_which",
+        "stop_sound",
+        "print_all_git_paths",
+        "tmux_paste",
+        "clear_jupyter_notebook_outputs",
+        "_get_processor_name",
+        "_set_ryan_vimrc",
+        "_set_ryan_tmux_conf",
+        "get_system_fonts",
+        "tmux_copy"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_which",
+        "stop_sound",
+        "print_all_git_paths",
+        "tmux_paste",
+        "clear_jupyter_notebook_outputs",
+        "_get_processor_name",
+        "_set_ryan_vimrc",
+        "_set_ryan_tmux_conf",
+        "get_system_fonts",
+        "tmux_copy",
+        "shell_command",
+        "run"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "run": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_view_image_via_textual_imageview": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "commit_process": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "python_input": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_view_with_pyfx": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_profile_vim_startup_plugins": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_run_tmux_command": {
+      "current_quality": "basic",
+      "current_docstring": "Utility function to run a tmux command.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "shell_command": {
+      "current_quality": "good",
+      "current_docstring": "Execute a shell command and return its output.\n\nArgs:\n    command (str): The shell command to execute\n    stdin (str): Optional string to pipe into stdin\n\nReturns:\n    (str) The command's stdout",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax"
+      ],
+      "has_examples": false,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document backend-specific behavior and when to use each _via_ variant"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

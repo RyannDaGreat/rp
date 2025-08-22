@@ -1,0 +1,342 @@
+{
+  "package_id": 58,
+  "functions": [
+    "as_complex_vector",
+    "_edges_intersect",
+    "_points_array_to_complex_vector",
+    "_cv_contour_to_complex_vector",
+    "paths_intersect",
+    "r_transform",
+    "r_transform_inverse",
+    "_point_on_edge"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 755,
+  "context": {
+    "as_complex_vector": {
+      "function_name": "as_complex_vector",
+      "calls": [
+        "is_points_array",
+        "is_complex_vector",
+        "_cv_contour_to_complex_vector",
+        "is_cv_contour",
+        "_points_array_to_complex_vector"
+      ],
+      "called_by": [
+        "r_transform",
+        "_edge_intersection_positions",
+        "path_intersections",
+        "r_transform_inverse",
+        "_point_on_edge",
+        "_edges_intersect",
+        "least_squares_euclidean_affine",
+        "paths_intersect",
+        "cv_contour_to_segment",
+        "graham_scan"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "r_transform",
+        "_edge_intersection_positions",
+        "_point_on_edge",
+        "_edges_intersect",
+        "_points_array_to_complex_vector",
+        "as_complex_vector",
+        "graham_scan",
+        "path_intersections",
+        "r_transform_inverse",
+        "is_points_array",
+        "is_complex_vector",
+        "_cv_contour_to_complex_vector",
+        "is_cv_contour",
+        "least_squares_euclidean_affine",
+        "cv_contour_to_segment",
+        "paths_intersect"
+      ],
+      "multiplexing": [
+        "_points_array_to_complex_vector",
+        "_cv_contour_to_complex_vector",
+        "_points_array_to_complex_vector",
+        "_cv_contour_to_complex_vector",
+        "_cv_contour_to_complex_vector"
+      ],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_edges_intersect": {
+      "function_name": "_edges_intersect",
+      "calls": [
+        "is_clockwise",
+        "_point_on_edge",
+        "as_complex_vector"
+      ],
+      "called_by": [
+        "path_intersections",
+        "paths_intersect",
+        "_edge_intersection_positions"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_clockwise",
+        "_edge_intersection_positions",
+        "as_complex_vector",
+        "path_intersections",
+        "_point_on_edge",
+        "paths_intersect",
+        "_edges_intersect"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_points_array_to_complex_vector": {
+      "function_name": "_points_array_to_complex_vector",
+      "calls": [
+        "is_points_array"
+      ],
+      "called_by": [
+        "_cv_contour_to_complex_vector",
+        "as_complex_vector"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_cv_contour_to_complex_vector",
+        "_points_array_to_complex_vector",
+        "is_points_array",
+        "as_complex_vector"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_cv_contour_to_complex_vector": {
+      "function_name": "_cv_contour_to_complex_vector",
+      "calls": [
+        "_cv_contour_to_points_array",
+        "is_cv_contour",
+        "_points_array_to_complex_vector"
+      ],
+      "called_by": [
+        "as_complex_vector"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_cv_contour_to_complex_vector",
+        "is_cv_contour",
+        "_cv_contour_to_points_array",
+        "_points_array_to_complex_vector",
+        "as_complex_vector"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "paths_intersect": {
+      "function_name": "paths_intersect",
+      "calls": [
+        "_edges_intersect",
+        "as_complex_vector"
+      ],
+      "called_by": [
+        "path_intersects_point"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "paths_intersect",
+        "path_intersects_point",
+        "_edges_intersect",
+        "as_complex_vector"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "r_transform": {
+      "function_name": "r_transform",
+      "calls": [
+        "as_complex_vector"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "r_transform",
+        "as_complex_vector"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "r_transform_inverse": {
+      "function_name": "r_transform_inverse",
+      "calls": [
+        "circ_diff_inverse",
+        "as_complex_vector"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "r_transform_inverse",
+        "circ_diff_inverse",
+        "as_complex_vector"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_point_on_edge": {
+      "function_name": "_point_on_edge",
+      "calls": [
+        "loop_direction_2d",
+        "median",
+        "as_complex_vector"
+      ],
+      "called_by": [
+        "_edge_intersection_positions",
+        "_edges_intersect"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "loop_direction_2d",
+        "_edge_intersection_positions",
+        "median",
+        "as_complex_vector",
+        "_point_on_edge",
+        "_edges_intersect"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "as_complex_vector": {
+      "current_quality": "basic",
+      "current_docstring": "Automatically convert path path data ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_edges_intersect": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_points_array_to_complex_vector": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_cv_contour_to_complex_vector": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "paths_intersect": {
+      "current_quality": "basic",
+      "current_docstring": "Does NOT assume the paths are loops\nO(n^2) naive algorithm. Should be full-proof.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "r_transform": {
+      "current_quality": "basic",
+      "current_docstring": "Stands for Ryan-Transform. Used for path matching in my 2019 Zebra summer internship. Removes translation, rotation and scale freedom from the path.\nNOTE: According to wolfram alpha, d/dx ln(d/dx f(x)...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "r_transform_inverse": {
+      "current_quality": "basic",
+      "current_docstring": "Note that we lose scale, rotation and translational information\nr_transform(r_transform_inverse(r_transform(path))) == r_transform(path)",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_point_on_edge": {
+      "current_quality": "basic",
+      "current_docstring": "Return true if a point is on an edge, including the edge's endpoints ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document the multiplexing pattern - how the base function dispatches to specific implementations"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

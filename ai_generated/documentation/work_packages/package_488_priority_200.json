@@ -1,0 +1,183 @@
+{
+  "package_id": 488,
+  "functions": [
+    "_labeled_image_text_to_image",
+    "labeled_image",
+    "cv_text_to_image"
+  ],
+  "total_functions": 3,
+  "estimated_hours": 2.25,
+  "priority_score": 200,
+  "context": {
+    "_labeled_image_text_to_image": {
+      "function_name": "_labeled_image_text_to_image",
+      "calls": [
+        "pil_text_to_image",
+        "cv_text_to_image"
+      ],
+      "called_by": [
+        "labeled_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "pil_text_to_image",
+        "_labeled_image_text_to_image",
+        "labeled_image",
+        "cv_text_to_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "labeled_image": {
+      "function_name": "labeled_image",
+      "calls": [
+        "labeled_image",
+        "get_image_dimensions",
+        "gather_args_call",
+        "resize_image_to_fit",
+        "as_rgb_image",
+        "number_of_lines",
+        "crop_image",
+        "cv_resize_image",
+        "as_rgba_float_color",
+        "get_image_width",
+        "rotate_image",
+        "vertically_concatenated_images",
+        "is_image",
+        "as_numpy_image",
+        "get_image_height",
+        "blend_images",
+        "_labeled_image_text_to_image",
+        "uniform_float_color_image"
+      ],
+      "called_by": [
+        "labeled_image",
+        "labeled_images"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "gather_args_call",
+        "as_rgb_image",
+        "get_image_height",
+        "as_rgba_float_color",
+        "is_image",
+        "labeled_images",
+        "_labeled_image_text_to_image",
+        "labeled_image",
+        "get_image_dimensions",
+        "resize_image_to_fit",
+        "number_of_lines",
+        "crop_image",
+        "cv_resize_image",
+        "vertically_concatenated_images",
+        "get_image_width",
+        "rotate_image",
+        "as_numpy_image",
+        "blend_images",
+        "uniform_float_color_image"
+      ],
+      "multiplexing": [
+        "copy",
+        "blend_images",
+        "vertically_concatenated_images",
+        "vertically_concatenated_images",
+        "blend_images",
+        "vertically_concatenated_images",
+        "vertically_concatenated_images"
+      ],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "cv_text_to_image": {
+      "function_name": "cv_text_to_image",
+      "calls": [
+        "grid_concatenated_images",
+        "_cv_text_to_image_monospace",
+        "_single_line_cv_text_to_image"
+      ],
+      "called_by": [
+        "_labeled_image_text_to_image",
+        "_init_update",
+        "_cv_char_to_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "grid_concatenated_images",
+        "_init_update",
+        "_cv_char_to_image",
+        "cv_text_to_image",
+        "_labeled_image_text_to_image",
+        "_cv_text_to_image_monospace",
+        "_single_line_cv_text_to_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "_labeled_image_text_to_image": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "labeled_image": {
+      "current_quality": "excellent",
+      "current_docstring": "    Adds a label to an image and returns an image\n    'size' is either measured in pixels (int), or is in proportion to the image size (float)\n\n    Args:\n        image (numpy.ndarray): The input image...",
+      "suggestions": [
+        "Document supported image types and formats"
+      ],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "cv_text_to_image": {
+      "current_quality": "excellent",
+      "current_docstring": "Uses OpenCV to write words on an image, and returns that image\n\nEXAMPLE DEMO (Shows all fonts):\n    >>> collages=[]\n    ... for scale in [1,2,3,4,5]:\n    ...     images=[]\n    ...     for font in rang...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document supported image types and formats"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document the multiplexing pattern - how the base function dispatches to specific implementations"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

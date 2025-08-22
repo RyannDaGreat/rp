@@ -1,0 +1,407 @@
+{
+  "package_id": 8,
+  "functions": [
+    "get",
+    "get_my_public_ip_address",
+    "formula_as_file",
+    "list_cap_props",
+    "trace_lines",
+    "_rinsp_search_helper",
+    "_rich_print",
+    "_get_all_github_gists_info"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 1175,
+  "context": {
+    "get": {
+      "function_name": "get",
+      "calls": [],
+      "called_by": [
+        "write_to_fp",
+        "_rp_show_custom_line_profile",
+        "print_gpu_summary",
+        "get_downloaded_fonts",
+        "check_pip_requirements",
+        "_rinsp_search_helper",
+        "get_cudnn_version",
+        "set_cuda_visible_devices",
+        "map_network",
+        "skia_stamp_image",
+        "_datamuse_words_request",
+        "_cv_print_cam_props",
+        "curl_bytes",
+        "latex_image",
+        "shorten_github_url",
+        "_get_all_github_gists_info",
+        "get_terminal_size",
+        "download_url",
+        "load_gist",
+        "fansi_syntax_highlighting",
+        "_launch_ranger",
+        "get_font_supported_chars",
+        "_parse_origin_to_pixels",
+        "_pterm_exeval",
+        "ansi_highlight",
+        "get_current_function",
+        "fansi",
+        "get_default_shell",
+        "_old_fansi_syntax_highlighting",
+        "get_nvidia_smi",
+        "fetch_data",
+        "get_windows_version",
+        "s3_list_objects",
+        "get_my_public_ip_address",
+        "get_all_local_ip_addresses",
+        "text_to_speech_via_google",
+        "_rich_print",
+        "_get_env_info",
+        "download_google_font",
+        "formula_as_file",
+        "add_to_env_path",
+        "pinger",
+        "trace_lines",
+        "load_image_from_url",
+        "get_image_file_dimensions",
+        "list_cap_props",
+        "web_paste"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "write_to_fp",
+        "_rp_show_custom_line_profile",
+        "print_gpu_summary",
+        "get_downloaded_fonts",
+        "check_pip_requirements",
+        "_rinsp_search_helper",
+        "get_cudnn_version",
+        "set_cuda_visible_devices",
+        "get",
+        "map_network",
+        "skia_stamp_image",
+        "_datamuse_words_request",
+        "_cv_print_cam_props",
+        "curl_bytes",
+        "latex_image",
+        "shorten_github_url",
+        "_get_all_github_gists_info",
+        "get_terminal_size",
+        "download_url",
+        "load_gist",
+        "fansi_syntax_highlighting",
+        "_launch_ranger",
+        "get_font_supported_chars",
+        "_parse_origin_to_pixels",
+        "_pterm_exeval",
+        "ansi_highlight",
+        "get_current_function",
+        "fansi",
+        "get_default_shell",
+        "_old_fansi_syntax_highlighting",
+        "get_nvidia_smi",
+        "fetch_data",
+        "get_windows_version",
+        "s3_list_objects",
+        "get_my_public_ip_address",
+        "get_all_local_ip_addresses",
+        "text_to_speech_via_google",
+        "_rich_print",
+        "_get_env_info",
+        "download_google_font",
+        "formula_as_file",
+        "add_to_env_path",
+        "pinger",
+        "trace_lines",
+        "load_image_from_url",
+        "get_image_file_dimensions",
+        "list_cap_props",
+        "web_paste"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_my_public_ip_address": {
+      "function_name": "get_my_public_ip_address",
+      "calls": [
+        "pip_import",
+        "get",
+        "connected_to_internet",
+        "strip"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_my_public_ip_address",
+        "strip",
+        "get",
+        "pseudo_terminal",
+        "pip_import",
+        "connected_to_internet"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "formula_as_file": {
+      "function_name": "formula_as_file",
+      "calls": [
+        "get"
+      ],
+      "called_by": [
+        "latex_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get",
+        "latex_image",
+        "formula_as_file"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "list_cap_props": {
+      "function_name": "list_cap_props",
+      "calls": [
+        "get",
+        "print"
+      ],
+      "called_by": [
+        "_cv_print_cam_props"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "list_cap_props",
+        "get",
+        "_cv_print_cam_props",
+        "print"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "trace_lines": {
+      "function_name": "trace_lines",
+      "calls": [
+        "pop",
+        "get"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "pop",
+        "get",
+        "trace_lines"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_rinsp_search_helper": {
+      "function_name": "_rinsp_search_helper",
+      "calls": [
+        "helper",
+        "add",
+        "get",
+        "update",
+        "match",
+        "keys"
+      ],
+      "called_by": [
+        "rinsp_search",
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "helper",
+        "add",
+        "get",
+        "rinsp_search",
+        "pseudo_terminal",
+        "update",
+        "match",
+        "keys",
+        "_rinsp_search_helper"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_rich_print": {
+      "function_name": "_rich_print",
+      "calls": [
+        "pip_import",
+        "get",
+        "print",
+        "_maybe_display_string_in_pager"
+      ],
+      "called_by": [
+        "pretty_print",
+        "display_website_in_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get",
+        "print",
+        "display_website_in_terminal",
+        "_rich_print",
+        "pip_import",
+        "_maybe_display_string_in_pager",
+        "pretty_print"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_get_all_github_gists_info": {
+      "function_name": "_get_all_github_gists_info",
+      "calls": [
+        "list_flatten",
+        "get",
+        "load_json",
+        "get_current_function_name",
+        "format",
+        "get_number_of_github_gists",
+        "load_files"
+      ],
+      "called_by": [
+        "_download_rp_gists"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "list_flatten",
+        "get",
+        "load_json",
+        "load_files",
+        "get_current_function_name",
+        "_download_rp_gists",
+        "format",
+        "get_number_of_github_gists",
+        "_get_all_github_gists_info"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "get": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_my_public_ip_address": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "formula_as_file": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "list_cap_props": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "trace_lines": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_rinsp_search_helper": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_rich_print": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_get_all_github_gists_info": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

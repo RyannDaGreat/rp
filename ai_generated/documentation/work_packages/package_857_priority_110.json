@@ -1,0 +1,111 @@
+{
+  "package_id": 857,
+  "functions": [
+    "resize_lists",
+    "resize_list"
+  ],
+  "total_functions": 2,
+  "estimated_hours": 1.5,
+  "priority_score": 110,
+  "context": {
+    "resize_lists": {
+      "function_name": "resize_lists",
+      "calls": [
+        "is_numpy_array",
+        "detuple",
+        "resize_list",
+        "as_numpy_array"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "detuple",
+        "resize_list",
+        "is_numpy_array",
+        "resize_lists",
+        "as_numpy_array"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "resize_list": {
+      "function_name": "resize_list",
+      "calls": [
+        "is_numpy_array",
+        "is_torch_tensor"
+      ],
+      "called_by": [
+        "resize_list_to_fit",
+        "resize_lists_to_max_len",
+        "resize_lists_to_min_len",
+        "resize_lists"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "resize_lists_to_max_len",
+        "resize_list",
+        "resize_list_to_fit",
+        "is_numpy_array",
+        "resize_lists_to_min_len",
+        "resize_lists",
+        "is_torch_tensor"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "resize_lists": {
+      "current_quality": "basic",
+      "current_docstring": "Plural of rp.resize_list ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "resize_list": {
+      "current_quality": "excellent",
+      "current_docstring": "This function stretches or compresses a list to a given length using nearest-neighbor interpolation. \nThe last element of the input list is always included in the output list, regardless of the target...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

@@ -1,0 +1,337 @@
+{
+  "package_id": 44,
+  "functions": [
+    "walk",
+    "print_line",
+    "register",
+    "highlight_child",
+    "files_walk",
+    "is_symbolic_link",
+    "replace_if_none",
+    "destructure"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 880,
+  "context": {
+    "walk": {
+      "function_name": "walk",
+      "calls": [
+        "path_join",
+        "walk",
+        "get_stats_string",
+        "print_line",
+        "register",
+        "highlight_child",
+        "is_symbolic_link"
+      ],
+      "called_by": [
+        "walk",
+        "files_walk",
+        "strip_python_docstrings",
+        "replace_if_none",
+        "destructure",
+        "_fzf_multi_grep",
+        "bundle_vars",
+        "display_file_tree",
+        "dict_walk"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "walk",
+        "strip_python_docstrings",
+        "replace_if_none",
+        "destructure",
+        "print_line",
+        "_fzf_multi_grep",
+        "bundle_vars",
+        "register",
+        "display_file_tree",
+        "is_symbolic_link",
+        "path_join",
+        "files_walk",
+        "get_stats_string",
+        "highlight_child",
+        "dict_walk"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "print_line": {
+      "function_name": "print_line",
+      "calls": [],
+      "called_by": [
+        "walk",
+        "pseudo_terminal",
+        "display_file_tree",
+        "rinsp_search",
+        "print_code",
+        "_fd"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_fd",
+        "walk",
+        "pseudo_terminal",
+        "display_file_tree",
+        "rinsp_search",
+        "print_code",
+        "print_line"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "register": {
+      "function_name": "register",
+      "calls": [],
+      "called_by": [
+        "display_file_tree",
+        "walk"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "display_file_tree",
+        "register",
+        "walk"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "highlight_child": {
+      "function_name": "highlight_child",
+      "calls": [
+        "fansi"
+      ],
+      "called_by": [
+        "display_file_tree",
+        "walk"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "display_file_tree",
+        "walk",
+        "fansi",
+        "highlight_child"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "files_walk": {
+      "function_name": "files_walk",
+      "calls": [
+        "breadth_first_path_iterator",
+        "walk",
+        "path_join"
+      ],
+      "called_by": [
+        "text_files_walk",
+        "_fzf_multi_grep"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "breadth_first_path_iterator",
+        "path_join",
+        "walk",
+        "text_files_walk",
+        "files_walk",
+        "_fzf_multi_grep"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_symbolic_link": {
+      "function_name": "is_symbolic_link",
+      "calls": [],
+      "called_by": [
+        "walk",
+        "pseudo_terminal",
+        "make_hardlink",
+        "get_stats_string",
+        "recursion_helper",
+        "display_file_tree",
+        "get_all_paths"
+      ],
+      "aliases": [
+        "is_symlink"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "walk",
+        "pseudo_terminal",
+        "get_all_paths",
+        "make_hardlink",
+        "get_stats_string",
+        "recursion_helper",
+        "display_file_tree",
+        "is_symbolic_link",
+        "is_symlink"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "replace_if_none": {
+      "function_name": "replace_if_none",
+      "calls": [
+        "walk",
+        "parse",
+        "strip"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "replace_if_none",
+        "walk",
+        "parse",
+        "strip"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "destructure": {
+      "function_name": "destructure",
+      "calls": [
+        "walk",
+        "parse",
+        "strip"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "walk",
+        "parse",
+        "destructure",
+        "strip"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "walk": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "print_line": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "register": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "highlight_child": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "files_walk": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "is_symbolic_link": {
+      "current_quality": "basic",
+      "current_docstring": "Returns whether or not a given path is a symbolic link",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "replace_if_none": {
+      "current_quality": "good",
+      "current_docstring": "TODO: Make this work with older versions of python, using destructure's strategy\n\nUsed to replace default values in a concise way\nPlease read the examples - this function uses introspection\nand the co...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "destructure": {
+      "current_quality": "good",
+      "current_docstring": "Extracts values from a dictionary based on the variable names in the\nassignment expression in the calling line of code. \nMimics Javascript's destructuring assignment feature.\n\nThe main purpose of this...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

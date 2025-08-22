@@ -1,0 +1,222 @@
+{
+  "package_id": 152,
+  "functions": [
+    "save",
+    "_torch_tensor_to_bytes_for_hashing",
+    "save_video_gif_via_pil",
+    "save_image_jxl"
+  ],
+  "total_functions": 4,
+  "estimated_hours": 3.0,
+  "priority_score": 355,
+  "context": {
+    "save": {
+      "function_name": "save",
+      "calls": [
+        "write_to_fp"
+      ],
+      "called_by": [
+        "text_to_speech_via_google",
+        "save_image_avif",
+        "file_cache_call",
+        "_torch_tensor_to_bytes_for_hashing",
+        "save_video_gif_via_pil",
+        "save_image_jpg",
+        "visualize_pytorch_model",
+        "load_image_from_clipboard",
+        "save_animated_webp",
+        "_omni_save",
+        "save_image_webp",
+        "save_image_jxl"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "save",
+        "text_to_speech_via_google",
+        "save_image_avif",
+        "file_cache_call",
+        "_torch_tensor_to_bytes_for_hashing",
+        "save_video_gif_via_pil",
+        "save_image_jpg",
+        "visualize_pytorch_model",
+        "load_image_from_clipboard",
+        "save_animated_webp",
+        "_omni_save",
+        "save_image_webp",
+        "write_to_fp",
+        "save_image_jxl"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_torch_tensor_to_bytes_for_hashing": {
+      "function_name": "_torch_tensor_to_bytes_for_hashing",
+      "calls": [
+        "save",
+        "read"
+      ],
+      "called_by": [
+        "handy_hash"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "save",
+        "handy_hash",
+        "_torch_tensor_to_bytes_for_hashing",
+        "read"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "save_video_gif_via_pil": {
+      "function_name": "save_video_gif_via_pil",
+      "calls": [
+        "save",
+        "make_directory",
+        "get_absolute_path",
+        "with_file_extension",
+        "get_unique_copy_path",
+        "ends_with_any",
+        "get_path_parent",
+        "load_video_stream",
+        "is_video_file"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "save",
+        "make_directory",
+        "get_absolute_path",
+        "with_file_extension",
+        "get_unique_copy_path",
+        "save_video_gif_via_pil",
+        "ends_with_any",
+        "get_path_parent",
+        "load_video_stream",
+        "is_video_file"
+      ],
+      "multiplexing": [],
+      "is_via_variant": true,
+      "is_private": false
+    },
+    "save_image_jxl": {
+      "function_name": "save_image_jxl",
+      "calls": [
+        "as_numpy_image",
+        "save",
+        "get_unique_copy_path",
+        "get_file_extension",
+        "is_grayscale_image",
+        "as_rgb_image",
+        "as_pil_image",
+        "as_byte_image",
+        "pip_import",
+        "make_parent_directory"
+      ],
+      "called_by": [
+        "save_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_numpy_image",
+        "save",
+        "get_unique_copy_path",
+        "get_file_extension",
+        "save_image",
+        "is_grayscale_image",
+        "as_rgb_image",
+        "as_pil_image",
+        "as_byte_image",
+        "pip_import",
+        "make_parent_directory",
+        "save_image_jxl"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "save": {
+      "current_quality": "basic",
+      "current_docstring": "Do the Web request and save to `savefile` ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_torch_tensor_to_bytes_for_hashing": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "save_video_gif_via_pil": {
+      "current_quality": "basic",
+      "current_docstring": "Save a video to a GIF with given path and framerate.\nReturns the path of the new GIF.\n\nTODO: Support higher quality dithering via adapting VideoWriterMP4 and convert_to_gif_via_ffmpeg together somehow",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "save_image_jxl": {
+      "current_quality": "good",
+      "current_docstring": "    Save image in JPEG XL format. Set quality=100 for lossless compression.\n    If add_extension is True, adds '.jxl' extension if not already present.\n    \n    EXAMPLE (Comparison video between JPG a...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Add supported file formats and common usage patterns"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document backend-specific behavior and when to use each _via_ variant"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

@@ -1,0 +1,392 @@
+{
+  "package_id": 32,
+  "functions": [
+    "is_valid_url",
+    "file_to_bytes",
+    "display_website_in_terminal",
+    "_is_youtube_video_url",
+    "_get_font_path",
+    "_load_text_from_file_or_url",
+    "load_animated_gif",
+    "shorten_github_url"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 950,
+  "context": {
+    "is_valid_url": {
+      "function_name": "is_valid_url",
+      "calls": [],
+      "called_by": [
+        "download_url_to_cache",
+        "text_file_to_string",
+        "_is_youtube_video_url",
+        "_display_video_in_notebook",
+        "display_website_in_terminal",
+        "display_video",
+        "pseudo_terminal",
+        "_get_youtube_video_data_via_embeddify",
+        "display_image_in_terminal_color",
+        "shorten_github_url",
+        "unshorten_url",
+        "download_url",
+        "_load_text_from_file_or_url",
+        "_get_file_path",
+        "pterm_pretty_print",
+        "load_image",
+        "display_image_slideshow",
+        "load_animated_gif",
+        "_get_repo_name_from_url",
+        "load_image_from_url",
+        "run_depth_pro",
+        "file_to_bytes",
+        "_get_font_path"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "download_url_to_cache",
+        "text_file_to_string",
+        "_load_text_from_file_or_url",
+        "_get_file_path",
+        "_is_youtube_video_url",
+        "_display_video_in_notebook",
+        "display_website_in_terminal",
+        "display_video",
+        "pterm_pretty_print",
+        "pseudo_terminal",
+        "load_image",
+        "_get_youtube_video_data_via_embeddify",
+        "is_valid_url",
+        "display_image_in_terminal_color",
+        "display_image_slideshow",
+        "load_animated_gif",
+        "shorten_github_url",
+        "_get_repo_name_from_url",
+        "unshorten_url",
+        "load_image_from_url",
+        "run_depth_pro",
+        "file_to_bytes",
+        "_get_font_path",
+        "download_url"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "file_to_bytes": {
+      "function_name": "file_to_bytes",
+      "calls": [
+        "read",
+        "curl_bytes",
+        "is_valid_url"
+      ],
+      "called_by": [
+        "file_to_base64",
+        "_copy_path_to_bundle",
+        "curl_bytes",
+        "encode_video_to_bytes",
+        "zip_folder_to_bytes",
+        "file_to_object"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "read",
+        "file_to_base64",
+        "_copy_path_to_bundle",
+        "curl_bytes",
+        "is_valid_url",
+        "encode_video_to_bytes",
+        "zip_folder_to_bytes",
+        "file_to_bytes",
+        "file_to_object"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "display_website_in_terminal": {
+      "function_name": "display_website_in_terminal",
+      "calls": [
+        "curl",
+        "pip_import",
+        "is_valid_url",
+        "_rich_print"
+      ],
+      "called_by": [
+        "pterm_pretty_print",
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "pterm_pretty_print",
+        "display_website_in_terminal",
+        "curl",
+        "pseudo_terminal",
+        "_rich_print",
+        "pip_import",
+        "is_valid_url"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_is_youtube_video_url": {
+      "function_name": "_is_youtube_video_url",
+      "calls": [
+        "is_valid_url"
+      ],
+      "called_by": [
+        "__enter__",
+        "get_youtube_video_transcript",
+        "download_url"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "__enter__",
+        "get_youtube_video_transcript",
+        "download_url",
+        "is_valid_url",
+        "_is_youtube_video_url"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_get_font_path": {
+      "function_name": "_get_font_path",
+      "calls": [
+        "download_google_font",
+        "is_valid_url",
+        "download_font",
+        "has_file_extension",
+        "get_system_fonts"
+      ],
+      "called_by": [
+        "pil_text_to_image",
+        "skia_text_to_image",
+        "get_font_supported_chars"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_font_supported_chars",
+        "pil_text_to_image",
+        "download_font",
+        "is_valid_url",
+        "download_google_font",
+        "has_file_extension",
+        "get_system_fonts",
+        "skia_text_to_image",
+        "_get_font_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_load_text_from_file_or_url": {
+      "function_name": "_load_text_from_file_or_url",
+      "calls": [
+        "file_exists",
+        "text_file_to_string",
+        "pip_import",
+        "is_valid_url"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "pseudo_terminal",
+        "file_exists",
+        "text_file_to_string",
+        "pip_import",
+        "_load_text_from_file_or_url",
+        "is_valid_url"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "load_animated_gif": {
+      "function_name": "load_animated_gif",
+      "calls": [
+        "get_absolute_path",
+        "file_exists",
+        "pip_import",
+        "delete_file",
+        "is_valid_url",
+        "load_animated_gif",
+        "as_numpy_array",
+        "temporary_file_path",
+        "download_url"
+      ],
+      "called_by": [
+        "load_animated_gif"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_absolute_path",
+        "file_exists",
+        "pip_import",
+        "delete_file",
+        "is_valid_url",
+        "load_animated_gif",
+        "as_numpy_array",
+        "temporary_file_path",
+        "download_url"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "shorten_github_url": {
+      "function_name": "shorten_github_url",
+      "calls": [
+        "get",
+        "print",
+        "pip_import",
+        "is_valid_url",
+        "shorten_url"
+      ],
+      "called_by": [
+        "save_gist"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "shorten_url",
+        "get",
+        "save_gist",
+        "shorten_github_url",
+        "print",
+        "pip_import",
+        "is_valid_url"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "is_valid_url": {
+      "current_quality": "basic",
+      "current_docstring": "Return true iff the url string is syntactically valid ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "file_to_bytes": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "display_website_in_terminal": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_is_youtube_video_url": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_get_font_path": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_load_text_from_file_or_url": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "load_animated_gif": {
+      "current_quality": "basic",
+      "current_docstring": "Location should be a url or a file path pointing to a GIF file\nLoads an array of frames of an RGB animated GIF\nCan load from a file or from a URL\nEXAMPLE:\n    while True:\n       url = 'https://i.pinim...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Add supported file formats and common usage patterns"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "shorten_github_url": {
+      "current_quality": "basic",
+      "current_docstring": "Doesn't work anymore! git.io was discontinued for some god forsaken reason :(\nUse rp.shorten_url instead (for backwards compatibility, this function now simply calls that)\n\nUses git.io to shorten a ur...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

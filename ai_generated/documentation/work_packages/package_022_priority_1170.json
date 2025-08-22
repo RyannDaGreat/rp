@@ -1,0 +1,395 @@
+{
+  "package_id": 22,
+  "functions": [
+    "line_split",
+    "number_of_lines",
+    "string_width",
+    "_get_cd_history",
+    "fansify",
+    "indentify_all_but_first_line",
+    "print_history",
+    "load_annotated_lines"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 1170,
+  "context": {
+    "line_split": {
+      "function_name": "line_split",
+      "calls": [],
+      "called_by": [
+        "get_all_english_words",
+        "_dhistory_helper",
+        "make_string_rectangular",
+        "get_all_function_names",
+        "_fzf_multi_grep",
+        "wrap_string_to_width",
+        "number_of_lines",
+        "pseudo_terminal",
+        "_cv_text_to_image_monospace",
+        "indentify_all_but_first_line",
+        "string_is_rectangular",
+        "vim_copy",
+        "_line_numbered_string",
+        "set_ans",
+        "_get_cd_history",
+        "_cpah",
+        "load_annotated_lines",
+        "pip_install_multiple",
+        "number_of_lines_in_terminal",
+        "load_file_lines",
+        "wordcloud_image",
+        "fansify",
+        "_nbca",
+        "bordered_string",
+        "visible_string_length",
+        "rinsp",
+        "print_history",
+        "string_width",
+        "get_system_fonts",
+        "_all_files_listed_in_exception_traceback",
+        "_ISM",
+        "horizontally_concatenated_strings",
+        "_legacy_fansi"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_all_english_words",
+        "_dhistory_helper",
+        "make_string_rectangular",
+        "get_all_function_names",
+        "_fzf_multi_grep",
+        "wrap_string_to_width",
+        "number_of_lines",
+        "pseudo_terminal",
+        "_cv_text_to_image_monospace",
+        "indentify_all_but_first_line",
+        "string_is_rectangular",
+        "vim_copy",
+        "_line_numbered_string",
+        "set_ans",
+        "_get_cd_history",
+        "_cpah",
+        "load_annotated_lines",
+        "pip_install_multiple",
+        "line_split",
+        "number_of_lines_in_terminal",
+        "load_file_lines",
+        "wordcloud_image",
+        "fansify",
+        "_nbca",
+        "bordered_string",
+        "visible_string_length",
+        "rinsp",
+        "print_history",
+        "string_width",
+        "get_system_fonts",
+        "_all_files_listed_in_exception_traceback",
+        "_ISM",
+        "horizontally_concatenated_strings",
+        "_legacy_fansi"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "number_of_lines": {
+      "function_name": "number_of_lines",
+      "calls": [
+        "line_split"
+      ],
+      "called_by": [
+        "convert_to_gif_via_ffmpeg",
+        "labeled_image",
+        "pad_to_same_number_of_lines",
+        "_maybe_display_string_in_pager",
+        "rinsp",
+        "string_height",
+        "display_code_cell"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "convert_to_gif_via_ffmpeg",
+        "labeled_image",
+        "pad_to_same_number_of_lines",
+        "number_of_lines",
+        "_maybe_display_string_in_pager",
+        "line_split",
+        "rinsp",
+        "string_height",
+        "display_code_cell"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "string_width": {
+      "function_name": "string_width",
+      "calls": [
+        "line_split"
+      ],
+      "called_by": [
+        "bordered_string",
+        "pad_string_to_dims",
+        "make_string_rectangular",
+        "fansi_pygments_demo",
+        "string_is_rectangular",
+        "display_code_cell"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "bordered_string",
+        "pad_string_to_dims",
+        "line_split",
+        "make_string_rectangular",
+        "fansi_pygments_demo",
+        "string_width",
+        "string_is_rectangular",
+        "display_code_cell"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_get_cd_history": {
+      "function_name": "_get_cd_history",
+      "calls": [
+        "text_file_to_string",
+        "line_split"
+      ],
+      "called_by": [
+        "pseudo_terminal",
+        "task",
+        "_get_cdh_back_names",
+        "_clean_cd_history",
+        "_add_to_cd_history",
+        "_cdh_back_query"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "pseudo_terminal",
+        "text_file_to_string",
+        "task",
+        "_get_cdh_back_names",
+        "line_split",
+        "_clean_cd_history",
+        "_add_to_cd_history",
+        "_cdh_back_query",
+        "_get_cd_history"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "fansify": {
+      "function_name": "fansify",
+      "calls": [
+        "fansi",
+        "line_join",
+        "line_split"
+      ],
+      "called_by": [
+        "print_history",
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "print_history",
+        "fansi",
+        "fansify",
+        "pseudo_terminal",
+        "line_join",
+        "line_split"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "indentify_all_but_first_line": {
+      "function_name": "indentify_all_but_first_line",
+      "calls": [
+        "line_join",
+        "line_split"
+      ],
+      "called_by": [
+        "rinsp"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "line_join",
+        "rinsp",
+        "line_split",
+        "indentify_all_but_first_line"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "print_history": {
+      "function_name": "print_history",
+      "calls": [
+        "print",
+        "_maybe_display_string_in_pager",
+        "line_split",
+        "fansi",
+        "strip",
+        "fansify",
+        "line_join"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "print",
+        "pseudo_terminal",
+        "_maybe_display_string_in_pager",
+        "line_split",
+        "print_history",
+        "fansi",
+        "strip",
+        "fansify",
+        "line_join"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "load_annotated_lines": {
+      "function_name": "load_annotated_lines",
+      "calls": [
+        "load_text",
+        "line_split"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "load_annotated_lines",
+        "load_text",
+        "line_split"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "line_split": {
+      "current_quality": "basic",
+      "current_docstring": "    I find myself often wishing this function exists for a few seconds before remembering String.splitlines exists\n    EXAMPLE: line_split('hello\nworld')==['hello','world']\n    ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "number_of_lines": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "string_width": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_get_cd_history": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "fansify": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "indentify_all_but_first_line": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "print_history": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "load_annotated_lines": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

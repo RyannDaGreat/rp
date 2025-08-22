@@ -1,0 +1,386 @@
+{
+  "package_id": 47,
+  "functions": [
+    "_maybe_display_string_in_pager",
+    "display_query_options",
+    "print_code",
+    "currently_in_a_tty",
+    "_line_numbered_string",
+    "_fd",
+    "string_pager",
+    "get_terminal_height"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 915,
+  "context": {
+    "_maybe_display_string_in_pager": {
+      "function_name": "_maybe_display_string_in_pager",
+      "calls": [
+        "number_of_lines",
+        "get_terminal_height",
+        "ring_terminal_bell",
+        "currently_in_a_tty",
+        "fansi",
+        "number_of_lines_in_terminal",
+        "string_pager",
+        "_line_numbered_string"
+      ],
+      "called_by": [
+        "display_file_tree",
+        "_display_filetype_size_histogram",
+        "rinsp_search",
+        "pterm_pretty_print",
+        "pseudo_terminal",
+        "_rich_print",
+        "input_select",
+        "rinsp",
+        "print_history",
+        "display_query_options",
+        "print_code",
+        "_fd"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "display_file_tree",
+        "_display_filetype_size_histogram",
+        "rinsp_search",
+        "ring_terminal_bell",
+        "currently_in_a_tty",
+        "fansi",
+        "number_of_lines_in_terminal",
+        "display_query_options",
+        "_fd",
+        "number_of_lines",
+        "pterm_pretty_print",
+        "pseudo_terminal",
+        "get_terminal_height",
+        "_rich_print",
+        "input_select",
+        "_maybe_display_string_in_pager",
+        "rinsp",
+        "print_history",
+        "print_code",
+        "string_pager",
+        "_line_numbered_string"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "display_query_options": {
+      "function_name": "display_query_options",
+      "calls": [
+        "print",
+        "_maybe_display_string_in_pager",
+        "strip_ansi_escapes",
+        "line_join",
+        "_highlighted_query_results"
+      ],
+      "called_by": [
+        "input_select"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "strip_ansi_escapes",
+        "display_query_options",
+        "_maybe_display_string_in_pager",
+        "print",
+        "line_join",
+        "input_select",
+        "_highlighted_query_results"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "print_code": {
+      "function_name": "print_code",
+      "calls": [
+        "print",
+        "print_line",
+        "_maybe_display_string_in_pager",
+        "fansi",
+        "line_join",
+        "fansi_syntax_highlighting"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "print",
+        "pseudo_terminal",
+        "print_line",
+        "_maybe_display_string_in_pager",
+        "fansi",
+        "print_code",
+        "line_join",
+        "fansi_syntax_highlighting"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "currently_in_a_tty": {
+      "function_name": "currently_in_a_tty",
+      "calls": [],
+      "called_by": [
+        "line_graph_live",
+        "pseudo_terminal",
+        "display_image",
+        "display_qr_code_in_terminal",
+        "_maybe_display_string_in_pager",
+        "display_image_slideshow",
+        "number_of_lines_in_terminal",
+        "edit_image_in_terminal",
+        "vim"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "line_graph_live",
+        "pseudo_terminal",
+        "display_image",
+        "display_qr_code_in_terminal",
+        "_maybe_display_string_in_pager",
+        "currently_in_a_tty",
+        "display_image_slideshow",
+        "number_of_lines_in_terminal",
+        "edit_image_in_terminal",
+        "vim"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_line_numbered_string": {
+      "function_name": "_line_numbered_string",
+      "calls": [
+        "fansi",
+        "line_join",
+        "line_split"
+      ],
+      "called_by": [
+        "_maybe_display_string_in_pager"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "fansi",
+        "line_join",
+        "_line_numbered_string",
+        "_maybe_display_string_in_pager",
+        "line_split"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_fd": {
+      "function_name": "_fd",
+      "calls": [
+        "print",
+        "get_path_name",
+        "print_line",
+        "_maybe_display_string_in_pager",
+        "fansi",
+        "highlighted",
+        "line_join"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "print",
+        "get_path_name",
+        "pseudo_terminal",
+        "print_line",
+        "_maybe_display_string_in_pager",
+        "fansi",
+        "highlighted",
+        "line_join",
+        "_fd"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "string_pager": {
+      "function_name": "string_pager",
+      "calls": [
+        "_string_pager_via_click",
+        "_string_pager_via_pypager"
+      ],
+      "called_by": [
+        "display_more_options",
+        "pseudo_terminal",
+        "input_select",
+        "_maybe_display_string_in_pager",
+        "display_options_with_pager"
+      ],
+      "aliases": [],
+      "via_variants": [
+        "_string_pager_via_click",
+        "_string_pager_via_pypager",
+        "_string_pager_via_less"
+      ],
+      "cluster": [
+        "display_more_options",
+        "pseudo_terminal",
+        "_string_pager_via_less",
+        "input_select",
+        "_maybe_display_string_in_pager",
+        "display_options_with_pager",
+        "_string_pager_via_click",
+        "string_pager",
+        "_string_pager_via_pypager"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_terminal_height": {
+      "function_name": "get_terminal_height",
+      "calls": [
+        "get_terminal_size"
+      ],
+      "called_by": [
+        "histogram_in_terminal",
+        "_maybe_display_string_in_pager",
+        "line_graph_via_plotille"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "line_graph_via_plotille",
+        "get_terminal_height",
+        "histogram_in_terminal",
+        "get_terminal_size",
+        "_maybe_display_string_in_pager"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "_maybe_display_string_in_pager": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "display_query_options": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "print_code": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "currently_in_a_tty": {
+      "current_quality": "basic",
+      "current_docstring": "Returns True if we're in a TTY (aka a terminal that can run Prompt-Toolkit)\n(As opposed to, for example, running inside a jupyter notebook)",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_line_numbered_string": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_fd": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "string_pager": {
+      "current_quality": "basic",
+      "current_docstring": "Uses a python-based pager, similar to the program 'less', where you can scroll and search through things\nWhat is a pager? See: https://en.wikipedia.org/wiki/Terminal_pager\nUseful for displaying gigant...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_terminal_height": {
+      "current_quality": "basic",
+      "current_docstring": "Attempts to return the height of the current TTY in characters - otherwise it will return 25 by default ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

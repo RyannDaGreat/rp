@@ -1,0 +1,515 @@
+{
+  "package_id": 6,
+  "functions": [
+    "strip",
+    "get_all_paths",
+    "get_all_function_names",
+    "get_stats_string",
+    "display_file_tree",
+    "number_of_leading_spaces",
+    "get_default_iface_name_linux",
+    "columnify_strings"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 1370,
+  "context": {
+    "strip": {
+      "function_name": "strip",
+      "calls": [
+        "strip",
+        "replace"
+      ],
+      "called_by": [
+        "get_my_mac_address",
+        "display_file_tree",
+        "killport",
+        "replace_if_none",
+        "_dhistory_helper",
+        "fix_package",
+        "_get_cdh_back_names",
+        "number_of_leading_spaces",
+        "_get_processor_name",
+        "_display_video_in_notebook",
+        "destructure",
+        "fansi_pygments_demo",
+        "load_tsv",
+        "get_all_function_names",
+        "words_to_number",
+        "_autocomplete_lss_name",
+        "get_default_iface_name_linux",
+        "pseudo_terminal",
+        "_write_default_gitignore",
+        "properties_to_xml",
+        "validate_tensor_shapes",
+        "get_git_branch",
+        "get_stats_string",
+        "add_ipython_kernel",
+        "_pterm_fuzzy_cd",
+        "_view_markdown_in_terminal",
+        "_extract_code_cells_from_ipynb",
+        "get_vim_python_executable",
+        "vim_paste",
+        "bundle_vars",
+        "__str__",
+        "as_rgba_float_color",
+        "delete_empty_lines",
+        "pip_install_multiple",
+        "columnify_strings",
+        "color_name_to_float_color",
+        "strip",
+        "_load_ryan_lazygit_config",
+        "select_torch_device",
+        "parse",
+        "concat_mp4_files",
+        "rp_iglob",
+        "format_signature",
+        "unindent",
+        "get_my_public_ip_address",
+        "get_all_paths",
+        "text_to_speech_via_google",
+        "get_lines",
+        "_parse_exeval_code",
+        "select_git_commit",
+        "_get_env_info",
+        "get_star_modules",
+        "as_example_comment",
+        "rinsp",
+        "get_git_date_modified",
+        "print_history",
+        "is_valid_line",
+        "get_arxiv_bibtex",
+        "_get_repo_name_from_url",
+        "_run_tmux_command"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_my_mac_address",
+        "display_file_tree",
+        "killport",
+        "replace_if_none",
+        "_dhistory_helper",
+        "fix_package",
+        "_get_cdh_back_names",
+        "number_of_leading_spaces",
+        "_get_processor_name",
+        "_display_video_in_notebook",
+        "destructure",
+        "fansi_pygments_demo",
+        "load_tsv",
+        "get_all_function_names",
+        "words_to_number",
+        "_autocomplete_lss_name",
+        "get_default_iface_name_linux",
+        "pseudo_terminal",
+        "_write_default_gitignore",
+        "properties_to_xml",
+        "validate_tensor_shapes",
+        "get_git_branch",
+        "get_stats_string",
+        "add_ipython_kernel",
+        "_pterm_fuzzy_cd",
+        "_view_markdown_in_terminal",
+        "_extract_code_cells_from_ipynb",
+        "get_vim_python_executable",
+        "vim_paste",
+        "bundle_vars",
+        "__str__",
+        "as_rgba_float_color",
+        "delete_empty_lines",
+        "pip_install_multiple",
+        "columnify_strings",
+        "color_name_to_float_color",
+        "strip",
+        "_load_ryan_lazygit_config",
+        "select_torch_device",
+        "parse",
+        "concat_mp4_files",
+        "replace",
+        "rp_iglob",
+        "format_signature",
+        "unindent",
+        "get_my_public_ip_address",
+        "get_all_paths",
+        "text_to_speech_via_google",
+        "get_lines",
+        "_parse_exeval_code",
+        "select_git_commit",
+        "_get_env_info",
+        "get_star_modules",
+        "as_example_comment",
+        "rinsp",
+        "get_git_date_modified",
+        "print_history",
+        "is_valid_line",
+        "get_arxiv_bibtex",
+        "_get_repo_name_from_url",
+        "_run_tmux_command"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_all_paths": {
+      "function_name": "get_all_paths",
+      "calls": [
+        "get_current_directory",
+        "add",
+        "get_file_extension",
+        "is_hidden",
+        "get_absolute_path",
+        "is_symbolic_link",
+        "recursion_helper",
+        "strip",
+        "directory_exists",
+        "get_relative_path"
+      ],
+      "called_by": [
+        "display_file_tree",
+        "_display_filetype_size_histogram",
+        "input_select_path",
+        "delete_all_paths_in_directory",
+        "pseudo_terminal",
+        "get_all_files",
+        "get_stats_string",
+        "get_subfolders",
+        "_maybe_unbury_folder",
+        "get_all_image_files",
+        "display_image_slideshow",
+        "get_all_folders",
+        "_paste_path_from_bundle",
+        "is_empty_folder"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "display_file_tree",
+        "add",
+        "get_file_extension",
+        "_display_filetype_size_histogram",
+        "recursion_helper",
+        "get_subfolders",
+        "strip",
+        "_paste_path_from_bundle",
+        "directory_exists",
+        "get_relative_path",
+        "get_current_directory",
+        "get_all_paths",
+        "is_hidden",
+        "input_select_path",
+        "delete_all_paths_in_directory",
+        "pseudo_terminal",
+        "get_absolute_path",
+        "is_symbolic_link",
+        "get_all_files",
+        "get_stats_string",
+        "_maybe_unbury_folder",
+        "get_all_image_files",
+        "display_image_slideshow",
+        "get_all_folders",
+        "is_empty_folder"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_all_function_names": {
+      "function_name": "get_all_function_names",
+      "calls": [
+        "lrstrip_all_lines",
+        "strip",
+        "line_split"
+      ],
+      "called_by": [
+        "_dhistory_helper",
+        "_get_function_name"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "strip",
+        "_dhistory_helper",
+        "get_all_function_names",
+        "lrstrip_all_lines",
+        "line_split",
+        "_get_function_name"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_stats_string": {
+      "function_name": "get_stats_string",
+      "calls": [
+        "get_file_extension",
+        "get_all_paths",
+        "shuffled",
+        "is_hidden_file",
+        "is_symbolic_link",
+        "is_utf8_file",
+        "number_of_lines_in_file",
+        "fansi",
+        "strip",
+        "get_file_size",
+        "get_image_file_dimensions"
+      ],
+      "called_by": [
+        "display_file_tree",
+        "walk"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "display_file_tree",
+        "get_file_extension",
+        "get_all_paths",
+        "shuffled",
+        "is_hidden_file",
+        "get_stats_string",
+        "is_symbolic_link",
+        "is_utf8_file",
+        "number_of_lines_in_file",
+        "fansi",
+        "strip",
+        "get_file_size",
+        "get_image_file_dimensions",
+        "walk"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "display_file_tree": {
+      "function_name": "display_file_tree",
+      "calls": [
+        "get_file_extension",
+        "register",
+        "print_line",
+        "is_utf8_file",
+        "highlight_child",
+        "number_of_lines_in_file",
+        "is_symbolic_link",
+        "get_stats_string",
+        "_maybe_display_string_in_pager",
+        "get_file_size",
+        "shuffled",
+        "print",
+        "fansi",
+        "strip",
+        "summary",
+        "get_all_paths",
+        "is_hidden_file",
+        "get_image_file_dimensions",
+        "path_join",
+        "line_join",
+        "walk"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "display_file_tree",
+        "get_file_extension",
+        "register",
+        "shuffled",
+        "print",
+        "print_line",
+        "is_utf8_file",
+        "highlight_child",
+        "number_of_lines_in_file",
+        "fansi",
+        "strip",
+        "summary",
+        "get_all_paths",
+        "is_hidden_file",
+        "pseudo_terminal",
+        "is_symbolic_link",
+        "get_stats_string",
+        "_maybe_display_string_in_pager",
+        "get_file_size",
+        "get_image_file_dimensions",
+        "path_join",
+        "line_join",
+        "walk"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "number_of_leading_spaces": {
+      "function_name": "number_of_leading_spaces",
+      "calls": [
+        "strip"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "strip",
+        "number_of_leading_spaces",
+        "pseudo_terminal"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_default_iface_name_linux": {
+      "function_name": "get_default_iface_name_linux",
+      "calls": [
+        "strip"
+      ],
+      "called_by": [
+        "get_my_mac_address"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_my_mac_address",
+        "strip",
+        "get_default_iface_name_linux"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "columnify_strings": {
+      "function_name": "columnify_strings",
+      "calls": [
+        "line_join",
+        "strip",
+        "replace",
+        "horizontally_concatenated_strings"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "strip",
+        "pseudo_terminal",
+        "line_join",
+        "replace",
+        "horizontally_concatenated_strings",
+        "columnify_strings"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "strip": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_all_paths": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_all_function_names": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_stats_string": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "display_file_tree": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "number_of_leading_spaces": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_default_iface_name_linux": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "columnify_strings": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "package_id": 990,
+  "functions": [
+    "identity",
+    "on_return"
+  ],
+  "total_functions": 2,
+  "estimated_hours": 1.5,
+  "priority_score": 50,
+  "context": {
+    "identity": {
+      "function_name": "identity",
+      "calls": [
+        "detuple"
+      ],
+      "called_by": [],
+      "aliases": [
+        "on_return"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "detuple",
+        "identity",
+        "on_return"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "on_return": {
+      "function_name": "on_return",
+      "calls": [],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "on_return"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "identity": {
+      "current_quality": "excellent",
+      "current_docstring": "The identity function. \u0192\ufe59\ud835\udccd\ufe5a\ufe66 \ud835\udccd    where   \u0192 \u2263 identity\nExamples:\n  identity(2) == 2\n  identity('Hello World!') == 'Hello World!'\n  identity(1,2,3) == (1,2,3)  #When given multiple args, returns a tupl...",
+      "suggestions": [
+        "Document function parameters and their types"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

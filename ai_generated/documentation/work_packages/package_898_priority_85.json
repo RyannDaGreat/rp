@@ -1,0 +1,112 @@
+{
+  "package_id": 898,
+  "functions": [
+    "load_image_from_screenshot_via_mss",
+    "load_image_from_screenshot"
+  ],
+  "total_functions": 2,
+  "estimated_hours": 1.5,
+  "priority_score": 85,
+  "context": {
+    "load_image_from_screenshot_via_mss": {
+      "function_name": "load_image_from_screenshot_via_mss",
+      "calls": [
+        "pip_import",
+        "as_numpy_array",
+        "cv_bgr_rgb_swap"
+      ],
+      "called_by": [
+        "load_image_from_screenshot"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_numpy_array",
+        "load_image_from_screenshot_via_mss",
+        "pip_import",
+        "cv_bgr_rgb_swap",
+        "load_image_from_screenshot"
+      ],
+      "multiplexing": [],
+      "is_via_variant": true,
+      "is_private": false
+    },
+    "load_image_from_screenshot": {
+      "function_name": "load_image_from_screenshot",
+      "calls": [
+        "load_image_from_screenshot_via_mss"
+      ],
+      "called_by": [
+        "load_screenshot_stream"
+      ],
+      "aliases": [],
+      "via_variants": [
+        "load_image_from_screenshot_via_mss",
+        "_load_image_from_screenshot_via_pyscreenshot"
+      ],
+      "cluster": [
+        "_load_image_from_screenshot_via_pyscreenshot",
+        "load_image_from_screenshot_via_mss",
+        "load_screenshot_stream",
+        "load_image_from_screenshot"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "load_image_from_screenshot_via_mss": {
+      "current_quality": "good",
+      "current_docstring": "Grabs a screenshot from the main monitor using the \nMultiple Screen Shots (MSS) Library\nReturns it as a RGB byte image\n\ncursor: If true, included the cursor in the image\n\nEXAMPLE:\n    \n    >>> while T...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Explain backend-specific behavior and when to use this variant"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "load_image_from_screenshot": {
+      "current_quality": "good",
+      "current_docstring": "Grabs a screenshot from the main monitor\nReturns it as a RGB byte image\n\nEXAMPLE:\n    \n    >>> while True:\n    ...     image = load_image_from_screenshot()\n    ...     image = cv_resize_image(image, 0...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Add supported file formats and common usage patterns"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document backend-specific behavior and when to use each _via_ variant"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

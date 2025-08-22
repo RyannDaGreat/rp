@@ -1,0 +1,48 @@
+=== RP Argument Consistency Report ===
+
+Functions analyzed: 2001
+Unique arguments found: 979
+Inconsistencies detected: 672
+
+=== Standard Argument Usage ===
+strict: used in 36 functions
+  Default values: [False, True]
+show_progress: used in 70 functions
+  Default values: [False, True]
+num_threads: used in 21 functions
+  Default values: [0]
+use_cache: used in 39 functions
+  Default values: [False, True]
+copy: used in 51 functions
+  Default values: [False, True]
+shutup: used in 6 functions
+  Default values: [False]
+
+=== Most Frequently Used Arguments ===
+image: 172 functions
+x: 163 functions
+  Common defaults: [0]
+path: 125 functions
+  Common defaults: ['/', '.']
+show_progress: 70 functions
+  Common defaults: [False, True]
+string: 63 functions
+copy: 51 functions
+  Common defaults: [False, True]
+code: 47 functions
+width: 45 functions
+  Common defaults: [64, 256, 1]
+lazy: 43 functions
+  Common defaults: [False]
+use_cache: 39 functions
+  Common defaults: [False, True]
+height: 38 functions
+  Common defaults: [64, 256, 128]
+strict: 36 functions
+  Common defaults: [False, True]
+color: 30 functions
+  Common defaults: ['(1, 1, 1, 1)', '(0, 0, 0, 0)', 'white']
+interp: 29 functions
+  Common defaults: ['nearest', 'floor', 'auto']
+y: 26 functions
+  Common defaults: [0]

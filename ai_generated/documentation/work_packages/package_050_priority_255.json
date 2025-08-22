@@ -1,0 +1,170 @@
+{
+  "package_id": 50,
+  "functions": [
+    "running_in_ipython",
+    "play_sound_from_samples",
+    "visualize_pytorch_model",
+    "running_in_jupyter_notebook"
+  ],
+  "total_functions": 4,
+  "estimated_hours": 3.0,
+  "priority_score": 255,
+  "context": {
+    "running_in_ipython": {
+      "function_name": "running_in_ipython",
+      "calls": [],
+      "called_by": [
+        "visualize_pytorch_model",
+        "python_input",
+        "display_image",
+        "cv_imshow",
+        "play_sound_from_samples"
+      ],
+      "aliases": [
+        "running_in_jupyter_notebook"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "play_sound_from_samples",
+        "running_in_ipython",
+        "visualize_pytorch_model",
+        "display_image",
+        "python_input",
+        "cv_imshow",
+        "running_in_jupyter_notebook"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "play_sound_from_samples": {
+      "function_name": "play_sound_from_samples",
+      "calls": [
+        "running_in_ipython",
+        "pip_import",
+        "fansi_print"
+      ],
+      "called_by": [
+        "play_tone",
+        "play_chord",
+        "play_sound_file",
+        "text_to_speech_via_google"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "running_in_ipython",
+        "play_sound_file",
+        "text_to_speech_via_google",
+        "pip_import",
+        "fansi_print",
+        "play_sound_from_samples",
+        "play_tone",
+        "play_chord"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "visualize_pytorch_model": {
+      "function_name": "visualize_pytorch_model",
+      "calls": [
+        "running_in_ipython",
+        "save",
+        "pip_import",
+        "open_file_with_default_application",
+        "display",
+        "temporary_file_path"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "running_in_ipython",
+        "save",
+        "display",
+        "visualize_pytorch_model",
+        "pip_import",
+        "temporary_file_path",
+        "open_file_with_default_application"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "running_in_jupyter_notebook": {
+      "function_name": "running_in_jupyter_notebook",
+      "calls": [],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "running_in_jupyter_notebook"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "running_in_ipython": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "play_sound_from_samples": {
+      "current_quality": "good",
+      "current_docstring": "For stereo, use a np matrix\nExample: psfs((x%100)/100 for x in range(100000))\nEach sample should \u2208 [-1,1] or else it will be clipped (if it wasn't clipped it would use modular arithmeti\nc on the int16...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "visualize_pytorch_model": {
+      "current_quality": "good",
+      "current_docstring": "TODO: integrate code better with _visualize_pytorch_model_via_torchviz: get rid of redundant code\nShow a graph depicting some pytorch-based neural network\n - model: should be some neural network model...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

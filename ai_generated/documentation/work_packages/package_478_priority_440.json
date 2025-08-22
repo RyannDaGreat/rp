@@ -1,0 +1,220 @@
+{
+  "package_id": 478,
+  "functions": [
+    "_get_default_session_title",
+    "running_in_conda",
+    "running_in_venv",
+    "get_venv_name",
+    "get_conda_name"
+  ],
+  "total_functions": 5,
+  "estimated_hours": 3.75,
+  "priority_score": 440,
+  "context": {
+    "_get_default_session_title": {
+      "function_name": "_get_default_session_title",
+      "calls": [
+        "get_venv_name",
+        "running_in_conda",
+        "_get_session_title",
+        "get_conda_name",
+        "running_in_venv"
+      ],
+      "called_by": [
+        "_set_default_session_title"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_get_default_session_title",
+        "_get_session_title",
+        "get_conda_name",
+        "get_venv_name",
+        "_set_default_session_title",
+        "running_in_venv",
+        "running_in_conda"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "running_in_conda": {
+      "function_name": "running_in_conda",
+      "calls": [
+        "_is_python_exe_root"
+      ],
+      "called_by": [
+        "_get_default_session_title",
+        "get_conda_name",
+        "running_in_mamba",
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_get_default_session_title",
+        "running_in_mamba",
+        "pseudo_terminal",
+        "_is_python_exe_root",
+        "get_conda_name",
+        "running_in_conda"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "running_in_venv": {
+      "function_name": "running_in_venv",
+      "calls": [
+        "_is_python_exe_root"
+      ],
+      "called_by": [
+        "_get_default_session_title",
+        "get_venv_name",
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_get_default_session_title",
+        "pseudo_terminal",
+        "_is_python_exe_root",
+        "get_venv_name",
+        "running_in_venv"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_venv_name": {
+      "function_name": "get_venv_name",
+      "calls": [
+        "running_in_venv"
+      ],
+      "called_by": [
+        "_get_default_session_title",
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_get_default_session_title",
+        "get_venv_name",
+        "running_in_venv",
+        "pseudo_terminal"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_conda_name": {
+      "function_name": "get_conda_name",
+      "calls": [
+        "running_in_conda"
+      ],
+      "called_by": [
+        "_get_default_session_title",
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_conda_name",
+        "_get_default_session_title",
+        "running_in_conda",
+        "pseudo_terminal"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "_get_default_session_title": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "running_in_conda": {
+      "current_quality": "basic",
+      "current_docstring": "Returns True if this python process is from a Conda environment, and False otherwise",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "running_in_venv": {
+      "current_quality": "basic",
+      "current_docstring": "Returns True if this python process is from a virtual environment (venv), and False otherwise",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_venv_name": {
+      "current_quality": "basic",
+      "current_docstring": "Returns the name of the current python virtual environment (venv). Throws an error if it can't find it.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_conda_name": {
+      "current_quality": "basic",
+      "current_docstring": "Returns the name of the current conda environment. Throws an error if it can't find it.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

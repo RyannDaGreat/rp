@@ -1,0 +1,371 @@
+{
+  "package_id": 35,
+  "functions": [
+    "unique",
+    "task",
+    "_add_to_cd_history",
+    "_get_cdh_back_names",
+    "path_intersections",
+    "icp_least_squares_euclidean_affine",
+    "_edge_intersection_positions",
+    "find_and_replace_text_files"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 730,
+  "context": {
+    "unique": {
+      "function_name": "unique",
+      "calls": [],
+      "called_by": [
+        "find_and_replace_text_files",
+        "_edge_intersection_positions",
+        "pseudo_terminal",
+        "path_intersections",
+        "task",
+        "_get_cdh_back_names",
+        "icp_least_squares_euclidean_affine",
+        "_add_to_cd_history",
+        "dict_transpose",
+        "graham_scan",
+        "print_notebook_gpu_summary"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "unique",
+        "find_and_replace_text_files",
+        "_edge_intersection_positions",
+        "pseudo_terminal",
+        "path_intersections",
+        "task",
+        "_get_cdh_back_names",
+        "icp_least_squares_euclidean_affine",
+        "_add_to_cd_history",
+        "dict_transpose",
+        "graham_scan",
+        "print_notebook_gpu_summary"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "task": {
+      "function_name": "task",
+      "calls": [
+        "line_join",
+        "unique",
+        "_get_cd_history",
+        "string_to_text_file"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "unique",
+        "task",
+        "line_join",
+        "_get_cd_history",
+        "string_to_text_file"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_add_to_cd_history": {
+      "function_name": "_add_to_cd_history",
+      "calls": [
+        "line_join",
+        "unique",
+        "_get_cd_history",
+        "string_to_text_file"
+      ],
+      "called_by": [
+        "_update_cd_history"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "unique",
+        "_add_to_cd_history",
+        "_update_cd_history",
+        "line_join",
+        "_get_cd_history",
+        "string_to_text_file"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_get_cdh_back_names": {
+      "function_name": "_get_cdh_back_names",
+      "calls": [
+        "unique",
+        "_get_cd_history",
+        "strip",
+        "get_path_names"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "unique",
+        "strip",
+        "_get_cdh_back_names",
+        "_get_cd_history",
+        "get_path_names"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "path_intersections": {
+      "function_name": "path_intersections",
+      "calls": [
+        "unique",
+        "_edge_intersection_positions",
+        "as_points_array",
+        "_edges_intersect",
+        "as_complex_vector"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "unique",
+        "_edge_intersection_positions",
+        "as_points_array",
+        "as_complex_vector",
+        "path_intersections",
+        "_edges_intersect"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "icp_least_squares_euclidean_affine": {
+      "function_name": "icp_least_squares_euclidean_affine",
+      "calls": [
+        "unique",
+        "max_valued_index",
+        "closest_points",
+        "point_cloud_angle",
+        "mean",
+        "least_squares_euclidean_affine",
+        "rotation_affine_2d",
+        "apply_affine",
+        "combined_affine",
+        "translation_affine"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "unique",
+        "max_valued_index",
+        "rotation_affine_2d",
+        "closest_points",
+        "icp_least_squares_euclidean_affine",
+        "point_cloud_angle",
+        "mean",
+        "least_squares_euclidean_affine",
+        "apply_affine",
+        "combined_affine",
+        "translation_affine"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_edge_intersection_positions": {
+      "function_name": "_edge_intersection_positions",
+      "calls": [
+        "_point_on_edge",
+        "unique",
+        "_edges_intersect",
+        "as_complex_vector"
+      ],
+      "called_by": [
+        "path_intersections"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "unique",
+        "_edge_intersection_positions",
+        "as_complex_vector",
+        "path_intersections",
+        "_point_on_edge",
+        "_edges_intersect"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "find_and_replace_text_files": {
+      "function_name": "find_and_replace_text_files",
+      "calls": [
+        "is_iterable",
+        "unique",
+        "input_yes_no",
+        "old_and_new_text",
+        "print",
+        "input_option",
+        "view_string_diff",
+        "text_file_to_string",
+        "get_all_files",
+        "is_utf8_file",
+        "file_will_change",
+        "get_progress_text",
+        "format",
+        "input_conditional",
+        "line_join",
+        "replace",
+        "string_to_text_file"
+      ],
+      "called_by": [
+        "_fart"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_iterable",
+        "unique",
+        "input_yes_no",
+        "print",
+        "view_string_diff",
+        "text_file_to_string",
+        "is_utf8_file",
+        "file_will_change",
+        "format",
+        "input_conditional",
+        "_fart",
+        "replace",
+        "find_and_replace_text_files",
+        "old_and_new_text",
+        "input_option",
+        "get_all_files",
+        "get_progress_text",
+        "line_join",
+        "string_to_text_file"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "unique": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "task": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_add_to_cd_history": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_get_cdh_back_names": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "path_intersections": {
+      "current_quality": "basic",
+      "current_docstring": "TODO: Let this function take varargs paths and return all intersections\nReturns a list of points where the two paths intersect, including edge cases (the paths intersect tangentially at a vertex, or o...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "icp_least_squares_euclidean_affine": {
+      "current_quality": "basic",
+      "current_docstring": "icp stands for \"iterative closest point\". It's an algorithm used to match point-clouds.\nThe length of from_points and to_points does NOT have to match. However, they must both have at least two points...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_edge_intersection_positions": {
+      "current_quality": "basic",
+      "current_docstring": "Will return a list of either 0, 1 or 2 points (2 points is a special edge case where one line shares part of its segment with another line collinearly) ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "find_and_replace_text_files": {
+      "current_quality": "good",
+      "current_docstring": "Search and Replace text in files\nThis function searches for all text files within the given paths and replaces all instances of the query string with the replacement string.\nIt has two modes of operat...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax"
+      ],
+      "has_examples": false,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

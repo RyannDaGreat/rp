@@ -1,0 +1,204 @@
+{
+  "package_id": 64,
+  "functions": [
+    "as_byte_images",
+    "_load_images_via_pdf2image",
+    "_display_video_via_mediapy",
+    "_cv_save_video_mp4"
+  ],
+  "total_functions": 4,
+  "estimated_hours": 3.0,
+  "priority_score": 390,
+  "context": {
+    "as_byte_images": {
+      "function_name": "as_byte_images",
+      "calls": [
+        "_images_conversion"
+      ],
+      "called_by": [
+        "_cv_save_video_mp4",
+        "_display_video_via_mediapy",
+        "save_animated_png",
+        "save_animated_webp",
+        "_load_images_via_pdf2image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_byte_images",
+        "_cv_save_video_mp4",
+        "_images_conversion",
+        "_display_video_via_mediapy",
+        "save_animated_png",
+        "save_animated_webp",
+        "_load_images_via_pdf2image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_load_images_via_pdf2image": {
+      "function_name": "_load_images_via_pdf2image",
+      "calls": [
+        "as_byte_images",
+        "gather_args_recursive_call",
+        "handy_hash",
+        "pip_import"
+      ],
+      "called_by": [
+        "load_pdf_as_images"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_byte_images",
+        "gather_args_recursive_call",
+        "pip_import",
+        "load_pdf_as_images",
+        "handy_hash",
+        "_load_images_via_pdf2image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": true,
+      "is_private": true
+    },
+    "_display_video_via_mediapy": {
+      "function_name": "_display_video_via_mediapy",
+      "calls": [
+        "as_byte_images",
+        "as_numpy_images",
+        "_make_video_dimensions_even",
+        "as_rgb_images",
+        "pip_import"
+      ],
+      "called_by": [
+        "_display_video_in_notebook"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_byte_images",
+        "as_numpy_images",
+        "_make_video_dimensions_even",
+        "_display_video_in_notebook",
+        "as_rgb_images",
+        "pip_import",
+        "_display_video_via_mediapy"
+      ],
+      "multiplexing": [],
+      "is_via_variant": true,
+      "is_private": true
+    },
+    "_cv_save_video_mp4": {
+      "function_name": "_cv_save_video_mp4",
+      "calls": [
+        "as_byte_images",
+        "_as_video_quality",
+        "as_rgb_images",
+        "with_file_extension",
+        "get_unique_copy_path",
+        "get_current_function_name",
+        "pip_import",
+        "make_parent_directory",
+        "as_numpy_array",
+        "has_file_extension"
+      ],
+      "called_by": [
+        "save_video_mp4"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_byte_images",
+        "_cv_save_video_mp4",
+        "save_video_mp4",
+        "_as_video_quality",
+        "as_rgb_images",
+        "with_file_extension",
+        "get_unique_copy_path",
+        "get_current_function_name",
+        "pip_import",
+        "make_parent_directory",
+        "as_numpy_array",
+        "has_file_extension"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "as_byte_images": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_load_images_via_pdf2image": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_display_video_via_mediapy": {
+      "current_quality": "basic",
+      "current_docstring": "Use mediapy to display a video in a Jupyter notebook ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Explain backend-specific behavior and when to use this variant",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_cv_save_video_mp4": {
+      "current_quality": "basic",
+      "current_docstring": "Uses quality instead of bitrate because of how opencv works: https://docs.opencv.org/3.4/d4/d15/group__videoio__flags__base.html#gga41c5cfa7859ae542b71b1d33bbd4d2b4ace3320e146f4f95f3d58b32b0e1237b1 \nN...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document backend-specific behavior and when to use each _via_ variant"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

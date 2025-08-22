@@ -1,0 +1,400 @@
+{
+  "package_id": 30,
+  "functions": [
+    "get_current_directory",
+    "get_relative_path",
+    "_update_cd_history",
+    "_vimore",
+    "_string_diff_helper",
+    "_launch_ranger",
+    "vim_string_diff",
+    "_run_ai_cli_coder"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 680,
+  "context": {
+    "get_current_directory": {
+      "function_name": "get_current_directory",
+      "calls": [],
+      "called_by": [
+        "_launch_ranger",
+        "get_all_paths",
+        "_display_filetype_size_histogram",
+        "input_select_path",
+        "_run_ai_cli_coder",
+        "_pterm_cd",
+        "pseudo_terminal",
+        "get_relative_path",
+        "_update_cd_history",
+        "commit_process",
+        "vim_string_diff",
+        "_vimore",
+        "_string_diff_helper",
+        "vim"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_current_directory",
+        "get_all_paths",
+        "_display_filetype_size_histogram",
+        "input_select_path",
+        "_run_ai_cli_coder",
+        "_pterm_cd",
+        "pseudo_terminal",
+        "get_relative_path",
+        "vim_string_diff",
+        "_update_cd_history",
+        "vim",
+        "commit_process",
+        "_vimore",
+        "_string_diff_helper",
+        "_launch_ranger"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_relative_path": {
+      "function_name": "get_relative_path",
+      "calls": [
+        "get_current_directory"
+      ],
+      "called_by": [
+        "get_all_paths",
+        "pseudo_terminal",
+        "_copy_path_to_bundle",
+        "make_symlink",
+        "_relative_path_ans",
+        "_display_video_in_notebook",
+        "localized_path",
+        "_vimore",
+        "get_relative_paths"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_current_directory",
+        "get_all_paths",
+        "pseudo_terminal",
+        "_copy_path_to_bundle",
+        "make_symlink",
+        "_relative_path_ans",
+        "_display_video_in_notebook",
+        "localized_path",
+        "_vimore",
+        "get_relative_paths",
+        "get_relative_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_update_cd_history": {
+      "function_name": "_update_cd_history",
+      "calls": [
+        "get_current_directory",
+        "_add_to_cd_history",
+        "get_all_importable_module_names"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_current_directory",
+        "_add_to_cd_history",
+        "_update_cd_history",
+        "pseudo_terminal",
+        "get_all_importable_module_names"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_vimore": {
+      "function_name": "_vimore",
+      "calls": [
+        "get_current_directory",
+        "file_exists",
+        "fansi_print",
+        "input_select",
+        "fansi",
+        "localized_path",
+        "_all_files_listed_in_exception_traceback",
+        "get_relative_path"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_current_directory",
+        "pseudo_terminal",
+        "file_exists",
+        "fansi_print",
+        "input_select",
+        "fansi",
+        "localized_path",
+        "_all_files_listed_in_exception_traceback",
+        "_vimore",
+        "get_relative_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_string_diff_helper": {
+      "function_name": "_string_diff_helper",
+      "calls": [
+        "get_current_directory",
+        "make_directory",
+        "is_utf8_file",
+        "set_current_directory",
+        "temporary_file_path",
+        "string_to_text_file"
+      ],
+      "called_by": [
+        "dunk_string_diff",
+        "view_string_diff"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_current_directory",
+        "view_string_diff",
+        "make_directory",
+        "is_utf8_file",
+        "dunk_string_diff",
+        "set_current_directory",
+        "string_to_text_file",
+        "temporary_file_path",
+        "_string_diff_helper"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_launch_ranger": {
+      "function_name": "_launch_ranger",
+      "calls": [
+        "main",
+        "get_current_directory",
+        "get",
+        "pip_import",
+        "fansi_print"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "main",
+        "get_current_directory",
+        "get",
+        "pseudo_terminal",
+        "pip_import",
+        "fansi_print",
+        "_launch_ranger"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "vim_string_diff": {
+      "function_name": "vim_string_diff",
+      "calls": [
+        "get_current_directory",
+        "text_file_to_string",
+        "make_directory",
+        "set_current_directory",
+        "temporary_file_path",
+        "string_to_text_file"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_current_directory",
+        "set_current_directory",
+        "text_file_to_string",
+        "vim_string_diff",
+        "make_directory",
+        "temporary_file_path",
+        "string_to_text_file"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_run_ai_cli_coder": {
+      "function_name": "_run_ai_cli_coder",
+      "calls": [
+        "get_current_directory",
+        "fansi_highlight_path",
+        "get_source_code",
+        "print",
+        "_ensure_git_installed",
+        "gather_vars",
+        "file_exists",
+        "make_directory",
+        "save_text_file",
+        "millis",
+        "_run_sys_command",
+        "format_current_date",
+        "path_join",
+        "display_code_cell",
+        "run",
+        "directory_exists"
+      ],
+      "called_by": [
+        "_run_claude_code",
+        "_run_gemini_cli"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_source_code",
+        "print",
+        "gather_vars",
+        "file_exists",
+        "_run_claude_code",
+        "_run_gemini_cli",
+        "display_code_cell",
+        "millis",
+        "directory_exists",
+        "get_current_directory",
+        "fansi_highlight_path",
+        "_run_ai_cli_coder",
+        "_ensure_git_installed",
+        "make_directory",
+        "save_text_file",
+        "_run_sys_command",
+        "format_current_date",
+        "path_join",
+        "run"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "get_current_directory": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_relative_path": {
+      "current_quality": "basic",
+      "current_docstring": "Take an absolute path, and turn it into a relative path starting from root_directory\nroot_directory's default is get_current_directory()",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_update_cd_history": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_vimore": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_string_diff_helper": {
+      "current_quality": "basic",
+      "current_docstring": "Helper function for string diff operations\nSets up git repo and executes the provided diff command",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_launch_ranger": {
+      "current_quality": "basic",
+      "current_docstring": "Ranger is a curses-based file manager with Vim keybindings\nIt's really useful for quickly/visually browsing through files and directories!\nWhatsmore, is that we can launch it in this process - which i...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "vim_string_diff": {
+      "current_quality": "good",
+      "current_docstring": "Requires the program 'vimdiff'\nReturns the modified 'before' as a string\n\nHow to use vimdiff:\n    https://stackoverflow.com/questions/27832630/merge-changes-using-vimdiff\n    Summary:\n        do    an...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": true
+    },
+    "_run_ai_cli_coder": {
+      "current_quality": "good",
+      "current_docstring": "Given code as either a path or a string, edits that code using a cli-based coder (such as gemini-cli or claudecode).\n\nIf the given code is a file path, makes a temporary directory and works there,\ncre...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax"
+      ],
+      "has_examples": false,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

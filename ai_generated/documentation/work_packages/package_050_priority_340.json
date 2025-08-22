@@ -1,0 +1,157 @@
+{
+  "package_id": 50,
+  "functions": [
+    "input_integer",
+    "is_valid_integer_string",
+    "input_conditional"
+  ],
+  "total_functions": 3,
+  "estimated_hours": 2.25,
+  "priority_score": 340,
+  "context": {
+    "input_integer": {
+      "function_name": "input_integer",
+      "calls": [
+        "print",
+        "is_valid_integer_string",
+        "input_conditional"
+      ],
+      "called_by": [
+        "display_image_slideshow"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "display_image_slideshow",
+        "is_valid_integer_string",
+        "print",
+        "input_conditional",
+        "input_integer"
+      ],
+      "multiplexing": [
+        "int",
+        "int",
+        "int",
+        "int",
+        "int",
+        "int",
+        "int",
+        "int",
+        "int",
+        "int"
+      ],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_valid_integer_string": {
+      "function_name": "is_valid_integer_string",
+      "calls": [],
+      "called_by": [
+        "input_integer",
+        "on_fail"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_valid_integer_string",
+        "input_integer",
+        "on_fail"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "input_conditional": {
+      "function_name": "input_conditional",
+      "calls": [
+        "print",
+        "condition",
+        "on_fail"
+      ],
+      "called_by": [
+        "find_and_replace_text_files",
+        "input_integer",
+        "input_option",
+        "input_yes_no",
+        "input_select"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "find_and_replace_text_files",
+        "input_conditional",
+        "input_integer",
+        "input_option",
+        "on_fail",
+        "input_yes_no",
+        "print",
+        "condition",
+        "input_select"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "input_integer": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "is_valid_integer_string": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "input_conditional": {
+      "current_quality": "good",
+      "current_docstring": "Keeps asking the user for a console input until they satisfy the condition with their answer.\nExample: ans=input_conditional('Please enter yes or no.', lambda x: x.lower() in {'yes','no'},)",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document the multiplexing pattern - how the base function dispatches to specific implementations"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

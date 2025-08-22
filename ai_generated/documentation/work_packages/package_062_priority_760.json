@@ -1,0 +1,374 @@
+{
+  "package_id": 62,
+  "functions": [
+    "get_terminal_width",
+    "linerino",
+    "_input_select_multiple_paragraphs",
+    "_input_select_multiple_history",
+    "get_terminal_size",
+    "clip_string_width",
+    "histogram_in_terminal",
+    "display_image_in_terminal_color"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 760,
+  "context": {
+    "get_terminal_width": {
+      "function_name": "get_terminal_width",
+      "calls": [
+        "get_terminal_size"
+      ],
+      "called_by": [
+        "_input_select_multiple_paragraphs",
+        "pseudo_terminal",
+        "histogram_in_terminal",
+        "clip_string_width",
+        "_input_select_multiple_history",
+        "linerino",
+        "display_image_in_terminal_color",
+        "rinsp",
+        "number_of_lines_in_terminal",
+        "display_video_in_terminal_color",
+        "line_graph_via_plotille",
+        "set_ans",
+        "print_rich_stack_trace",
+        "_fzf_multi_grep",
+        "display_image_in_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_input_select_multiple_history",
+        "linerino",
+        "number_of_lines_in_terminal",
+        "display_video_in_terminal_color",
+        "print_rich_stack_trace",
+        "_fzf_multi_grep",
+        "display_image_in_terminal",
+        "_input_select_multiple_paragraphs",
+        "pseudo_terminal",
+        "histogram_in_terminal",
+        "clip_string_width",
+        "get_terminal_width",
+        "display_image_in_terminal_color",
+        "rinsp",
+        "get_terminal_size",
+        "line_graph_via_plotille",
+        "set_ans"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "linerino": {
+      "function_name": "linerino",
+      "calls": [
+        "fansi",
+        "get_terminal_width"
+      ],
+      "called_by": [
+        "to_str",
+        "rinsp"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "fansi",
+        "get_terminal_width",
+        "linerino",
+        "to_str",
+        "rinsp"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_input_select_multiple_paragraphs": {
+      "function_name": "_input_select_multiple_paragraphs",
+      "calls": [
+        "fansi_is_enabled",
+        "_iterfzf",
+        "get_terminal_width",
+        "line_join",
+        "get_module_path"
+      ],
+      "called_by": [
+        "_input_select_rp_gists",
+        "_input_select_multiple_history_multiline"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_input_select_multiple_paragraphs",
+        "fansi_is_enabled",
+        "_iterfzf",
+        "get_terminal_width",
+        "_input_select_rp_gists",
+        "_input_select_multiple_history_multiline",
+        "line_join",
+        "get_module_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_input_select_multiple_history": {
+      "function_name": "_input_select_multiple_history",
+      "calls": [
+        "text_file_to_string",
+        "_iterfzf",
+        "line_join",
+        "get_terminal_width"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_iterfzf",
+        "text_file_to_string",
+        "_input_select_multiple_history",
+        "line_join",
+        "get_terminal_width"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "get_terminal_size": {
+      "function_name": "get_terminal_size",
+      "calls": [
+        "ioctl_GWINSZ",
+        "get"
+      ],
+      "called_by": [
+        "get_terminal_height",
+        "get_terminal_width"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "ioctl_GWINSZ",
+        "get",
+        "get_terminal_height",
+        "get_terminal_size",
+        "get_terminal_width"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "clip_string_width": {
+      "function_name": "clip_string_width",
+      "calls": [
+        "get_terminal_width"
+      ],
+      "called_by": [
+        "display_dict"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "clip_string_width",
+        "get_terminal_width",
+        "display_dict"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "histogram_in_terminal": {
+      "function_name": "histogram_in_terminal",
+      "calls": [
+        "print",
+        "get_terminal_height",
+        "pip_import",
+        "get_terminal_width",
+        "as_numpy_array"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_numpy_array",
+        "print",
+        "get_terminal_height",
+        "histogram_in_terminal",
+        "pip_import",
+        "get_terminal_width"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "display_image_in_terminal_color": {
+      "function_name": "display_image_in_terminal_color",
+      "calls": [
+        "_helper",
+        "as_byte_image",
+        "bordered_image_solid_color",
+        "resize_image_to_fit",
+        "as_rgb_image",
+        "get_image_height",
+        "file_exists",
+        "pip_import",
+        "load_image",
+        "is_valid_url",
+        "as_numpy_image",
+        "is_image",
+        "get_terminal_width",
+        "as_pil_image"
+      ],
+      "called_by": [
+        "display_image",
+        "_display_pterm_image",
+        "pterm_pretty_print",
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_byte_image",
+        "bordered_image_solid_color",
+        "as_rgb_image",
+        "get_image_height",
+        "file_exists",
+        "pip_import",
+        "is_image",
+        "as_pil_image",
+        "_helper",
+        "resize_image_to_fit",
+        "pterm_pretty_print",
+        "pseudo_terminal",
+        "display_image",
+        "load_image",
+        "_display_pterm_image",
+        "is_valid_url",
+        "display_image_in_terminal_color",
+        "as_numpy_image",
+        "get_terminal_width"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "get_terminal_width": {
+      "current_quality": "basic",
+      "current_docstring": "Attempts to return the width of the current TTY in characters - otherwise it will return 80 by default ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "linerino": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_input_select_multiple_paragraphs": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_input_select_multiple_history": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_terminal_size": {
+      "current_quality": "basic",
+      "current_docstring": "From http://stackoverflow.com/questions/566746/how-to-get-linux-console-window-width-in-python/14422538#14422538\nAdapted for windows via GPT4: https://chat.openai.com/share/976384cd-69fe-46fa-bc75-9f1...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "clip_string_width": {
+      "current_quality": "basic",
+      "current_docstring": "clip to terminal size. works with multi lines at once. ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "histogram_in_terminal": {
+      "current_quality": "basic",
+      "current_docstring": "Right now this function is very simple (it doesnt let you specify the number of bins, for example)\nIn the future I might add more functionality like that, or use unicode_loading_bar to make better sid...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "display_image_in_terminal_color": {
+      "current_quality": "good",
+      "current_docstring": "Will attempt to draw a color image in the terminal\nThis is slower than display_image_in_terminal, and relies on both unicode and terminal colors\nEXAMPLE:\n    >>> while True:\n    ...     _terminal_move...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Document supported image types and formats"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

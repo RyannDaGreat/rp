@@ -1,0 +1,301 @@
+{
+  "package_id": 83,
+  "functions": [
+    "fourier_descriptor",
+    "cv_contour_match",
+    "complex_descriptors",
+    "mean",
+    "fourier_descriptor_distance",
+    "fourier_descriptor_similarity",
+    "evenly_split_path"
+  ],
+  "total_functions": 7,
+  "estimated_hours": 5.25,
+  "priority_score": 650,
+  "context": {
+    "fourier_descriptor": {
+      "function_name": "fourier_descriptor",
+      "calls": [
+        "evenly_split_path",
+        "complex_descriptors",
+        "mean"
+      ],
+      "called_by": [
+        "cv_contour_match",
+        "fourier_descriptor_distance",
+        "fourier_descriptor_similarity"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "mean",
+        "complex_descriptors",
+        "cv_contour_match",
+        "fourier_descriptor_distance",
+        "fourier_descriptor",
+        "evenly_split_path",
+        "fourier_descriptor_similarity"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "cv_contour_match": {
+      "function_name": "cv_contour_match",
+      "calls": [
+        "complex_descriptor",
+        "cv_contour_area",
+        "mean",
+        "fourier_descriptor",
+        "cv_contour_length",
+        "conv_circ",
+        "pip_import",
+        "ryan_match"
+      ],
+      "called_by": [
+        "cv_best_match_contours",
+        "cv_best_match_contour"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "complex_descriptor",
+        "cv_best_match_contours",
+        "mean",
+        "fourier_descriptor",
+        "ryan_match",
+        "cv_best_match_contour",
+        "cv_contour_length",
+        "cv_contour_match",
+        "conv_circ",
+        "pip_import",
+        "cv_contour_area"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "complex_descriptors": {
+      "function_name": "complex_descriptors",
+      "calls": [
+        "mean"
+      ],
+      "called_by": [
+        "fourier_descriptor"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "mean",
+        "complex_descriptors",
+        "fourier_descriptor"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "mean": {
+      "function_name": "mean",
+      "calls": [
+        "detuple"
+      ],
+      "called_by": [
+        "complex_descriptor",
+        "complex_descriptors",
+        "rinsp",
+        "fourier_descriptor",
+        "icp_least_squares_euclidean_affine",
+        "center",
+        "_rgb_to_grayscale",
+        "cv_contour_match",
+        "least_squares_regression_line_coeffs",
+        "_mean",
+        "_images_conversion"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "complex_descriptor",
+        "complex_descriptors",
+        "rinsp",
+        "mean",
+        "fourier_descriptor",
+        "icp_least_squares_euclidean_affine",
+        "detuple",
+        "center",
+        "_rgb_to_grayscale",
+        "cv_contour_match",
+        "least_squares_regression_line_coeffs",
+        "_mean",
+        "_images_conversion"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "fourier_descriptor_distance": {
+      "function_name": "fourier_descriptor_distance",
+      "calls": [
+        "euclidean_distance",
+        "fourier_descriptor"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "euclidean_distance",
+        "fourier_descriptor_distance",
+        "fourier_descriptor"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "fourier_descriptor_similarity": {
+      "function_name": "fourier_descriptor_similarity",
+      "calls": [
+        "fourier_descriptor"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "fourier_descriptor_similarity",
+        "fourier_descriptor"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "evenly_split_path": {
+      "function_name": "evenly_split_path",
+      "calls": [
+        "cumulative_euclidean_distances",
+        "as_points_array",
+        "interp"
+      ],
+      "called_by": [
+        "fourier_descriptor"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_points_array",
+        "fourier_descriptor",
+        "cumulative_euclidean_distances",
+        "evenly_split_path",
+        "interp"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "fourier_descriptor": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "cv_contour_match": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "complex_descriptors": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "mean": {
+      "current_quality": "good",
+      "current_docstring": "A super basic mean calculator\nWorks with any datatype that supports + and /\n\nEXAMPLES:\n >>> mean(1,2,3)\n >>> mean(1,2,3)\nans = 2.0\n >>> mean(123)\nans = 123.0\n >>> mean([1,5,2,4])\nans = 3.0",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "fourier_descriptor_distance": {
+      "current_quality": "basic",
+      "current_docstring": "For guidance on how to use fourier_descriptor_kwargs, see the kwargs of fourier_descriptor",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "fourier_descriptor_similarity": {
+      "current_quality": "basic",
+      "current_docstring": "For guidance on how to use fourier_descriptor_kwargs, see the kwargs of fourier_descriptor",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "evenly_split_path": {
+      "current_quality": "good",
+      "current_docstring": "Path is a list of points. Can be any number of dimensions.\nThe euclidean distance from each point to the next point in the output of this function is NOT guarenteed to be even by iteself; however it i...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

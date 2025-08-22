@@ -1,0 +1,360 @@
+{
+  "package_id": 55,
+  "functions": [
+    "load_files",
+    "refresh",
+    "_whiches",
+    "download_urls_to_cache",
+    "convert_to_gifs_via_ffmpeg",
+    "save_video_mp4",
+    "replace_symlinks_with_hardlinks",
+    "load_jsons"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 765,
+  "context": {
+    "load_files": {
+      "function_name": "load_files",
+      "calls": [
+        "_load_files"
+      ],
+      "called_by": [
+        "save_video_mp4",
+        "load_jsons",
+        "replace_symlinks_with_hardlinks",
+        "load_yaml_files",
+        "_whiches",
+        "_get_all_github_gists_info",
+        "download_urls_to_cache",
+        "get_cache_file_paths",
+        "refresh",
+        "copy_paths",
+        "load_text_files",
+        "download_urls",
+        "load_images",
+        "get_all_taken_ports",
+        "_delete_paths_helper",
+        "convert_to_gifs_via_ffmpeg"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "replace_symlinks_with_hardlinks",
+        "load_yaml_files",
+        "download_urls_to_cache",
+        "copy_paths",
+        "load_text_files",
+        "download_urls",
+        "refresh",
+        "_delete_paths_helper",
+        "save_video_mp4",
+        "load_jsons",
+        "load_files",
+        "_whiches",
+        "get_cache_file_paths",
+        "_get_all_github_gists_info",
+        "_load_files",
+        "load_images",
+        "get_all_taken_ports",
+        "convert_to_gifs_via_ffmpeg"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "refresh": {
+      "function_name": "refresh",
+      "calls": [
+        "get_system_commands",
+        "load_files"
+      ],
+      "called_by": [
+        "mini_editor",
+        "_whiches"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "load_files",
+        "_whiches",
+        "get_system_commands",
+        "refresh",
+        "mini_editor"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_whiches": {
+      "function_name": "_whiches",
+      "calls": [
+        "run_as_new_thread",
+        "get_system_commands",
+        "load_files",
+        "refresh"
+      ],
+      "called_by": [
+        "_ism_whiches"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "load_files",
+        "_whiches",
+        "get_system_commands",
+        "_ism_whiches",
+        "refresh",
+        "run_as_new_thread"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "download_urls_to_cache": {
+      "function_name": "download_urls_to_cache",
+      "calls": [
+        "detuple",
+        "download_url_to_cache",
+        "load_files"
+      ],
+      "called_by": [
+        "_download_rp_gists"
+      ],
+      "aliases": [
+        "download_files_to_cache"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "download_files_to_cache",
+        "detuple",
+        "load_files",
+        "download_urls_to_cache",
+        "download_url_to_cache",
+        "_download_rp_gists"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "convert_to_gifs_via_ffmpeg": {
+      "function_name": "convert_to_gifs_via_ffmpeg",
+      "calls": [
+        "load_files",
+        "rp_glob",
+        "convert_to_gif_via_ffmpeg",
+        "broadcast_kwargs",
+        "gather_vars"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "load_files",
+        "convert_to_gif_via_ffmpeg",
+        "broadcast_kwargs",
+        "rp_glob",
+        "convert_to_gifs_via_ffmpeg",
+        "gather_vars"
+      ],
+      "multiplexing": [],
+      "is_via_variant": true,
+      "is_private": false
+    },
+    "save_video_mp4": {
+      "function_name": "save_video_mp4",
+      "calls": [
+        "get_max_image_dimensions",
+        "_cv_save_video_mp4",
+        "load_files",
+        "load_image",
+        "write_frame",
+        "get_all_image_files",
+        "_ensure_ffmpeg_installed",
+        "finish"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_max_image_dimensions",
+        "save_video_mp4",
+        "_cv_save_video_mp4",
+        "load_files",
+        "load_image",
+        "write_frame",
+        "get_all_image_files",
+        "_ensure_ffmpeg_installed",
+        "finish"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "replace_symlinks_with_hardlinks": {
+      "function_name": "replace_symlinks_with_hardlinks",
+      "calls": [
+        "rp_iglob",
+        "load_files"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "replace_symlinks_with_hardlinks",
+        "rp_iglob",
+        "load_files"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "load_jsons": {
+      "function_name": "load_jsons",
+      "calls": [
+        "detuple",
+        "load_files",
+        "load_json"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "load_jsons",
+        "load_files",
+        "detuple",
+        "load_json"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "load_files": {
+      "current_quality": "basic",
+      "current_docstring": "Load a list of files with optional multithreading.\n\n- load_file (function): A function to load a single file. Expected signature: load_file(str) -> any.\n- file_paths (iterable): Paths to the files to ...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "refresh": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_whiches": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "download_urls_to_cache": {
+      "current_quality": "basic",
+      "current_docstring": "Plural of rp.download_url_to_cache ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "convert_to_gifs_via_ffmpeg": {
+      "current_quality": "basic",
+      "current_docstring": "Plural of convert_to_gif_via_ffmpeg. Arguments are broadcastable. ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Explain backend-specific behavior and when to use this variant",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "save_video_mp4": {
+      "current_quality": "basic",
+      "current_docstring": "frames: a list of images as defined by rp.is_image(). Saves an .mp4 file at the path\n    - frames can also contain strings, if those strings are image file paths\n    - frames can also be a glob or a f...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Add supported file formats and common usage patterns"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "replace_symlinks_with_hardlinks": {
+      "current_quality": "basic",
+      "current_docstring": "Plural of replace_symlink_with_hardlink. TODO: Parallelize this (maybe with load_files), and add strict, num_threads, etc",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "load_jsons": {
+      "current_quality": "basic",
+      "current_docstring": "Plural of load_json\nPlease see load_files and rp_iglob for more information\nYields the jsons as an iterator",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Add supported file formats and common usage patterns"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document backend-specific behavior and when to use each _via_ variant"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

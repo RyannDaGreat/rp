@@ -1,0 +1,152 @@
+{
+  "package_id": 449,
+  "functions": [
+    "_get_openexr_image_dimensions",
+    "get_image_file_dimensions",
+    "load_openexr_image"
+  ],
+  "total_functions": 3,
+  "estimated_hours": 2.25,
+  "priority_score": 190,
+  "context": {
+    "_get_openexr_image_dimensions": {
+      "function_name": "_get_openexr_image_dimensions",
+      "calls": [
+        "pip_import"
+      ],
+      "called_by": [
+        "load_openexr_image",
+        "get_image_file_dimensions"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_get_openexr_image_dimensions",
+        "pip_import",
+        "load_openexr_image",
+        "get_image_file_dimensions"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "get_image_file_dimensions": {
+      "function_name": "get_image_file_dimensions",
+      "calls": [
+        "_get_openexr_image_dimensions",
+        "get_file_extension",
+        "get",
+        "file_exists",
+        "pip_import"
+      ],
+      "called_by": [
+        "display_file_tree",
+        "get_stats_string",
+        "rinsp"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_get_openexr_image_dimensions",
+        "get_file_extension",
+        "get",
+        "display_file_tree",
+        "file_exists",
+        "pip_import",
+        "get_stats_string",
+        "rinsp",
+        "get_image_file_dimensions"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "load_openexr_image": {
+      "function_name": "load_openexr_image",
+      "calls": [
+        "_get_openexr_image_dimensions",
+        "pip_import",
+        "get_openexr_channels",
+        "is_valid_openexr_file"
+      ],
+      "called_by": [
+        "load_image_from_file"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_get_openexr_image_dimensions",
+        "load_openexr_image",
+        "is_valid_openexr_file",
+        "pip_import",
+        "load_image_from_file",
+        "get_openexr_channels"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "_get_openexr_image_dimensions": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_image_file_dimensions": {
+      "current_quality": "good",
+      "current_docstring": "Takes the file path of an image, and returns the image's (height, width)\nIt does this without loading the entire image, so while \n   get_image_file_dimensions(image_file_path) == get_image_width,get_i...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document supported image types and formats"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": true
+    },
+    "load_openexr_image": {
+      "current_quality": "good",
+      "current_docstring": "Will load a floating point openexr image as a numpy array\nThe 'channels' argument is used to specify the channel names that are loaded\nBy default this works only with RGB or RGBA floating point .exr i...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Add supported file formats and common usage patterns"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

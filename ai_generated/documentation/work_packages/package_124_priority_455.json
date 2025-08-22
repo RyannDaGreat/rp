@@ -1,0 +1,357 @@
+{
+  "package_id": 124,
+  "functions": [
+    "get_all_gpu_ids",
+    "get_visible_gpu_ids",
+    "get_cuda_visible_devices",
+    "get_used_vram",
+    "get_free_vram",
+    "print_gpu_summary",
+    "get_gpu_name",
+    "get_total_vram"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 455,
+  "context": {
+    "get_all_gpu_ids": {
+      "function_name": "get_all_gpu_ids",
+      "calls": [
+        "get_gpu_count",
+        "get_cuda_visible_devices"
+      ],
+      "called_by": [
+        "get_gpu_utilization",
+        "get_gpu_temperature",
+        "get_visible_gpu_ids",
+        "get_gpu_pids",
+        "get_gpu_with_most_free_vram",
+        "print_gpu_summary",
+        "get_free_vram",
+        "get_gpu_uuid",
+        "get_gpu_name",
+        "get_total_vram",
+        "print_notebook_gpu_summary",
+        "get_used_vram"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_all_gpu_ids",
+        "get_gpu_utilization",
+        "get_gpu_temperature",
+        "get_visible_gpu_ids",
+        "get_cuda_visible_devices",
+        "get_gpu_pids",
+        "get_gpu_with_most_free_vram",
+        "get_gpu_count",
+        "print_gpu_summary",
+        "get_free_vram",
+        "get_gpu_uuid",
+        "get_gpu_name",
+        "get_total_vram",
+        "print_notebook_gpu_summary",
+        "get_used_vram"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_visible_gpu_ids": {
+      "function_name": "get_visible_gpu_ids",
+      "calls": [
+        "get_all_gpu_ids",
+        "get_cuda_visible_devices"
+      ],
+      "called_by": [
+        "waste_gpus",
+        "select_torch_device"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_all_gpu_ids",
+        "waste_gpus",
+        "select_torch_device",
+        "get_visible_gpu_ids",
+        "get_cuda_visible_devices"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_cuda_visible_devices": {
+      "function_name": "get_cuda_visible_devices",
+      "calls": [],
+      "called_by": [
+        "get_visible_gpu_ids",
+        "get_all_gpu_ids"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_visible_gpu_ids",
+        "get_cuda_visible_devices",
+        "get_all_gpu_ids"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_used_vram": {
+      "function_name": "get_used_vram",
+      "calls": [
+        "get_all_gpu_ids",
+        "none_to_zero",
+        "_get_gpu_memory_info",
+        "get_gpu_pids",
+        "currently_running_windows",
+        "_get_gpu_handle",
+        "get_used_vram"
+      ],
+      "called_by": [
+        "get_vram_used_by_current_process",
+        "print_gpu_summary",
+        "print_notebook_gpu_summary",
+        "get_used_vram"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_all_gpu_ids",
+        "get_vram_used_by_current_process",
+        "none_to_zero",
+        "get_gpu_pids",
+        "_get_gpu_memory_info",
+        "print_gpu_summary",
+        "currently_running_windows",
+        "_get_gpu_handle",
+        "print_notebook_gpu_summary",
+        "get_used_vram"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_free_vram": {
+      "function_name": "get_free_vram",
+      "calls": [
+        "get_all_gpu_ids",
+        "get_free_vram",
+        "_get_gpu_memory_info"
+      ],
+      "called_by": [
+        "_waste_gpu",
+        "print_gpu_summary",
+        "get_free_vram"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_all_gpu_ids",
+        "_waste_gpu",
+        "print_gpu_summary",
+        "get_free_vram",
+        "_get_gpu_memory_info"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "print_gpu_summary": {
+      "function_name": "print_gpu_summary",
+      "calls": [
+        "get_all_gpu_ids",
+        "get_gpu_utilization",
+        "get_gpu_temperature",
+        "get",
+        "print",
+        "pip_import",
+        "get_gpu_pids",
+        "human_readable_file_size",
+        "format",
+        "get_process_username",
+        "get_free_vram",
+        "get_gpu_name",
+        "get_total_vram",
+        "get_used_vram"
+      ],
+      "called_by": [
+        "waste_gpus",
+        "select_torch_device"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "print",
+        "pip_import",
+        "print_gpu_summary",
+        "format",
+        "select_torch_device",
+        "human_readable_file_size",
+        "get_gpu_name",
+        "get_total_vram",
+        "get_used_vram",
+        "get_all_gpu_ids",
+        "get_gpu_utilization",
+        "get_gpu_temperature",
+        "get",
+        "get_gpu_pids",
+        "get_process_username",
+        "waste_gpus",
+        "get_free_vram"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_gpu_name": {
+      "function_name": "get_gpu_name",
+      "calls": [
+        "get_all_gpu_ids",
+        "get_gpu_name",
+        "_get_gpu_handle"
+      ],
+      "called_by": [
+        "get_gpu_name",
+        "print_gpu_summary"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_all_gpu_ids",
+        "print_gpu_summary",
+        "get_gpu_name",
+        "_get_gpu_handle"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_total_vram": {
+      "function_name": "get_total_vram",
+      "calls": [
+        "get_all_gpu_ids",
+        "get_total_vram",
+        "_get_gpu_memory_info"
+      ],
+      "called_by": [
+        "print_gpu_summary",
+        "get_total_vram"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_all_gpu_ids",
+        "print_gpu_summary",
+        "get_total_vram",
+        "_get_gpu_memory_info"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "get_all_gpu_ids": {
+      "current_quality": "basic",
+      "current_docstring": "If you are on a device with GPU's, returns [0, 1, 2, ... (num gpus - 1) ] ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": true
+    },
+    "get_visible_gpu_ids": {
+      "current_quality": "basic",
+      "current_docstring": "Return all GPU's that are intended to be available to this process.\nIf cuda_visible_devices is set, returns that. Otherwise, return all hardware GPU ID's. ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": true
+    },
+    "get_cuda_visible_devices": {
+      "current_quality": "basic",
+      "current_docstring": "Returns a list of ints ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_used_vram": {
+      "current_quality": "excellent",
+      "current_docstring": "Returns the amount of used VRAM for a GPU given its ID or for a specific process ID.\nIf a process ID is not specified, it will return the total amount used by that GPU across all processes.\nThe return...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "get_free_vram": {
+      "current_quality": "excellent",
+      "current_docstring": "Returns the amount of free VRAM for a GPU given its ID.\nThe returned value is in bytes.\nIf gpu_id is None, returns a list of free VRAM for all GPUs.\n\nArgs:\n    gpu_id (int, optional): The ID of the GP...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "print_gpu_summary": {
+      "current_quality": "excellent",
+      "current_docstring": "Prints a summary of GPU information using the Rich library.\n\nArgs:\n    include_processes (bool, optional): If True, includes the processes running on each GPU. Defaults to True.\n    include_temperatur...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "get_gpu_name": {
+      "current_quality": "excellent",
+      "current_docstring": "Returns the name of a GPU given its ID.\nThe returned value is a string.\nIf gpu_id is None, returns a list of names for all GPUs.\n\nArgs:\n    gpu_id (int, optional): The ID of the GPU. Default is None.\n...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "get_total_vram": {
+      "current_quality": "excellent",
+      "current_docstring": "Returns the total amount of VRAM for a GPU given its ID.\nThe returned value is in bytes.\nIf gpu_id is None, returns a list of total VRAM for all GPUs.\n\nArgs:\n    gpu_id (int, optional): The ID of the ...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

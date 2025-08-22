@@ -1,0 +1,382 @@
+{
+  "package_id": 45,
+  "functions": [
+    "as_grayscale_image",
+    "_rgb_image_to_grayscale_image",
+    "_skimage_skeletonize",
+    "_rgba_image_to_grayscale_image",
+    "_grayscale_image_to_grayscale_image",
+    "display_image_in_terminal",
+    "compose_rgba_image",
+    "compose_rgb_image"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 820,
+  "context": {
+    "as_grayscale_image": {
+      "function_name": "as_grayscale_image",
+      "calls": [
+        "is_rgba_image",
+        "_rgb_image_to_grayscale_image",
+        "_grayscale_image_to_grayscale_image",
+        "is_grayscale_image",
+        "is_rgb_image",
+        "is_image",
+        "_rgba_image_to_grayscale_image"
+      ],
+      "called_by": [
+        "cv_find_contours",
+        "get_edge_drawing",
+        "get_alpha_outline",
+        "cv_distance_transform",
+        "compose_rgba_image",
+        "with_image_brightness",
+        "detect_apriltags",
+        "with_alpha_channel",
+        "with_image_hue",
+        "with_image_saturation",
+        "get_normal_map",
+        "_with_image_channel",
+        "cv_image_filter",
+        "compose_rgb_image",
+        "_skimage_skeletonize",
+        "blend_images",
+        "cv_inpaint_image",
+        "display_image_in_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "cv_find_contours",
+        "get_edge_drawing",
+        "cv_distance_transform",
+        "compose_rgba_image",
+        "is_rgba_image",
+        "with_image_brightness",
+        "_rgb_image_to_grayscale_image",
+        "detect_apriltags",
+        "is_rgb_image",
+        "is_image",
+        "cv_image_filter",
+        "with_image_saturation",
+        "compose_rgb_image",
+        "_skimage_skeletonize",
+        "_rgba_image_to_grayscale_image",
+        "cv_inpaint_image",
+        "display_image_in_terminal",
+        "get_alpha_outline",
+        "_grayscale_image_to_grayscale_image",
+        "is_grayscale_image",
+        "with_alpha_channel",
+        "with_image_hue",
+        "get_normal_map",
+        "as_grayscale_image",
+        "_with_image_channel",
+        "blend_images"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_rgb_image_to_grayscale_image": {
+      "function_name": "_rgb_image_to_grayscale_image",
+      "calls": [
+        "_rgb_to_grayscale"
+      ],
+      "called_by": [
+        "_rgba_image_to_grayscale_image",
+        "as_grayscale_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_rgb_image_to_grayscale_image",
+        "_rgba_image_to_grayscale_image",
+        "as_grayscale_image",
+        "_rgb_to_grayscale"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_skimage_skeletonize": {
+      "function_name": "_skimage_skeletonize",
+      "calls": [
+        "skeletonize",
+        "pip_import",
+        "as_binary_image",
+        "as_grayscale_image"
+      ],
+      "called_by": [
+        "skeletonize"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_grayscale_image",
+        "_skimage_skeletonize",
+        "skeletonize",
+        "pip_import",
+        "as_binary_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_rgba_image_to_grayscale_image": {
+      "function_name": "_rgba_image_to_grayscale_image",
+      "calls": [
+        "_rgb_image_to_grayscale_image",
+        "_rgba_image_to_rgb_image"
+      ],
+      "called_by": [
+        "as_grayscale_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_rgb_image_to_grayscale_image",
+        "_rgba_image_to_grayscale_image",
+        "as_grayscale_image",
+        "_rgba_image_to_rgb_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_grayscale_image_to_grayscale_image": {
+      "function_name": "_grayscale_image_to_grayscale_image",
+      "calls": [
+        "as_numpy_array"
+      ],
+      "called_by": [
+        "as_grayscale_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_grayscale_image_to_grayscale_image",
+        "as_numpy_array",
+        "as_grayscale_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "display_image_in_terminal": {
+      "function_name": "display_image_in_terminal",
+      "calls": [
+        "bordered_image_solid_color",
+        "print",
+        "resize_image",
+        "pip_import",
+        "as_binary_image",
+        "load_image",
+        "get_image_width",
+        "as_numpy_image",
+        "width",
+        "get_terminal_width",
+        "as_grayscale_image",
+        "height"
+      ],
+      "called_by": [
+        "print_latex_image"
+      ],
+      "aliases": [
+        "display"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "bordered_image_solid_color",
+        "print",
+        "print_latex_image",
+        "resize_image",
+        "pip_import",
+        "as_binary_image",
+        "load_image",
+        "get_image_width",
+        "as_numpy_image",
+        "width",
+        "get_terminal_width",
+        "as_grayscale_image",
+        "display",
+        "height",
+        "display_image_in_terminal"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "compose_rgba_image": {
+      "function_name": "compose_rgba_image",
+      "calls": [
+        "is_grayscale_image",
+        "as_grayscale_image",
+        "as_float_image"
+      ],
+      "called_by": [
+        "compose_image_from_channels"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_float_image",
+        "as_grayscale_image",
+        "compose_rgba_image",
+        "is_grayscale_image",
+        "compose_image_from_channels"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "compose_rgb_image": {
+      "function_name": "compose_rgb_image",
+      "calls": [
+        "is_grayscale_image",
+        "as_grayscale_image",
+        "as_float_image"
+      ],
+      "called_by": [
+        "compose_image_from_channels"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "compose_rgb_image",
+        "as_float_image",
+        "as_grayscale_image",
+        "is_grayscale_image",
+        "compose_image_from_channels"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "as_grayscale_image": {
+      "current_quality": "basic",
+      "current_docstring": "Returns a 2-dimensional numpy array in HW form (height, width) ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Document supported image types and formats",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_rgb_image_to_grayscale_image": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_skimage_skeletonize": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_rgba_image_to_grayscale_image": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_grayscale_image_to_grayscale_image": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "display_image_in_terminal": {
+      "current_quality": "basic",
+      "current_docstring": "Uses unicode, and is black-and-white\nEXAMPLE: while True: display_image_in_terminal(load_image_from_webcam())\n\nEXAMPLE: Starfield\n     def stars(density=.001,size=256):\n         return as_float_image(...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Document supported image types and formats"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "compose_rgba_image": {
+      "current_quality": "basic",
+      "current_docstring": "Create an RGBA image from four separate channels ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Document supported image types and formats",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "compose_rgb_image": {
+      "current_quality": "basic",
+      "current_docstring": "Create an RGB image from three separate channels ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Document supported image types and formats",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

@@ -1,0 +1,138 @@
+{
+  "package_id": 125,
+  "functions": [
+    "as_form",
+    "get_form",
+    "get_current_timezone"
+  ],
+  "total_functions": 3,
+  "estimated_hours": 2.25,
+  "priority_score": 295,
+  "context": {
+    "as_form": {
+      "function_name": "as_form",
+      "calls": [
+        "get_form"
+      ],
+      "called_by": [
+        "__init_subclass__",
+        "get_current_timezone"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_form",
+        "__init_subclass__",
+        "get_current_timezone",
+        "as_form"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_form": {
+      "function_name": "get_form",
+      "calls": [
+        "is_form"
+      ],
+      "called_by": [
+        "as_form"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_form",
+        "as_form",
+        "is_form"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_current_timezone": {
+      "function_name": "get_current_timezone",
+      "calls": [
+        "get_current_date",
+        "format_date",
+        "as_form"
+      ],
+      "called_by": [
+        "get_git_commit_date",
+        "string_to_date"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_git_commit_date",
+        "get_current_date",
+        "string_to_date",
+        "as_form",
+        "format_date",
+        "get_current_timezone"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "as_form": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_form": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_current_timezone": {
+      "current_quality": "good",
+      "current_docstring": "EXAMPLE:\n    >>> get_current_timezone()\n    ans = PST",
+      "suggestions": [
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "package_id": 745,
+  "functions": [
+    "cartesian_to_polar"
+  ],
+  "total_functions": 1,
+  "estimated_hours": 0.75,
+  "priority_score": 70,
+  "context": {
+    "cartesian_to_polar": {
+      "function_name": "cartesian_to_polar",
+      "calls": [],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "cartesian_to_polar"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "cartesian_to_polar": {
+      "current_quality": "basic",
+      "current_docstring": "Input conditions: x\uff0cy \u2208 \u211d \u2a01 x\ufe66\uff3bx\u2080\uff0cx\u2081\uff0cx\u2082\u2026\u2026\uff3d\u22c0 y\ufe66\uff3by\u2080\uff0cy\u2081\uff0cy\u2082\u2026\u2026\uff3d\nreturns: (r, \u03f4) where r \u2263 radius\uff0c\u03f4 \u2263 angle and 0 \u2264 \u03f4 < \u03f4_unit. \u03f4_unit\ufe66\u03c4 --> \u03f4 is in radians\uff0c\u03f4_unit\ufe66360 --> \u03f4 is in degrees",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

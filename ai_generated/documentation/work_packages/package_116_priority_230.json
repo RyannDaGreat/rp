@@ -1,0 +1,202 @@
+{
+  "package_id": 116,
+  "functions": [
+    "_cv_helper",
+    "cv_draw_arrow",
+    "cv_draw_circles",
+    "cv_draw_arrows"
+  ],
+  "total_functions": 4,
+  "estimated_hours": 3.0,
+  "priority_score": 230,
+  "context": {
+    "_cv_helper": {
+      "function_name": "_cv_helper",
+      "calls": [
+        "pip_import"
+      ],
+      "called_by": [
+        "cv_draw_rectangle",
+        "cv_draw_contours",
+        "cv_draw_circles",
+        "cv_draw_circle",
+        "cv_draw_arrow",
+        "cv_draw_arrows"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "cv_draw_rectangle",
+        "cv_draw_circles",
+        "cv_draw_contours",
+        "cv_draw_circle",
+        "pip_import",
+        "cv_draw_arrow",
+        "cv_draw_arrows",
+        "_cv_helper"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "cv_draw_arrow": {
+      "function_name": "cv_draw_arrow",
+      "calls": [
+        "is_binary_image",
+        "as_byte_image",
+        "as_rgb_image",
+        "as_rgba_image",
+        "as_rgba_float_color",
+        "pip_import",
+        "float_color_to_byte_color",
+        "cv_draw_arrow",
+        "is_rgb_image",
+        "pop",
+        "_cv_helper"
+      ],
+      "called_by": [
+        "cv_draw_arrows",
+        "cv_draw_arrow"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_binary_image",
+        "as_byte_image",
+        "as_rgb_image",
+        "as_rgba_image",
+        "as_rgba_float_color",
+        "pip_import",
+        "cv_draw_arrow",
+        "float_color_to_byte_color",
+        "is_rgb_image",
+        "cv_draw_arrows",
+        "pop",
+        "_cv_helper"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "cv_draw_circles": {
+      "function_name": "cv_draw_circles",
+      "calls": [
+        "is_iterable",
+        "as_rgba_float_color",
+        "cv_draw_circle",
+        "_cv_helper",
+        "broadcast_lists"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_iterable",
+        "as_rgba_float_color",
+        "_cv_helper",
+        "broadcast_lists",
+        "cv_draw_circles",
+        "cv_draw_circle"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "cv_draw_arrows": {
+      "function_name": "cv_draw_arrows",
+      "calls": [
+        "is_iterable",
+        "as_rgba_float_color",
+        "cv_draw_arrow",
+        "_cv_helper",
+        "broadcast_lists"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "cv_draw_arrows",
+        "is_iterable",
+        "_cv_helper",
+        "broadcast_lists",
+        "as_rgba_float_color",
+        "cv_draw_arrow"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "_cv_helper": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "cv_draw_arrow": {
+      "current_quality": "good",
+      "current_docstring": "Draws an arrow from (start_x, start_y) to (end_x, end_y) on a given image. If copy=False, it *might* mutate the original image if the given image is an RGB or RGBA byte image.\n\nRim draws an outline ar...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "cv_draw_circles": {
+      "current_quality": "good",
+      "current_docstring": "Plural of cv_draw_circle\nx, y, color, antialias are all broadcastable\n\nEXAMPLE:\n    >>> N = 300\n    ... image = load_image(\n    ...     \"https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pag...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "cv_draw_arrows": {
+      "current_quality": "good",
+      "current_docstring": "Plural of cv_draw_arrow\nstart_x, start_y, end_x, end_y, thickness, color, rim, rim_color, tip_length, antialias are all broadcastable\n\nEXAMPLE:\n    >>> N = 50\n    ... image = load_image(\n    ...     \"...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

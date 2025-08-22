@@ -1,0 +1,302 @@
+{
+  "package_id": 52,
+  "functions": [
+    "is_a_matrix",
+    "is_a_square_matrix",
+    "cv_remap_image",
+    "encode_float_matrix_to_rgba_byte_image",
+    "optical_flow_to_image",
+    "torch_remap_image",
+    "torch_scatter_add_image"
+  ],
+  "total_functions": 7,
+  "estimated_hours": 5.25,
+  "priority_score": 515,
+  "context": {
+    "is_a_matrix": {
+      "function_name": "is_a_matrix",
+      "calls": [
+        "_tensorify"
+      ],
+      "called_by": [
+        "is_a_square_matrix",
+        "optical_flow_to_image",
+        "torch_remap_image",
+        "as_numpy_image",
+        "encode_float_matrix_to_rgba_byte_image",
+        "torch_scatter_add_image",
+        "cv_remap_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_a_square_matrix",
+        "optical_flow_to_image",
+        "torch_remap_image",
+        "_tensorify",
+        "as_numpy_image",
+        "is_a_matrix",
+        "encode_float_matrix_to_rgba_byte_image",
+        "torch_scatter_add_image",
+        "cv_remap_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_a_square_matrix": {
+      "function_name": "is_a_square_matrix",
+      "calls": [
+        "_tensorify",
+        "is_a_matrix"
+      ],
+      "called_by": [
+        "square_matrix_size"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "square_matrix_size",
+        "is_a_square_matrix",
+        "_tensorify",
+        "is_a_matrix"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "cv_remap_image": {
+      "function_name": "cv_remap_image",
+      "calls": [
+        "is_binary_image",
+        "as_byte_image",
+        "get_image_dimensions",
+        "pip_import",
+        "is_a_matrix"
+      ],
+      "called_by": [
+        "apply_uv_map",
+        "accumulate_flows"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_binary_image",
+        "as_byte_image",
+        "get_image_dimensions",
+        "pip_import",
+        "is_a_matrix",
+        "apply_uv_map",
+        "cv_remap_image",
+        "accumulate_flows"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "encode_float_matrix_to_rgba_byte_image": {
+      "function_name": "encode_float_matrix_to_rgba_byte_image",
+      "calls": [
+        "is_grayscale_image",
+        "proportion_to_digits",
+        "is_a_matrix"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "is_grayscale_image",
+        "encode_float_matrix_to_rgba_byte_image",
+        "proportion_to_digits",
+        "is_a_matrix"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "optical_flow_to_image": {
+      "function_name": "optical_flow_to_image",
+      "calls": [
+        "pip_import",
+        "is_torch_tensor",
+        "is_a_matrix",
+        "as_numpy_array",
+        "is_number",
+        "is_float_image"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "optical_flow_to_image",
+        "is_torch_tensor",
+        "is_a_matrix",
+        "as_numpy_array",
+        "is_number",
+        "is_float_image",
+        "pip_import"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "torch_remap_image": {
+      "function_name": "torch_remap_image",
+      "calls": [
+        "is_torch_image",
+        "pip_import",
+        "is_torch_tensor",
+        "format",
+        "is_a_matrix"
+      ],
+      "called_by": [
+        "apply_uv_map",
+        "accumulate_flows"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "torch_remap_image",
+        "is_torch_image",
+        "pip_import",
+        "is_torch_tensor",
+        "format",
+        "is_a_matrix",
+        "apply_uv_map",
+        "accumulate_flows"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "torch_scatter_add_image": {
+      "function_name": "torch_scatter_add_image",
+      "calls": [
+        "get_bilinear_weights",
+        "is_torch_image",
+        "pip_import",
+        "is_torch_tensor",
+        "format",
+        "is_a_matrix",
+        "torch_scatter_add_image"
+      ],
+      "called_by": [
+        "torch_scatter_add_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_bilinear_weights",
+        "is_torch_image",
+        "pip_import",
+        "is_torch_tensor",
+        "format",
+        "is_a_matrix",
+        "torch_scatter_add_image"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "is_a_matrix": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "is_a_square_matrix": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "cv_remap_image": {
+      "current_quality": "basic",
+      "current_docstring": "If image is RGBA, then out-of-bounds regions will have 0-alpha\nThis is like a UV mapping - where x and y's values are mapped to image\nIf relative=True, it will warp image - treating x and y like dx an...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "encode_float_matrix_to_rgba_byte_image": {
+      "current_quality": "basic",
+      "current_docstring": "Can encode a 32-bit float into the 4 channels of an RGBA image\nThe values should be between 0 and 1\nThis output can be saved as a .png file\nFormerly called 'rgb_encoded_matrix'\nIt's useful for reading...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Document supported image types and formats"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "optical_flow_to_image": {
+      "current_quality": "good",
+      "current_docstring": "Visualize optical flow as an RGB image - and return the image.\n\nThe hue represents the angle of the flow, while magnitude is represented by either brightness or saturation.\nIt has the same general ide...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax"
+      ],
+      "has_examples": false,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "torch_remap_image": {
+      "current_quality": "excellent",
+      "current_docstring": "Remap an image tensor using the given x and y coordinate tensors.\nOut-of-bounds regions will be given 0's\nAnalagous to rp.cv_remap_image, which is used for images as defined by rp.is_image()\n\nIf the i...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "torch_scatter_add_image": {
+      "current_quality": "excellent",
+      "current_docstring": "Scatter add an image tensor using the given x and y coordinate tensors.\nPixels warped out-of-bounds will be skipped.\nThis is similar to torch_remap_image, but uses scatter_add instead of remapping.\n\nI...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

@@ -1,0 +1,363 @@
+{
+  "package_id": 54,
+  "functions": [
+    "randint",
+    "random_rgb_byte_color",
+    "random_rain_length",
+    "random_rgba_byte_color",
+    "random_grayscale_byte_color",
+    "line_graph_via_bokeh",
+    "random_index",
+    "play_the_matrix_animation"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 900,
+  "context": {
+    "randint": {
+      "function_name": "randint",
+      "calls": [
+        "randint"
+      ],
+      "called_by": [
+        "random_index",
+        "randints",
+        "random_rgba_byte_color",
+        "get_random_crop_bounds",
+        "randint_complex",
+        "randint",
+        "play_the_matrix_animation",
+        "rain_forever",
+        "rain_once",
+        "random_rain_length",
+        "random_rgb_byte_color",
+        "random_grayscale_byte_color",
+        "line_graph_via_bokeh",
+        "crop_image_at_random_position"
+      ],
+      "aliases": [
+        "random_int"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "get_random_crop_bounds",
+        "rain_forever",
+        "randint",
+        "random_rgb_byte_color",
+        "line_graph_via_bokeh",
+        "crop_image_at_random_position",
+        "random_index",
+        "random_rgba_byte_color",
+        "randint_complex",
+        "play_the_matrix_animation",
+        "rain_once",
+        "random_int",
+        "random_rain_length",
+        "random_grayscale_byte_color",
+        "randints"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "random_rgb_byte_color": {
+      "function_name": "random_rgb_byte_color",
+      "calls": [
+        "randint"
+      ],
+      "called_by": [
+        "random_hex_color",
+        "_init_update",
+        "random_rgb_byte_colors"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_init_update",
+        "random_rgb_byte_color",
+        "randint",
+        "random_rgb_byte_colors",
+        "random_hex_color"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "random_rain_length": {
+      "function_name": "random_rain_length",
+      "calls": [
+        "randint"
+      ],
+      "called_by": [
+        "rain_once",
+        "play_the_matrix_animation"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "random_rain_length",
+        "rain_once",
+        "play_the_matrix_animation",
+        "randint"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "random_rgba_byte_color": {
+      "function_name": "random_rgba_byte_color",
+      "calls": [
+        "randint"
+      ],
+      "called_by": [
+        "random_rgba_byte_colors"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "random_rgba_byte_colors",
+        "random_rgba_byte_color",
+        "randint"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "random_grayscale_byte_color": {
+      "function_name": "random_grayscale_byte_color",
+      "calls": [
+        "randint"
+      ],
+      "called_by": [
+        "random_grayscale_byte_colors"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "random_grayscale_byte_colors",
+        "random_grayscale_byte_color",
+        "randint"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "line_graph_via_bokeh": {
+      "function_name": "line_graph_via_bokeh",
+      "calls": [
+        "byte_color_to_hex_color",
+        "_initialize_bokeh",
+        "randint"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "byte_color_to_hex_color",
+        "_initialize_bokeh",
+        "randint",
+        "line_graph_via_bokeh"
+      ],
+      "multiplexing": [],
+      "is_via_variant": true,
+      "is_private": false
+    },
+    "random_index": {
+      "function_name": "random_index",
+      "calls": [
+        "random_element",
+        "random_index",
+        "has_len",
+        "randint"
+      ],
+      "called_by": [
+        "random_index",
+        "display_image_slideshow",
+        "random_element",
+        "random_substring"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "random_index",
+        "display_image_slideshow",
+        "random_substring",
+        "randint",
+        "has_len",
+        "random_element"
+      ],
+      "multiplexing": [
+        "random_element",
+        "randint",
+        "random_index"
+      ],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "play_the_matrix_animation": {
+      "function_name": "play_the_matrix_animation",
+      "calls": [
+        "config",
+        "get_color",
+        "random_char",
+        "get_matrix_code_chars",
+        "rain_once",
+        "rain_forever",
+        "randint",
+        "show_head",
+        "init_colors",
+        "show_body",
+        "add_rain",
+        "random_rain_length",
+        "update_style",
+        "wrapper",
+        "animate_rain",
+        "clear",
+        "show_tail"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "config",
+        "get_color",
+        "rain_forever",
+        "randint",
+        "show_head",
+        "show_body",
+        "wrapper",
+        "animate_rain",
+        "show_tail",
+        "random_char",
+        "get_matrix_code_chars",
+        "rain_once",
+        "play_the_matrix_animation",
+        "init_colors",
+        "add_rain",
+        "random_rain_length",
+        "update_style",
+        "clear"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "randint": {
+      "current_quality": "basic",
+      "current_docstring": "If both a and b are specified, the range is inclusive, choose from range\uff3ba\uff0cb] \u22c2 \u2124\nOtherwise, if only a is specified, choose random element from the range \uff3ba\uff0cb) \u22c2 \u2124",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "random_rgb_byte_color": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "random_rain_length": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "random_rgba_byte_color": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "random_grayscale_byte_color": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "line_graph_via_bokeh": {
+      "current_quality": "basic",
+      "current_docstring": "Uses the Bokeh library to display an interactive line graph in an IPython notebook\nOnly works in IPython notebooks right now\n\nTODO:\n    - Currently only displays one graph at a time. Might add the abi...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "random_index": {
+      "current_quality": "good",
+      "current_docstring": "Returns a random index for a given array or array length.\n\nIf the input is a dictionary or a subclass of dict, it returns a random element from the list of values.\nIf the input is an integer, it retur...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax"
+      ],
+      "has_examples": false,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "play_the_matrix_animation": {
+      "current_quality": "basic",
+      "current_docstring": "Plays a super cool animation in your terminal that makes it look like you're hacking the matrix\n(From the movie)\nThis code is from: https://github.com/gineer01/matrix-rain\n!/usr/bin/env python3",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document backend-specific behavior and when to use each _via_ variant",
+    "7. SPECIAL: Document the multiplexing pattern - how the base function dispatches to specific implementations"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

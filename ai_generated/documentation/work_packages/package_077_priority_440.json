@@ -1,0 +1,178 @@
+{
+  "package_id": 77,
+  "functions": [
+    "random_char",
+    "show_head",
+    "show_body",
+    "animate_rain"
+  ],
+  "total_functions": 4,
+  "estimated_hours": 3.0,
+  "priority_score": 440,
+  "context": {
+    "random_char": {
+      "function_name": "random_char",
+      "calls": [],
+      "called_by": [
+        "animate_rain",
+        "show_head",
+        "show_body",
+        "play_the_matrix_animation"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "random_char",
+        "play_the_matrix_animation",
+        "animate_rain",
+        "show_head",
+        "show_body"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "show_head": {
+      "function_name": "show_head",
+      "calls": [
+        "random_char"
+      ],
+      "called_by": [
+        "animate_rain",
+        "play_the_matrix_animation"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "animate_rain",
+        "show_head",
+        "random_char",
+        "play_the_matrix_animation"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "show_body": {
+      "function_name": "show_body",
+      "calls": [
+        "get_color",
+        "random_char"
+      ],
+      "called_by": [
+        "animate_rain",
+        "play_the_matrix_animation"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_color",
+        "random_char",
+        "play_the_matrix_animation",
+        "animate_rain",
+        "show_body"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "animate_rain": {
+      "function_name": "animate_rain",
+      "calls": [
+        "get_color",
+        "random_char",
+        "show_head",
+        "show_body",
+        "show_tail"
+      ],
+      "called_by": [
+        "rain_once",
+        "play_the_matrix_animation"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_color",
+        "random_char",
+        "rain_once",
+        "play_the_matrix_animation",
+        "show_head",
+        "show_body",
+        "animate_rain",
+        "show_tail"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "random_char": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "show_head": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "show_body": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "animate_rain": {
+      "current_quality": "good",
+      "current_docstring": "A rain consists of 3 parts: head, body, and tail\nHead: the white leading rain drop\nBody: the fading trail\nTail: empty space behind the rain trail\n:param stdscr: curses's screen object\n:param x: the co...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax"
+      ],
+      "has_examples": false,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

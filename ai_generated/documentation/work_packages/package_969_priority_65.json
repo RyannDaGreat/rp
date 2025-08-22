@@ -1,0 +1,116 @@
+{
+  "package_id": 969,
+  "functions": [
+    "copy_image_to_clipboard",
+    "_copy_image_to_clipboard_via_pyjpgclipboard"
+  ],
+  "total_functions": 2,
+  "estimated_hours": 1.5,
+  "priority_score": 65,
+  "context": {
+    "copy_image_to_clipboard": {
+      "function_name": "copy_image_to_clipboard",
+      "calls": [
+        "_copy_image_to_clipboard_via_pyjpgclipboard",
+        "_copy_image_to_clipboard_via_copykitten"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [
+        "_copy_image_to_clipboard_via_pyjpgclipboard",
+        "_copy_image_to_clipboard_via_copykitten"
+      ],
+      "cluster": [
+        "_copy_image_to_clipboard_via_pyjpgclipboard",
+        "_copy_image_to_clipboard_via_copykitten",
+        "copy_image_to_clipboard",
+        "pseudo_terminal"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_copy_image_to_clipboard_via_pyjpgclipboard": {
+      "function_name": "_copy_image_to_clipboard_via_pyjpgclipboard",
+      "calls": [
+        "squelch_call",
+        "pip_import",
+        "load_image",
+        "save_image_jpg",
+        "temporary_file_path"
+      ],
+      "called_by": [
+        "copy_image_to_clipboard"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_copy_image_to_clipboard_via_pyjpgclipboard",
+        "squelch_call",
+        "copy_image_to_clipboard",
+        "save_image_jpg",
+        "pip_import",
+        "load_image",
+        "temporary_file_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": true,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "copy_image_to_clipboard": {
+      "current_quality": "good",
+      "current_docstring": "Copies an image to the system clipboard\n\nEXAMPLE:\n\n    >>> ans = get_youtube_video_thumbnail('https://www.youtube.com/watch?v=iu54gTucsiE')\n    ... copy_image_to_clipboard(ans)\n    ... #Try pasting in...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Document supported image types and formats"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_copy_image_to_clipboard_via_pyjpgclipboard": {
+      "current_quality": "good",
+      "current_docstring": "(This function works fine! But it didnt support RGBA images so it's obsolete now)\n\nTakes an image or a path/url to an image and copies that image to your system clipboard. If you're using Ubuntu, you ...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Explain backend-specific behavior and when to use this variant"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document backend-specific behavior and when to use each _via_ variant"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

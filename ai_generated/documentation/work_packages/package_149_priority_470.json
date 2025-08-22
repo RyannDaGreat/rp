@@ -1,0 +1,200 @@
+{
+  "package_id": 149,
+  "functions": [
+    "remove_first_import_line",
+    "unarpy",
+    "is_valid_python_syntax",
+    "_inline_rp_code"
+  ],
+  "total_functions": 4,
+  "estimated_hours": 3.0,
+  "priority_score": 470,
+  "context": {
+    "remove_first_import_line": {
+      "function_name": "remove_first_import_line",
+      "calls": [
+        "is_valid_python_syntax",
+        "line_join"
+      ],
+      "called_by": [
+        "_inline_rp_code",
+        "unarpy"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_inline_rp_code",
+        "line_join",
+        "is_valid_python_syntax",
+        "unarpy",
+        "remove_first_import_line"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "unarpy": {
+      "function_name": "unarpy",
+      "calls": [
+        "extract_imports",
+        "get_code",
+        "remove_first_import_line"
+      ],
+      "called_by": [
+        "_inline_rp_code"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_inline_rp_code",
+        "get_code",
+        "extract_imports",
+        "unarpy",
+        "remove_first_import_line"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_valid_python_syntax": {
+      "function_name": "is_valid_python_syntax",
+      "calls": [
+        "parse"
+      ],
+      "called_by": [
+        "_inline_rp_code",
+        "pseudo_terminal",
+        "_is_valid_exeval_python_syntax",
+        "_pterm_exeval",
+        "pterm_pretty_print",
+        "remove_first_import_line",
+        "_omni_save_default_extension",
+        "parse",
+        "repr_vars"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_inline_rp_code",
+        "pseudo_terminal",
+        "_pterm_exeval",
+        "pterm_pretty_print",
+        "remove_first_import_line",
+        "_omni_save_default_extension",
+        "parse",
+        "is_valid_python_syntax",
+        "_is_valid_exeval_python_syntax",
+        "repr_vars"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_inline_rp_code": {
+      "function_name": "_inline_rp_code",
+      "calls": [
+        "add",
+        "extract_imports",
+        "get_module_path_from_name",
+        "remove_first_import_line",
+        "get_source_code",
+        "parse",
+        "get_code",
+        "line_join",
+        "is_valid_python_syntax",
+        "get_source_file",
+        "unarpy"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_inline_rp_code",
+        "add",
+        "extract_imports",
+        "get_module_path_from_name",
+        "remove_first_import_line",
+        "get_source_code",
+        "parse",
+        "get_code",
+        "line_join",
+        "is_valid_python_syntax",
+        "get_source_file",
+        "unarpy"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "remove_first_import_line": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "unarpy": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "is_valid_python_syntax": {
+      "current_quality": "basic",
+      "current_docstring": "Returns True if the code is valid python syntax, False otherwise.\nThe 'mode' specifies the type of python code - 'exec' is a superset of 'eval'.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_inline_rp_code": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

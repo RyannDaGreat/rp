@@ -1,0 +1,194 @@
+{
+  "package_id": 231,
+  "functions": [
+    "matches",
+    "get_path_name",
+    "_cdh_back_query",
+    "fuzzy_string_match"
+  ],
+  "total_functions": 4,
+  "estimated_hours": 3.0,
+  "priority_score": 410,
+  "context": {
+    "matches": {
+      "function_name": "matches",
+      "calls": [
+        "fuzzy_string_match",
+        "get_path_name"
+      ],
+      "called_by": [
+        "_cdh_back_query"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_path_name",
+        "fuzzy_string_match",
+        "_cdh_back_query",
+        "matches"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_path_name": {
+      "function_name": "get_path_name",
+      "calls": [
+        "strip_file_extension"
+      ],
+      "called_by": [
+        "matches",
+        "copy_paths",
+        "_maybe_unbury_folder",
+        "get_path_names",
+        "_pterm_fuzzy_cd",
+        "copy_to_folder",
+        "_cdh_back_query",
+        "is_a_match",
+        "_fd"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "strip_file_extension",
+        "get_path_name",
+        "matches",
+        "copy_paths",
+        "_maybe_unbury_folder",
+        "get_path_names",
+        "_pterm_fuzzy_cd",
+        "copy_to_folder",
+        "_cdh_back_query",
+        "is_a_match",
+        "_fd"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_cdh_back_query": {
+      "function_name": "_cdh_back_query",
+      "calls": [
+        "get_path_name",
+        "fuzzy_string_match",
+        "_get_cd_history",
+        "matches"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_cdh_back_query",
+        "get_path_name",
+        "matches",
+        "pseudo_terminal",
+        "_get_cd_history",
+        "fuzzy_string_match"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "fuzzy_string_match": {
+      "function_name": "fuzzy_string_match",
+      "calls": [],
+      "called_by": [
+        "_autocomplete_lss_name",
+        "matches",
+        "pseudo_terminal",
+        "_pterm_fuzzy_cd",
+        "_ric_current_candidate_fuzzy_matches",
+        "_cdh_back_query",
+        "is_a_match"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_autocomplete_lss_name",
+        "matches",
+        "pseudo_terminal",
+        "_pterm_fuzzy_cd",
+        "_ric_current_candidate_fuzzy_matches",
+        "_cdh_back_query",
+        "fuzzy_string_match",
+        "is_a_match"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "matches": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_path_name": {
+      "current_quality": "basic",
+      "current_docstring": "'/tmp/d/a.dat' --> 'a.dat'\nFor more, see: https://stackoverflow.com/questions/8384737/extract-file-name-from-path-no-matter-what-the-os-path-format",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_cdh_back_query": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "fuzzy_string_match": {
+      "current_quality": "good",
+      "current_docstring": " >>> fuzzy_string_match('apha','alpha')\nans = True\n >>> fuzzy_string_match('alpha','alpha')\nans = True\n >>> fuzzy_string_match('aa','alpha')\nans = True\n >>> fuzzy_string_match('aqa','alpha')\nans = Fal...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

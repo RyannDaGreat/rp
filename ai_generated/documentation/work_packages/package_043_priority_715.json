@@ -1,0 +1,283 @@
+{
+  "package_id": 43,
+  "functions": [
+    "display_eta",
+    "tic",
+    "out",
+    "__call__",
+    "fansi_progress",
+    "_print_status",
+    "_eta"
+  ],
+  "total_functions": 7,
+  "estimated_hours": 5.25,
+  "priority_score": 715,
+  "context": {
+    "display_eta": {
+      "function_name": "display_eta",
+      "calls": [
+        "tic",
+        "fansi_progress",
+        "_print_status"
+      ],
+      "called_by": [
+        "_eta",
+        "out",
+        "__call__"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "display_eta",
+        "tic",
+        "out",
+        "__call__",
+        "_eta",
+        "fansi_progress",
+        "_print_status"
+      ],
+      "multiplexing": [
+        "_print_status",
+        "_print_status",
+        "_print_status"
+      ],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "tic": {
+      "function_name": "tic",
+      "calls": [],
+      "called_by": [
+        "ptoctic",
+        "_eta",
+        "display_eta"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_eta",
+        "ptoctic",
+        "tic",
+        "display_eta"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "out": {
+      "function_name": "out",
+      "calls": [
+        "display_eta"
+      ],
+      "called_by": [],
+      "aliases": [
+        "_get_prompt_style_cached"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "display_eta",
+        "out",
+        "_get_prompt_style_cached"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "__call__": {
+      "function_name": "__call__",
+      "calls": [
+        "display_eta"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "display_eta",
+        "__call__"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "fansi_progress": {
+      "function_name": "fansi_progress",
+      "calls": [
+        "fansi"
+      ],
+      "called_by": [
+        "_eta",
+        "display_eta"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "display_eta",
+        "fansi",
+        "_eta",
+        "fansi_progress"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_print_status": {
+      "function_name": "_print_status",
+      "calls": [
+        "print",
+        "_erase_terminal_line"
+      ],
+      "called_by": [
+        "_eta",
+        "display_eta"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "display_eta",
+        "print",
+        "_erase_terminal_line",
+        "_eta",
+        "_print_status"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "_eta": {
+      "function_name": "_eta",
+      "calls": [
+        "fansi_progress",
+        "_print_status",
+        "fansi",
+        "tic",
+        "display_eta"
+      ],
+      "called_by": [
+        "_web_copy"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "fansi",
+        "tic",
+        "display_eta",
+        "_eta",
+        "_print_status",
+        "fansi_progress",
+        "_web_copy"
+      ],
+      "multiplexing": [
+        "_print_status",
+        "_print_status",
+        "_print_status"
+      ],
+      "is_via_variant": false,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "display_eta": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "tic": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "out": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "__call__": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "fansi_progress": {
+      "current_quality": "basic",
+      "current_docstring": "Used to show a progress bar under the ETA text! ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_print_status": {
+      "current_quality": "basic",
+      "current_docstring": "Print a single line in such a way that it will be overwritten if we call _print_status again ",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_eta": {
+      "current_quality": "good",
+      "current_docstring": "Example:\n    >>> a = eta(2000,title='test')\n    ... for i in range(2000):\n    ...     sleep(.031)\n    ...     a(i)",
+      "suggestions": [
+        "Document function parameters and their types"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document the multiplexing pattern - how the base function dispatches to specific implementations"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

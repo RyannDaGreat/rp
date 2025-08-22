@@ -1,0 +1,267 @@
+{
+  "package_id": 471,
+  "functions": [
+    "starts_with_any",
+    "get_path_parent",
+    "make_symlink_relative",
+    "_string_with_any",
+    "path_split",
+    "repr_vars"
+  ],
+  "total_functions": 6,
+  "estimated_hours": 4.5,
+  "priority_score": 370,
+  "context": {
+    "starts_with_any": {
+      "function_name": "starts_with_any",
+      "calls": [
+        "_string_with_any"
+      ],
+      "called_by": [
+        "_ensure_installed",
+        "get_path_parent",
+        "pseudo_terminal",
+        "make_symlink_relative",
+        "_load_files",
+        "path_split",
+        "repr_vars"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_ensure_installed",
+        "starts_with_any",
+        "get_path_parent",
+        "pseudo_terminal",
+        "make_symlink_relative",
+        "_string_with_any",
+        "_load_files",
+        "path_split",
+        "repr_vars"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_path_parent": {
+      "function_name": "get_path_parent",
+      "calls": [
+        "starts_with_any",
+        "get_path_parent"
+      ],
+      "called_by": [
+        "save_video_gif_via_pil",
+        "get_vim_python_executable",
+        "get_path_parent",
+        "rename_path",
+        "get_paths_parents",
+        "_is_python_exe_root",
+        "download_url"
+      ],
+      "aliases": [
+        "get_file_directory"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "save_video_gif_via_pil",
+        "starts_with_any",
+        "get_vim_python_executable",
+        "get_path_parent",
+        "rename_path",
+        "get_file_directory",
+        "get_paths_parents",
+        "_is_python_exe_root",
+        "download_url"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "make_symlink_relative": {
+      "function_name": "make_symlink_relative",
+      "calls": [
+        "read_symlink",
+        "make_symlink",
+        "starts_with_any",
+        "get_absolute_path"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "make_symlink_relative",
+        "starts_with_any",
+        "read_symlink",
+        "make_symlink",
+        "get_absolute_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_string_with_any": {
+      "function_name": "_string_with_any",
+      "calls": [
+        "detuple"
+      ],
+      "called_by": [
+        "ends_with_any",
+        "starts_with_any"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "ends_with_any",
+        "detuple",
+        "starts_with_any",
+        "_string_with_any"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "path_split": {
+      "function_name": "path_split",
+      "calls": [
+        "currently_running_windows",
+        "starts_with_any"
+      ],
+      "called_by": [
+        "_pterm_fuzzy_cd",
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_pterm_fuzzy_cd",
+        "currently_running_windows",
+        "starts_with_any",
+        "path_split",
+        "pseudo_terminal"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "repr_vars": {
+      "function_name": "repr_vars",
+      "calls": [
+        "detuple",
+        "starts_with_any",
+        "get_source_code",
+        "gather_vars",
+        "is_valid_python_syntax",
+        "line_join"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "detuple",
+        "starts_with_any",
+        "get_source_code",
+        "gather_vars",
+        "is_valid_python_syntax",
+        "line_join",
+        "repr_vars"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "starts_with_any": {
+      "current_quality": "basic",
+      "current_docstring": "Returns True if begins with any of the prefixes. If return_match, it returns that prefix if it exists - else None.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": true
+    },
+    "get_path_parent": {
+      "current_quality": "good",
+      "current_docstring": "Retrieve the parent directory or URL of the given path or URL.\n\nExamples:\n    >>> get_path_parent('oaijsd/odjf/aoijf/sdojif.ojf')      -> 'oaijsd/odjf/aoijf'\n    >>> get_path_parent('/')              ...",
+      "suggestions": [
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "make_symlink_relative": {
+      "current_quality": "basic",
+      "current_docstring": "Replace the destination of a symlink with a relative path instead of an absolute one",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_string_with_any": {
+      "current_quality": "basic",
+      "current_docstring": "Helper function that checks if string matches any of the substrings using the given match_func.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Expand description with more detail about purpose and behavior"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "path_split": {
+      "current_quality": "good",
+      "current_docstring": "EXAMPLE:\n    >>> path_split('https://claude.ai/chat/6b1ff843-1c6c-4e34-8c9f-21bd83bc0315')\n    ans = ['https://', 'claude.ai', 'chat', '6b1ff843-1c6c-4e34-8c9f-21bd83bc0315']\n    >>> path_join(ans)\n  ...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "repr_vars": {
+      "current_quality": "excellent",
+      "current_docstring": "Returns the string representation of specified variables.\nImperfectly implemented right now. Still useful though.\n\nArgs:\n    *vars: Variable names as strings, or a single string with space-separated n...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

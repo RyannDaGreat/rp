@@ -1,0 +1,187 @@
+{
+  "package_id": 136,
+  "functions": [
+    "joined_names",
+    "_pterm_fuzzy_cd",
+    "random_batch"
+  ],
+  "total_functions": 3,
+  "estimated_hours": 2.25,
+  "priority_score": 330,
+  "context": {
+    "joined_names": {
+      "function_name": "joined_names",
+      "calls": [
+        "joined_names",
+        "random_batch"
+      ],
+      "called_by": [
+        "_pterm_fuzzy_cd",
+        "joined_names"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_pterm_fuzzy_cd",
+        "joined_names",
+        "random_batch"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_pterm_fuzzy_cd": {
+      "function_name": "_pterm_fuzzy_cd",
+      "calls": [
+        "random_batch",
+        "get_path_name",
+        "get_home_directory",
+        "_pterm_cd",
+        "print",
+        "joined_names",
+        "_get_all_paths_fast",
+        "get_path_names",
+        "fansi",
+        "strip",
+        "currently_running_windows",
+        "_ric_current_candidate_fuzzy_matches",
+        "path_split",
+        "path_join",
+        "fuzzy_string_match",
+        "is_a_match"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_path_name",
+        "_pterm_cd",
+        "print",
+        "_get_all_paths_fast",
+        "get_path_names",
+        "fansi",
+        "strip",
+        "get_home_directory",
+        "fuzzy_string_match",
+        "random_batch",
+        "pseudo_terminal",
+        "joined_names",
+        "_pterm_fuzzy_cd",
+        "currently_running_windows",
+        "_ric_current_candidate_fuzzy_matches",
+        "path_split",
+        "path_join",
+        "is_a_match"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "random_batch": {
+      "function_name": "random_batch",
+      "calls": [
+        "random_batch",
+        "_is_pandas_iloc_iterable",
+        "is_torch_tensor",
+        "keys",
+        "_is_pandas_dataframe"
+      ],
+      "called_by": [
+        "random_batch_with_replacement",
+        "random_batch",
+        "shuffled",
+        "random_parallel_batch",
+        "joined_names",
+        "_pterm_fuzzy_cd",
+        "random_batch_up_to"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "random_batch_with_replacement",
+        "random_batch",
+        "_is_pandas_iloc_iterable",
+        "shuffled",
+        "random_parallel_batch",
+        "joined_names",
+        "_pterm_fuzzy_cd",
+        "is_torch_tensor",
+        "random_batch_up_to",
+        "keys",
+        "_is_pandas_dataframe"
+      ],
+      "multiplexing": [
+        "list",
+        "list",
+        "list",
+        "list",
+        "list"
+      ],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "joined_names": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_pterm_fuzzy_cd": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "random_batch": {
+      "current_quality": "good",
+      "current_docstring": "Given an input list, torch tensor, numpy array, dict, etc - get a random subset with a given batch_size.\nIf retain_order is True, will keep the original order. \nWill not choose the same index twice.\nB...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/",
+    "7. SPECIAL: Document the multiplexing pattern - how the base function dispatches to specific implementations"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

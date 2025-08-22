@@ -1,0 +1,488 @@
+{
+  "package_id": 21,
+  "functions": [
+    "get_file_extension",
+    "has_file_extension",
+    "apply_suffix_to_path",
+    "get_unique_copy_path",
+    "format_path",
+    "with_file_extension",
+    "is_image_file",
+    "_display_filetype_size_histogram"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 1100,
+  "context": {
+    "get_file_extension": {
+      "function_name": "get_file_extension",
+      "calls": [
+        "_get_file_path"
+      ],
+      "called_by": [
+        "display_file_tree",
+        "change_video_file_framerate",
+        "recursion_helper",
+        "_display_video_in_notebook",
+        "save_image_jpg",
+        "load_sound_file",
+        "get_image_file_dimensions",
+        "save_image",
+        "clear_jupyter_notebook_outputs",
+        "input_select_path",
+        "save_image_webp",
+        "with_file_name",
+        "pseudo_terminal",
+        "get_stats_string",
+        "is_image_file",
+        "save_image_avif",
+        "extract_zip_file",
+        "_display_filetype_size_histogram",
+        "apply_suffix_to_path",
+        "get_cache_file_path",
+        "save_animated_webp",
+        "load_image_from_file",
+        "save_image_jxl",
+        "get_unique_copy_path",
+        "convert_image_file",
+        "get_all_paths",
+        "encode_image_to_bytes",
+        "pterm_pretty_print",
+        "with_file_extension",
+        "save_video_avi",
+        "_extract_archive_via_pyunpack",
+        "has_file_extension",
+        "add_audio_to_video_file",
+        "download_youtube_video",
+        "format_path"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "display_file_tree",
+        "get_file_extension",
+        "change_video_file_framerate",
+        "recursion_helper",
+        "_display_video_in_notebook",
+        "save_image_jpg",
+        "load_sound_file",
+        "get_image_file_dimensions",
+        "save_image",
+        "clear_jupyter_notebook_outputs",
+        "input_select_path",
+        "save_image_webp",
+        "with_file_name",
+        "pseudo_terminal",
+        "get_stats_string",
+        "is_image_file",
+        "save_image_avif",
+        "extract_zip_file",
+        "_display_filetype_size_histogram",
+        "apply_suffix_to_path",
+        "get_cache_file_path",
+        "save_animated_webp",
+        "load_image_from_file",
+        "save_image_jxl",
+        "_get_file_path",
+        "get_unique_copy_path",
+        "convert_image_file",
+        "get_all_paths",
+        "encode_image_to_bytes",
+        "pterm_pretty_print",
+        "with_file_extension",
+        "save_video_avi",
+        "_extract_archive_via_pyunpack",
+        "has_file_extension",
+        "add_audio_to_video_file",
+        "download_youtube_video",
+        "format_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "has_file_extension": {
+      "function_name": "has_file_extension",
+      "calls": [
+        "get_file_extension"
+      ],
+      "called_by": [
+        "save_image",
+        "display_image_in_notebook",
+        "rename_path",
+        "with_file_name",
+        "_cv_save_video_mp4",
+        "with_file_extension",
+        "save_video_avi",
+        "load_sound_file",
+        "_omni_save",
+        "_get_font_path"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "save_image",
+        "get_file_extension",
+        "display_image_in_notebook",
+        "rename_path",
+        "with_file_name",
+        "_cv_save_video_mp4",
+        "with_file_extension",
+        "save_video_avi",
+        "has_file_extension",
+        "load_sound_file",
+        "_omni_save",
+        "_get_font_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "apply_suffix_to_path": {
+      "function_name": "apply_suffix_to_path",
+      "calls": [
+        "strip_file_extension",
+        "get_file_extension",
+        "with_file_extension",
+        "apply_suffix_to_name",
+        "path_join"
+      ],
+      "called_by": [
+        "get_unique_copy_path"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "strip_file_extension",
+        "get_file_extension",
+        "apply_suffix_to_path",
+        "apply_suffix_to_name",
+        "get_unique_copy_path",
+        "path_join",
+        "with_file_extension"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "get_unique_copy_path": {
+      "function_name": "get_unique_copy_path",
+      "calls": [
+        "strip_file_extension",
+        "get_file_extension",
+        "apply_suffix_to_path",
+        "path_exists",
+        "with_file_extension",
+        "apply_suffix_to_name",
+        "path_join",
+        "replace"
+      ],
+      "called_by": [
+        "save_image",
+        "save_video_gif_via_pil",
+        "convert_to_gif_via_ffmpeg",
+        "add_audio_to_video_file",
+        "save_image_webp",
+        "change_video_file_framerate",
+        "save_animated_webp",
+        "save_image_jxl",
+        "_cv_save_video_mp4",
+        "convert_audio_file",
+        "concat_mp4_files",
+        "swap_paths",
+        "save_image_jpg",
+        "download_youtube_video",
+        "save_image_avif",
+        "make_zip_file_from_folder",
+        "save_animated_png",
+        "_get_default_video_path"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_file_extension",
+        "apply_suffix_to_path",
+        "change_video_file_framerate",
+        "path_join",
+        "save_animated_webp",
+        "save_image_jxl",
+        "get_unique_copy_path",
+        "apply_suffix_to_name",
+        "swap_paths",
+        "concat_mp4_files",
+        "save_image_jpg",
+        "replace",
+        "make_zip_file_from_folder",
+        "save_animated_png",
+        "save_image",
+        "strip_file_extension",
+        "save_video_gif_via_pil",
+        "convert_to_gif_via_ffmpeg",
+        "save_image_webp",
+        "path_exists",
+        "_cv_save_video_mp4",
+        "with_file_extension",
+        "convert_audio_file",
+        "add_audio_to_video_file",
+        "download_youtube_video",
+        "save_image_avif",
+        "_get_default_video_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "format_path": {
+      "function_name": "format_path",
+      "calls": [
+        "fansi",
+        "get_file_extension"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "fansi",
+        "get_file_extension",
+        "format_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "with_file_extension": {
+      "function_name": "with_file_extension",
+      "calls": [
+        "strip_file_extension",
+        "get_file_extension",
+        "has_file_extension"
+      ],
+      "called_by": [
+        "download_youtube_video",
+        "convert_to_gif_via_ffmpeg",
+        "display_image_in_notebook",
+        "save_video_gif_via_pil",
+        "apply_suffix_to_path",
+        "change_video_file_framerate",
+        "with_file_name",
+        "get_cache_file_path",
+        "_cv_save_video_mp4",
+        "with_file_extensions",
+        "convert_audio_file",
+        "get_unique_copy_path",
+        "add_audio_to_video_file",
+        "save_animated_png",
+        "convert_image_file",
+        "_display_downloadable_image_in_notebook_via_ipython"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_file_extension",
+        "apply_suffix_to_path",
+        "change_video_file_framerate",
+        "get_cache_file_path",
+        "with_file_extensions",
+        "get_unique_copy_path",
+        "convert_image_file",
+        "save_animated_png",
+        "convert_to_gif_via_ffmpeg",
+        "strip_file_extension",
+        "display_image_in_notebook",
+        "save_video_gif_via_pil",
+        "with_file_name",
+        "_cv_save_video_mp4",
+        "with_file_extension",
+        "convert_audio_file",
+        "has_file_extension",
+        "add_audio_to_video_file",
+        "download_youtube_video",
+        "_display_downloadable_image_in_notebook_via_ipython"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "is_image_file": {
+      "function_name": "is_image_file",
+      "calls": [
+        "get_file_extension",
+        "_guess_mimetype"
+      ],
+      "called_by": [
+        "pterm_pretty_print",
+        "pseudo_terminal",
+        "_omni_load",
+        "rinsp",
+        "display_image_slideshow",
+        "save_image_to_imgur",
+        "edit_image_in_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "get_file_extension",
+        "pterm_pretty_print",
+        "pseudo_terminal",
+        "_omni_load",
+        "_guess_mimetype",
+        "rinsp",
+        "display_image_slideshow",
+        "is_image_file",
+        "save_image_to_imgur",
+        "edit_image_in_terminal"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_display_filetype_size_histogram": {
+      "function_name": "_display_filetype_size_histogram",
+      "calls": [
+        "get_current_directory",
+        "get_all_paths",
+        "get_file_extension",
+        "print",
+        "_maybe_display_string_in_pager",
+        "human_readable_file_size",
+        "get_file_size",
+        "line_join",
+        "horizontally_concatenated_strings"
+      ],
+      "called_by": [
+        "pseudo_terminal"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_display_filetype_size_histogram",
+        "get_current_directory",
+        "get_all_paths",
+        "get_file_extension",
+        "print",
+        "pseudo_terminal",
+        "line_join",
+        "_maybe_display_string_in_pager",
+        "get_file_size",
+        "human_readable_file_size",
+        "horizontally_concatenated_strings"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    }
+  },
+  "documentation_status": {
+    "get_file_extension": {
+      "current_quality": "basic",
+      "current_docstring": "'x.png'        --> 'png'\n'text.txt'     --> 'txt'\n'text'         --> ''\n'text.jpg.txt' --> 'txt'\n'a/b/c.png'    --> 'png'\n'a/b/c'        --> ''\n For more, see: https://stackoverflow.com/questions/5413...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "has_file_extension": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "apply_suffix_to_path": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "get_unique_copy_path": {
+      "current_quality": "good",
+      "current_docstring": "Generates a new file path that does not conflict with any existing files by appending a suffix to the file name. The function does not create the file itself, just provides the path.\n\nTLDR: Lets you c...",
+      "suggestions": [
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "format_path": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "with_file_extension": {
+      "current_quality": "good",
+      "current_docstring": "Replaces or adds a file extension to a path\n\nIf extension is blank, and replace=False, path won't be changed\nIf extension is blank, and replace=True, then this is equivalent to strip_file_extension\n\nE...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "is_image_file": {
+      "current_quality": "basic",
+      "current_docstring": "Check if file path points to an image file based on extension/mimetype.\n\nChecks file extension and mimetype to determine if it's an image.\nSpecial handling for .exr (OpenEXR) files.\nDoes NOT check if ...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type",
+        "Document supported image types and formats"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_display_filetype_size_histogram": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

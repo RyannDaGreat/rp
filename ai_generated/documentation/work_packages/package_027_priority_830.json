@@ -1,0 +1,441 @@
+{
+  "package_id": 27,
+  "functions": [
+    "make_parent_directory",
+    "make_directory",
+    "_load_ryan_lazygit_config",
+    "move_path",
+    "save_animated_webp",
+    "save_image_jpg",
+    "save_image_webp",
+    "save_image_avif"
+  ],
+  "total_functions": 8,
+  "estimated_hours": 6.0,
+  "priority_score": 830,
+  "context": {
+    "make_parent_directory": {
+      "function_name": "make_parent_directory",
+      "calls": [
+        "make_directory"
+      ],
+      "called_by": [
+        "save_image",
+        "save_image_webp",
+        "pseudo_terminal",
+        "save_animated_webp",
+        "move_path",
+        "save_image_jxl",
+        "_cv_save_video_mp4",
+        "convert_audio_file",
+        "write_frame",
+        "_load_ryan_lazygit_config",
+        "save_safetensors",
+        "save_image_jpg",
+        "save_image_avif",
+        "save_animated_png",
+        "bytes_to_file"
+      ],
+      "aliases": [
+        "make_parent_folder"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "save_animated_webp",
+        "save_image_jxl",
+        "write_frame",
+        "_load_ryan_lazygit_config",
+        "save_safetensors",
+        "move_path",
+        "save_image_jpg",
+        "save_animated_png",
+        "save_image",
+        "save_image_webp",
+        "pseudo_terminal",
+        "make_parent_directory",
+        "make_directory",
+        "_cv_save_video_mp4",
+        "make_parent_folder",
+        "convert_audio_file",
+        "save_image_avif",
+        "bytes_to_file"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "make_directory": {
+      "function_name": "make_directory",
+      "calls": [
+        "directory_exists"
+      ],
+      "called_by": [
+        "_get_executable",
+        "take_directory",
+        "save_video_gif_via_pil",
+        "extract_zip_file",
+        "_pip_import_depth_pro",
+        "_run_ai_cli_coder",
+        "pseudo_terminal",
+        "make_parent_directory",
+        "download_google_font",
+        "download_font",
+        "_pip_import_pyflow",
+        "make_directories",
+        "_install_lazygit",
+        "slowmo_video_via_rife",
+        "vim_string_diff",
+        "download_url",
+        "_string_diff_helper",
+        "copy_directory"
+      ],
+      "aliases": [
+        "make_folder"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "take_directory",
+        "extract_zip_file",
+        "_pip_import_pyflow",
+        "make_directories",
+        "slowmo_video_via_rife",
+        "vim_string_diff",
+        "directory_exists",
+        "_string_diff_helper",
+        "_get_executable",
+        "_pip_import_depth_pro",
+        "save_video_gif_via_pil",
+        "make_folder",
+        "_run_ai_cli_coder",
+        "pseudo_terminal",
+        "make_parent_directory",
+        "make_directory",
+        "download_google_font",
+        "download_font",
+        "_install_lazygit",
+        "download_url",
+        "copy_directory"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "_load_ryan_lazygit_config": {
+      "function_name": "_load_ryan_lazygit_config",
+      "calls": [
+        "unindent",
+        "currently_running_mac",
+        "get_absolute_path",
+        "make_parent_directory",
+        "file_exists",
+        "append_line_to_file",
+        "strip",
+        "_install_lazygit"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "unindent",
+        "currently_running_mac",
+        "get_absolute_path",
+        "make_parent_directory",
+        "file_exists",
+        "append_line_to_file",
+        "strip",
+        "_load_ryan_lazygit_config",
+        "_install_lazygit"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": true
+    },
+    "move_path": {
+      "function_name": "move_path",
+      "calls": [
+        "make_parent_directory",
+        "path_join"
+      ],
+      "called_by": [
+        "symlink_move",
+        "_maybe_unbury_folder",
+        "_paste_path_from_bundle"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "_paste_path_from_bundle",
+        "symlink_move",
+        "make_parent_directory",
+        "move_path",
+        "path_join",
+        "_maybe_unbury_folder"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "save_animated_webp": {
+      "function_name": "save_animated_webp",
+      "calls": [
+        "as_byte_images",
+        "save",
+        "get_file_extension",
+        "as_pil_images",
+        "make_parent_directory",
+        "get_unique_copy_path",
+        "as_rgba_images"
+      ],
+      "called_by": [],
+      "aliases": [
+        "save_video_webp"
+      ],
+      "via_variants": [],
+      "cluster": [
+        "as_byte_images",
+        "save",
+        "get_file_extension",
+        "as_pil_images",
+        "save_animated_webp",
+        "make_parent_directory",
+        "get_unique_copy_path",
+        "as_rgba_images",
+        "save_video_webp"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "save_image_jpg": {
+      "function_name": "save_image_jpg",
+      "calls": [
+        "as_byte_image",
+        "save",
+        "get_file_extension",
+        "as_rgb_image",
+        "make_parent_directory",
+        "is_image",
+        "as_numpy_image",
+        "get_unique_copy_path"
+      ],
+      "called_by": [
+        "_copy_image_to_clipboard_via_pyjpgclipboard",
+        "save_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_byte_image",
+        "save",
+        "get_file_extension",
+        "save_image",
+        "as_rgb_image",
+        "make_parent_directory",
+        "is_image",
+        "as_numpy_image",
+        "_copy_image_to_clipboard_via_pyjpgclipboard",
+        "get_unique_copy_path",
+        "save_image_jpg"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "save_image_webp": {
+      "function_name": "save_image_webp",
+      "calls": [
+        "as_byte_image",
+        "save",
+        "get_file_extension",
+        "as_rgb_image",
+        "make_parent_directory",
+        "is_grayscale_image",
+        "as_numpy_image",
+        "as_pil_image",
+        "get_unique_copy_path"
+      ],
+      "called_by": [
+        "save_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_byte_image",
+        "save",
+        "get_file_extension",
+        "save_image",
+        "save_image_webp",
+        "as_rgb_image",
+        "make_parent_directory",
+        "is_grayscale_image",
+        "as_numpy_image",
+        "as_pil_image",
+        "get_unique_copy_path"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "save_image_avif": {
+      "function_name": "save_image_avif",
+      "calls": [
+        "as_byte_image",
+        "save",
+        "get_file_extension",
+        "as_rgb_image",
+        "make_parent_directory",
+        "pip_import",
+        "is_grayscale_image",
+        "as_numpy_image",
+        "as_pil_image",
+        "get_unique_copy_path"
+      ],
+      "called_by": [
+        "save_image"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "as_byte_image",
+        "save",
+        "get_file_extension",
+        "save_image",
+        "as_rgb_image",
+        "make_parent_directory",
+        "pip_import",
+        "is_grayscale_image",
+        "as_numpy_image",
+        "as_pil_image",
+        "get_unique_copy_path",
+        "save_image_avif"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "make_parent_directory": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "make_directory": {
+      "current_quality": "good",
+      "current_docstring": "Will make a directory if it doesn't allready exist. If it does already exist, it won't throw an error.\nHowever, it will throw an error if the specified path is impossible to make without deleting some...",
+      "suggestions": [
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": true,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "_load_ryan_lazygit_config": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "move_path": {
+      "current_quality": "basic",
+      "current_docstring": "Like the 'mv' command\nMove a folder or file into a given directory if to_path is a directory,\notherwise just rename the path",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "save_animated_webp": {
+      "current_quality": "basic",
+      "current_docstring": "Save an animated video in WebP format.\nIf add_extension is True, adds '.webp' extension if not already present.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Add supported file formats and common usage patterns"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "save_image_jpg": {
+      "current_quality": "basic",
+      "current_docstring": "If add_extension is True, will add a '.jpg' or '.jpeg' extension to path IFF it doesn't allready end with such an extension (AKA 'a/b/c.jpg' -> 'a/b/c.jpg' BUT 'a/b/c.png' -> 'a/b/c.png.jpg')",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Add supported file formats and common usage patterns"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "save_image_webp": {
+      "current_quality": "basic",
+      "current_docstring": "Save image in WebP format. Set lossless=True for lossless compression, False for lossy.\nIf add_extension is True, adds '.webp' extension if not already present.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Add supported file formats and common usage patterns"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "save_image_avif": {
+      "current_quality": "basic",
+      "current_docstring": "Save image in AVIF format. Set lossless=True for lossless compression, False for lossy.\nIf add_extension is True, adds '.avif' extension if not already present.",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document function parameters and their types",
+        "Document return value and type",
+        "Add supported file formats and common usage patterns"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}

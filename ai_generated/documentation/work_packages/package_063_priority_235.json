@@ -1,0 +1,159 @@
+{
+  "package_id": 63,
+  "functions": [
+    "has_len",
+    "random_element",
+    "display_video_in_terminal_color"
+  ],
+  "total_functions": 3,
+  "estimated_hours": 2.25,
+  "priority_score": 235,
+  "context": {
+    "has_len": {
+      "function_name": "has_len",
+      "calls": [],
+      "called_by": [
+        "random_element",
+        "split_into_sublists",
+        "calculate_flows",
+        "display_video_in_terminal_color",
+        "random_index"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "split_into_sublists",
+        "calculate_flows",
+        "display_video_in_terminal_color",
+        "random_index",
+        "random_element",
+        "has_len"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "random_element": {
+      "function_name": "random_element",
+      "calls": [
+        "_is_pandas_iloc_iterable",
+        "random_element",
+        "keys",
+        "random_index",
+        "has_len"
+      ],
+      "called_by": [
+        "list_dict_transpose",
+        "pseudo_terminal",
+        "random_element",
+        "text_to_speech",
+        "random_choice",
+        "random_namespace_hash",
+        "random_index",
+        "random_passphrase"
+      ],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "has_len",
+        "_is_pandas_iloc_iterable",
+        "list_dict_transpose",
+        "pseudo_terminal",
+        "random_index",
+        "random_element",
+        "random_choice",
+        "random_namespace_hash",
+        "keys",
+        "text_to_speech",
+        "random_passphrase"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    },
+    "display_video_in_terminal_color": {
+      "function_name": "display_video_in_terminal_color",
+      "calls": [
+        "display_image",
+        "fansi_print",
+        "get_terminal_width",
+        "unicode_loading_bar",
+        "_terminal_move_cursor_to_top_left",
+        "has_len"
+      ],
+      "called_by": [],
+      "aliases": [],
+      "via_variants": [],
+      "cluster": [
+        "unicode_loading_bar",
+        "display_video_in_terminal_color",
+        "get_terminal_width",
+        "display_image",
+        "fansi_print",
+        "_terminal_move_cursor_to_top_left",
+        "has_len"
+      ],
+      "multiplexing": [],
+      "is_via_variant": false,
+      "is_private": false
+    }
+  },
+  "documentation_status": {
+    "has_len": {
+      "current_quality": "missing",
+      "current_docstring": "",
+      "suggestions": [
+        "Add comprehensive docstring with purpose, parameters, and examples"
+      ],
+      "has_examples": false,
+      "has_parameters": false,
+      "has_return_info": false
+    },
+    "random_element": {
+      "current_quality": "excellent",
+      "current_docstring": "Returns a random element from an iterable, dictionary-like, or set-like object.\n\nParameters:\n    x (iterable or Mapping or Set): The collection to choose from.\n\nReturns:\n    object: A randomly chosen ...",
+      "suggestions": [],
+      "has_examples": true,
+      "has_parameters": true,
+      "has_return_info": true
+    },
+    "display_video_in_terminal_color": {
+      "current_quality": "good",
+      "current_docstring": "Display a video in the terminal with a progress bar.\n\nArgs:\n    frames (list): List of frames to display\n    loop (bool): Whether to loop the video indefinitely\n    framerate (int, optional): Target f...",
+      "suggestions": [
+        "Add concrete usage examples with >>> syntax",
+        "Document return value and type"
+      ],
+      "has_examples": false,
+      "has_parameters": true,
+      "has_return_info": false
+    }
+  },
+  "work_instructions": [
+    "For each function in this package:",
+    "1. Read the existing docstring (if any) and understand the function's purpose",
+    "2. Examine the function's implementation to understand its behavior",
+    "3. Check related functions (in context) to understand how they work together",
+    "4. ENHANCE (don't replace) the docstring following the template:",
+    "   - Keep original docstring if it exists",
+    "   - Add 'Enhanced Documentation:' section with usage patterns",
+    "   - Include concrete examples with >>> syntax",
+    "   - Document parameters and return values",
+    "   - Note related functions and when to use vs alternatives",
+    "   - Add relevant tags for searchability",
+    "5. Test your examples to ensure they work",
+    "6. Update the appropriate tag files in documentation/tags/"
+  ],
+  "quality_checklist": [
+    "\u2610 Each function has enhanced docstring with purpose clearly explained",
+    "\u2610 All parameters are documented with types and descriptions",
+    "\u2610 Return values are documented with types and descriptions",
+    "\u2610 At least one concrete example with >>> syntax that actually runs",
+    "\u2610 Related functions are mentioned with explanations",
+    "\u2610 Usage patterns and common scenarios are described",
+    "\u2610 Relevant tags added for searchability",
+    "\u2610 Function added to appropriate tag files in documentation/tags/",
+    "\u2610 Examples tested and confirmed working",
+    "\u2610 Cross-references to multiplexing patterns or _via_ variants documented"
+  ]
+}
