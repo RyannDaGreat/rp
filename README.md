@@ -35,8 +35,9 @@ display_image(img)             # Show in preview
 
 ## ✨ Key Features
 
+
 - **🚀 Ultra-fast import**: ~22ms for 500K+ lines (10x faster than NumPy)
-- **📦 Self-contained**: All dependencies included - no version conflicts
+- **📦 Self-contained**: 2MB total. All dependencies included - no version conflicts
 - **🔄 Accept anything**: Functions automatically handle type conversions
 - **⚙️ Smart defaults**: Sensible parameters that "just work"
 - **🔀 Multiple backends**: Choose performance vs features (OpenCV, PIL, PyTorch, etc.)
