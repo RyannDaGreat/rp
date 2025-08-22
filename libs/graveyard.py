@@ -19,7 +19,6 @@ __all__ = [
     'OSC_jiggle',
     'OSC_output',
     'UCB1',
-    'another_test_function',
     'arduino',
     'blob_coords',
     'brutish_display_image',
@@ -27,10 +26,12 @@ __all__ = [
     'default_rip_music_output_filename',
     'default_socket_port',
     'display_grayscale_image',
+    'float_clamp',
     'get_file_paths',
     'graph_resistance_distance',
     'image_to_all_normalized_xy_rgb_training_pairs',
     'image_to_xyrgb_lists',
+    'int_clamp',
     'k_means_analysis',
     'matlab',
     'matlab_disable_stdout',
@@ -45,6 +46,7 @@ __all__ = [
     'read_line',
     'rip_info',
     'rip_music',
+    'shorten_github_url',
     'socket_read',
     'socket_reader',
     'socket_reading_thread',
@@ -52,7 +54,6 @@ __all__ = [
     'socket_writer',
     'space_split',
     'summation',
-    'test_function_for_graveyard',
     'tofloat',
     'xyrgb_lists_to_image',
     'xyrgb_normalize',
@@ -71,41 +72,6 @@ __all__ = [
 
 # Graveyard content will be automatically appended below by move_to_graveyard.py script
 # Each moved code block will be separated by comments indicating its original location
-
-
-# ======================================================================
-# Code blocks moved from r.py
-# ======================================================================
-
-
-# Block 1 - Originally from r.py lines 17480-17486
-# ------------------------------------------------------------
-
-import rp.r
-
-def test_function_for_graveyard():
-    """Test function that uses rp functions to test the graveyard system."""
-    shell = get_default_shell()
-    result = display_image("test.png") 
-    return shell, result
-
-
-# ======================================================================
-# Code blocks moved from r.py
-# ======================================================================
-
-
-# Block 1 - Originally from r.py lines 17480-17487
-# ------------------------------------------------------------
-
-import rp.r
-
-def another_test_function():
-    """Another test with more rp function calls."""
-    shell_cmd = rp.r.get_default_shell()
-    img_result = rp.r.display_image("another_test.png")
-    is_valid = rp.r.is_valid_python_syntax("print('hello')")
-    return shell_cmd, img_result, is_valid
 
 
 # ======================================================================
@@ -1090,3 +1056,53 @@ def image_to_all_normalized_xy_rgb_training_pairs(image):
     #   ⎩                                                                      ⎭
     # endregion
 # endregion
+
+
+# ======================================================================
+# Code blocks moved from r.py
+# ======================================================================
+
+
+# Block 1 - Originally from r.py lines 15918-15933
+# ------------------------------------------------------------
+
+import rp.r
+
+def int_clamp(x: int,min_value: int,max_value: int) -> int:
+    return rp.r.clamp(x,min_value,max_value)
+
+def float_clamp(x: float,min_value: float,max_value: float) -> float:
+    """
+    Clamps a float value between min_value and max_value.
+    
+    Examples:
+        >>> float_clamp(5.0, 0.0, 10.0)   # 5.0
+        >>> float_clamp(-2.0, 0.0, 10.0)  # 0.0
+        >>> float_clamp(15.0, 0.0, 10.0)  # 10.0
+    """
+    # noinspection PyTypeChecker
+    return rp.r.clamp(x,min_value,max_value)
+
+
+
+
+# ======================================================================
+# Code blocks moved from r.py
+# ======================================================================
+
+
+# Block 1 - Originally from r.py lines 16629-16640
+# ------------------------------------------------------------
+
+import rp.r
+
+def shorten_github_url(url,title=None):
+    """
+    Doesn't work anymore! git.io was discontinued for some god forsaken reason :(
+    Use rp.shorten_url instead (for backwards compatibility, this function now simply calls that)
+
+    Uses git.io to shorten a url
+    This method specifically only works for Github URL's; it doesn't work for anything else
+    If title is specified, it will try to get you a particular name for your url (such as git.io/labinacube)
+    """
+    return rp.r.shorten_url(url) # git.io was discontinued :(
