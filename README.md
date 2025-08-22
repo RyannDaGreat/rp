@@ -1,6 +1,6 @@
 # RP (Ryan's Python) 🐍
 
-[Written with AI]
+[This README was Written with AI. The vast majority of the code was written by hand.]
 
 **The comprehensive Python utility library that just works**
 
