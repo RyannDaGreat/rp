@@ -161,7 +161,7 @@ def _trim_text(text, max_width):
     if width > max_width:
         # When there are no double width characters, just use slice operation.
         if len(text) == width:
-            trimmed_text = (text[:max(1, max_width-3)] + '...')[:max_width]
+            trimmed_text = (text[:max(1, max_width-4)] + '...')[:max_width]
             return trimmed_text, len(trimmed_text)
 
         # Otherwise, loop until we have the desired width. (Rather
@@ -169,7 +169,7 @@ def _trim_text(text, max_width):
         else:
             trimmed_text = ''
             for c in text:
-                if get_cwidth(trimmed_text + c) <= max_width - 3:
+                if get_cwidth(trimmed_text + c) <= max_width - 4:
                     trimmed_text += c
             trimmed_text += '...'
 
