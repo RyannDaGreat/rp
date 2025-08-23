@@ -57,7 +57,7 @@ The editor is quite powerful. For example, it has multi-language syntax highligh
 
 It has many UI themes
 
-<img width="4000" height="1593" alt="image" src="https://github.com/user-attachments/assets/3de5f001-f54f-42e8-bea2-54ca622be4be" />
+<img width="4000" height="1593" alt="image" src="https://github.com/user-attachments/assets/7a69048d-850c-42b3-aa63-acc176bd5847" />
 
 
 
