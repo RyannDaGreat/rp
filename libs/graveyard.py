@@ -544,7 +544,7 @@ def qterm():
     _todo=[]
     _done=[]  # Results of _todo
 
-    import rp.r_iterm_comm as ric
+    import rp.rp_ptpython.r_iterm_comm as ric
     _level=ric.pseudo_terminal_level
     rp.r.run_as_new_thread(pseudo_terminal,rp.r.globals(),exec=_exec,eval=_eval)
     while ric.pseudo_terminal_level==_level:

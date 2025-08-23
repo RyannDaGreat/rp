@@ -105,7 +105,7 @@ def _return_document_handler(cli, buffer):
     # Make sure that if we run this UI again, that we reset this buffer, next
     # time.
     def reset_this_buffer():
-        import rp.r_iterm_comm as ric
+        import rp.rp_ptpython.r_iterm_comm as ric
         # print(ric.dont_erase_buffer_on_enter)
         if ric.dont_erase_buffer_on_enter:
             ric.dont_erase_buffer_on_enter.clear()#Do erase the buffer now. This is a one-time-thing.
