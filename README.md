@@ -10,14 +10,16 @@ A stable, self-contained Python environment and utility library. RP combines a r
 
 RP is both:
 
-* A **standard-library++** of 1,600+ optimized, well documented functions covering images, audio, video, files, web, math, ML, and system utilities.
+* A **standard-library++** of 1,600+ optimized, well documented functions covering images, audio, video, files, web, math, ML, system utils, and many other tools that will make your code both faster, shorter and easier to read.
     * Pure Python (~2 MB), imports in ~20ms
     * Minimal, stable dependencies (only long-mature packages like `six`, `pygments`)
     * Stable API — code written with RP in 2016 still runs unchanged today
+    * Functions are easy enough to read they're basically self-documenting, and most come with examples in their docstrings
 * **PTerm (Pseudo Terminal)**: a hybrid REPL, shell, and lightweight IDE you launch with `python -m rp`.
     * Python evaluation with completions, editing, and history
     * Shell-like commands built in (no need to leave the prompt)
     * IDE-like features: inline profiling, debugging, namespace undo/redo, inline image/video display
+    * TLDR: It is powerful enough that nowadays, most of RP's development is done in RP
 
 Together, RP is a single install that gives you a richer standard library and an interactive environment tuned for productivity.
 
@@ -164,8 +166,3 @@ For example, the `rp.explore_torch_module(...)` function lets you interactively 
 <img width="3456" height="2084" alt="image" src="https://github.com/user-attachments/assets/18dc9196-7101-40d4-beb6-f8a262370caf" />
 
 There are several useful tools that I will be adding to documentation in the coming months.
-
-
-## ✍️ Closing thought
-
-RP isn’t “yet another utils lib.” It’s a practical environment: a richer standard library, a hybrid REPL/shell (PTerm), and a set of utilities you can depend on for the long haul.
