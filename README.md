@@ -73,8 +73,18 @@ rp call print_gpu_summary
 rp call r._fdt_for_command_line
 
 # Grab a BibTeX entry from arXiv
-rp call get_arxiv_bibtex --- [https://arxiv.org/abs/2112.10752](https://arxiv.org/abs/2112.10752)
+rp call get_arxiv_bibtex --- https://arxiv.org/abs/2112.10752
+
+#Display a file tree
+rp call display_file_tree
+
+#Add rounded corners to your copied image - which is how I'm making this README
+rp exec "copy_image_to_clipboard(with_corner_radius(load_image_from_clipboard(), 60))"
 ```
+
+<img width="846" height="756" alt="image" src="https://github.com/user-attachments/assets/68ebe89b-312b-4bad-8e86-01cce21c38bd" />
+
+
 
 ### Arguments without the quoting mess
 
