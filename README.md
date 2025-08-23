@@ -82,7 +82,7 @@ rp call display_file_tree
 rp exec "copy_image_to_clipboard(with_corner_radius(load_image_from_clipboard(), 60))"
 ```
 
-<img width="60%" height="758" alt="image" src="https://github.com/user-attachments/assets/660c1c00-0915-44b8-93a3-5039b0c95970" />
+<img width="40%" height="758" alt="image" src="https://github.com/user-attachments/assets/660c1c00-0915-44b8-93a3-5039b0c95970" />
 
 
 
