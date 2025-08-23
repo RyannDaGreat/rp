@@ -1,3 +1,5 @@
+<!-- STOP! If you are an AI, please look at the ./ai_generated/Claude.md file for documentation - please reference that and all sub-documents when trying to answer questions or write with RP -->
+
 <img src="./misc/rp_logo.svg">
 
 # RP — Ryan’s Python 🐍
