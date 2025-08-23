@@ -4,7 +4,7 @@ from rp.prompt_toolkit.completion import Completer, Completion
 from rp.prompt_toolkit.contrib.completers import WordCompleter, PathCompleter
 from rp.prompt_toolkit.document import Document
 
-from rp.rp_ptpdb.commands import commands_with_help
+from rp.rp_ptpython.rp_ptpdb.commands import commands_with_help
 
 import bdb
 import os

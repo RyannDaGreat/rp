@@ -51,7 +51,7 @@ def get_all_function_names(code:str):
 def run_code_without_destroying_buffer(event,put_in_history=True):
     #Run the code in the buffer without clearing it or destroying cursor position etc
     buffer=event.cli.current_buffer
-    import rp.r_iterm_comm as ric
+    import rp.rp_ptpython.r_iterm_comm as ric
     ric.dont_erase_buffer_on_enter+=['DO IT']
     buffer.accept_action.validate_and_handle(event.cli, buffer,put_in_history=put_in_history)
 
@@ -94,7 +94,7 @@ def handle_run_cell(event):
 def is_callable_token(token_name):
     assert isinstance(token_name,str)
     token_name=token_name.strip()
-    import rp.r_iterm_comm as r_iterm_comm
+    import rp.rp_ptpython.r_iterm_comm as r_iterm_comm
     try:
         return callable(eval(token_name,r_iterm_comm.globa))
     except Exception as e:
@@ -103,7 +103,7 @@ def is_callable_token(token_name):
 def is_iterable_token(token_name):
     assert isinstance(token_name,str)
     token_name=token_name.strip()
-    import rp.r_iterm_comm as r_iterm_comm
+    import rp.rp_ptpython.r_iterm_comm as r_iterm_comm
     from rp import is_iterable
     try:
         return is_iterable(eval(token_name,r_iterm_comm.globa))
@@ -232,7 +232,7 @@ def split_python_tokens(string,return_tokens=False,ignore_errors=True):
         return [token.string for token in tokens]
 
 def get_ans():
-    import rp.r_iterm_comm as ric
+    import rp.rp_ptpython.r_iterm_comm as ric
     if 'ans' in ric.globa:
         return ric.globa['ans']
     else:
@@ -415,7 +415,7 @@ def do_paste(buffer,commented:int=None):
 def do_string_paste(buffer):
     import rp
     buffer.insert_text(repr(rp.string_from_clipboard()))
-import rp.r_iterm_comm as ric
+import rp.rp_ptpython.r_iterm_comm as ric
 enable_space_autocompletions=ric.enable_space_autocompletions#This variable is a list that's mutated between being empty and being full, which toggles it's truth value. This feature isn't completely figured out yet...I suppose it's better to disable it for the time being...
 
 def toggle_top_line_text(buffer,top_line='debug()\n'):
@@ -1262,7 +1262,7 @@ def handle_character(buffer,char,event=None):
     #If this function returns true it overrides the other code that handles that specific char
     from rp import is_namespaceable
     global last_pressed_dash
-    import rp.r_iterm_comm as ric
+    import rp.rp_ptpython.r_iterm_comm as ric
     import tokenize
 
     if False:#No microcompletions
@@ -2329,7 +2329,7 @@ def handle_character(buffer,char,event=None):
                 'torchrun':'PYM torch.distributed.run',
             })
 
-            import rp.r_iterm_comm as ric
+            import rp.rp_ptpython.r_iterm_comm as ric
             if hasattr(ric,'kibble_shortcuts'):
                 kibble_shortcuts=ric.kibble_shortcuts
                 if isinstance(kibble_shortcuts, dict):
@@ -2391,7 +2391,7 @@ def handle_character(buffer,char,event=None):
                 return False
                 
         
-        import rp.r_iterm_comm as ric
+        import rp.rp_ptpython.r_iterm_comm as ric
         if char in './?=' and text=="" and ric.successful_commands:
             last_command=ric.successful_commands[-1]
             if not '\n' in last_command and not ';' in last_command:
@@ -3919,7 +3919,7 @@ def load_python_bindings(python_input):
         import rp
         if not data.startswith(' ') and data.split():
             first_word=data.split()[0] if data else ''
-            import rp.r_iterm_comm as ric
+            import rp.rp_ptpython.r_iterm_comm as ric
             import keyword
 
             # Get the list of all Python keywords
@@ -4045,8 +4045,8 @@ def load_python_bindings(python_input):
         if not before and not after:
             buffer.insert_text('ans.')
             return
-        import rp.r_iterm_comm
-        var=rp.r_iterm_comm.last_assignable_comm
+        import rp.rp_ptpython.r_iterm_comm
+        var=rp.rp_ptpython.r_iterm_comm.last_assignable_comm
         # if before.endswith('=') and before[:-1]==var:
             #THIS COMLPETION IS COMMENTED OUT EVEN THOUGH IT WORKS. IT GOT ANNOYING FOR TETING THE =.. OPERATOR, WHICH I THINK MIGHT BE MORE IMPORTANT FOR DEMOING RPTERM
             #var=|  -->  var.|
@@ -4107,7 +4107,7 @@ def load_python_bindings(python_input):
         after= document.text_after_cursor
 
         if document.text=='':# What else would we possibly want the spacebar for on an empty input? Spacebar invokes functions, and the default variable is ans.
-            import rp.r_iterm_comm as ric
+            import rp.rp_ptpython.r_iterm_comm as ric
             if callable(ric.ans):
                 buffer.insert_text('ans()')
                 buffer.cursor_left()
@@ -4285,7 +4285,7 @@ def load_python_bindings(python_input):
             buffer.cursor_right(2)
             return
         from rp import space_split,is_namespaceable
-        import rp.r_iterm_comm as r_iterm_comm
+        import rp.rp_ptpython.r_iterm_comm as r_iterm_comm
         split=space_split(before_line)
         from rp import printed
         from_or_import_on_beginning_of_line=before_line.lstrip().startswith("import ") or before_line.lstrip().startswith("from ")
@@ -4330,7 +4330,7 @@ def load_python_bindings(python_input):
                 if not not_just_functions:
                     if not '\n' in before.strip() and before.strip().isupper() or beginswithany(bs,'import ','from ','def ') or 'lambda' in bs:#Basically, any place we're allowed to declare new variable names, we shouldn't be autocompleting them. lambda is bit tricky so I'm just sayig 'no space function completion on lines that contain lambda'.
                         return False#We might be typing something like 'UNDO ALL', in which case we do NOT want the 'UNDO' to be autocompleted
-                import rp.r_iterm_comm as ric
+                import rp.rp_ptpython.r_iterm_comm as ric
                 for candidate in ric.current_candidates:#Don't autocomplete if our current word to complete allready exists. For example, don't complete 'in' into 'inverse', etc.
                     try:
                         if robust_hasattr(candidate,'text') and candidate.text==name_of_interest or candidate==name_of_interest:
@@ -4832,7 +4832,7 @@ def load_python_bindings(python_input):
             buffer.insert_text(':')
     @handle('=',filter=~vi_mode_enabled&microcompletions_enabled)
     def _(event):
-        import rp.r_iterm_comm as r_iterm_comm
+        import rp.rp_ptpython.r_iterm_comm as r_iterm_comm
 
         def buffer_insert(text):
             if(text=='=='):#text cannot be '=' because we still want to be able to use the '-=' augmented assignment
@@ -5030,7 +5030,7 @@ def load_python_bindings(python_input):
                 global aicode_result
                 buffer=event.cli.current_buffer
                 original_code = buffer.document.text
-                import rp.r_iterm_comm as ric
+                import rp.rp_ptpython.r_iterm_comm as ric
                 # code = '__import__("rp").r_iterm_comm.aicode_result=__import__("rp").r._run_claude_code('+repr(original_code)+') # Using AI to edit your code'
                 # run_arbitrary_code_without_destroying_buffer(code, event, put_in_history=False)
                 import rp
@@ -5343,7 +5343,7 @@ def load_python_bindings(python_input):
         # print(buffer._redo_stack)
         # buffer.redo()
 
-    import rp.r_iterm_comm as r_iterm_comm
+    import rp.rp_ptpython.r_iterm_comm as r_iterm_comm
 
     @handle(Keys.ControlV)# On mac this is alt+z
     def _(event):
@@ -5985,9 +5985,9 @@ def load_python_bindings(python_input):
                 # 
                 refresh_strings_from_buffer()
         if not (single_line and token_exists(current_line.strip())):
-            import rp.r_iterm_comm
+            import rp.rp_ptpython.r_iterm_comm
             enter_completable_keywords=dict(fo='for _ in ans:',e='else:',t='try:',b='break',c='continue',f='finally:',p='pass',r='return',y='yield',d='def _():',w='while True:',i='if True:')#enter-completion of keywords that don't need to take arguments
-            single_line_enabled_keywords={'fo','f','i','t','d','w'}-set(rp.r_iterm_comm.globa)
+            single_line_enabled_keywords={'fo','f','i','t','d','w'}-set(rp.rp_ptpython.r_iterm_comm.globa)
             keyword=current_line.lstrip()
             if single_line and before_line and 'class '.startswith(before_line) and not after_line:
                 #c|   --->  class _:\n|

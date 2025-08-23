@@ -8,7 +8,7 @@ This can be used for creation of Python REPLs.
     cli.run()
 """
 from __future__ import unicode_literals
-import rp.r_iterm_comm as ric
+import rp.rp_ptpython.r_iterm_comm as ric
 from rp.prompt_toolkit import AbortAction
 from rp.prompt_toolkit.auto_suggest import AutoSuggestFromHistory,ConditionalAutoSuggest
 from rp.prompt_toolkit.buffer import Buffer
@@ -38,7 +38,7 @@ from .validator import PythonValidator
 
 from functools import partial
 
-import rp.r_iterm_comm as r_iterm_comm
+import rp.rp_ptpython.r_iterm_comm as r_iterm_comm
 
 import six
 import __future__
@@ -50,7 +50,7 @@ __all__=(
     'PythonCommandLineInterface',
 )
 
-import rp.r_iterm_comm as ric
+import rp.rp_ptpython.r_iterm_comm as ric
 def set_debug_height(height):
     ric.debug_height=height
     return height
@@ -1140,8 +1140,8 @@ class PythonInput(object):
 
         def run():
             script=get_jedi_script_from_document(document,self.get_locals(),self.get_globals())
-            import rp.r_iterm_comm
-            rp.r_iterm_comm.script_debug=script
+            import rp.rp_ptpython.r_iterm_comm
+            rp.rp_ptpython.r_iterm_comm.script_debug=script
             # from r import pseudo_terminal
             # pseudo_terminal(locals(),enable_ptpython=False)
             # Show signatures in help text.
@@ -1191,7 +1191,7 @@ class PythonInput(object):
                 cli.request_redraw()
             else:
                 self._on_input_timeout(cli)
-            import rp.r_iterm_comm as r_iterm_comm
+            import rp.rp_ptpython.r_iterm_comm as r_iterm_comm
             r_iterm_comm.current_input_text=document.text
             if self.show_realtime_input:
                 cli.buffers['realtime_display'].reset(initial_document=Document(str(r_iterm_comm.rp_evaluator(document.text))[:100000],cursor_position=0))
@@ -1241,7 +1241,7 @@ class ConstrainedHeightRenderer:
     def height_is_known(self):
         # Always return True when we have height constraints to ensure status bar shows
         if hasattr(self._output, 'get_real_size'):
-            import rp.r_iterm_comm as ric
+            import rp.rp_ptpython.r_iterm_comm as ric
             top_space_percent = ric.options.get('top_space', 0)
             if top_space_percent > 0:
                 return True
@@ -1264,7 +1264,7 @@ class ConstrainedHeightOutput(Output):
         """Override get_size to apply height constraints for layout."""
         real_size = self._output.get_size()
         
-        import rp.r_iterm_comm as ric
+        import rp.rp_ptpython.r_iterm_comm as ric
         top_space_percent = ric.options.get('top_space', 0)
         min_rows = ric.options.get('min_bot_space', 15)
         

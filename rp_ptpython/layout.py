@@ -421,8 +421,8 @@ def status_bar(python_input):
             def testytest(cli,mouse_event):
                 # python_input.enter_history(cli)
                 pass
-            import rp.r_iterm_comm
-            append((TB.PseudoTerminalCurrentVariable,repr(rp.r_iterm_comm.last_assignable_comm),testytest))
+            import rp.rp_ptpython.r_iterm_comm
+            append((TB.PseudoTerminalCurrentVariable,repr(rp.rp_ptpython.r_iterm_comm.last_assignable_comm),testytest))
             append((TB, ' '))
         return result
 
@@ -709,8 +709,8 @@ def create_layout(python_input,
         )
     def title_fill(title,fill=' ',style=Token.Window.TIItleV2):
         height=title.count("\n")+1
-        import rp.r_iterm_comm
-        rp.r_iterm_comm.python_input_buffers[title]=title
+        import rp.rp_ptpython.r_iterm_comm
+        rp.rp_ptpython.r_iterm_comm.python_input_buffers[title]=title
         try:
             return VSplit([
             Window(height=D.exact(height),content=FillControl(fill,token=style)),
@@ -782,9 +782,9 @@ def create_layout(python_input,
                     content=
                     HSplit([
                         # title_fill("Parenthesis Automator"),
-                        # Window(BufferControl(buffer_name='parenthesizer_buffer',lexer=lexer,),wrap_lines=False,height=D(max=rp.r_iterm_comm.parenthesized_line.count('\n'),min=rp.r_iterm_comm.parenthesized_line.count('\n')    ))
+                        # Window(BufferControl(buffer_name='parenthesizer_buffer',lexer=lexer,),wrap_lines=False,height=D(max=rp.rp_ptpython.r_iterm_comm.parenthesized_line.count('\n'),min=rp.rp_ptpython.r_iterm_comm.parenthesized_line.count('\n')    ))
                         Window(BufferControl(buffer_name='parenthesizer_buffer',lexer=lexer,),wrap_lines=False)
-                        # title_fill(rp.r_iterm_comm.parenthesized_line),
+                        # title_fill(rp.rp_ptpython.r_iterm_comm.parenthesized_line),
                     ]),
                     filter=ShowParenthesisAutomator(python_input) & ~IsDone(),
                 ),

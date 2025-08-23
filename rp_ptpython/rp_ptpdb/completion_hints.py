@@ -4,7 +4,7 @@ from pygments.token import Token
 from rp.prompt_toolkit.enums import DEFAULT_BUFFER
 from rp.prompt_toolkit.layout.processors import AfterInput
 
-from rp.rp_ptpdb.commands import completion_hints
+from rp.rp_ptpython.rp_ptpdb.commands import completion_hints
 
 
 class CompletionHint(AfterInput):

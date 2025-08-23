@@ -186,7 +186,7 @@ class PythonCompleter(Completer):
                 sorting_priorities[c]=p
                 # print(c,p)
                 yield completion
-        import rp.r_iterm_comm as ric
+        import rp.rp_ptpython.r_iterm_comm as ric
         current_line=document.current_line
         before_line=document.current_line_before_cursor
         after_line=document.current_line_after_cursor
@@ -464,9 +464,9 @@ class PythonCompleter(Completer):
             # If we are inside a string, Don't do Jedi completion.
             import rp
             if self._path_completer_grammar.match(document.text_before_cursor):
-                rp.r_iterm_comm.writing_in_string=True
+                rp.rp_ptpython.r_iterm_comm.writing_in_string=True
                 return
-            rp.r_iterm_comm.writing_in_string=False
+            rp.rp_ptpython.r_iterm_comm.writing_in_string=False
 
             # Do Jedi Python completions.
             if complete_event.completion_requested or self._complete_python_while_typing(document):
@@ -558,7 +558,7 @@ class PythonCompleter(Completer):
         from rp import tic,toc,ptoctic,ptoc 
         # tic()
         origin=document.get_word_before_cursor()
-        import rp.r_iterm_comm as ric
+        import rp.rp_ptpython.r_iterm_comm as ric
         pre_origin_doc=document.text[:document.cursor_position-(origin[::-1].find('.') if '.' in origin else len(origin))]
         from rp import ring_terminal_bell
         # if pre_origin_doc.endswith('.'):
@@ -839,13 +839,13 @@ def ryan_completion_matches(origin:str,candidates:list):
                 out+=.1# penalty because 'ab' is closer to 'a_bz' than 'az_b'
             else:
                 count+=1
-        import rp.r_iterm_comm
+        import rp.rp_ptpython.r_iterm_comm
         # rp.tic()
         try:
-            temp=(''.join(rp.r_iterm_comm.successful_commands)).count(temp)
+            temp=(''.join(rp.rp_ptpython.r_iterm_comm.successful_commands)).count(temp)
             if temp:
                 out/=temp# Doesn't have to be division; this is arbitrary. Basically, if we used this before successfully give it more weight and likelyness we want to use it again
-        except AttributeError:pass# AttributeError: module 'rp.r_iterm_comm' has no attribute 'successful_commands'
+        except AttributeError:pass# AttributeError: module 'rp.rp_ptpython.r_iterm_comm' has no attribute 'successful_commands'
         except TypeError:pass# TypeError: unsupported operand type(s) for /=: 'float' and 'str'
         # rp.ptoc()
         return None if origin else out

@@ -173,7 +173,7 @@ class SourceCodeMargin(Margin):
             self.ptpdb.curframe.f_lineno
         )
 
-import rp.r_iterm_comm as ric
+import rp.rp_ptpython.r_iterm_comm as ric
 
 def width():
     import rp
