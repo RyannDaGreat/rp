@@ -52,7 +52,8 @@ It’s a REPL, shell, and lightweight IDE simultaneously.
 <img width="3428" height="2080" alt="image" src="https://github.com/user-attachments/assets/cf850b7f-7df6-4f4f-ace9-27a725bd630b" />
 
 The editor is quite powerful. For example, it has multi-language syntax highlighting
-<img width="1716" height="1570" alt="image" src="https://github.com/user-attachments/assets/11f1c340-df63-4367-9d09-a6d30a7e0c21" />
+
+<img width="60%" height="1570" alt="image" src="https://github.com/user-attachments/assets/11f1c340-df63-4367-9d09-a6d30a7e0c21" />
 
 
 
