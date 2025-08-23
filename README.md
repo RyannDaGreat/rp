@@ -111,18 +111,10 @@ save_image(img, "output.png")
 ## ⚖️ Design Principles
 
 * **Stability first**: no breaking changes since 2016
-* **Self-contained**: pure Python, ~2 MB, minimal external deps
 * **Type-flexible APIs**: NumPy ↔ PIL ↔ Torch accepted automatically
 * **Sane defaults**: common cases need no configuration
-* **Pluralization**: batch operations always mirror single-item names
+* **Pluralization**: batch operations always mirror single-item names (`load_image(path)` vs `load_images(paths)`)
 * **Performance-conscious**: lazy imports, parallel helpers, caching
-
-## 📊 Practical Footprint
-
-* ~20 ms cold import
-* Pure Python, no compilation needed
-* No dependency hell — only a handful of long-stable packages
-* ~2 MB install size
 
 ## 📖 Learn More
 
