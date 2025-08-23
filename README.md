@@ -53,7 +53,7 @@ It’s a REPL, shell, and lightweight IDE simultaneously.
 
 The editor is quite powerful. For example, it has multi-language syntax highlighting
 
-<img width="60%" height="1570" alt="image" src="https://github.com/user-attachments/assets/11f1c340-df63-4367-9d09-a6d30a7e0c21" />
+<img width="30%" height="1570" alt="image" src="https://github.com/user-attachments/assets/11f1c340-df63-4367-9d09-a6d30a7e0c21" />
 
 It has many UI themes
 
