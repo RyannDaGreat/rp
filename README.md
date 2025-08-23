@@ -164,8 +164,3 @@ For example, the `rp.explore_torch_module(...)` function lets you interactively 
 <img width="3456" height="2084" alt="image" src="https://github.com/user-attachments/assets/18dc9196-7101-40d4-beb6-f8a262370caf" />
 
 There are several useful tools that I will be adding to documentation in the coming months.
-
-
-## ✍️ Closing thought
-
-RP isn’t “yet another utils lib.” It’s a practical environment: a richer standard library, a hybrid REPL/shell (PTerm), and a set of utilities you can depend on for the long haul.
