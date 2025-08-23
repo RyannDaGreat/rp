@@ -25,8 +25,6 @@ RP is both:
 
 Together, RP is a single install that gives you a richer standard library and an interactive environment tuned for productivity.
 
-Getting started with an AI coding assistant is easy - just tell it to read the "autodocs" folder, and it will quickly understand this library.
-
 ## 📦 Install
 
 ```bash
@@ -82,7 +80,9 @@ rp call display_file_tree
 rp exec "copy_image_to_clipboard(with_corner_radius(load_image_from_clipboard(), 60))"
 ```
 
-<img width="40%" height="758" alt="image" src="https://github.com/user-attachments/assets/660c1c00-0915-44b8-93a3-5039b0c95970" />
+<img width="32%" height="758" alt="image" src="https://github.com/user-attachments/assets/660c1c00-0915-44b8-93a3-5039b0c95970" />
+<img width="67%" height="868" alt="image" src="https://github.com/user-attachments/assets/483691cb-48dd-4930-9ca8-7afaac6acfa7" />
+
 
 
 
@@ -138,7 +138,9 @@ save_image(img, "output.png")
 
 ## 📖 Learn More
 
-Documentation is bundled in the repo, including AI-generated guides that cover the full API surface. Explore the `ai_generated` folder for organized docs and examples.
+Nearly every function in rp comes with documentation, many of which include full self-contained examples. 
+
+Getting started with an AI coding assistant is easy - just tell it to read the "autodocs" folder, and it will quickly understand this library.
 
 ## 📜 License
 
