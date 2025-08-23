@@ -15,6 +15,7 @@ RP is both:
     * Minimal, stable dependencies (only long-mature packages like `six`, `pygments`)
     * Stable API — code written with RP in 2016 still runs unchanged today
     * Functions are easy enough to read they're basically self-documenting, and most come with examples in their docstrings
+    * You don't have to learn all 1600 functions - tell your LLM to read the "autodocs" folder and it will become proficient in this library
 * **PTerm (Pseudo Terminal)**: a hybrid REPL, shell, and lightweight IDE you launch with `python -m rp`.
     * Python evaluation with completions, editing, and history
     * Shell-like commands built in (no need to leave the prompt)
