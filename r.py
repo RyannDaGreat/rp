@@ -2101,7 +2101,14 @@ def fansi_pygments(
             available_languages = [lexer[0] for lexer in get_all_lexers()]
             raise ValueError("Invalid language '{}' specified. Available languages: {}".format(language, ', '.join(available_languages)))
     else:
-        lexer = guess_lexer(code)
+        # Custom detection for specific patterns before falling back to guess_lexer
+        code_stripped = code.strip()
+        if code_stripped.startswith('#!/bin/bash') or code_stripped.startswith('#!/usr/bin/bash'):
+            lexer = get_lexer_by_name('bash')
+        elif code_stripped.startswith('<!DOCTYPE html>') or code_stripped.lower().startswith('<!doctype html>'):
+            lexer = get_lexer_by_name('html')
+        else:
+            lexer = guess_lexer(code)
     
     try:
         style = get_style_by_name(style)
@@ -11441,6 +11448,9 @@ def display_code_cell(code, *, title="Code Cell", language=None):
         >>> display_code_cell(get_source_code(load_image))
 
     """
+    if not isinstance(code, str):
+        raise TypeError('rp.display_code_cell: Need str, but input was of type '+str(type(code)))
+
     # IMPORTANT: Do not use f-strings in this function to maintain compatibility
     code = code.rstrip() #We have to for the printer...
     language = language or 'python3'
@@ -19260,7 +19270,7 @@ def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,lin
 
     if ipython:
         exec=eval=_ipython_exeval
-    import rp.patch_linecache as patch
+    import rp.rp_ptpython.patch_linecache as patch
     from time import time as _time
     _end_time=None
     try:
@@ -21478,7 +21488,7 @@ def _autocomplete_lss_name(lss_name,command_name=None):
     """
     if command_name is not None:
         lss_name=lss_name[len(command_name+' '):]
-    import rp.r_iterm_comm as ric
+    import rp.rp_ptpython.r_iterm_comm as ric
     if (
         ric.current_candidates
         and fuzzy_string_match(
@@ -21649,7 +21659,7 @@ def _pterm_fuzzy_cd(query_path, do_cd=False):
 
 def _ric_current_candidate_fuzzy_matches(query):
     #Return the first pt completion candidate if they exist and match the query...
-    import rp.r_iterm_comm as ric
+    import rp.rp_ptpython.r_iterm_comm as ric
     can = ric.current_candidates
     if can and fuzzy_string_match(query, can[0], case_sensitive=False):
         return can[0]
@@ -21855,7 +21865,7 @@ def _add_pterm_prefix_shortcut(shortcut:str,replacement:str):
     assert isinstance(shortcut,str), shortcut
     assert isinstance(replacement,str) or isinstance(replacement, list) and len(replacement)==2, replacement
     
-    import rp.r_iterm_comm as ric
+    import rp.rp_ptpython.r_iterm_comm as ric
     ric.kibble_shortcuts[shortcut]=replacement
 
 def _add_pterm_command_shortcuts(shortcuts:str):
@@ -21867,7 +21877,7 @@ def _add_pterm_command_shortcuts(shortcuts:str):
         >>> ''')
     """
     shortcuts=shortcuts.splitlines()
-    import rp.r_iterm_comm as ric
+    import rp.rp_ptpython.r_iterm_comm as ric
     ric.additional_command_shortcuts+=shortcuts
 
 
@@ -21878,7 +21888,7 @@ def _get_pterm_verbose():
 
 class _PtermLevelTitleContext:
     def __init__(self, level_title):
-        import rp.r_iterm_comm as ric
+        import rp.rp_ptpython.r_iterm_comm as ric
         self.level = ric.pseudo_terminal_level
         self.should_do = bool(level_title)# or bool(self.level)
         if self.should_do:
@@ -22038,12 +22048,12 @@ def pseudo_terminal(
         pass# Not important if it fails, especially on windows (which doesn't support readline)
     # from r import fansi_print,fansi,space_split,is_literal,string_from_clipboard,mini_editor,merged_dicts,print_stack_trace# Necessary imports for this method to function properly.
 
-    import rp.r_iterm_comm# Used to talk to ptpython
+    import rp.rp_ptpython.r_iterm_comm# Used to talk to ptpython
     def level_label(change=0):
-        return (("(Level "+str(rp.r_iterm_comm.pseudo_terminal_level+change)+")")if rp.r_iterm_comm.pseudo_terminal_level else "")
+        return (("(Level "+str(rp.rp_ptpython.r_iterm_comm.pseudo_terminal_level+change)+")")if rp.rp_ptpython.r_iterm_comm.pseudo_terminal_level else "")
     try:
         fansi_print(style.message() +' '+ level_label(),'blue','bold')
-        rp.r_iterm_comm.pseudo_terminal_level+=1
+        rp.rp_ptpython.r_iterm_comm.pseudo_terminal_level+=1
 
         from copy import deepcopy,copy
 
@@ -22238,7 +22248,7 @@ def pseudo_terminal(
             Tags: pseudo-terminal, ans, history
             """
             try:    
-                import rp.r_iterm_comm as ric
+                import rp.rp_ptpython.r_iterm_comm as ric
                 ric.ans=val
                 save_history&=use_ans_history
                 dupdate(dicts[0],'ans')
@@ -22422,8 +22432,8 @@ def pseudo_terminal(
                 print("PERMISSION ERROR SAVING PTERM HISTORY, FROM r._write_to_pterm_hist(...). COMMAND HISTORY NOT SAVED.")
                 print("THIS ERROR WILL ONLY BE SHOWN ONCE PER PSEUDO-TERMINAL SESSION TO AVOID SPAM")
             successful_command_history.append(x)
-            import rp.r_iterm_comm
-            rp.r_iterm_comm.successful_commands=successful_command_history.copy()
+            import rp.rp_ptpython.r_iterm_comm
+            rp.rp_ptpython.r_iterm_comm.successful_commands=successful_command_history.copy()
         help_commands_string="""
         <Input Modifier>
         MOD ON
@@ -23381,7 +23391,7 @@ def pseudo_terminal(
         #Note: \x20 is the space character
         command_shortcuts=line_split(command_shortcuts_string)
         
-        import rp.r_iterm_comm as ric
+        import rp.rp_ptpython.r_iterm_comm as ric
         if hasattr(ric,'additional_command_shortcuts'):
             command_shortcuts+=list(ric.additional_command_shortcuts)
 
@@ -23403,11 +23413,11 @@ def pseudo_terminal(
             command_shortcuts[key.lower()]=command_shortcuts[key]#Make it case-insensitive
 
         try:
-            import rp.r_iterm_comm
-            rp.r_iterm_comm.globa=scope()#prime it and get it ready to go (before I had to enter some valid command like '1' etc to get autocomplete working at 100%)
+            import rp.rp_ptpython.r_iterm_comm
+            rp.rp_ptpython.r_iterm_comm.globa=scope()#prime it and get it ready to go (before I had to enter some valid command like '1' etc to get autocomplete working at 100%)
             
             while True:
-                rp.r_iterm_comm.rp_pt_user_created_var_names[:]=list(_user_created_var_names)
+                rp.rp_ptpython.r_iterm_comm.rp_pt_user_created_var_names[:]=list(_user_created_var_names)
                 try:
                     # region Get user_message, xor exit with second keyboard interrupt
                     _update_cd_history()
@@ -23419,31 +23429,31 @@ def pseudo_terminal(
                             # TODO Make everything evaluable like in ipython
                         def try_eval(x,true=False):# If true==True, then we return the actual value, not a formatted string
                             # region Communicate with ptpython via r_iterm_comm
-                            if x==rp.r_iterm_comm.try_eval_mem_text:
-                                return rp.r_iterm_comm.rp_evaluator_mem# Text hasn't changed, so don't evaluate it again
-                            rp.r_iterm_comm.try_eval_mem_text=x
+                            if x==rp.rp_ptpython.r_iterm_comm.try_eval_mem_text:
+                                return rp.rp_ptpython.r_iterm_comm.rp_evaluator_mem# Text hasn't changed, so don't evaluate it again
+                            rp.rp_ptpython.r_iterm_comm.try_eval_mem_text=x
                             temp=sys.stdout.write
                             try:
                                 sys.stdout.write=_muted_stdout_write
                                 s=scope()
                                 # true_value=eval(x,merged_dicts(s,globals(),locals()))
                                 if x.count('RETURN')==1:
-                                    exec(x.split('RETURN')[0],rp.r_iterm_comm.globa)# If we have a RETURN in it,
+                                    exec(x.split('RETURN')[0],rp.rp_ptpython.r_iterm_comm.globa)# If we have a RETURN in it,
                                     x=x.split('RETURN')[1].lstrip()# lstrip also removes newlines
                                 out="eval("+repr(x)+") = \n"
-                                true_value=eval(x,rp.r_iterm_comm.globa)
+                                true_value=eval(x,rp.rp_ptpython.r_iterm_comm.globa)
                                 if true:
                                     return true_value
                                 from pprint import pformat
                                 out=out+(str if isinstance(true_value,str) else repr)((true_value))  # + '\nans = '+str(dicts[0]['ans'])
-                                rp.r_iterm_comm.rp_evaluator_mem=out
+                                rp.rp_ptpython.r_iterm_comm.rp_evaluator_mem=out
                                 return str(out)+"\n"
                             except Exception as E:
-                                return str(rp.r_iterm_comm.rp_evaluator_mem)+"\nERROR: "+str(E)
+                                return str(rp.rp_ptpython.r_iterm_comm.rp_evaluator_mem)+"\nERROR: "+str(E)
                             finally:
                                 sys.stdout.write=temp
-                        rp.r_iterm_comm.rp_evaluator=try_eval
-                        rp.r_iterm_comm.rp_VARS_display=str(' '.join(sorted(list(_user_created_var_names))))
+                        rp.rp_ptpython.r_iterm_comm.rp_evaluator=try_eval
+                        rp.rp_ptpython.r_iterm_comm.rp_VARS_display=str(' '.join(sorted(list(_user_created_var_names))))
                         # endregion
                         import gc as garbage_collector
                         if do_garbage_collection_before_input:
@@ -25931,7 +25941,7 @@ def pseudo_terminal(
                         # endregion
                         # region Lazy-Parsers:Try to parse things like 'rinsp ans' into 'rinsp(ans)' and '+7' into 'ans+7'
                         # from r import space_split
-                        current_var=rp.r_iterm_comm.last_assignable_comm
+                        current_var=rp.rp_ptpython.r_iterm_comm.last_assignable_comm
                         # if user_message in '/ // /// //// /////'.split():
                         #     user_message=user_message.replace('/','?')
                         #     fansi_print("Transformed command into " + repr(user_message),'magenta')
@@ -26017,10 +26027,10 @@ def pseudo_terminal(
                             # region Try to evaluate/execute user_message
                             if last_assignable_candidate not in ['',None,'ans']:
                                 last_assignable=last_assignable_candidate
-                                import rp.r_iterm_comm
+                                import rp.rp_ptpython.r_iterm_comm
                                 last_assignable=regex_replace(last_assignable,'from .* import ','')#remove the 'from x import y' from that name, it's gibberish
                                 last_assignable=itc(lambda x:regex_replace(x,r'\w+\s+as\s+(\w+)',r'\1'),last_assignable)#a as b --> b; and "a as b,c as d"-->b,d
-                                rp.r_iterm_comm.last_assignable_comm=last_assignable
+                                rp.rp_ptpython.r_iterm_comm.last_assignable_comm=last_assignable
                             try:
                                 scope_before=set(scope())
                                 take_snapshot()# Taken BEFORE modifications to save current state!
@@ -26113,7 +26123,7 @@ def pseudo_terminal(
                                 else:
                                     raise
                             # endregion
-                    rp.r_iterm_comm.globa=scope()
+                    rp.rp_ptpython.r_iterm_comm.globa=scope()
                     
                     #Add the current directory to the cd history if its changed
                     try:
@@ -26156,7 +26166,7 @@ def pseudo_terminal(
 
 
     finally:
-        rp.r_iterm_comm.pseudo_terminal_level-=1
+        rp.rp_ptpython.r_iterm_comm.pseudo_terminal_level-=1
         if level_label():
             fansi_print("    - Exiting pseudo-terminal at "+level_label(),'blue' ,'bold')
 
@@ -43343,7 +43353,7 @@ def debug(level=0):
     This doesn't use pudb, because pudb doesn't work on windows. Meanwhile, ptpdb runs on anything that can run prompt toolkit...making it a clear winner here.
     """
     try:
-        from rp.rp_ptpdb import set_trace_shallow
+        from rp.rp_ptpython.rp_ptpdb import set_trace_shallow
         # text_to_speech("CHUGGA CHUGGA MUGGA WUGGA")
         return set_trace_shallow(level=1+level)
     except:
@@ -47466,7 +47476,7 @@ running_in_desktop = currently_running_desktop
 
 def _maybe_display_string_in_pager(string,with_line_numbers=True):
     #Display the string in the pager if it's too long
-    import rp.r_iterm_comm as ric
+    import rp.rp_ptpython.r_iterm_comm as ric
     if ric.pseudo_terminal_level == 0: #Don't block terminal output if we're not in pseudo terminal! That can cause issues for pretty printing in a headless job, for example.
         return
     if currently_in_a_tty():
