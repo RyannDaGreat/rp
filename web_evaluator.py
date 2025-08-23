@@ -27,12 +27,12 @@ DEFAULT_CLUSTER_SESSION_NAME = "Webeval Cluster"
 #RP's Web Evaluator
 #    This module provides duct-tape to connect python between computers
 #    It's very fast, very versatile and very easy to set up and use.
-#    However, communication is not encrypted, and also you can freeze the server if given bad code (for example, an infinite loop given by the client can hang the server)
-#    With this in mind, it's extremely useful in situations where you need to offload computation from one computer to another.
 #    Because it's an HTTP server, one server can service multiple clients.
 #    It can also double as a web server and fileserver, allowing you to host websites with it that can even run custom python code from the frontend, similar to Jupyter lab.
 #    To use this module, one computer runs the run_server() function and the other creates a Client and uses client.evaluate()
 #    For testing, you can also use "python3 -m rp.web_evaluator" on client, server or both
+#    However, communication is not encrypted, and also you can freeze the server if given bad code (for example, an infinite loop given by the client can hang the server)
+#    With this in mind, it's extremely useful in situations where you need to offload computation from one computer to another.
 
 """
 
