@@ -92,3 +92,6 @@ r.py.history.txt.meta
 rp_public_namespace.py
 grep
 .rprc
+.rprc
+.plans.py
+.rp_pyin_settings
