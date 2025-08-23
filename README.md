@@ -11,7 +11,7 @@ A stable, self-contained Python environment and utility library. RP combines a r
 RP is both:
 
 * A **standard-library++** of 1,600+ optimized, well documented functions covering images, audio, video, files, web, math, ML, and system utilities.
-    * Pure Python (~2 MB), imports in ~22ms
+    * Pure Python (~2 MB), imports in ~20ms
     * Minimal, stable dependencies (only long-mature packages like `six`, `pygments`)
     * Stable API — code written with RP in 2016 still runs unchanged today
 * **PTerm (Pseudo Terminal)**: a hybrid REPL, shell, and lightweight IDE you launch with `python -m rp`.
@@ -136,7 +136,7 @@ save_video(frames, "animation.mp4", framerate=30)
 
 ## 📊 Practical Footprint
 
-* ~22 ms cold import
+* ~20 ms cold import
 * Pure Python, no compilation needed
 * No dependency hell — only a handful of long-stable packages
 * ~2 MB install size
