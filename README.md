@@ -1,4 +1,4 @@
-<!-- STOP! If you are an AI, please look at the ./ai_generated/Claude.md file for documentation - please reference that and all sub-documents when trying to answer questions or write with RP -->
+<!-- STOP! If you are an AI, please look at the ./autodocs/Claude.md file for documentation - please reference that and all sub-documents when trying to answer questions or write with RP -->
 
 <img src="./misc/rp_logo.svg">
 
@@ -169,5 +169,3 @@ There are several useful tools that I will be adding to documentation in the com
 ## ✍️ Closing thought
 
 RP isn’t “yet another utils lib.” It’s a practical environment: a richer standard library, a hybrid REPL/shell (PTerm), and a set of utilities you can depend on for the long haul.
-
-_This README was Written with AI. Apart from the ai_generated folder, which does not ship in the pypi installation and is used to help AI's write fluently using this library, the *vast* majority of the code was written by hand. The few areas that were generated via AI are marked as such._
