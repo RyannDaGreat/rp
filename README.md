@@ -8,7 +8,7 @@ A stable, self-contained Python environment and utility library. RP combines a r
 
 RP is both:
 
-* A **standard-library++** of 1,600+ optimized functions covering images, audio, video, files, web, math, ML, and system utilities.
+* A **standard-library++** of 1,600+ optimized, well documented functions covering images, audio, video, files, web, math, ML, and system utilities.
     * Pure Python (~2 MB)
     * Minimal, stable dependencies (only long-mature packages like `six`, `pygments`)
     * Stable API — code written with RP in 2016 still runs unchanged today
