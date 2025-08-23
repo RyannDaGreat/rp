@@ -109,14 +109,6 @@ img = gauss_blur(img, 2.0)
 save_image(img, "output.png")
 ```
 
-#### Files
-
-```python
-text = load_text_file("document.txt")
-save_json(data, "data.json")
-files = get_all_files("*.py", recursive=True)
-```
-
 #### Audio / Video
 
 ```python
@@ -125,14 +117,6 @@ save_audio(audio, "converted.wav")
 
 frames = load_images("frame_*.png")
 save_video(frames, "animation.mp4", framerate=30)
-```
-
-#### Web
-
-```python
-html = get_url("[https://example.com](https://example.com)")
-links = extract_links_from_html(html)
-download_file("[https://example.com/file.zip](https://example.com/file.zip)", "local.zip")
 ```
 
 ## ⚖️ Design Principles
