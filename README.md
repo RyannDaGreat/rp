@@ -158,6 +158,12 @@ Because it saves you time. Instead of stitching together many small libraries an
 * Run utilities directly from the command line (`rp call …` / `rp exec …`)
 * Trust that your code will still run years from now
 
+## RP Contains Useful Tools
+
+For example, the `rp.explore_torch_module(...)` function lets you interactively explore pytorch modules and pipelines. 
+<img width="3456" height="2084" alt="image" src="https://github.com/user-attachments/assets/18dc9196-7101-40d4-beb6-f8a262370caf" />
+
+
 ## ✍️ Closing thought
 
 RP isn’t “yet another utils lib.” It’s a practical environment: a richer standard library, a hybrid REPL/shell (PTerm), and a set of utilities you can depend on for the long haul.
