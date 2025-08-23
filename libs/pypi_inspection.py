@@ -43,10 +43,23 @@ def get_pypi_name(dist_info_path):
     name=line[len('Name:'):].strip()
     return name
 def get_modules(dist_info_path):
-    top_level=path_join(dist_info_path,'top_level.txt')
-    top_level=text_file_to_string(top_level)
-    top_level=line_split(top_level)
-    return top_level
+    top_level_file = path_join(dist_info_path,'top_level.txt')
+    
+    if file_exists(top_level_file):
+        # Standard case: read from top_level.txt
+        top_level = text_file_to_string(top_level_file)
+        top_level = line_split(top_level)
+        return [m.strip() for m in top_level if m.strip()]
+    else:
+        # Fallback: infer module name from dist-info directory name
+        # e.g., "numpy-1.26.4.dist-info" -> "numpy"
+        dir_name = get_file_name(dist_info_path)  # Gets just the directory name
+        if dir_name.endswith('.dist-info'):
+            package_name = dir_name[:-len('.dist-info')]  # Remove .dist-info
+            # Remove version info (everything after first hyphen)
+            module_name = package_name.split('-')[0]
+            return [module_name]
+        return []
 def get_dist_info_paths():        
     infos=[x for x in get_subdirectories(get_site_packages_directory()) if x.endswith('.dist-info')]
     return infos
@@ -219,17 +232,56 @@ def get_module_name_from_object(o):
         pass
     raise TypeError('Failed to get the module name for the given object')
 
-def get_pypi_info_from_module_name(module_name,info=None):
-    #assert is_a_module(module)
-    name=module_name
-    name=name.split('.')[0]#rp.prompt_toolkit --> rp
-    info=info or get_dist_infos()
-    if name in info:
-        return info[name]
+def _find_dist_info_for_module(module_name):
+    """Find the specific dist-info directory for a module without scanning all packages"""
+    name = module_name.split('.')[0]  # rp.prompt_toolkit --> rp
+    site_packages = get_site_packages_directory()
+    
+    # Common patterns for dist-info naming
+    possible_patterns = [
+        f"{name}-*.dist-info",
+        f"{name.replace('_', '-')}-*.dist-info", 
+        f"{name.replace('-', '_')}-*.dist-info",
+        f"{name.upper()}-*.dist-info",
+        f"{name.lower()}-*.dist-info"
+    ]
+    
+    import glob
+    import os
+    
+    for pattern in possible_patterns:
+        pattern_path = os.path.join(site_packages, pattern)
+        matches = glob.glob(pattern_path)
+        if matches:
+            # Found a match - check if this dist-info contains our module
+            for match in matches:
+                try:
+                    modules = get_modules(match)
+                    if name in modules:
+                        return match
+                except Exception:
+                    continue
     return None
 
+def get_pypi_info_from_module_name(module_name, info=None):
+    """Get PyPI info for a specific module"""
+    if info is not None:
+        # If full info dict is provided, use it directly
+        name = module_name.split('.')[0]
+        return info.get(name)
+    
+    # Try to find the specific dist-info directory first (much faster)
+    dist_info_path = _find_dist_info_for_module(module_name)
+    if dist_info_path:
+        return get_pypi_info(dist_info_path)
+    
+    # Fallback to full scan only if direct lookup fails
+    name = module_name.split('.')[0]
+    info = get_dist_infos()
+    return info.get(name)
+
 def get_pypi_module_package_names():
-    import rp.pypi_inspection as p
+    import rp.libs.pypi_inspection as p
     o=p.get_dist_infos()
     q={}
     for x in o:
