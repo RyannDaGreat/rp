@@ -49,18 +49,6 @@ You’ll enter an environment that feels familiar if you’ve used IPython, but 
 <img width="3428" height="2080" alt="image" src="https://github.com/user-attachments/assets/cf850b7f-7df6-4f4f-ace9-27a725bd630b" />
 
 
-
-**Example session:**
-
-```python
->>> img = load_image("photo.jpg")
->>> img = resize_image(img, 0.5)
->>> display_image(img)        # preview inline
->>> save_image(img, "thumb.png")
->>> PROF slow_function(data)  # profile interactively
->>> UNDO                      # revert last namespace change
-```
-
 It’s a REPL, shell, and lightweight IDE in one.
 
 ## 🖥️ Command-Line Usage
@@ -119,15 +107,6 @@ img = gauss_blur(img, 2.0)
 save_image(img, "output.png")
 ```
 
-#### Audio / Video
-
-```python
-audio = load_audio("song.mp3")
-save_audio(audio, "converted.wav")
-
-frames = load_images("frame_*.png")
-save_video(frames, "animation.mp4", framerate=30)
-```
 
 ## ⚖️ Design Principles
 
