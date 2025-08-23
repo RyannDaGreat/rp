@@ -35,7 +35,7 @@ def debug_comment(value):
         >>> rp.debug_comment(rp.debug_comment)# --> <function debug_comment at 0x10717cee0>
 
         >>> #If you align the comments like this it will respect the alignment upon updating
-        >>> rp.debug_comment(rp.debug_comment.__module__)# --> rp.experimental.debug_comment
+        >>> rp.debug_comment(rp.debug_comment.__module__)# --> rp.libs.debug_comment
         >>> rp.debug_comment(rp)                         # --> <module 'rp' from '/opt/homebrew/lib/python3.10/site-packages/rp/__init__.py'>
         >>> rp.debug_comment(__file__)                   # --> /Users/ryan/CleanCode/Sandbox/debugevaltest/evaltest.py
         >>> rp.debug_comment(__name__)                   # --> __main__

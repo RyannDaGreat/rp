@@ -32,7 +32,7 @@ DEFAULT_CLUSTER_SESSION_NAME = "Webeval Cluster"
 #    Because it's an HTTP server, one server can service multiple clients.
 #    It can also double as a web server and fileserver, allowing you to host websites with it that can even run custom python code from the frontend, similar to Jupyter lab.
 #    To use this module, one computer runs the run_server() function and the other creates a Client and uses client.evaluate()
-#    For testing, you can also use "python3 -m rp.experimental.web_evaluator" on client, server or both
+#    For testing, you can also use "python3 -m rp.web_evaluator" on client, server or both
 
 """
 

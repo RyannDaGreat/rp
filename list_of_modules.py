@@ -1,4 +1,3 @@
-rp.experimental
 rp.rp_ptpython
 rp.prompt_toolkit
 rp.rp_ptpdb

@@ -67,6 +67,8 @@ _cached_code_styles_path      = os.path.join(_rp_boot_cache, "code_styles.rpo")
 #Add RP's libraries to system path
 sys.path.append(_rp_folder)
 from rp.libs.stamp_tensor import stamp_tensor, crop_tensor 
+from rp.libs.tracetraptest import * #A few libs debugging features. These things mostly need to be renamed.
+from rp.libs.debug_comment import debug_comment
 
 #Lazy load modules for a speed boost
 try:
@@ -21420,7 +21422,7 @@ def _input_select_multiple_paragraphs(paragraphs,old_code=None):
         if fansi_is_enabled():
             lines=_iterfzf(lines,multi=True,exact=True,preview='echo {} | %s %s %i '%(
                 shlex.quote(sys.executable),
-                shlex.quote(get_module_path("rp.experimental.stdin_python_highlighter")),
+                shlex.quote(get_module_path("rp.libs.stdin_python_highlighter")),
                 preview_width),
             ) #
         else:
@@ -21432,7 +21434,7 @@ def _input_select_multiple_paragraphs(paragraphs,old_code=None):
         #No support for fansi_disabled right now
         lines=_iterfzf(lines,multi=True,exact=True,preview='echo {} | %s %s %i %s %s'%(
                 shlex.quote(sys.executable),
-                shlex.quote(get_module_path("rp.experimental.stdin_python_highlighter")),
+                shlex.quote(get_module_path("rp.libs.stdin_python_highlighter")),
                 preview_width,
                 "diff_mode",
                 shlex.quote(json.dumps(old_code)),
@@ -21447,11 +21449,11 @@ def _input_select_multiple_paragraphs(paragraphs,old_code=None):
         #The user cancelled
         return None
 
-    # highlighter_code=text_file_to_string(get_module_path("rp.experimental.stdin_python_highlighter"))
+    # highlighter_code=text_file_to_string(get_module_path("rp.libs.stdin_python_highlighter"))
     # highlighter_code=highlighter_code.replace("HARDCODED_WIDTH=None","HARDCODED_WIDTH=%i")%preview_width
 
     # lines=pip_import('iterfzf').iterfzf(lines,multi=True,exact=True,preview='echo {} | %s -i {} '%(
-    #     # json.dumps(get_module_path("rp.experimental.stdin_python_highlighter")),
+    #     # json.dumps(get_module_path("rp.libs.stdin_python_highlighter")),
     #     json.dumps(__file__),
     #     json.dumps(sys.executable),
     #     preview_width),
@@ -21830,7 +21832,7 @@ def _get_function_names(ans):
 def _convert_powerpoint_file(path,message=None):
     if message is not None:
         fansi_print(message,'green','bold')
-    from rp.experimental import process_powerpoint_file
+    from rp.libs.powerpoint_converter import process_powerpoint_file
     return process_powerpoint_file(path)
 
 
@@ -42535,8 +42537,8 @@ def get_module_path_from_name(module_name):
         ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/numpy/__init__.py
         >>> get_module_path_from_name('six')
         ans = /Library/Frameworks/Python.framework/Versions/3.5/lib/python3.5/site-packages/six.py
-        >>> get_module_path_from_name('rp.experimental.stdin_python_highlighter')
-        ans = /Users/burgert/miniconda3/lib/python3.12/site-packages/rp/experimental/stdin_python_highlighter.py
+        >>> get_module_path_from_name('rp.libs.stdin_python_highlighter')
+        ans = /Users/burgert/miniconda3/lib/python3.12/site-packages/rp/libs/stdin_python_highlighter.py
     """
     import importlib.util
     import os
@@ -43362,8 +43364,6 @@ def debug(level=0):
         # text_to_speech("OK AND THE OLD ONE")
         return set_trace()
 
-from rp.experimental.debug_comment import debug_comment
-
 
 def _tensorify(x):
     """
@@ -43538,8 +43538,6 @@ def get_english_synonyms(word):
         return get_english_synonyms_via_datamuse(word)
     except Exception:
         return get_english_synonyms_via_nltk(word)
-
-from .libs.tracetraptest import * #A few experimental debugging features. These things mostly need to be renamed.
 
 @memoized
 def fibonacci(n):
