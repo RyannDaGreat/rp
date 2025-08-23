@@ -6,6 +6,8 @@
 
 A stable, self-contained Python environment and utility library. RP combines a richer standard library with PTerm (a hybrid REPL/shell) and a powerful CLI.
 
+Matlab and Mathematica enjoy large standard libraries - why not python?
+
 ---
 
 RP is both:
