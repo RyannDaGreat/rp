@@ -23,7 +23,7 @@ RP is both:
 
 Together, RP is a single install that gives you a richer standard library and an interactive environment tuned for productivity.
 
-You don't have to invest much time to get started - tell your coding assistant to read the "autodocs" folder, and it will become quickly familiar with this library.
+Getting started with an AI coding assistant is easy - just tell it to read the "autodocs" folder, and it will quickly understand this library.
 
 ## 📦 Install
 
