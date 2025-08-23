@@ -55,6 +55,10 @@ The editor is quite powerful. For example, it has multi-language syntax highligh
 
 <img width="60%" height="1570" alt="image" src="https://github.com/user-attachments/assets/11f1c340-df63-4367-9d09-a6d30a7e0c21" />
 
+It has many UI themes
+
+<img width="4000" height="1593" alt="image" src="https://github.com/user-attachments/assets/3de5f001-f54f-42e8-bea2-54ca622be4be" />
+
 
 
 ## 🖥️ Command-Line Usage
