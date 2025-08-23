@@ -156,4 +156,4 @@ Because it saves you time. Instead of stitching together many small libraries an
 
 RP isn’t “yet another utils lib.” It’s a practical environment: a richer standard library, a hybrid REPL/shell (PTerm), and a set of utilities you can depend on for the long haul.
 
-_This README was Written with AI. Apart from the ai_generated folder, which does not ship in the pypi installation, the *vast* majority of the code was written by hand. The few areas that were generated via AI are marked as such._
+_This README was Written with AI. Apart from the ai_generated folder, which does not ship in the pypi installation and is used to help AI's write fluently using this library, the *vast* majority of the code was written by hand. The few areas that were generated via AI are marked as such._
