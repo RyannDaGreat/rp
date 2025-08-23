@@ -42,7 +42,8 @@ You’ll enter an environment that feels familiar if you’ve used IPython, but 
 * Preview images, video frames, and syntax-highlighted text inline
 * Undo namespace changes, scroll error stacks, and profile code interactively
 
-<img width="2034" height="1488" alt="image" src="https://github.com/user-attachments/assets/da19e7a0-bca2-469a-a4b1-ebb6ee1734a8" />
+<img width="3430" height="2078" alt="image" src="https://github.com/user-attachments/assets/2848a614-84b4-4a1f-9769-a0f58a51f896" />
+
 
 **Example session:**
 
