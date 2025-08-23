@@ -18,6 +18,7 @@ RP is both:
     * Python evaluation with completions, editing, and history
     * Shell-like commands built in (no need to leave the prompt)
     * IDE-like features: inline profiling, debugging, namespace undo/redo, inline image/video display
+    * TLDR: It is powerful enough that nowadays, most of RP's development is done in RP
 
 Together, RP is a single install that gives you a richer standard library and an interactive environment tuned for productivity.
 
