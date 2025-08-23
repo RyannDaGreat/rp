@@ -32,7 +32,7 @@ DEFAULT_CLUSTER_SESSION_NAME = "Webeval Cluster"
 #    To use this module, one computer runs the run_server() function and the other creates a Client and uses client.evaluate()
 #    For testing, you can also use "python3 -m rp.web_evaluator" on client, server or both
 #    However, communication is not encrypted, and also you can freeze the server if given bad code (for example, an infinite loop given by the client can hang the server)
-#    This lack of encryption benefits both simplicity and speed. If you operate this over a public connection, I reccomend using ZeroTier 
+#    This lack of encryption benefits both simplicity and speed. If you operate this over a public connection, I recommend using ZeroTier 
 #    With this in mind, it's extremely useful in situations where you need to offload computation from one computer to another.
 
 """
