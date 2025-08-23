@@ -126,7 +126,16 @@ _original_pwd = os.getcwd()
 # region ［entuple， detuple］
 
 def entuple(x):
-    # For pesky petty things.
+    """
+    Ensures input is a tuple. If already a tuple, returns unchanged; otherwise wraps in tuple.
+    For pesky petty things. Code is simpler than explanation here.
+        
+    Example:
+        >>> entuple(5)
+        (5,)
+        >>> entuple((1, 2))
+        (1, 2)
+    """
     if isinstance(x,tuple):
         return x
     return x,
@@ -189,15 +198,44 @@ def delist(x):
 #   ∫𝓍²∂𝓍
 # ﹣∞
 def itc(f,x):
-    #itc ==== iterate to convergence, where f(x)==x.
-    #In other words, we iterate f on x until we reach a fixed point.
+    """
+    Iterate to convergence, where f(x)==x.
+    In other words, iterate f on x until we reach a fixed point.
+    
+    Args:
+        f: Function to iterate
+        x: Initial value
+        
+    Returns:
+        The fixed point value where f(x) == x
+        
+    Example:
+        >>> itc(lambda x: (x + 2/x) / 2, 1.0)  # Newton's method for sqrt(2)
+        1.414213562373095
+    """
     while True:
         y=f(x)
         if y==x:
             return y
         x=y
 # region  ［run‚ fog］
-def run_func(f,*g,**kwg):  # Pop () ⟶ )(
+def run_func(f,*g,**kwg):
+    """
+    Calls function f with given args and kwargs.
+    Simple function call wrapper. Pop () ⟶ )(
+    
+    Args:
+        f: Function to call
+        *g: Positional arguments to pass to f
+        **kwg: Keyword arguments to pass to f
+        
+    Returns:
+        Result of f(*g, **kwg)
+        
+    Example:
+        >>> run_func(print, "hello", "world")
+        hello world
+    """
     return f(*g,**kwg)
 call = run_func
     
@@ -237,7 +275,22 @@ def scoop(funcⵓscoopˏnew,list_in,init_value=None):
 # endregion
 # region ［seq_map‚ par_map］
 def seq_map(func,*iterables):
-    # Like par_map, this def features non-lazy evaluation! (Unlike python's map function, which does not. Proof: map(print,['hello']) does not print anything, but [*map(print,['hello'])] does.)
+    """
+    Like python's map, but with non-lazy evaluation (returns list immediately).
+    Unlike python's map function which is lazy, this forces evaluation of all results.
+    
+    Args:
+        func: Function to apply to each set of arguments
+        *iterables: One or more iterables to process. func is applied to zip(*iterables)
+        
+    Returns:
+        list: Results of applying func to each set of arguments
+        
+    Example:
+        >>> seq_map(lambda x: x*2, [1,2,3])
+        [2, 4, 6]
+        
+    """
     return list(map(func,*iterables))  # Basically it's exactly like python's built-in map function, except it forces it to evaluate everything inside it before it returns the output.
 
 
@@ -446,7 +499,23 @@ rev=lambda f,n:lambda *𝓍_:seq([f] * n,*𝓍_)  # Pseudo-revolutions (technica
 # endregion
 # region ［pam］
 def pam(funcs,*args,**kwargs):
-    # pam is map spelt backwards. pam maps multiple defs onto a single set of arguments (instead of map, which maps multiple sets of arguments onto one function)
+    """
+    Applies multiple functions to the same arguments. pam is map spelt backwards.
+    Maps multiple functions onto a single set of arguments (instead of map, which maps 
+    multiple sets of arguments onto one function).
+    
+    Args:
+        funcs: Iterable of functions to apply
+        *args: Positional arguments to pass to each function
+        **kwargs: Keyword arguments to pass to each function
+        
+    Returns:
+        list: Results of applying each function to the given arguments
+        
+    Example:
+        >>> pam([len, str.upper, str.lower], "Hello")
+        [5, 'HELLO', 'hello']
+    """
     assert is_iterable(funcs),str(funcs) + " ≣ funcs，is NOT iterable. Don't bother using pam! Pam is meant for mapping multiple functions onto one set of arguments; and from what I can tell you only have one function."
     return [f(*args,**kwargs) for f in funcs]
 # endregion
@@ -1105,11 +1174,14 @@ _fansi_styles = {
     "italic": 3,
     "underlined": 4,
     "blinking": 5,
+    "fastblink": 6,
     "invert": 7,
     "hide": 8,
     "strike": 9,
     "sub": 74,
     "super": 73,
+    "overlined": 53,
+    "thin": 2,
 
     #https://ryantravitz.com/blog/2023-02-18-pull-of-the-undercurl/
     'underline'  : '4:1', #Same as underlined, but supports custom colors! 
@@ -1185,15 +1257,25 @@ def fansi(
         - 'bold': Bold text                                  |  yes      |    yes       |   yes   |
         - 'faded': Faint text                                |  yes      |    yes       |   yes   |
         - 'italic': Italic text                              |  yes      |    yes       |   yes   |
-        - 'underlined': Underlined text                      |  yes      |    yes       |   yes   |
         - 'blinking': Blinking text                          |       no  |    yes       |   yes   |
         - 'invert': Swap foreground and background colors    |  yes      |    yes       |   yes   |
         - 'hide': Hidden text (useful for passwords)         |  yes      |    yes       |   yes   |
         - 'strike': Strikethrough text                       |  yes      |         no   |   yes   |
         - 'super': Superscript text                          |       no  |         no   |   yes   |
         - 'sub': Subscript text                              |       no  |         no   |   yes   |
+        - 'underlined': Underlined text                      |  yes      |    yes       |   yes   |
+        - 'undercurl': Wiggly underline                      |  yes      |         no   |   yes   |
+        - 'underdots': Dotted underline                      |  yes      |         no   |   yes   |
+        - 'underdash': Dashed underline                      |  yes      |         no   |   yes   |
+        - 'underdouble': Double-underline                    |  yes      |         no   |   yes   |
+        - 'overlined': Line over text                        |       no  |         no   |   yes   |
+        - 'fastblink': Blinking text, but faster             |       no  |         no   |   yes   |
+        - 'thin': Opposite of bold                           |       no  |         no   |   yes   |
+
 
     COLORS:
+        Fansi supports the basic 8-colors windows supports, as well as 256-bit color and truecolor
+
         The basic color options for text_color and background_color are:
             - 'black': ANSI color 0
             - 'red': ANSI color 1 
@@ -1204,15 +1286,22 @@ def fansi(
             - 'cyan': ANSI color 6 
             - 'gray'/'grey': ANSI color 7
             - 'white': ANSI color 8
+
         Any other colors will be displayed in either 256-color form, or 24-bit color form if truecolor==True
             If text_color or background_color is given as an integer, it will be interpreted as a 256-color code.
             Any color compatible with rp.as_rgba_float_color will work too, and will be mapped to the nearest 256-color code.
             If truecolor=True, assumes terminal has 24-bit color support. Otherwise, 256 color support will be assumed.
-            See the below example!
+            See the below examples for how to specify colors - you have quite a lot of freedom!
+            Colors like "dark dark green", "light cyan blue", "purple hotpink", "yellow green" and even "randomhue" etc all work
 
     LINK:
         - If link is provided, the text becomes a clickable hyperlink in terminals that support hyperlinks
         - Example: fansi("Click me", "blue", "underlined", link="https://example.com")
+
+    SHORTHAND:
+        - Instead of specifying the style, color, and background color all in different fields you can also specify it in a single string
+          For example, "bold italic blue on black" sets text_color="blue", style="bold italic", and background_color="black"
+          See below examples for more!
 
     EXAMPLES:
 
@@ -2103,7 +2192,7 @@ def string_to_clipboard(string):
     _set_local_clipboard_string(string)
     try:
         try:
-            from rp.Pyperclip import paste,copy
+            from rp.libs.Pyperclip import paste,copy
             assert not running_in_ssh() #This is a patch for Ryan Burgert's desktop computer, which doesn't like using the clipboard over ssh for some reason. 
             copy(string)
         except Exception:
@@ -2158,7 +2247,7 @@ def string_from_clipboard():
     If that doesn't work, it falls back to writing to a global variable called _local_clipboard_string
     """
     try:
-        from rp.Pyperclip import paste,copy
+        from rp.libs.Pyperclip import paste,copy
         assert not running_in_ssh() #This is a patch for Ryan Burgert's desktop computer, which doesn't like using the clipboard over ssh for some reason. 
         return paste()
     except Exception:
@@ -5479,9 +5568,6 @@ def load_image(location,*,use_cache=False):
     Loads an image file or URL, returns a numpy array
     Handles both local file paths and web URLs
     
-    Central function for loading images from files or URLs with automatic format detection.
-    Returns numpy array in HWC format (height, width, channels) with values 0-255 (uint8).
-    
     Parameters:
         - location (str): File path or URL to image
         - use_cache (bool, optional): Enable caching for faster repeated loads. Default False.
@@ -5492,6 +5578,7 @@ def load_image(location,*,use_cache=False):
                          For RGB images: shape (height, width, 3)
                          For RGBA images: shape (height, width, 4)  
                          For grayscale (rare): shape (height, width) or (height, width, 1)
+                            There are some PNG's that do this...
       
     See also:
         - load_images(...): Plural version for batch loading
@@ -5509,7 +5596,7 @@ def load_image(location,*,use_cache=False):
     
     """
     assert isinstance(location,str),'load_image error: location should be a string representing a URL or file path. However, location is not a string. type(location)=='+repr(type(location))+' and location=='+repr(location)
-    
+
     # Clean delegation to helpers (each handles its own caching)
     if is_valid_url(location):
         return load_image_from_url(location, use_cache=use_cache)
@@ -5710,6 +5797,9 @@ def load_image_from_file(file_name, *, use_cache=False):
     if get_file_extension(file_name).upper()=='HEIC':
         #Apple photo format - use dedicated HEIC loader
         return _load_image_heic(file_name)
+
+    if is_video_file(file_name):
+        return load_video(file_name, length=1, show_progress=False)[0]
 
     try               :return _load_image_from_file_via_imageio(file_name)#Imageio will not forget the alpha channel when loading png files
     except Exception  :pass #Don't cry over spilled milk...if imageio didn't work we'll try the other libraries.
@@ -6896,6 +6986,94 @@ def convert_image_file(
 
     
 
+def _convert_files(
+    input_files,
+    get_all_files_func,
+    convert_single_file_func,
+    progress_title,
+    *,
+    strict=True,
+    parallel=True,
+    show_progress=False
+):
+    """
+    Generic function for batch file conversion with progress tracking and error handling.
+    Used by convert_image_files and convert_audio_files.
+    
+    Args:
+        input_files: Input files or directory
+        get_all_files_func: Function to get all files of specific type (e.g., get_all_image_files)
+        convert_single_file_func: Function that converts a single file
+        progress_title: Title for progress bar (e.g., "Converting Images")
+        strict: Error handling mode
+        parallel: Whether to use parallel processing
+        show_progress: Whether to show progress bar
+    
+    Returns:
+        list: Converted file paths
+    """
+    assert is_iterable(input_files), "Input files should be a list of files or a string (a folder path), but got {}.".format(type(input_files))
+    assert strict in {True, False, None}, 'The \'strict\' parameter must be set to either True, False, or None.'
+
+    import functools
+    
+    input_files = _get_files_from_paths(input_files, get_files=get_all_files_func)
+
+    cancelled = False
+    output_files = []
+
+    def _convert_single(input_file):
+        output = None
+
+        nonlocal cancelled
+        if cancelled:
+            if isinstance(cancelled, Exception):
+                raise cancelled
+            else:
+                return None
+
+        try:
+            output = convert_single_file_func(input_file)
+
+        except Exception as e:
+            if strict is True:
+                cancelled = e
+                raise
+            elif strict is None:
+                output = None
+
+        if show_progress and not cancelled:
+            nonlocal number_of_files_converted
+            number_of_files_converted += 1
+            show_time_remaining(number_of_files_converted)
+
+        return output
+
+    try:
+        if show_progress:
+            number_of_files_converted = 0
+            show_time_remaining = eta(len(input_files), title=progress_title)
+            start_time = gtoc()
+
+        mapper = functools.partial(par_map, buffer_limit=None) if parallel else seq_map
+        output_files = mapper(_convert_single, input_files)
+
+        if strict is False:
+            output_files = [output_file for output_file in output_files if output_file is not None]
+
+        if show_progress:
+            end_time = gtoc()
+            elapsed_time = end_time - start_time
+            sys.stdout.write('\033[2K\033[1G')  # erase and go to beginning of line
+            print('Converted {0} files in {1:.3f} seconds'.format(len(output_files), elapsed_time))
+
+    except KeyboardInterrupt:
+        cancelled = True
+        raise
+
+    return output_files
+
+
 def convert_image_files(
     input_files=".",
     new_extension=None, 
@@ -6963,74 +7141,28 @@ def convert_image_files(
 
     """
     
-    assert is_iterable(input_files), "Input files should be a list of files or a string (a folder path), but got {}.".format(type(input_files))
     assert output_folder is None or isinstance(output_folder, str), "Output folder must be a string, but got {}.".format(type(output_folder))
-    assert strict in {True, False, None}, 'The \'strict\' parameter must be set to either True, False, or None.'
 
-    import functools
-    
-    input_files = _get_files_from_paths(input_files, get_files=get_all_image_files)
+    def convert_single_image_file(input_file):
+        return convert_image_file(
+            input_file, new_extension, output_folder,
+            skip_overwrite=skip_overwrite,
+            image_transform=image_transform,
+            name_transform=name_transform,
+            load_image=load_image,
+            save_image=save_image,
+            delete_original=delete_original
+        )
 
-    cancelled = False
-    output_files = []
-
-    def _convert_image(input_file):
-        output = None #I'm not sure why but somehow the controlflow can avoid declaring output in some edge case. Instead of debugging it I'll just fix it here.
-
-        nonlocal cancelled
-        if cancelled:
-            if isinstance(cancelled, Exception):
-                raise cancelled
-            else:
-                return None
-
-        try:
-            output = convert_image_file(input_file, new_extension, output_folder, 
-                                        skip_overwrite = skip_overwrite,
-                                        image_transform = image_transform,
-                                        name_transform = name_transform,
-                                        load_image = load_image, 
-                                        save_image = save_image,
-                                        delete_original = delete_original)
-
-        except Exception as e:
-            if strict is True:
-                cancelled = e
-                raise
-            elif strict is None:
-                output = None
-
-        if show_progress and not cancelled:
-            nonlocal number_of_images_converted
-            number_of_images_converted += 1
-            show_time_remaining(number_of_images_converted)
-
-        return output
-
-    try:
-        if show_progress:
-            number_of_images_converted = 0
-            show_time_remaining = eta(len(input_files), title='Converting Images')
-            start_time = gtoc()
-
-        mapper = functools.partial(par_map, buffer_limit=None) if parallel else seq_map
-        output_files = mapper(_convert_image, input_files)
-
-        if strict is False:
-            output_files = [output_file for output_file in output_files if output_file is not None]
-
-        if show_progress:
-            end_time = gtoc()
-            elapsed_time = end_time - start_time
-            sys.stdout.write('\033[2K\033[1G')  # erase and go to beginning of line
-            print('Converted %i images in %.3f seconds' % (len(output_files), elapsed_time))
-            #TODO: Sometimes it reports it converted 0 images when it actually worked just fine - it's not keeping track of how many conversions it made?
-
-    except KeyboardInterrupt:
-        cancelled = True
-        raise
-
-    return output_files
+    return _convert_files(
+        input_files=input_files,
+        get_all_files_func=get_all_image_files,
+        convert_single_file_func=convert_single_image_file,
+        progress_title='Converting Images',
+        strict=strict,
+        parallel=parallel,
+        show_progress=show_progress
+    )
 
 
 
@@ -7886,6 +8018,77 @@ def convert_audio_file(input_file, output_file, *, skip_existing=False):
         raise FileNotFoundError("Failed to create output file: " + output_file)
 
     return output_file
+
+
+def convert_audio_files(
+    input_files=".",
+    output_format=None,
+    output_folder=None,
+    *,
+    strict=True,
+    parallel=True,
+    show_progress=False,
+    skip_existing=False
+):
+    """
+    Convert multiple audio files to a specified format using FFmpeg.
+    
+    Args:
+        input_files (list or str): Paths to the audio files to be converted, or a folder containing audio files.
+                                   Defaults to '.', aka all audio files in the current working directory.
+        output_format (str, optional): Desired output format for the files (e.g., 'mp3', 'wav', 'ogg', 'mp4').
+                                      If None, the format is not changed.
+        output_folder (str, optional): Path to the folder where the converted audio files will be saved.
+                                      If not provided, files are saved in the same folder as the input files.
+        strict (bool, optional): Controls what happens when an audio file fails to convert.
+                                If True (default), an error is raised.
+                                If False, files that fail to convert are skipped.
+                                If None, positions of files that fail to convert are filled with None in the output.
+        parallel (bool, optional): If True, runs multithreaded. Otherwise computes in main thread.
+        show_progress (bool, optional): If True, shows a progress bar. Defaults to False.
+        skip_existing (bool, optional): If True, won't overwrite existing files. Defaults to False.
+    
+    Returns:
+        list: Paths to the converted audio files.
+    
+    Raises:
+        RuntimeError: If FFmpeg encounters an error or is not installed (in strict mode).
+        FileNotFoundError: If input files do not exist or output files could not be created (in strict mode).
+    
+    Notes:
+        - Requires FFmpeg to be installed and available in PATH.
+        - Automatically creates unique filenames if output paths already exist.
+        - Supports wav, mp3, ogg, mp4 formats.
+    
+    EXAMPLE:
+        >>> convert_audio_files(['audio1.mp4', 'audio2.mp4'], 'mp3')
+        ans = ['audio1.mp3', 'audio2.mp3']
+    """
+    assert output_folder is None or isinstance(output_folder, str), "Output folder must be a string, but got {}.".format(type(output_folder))
+
+    def convert_single_audio_file(input_file):
+        output = convert_audio_file(input_file, output_format or input_file, skip_existing=skip_existing)
+        
+        if output_folder:
+            import os
+            basename = os.path.basename(output)
+            final_output = os.path.join(output_folder, basename)
+            if final_output != output:
+                make_parent_directory(final_output)
+                os.rename(output, final_output)
+                output = final_output
+        
+        return output
+
+    return _convert_files(
+        input_files=input_files,
+        get_all_files_func=get_all_audio_files,
+        convert_single_file_func=convert_single_audio_file,
+        progress_title='Converting Audio Files',
+        strict=strict,
+        parallel=parallel,
+        show_progress=show_progress
+    )
 
 
 # endregionx
@@ -9437,6 +9640,11 @@ def max_valued_elements(l,key=None):
     return gather(l,max_valued_indices(l,key=key))
 
 def max_valued_index(l,key=None):
+    """
+    Returns the index of the maximum value in a list or key of maximum value in dict.
+    EXAMPLE:
+        >>> max_valued_index([1, 5, 3, 2]) == 1
+    """
     if isinstance(l,dict):
         #Let this function work with dictionaries, such that max_valued_index({'a':1,'b':3,'c':2})=='b'
         inverted_dict=invert_dict(l)
@@ -9444,6 +9652,11 @@ def max_valued_index(l,key=None):
     return list(l).index(max(l))  # Gets the index of the maximum value in list 'l'. This is a useful def by rCode standards because it references 'l' twice.
 
 def min_valued_index(l,key=None):
+    """
+    Returns the index of the minimum value in a list or key of minimum value in dict.
+    EXAMPLE:
+        >>> min_valued_index([1, 5, 3, 2]) == 0
+    """
     if isinstance(l,dict):
         #Let this function work with dictionaries, such that max_valued_index({'a':1,'b':3,'c':2})=='b'
         inverted_dict=invert_dict(l)
@@ -9453,8 +9666,18 @@ def min_valued_index(l,key=None):
 # endregion
 # region  Blend≣Lerp/sign: ［blend，iblend，lerp，interp，linterp］
 def blend(𝓍,𝓎,α):  # Also known as 'lerp'
+    """
+    Linear interpolation between two values. Also known as 'lerp'.
+    EXAMPLE:
+        >>> blend(0, 10, 0.5) == 5.0
+    """
     return (1 - α) * 𝓍 + α * 𝓎  # More α --> More 𝓎 ⋀ Less 𝓍
 def iblend(z,𝓍,𝓎):  # iblend≣inverse blend. Solves for α， given 𝓏﹦blend(𝓍,𝓎,α)
+    """
+    Inverse blend. Solves for α given z = blend(x, y, α).
+    EXAMPLE:
+        >>> iblend(5, 0, 10) == 0.5
+    """
     z=z-𝓍
     z=z/(𝓎-𝓍)
     return z
@@ -10517,6 +10740,12 @@ def get_current_function_name(frames_back=0):
     return get_current_function(frames_back+1).__name__
 
 def gather_args_recursive_call(*args, frames_back=0, **kwargs):
+    """
+    Recursively calls the current function with gathered arguments from local scope.
+    EXAMPLE:
+        >>> def factorial(n): 
+        ...     return 1 if n <= 1 else n * gather_args_recursive_call(n-1)
+    """
     frames_back+=1
     function=get_current_function(frames_back)
     return gather_args_call(function,*args,frames_back=frames_back+1,**kwargs)
@@ -19446,6 +19675,7 @@ _default_pyin_settings=dict(
 
 _default_pyin_settings.update(dict(
     #Looks really cool. Gonna make that default.
+    _current_ui_style_name='anna',
     code_ui_max_brightness=.75,
     ui_hue_shift=330,
     ui_min_brightness=.1,
@@ -19453,7 +19683,7 @@ _default_pyin_settings.update(dict(
     indent_guides_mode='Propagate',
     show_whitespace="Lead+Trail",
     highlight_cursor_column=True,
-    highlight_cursor_row=True,
+    highlight_cursor_line=True,
 ))
 
 _globa_pyin=[None]
@@ -20326,6 +20556,8 @@ def is_sound_file(file_path):
     
     Example filetypes:
         mp3, ogg, wav
+
+    Alias: is_audio_file
         
     See Also:
         - is_image_file
@@ -20334,6 +20566,8 @@ def is_sound_file(file_path):
         - is_utf8_file
     """
     return _guess_mimetype(file_path)=='audio'
+
+is_audio_file = is_sound_file
 
 def is_utf8_file(path):
     """
@@ -24129,13 +24363,13 @@ def pseudo_terminal(
                         _view_interactive_json(value)
                     elif user_message=='?i':
                         fansi_print("?i --> PyPI Package Inspection:","blue",'bold')
-                        import rp.pypi_inspection as pi
+                        import rp.libs.pypi_inspection as pi
                         pi.display_module_pypi_info(get_ans())
                     elif user_message.endswith('?i') and not '\n' in user_message:
                         user_message=user_message[:-2]
                         fansi_print("?i --> PyPI Package Inspection:","blue",'bold')
                         value=eval(user_message,scope())
-                        import rp.pypi_inspection as pi
+                        import rp.libs.pypi_inspection as pi
                         pi.display_module_pypi_info(value)
 
                     elif user_message=='?e':
@@ -25657,11 +25891,18 @@ def pseudo_terminal(
                                 user_message='OPEN .'
                             if user_message=='OPENA':
                                 fansi_print("OPENA --> OPEN ans --> OPENs the path or URL specified by ans",'blue','bold')
-                                path=str(get_ans())
-                                if not path_exists(path) and not is_valid_url(path):
-                                    fansi_print("    (Error: path %s does not exist)"%repr(path[:1000]),'red','bold')
-                                    continue
-                                user_message='OPEN '+path
+                                if isinstance(get_ans(),str):
+                                    if '\n' in get_ans():
+                                        set_ans(get_ans().splitlines())
+                                if isinstance(get_ans(),str):
+                                    path=str(get_ans())
+                                    if not path_exists(path) and not is_valid_url(path):
+                                        fansi_print("    (Error: path %s does not exist)"%repr(path[:1000]),'red','bold')
+                                        continue
+                                    user_message='OPEN '+path
+                                else:
+                                    user_message = "for file in ans: squelch_call(open_file_with_default_application, file)"
+
                             if user_message == 'OPEN':
                                 print("Please select the file or folder you would like to open")
                                 file_path=input_select_path()
@@ -33501,6 +33742,19 @@ def get_all_image_files(*args,**kwargs):
     )
     return list(filter(is_image_file,file_paths))
 
+def get_all_audio_files(*args,**kwargs):
+    """ Like get_all_files, but only returns audio files. This function is just sugar.  """
+    file_paths = get_all_paths(
+        *args,
+        **{
+            "include_folders": False,
+            "include_files": True,
+            "sort_by" : "number",
+            **kwargs,
+        }
+    )
+    return list(filter(is_sound_file,file_paths))
+
 def get_all_runnable_python_files(
     folder=".",
     *,
@@ -34480,11 +34734,11 @@ def least_squares_regression_line_coeffs(X, Y=None, include_correlation=False):
         return m, b
     
 def magnitude(x,**kwargs):
-    #Get the total magnitude
+    """ Get the total magnitude """
     return np.sqrt(np.sum(np.abs(x)**2,**kwargs))
 
 def normalized(x,axis=None):
-    #Normalize the vector/matrix/etc to have total magnitude 1
+    """ Normalize the vector/matrix/etc to have total magnitude 1 """
     x=np.asarray(x)
     return x/magnitude(x,axis=axis,keepdims=True)
 
@@ -34497,19 +34751,23 @@ def _get_javascript_runtime():
         _javascript_runtime=js2py.EvalJs()
     return _javascript_runtime
 def javascript(code):
-    #I created this function to reuse code that I wrote in javascript.
-    #Evaluate code written in javascript and return it.
+    """
+    I created this function to reuse code that I wrote in javascript.
+    Evaluate code written in javascript and return it.
+    """
     assert isinstance(code,str)
     return _get_javascript_runtime().eval(code)
 js=javascript
 def javascript_console():
-    #Enter the javascript console, which
+    """ Enter the javascript console, which lets you use JS in python interactively """
     return _get_javascript_runtime().console()
 
 @memoized
 def _get_byte_to_binary_grayscale_image_floyd_steinburg_dithering_function():
-    #Code Originally from http://study.marearts.com/2018/10/dithering-python-opencv-source-code.html 
-    #I optimized it to use numba, which yielded a speedup of over 1000
+    """
+    Code Originally from http://study.marearts.com/2018/10/dithering-python-opencv-source-code.html 
+    I optimized it to use numba, which yielded a speedup of over 1000
+    """
     
     pip_import('numba')#We're going to need numba to speed things up, or else this isn't practical
     import numba    
@@ -35702,6 +35960,12 @@ def byte_color_to_hex_color(byte_color:tuple, hashtag=True):
 
 
 def byte_color_to_float_color(byte_color):
+    """
+    Converts byte color (0-255) to float color (0.0-1.0)
+    EXAMPLE:
+        >>> byte_color_to_float_color((0, 255, 127)) == (0.0, 1.0, 0.498...)
+        >>> byte_color_to_float_color((255, 0, 0))   == (1.0, 0.0, 0.0)
+    """
     return tuple(x/255 for x in byte_color)
 
 def float_color_to_byte_color(float_color):
@@ -35929,9 +36193,22 @@ def color_name_to_float_color(color_name: str):
     raise ValueError("rp.color_name_to_float_color: Unrecognized color name in either RP's color system or CSS3: "+repr(color_name))
 
 def color_name_to_byte_color(color_name):
+    """
+    Given a color name, this function returns an RGB byte color (0-255 range)
+    EXAMPLE:
+        >>> color_name_to_byte_color('green')          == (0, 255, 0)
+        >>> color_name_to_byte_color('light green')    == (128, 255, 128)
+    """
     return float_color_to_byte_color(color_name_to_float_color(color_name))
 
 def color_name_to_hex_color(color_name):
+    """
+    Given a color name, this function returns a hex color string
+    EXAMPLE:
+        >>> color_name_to_hex_color('green')      == '#00FF00'
+        >>> color_name_to_hex_color('dark green') == '#008000'
+        >>> color_name_to_hex_color('yellow')     == '#FFFF00'
+    """
     return float_color_to_hex_color(color_name_to_float_color(color_name))
 
 def get_color_hue(color):
@@ -36249,6 +36526,17 @@ def running_in_ipython():
 running_in_jupyter_notebook=running_in_ipython
 
 class JupyterImageChannel:
+    """
+    A class for displaying and updating images dynamically in Jupyter notebooks.
+    
+    Creates an image display channel that can be updated in-place without creating
+    new output cells. Useful for animations, live plots, or iterative visualizations.
+    
+    Example:
+        >>> channel = JupyterImageChannel()
+        >>> channel.display()  # Shows initial placeholder
+        >>> channel.update(my_image)  # Updates same display area
+    """
     def __init__(self, name=None):
         assert rp.running_in_jupyter_notebook()
         
@@ -38014,6 +38302,25 @@ def _as_video_quality(video_quality:str) -> int:
     return video_quality
 
 class VideoWriterMP4:
+    """
+    A class for writing MP4 videos frame by frame using ffmpeg.
+    
+    Creates MP4 videos by writing individual frames sequentially. Handles automatic
+    dimension adjustment to ensure compatibility with libx264 codec requirements.
+    
+    Args:
+        path: Output file path (defaults to auto-generated, adds .mp4 if needed)
+        framerate: Video framerate in fps (default: 60)  
+        video_bitrate: Quality setting - 'low'/'medium'/'high' or int (default: 'medium')
+        height/width: Force specific dimensions (default: auto from first frame)
+        show_progress: Show ffmpeg progress output (default: True)
+        
+    Example:
+        >>> writer = VideoWriterMP4('output.mp4', framerate=30)
+        >>> writer.write_frame(image1)
+        >>> writer.write_frame(image2) 
+        >>> writer.finish()
+    """
     #Todo: If this ever gets fucky, try https://github.com/imageio/imageio-ffmpeg - it looks pretty good!
 
     def __init__(self, path=None, framerate=60, video_bitrate='medium', height=None, width=None, show_progress=True):
@@ -38771,12 +39078,28 @@ def concat_mp4_files(*input_files, output_file=None):
 
 
 def directory_exists(path):
+    """
+    Checks if a directory exists at the given path.
+    EXAMPLE:
+        >>> directory_exists('/tmp') == True
+        >>> directory_exists('/nonexistent') == False
+    Aliases: folder_exists, is_a_folder, is_a_directory
+    """
     if not isinstance(path,str): return False
     return os.path.isdir(path)
 folder_exists=directory_exists
 is_a_folder=is_a_directory=directory_exists#Synonyms, you might want one more than another depending o nthe context. Sometimes we might want to know if it exists, and others we might allready know the path exists and want to see what kind of path it is. It's just to make it more readable, that's all. Less need for comments like these lol.
 
 def is_empty_folder(path:str):
+    """
+    Checks if a folder exists and is empty (contains no files or folders).
+    Returns False if directory doesn't exist.
+    EXAMPLE:
+        >>> is_empty_folder('/tmp/empty_dir')     == True
+        >>> is_empty_folder('/tmp/dir_with_files') == False
+        >>> is_empty_folder('/nonexistent')       == False
+    Aliases: is_empty_directory
+    """
     if not isinstance(path,str): return False
     return is_a_folder(path) and list(get_all_paths(path,include_folders=True,include_files=True,recursive=False))==[]
 is_empty_directory=is_empty_folder
@@ -39081,7 +39404,12 @@ def delete_folder(path,*,recursive=True,permanent=True):
         send2trash.send2trash(path)  
 
 def delete_symlink(path):
-    assert is_symlink(path)
+    """
+    Deletes a symbolic link. Raises ValueError if path is not a symlink.
+    EXAMPLE:
+        >>> delete_symlink('/tmp/mylink')  # Removes symlink only, not target
+    """
+    if not is_symlink(path): raise ValueError("Not a symlink: " + str(path))
     delete_file(path)
 
 delete_directory=delete_folder
@@ -43201,7 +43529,7 @@ def get_english_synonyms(word):
     except Exception:
         return get_english_synonyms_via_nltk(word)
 
-from .tracetraptest import * #A few experimental debugging features. These things mostly need to be renamed.
+from .libs.tracetraptest import * #A few experimental debugging features. These things mostly need to be renamed.
 
 @memoized
 def fibonacci(n):
@@ -48097,6 +48425,11 @@ def file_to_bytes(path: str, use_cache=False):
     return data
 
 def file_to_base64(path: str, use_cache=False):
+    """
+    Reads a file and encodes its contents to base64 string.
+    EXAMPLE:
+        >>> file_to_base64('/tmp/test.txt')  # Returns base64 of file contents
+    """
     return bytes_to_base64(file_to_bytes(path, use_cache))
 
 _file_to_object_cache={}
@@ -48170,21 +48503,47 @@ def file_to_object(path:str, use_cache=False):
     return output
 
 def object_to_file(object,path:str):
+    """
+    Saves an object to a file using RP's object serialization format (.rpo).
+    Uses compression and handles any Python object that can be pickled.
+    EXAMPLE:
+        >>> object_to_file([1, 2, 3], '/tmp/test.rpo')
+    """
     return bytes_to_file(object_to_bytes(object),path)
 
 def bytes_to_base64(bytestring: bytes) -> str:
+    """
+    Encodes bytes to base64 string.
+    EXAMPLE:
+        >>> bytes_to_base64(b'hello') == 'aGVsbG8='
+    """
     import base64
     return base64.b64encode(bytestring).decode('utf-8')
 
 def base64_to_bytes(base64_string: str) -> bytes:
+    """
+    Decodes base64 string to bytes.
+    EXAMPLE:
+        >>> base64_to_bytes('aGVsbG8=') == b'hello'
+    """
     import base64
     return base64.b64decode(base64_string)
     
 def bytes_to_base16(bytestring: bytes) -> str:
+    """
+    Encodes bytes to base16 (hex) string.
+    EXAMPLE:
+        >>> bytes_to_base16(b'hello') == '68656c6c6f'
+    """
     import binascii
     return binascii.hexlify(bytestring).decode('utf-8')
 
 def base16_to_bytes(base16_string: str) -> bytes:
+    """
+    Decodes base16 (hex) string to bytes.
+    EXAMPLE:
+        >>> base16_to_bytes('68656c6c6f') == b'hello'
+    """
     import binascii
     return binascii.unhexlify(base16_string)
 
