@@ -44639,7 +44639,8 @@ def clean_imports_via_unimport(code: str) -> str:
 
 
 _ryan_tmux_conf=r'''
-#Ryan Burgert's Tmux config
+#Ryan Burgert's Tmux Config
+
 #Main changes:
 #   * Note: These shortcuts are all preceded by Control+B
 #   - You can use the mouse to move panes around
@@ -44954,6 +44955,17 @@ def _ensure_snap_installed():
         windows=None,
     )
 
+def _ensure_vscode_installed():
+    """
+    Ensure VS Code CLI is available for launching VS Code Server.
+    The CLI provides the `code serve-web` command needed to run the local web server.
+    """
+    _ensure_installed(
+        'code',
+        mac='brew install --cask visual-studio-code',
+        linux='curl -L "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64" > /tmp/vscode.deb && apt install /tmp/vscode.deb --yes',
+        windows='winget install --id=Microsoft.VisualStudioCode',
+    )
 
 def _ensure_nvtop_installed():
     _ensure_installed(
@@ -45058,6 +45070,18 @@ def _ensure_ollama_server_running():
             " >> OLLAMA SERVER STARTED IN TMUX SESSION: %s << "%repr(session_name),
             "italic bold black black on green cyan",
         )
+
+def _launch_vscode_web_server(port=None):
+    """
+    Launch VS Code as a local web server accessible in your browser.
+    
+    Args:
+        port: Port to use. If None, finds next available port starting from 51235.
+    """
+    _ensure_vscode_installed()
+    if port is None:
+        port = get_next_free_port(51235)
+    _run_sys_command(f'code serve-web --host 0.0.0.0 --without-connection-token --port {port} --accept-server-license-terms --disable-telemetry')
 
  
 #THIS FUNCTION INSTALLS IT FINE! BUT I DIDN'T FINISH MAKING IT USEFUL YET. UNCOMMENT ONCE I HAVE WRAPPERS FOR IT.
