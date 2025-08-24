@@ -44963,7 +44963,7 @@ def _ensure_vscode_installed():
     _ensure_installed(
         'code',
         mac='brew install --cask visual-studio-code',
-        linux='curl -L "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64" > /tmp/vscode.deb && apt install /tmp/vscode.deb --yes',
+        linux='curl -L "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64" > /tmp/vscode.deb && sudo apt install /tmp/vscode.deb --yes',
         windows='winget install --id=Microsoft.VisualStudioCode',
     )
 
