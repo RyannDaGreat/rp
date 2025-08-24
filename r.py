@@ -45081,7 +45081,7 @@ def _launch_vscode_web_server(port=None):
     _ensure_vscode_installed()
     if port is None:
         port = get_next_free_port(51235)
-    _run_sys_command(f'code serve-web --host 0.0.0.0 --without-connection-token --port {port} --accept-server-license-terms --disable-telemetry')
+    _run_sys_command('code serve-web --host 0.0.0.0 --without-connection-token --port '+str(port)+' --accept-server-license-terms --disable-telemetry')
 
  
 #THIS FUNCTION INSTALLS IT FINE! BUT I DIDN'T FINISH MAKING IT USEFUL YET. UNCOMMENT ONCE I HAVE WRAPPERS FOR IT.
