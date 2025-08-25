@@ -19687,7 +19687,7 @@ _default_pyin_settings=dict(
 
 _default_pyin_settings.update(dict(
     #Looks really cool. Gonna make that default.
-    _current_ui_style_name='anna',
+    # _current_ui_style_name='anna',
     code_ui_max_brightness=.75,
     ui_hue_shift=330,
     ui_min_brightness=.1,
