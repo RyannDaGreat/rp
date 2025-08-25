@@ -32,6 +32,9 @@ from rp.prompt_toolkit.keys                        import Keys,Key
 from rp.prompt_toolkit.buffer                      import Buffer
 from rp.prompt_toolkit.key_binding.input_processor import KeyPressEvent
 
+import rp.rp_ptpython.r_iterm_comm as ric
+import rp.rp_ptpython.r_iterm_comm as r_iterm_comm
+
 from rp import *
 __all__ = (
     'load_python_bindings',
