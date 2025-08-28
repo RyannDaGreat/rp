@@ -1729,6 +1729,10 @@ def fansi_print(
     )
 
 def fansi_printed(x, *args, **kwargs):
+    """
+    Print styled text and return the original text unchanged.
+    See `fansi_print` for parameter details.
+    """
     fansi_print(x, *args, **kwargs)
     return x
 
@@ -8172,12 +8176,23 @@ def add_ipython_kernel(kernel_name: str = None, display_name: str = None):
     print("Successfully added Python " + display_name + " as a Jupyter kernel.")
 
 
-def display_video(video,framerate=30,*,loop=False):
+def display_video(video, framerate=30, *, loop=False):
     """
     Video can either be a string, or a video (aka a 4d tensor or iterable of images)
     Example: display_video('https://www.youtube.com/watch?v=jvipPYFebWc')
-    TODO: Implement loop for jupyter
+
+    Works on desktop, Jupyter, and Marimo
+
+    For Marimo it returns a mo.video object - so it must be put at the end of a cell
+
+    TODO: Implement loop arg properly for jupyter, right now it always loops
     """
+
+    if isinstance(video,str):
+        if not is_valid_url(video):
+            if not file_exists(video):
+                raise FileNotFoundError(video)
+            assert is_video_file(video),repr(video)+' is not a video file'
 
     def loop_wrapper(video):
         if hasattr(video, '__getitem__') and hasattr(video, '__len__'):
@@ -8194,18 +8209,16 @@ def display_video(video,framerate=30,*,loop=False):
             while True:
                 yield from seen_frames
 
-
-
     if running_in_jupyter_notebook():
         display_video_in_notebook(video,framerate=framerate)
+
+    elif running_in_marimo_notebook():
+        return _display_video_in_marimo(video, loop=loop, framerate=framerate)
+
     else:
         #Todo: Add keyboard controls to play, pause, rewind, restart, next frame, prev frame, go to frame, adjust framerate
         #It would be much like display_image_slideshow (maybe even add functionality to display_image_slideshow and use that?)
         if isinstance(video,str):
-            if not is_valid_url(video):
-                if not file_exists(video):
-                    raise FileNotFoundError(video)
-                assert is_video_file(video),repr(video)+' is not a video file'
             video=load_video_stream(video)
 
         if loop:
@@ -8223,6 +8236,21 @@ def display_video(video,framerate=30,*,loop=False):
             except KeyboardInterrupt:
                 fansi_print("rp.display_video: Received KeyboardInterrupt - stopping playback", 'cyan', 'bold')
                 break
+
+def _display_video_in_marimo(video, *, framerate, loop):
+    """
+    Returns an object! You must put this at the end of the cell
+    """
+    import marimo as mo
+
+    if isinstance(video, str):
+        #If it's a path just display that path...
+        content = video
+    else:
+        #Else we need to turn that video into bytes to display it...
+        content = encode_video_to_bytes(video, framerate=framerate)
+
+    return mo.video(content, loop=loop, autoplay=True)
 
 # def display_video_in_notebook(video,framerate=30):
 #     """
@@ -9674,6 +9702,7 @@ def min_valued_index(l,key=None):
 
 # endregion
 # region  Blend≣Lerp/sign: ［blend，iblend，lerp，interp，linterp］
+
 def blend(𝓍,𝓎,α):  # Also known as 'lerp'
     """
     Linear interpolation between two values. Also known as 'lerp'.
@@ -9681,6 +9710,7 @@ def blend(𝓍,𝓎,α):  # Also known as 'lerp'
         >>> blend(0, 10, 0.5) == 5.0
     """
     return (1 - α) * 𝓍 + α * 𝓎  # More α --> More 𝓎 ⋀ Less 𝓍
+
 def iblend(z,𝓍,𝓎):  # iblend≣inverse blend. Solves for α， given 𝓏﹦blend(𝓍,𝓎,α)
     """
     Inverse blend. Solves for α given z = blend(x, y, α).
@@ -9695,6 +9725,7 @@ def iblend(z,𝓍,𝓎):  # iblend≣inverse blend. Solves for α， given 𝓏�
     # z-=𝓍
     # z/=𝓎-𝓍
     # return z
+
 def interp(x,x0,x1,y0,y1):  # 2 point interpolation
     return (x - x0) / (x1 - x0) * (y1 - y0) + y0  # https://www.desmos.com/calculator/bqpv7tfvpy
 
@@ -28040,7 +28071,32 @@ def cv_closest_contour(contours,x,y):
 
 def cv_draw_contours(image,contours,color='white',width=1,*,fill=False,antialias=True,copy=True):
     """
-    TODO: Important: This must somehow preserve whether the contour is closed or not??
+    Draw multiple contours on an image using OpenCV.
+    
+    Args:
+        image: Input image (numpy array, PIL image, or torch tensor)
+        contours: List of contours to draw. Each contour can be:
+            - numpy array of shape (N, 2) or (N, 1, 2) for (x,y) coordinates
+            - List of (x,y) tuples
+        color (str|tuple, default='white'): Color for drawing contours.
+            Accepts color names ('red', 'blue', etc.) or RGB tuples
+        width (int, default=1): Line thickness for contour outlines
+        fill (bool, default=False): Whether to fill contours with solid color
+        antialias (bool, default=True): Enable antialiasing for smoother lines
+        copy (bool, default=True): Return a copy of the image vs modify in place
+        
+    Returns:
+        numpy array: Image with drawn contours
+        
+    Note:
+        TODO: This function should preserve whether each contour is closed or not.
+        Currently treats all contours as closed polygons.
+        
+    Examples:
+        >>> image = load_image('path/to/image.jpg')
+        >>> contours = [[(10,10), (50,10), (50,50), (10,50)]]
+        >>> result = cv_draw_contours(image, contours, color='red', width=2)
+        >>> result = cv_draw_contours(image, contours, fill=True, color='blue')
     """
     color=as_rgb_float_color(color)
     color=float_color_to_byte_color(color)
@@ -28052,8 +28108,34 @@ def cv_draw_contours(image,contours,color='white',width=1,*,fill=False,antialias
     if fill:cv2.fillPoly(image,contours,color)
     return image
 
-def cv_draw_contour(image,contour,*args,**kwargs):
-    return cv_draw_contours(image,[contour],*args,**kwargs)
+def cv_draw_contour(image,contour,color='white',width=1,*,fill=False,antialias=True,copy=True):
+    """
+    Draw a single contour on an image using OpenCV.
+    
+    This is a convenience function that wraps cv_draw_contours for drawing a single contour.
+    
+    Args:
+        image: Input image (numpy array, PIL image, or torch tensor)
+        contour: Single contour to draw. Can be:
+            - numpy array of shape (N, 2) or (N, 1, 2) for (x,y) coordinates  
+            - List of (x,y) tuples
+        color (str|tuple, default='white'): Color for drawing the contour.
+            Accepts color names ('red', 'blue', etc.) or RGB tuples
+        width (int, default=1): Line thickness for contour outline
+        fill (bool, default=False): Whether to fill the contour with solid color
+        antialias (bool, default=True): Enable antialiasing for smoother lines
+        copy (bool, default=True): Return a copy of the image vs modify in place
+        
+    Returns:
+        numpy array: Image with drawn contour
+        
+    Examples:
+        >>> image = load_image('path/to/image.jpg')
+        >>> contour = [(10,10), (50,10), (50,50), (10,50)]
+        >>> result = cv_draw_contour(image, contour, color='red', width=3)
+        >>> result = cv_draw_contour(image, contour, fill=True, color='green')
+    """
+    return gather_args_call(cv_draw_contours, contours=[contour])
 
 def cv_draw_rectangle(image,
                       *,
@@ -28105,16 +28187,6 @@ def cv_contour_area(contour):#,closed=False):
     cv2=pip_import('cv2')
     contour=as_cv_contour(contour)
     return cv2.contourArea(contour)
-
-# def cv_draw_circle(image,x,y,radius=5,color=(255,255,255),*,antialias=True,copy=True):
-#     if is_binary_image(image):image=rp.as_rgb_image(image)
-#     image = as_byte_image(image)
-#     x=int(x)
-#     y=int(y)
-#     cv2=pip_import('cv2')
-#     image,kwargs=_cv_helper(image=image,copy=copy,antialias=antialias)
-#     cv2.circle(image,(x,y),radius,color,-1,**kwargs)
-#     return image
 
 def cv_draw_circle(
     image,
@@ -28181,12 +28253,15 @@ def cv_draw_circle(
         )
         return image
     
-    color=as_rgb_float_color(color)
-    color=float_color_to_byte_color(color)
-    
     if is_binary_image(image):
         image = rp.as_rgb_image(image, copy=copy)
     image = as_byte_image(image, copy=copy)
+
+    if is_rgba_image(image):
+        color=as_rgba_float_color(color)
+    else:
+        assert is_rgb_image(image), 'Internal assertion'
+    color=float_color_to_byte_color(color)
 
     radius = int(radius)        
     x      = int(x)
@@ -31999,37 +32074,63 @@ _ryan_fonts = {
 }
 
 @memoized
-def _get_font_path(font, strict=False):
-    if isinstance(font, str):
+def _get_font_paths(font, strict=False):
+    assert isinstance(font, str)
 
-        if font.startswith("G:"):
-            # "G:Quicksand" or "G:Zilla Slab" from google fonts
-            font = download_google_font(font[len("G:") :])
-        elif font in _ryan_fonts:
-            # Starts with R: by convention
-            # "R:Futura" from _ryan_fonts
-            font = _ryan_fonts[font]
+    #Likely will be overridden
+    fonts = [font]
 
-        if is_valid_url(font):
-            # A proper URL
-            font = download_font(font)
-        elif not has_file_extension(font):
-            matching_paths = [
-                path
-                for path in get_system_fonts()
-                if get_file_name(path, include_file_extension=False) == font
-            ]
-            if matching_paths:
-                # If we have any system fonts that match this name, return their path
-                # For example, font="Futura" --> matching_paths=['/System/Library/Fonts/Supplemental/Futura.ttc']
-                font = matching_paths[0]
-            elif strict:
-                raise FileNotFoundError("Cannot get font path: " + repr(font))
-            else:
-                # Just return the font as is. It's actually ok if its not a path, as long as it's a system font, like "Arial" etc. Often this is ok.
-                pass
+    if font.startswith("G:"):
+        # "G:Quicksand" or "G:Zilla Slab" from google fonts
+        fonts = [download_google_font(font[len("G:") :])]
+    elif font in _ryan_fonts:
+        # Starts with R: by convention
+        # "R:Futura" from _ryan_fonts
+        fonts = [_ryan_fonts[font]]
 
-        return font
+    if is_valid_url(font):
+        # A proper URL
+        fonts = [download_font(font)]
+    elif not has_file_extension(font):
+        matching_paths = [
+            path
+            for path in get_system_fonts()
+            if get_file_name(path, include_file_extension=False) == font
+        ]
+        if matching_paths:
+            # If we have any system fonts that match this name, return their path
+            # For example, font="Futura" --> matching_paths=['/System/Library/Fonts/Supplemental/Futura.ttc']
+            fonts = matching_paths
+        elif strict:
+            error_message = "Cannot find font path: " + repr(font)
+            raise FileNotFoundError(error_message)
+        else:
+            # Just return the font as is. It's actually ok if its not a path, as long as it's a system font, like "Arial" etc. Often this is ok.
+            pass
+
+    return fonts
+
+
+
+@memoized
+def _get_font_path(font, strict=False, extensions=None):
+    fonts = _get_font_paths(font, strict=strict)
+
+    if extensions:
+        fonts = [x for x in fonts if get_file_extension(x) in extensions]
+
+    if not fonts:
+        if extensions:
+            error_message = "Cannot find font path with any of extensions="+repr(extensions)+": " + repr(font)
+        else:
+            error_message = "Cannot find font path: " + repr(font)
+        raise FileNotFoundError(error_message)
+
+    font = fonts[0]
+
+    return font
+
+
 
 @memoized
 def get_font_supported_chars(font):
@@ -32197,7 +32298,8 @@ def skia_text_to_image(
     align=None,
     color=None,
     background_color=None,
-    fallback_fonts=None
+    character_spacing=0,
+    word_spacing=0
 ):
     """
     Renders multiline text via python-skia - a very fast graphics library that powers Google Chrome.
@@ -32212,6 +32314,9 @@ def skia_text_to_image(
         text (str): The text content to render
         size (int, optional): Font size in pixels (approximate). Defaults to 64.
         font (str, optional): Primary font name. Defaults to "Futura".
+            NOTE: Right now, custom font paths are not supported! It must be a system font family
+            I tried to allow custom font paths, but couldn't find a solution that allowed emoji
+            fallbacks + a custom font path in under an hour of attempts. TODO for the future!
         width (int, optional): Output width in pixels. If None, calculated from text.
         style (str or set, optional): Text styling - can include alignment (left/right/center),
             formatting (bold/italic), and decorations (underline/strike/undercurl/underdash/underdots).
@@ -32220,7 +32325,8 @@ def skia_text_to_image(
         align (str, optional): Text alignment override (left/right/center). Overrides style if specified.
         color (str, optional): Text color. Defaults to 'white'. Overrides style if specified.
         background_color (str, optional): Background color. Defaults to 'transparent'. Overrides style if specified.
-        fallback_fonts (list, optional): List of fallback font names. If None, uses default emoji fonts.
+        character_spacing (int, optional): Additional spacing between characters in pixels. Defaults to 0.
+        word_spacing (int, optional): Additional spacing between words in pixels. Defaults to 0.
     
     Returns:
         numpy.ndarray: RGBA image array with rendered text
@@ -32341,6 +32447,7 @@ def skia_text_to_image(
     assert style <= all_style_options
 
     #Default Options
+    fallback_fonts = None #Not mature enough to expose as an arg yet # fallback_fonts (list, optional): List of fallback font names. If None, uses default emoji fonts.
     if color            is None: color            = 'white'
     if background_color is None: background_color = 'transparent'
     if align            is None: align            = 'left'
@@ -32350,8 +32457,8 @@ def skia_text_to_image(
     color            = float_color_to_byte_color(as_rgba_float_color(color           ))
     background_color = float_color_to_byte_color(as_rgba_float_color(background_color))
 
-    # Load/Download the font, such as Helvetica, a font URL, a path to a font, or shorthand like R:Futura etc
-    font = _get_font_path(font)
+    # # Load/Download the font, such as Helvetica, a font URL, a path to a font, or shorthand like R:Futura etc
+    # font = _get_font_path(font)
 
     # 1. SETUP PARAGRAPH AND FONT STYLES
     # The FontCollection is the key to finding multiple system fonts.
@@ -32364,6 +32471,11 @@ def skia_text_to_image(
     # Set font size and color
     t_style.setFontSize(size)
     t_style.setColor(skia.Color(*color))
+
+
+    # Spacing on the text style (pixels)
+    t_style.setLetterSpacing(character_spacing)   # float, px
+    t_style.setWordSpacing(word_spacing)          # float, px
 
     # Set alignment from argument
     if   align=='left'  : p_style.setTextAlign(skia.textlayout.TextAlign.kLeft  )
@@ -33738,6 +33850,10 @@ def get_all_paths(*directory_path                    ,
     return output
 
 def get_all_files(*args,**kwargs):
+    """
+    Get all files from specified directories (folders excluded).
+    See `get_all_paths` for parameter details.
+    """
     return get_all_paths(*args,**{'include_folders':False,'include_files':True,**kwargs})
 
 def get_all_image_files(*args,**kwargs):
@@ -33839,6 +33955,10 @@ def get_all_runnable_python_files(
 
 
 def get_all_folders(*args,**kwargs):
+    """
+    Get all folders from specified directories (files excluded).
+    See `get_all_paths` for parameter details.
+    """
     return get_all_paths(*args,**{'include_folders':True,'include_files':False,**kwargs})
 get_all_directories=get_all_folders
 
@@ -34113,9 +34233,11 @@ def rp_iglob(
         else:
             raise TypeError("Unsupported type: "+str(type(file_pattern))+")")
 
-def rp_glob(*args,**kwargs):
-    """ See rp_iglob's docstring """
-    return list(rp_iglob(*args,**kwargs))
+def rp_glob(*files, check_exists=False):
+    """
+    Non-lazy version of `rp_iglob` that returns all results as a list.
+    """
+    return list(rp_iglob(*files, check_exists=check_exists))
 
 
 
@@ -38172,7 +38294,7 @@ def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cach
         else:
             delete_file(cache_path, strict=False)
     
-    if not start_frame and length is None and not show_progress:
+    if not start_frame and length is None and not show_progress and is_image_file(path):
         #Uses PIL for GIF's and animated PNG's
         pil_video = _load_animated_image_via_pil(path, use_cache=False) #Can support alpha GIF's. This func handles caching.
         stream = iter(pil_video)
@@ -38853,7 +38975,7 @@ def save_video(images, path, *, framerate=60):
     return path
 
 
-def encode_video_to_bytes(video,filetype:str='.avi',framerate=30):
+def encode_video_to_bytes(video,filetype:str='.mp4',framerate=60):
     """Encode video to bytes without saving to disk.
     See also: decode_video_from_bytes"""
     video_file=temporary_file_path(filetype)
@@ -44767,6 +44889,11 @@ _ryan_tmux_conf=r'''
         #To get 24 bit color support in mosh you have to build it yourself! I PROMISE IT'S NOT THAT BAD (it's really quick)! https://github.com/mobile-shell/mosh/wiki/Build-Instructions
         #I was referred there by https://github.com/mobile-shell/mosh/issues/649
         set-option -sa terminal-overrides ",xterm*:Tc" #This somehow enables Truecolor...idk why but it works on Macx! From https://herrbischoff.com/2020/08/how-to-enable-italics-in-tmux/
+
+        # undercurl support : https://www.reddit.com/r/neovim/comments/179tb2r/undercurl_in_tmuxneovim/
+        set -as terminal-overrides ',*:Smulx=\E[4::%p1%dm'
+        # support colors for undercurl
+        set -as terminal-overrides ',*:Setulc=\E[58::2::%p1%{65536}%/%d::%p1%{256}%/%{255}%&%d::%p1%{255}%&%d%;m'
     #CLIPBOARD:
         #Let tmux copy to the system clipboard. "external" is more restrictive than "on" - "on lets any program copy to terminal via OSC52. This is what we want.
         #https://github.com/tmux/tmux/wiki/Clipboard#terminal-support---tmux-inside-tmux
@@ -45430,6 +45557,25 @@ def get_port_is_taken(port: int) -> bool:
             # ERROR: OverflowError: bind(): port must be 0-65535.
             return False
 
+def get_port_is_free(port:int) -> bool:
+    """ Opposite of rp.get_port_is_taken """
+    return not get_port_is_taken(port)
+
+def _get_all_ports(port_filter,*,show_progress=False):
+    """ Get all ports that satisfy some condition, return a list of integers """
+    all_ports = range(65535)
+    if show_progress:
+        function_name = get_current_function_name(frames_back=2)
+        all_ports = eta(all_ports, title=function_name)
+    return [port for port in all_ports if port_filter(port)]
+
+def get_all_free_ports(*,show_progress=False):
+    """ Return a list of all free ports on this computer"""
+    return gather_args_call(_get_all_ports, get_port_is_free)
+
+def get_all_taken_ports(*,show_progress=False):
+    """ Return a list of all taken ports on this computer"""
+    return gather_args_call(_get_all_ports, get_port_is_taken)
 
 def get_next_free_port(port,n=0):
     """
@@ -45454,39 +45600,106 @@ def get_next_free_port(port,n=0):
         port+=1
     return port
 
+# def get_process_using_port(port: int, *, strict = True):
+#     """
+#     Gets the process ID (PID) using the specified port.
+#
+#     Args:
+#         port: The port number.
+#         strict: If True, raise RuntimeError if no process is found.
+#                 If None, return None if no process is found.
+#
+#     Returns:
+#         The PID, or None if strict is None and no process is found.
+#
+#     Raises:
+#         TypeError: If 'port' is not an int, or 'strict' is not bool or None.
+#         ValueError: If 'port' is out of range.
+#         RuntimeError: If strict is True and no process/PID is found.
+#         psutil.Error: If there's a psutil error (rare).
+#
+#     EXAMPLES:
+#         >>> # Assuming a process is listening on port 8080
+#         >>> port = 8080
+#         >>> assert get_port_is_taken(port)
+#         >>> pid = get_process_using_port(port)
+#         >>> print(pid)  # Output would be the PID (e.g., 1234)
+#
+#         >>> # If no process is listening on port 9999, with strict=True (default)
+#         >>> port = 9999
+#         >>> try:
+#         ...   get_process_using_port(port)
+#         ... except RuntimeError as e:
+#         ...   print(str(e))
+#         No process found using port 9999.
+#
+#         >>> # If no process is listening on port 9999, with strict=None
+#         >>> port = 9999
+#         >>> result = get_process_using_port(port, strict=None)
+#         >>> print(result)
+#         None
+#
+#     Alias: get_pid_using_port
+#
+#     """
+#     pip_import('psutil')
+#     import psutil
+#
+#     if not isinstance(port, int):
+#         raise TypeError("Port must be an integer but got type %s"%type(port))
+#     if not 0 <= port <= 65535:
+#         raise ValueError("Port must be within the range 0-65535 but got %i"%port)
+#     if strict not in [True, None]:
+#         raise TypeError("'strict' argument must be either True or None but got %s"%strict)
+#
+#     for conn in psutil.net_connections():
+#         if conn.laddr.port == port and conn.status == psutil.CONN_LISTEN:
+#             if conn.pid:
+#                 return conn.pid
+#             elif strict: # Handle edge case where PID might not be available
+#                 raise RuntimeError("Process found using port {0}, but PID is unavailable.".format(port))
+#             else:
+#                 return None
+#
+#     if strict:
+#         raise RuntimeError("No process found using port {0}.".format(port))
+#     else:
+#         return None
 
-_get_all_taken_ports_cache = None
-
-
-def get_all_taken_ports(
-    *, lazy=False, num_threads=None, show_progress=False, use_cache=False
-):
-    """Returns all ports that are currently taken up"""
-    global _get_all_taken_ports_cache
-    if use_cache and _get_all_taken_ports_cache is not None:
-        return _get_all_taken_ports_cache
-
-    def helper(x):
-        assert get_port_is_taken(x)
-        return x
-
-    if show_progress is True:
-        show_progress = "eta:" + get_current_function_name()
-    output = load_files(
-        helper,
-        range(65536),
-        strict=False,
-        lazy=lazy,
-        num_threads=None,
-        show_progress=show_progress,
-    )
-    if not lazy:
-        _get_all_taken_ports_cache = output
-    return output
-
-def get_process_using_port(port: int, *, strict = True):
+def _listening_pids_via_lsof(port):
     """
-    Gets the process ID (PID) using the specified port.
+    Helper: return a list of PIDs that are LISTENing on the given TCP port using lsof.
+    """
+    import subprocess
+    
+    if not isinstance(port, int):
+        raise TypeError("Port must be an integer but got type %s" % type(port))
+    if not 0 <= port <= 65535:
+        raise ValueError("Port must be within the range 0-65535 but got %i" % port)
+
+    # -i tcp:PORT filters by TCP port
+    # -sTCP:LISTEN restricts to listeners (avoid ESTABLISHED, etc.)
+    # -t outputs only PIDs
+    cmd = ["bash", "-lc", "lsof -i tcp:{0} -sTCP:LISTEN -t".format(port)]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+
+    # If lsof isn't found or another real error occurs, surface stderr to help debugging.
+    if proc.returncode not in (0, 1):  # 1 = "no output" / "not found" cases for lsof
+        err = proc.stderr.strip()
+        if err:
+            raise RuntimeError("lsof error: {0}".format(err))
+
+    lines = [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
+    pids = []
+    for ln in lines:
+        if ln.isdigit():
+            pids.append(int(ln))
+    return pids
+
+
+def get_process_using_port(port, strict=True):
+    """
+    Gets one process ID (PID) listening on the specified TCP port using lsof.
 
     Args:
         port: The port number.
@@ -45494,58 +45707,88 @@ def get_process_using_port(port: int, *, strict = True):
                 If None, return None if no process is found.
 
     Returns:
-        The PID, or None if strict is None and no process is found.
+        The PID (one of them, if multiple), or None if strict is None and no process is found.
 
     Raises:
         TypeError: If 'port' is not an int, or 'strict' is not bool or None.
         ValueError: If 'port' is out of range.
-        RuntimeError: If strict is True and no process/PID is found.
-        psutil.Error: If there's a psutil error (rare).
-
-    EXAMPLES:
-        >>> # Assuming a process is listening on port 8080
-        >>> port = 8080
-        >>> assert get_port_is_taken(port)
-        >>> pid = get_process_using_port(port)
-        >>> print(pid)  # Output would be the PID (e.g., 1234)
-
-        >>> # If no process is listening on port 9999, with strict=True (default)
-        >>> port = 9999
-        >>> try:
-        ...   get_process_using_port(port)
-        ... except RuntimeError as e:
-        ...   print(str(e))
-        No process found using port 9999.
-
-        >>> # If no process is listening on port 9999, with strict=None
-        >>> port = 9999
-        >>> result = get_process_using_port(port, strict=None)
-        >>> print(result)
-        None
+        RuntimeError: If strict is True and no process/PID is found, or lsof fails.
     """
-    pip_import('psutil')
-    import psutil
+    if strict not in (True, None):
+        raise TypeError("'strict' argument must be either True or None but got %s" % (strict,))
 
-    if not isinstance(port, int):
-        raise TypeError("Port must be an integer but got type %s"%type(port))
-    if not 0 <= port <= 65535:
-        raise ValueError("Port must be within the range 0-65535 but got %i"%port)
-    if strict not in [True, None]:
-        raise TypeError("'strict' argument must be either True or None but got %s"%strict)
+    pids = _listening_pids_via_lsof(port)
 
-    for conn in psutil.net_connections():
-        if conn.laddr.port == port and conn.status == psutil.CONN_LISTEN:
-            if conn.pid:
-                return conn.pid
-            elif strict: # Handle edge case where PID might not be available
-                raise RuntimeError("Process found using port {0}, but PID is unavailable.".format(port))
-            else:
-                return None
+    if pids:
+        # Return a single representative PID (first one)
+        return pids[0]
 
+    # No processes found
     if strict:
         raise RuntimeError("No process found using port {0}.".format(port))
-    else:
-        return None
+    return None
+
+
+# Alias
+get_pid_using_port = get_process_using_port
+
+
+def killport(port, strict=True):
+    """
+    Kills any process listening on the given TCP port.
+
+    If strict and no process uses that port, raise an error.
+    Uses get_process_using_port() for the existence check, then cleans up all listeners.
+    """
+    # First, rely on get_process_using_port to validate existence / strict behavior
+    pid = get_process_using_port(port, strict=(True if strict else None))
+
+    if pid is None:
+        # strict is False-ish path; nothing to do
+        return
+
+    # There is at least one PID; now gather *all* and kill them
+    import os
+    import signal
+    
+    all_pids = _listening_pids_via_lsof(port)
+
+    if not all_pids:
+        # Very rare race where process exited between the check and here
+        if strict:
+            raise ValueError("killport: No processes using port {0}".format(port))
+        return
+
+    for p in all_pids:
+        try:
+            os.kill(p, signal.SIGKILL)
+            print("Killed process with PID: {0}".format(p))
+        except ProcessLookupError:
+            # Process already gone
+            print("Process {0} not found (already exited).".format(p))
+        except PermissionError:
+            # Insufficient permissions
+            print("Permission denied when trying to kill PID {0}.".format(p))
+
+
+get_pid_using_port = get_process_using_port
+
+def get_pids_using_ports(ports, *, strict=True, show_progress=False):
+    """
+    Plural of rp.get_process_using_port 
+    EXAMPLE:
+        >>> taken=get_all_taken_ports(show_progress=True)
+        gather_args_call: Done! Did 65535 items in 0:00:00.918162
+        >>> taken
+        [22, 88, 631, 3341, 5000, 5900, 7000, 7265, 7768, 9993, 23803, 43234, 47941, 49785, 49824, 50054, 50537, 50724, 50983, 51523, 51525, 51654, 51843, 51881, 51960, 51986, 52067, 52508, 52800, 53052, 53233, 53399, 53526, 53721, 54078, 54112, 54128, 54134, 54139, 54144, 54160, 54163, 54222, 54297, 54419, 54680, 54696, 54702, 54749, 55367, 55547, 55555, 55609, 55711, 55738, 55930, 56003, 56049, 56210, 56215, 56225, 56310, 56488, 56495, 56551, 56568, 56601, 57006, 57246, 57395, 57485, 57621, 57891, 58153, 58214, 58429, 58822, 59072, 59077, 59414, 59724, 59996, 60832, 60899, 60945, 61072, 61237, 61634, 61649, 61802, 61828, 62273, 62668, 62748, 62937, 63110, 63452, 63546, 63589, 63670, 64102, 64363, 64589, 65303, 65459, 65510]
+        >>> get_pids_using_ports(taken,strict=None,show_progress=True)
+        get_pids_using_ports: Done! Did 106 items in 0:00:03.060600
+        [None, None, None, 15587, 449, None, 449, 512, 45132, None, 502, 99876, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, 454, None, None, None, None, None, 45132, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, 45132, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None]
+
+    """
+    if show_progress:
+        ports = eta(ports, title=get_current_function_name())
+    return [gather_args_call(get_process_using_port, port) for port in ports]
 
 def compress_bytes(data: bytes) -> bytes:
     """
@@ -59756,41 +59999,9 @@ def fuzzy_match(array, target, equals=lambda x, y: x == y):
 
 def get_only(collection):
     """Return the sole item of the collection."""
-    assert len(collection) == 1, "Expected length of 1"
+    assert len(collection) == 1, "Expected length of 1 but got len "+str(len(collection))
     return next(iter(collection))
 
-
-def killport(port: int, strict=True):
-    "Kills any process using that port. If strict and no process uses that port, raise an error."
-    import subprocess
-    import os
-    import signal
-
-    # Find processes listening on the specified port
-    command = "lsof -i tcp:%s -t"%port
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    pids, errors = process.communicate()
-
-    if errors:
-        print("Error:", errors.decode())
-        return
-
-    # Extract PIDs from the output
-    pids = pids.decode().strip().split('\n')
-
-    if pids==['']:
-        if strict:
-            raise ValueError("rp.killport: No processes using port %i" % port)
-        else:
-            return
-    
-    # Kill each process
-    for pid in pids:
-        os.kill(int(pid), signal.SIGKILL)
-        if pid.isdigit():
-            print("Killed process with PID: "+str(pid))
-        else:
-            print("No process found on port "+str(port))
 
 del re #re is random element
 
