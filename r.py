@@ -23366,8 +23366,8 @@ def pseudo_terminal(
         CLS CLEAR
         VV !vim
 
-        RCLAHF $r._ensure_rclone_installed() ; $r._run_sys_command("rclone copy --progress --transfers 128 --metadata {$shlex.quote(ans)} ." #Quickly copy a network drive folder. Copies the contents, not the folder itself! The 'F' stands for fast, which is because this skips checksums - it wont overwrite any files ever!
-        RCLAH  $r._ensure_rclone_installed() ; $r._run_sys_command("rclone copy --checksum --progress --transfers 128 --metadata {$shlex.quote(ans)} ." #Quickly copy a network drive folder. Copies the contents, not the folder itself!
+        RCLAHF $r._ensure_rclone_installed() ; $r._run_sys_command("rclone copy --progress --transfers 128 --metadata {$shlex.quote(ans)} .") #Quickly copy a network drive folder. Copies the contents, not the folder itself! The 'F' stands for fast, which is because this skips checksums - it wont overwrite any files ever!
+        RCLAH  $r._ensure_rclone_installed() ; $r._run_sys_command("rclone copy --checksum --progress --transfers 128 --metadata {$shlex.quote(ans)} .") #Quickly copy a network drive folder. Copies the contents, not the folder itself!
 
         DR $r._display_columns(dir(),'dir():')
         DUSHA $fansi_print($human_readable_file_size(sum($get_file_size(x,False)for x in $enlist(ans))),'cyan','bold')
