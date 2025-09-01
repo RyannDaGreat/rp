@@ -2574,6 +2574,1504 @@ def uniform_float_color_image(height:int,width:int,color:tuple=(0,0,0,0)):
         return output
 
 
+class DictReader:
+    """ Like a read-only EasyDict - with a super simple implementation """
+    #Note: This class is similar in functionality to the python libraries "easydict" and "addict". You can find them on pypi.
+    #This class, however, is read-only right now.
+
+    def __init__(self,data:dict):
+        #This class makes reading nested dicts easier
+        #Instead of data['a']['b']['c'] you say data.a.b.c
+        #Right now this only reads values from dicts
+        #More functionality might be added later if I need it...
+        #...but for now let's keep it super simple...
+        #In the future this might:
+        #    - Extend the dict class (allow for __getitem__, __setitem__, and other operators)
+        
+        assert isinstance(data,dict)    
+    
+        self._data=data
+        
+    def __getattr__(self,key:str):
+        assert key in self._data, key
+        value = self._data[key]
+        return DictReader(value) if isinstance(value,dict) else value
+
+    def __dir__(self):
+        #Great for autocompletion in interactive sessions!
+        return list(self._data)
+
+    def __contains__(self, key):
+        return key in self._data
+
+    def __repr__(self):
+        return 'DictReader('+repr(self._data)+')'
+
+    def __getitem__(self, index):
+        return self._data[index]
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __len__(self):
+        return len(self._data)
+
+    def items(self):
+        return self._data.items()
+
+    def keys(self):
+        return self._data.keys()
+
+    def values(self):
+        return self._data.values()
+
+# Professional gradient presets from real design systems and modern UI trends
+gradient_presets = {
+    # Tech company gradients
+    'instagram_classic': ['#833ab4', '#fd1d1d', '#fcb045'],
+    'instagram_sunset': ['#ff7e5f', '#feb47b'], 
+    'facebook_blue': ['#3b82f6', '#1d4ed8'],
+    'twitter_blue': ['#1da1f2', '#0d8bd9'],
+    'linkedin_blue': ['#0077b5', '#005582'],
+    'github_dark': ['#0d1117', '#161b22'],
+    'discord_blurple': ['#7289da', '#5865f2'],
+    'slack_aubergine': ['#4a154b', '#350d36'],
+    'slack_green': ['#2eb67d', '#1a9661'],
+    'spotify_green': ['#1ed760', '#1db954'],
+    'netflix_red': ['#e50914', '#b20710'],
+    'youtube_red': ['#ff0000', '#cc0000'],
+    'zoom_blue': ['#2d8cff', '#1976d2'],
+    'figma_purple': ['#a259ff', '#7c3aed'],
+    'notion_grey': ['#2f3437', '#37352f'],
+    'stripe_blue': ['#635bff', '#4f46e5'],
+    'airbnb_coral': ['#ff5a5f', '#c41e3a'],
+    'uber_black': ['#000000', '#1a1a1a'],
+    'lyft_pink': ['#ff00bf', '#e619ac'],
+    'pinterest_red': ['#bd081c', '#e60023'],
+
+    # Modern UI/UX gradients
+    'corporate_blue': ['#2c5aa0', '#5c85d6'],
+    'enterprise_grey': ['#667eea', '#764ba2'],
+    'fintech_green': ['#11998e', '#38ef7d'],
+    'startup_orange': ['#ff6b6b', '#ffa726'],
+    'saas_purple': ['#8b5cf6', '#a855f7'],
+    'dashboard_blue': ['#0ea5e9', '#0284c7'],
+    'analytics_green': ['#10b981', '#059669'],
+    'premium_gold': ['#f59e0b', '#d97706'],
+    'pro_silver': ['#6b7280', '#4b5563'],
+    'enterprise_black': ['#111827', '#1f2937'],
+
+    # Nature & organic
+    'mountain_mist': ['#bdc3c7', '#2c3e50'],
+    'tropical_waters': ['#00b09b', '#96c93d'],
+    'arctic_aurora': ['#667eea', '#764ba2'],
+    'sahara_dunes': ['#deb887', '#f4a460'],
+    'amazon_canopy': ['#228b22', '#32cd32'],
+    'coral_reef': ['#ff9a9e', '#fecfef'],
+    'himalayan_peaks': ['#708090', '#b0c4de'],
+    'bamboo_forest': ['#7cb342', '#558b2f'],
+    'cherry_blossom': ['#ffb7c5', '#ffc0cb'],
+    'autumn_leaves': ['#d2691e', '#cd853f'],
+    'spring_meadow': ['#98fb98', '#00fa9a'],
+    'winter_ice': ['#b0e0e6', '#f0f8ff'],
+    'summer_sky': ['#87ceeb', '#4682b4'],
+
+    # Vibrant & energetic
+    'electric_violet': ['#4facfe', '#00f2fe'],
+    'neon_pink': ['#ff0099', '#493240'],
+    'cyber_blue': ['#00d2ff', '#3a7bd5'],
+    'laser_green': ['#56ab2f', '#a8e6cf'],
+    'plasma_orange': ['#f093fb', '#f5576c'],
+    'synthwave': ['#f72585', '#7209b7'],
+    'vaporwave': ['#a663cc', '#4cc9f0'],
+    'neon_city': ['#ff006e', '#8338ec', '#3a86ff'],
+    'electric_dreams': ['#667eea', '#764ba2'],
+    'digital_rain': ['#00ff41', '#00b8a9'],
+    'hologram': ['#89f7fe', '#66a6ff'],
+    'quantum_leap': ['#667eea', '#764ba2'],
+    'binary_sunset': ['#ff6b6b', '#4ecdc4'],
+    'matrix_code': ['#00ff00', '#008000'],
+
+    # Pastel & soft
+    'cotton_candy': ['#ffecd2', '#fcb69f'],
+    'lavender_dream': ['#e0c3fc', '#9bb5ff'],
+    'peach_cream': ['#ffeaa7', '#fab1a0'],
+    'mint_chocolate': ['#a8e6cf', '#dcedc1'],
+    'powder_blue': ['#a8edea', '#fed6e3'],
+    'baby_pink': ['#ffc0cb', '#ffb6c1'],
+    'soft_yellow': ['#fff8dc', '#fffacd'],
+    'gentle_green': ['#f0fff0', '#e0ffe0'],
+    'cloud_white': ['#f8f8ff', '#ffffff'],
+    'sunset_pink': ['#ff9a9e', '#fecfef'],
+    'twilight_blue': ['#b0c4de', '#add8e6'],
+    'pearl_white': ['#f8f8ff', '#fffafa'],
+    'silk_purple': ['#dda0dd', '#e6e6fa'],
+
+    # Dark & sophisticated
+    'midnight_city': ['#232526', '#414345'],
+    'charcoal_fade': ['#2c3e50', '#3498db'],
+    'obsidian': ['#0f0f23', '#24243e'],
+    'carbon_fiber': ['#2c2c54', '#40407a'],
+    'deep_space': ['#0f3460', '#16213e'],
+    'noir_black': ['#000000', '#434343'],
+    'gunmetal': ['#2a3439', '#1e2426'],
+    'slate_grey': ['#2f4f4f', '#696969'],
+    'storm_clouds': ['#2c3e50', '#34495e'],
+    'shadow_black': ['#1a1a2e', '#16213e'],
+    'eclipse': ['#0c0c0c', '#1a1a1a'],
+    'void': ['#000000', '#0d1117'],
+    'onyx': ['#353839', '#2c2c2c'],
+    'graphite': ['#41424c', '#2e2e2e'],
+    'charcoal': ['#36454f', '#2f4f4f'],
+
+    # Metallic & luxury
+    'gold_rush': ['#f7971e', '#ffd200'],
+    'silver_lining': ['#bdc3c7', '#2c3e50'],
+    'copper_tone': ['#b87333', '#cd853f'],
+    'rose_gold': ['#f093fb', '#f5576c'],
+    'platinum': ['#e5e4e2', '#d5d4d0'],
+    'bronze_age': ['#cd7f32', '#a0522d'],
+    'titanium': ['#878681', '#c0c0c0'],
+    'chrome_shine': ['#c0c0c0', '#808080'],
+    'brass_glow': ['#b5651d', '#daa520'],
+    'pewter_grey': ['#96a8a1', '#8b9dc3'],
+    'mercury_silver': ['#e5e5e5', '#c0c0c0'],
+    'golden_hour': ['#ff7f50', '#ffd700'],
+    'copper_patina': ['#7fb069', '#b87333'],
+    'steel_blue': ['#4682b4', '#708090'],
+    'iron_grey': ['#71716f', '#808080'],
+
+    # Food & beverage
+    'espresso_bean': ['#3c1053', '#ad5389'],
+    'wine_cellar': ['#c31432', '#240b36'],
+    'citrus_burst': ['#fa709a', '#fee140'],
+    'mint_mojito': ['#56ab2f', '#a8e6cf'],
+    'chocolate_truffle': ['#8b4513', '#daa520'],
+    'strawberry_shake': ['#ff69b4', '#ffc0cb'],
+    'blueberry_pie': ['#4169e1', '#6495ed'],
+    'lemon_drop': ['#ffff00', '#fffacd'],
+    'grape_juice': ['#8b008b', '#9932cc'],
+    'orange_creamsicle': ['#ff8c00', '#ffd700'],
+    'vanilla_cream': ['#f5f5dc', '#fffaf0'],
+    'caramel_swirl': ['#d2691e', '#daa520'],
+    'berry_smoothie': ['#dc143c', '#ff69b4'],
+    'green_tea': ['#9acd32', '#adff2f'],
+    'coffee_cream': ['#a0522d', '#deb887'],
+
+    # Seasonal
+    'spring_bloom': ['#98fb98', '#00fa9a', '#32cd32'],
+    'summer_heat': ['#ff4500', '#ff6347', '#ffa500'],
+    'autumn_harvest': ['#d2691e', '#cd853f', '#daa520'],
+    'winter_chill': ['#708090', '#b0c4de', '#f0f8ff'],
+    'valentine_love': ['#ff1493', '#ff69b4'],
+    'easter_pastel': ['#dda0dd', '#98fb98'],
+    'halloween_spook': ['#ff4500', '#8b0000'],
+    'christmas_joy': ['#dc143c', '#228b22'],
+    'new_years_gold': ['#ffd700', '#ffff00'],
+    'thanksgiving_warm': ['#d2691e', '#b8860b'],
+
+    # Time of day
+    'sunrise_glow': ['#ff7e5f', '#feb47b'],
+    'morning_fresh': ['#a8edea', '#fed6e3'],
+    'midday_bright': ['#fee140', '#fa709a'],
+    'afternoon_warm': ['#ff9500', '#ffb347'],
+    'golden_hour': ['#f7971e', '#ffd200'],
+    'sunset_magic': ['#ff416c', '#ff4b2b'],
+    'dusk_purple': ['#667eea', '#764ba2'],
+    'night_dark': ['#0f3460', '#16213e'],
+    'midnight_deep': ['#2c5aa0', '#5c85d6'],
+    'predawn_grey': ['#708090', '#a9a9a9'],
+    'dawn_pink': ['#ff69b4', '#ffc0cb'],
+
+    # Abstract concepts
+    'velocity_rush': ['#667eea', '#764ba2'],
+    'infinite_loop': ['#4facfe', '#00f2fe'],
+    'zen_harmony': ['#56ab2f', '#a8e6cf'],
+    'cosmic_energy': ['#667eea', '#764ba2'],
+    'liquid_flow': ['#bdc3c7', '#2c3e50'],
+    'solar_wind': ['#ff6b35', '#f7931e'],
+    'stellar_dust': ['#a8edea', '#fed6e3'],
+    'quantum_field': ['#667eea', '#764ba2'],
+    'gravity_wave': ['#4facfe', '#00f2fe'],
+    'time_warp': ['#ff006e', '#8338ec'],
+
+    # Geographic inspirations
+    'sahara_heat': ['#deb887', '#f4a460', '#d2b48c'],
+    'amazon_green': ['#134e5e', '#71b280'],
+    'arctic_white': ['#b0e0e6', '#f0f8ff'],
+    'pacific_blue': ['#0077be', '#4169e1'],
+    'himalayan_snow': ['#f0f8ff', '#fffafa'],
+    'mediterranean_blue': ['#4682b4', '#87ceeb'],
+    'caribbean_teal': ['#008b8b', '#20b2aa'],
+    'alaskan_ice': ['#b0e0e6', '#e0ffff'],
+    'scottish_highlands': ['#556b2f', '#8fbc8f'],
+    'australian_sunset': ['#ff4500', '#ff8c00'],
+    'african_savanna': ['#daa520', '#b8860b'],
+    'asian_monsoon': ['#4682b4', '#708090'],
+    'european_autumn': ['#cd853f', '#d2691e'],
+    'american_plains': ['#daa520', '#f0e68c'],
+    'antarctic_ice': ['#f0f8ff', '#ffffff'],
+
+    # Complex multi-color gradients (3+ colors)
+    # Rainbow and spectrum gradients
+    'rainbow_classic': ['#ff0000', '#ff8000', '#ffff00', '#80ff00', '#00ff00', '#00ff80', '#00ffff', '#0080ff', '#0000ff', '#8000ff', '#ff00ff', '#ff0080'],
+    'pride_rainbow': ['#e40303', '#ff8c00', '#ffed00', '#008018', '#0066ff', '#8b00ff'],
+    'fire_to_ice': ['#ff0000', '#ff4500', '#ffa500', '#ffff00', '#adff2f', '#00ffff', '#0080ff', '#0000ff'],
+    'sunset_spectrum': ['#ff6b35', '#f7931e', '#ffd200', '#ffb347', '#ff69b4', '#8a2be2'],
+
+    # Complex brand gradients  
+    'google_colors': ['#4285f4', '#34a853', '#fbbc04', '#ea4335'],
+    'microsoft_rainbow': ['#00bcf2', '#40e0d0', '#7b68ee', '#ff69b4'],
+    'adobe_spectrum': ['#ff0000', '#ff8c00', '#0099cc', '#9933ff'],
+    'slack_full': ['#4a154b', '#2eb67d', '#ece01a', '#e01e5a'],
+
+    # Nature multi-gradients
+    'tropical_sunset': ['#ff6b6b', '#ff8e53', '#ff6b9d', '#c44569'],
+    'forest_depths': ['#0f3460', '#16537e', '#1e6091', '#369681', '#53a08c'],
+    'ocean_layers': ['#000080', '#0000cd', '#4169e1', '#00bfff', '#87ceeb', '#e0f6ff'],
+    'mountain_range': ['#2c3e50', '#34495e', '#7f8c8d', '#95a5a6', '#bdc3c7', '#ecf0f1'],
+    'aurora_borealis': ['#0f4c75', '#3282b8', '#bbe1fa', '#1ba1f2', '#6a5acd', '#8a2be2'],
+
+    # Vibrant multi-color
+    'neon_spectrum': ['#ff0080', '#ff4000', '#ffff00', '#40ff00', '#00ffff', '#4000ff'],
+    'electric_rainbow': ['#ff006e', '#fb5607', '#ffbe0b', '#8338ec', '#3a86ff'],
+    'cyber_gradient': ['#00ff41', '#00d4ff', '#ff0080', '#8338ec', '#3a86ff'],
+    'synthwave_full': ['#ff006e', '#fb5607', '#ffbe0b', '#8338ec', '#3a86ff', '#06ffa5'],
+    'retro_computer': ['#ff0080', '#ff4000', '#ffff00', '#40ff00', '#00ffff', '#8000ff'],
+
+    # Pastel multi-color
+    'cotton_candy_dream': ['#ffccd5', '#ffb3d1', '#ff99cc', '#e6ccff', '#ccccff'],
+    'spring_garden': ['#f8bbd9', '#f2d7d5', '#d5dbdb', '#a9dfbf', '#85c1e9'],
+    'easter_palette': ['#fdeaa7', '#f8c471', '#f1948a', '#bb8fce', '#85c1e9'],
+    'soft_rainbow': ['#fadbd8', '#f5cba7', '#fff2cc', '#d5f4e6', '#d6eaf8', '#e8daef'],
+
+    # Dark sophisticated multi-color
+    'midnight_spectrum': ['#0c0c0c', '#1a1a2e', '#16213e', '#0f3460', '#533483'],
+    'shadow_depths': ['#000000', '#1a1a1a', '#2d2d2d', '#404040', '#545454'],
+    'noir_gradient': ['#0d1117', '#161b22', '#21262d', '#30363d', '#484f58'],
+    'charcoal_layers': ['#2c3e50', '#34495e', '#566573', '#717d7e', '#85929e'],
+
+    # Metallic multi-color
+    'precious_metals': ['#ffd700', '#c0c0c0', '#cd7f32', '#e5e4e2', '#b87333'],
+    'chrome_rainbow': ['#c0c0c0', '#d3d3d3', '#e5e5e5', '#f0f0f0', '#dcdcdc'],
+    'golden_spectrum': ['#b8860b', '#daa520', '#ffd700', '#ffed4e', '#fffacd'],
+    'copper_patina_full': ['#b87333', '#cd853f', '#d2691e', '#7fb069', '#20b2aa'],
+
+    # Time-based multi-color
+    'full_day_cycle': ['#191970', '#4b0082', '#8b008b', '#ff1493', '#ff4500', '#ffa500', '#ffff00', '#adff2f', '#00ff7f', '#0080ff'],
+    'seasons_cycle': ['#ffffff', '#98fb98', '#ffa500', '#8b4513'],
+    'golden_hour_full': ['#191970', '#483d8b', '#8b008b', '#ff1493', '#ff4500', '#ffa500', '#ffd700'],
+
+    # Geographic multi-color
+    'sahara_layers': ['#8b4513', '#cd853f', '#daa520', '#f4a460', '#deb887', '#f5deb3'],
+    'amazon_canopy_full': ['#013220', '#0d4f2c', '#228b22', '#32cd32', '#7cfc00'],
+    'coral_reef_spectrum': ['#008b8b', '#20b2aa', '#48d1cc', '#ff7f50', '#ff6347', '#ff1493'],
+    'himalayan_gradient': ['#2f4f4f', '#696969', '#778899', '#b0c4de', '#f0f8ff', '#fffafa'],
+
+    # Food multi-color
+    'fruit_bowl': ['#ff0000', '#ffa500', '#ffff00', '#32cd32', '#8a2be2', '#ff1493'],
+    'spice_market': ['#8b4513', '#d2691e', '#cd853f', '#daa520', '#ff6347'],
+    'candy_shop': ['#ff69b4', '#ff1493', '#ffd700', '#32cd32', '#00bfff', '#8a2be2'],
+    'wine_tasting': ['#722f37', '#8b0000', '#a0522d', '#cd853f', '#f4a460'],
+
+    # Abstract multi-color using dict positioning
+    'velocity_field': {0.0: '#ff0080', 0.25: '#ff4000', 0.5: '#ffff00', 0.75: '#40ff00', 1.0: '#00ffff'},
+    'quantum_superposition': {0.0: '#000080', 0.2: '#4169e1', 0.4: '#00bfff', 0.6: '#ff1493', 0.8: '#ff4500', 1.0: '#ffd700'},
+    'time_distortion': {-0.2: '#000000', 0.0: '#4b0082', 0.3: '#8b008b', 0.6: '#ff1493', 0.9: '#ffa500', 1.2: '#ffff00'},
+    'gravity_well': {0.0: '#000000', 0.1: '#191970', 0.3: '#4b0082', 0.6: '#8b008b', 0.8: '#ff1493', 1.0: '#ffffff'},
+    'wormhole': {-0.5: '#000000', 0.0: '#4b0082', 0.2: '#8b008b', 0.5: '#ff1493', 0.8: '#ffa500', 1.0: '#ffffff', 1.5: '#000000'},
+
+    # Extended range gradients using dict
+    'extended_fire': {-0.3: '#000000', 0.0: '#8b0000', 0.3: '#ff0000', 0.6: '#ff4500', 0.9: '#ffa500', 1.0: '#ffff00', 1.3: '#ffffff'},
+    'extended_ice': {-0.2: '#000080', 0.0: '#0000ff', 0.4: '#00bfff', 0.7: '#87ceeb', 1.0: '#f0f8ff', 1.2: '#ffffff'},
+    'infinity_gradient': {-1.0: '#ff0080', -0.5: '#ff4000', 0.0: '#ffff00', 0.5: '#40ff00', 1.0: '#00ffff', 1.5: '#8000ff', 2.0: '#ff0080'},
+
+    # Web-sourced gradients from popular design collections
+    # From webgradients repository - complex multi-color
+    'warm_flame': ['#ff9a9e', '#fad0c4', '#fad0c4'],
+    'above_the_sky': ['#BCBCBC', '#D9D9D9', '#e0e0e0', '#efefef', '#d9d9d9', '#bcbcbc'],
+    'wide_matrix': ['#fcc5e4', '#fda34b', '#ff7882', '#c8699e', '#7046aa', '#0c1db8', '#020f75'],
+    'space_shift': ['#3d3393', '#2b76b9', '#2cacd1', '#35eb93'],
+    'winter_neva': ['#a1c4fd', '#c2e9fb'],
+    'dusty_grass': ['#d4fc79', '#96e6a1'],
+    'night_fade': ['#a18cd1', '#fbc2eb'],
+    'aqua_splash': ['#13547a', '#80d0c7'],
+    'plum_bath': ['#cc208e', '#6713d2'],
+
+    # Popular CSS gradient collections
+    'fire_watch': ['#cb2d3e', '#ef473a'],
+    'sherbert': ['#f79d00', '#64f38c'],
+    'bloody_mary': ['#ff512f', '#dd2476'],
+    'lush': ['#56ab2f', '#a8e6cf'],
+    'sunrise': ['#ff512f', '#f09819'],
+    'purple_paradise': ['#1d2b64', '#f8cdda'],
+    'aqua_marine': ['#1a2980', '#26d0ce'],
+    'orange_coral': ['#ff9966', '#ff5e62'],
+    'blue_lagoon': ['#43c6ac', '#191654'],
+    'pink_flavour': ['#800080', '#ffc0cb'],
+
+    # Mesh gradients (trending multi-stops)
+    'mesh_purple': ['#667eea', '#764ba2', '#f093fb', '#f5576c'],
+    'mesh_ocean': ['#2196f3', '#21cbf3', '#2196f3', '#0288d1'],
+    'mesh_sunset': ['#fa709a', '#fee140', '#fa709a', '#ffd200'],
+    'mesh_forest': ['#134e5e', '#71b280', '#134e5e', '#2d5016'],
+    'mesh_candy': ['#ff9a9e', '#fecfef', '#ff9a9e', '#fad0c4'],
+
+    # Popular Instagram/social media gradients
+    'insta_warmth': ['#833ab4', '#fd1d1d', '#fcb045'],
+    'insta_purple': ['#405de6', '#5851db', '#833ab4', '#c13584', '#e1306c', '#fd1d1d'],
+    'tiktok_vibes': ['#ff0050', '#00f2ea'],
+    'snapchat_yellow': ['#fffc00', '#ffffff'],
+    'discord_gradient': ['#7289da', '#99aab5'],
+    'whatsapp_green': ['#075e54', '#25d366'],
+    'telegram_blue': ['#0088cc', '#1ea3d7'],
+
+    # Gaming gradients (popular in UI)
+    'valorant_red': ['#ff4655', '#0f1419'],
+    'cyberpunk_yellow': ['#fcee21', '#d508b7'],
+    'overwatch_orange': ['#f99e1a', '#ef4123'],
+    'fortnite_blue': ['#00d4ff', '#5b247a'],
+    'minecraft_green': ['#7cb342', '#357a35'],
+    'steam_blue': ['#1b2838', '#2a475e', '#66c0f4'],
+
+    # Dribbble/Behance trending gradients
+    'dribbble_pink': ['#ea4c89', '#f082ac'],
+    'behance_blue': ['#053eff', '#4d9de0'],
+    'figma_purple': ['#9747ff', '#651fff'],
+    'sketch_yellow': ['#fdbb2d', '#22c1c3'],
+    'adobe_red': ['#ff0000', '#ff6600', '#ffcc00'],
+
+    # UI/UX trend gradients from 2023-2024
+    'glassmorphism': ['#ffffff', '#ffffff', '#f0f0f0', '#e0e0e0'],
+    'neomorphism': ['#e6e7ee', '#ffffff', '#d1d9e6', '#ffffff'],
+    'cyberpunk_neon': ['#08fdd8', '#09fbd3', '#08f5d2', '#07f8d1'],
+    'retrowave_80s': ['#f7971e', '#ff006e', '#8338ec', '#3a86ff'],
+    'vaporwave_aesthetic': ['#ff006e', '#8338ec', '#3a86ff', '#06ffa5'],
+    'synthwave_nights': ['#2d1b69', '#11998e', '#38ef7d', '#fcb045'],
+
+    # Natural phenomenon gradients
+    'northern_lights_full': ['#00c9ff', '#92fe9d', '#00c9ff', '#a8edea', '#fed6e3'],
+    'volcano_eruption': ['#8b0000', '#ff0000', '#ff4500', '#ffa500', '#ffff00'],
+    'deep_ocean_trenches': ['#000428', '#004e92', '#009ffd', '#00d2ff'],
+    'sahara_sunset_layers': ['#8b4513', '#cd853f', '#daa520', '#ff8c00', '#ff4500'],
+    'amazon_canopy_depths': ['#013220', '#0d4f2c', '#228b22', '#32cd32', '#7cfc00', '#adff2f'],
+    'arctic_aurora_dance': ['#0f4c75', '#3282b8', '#bbe1fa', '#00d4aa', '#6a5acd', '#8a2be2'],
+
+    # Artistic/creative gradients
+    'watercolor_splash': ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe'],
+    'oil_painting': ['#8b4513', '#d2691e', '#daa520', '#f4a460', '#deb887'],
+    'acrylic_pour': ['#ff006e', '#fb5607', '#ffbe0b', '#8338ec', '#3a86ff', '#06ffa5'],
+    'neon_nights': ['#ff0080', '#ff4000', '#ffff00', '#40ff00', '#00ffff', '#4000ff', '#8000ff'],
+
+    # Food & beverage inspired (complex)
+    'tropical_smoothie': ['#ff6b6b', '#ee5a24', '#f0932b', '#eb4d4b', '#6c5ce7', '#a29bfe'],
+    'coffee_layers': ['#3c1053', '#ad5389', '#8b4513', '#d2691e', '#daa520'],
+    'wine_tasting_full': ['#722f37', '#8b0000', '#a0522d', '#cd853f', '#f4a460', '#deb887'],
+    'fruit_punch': ['#ff0000', '#ff4500', '#ffa500', '#ffff00', '#adff2f', '#00ff7f', '#ff1493'],
+    'spice_bazaar': ['#8b4513', '#d2691e', '#cd853f', '#daa520', '#ff6347', '#ff4500'],
+
+    # Seasonal complex gradients
+    'autumn_forest_full': ['#8b4513', '#d2691e', '#cd853f', '#daa520', '#ff8c00', '#ff4500'],
+    'spring_meadow_full': ['#98fb98', '#00fa9a', '#32cd32', '#adff2f', '#7fff00', '#9aff9a'],
+    'summer_beach_full': ['#87ceeb', '#4682b4', '#1e90ff', '#00bfff', '#87cefa', '#b0e0e6'],
+    'winter_wonderland_full': ['#708090', '#b0c4de', '#f0f8ff', '#fffafa', '#ffffff', '#f8f8ff'],
+
+    # Tech/digital complex
+    'matrix_rain_full': ['#000000', '#001100', '#002200', '#003300', '#004400', '#00ff00'],
+    'holographic_display': ['#89f7fe', '#66a6ff', '#45a3ff', '#2196f3', '#1976d2'],
+    'digital_glitch': ['#ff0080', '#ff4000', '#ffff00', '#40ff00', '#00ffff', '#8000ff', '#ff0080'],
+    'cyber_security': ['#0f3460', '#16213e', '#0e4b99', '#2e8bc0', '#b1d4e0'],
+    'quantum_computing': ['#000080', '#0000cd', '#4169e1', '#00bfff', '#87ceeb', '#e0f6ff', '#ffffff'],
+
+    # Extended range dict gradients (advanced web-sourced)
+    'time_portal': {-0.5: '#000000', 0.0: '#4b0082', 0.2: '#8b008b', 0.5: '#ff1493', 0.8: '#ffa500', 1.0: '#ffffff', 1.5: '#000000'},
+    'dimensional_rift': {-1.0: '#000000', -0.3: '#1a1a2e', 0.0: '#16213e', 0.3: '#0f3460', 0.7: '#533483', 1.0: '#8b008b', 1.3: '#000000'},
+    'energy_field': {0.0: '#ff0080', 0.15: '#ff4000', 0.3: '#ffff00', 0.45: '#40ff00', 0.6: '#00ffff', 0.75: '#4000ff', 0.9: '#8000ff', 1.0: '#ff0080'},
+    'reality_distortion': {-0.3: '#000000', 0.0: '#330867', 0.25: '#30cfd0', 0.5: '#a8edea', 0.75: '#fed6e3', 1.0: '#ffffff', 1.3: '#000000'},
+    'cosmic_wormhole': {-0.8: '#000000', -0.4: '#000428', 0.0: '#004e92', 0.3: '#009ffd', 0.6: '#00d2ff', 0.8: '#ffffff', 1.2: '#000000'},
+
+    # Step function gradients (sharp transitions for flags, etc.)
+    # Pride flags with precise positioning for clean stripes
+    'pride_flag': {
+            0.0: '#e40303',      # Red
+            0.166: '#e40303', 0.1661: '#ff8c00',  # Red->Orange
+            0.333: '#ff8c00', 0.3331: '#ffed00',  # Orange->Yellow  
+            0.5: '#ffed00', 0.5001: '#008018',    # Yellow->Green
+            0.666: '#008018', 0.6661: '#0066ff',  # Green->Blue
+            0.833: '#0066ff', 0.8331: '#8b00ff',  # Blue->Purple
+            1.0: '#8b00ff'       # Purple
+            },
+
+    'trans_flag': {
+            0.0: '#55cdfc',      # Light blue
+            0.199: '#55cdfc', 0.2: '#f7a8b8',     # Light blue->Pink
+            0.399: '#f7a8b8', 0.4: '#ffffff',     # Pink->White  
+            0.599: '#ffffff', 0.6: '#f7a8b8',     # White->Pink
+            0.799: '#f7a8b8', 0.8: '#55cdfc',     # Pink->Light blue
+            1.0: '#55cdfc'       # Light blue
+            },
+
+    'bi_flag': {
+            0.0: '#d60270',      # Magenta
+            0.399: '#d60270', 0.4: '#9b59b6',     # Magenta->Purple
+            0.599: '#9b59b6', 0.6: '#0038a8',     # Purple->Blue
+            1.0: '#0038a8'       # Blue
+            },
+
+    'pan_flag': {
+            0.0: '#ff218c',      # Pink
+            0.333: '#ff218c', 0.3331: '#ffd800', # Pink->Yellow
+            0.666: '#ffd800', 0.6661: '#21b1ff', # Yellow->Blue
+            1.0: '#21b1ff'       # Blue
+            },
+
+    'lesbian_flag': {
+            0.0: '#d52d00',      # Dark orange
+            0.199: '#d52d00', 0.2: '#ef7627',     # Dark orange->Orange
+            0.399: '#ef7627', 0.4: '#ff9a56',     # Orange->Light orange
+            0.599: '#ff9a56', 0.6: '#d162a4',     # Light orange->Pink
+            0.799: '#d162a4', 0.8: '#a20160',     # Pink->Dark pink
+            1.0: '#a20160'       # Dark pink
+            },
+
+    'nb_flag': {
+            0.0: '#fcf434',      # Yellow
+            0.249: '#fcf434', 0.25: '#ffffff',    # Yellow->White
+            0.499: '#ffffff', 0.5: '#9c59d1',     # White->Purple  
+            0.749: '#9c59d1', 0.75: '#2c2c2c',    # Purple->Black
+            1.0: '#2c2c2c'       # Black
+            },
+
+    # International flags with step transitions
+    'usa_flag_stripes': {
+            0.0: '#b22234',      # Red
+            0.076: '#b22234', 0.0761: '#ffffff',  # Red->White
+            0.153: '#ffffff', 0.1531: '#b22234',  # White->Red
+            0.230: '#b22234', 0.2301: '#ffffff',  # Red->White
+            0.307: '#ffffff', 0.3071: '#b22234',  # White->Red
+            0.384: '#b22234', 0.3841: '#ffffff',  # Red->White
+            0.461: '#ffffff', 0.4611: '#b22234',  # White->Red
+            0.538: '#b22234', 0.5381: '#ffffff',  # Red->White
+            0.615: '#ffffff', 0.6151: '#b22234',  # White->Red
+            0.692: '#b22234', 0.6921: '#ffffff',  # Red->White
+            0.769: '#ffffff', 0.7691: '#b22234',  # White->Red
+            0.846: '#b22234', 0.8461: '#ffffff',  # Red->White
+            0.923: '#ffffff', 0.9231: '#b22234',  # White->Red
+            1.0: '#b22234'       # Red
+            },
+
+    'german_flag': {
+            0.0: '#000000',      # Black
+            0.333: '#000000', 0.3331: '#dd0000', # Black->Red
+            0.666: '#dd0000', 0.6661: '#ffce00', # Red->Gold
+            1.0: '#ffce00'       # Gold
+            },
+
+    'french_flag': {
+            0.0: '#0055a4',      # Blue
+            0.333: '#0055a4', 0.3331: '#ffffff', # Blue->White
+            0.666: '#ffffff', 0.6661: '#ef4135', # White->Red
+            1.0: '#ef4135'       # Red
+            },
+
+    'italian_flag': {
+            0.0: '#009246',      # Green
+            0.333: '#009246', 0.3331: '#ffffff', # Green->White
+            0.666: '#ffffff', 0.6661: '#ce2b37', # White->Red
+            1.0: '#ce2b37'       # Red
+            },
+
+    'japanese_flag': {
+            0.0: '#ffffff',      # White
+            0.4: '#ffffff', 0.401: '#bc002d',     # White->Red (sun)
+            0.6: '#bc002d', 0.601: '#ffffff',     # Red->White
+            1.0: '#ffffff'       # White
+            },
+
+    # Sports team step gradients
+    'lakers_stripes': {
+            0.0: '#552583',      # Purple
+            0.499: '#552583', 0.5: '#fdb927',     # Purple->Gold
+            1.0: '#fdb927'       # Gold
+            },
+
+    'yankees_stripes': {
+            0.0: '#132448',      # Navy
+            0.499: '#132448', 0.5: '#c4ced4',     # Navy->Gray
+            1.0: '#c4ced4'       # Gray
+            },
+
+    # Warning/signal step patterns
+    'hazard_stripes': {
+            0.0: '#ffff00',      # Yellow
+            0.124: '#ffff00', 0.125: '#000000',   # Yellow->Black
+            0.249: '#000000', 0.25: '#ffff00',    # Black->Yellow
+            0.374: '#ffff00', 0.375: '#000000',   # Yellow->Black
+            0.499: '#000000', 0.5: '#ffff00',     # Black->Yellow
+            0.624: '#ffff00', 0.625: '#000000',   # Yellow->Black
+            0.749: '#000000', 0.75: '#ffff00',    # Black->Yellow
+            0.874: '#ffff00', 0.875: '#000000',   # Yellow->Black
+            1.0: '#000000'       # Black
+            },
+
+    'caution_tape': {
+            0.0: '#ffff00',      # Yellow
+            0.199: '#ffff00', 0.2: '#000000',     # Yellow->Black
+            0.399: '#000000', 0.4: '#ffff00',     # Black->Yellow
+            0.599: '#ffff00', 0.6: '#000000',     # Yellow->Black
+            0.799: '#000000', 0.8: '#ffff00',     # Black->Yellow
+            1.0: '#ffff00'       # Yellow
+            },
+
+    # Retro/pixel art step gradients
+    'pixel_fire': {
+            0.0: '#000000',      # Black
+            0.249: '#000000', 0.25: '#8b0000',    # Black->Dark red
+            0.499: '#8b0000', 0.5: '#ff0000',     # Dark red->Red
+            0.749: '#ff0000', 0.75: '#ffa500',    # Red->Orange
+            1.0: '#ffa500'       # Orange
+            },
+
+    'pixel_water': {
+            0.0: '#000080',      # Navy
+            0.249: '#000080', 0.25: '#0000ff',    # Navy->Blue
+            0.499: '#0000ff', 0.5: '#4169e1',     # Blue->Royal blue
+            0.749: '#4169e1', 0.75: '#87ceeb',    # Royal blue->Sky blue
+            1.0: '#87ceeb'       # Sky blue
+            },
+
+    'minecraft_grass': {
+            0.0: '#654321',      # Brown (dirt)
+            0.749: '#654321', 0.75: '#228b22',    # Brown->Green
+            1.0: '#228b22'       # Green
+            },
+
+    'turbo':  #https://research.google/blog/turbo-an-improved-rainbow-colormap-for-visualization/  -->  https://gist.github.com/mikhailov-work/ee72ba4191942acecc03fe6da94fc73f
+        [[.18995,.07176, .23217], [.19483, .08339, .26149], [.19956, .09498, .29024], [.20415, .10652, .31844], [.2086,  .11802, .34607], [.21291, .12947, .37314], [.21708, .14087, .39964], [.22111, .15223, .42558], [.225,   .16354, .45096], [.22875, .17481, .47578],
+         [.23236, .18603, .50004], [.23582, .1972,  .52373], [.23915, .20833, .54686], [.24234, .21941, .56942], [.24539, .23044, .59142], [.2483,  .24143, .61286], [.25107, .25237, .63374], [.25369, .26327, .65406], [.25618, .27412, .67381], [.25853, .28492, .693],
+         [.26074, .29568, .71162], [.2628,  .30639, .72968], [.26473, .31706, .74718], [.26652, .32768, .76412], [.26816, .33825, .7805],  [.26967, .34878, .79631], [.27103, .35926, .81156], [.27226, .3697,  .82624], [.27334, .38008, .84037], [.27429, .39043, .85393],
+         [.27509, .40072, .86692], [.27576, .41097, .87936], [.27628, .42118, .89123], [.27667, .43134, .90254], [.27691, .44145, .91328], [.27701, .45152, .92347], [.27698, .46153, .93309], [.2768,  .47151, .94214], [.27648, .48144, .95064], [.27603, .49132, .95857],
+         [.27543, .50115, .96594], [.27469, .51094, .97275], [.27381, .52069, .97899], [.27273, .5304,  .98461], [.27106, .54015, .9893],  [.26878, .54995, .99303], [.26592, .55979, .99583], [.26252, .56967, .99773], [.25862, .57958, .99876], [.25425, .5895,  .99896],
+         [.24946, .59943, .99835], [.24427, .60937, .99697], [.23874, .61931, .99485], [.23288, .62923, .99202], [.22676, .63913, .98851], [.22039, .64901, .98436], [.21382, .65886, .97959], [.20708, .66866, .97423], [.20021, .67842, .96833], [.19326, .68812, .9619],
+         [.18625, .69775, .95498], [.17923, .70732, .94761], [.17223, .7168,  .93981], [.16529, .7262,  .93161], [.15844, .73551, .92305], [.15173, .74472, .91416], [.14519, .75381, .90496], [.13886, .76279, .8955],  [.13278, .77165, .8858],  [.12698, .78037, .8759],
+         [.12151, .78896, .86581], [.11639, .7974,  .85559], [.11167, .80569, .84525], [.10738, .81381, .83484], [.10357, .82177, .82437], [.10026, .82955, .81389], [.0975,  .83714, .80342], [.09532, .84455, .79299], [.09377, .85175, .78264], [.09287, .85875, .7724],
+         [.09267, .86554, .7623],  [.0932,  .87211, .75237], [.09451, .87844, .74265], [.09662, .88454, .73316], [.09958, .8904,  .72393], [.10342, .896,   .715],   [.10815, .90142, .70599], [.11374, .90673, .69651], [.12014, .91193, .6866],  [.12733, .91701, .67627],
+         [.13526, .92197, .66556], [.14391, .9268,  .65448], [.15323, .93151, .64308], [.16319, .93609, .63137], [.17377, .94053, .61938], [.18491, .94484, .60713], [.19659, .94901, .59466], [.20877, .95304, .58199], [.22142, .95692, .56914], [.23449, .96065, .55614],
+         [.24797, .96423, .54303], [.2618,  .96765, .52981], [.27597, .97092, .51653], [.29042, .97403, .50321], [.30513, .97697, .48987], [.32006, .97974, .47654], [.33517, .98234, .46325], [.35043, .98477, .45002], [.36581, .98702, .43688], [.38127, .98909, .42386],
+         [.39678, .99098, .41098], [.41229, .99268, .39826], [.42778, .99419, .38575], [.44321, .99551, .37345], [.45854, .99663, .3614],  [.47375, .99755, .34963], [.48879, .99828, .33816], [.50362, .99879, .32701], [.51822, .9991,  .31622], [.53255, .99919, .30581],
+         [.54658, .99907, .29581], [.56026, .99873, .28623], [.57357, .99817, .27712], [.58646, .99739, .26849], [.59891, .99638, .26038], [.61088, .99514, .2528],  [.62233, .99366, .24579], [.63323, .99195, .23937], [.64362, .98999, .23356], [.65394, .98775, .22835],
+         [.66428, .98524, .2237],  [.67462, .98246, .2196],  [.68494, .97941, .21602], [.69525, .9761,  .21294], [.70553, .97255, .21032], [.71577, .96875, .20815], [.72596, .9647,  .2064],  [.7361,  .96043, .20504], [.74617, .95593, .20406], [.75617, .95121, .20343],
+         [.76608, .94627, .20311], [.77591, .94113, .2031],  [.78563, .93579, .20336], [.79524, .93025, .20386], [.80473, .92452, .20459], [.8141,  .91861, .20552], [.82333, .91253, .20663], [.83241, .90627, .20788], [.84133, .89986, .20926], [.8501,  .89328, .21074],
+         [.85868, .88655, .2123],  [.86709, .87968, .21391], [.8753,  .87267, .21555], [.88331, .86553, .21719], [.89112, .85826, .2188],  [.8987,  .85087, .22038], [.90605, .84337, .22188], [.91317, .83576, .22328], [.92004, .82806, .22456], [.92666, .82025, .2257],
+         [.93301, .81236, .22667], [.93909, .80439, .22744], [.94489, .79634, .228],   [.95039, .78823, .22831], [.9556,  .78005, .22836], [.96049, .77181, .22811], [.96507, .76352, .22754], [.96931, .75519, .22663], [.97323, .74682, .22536], [.97679, .73842, .22369],
+         [.98,    .73,    .22161], [.98289, .7214,  .21918], [.98549, .7125,  .2165],  [.98781, .7033,  .21358], [.98986, .69382, .21043], [.99163, .68408, .20706], [.99314, .67408, .20348], [.99438, .66386, .19971], [.99535, .65341, .19577], [.99607, .64277, .19165],
+         [.99654, .63193, .18738], [.99675, .62093, .18297], [.99672, .60977, .17842], [.99644, .59846, .17376], [.99593, .58703, .16899], [.99517, .57549, .16412], [.99419, .56386, .15918], [.99297, .55214, .15417], [.99153, .54036, .1491],  [.98987, .52854, .14398],
+         [.98799, .51667, .13883], [.9859,  .50479, .13367], [.9836,  .49291, .12849], [.98108, .48104, .12332], [.97837, .4692,  .11817], [.97545, .4574,  .11305], [.97234, .44565, .10797], [.96904, .43399, .10294], [.96555, .42241, .09798], [.96187, .41093, .0931],
+         [.95801, .39958, .08831], [.95398, .38836, .08362], [.94977, .37729, .07905], [.94538, .36638, .07461], [.94084, .35566, .07031], [.93612, .34513, .06616], [.93125, .33482, .06218], [.92623, .32473, .05837], [.92105, .31489, .05475], [.91572, .3053,  .05134],
+         [.91024, .29599, .04814], [.90463, .28696, .04516], [.89888, .27824, .04243], [.89298, .26981, .03993], [.88691, .26152, .03753], [.88066, .25334, .03521], [.87422, .24526, .03297], [.8676,  .2373,  .03082], [.86079, .22945, .02875], [.8538,  .2217,  .02677],
+         [.84662, .21407, .02487], [.83926, .20654, .02305], [.83172, .19912, .02131], [.82399, .19182, .01966], [.81608, .18462, .01809], [.80799, .17753, .0166],  [.79971, .17055, .0152],  [.79125, .16368, .01387], [.7826,  .15693, .01264], [.77377, .15028, .01148],
+         [.76476, .14374, .01041], [.75556, .13731, .00942], [.74617, .13098, .00851], [.73661, .12477, .00769], [.72686, .11867, .00695], [.71692, .11268, .00629], [.7068,  .1068,  .00571], [.6965,  .10102, .00522], [.68602, .09536, .00481], [.67535, .0898,  .00449],
+         [.66449, .08436, .00424], [.65345, .07902, .00408], [.64223, .0738,  .00401], [.63082, .06868, .00401], [.61923, .06367, .0041],  [.60746, .05878, .00427], [.5955,  .05399, .00453], [.58336, .04931, .00486], [.57103, .04474, .00529], [.55852, .04028, .00579],
+         [.54583, .03593, .00638], [.53295, .03169, .00705], [.51989, .02756, .0078],  [.50664, .02354, .00863], [.49321, .01963, .00955], [.4796,  .01583, .01055],],
+
+    #
+    # # CARTOColors — sequential (curated for maps/UX)
+    # "carto_sunset_7": [
+    #     "#F3E79BFF", "#FAC484FF", "#F8A07EFF",
+    #     "#EB7F86FF", "#CE6693FF", "#A059A0FF", "#5C53A5FF"
+    # ],
+    # "carto_darkmint_7": [
+    #     "#D2FBD4FF", "#A5DBC2FF", "#7BBCB0FF",
+    #     "#559C9EFF", "#3A7C89FF", "#235D72FF", "#123F5AFF"
+    # ],
+    # "carto_emrld_7": [
+    #     "#D3F2A3FF", "#97E196FF", "#6CC08BFF",
+    #     "#4C9B82FF", "#217A79FF", "#105965FF", "#074050FF"
+    # ],
+    # "carto_ag_sunset_7": [
+    #     "#4B2991FF", "#872CA2FF", "#C0369DFF",
+    #     "#EA4F88FF", "#FA7876FF", "#F6A97AFF", "#EDD9A3FF"
+    # ],
+    #
+    # # ColorBrewer — diverging (great for dramatic hero fades & backgrounds)
+    # "brewer_rdylbu_11": [
+    #     "#A50026FF", "#D73027FF", "#F46D43FF", "#FDAE61FF",
+    #     "#FEE090FF", "#FFFFBFFF", "#E0F3F8FF", "#ABD9E9FF",
+    #     "#74ADD1FF", "#4575B4FF", "#313695FF"
+    # ],
+    "brewer_spectral_11": [
+            "#9e0142", "#d53e4f", "#f46d43", "#fdae61", "#fee08b",
+            "#ffffbf", "#e6f598", "#abdda4", "#66c2a5", "#3288bd", "#5e4fa2"
+            ],
+    "sunset_horizon": [
+            "#F3E79B", "#FAC484", "#F8A07E",
+            "#EB7F86", "#CE6693", "#A059A0", "#5C53A5"
+            ],  # CARTO Sunset 7
+
+    "desert_glow": [
+            "#f46d43", "#fdae61", "#fee08b",
+            "#ffffbf", "#e6f598", "#abdda4", "#66c2a5"
+            ],  # ColorBrewer Spectral midrange
+
+    "autumn_spice": [
+            "#7f0000", "#b30000", "#d7301f",
+            "#ef6548", "#fc8d59", "#fdbb84", "#fdd49e", "#fee8c8", "#fff7ec"
+            ],  # Brewer Reds 9
+
+    "ocean_depths": [
+            "#D2FBD4", "#A5DBC2", "#7BBCB0",
+            "#559C9E", "#3A7C89", "#235D72", "#123F5A"
+            ],  # CARTO DarkMint 7
+
+    "icy_fjord": [
+            "#f7fbff", "#deebf7", "#c6dbef",
+            "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#08519c", "#08306b"
+            ],  # Brewer Blues 9
+    "forest_trail": [
+            "#00441b", "#006d2c", "#238b45",
+            "#41ae76", "#66c2a4", "#99d8c9", "#ccece6", "#e5f5f9", "#f7fcfd"
+            ],  # Brewer Greens 9
+
+
+    "viridis": [
+            "#440154", "#482878", "#3E4989",
+            "#31688E", "#26828E", "#1F9E89",
+            "#35B779", "#6DCD59", "#B4DE2C", "#FDE725"
+            ],
+
+    "inferno": [
+            "#000004", "#1B0C41", "#4A0C6B",
+            "#781C6D", "#A52C60", "#CF4446",
+            "#ED6925", "#FB9A06", "#F7D13D", "#FCFFA4"
+            ],
+
+    "magma": [
+            "#000004", "#140E36", "#3B0F70",
+            "#641A80", "#8C2981", "#B5367A",
+            "#DE4968", "#F7705C", "#FE9F6D", "#FEC98D", "#FCFDBF"
+            ],
+
+    "plasma": [
+            "#0D0887", "#41049D", "#6A00A8",
+            "#8F0DA4", "#B12A90", "#CC4778",
+            "#E16462", "#F2844B", "#FCA636", "#FCCC25", "#F0F921"
+            ],
+
+    "hot_spring": [
+            "#7F0000","#B30000","#D7301F","#EF6548","#FC8D59",
+            "#FDBB84","#FDD49E","#FEE8C8","#FFF7EC"
+            ],  # Brewer Reds warm
+
+    "festival_fire": [
+            "#40004B","#762A83","#9970AB","#C2A5CF",
+            "#E7D4E8","#D9F0D3","#A6DBA0","#5AAE61","#1B7837","#00441B"
+            ],  # Brewer PRGn 10
+
+    "retro_wave": [
+            "#3F007D","#54278F","#6A51A3","#807DBA",
+            "#9E9AC8","#BCBDDC","#DADAEB","#EFEDF5","#FCFBFD"
+            ],  # Brewer Purples
+
+    "pastel_dreams": [
+            "#FEE0D2","#FCBBA1","#FC9272","#FB6A4A",
+            "#EF3B2C","#CB181D","#A50F15","#67000D"
+            ],  # Brewer Reds soft
+
+    "lavender_fields": [
+            "#F7F4F9","#E7E1EF","#D4B9DA","#C994C7",
+            "#DF65B0","#E7298A","#CE1256","#980043","#67001F"
+            ],  # Brewer PuRd 9
+
+    "morning_mist": [
+            "#F7FBFF","#DEEBF7","#C6DBEF","#9ECAE1",
+            "#6BAED6","#4292C6","#2171B5","#08519C","#08306B"
+            ],  # Brewer Blues 9
+    "emerald_valley": [
+            "#D3F2A3","#97E196","#6CC08B","#4C9B82","#217A79","#105965","#074050"
+            ],  # CARTO Emrld
+
+    "forest_canopy": [
+            "#00441B","#006D2C","#238B45","#41AE76",
+            "#66C2A4","#99D8C9","#CCECE6","#E5F5F9","#F7FCFD"
+            ],  # Brewer Greens
+
+    "glacier_melt": [
+            "#313695","#4575B4","#74ADD1","#ABD9E9","#E0F3F8",
+            "#FFFFBF","#FEE090","#FDAE61","#F46D43","#D73027","#A50026"
+            ],  # Brewer RdYlBu 11
+
+    "earth_terrain": [
+            "#543005","#8C510A","#BF812D","#DFC27D",
+            "#F6E8C3","#C7EAE5","#80CDC1","#35978F","#01665E","#003C30"
+            ],  # Brewer BrBG 10
+
+
+    "desert_mirage": [
+            "#7F3B08","#B35806","#E08214","#FDB863",
+            "#FEE0B6","#D8DAEB","#B2ABD2","#8073AC","#542788","#2D004B"
+            ],  # Brewer PuOr 10
+
+    "aurora_night": [
+            "#1B1C3A","#28365C","#335C7D","#2A9D8F","#8AB17D",
+            "#E9C46A","#F4A261","#E76F51","#C44569"
+            ],
+
+    "tropical_lagoon": [
+            "#00429D","#4771B2","#73A2B6","#A5D0A1",
+            "#FFCA66","#F8894F","#ED4E33","#9B0000"
+            ],  # Brewer RdYlBu variation
+
+    "rose_quartz": [
+            "#67001F","#B2182B","#D6604D","#F4A582",
+            "#FDDBC7","#E0E0E0","#BABABA","#878787","#4D4D4D","#1A1A1A"
+            ],  # Brewer RdGy 10
+
+    "cosmic_dawn": [
+            "#0B0033","#320A64","#65109A","#A01ECF","#E23CEB","#F3A0F5",
+            "#B8CFFF","#7FD3E2","#4BC8CD","#26BFAF","#02B390","#00A271",
+            "#008354","#00653E","#00462C","#00241A","#000500",
+            "#2A0033","#540066","#7E0099","#A900CC","#D400FF","#FF6AFF"
+            ],
+    "tropical_twilight": [
+            "#FF9300","#FFC300","#FFED66","#FEFEAC","#FFB768",
+            "#FF8C69","#FF5E62","#FF006E","#D60087","#AD009E",
+            "#8400A6","#5800A1","#350087","#1A0057","#00002E",
+            "#320040","#600060","#900080","#C000A0","#FF00C0"
+            ],
+    "digital_rose": [
+            "#F8EDEB","#F5D7E3","#F2C1DC","#EFAACF","#EC94C3","#EB6AB7",
+            "#EA3FA7","#E11E99","#CA187F","#B31267","#960C4F","#750839",
+            "#54042A","#33041A","#11020A","#330119","#55022A","#77023D",
+            "#990250","#BB0640","#DD0640","#FF0640","#FF2E60","#FF4E80"
+            ],
+    "monet_frost": [
+            "#F7F0E6","#ECE3D9","#E0D7CC","#D4CABF","#C8BEB2","#BCB2A5",
+            "#AFA597","#A39A8A","#978D7D","#8B816F","#7F7461","#736853",
+            "#665C46","#59503A","#4D4430","#403725","#342B1E","#281F16",
+            "#1C130F","#10080A","#040103","#1A0910","#361321","#521D38",
+            "#6E2955","#8A3373","#A63D90","#C147AE","#DF51CB","#FC5BFD"
+            ],
+    "surreal_swirl": [
+            "#29001A","#3F0036","#560053","#6D006F","#84008B","#9B00A7",
+            "#B200C3","#C900DF","#E000FB","#FF00F3","#FF00DB","#FF00C3",
+            "#FF009B","#FF0083","#FF006B","#FF0053","#FF003B","#FF0023",
+            "#FF000B","#E60000","#CC0000","#B30000","#990000","#800000",
+            "#660000","#4D0000","#330000","#1A0000","#000000"
+            ],
+    "turner_sunset": [
+            '#FFD34D', '#FFD24D', '#FED04B', '#FCCC4A', '#FAC747', '#F7C045', '#F4B841', '#F1A936', '#EC992D', '#E98827',
+            '#E87727', '#E3642C', '#DA512F', '#CD3C33', '#BC2934', '#A91C36', '#951839', '#841C47', '#722257', '#652968',
+            '#583177', '#4A367F', '#3D3A83', '#303E84', '#293C79', '#253A70', '#223869', '#203763', '#1F3660', '#1F365F'
+            ],
+    "hokusai_prussian_wave": [
+            '#EAF7FF', '#E9F7FF', '#E7F6FF', '#E3F5FF', '#DEF3FF', '#D7F1FF', '#CEEFFF', '#C0E7FD', '#B1DEFB', '#A0D4F8',
+            '#8BC9F2', '#75BCEC', '#5FAEE5', '#49A0DB', '#3892CE', '#2A83C0', '#2274B3', '#1C69A7', '#175F9C', '#125692',
+            '#0E4D8A', '#0B4781', '#094179', '#083C72', '#08396D', '#073768', '#073564', '#073461', '#073360', '#07335F'
+            ],
+    "mucha_poster_pastel": [
+            '#F6D5C3', '#F6D4C1', '#F5D1BB', '#F3CCB0', '#EFC7A1', '#E8C08D', '#DFB679', '#D4AA62', '#CA9E50', '#BF923E',
+            '#B68A33', '#A1A562', '#A3C4AB', '#BBD3BE', '#D2E0CE', '#E3E9DB', '#EEF0E4', '#F4F4EC', '#C6E3DF', '#A8C9E3',
+            '#91B8D7', '#7BA6CC', '#6895C1', '#5A87B8', '#4E7BB0', '#4571A7', '#3F69A0', '#3A649B', '#376098', '#365F97'
+            ],
+    "monet_water_garden": [
+            '#0E3A75', '#0F3B77', '#103D7C', '#134286', '#184892', '#1E4FA3', '#285AAF', '#3366BE', '#4072C5', '#4F7FCC',
+            '#628DD2', '#749BD7', '#78AAD7', '#64B6AA', '#4EA689', '#349776', '#2E916E', '#3D9F78', '#55AE83', '#6FBD8F',
+            '#89CA9D', '#A2D5AB', '#B7DFB9', '#C9E5C4', '#D7EBCF', '#E0EFD4', '#E7F2D8', '#ECF4DC', '#EFF6DE', '#F0F6DF'
+            ],
+    "matisse_fauve_heat": [
+            '#D91A1A', '#DA1C1C', '#DD2121', '#E12929', '#E83333', '#F03E3E', '#F75352', '#FE6868', '#FF7C87', '#FF8BA5',
+            '#FF61C5', '#ED46E3', '#CA3CED', '#A43EF1', '#7F47F4', '#5D56F4', '#3B6FF6', '#2A9AF3', '#06B8EE', '#00D1E5',
+            '#00E5D4', '#00EDBD', '#2DF0A0', '#4CF187', '#66F06D', '#80EF57', '#92ED42', '#9EEC2E', '#A6EB1B', '#A8EB12'
+            ],
+    "bauhaus_primary_loop": [
+            '#C4002B', '#C5042B', '#C90F29', '#CE1C27', '#D62924', '#E0371E', '#EA5D00', '#EF8300', '#FBAA00', '#FFD313',
+            '#FFDE4B', '#F6E29C', '#E3DCD4', '#C8B5F4', '#8196FF', '#536EF4', '#274BD7', '#103099', '#3C4DA6', '#716BB1',
+            '#9782A7', '#C08F9B', '#D3A288', '#E0AA7A', '#E6B36B', '#EDBA61', '#F1C059', '#F3C452', '#F5C74E', '#F5C84C'
+            ],
+    "rothko_red_field": [
+            '#3D1212', '#3E1212', '#411313', '#461413', '#4D1514', '#561616', '#611917', '#6E1D18', '#7E2219', '#8E291A',
+            '#A03219', '#B34119', '#C54F19', '#D85F19', '#E36D20', '#EB7D2A', '#F28D39', '#F69F4B', '#F9AE5C', '#FABC6A',
+            '#FBC77A', '#FBD18A', '#FAD999', '#F8E0A6', '#F7E5B1', '#F6E8B9', '#F5EAC0', '#F4ECC4', '#F4EDC7', '#F4EDC8'
+            ],
+    "warhol_pop_candy": [
+            '#FF0068', '#FF0266', '#FF085F', '#FF1254', '#FF1E43', '#FF2A2A', '#FF4A16', '#FF6601', '#FF8C00', '#FFB400',
+            '#FFD600', '#E4F000', '#9FFF00', '#51FF00', '#00FF86', '#00F9D4', '#00DEFF', '#00B0FF', '#007FFF', '#3251FF',
+            '#5D2BFF', '#8417FF', '#A600FF', '#C502FF', '#E100FF', '#ED00EC', '#F500DC', '#FB00D1', '#FE00CA', '#FF00C8'
+            ],
+    "miami_vice_neon": [
+            '#00F0FF', '#07F0FF', '#16EFFF', '#25EDFF', '#32EBFF', '#40E9FF', '#59E5FF', '#70E2FF', '#89DCFF', '#A2D6FF',
+            '#B5CCFF', '#CABFFF', '#DDAFFF', '#F09BFC', '#FF85ED', '#FF6ED6', '#FF5BBF', '#FF4EA6', '#FF4E8C', '#FF5E70',
+            '#FF735A', '#FF8B4B', '#FFA142', '#FFB43C', '#FFC440', '#FFCE4D', '#FFD658', '#FFDC60', '#FFDF64', '#FFE066'
+            ],
+    "memphis_milano": [
+            '#FF77A8', '#FF79A9', '#FF7FAC', '#FF89B1', '#FF96B8', '#FFA6C1', '#FFB8CF', '#FFCCDE', '#FFD8AE', '#E2FF98',
+            '#C6FF76', '#74FFBD', '#7BF3FF', '#89CCFF', '#9AB3FF', '#B7A7FF', '#D9ABFE', '#FAC1FB', '#FFBDA0', '#FEC459',
+            '#FAA441', '#FC704B', '#E04782', '#7755AB', '#26547C', '#00819E', '#00A7AA', '#00C2A8', '#00D1A3', '#06D6A0'
+            ],
+}
+
+_matplotlib_gradient_preset_names='Accent Accent_r Blues Blues_r BrBG BrBG_r BuGn BuGn_r BuPu BuPu_r CMRmap CMRmap_r Dark2 Dark2_r GnBu GnBu_r Greens Greens_r Greys Greys_r OrRd OrRd_r Oranges Oranges_r PRGn PRGn_r Paired Paired_r Pastel1 Pastel1_r Pastel2 Pastel2_r PiYG PiYG_r PuBu PuBuGn PuBuGn_r PuBu_r PuOr PuOr_r PuRd PuRd_r Purples Purples_r RdBu RdBu_r RdGy RdGy_r RdPu RdPu_r RdYlBu RdYlBu_r RdYlGn RdYlGn_r Reds Reds_r Set1 Set1_r Set2 Set2_r Set3 Set3_r Spectral Spectral_r Wistia Wistia_r YlGn YlGnBu YlGnBu_r YlGn_r YlOrBr YlOrBr_r YlOrRd YlOrRd_r afmhot afmhot_r autumn autumn_r binary binary_r bone bone_r brg brg_r bwr bwr_r cividis cividis_r cool cool_r coolwarm coolwarm_r copper copper_r cubehelix cubehelix_r flag flag_r gist_earth gist_earth_r gist_gray gist_gray_r gist_heat gist_heat_r gist_ncar gist_ncar_r gist_rainbow gist_rainbow_r gist_stern gist_stern_r gist_yarg gist_yarg_r gnuplot gnuplot2 gnuplot2_r gnuplot_r gray gray_r hot hot_r hsv hsv_r inferno inferno_r jet jet_r magma magma_r nipy_spectral nipy_spectral_r ocean ocean_r pink pink_r plasma plasma_r prism prism_r rainbow rainbow_r seismic seismic_r spring spring_r summer summer_r tab10 tab10_r tab20 tab20_r tab20b tab20b_r tab20c tab20c_r terrain terrain_r viridis viridis_r winter winter_r'.split()
+
+gradient_presets = DictReader(gradient_presets)
+
+def _get_gradient_preset(name):
+    """
+    Get gradient colors from RP gradient presets or matplotlib colormaps.
+    
+    Args:
+        name (str): Gradient preset name or matplotlib colormap name
+        
+    Returns:
+        dict or list: Gradient specification
+        
+    Raises:
+        TypeError: If name is not a string
+        ValueError: If gradient name is not found in either RP presets or matplotlib
+    """
+    pip_import("cmapy")
+    import cmapy
+    
+    if not isinstance(name, str):
+        raise TypeError("Gradient name must be a string, got {0}: {1}. ".format(type(name).__name__, repr(name))
+                        "Expected string colormap name like 'viridis', 'sunset', etc - see rp.gradient_presets for full list")
+    
+    if name in gradient_presets:
+        # Check RP gradient presets first
+        return gradient_presets[name]
+    
+    elif name in _matplotlib_gradient_preset_names:
+        # Load matplotlib colormap and cache in gradient_presets
+        gradient_presets._data.update({
+            x: byte_colors_to_float_colors(cmapy.cmap(x)[:, 0])
+            for x in list_flatten([x["colormaps"] for x in cmapy.cmap_groups])
+        })
+        
+        # Now it should be in gradient_presets
+        if name in gradient_presets:
+            return gradient_presets[name]
+        else:
+            raise ValueError("Failed to load matplotlib colormap '{0}' via cmapy. ".format(name)
+                             "This should not happen - please report this as a bug.")
+    
+    rp_presets = sorted(gradient_presets.keys())
+    raise ValueError("Unknown gradient/colormap name: '{0}'. ".format(name)
+                    "Available options: {0}".format(' '.join(gradient_presets)))
+
+def _as_gradient_dict(gradient_spec):
+    """
+    Convert various gradient specifications to a unified position-color dict.
+    
+    Args:
+        gradient_spec: Can be:
+            - String: gradient preset name or matplotlib colormap name  
+            - List/tuple: list of colors to be evenly spaced
+            - Dict: position-color mapping (copied)
+            
+    Returns:
+        dict: Position-color mapping {float: color, ...}
+        
+    Raises:
+        TypeError: If gradient_spec is wrong type
+        ValueError: If gradient_spec is invalid (empty, unknown name, etc.)
+    """
+    # Cascade: string -> replace with preset value, then fall through to list/dict handling
+    if isinstance(gradient_spec, str):
+        gradient_spec = _get_gradient_preset(gradient_spec)
+            
+    # Now handle list/tuple -> dict conversion
+    if isinstance(gradient_spec, (list, tuple)):
+        if len(gradient_spec) < 2:
+            raise ValueError('Gradient list must have at least 2 colors, got {0}: {1}. '.format(len(gradient_spec), gradient_spec)
+                             'Example: ["red", "blue"] or ["#ff0000", "#0000ff"]')
+        positions = np.linspace(0.0, 1.0, len(gradient_spec))
+        gradient_spec = {pos: color for pos, color in zip(positions, gradient_spec)}
+        
+    # Final dict handling
+    if not isinstance(gradient_spec, dict):
+        # Should never reach here due to cascade logic
+        raise TypeError('Gradient must be a string name, list of colors, or position-color dict. '
+                        'Got {0}: {1}. '.format(type(gradient_spec).__name__, repr(gradient_spec))
+                        'Examples: "viridis", ["red", "blue"], {{0.0: "black", 1.0: "white"}}')
+
+    if len(gradient_spec) < 2:
+        raise ValueError('Gradient dict must have at least 2 position-color pairs, got {0}: {1}. '.format(len(gradient_spec), gradient_spec)
+                         'Example: {{0.0: "red", 1.0: "blue"}}')
+
+    return gradient_spec.copy()
+
+def _gradient_dict_to_list(gradient_dict, start=0, end=1, res=256):
+    """Convert gradient dict to list of colors with specified resolution using np.interp.
+    
+    EXAMPLE: _gradient_dict_to_list({0.0: 'red', 1.0: 'blue'}, res=3) 
+             # Returns [(1.0, 0.0, 0.0, 1.0), (0.5, 0.0, 0.5, 1.0), (0.0, 0.0, 1.0, 1.0)]
+    """
+    # Create evenly spaced positions
+    target_positions = np.linspace(start, end, res)
+    
+    # Extract sorted positions and colors from gradient_dict
+    sorted_items = sorted(gradient_dict.items())
+    gradient_positions = np.array([float(pos) for pos, color in sorted_items])
+    gradient_colors = [as_rgba_float_color(color) for pos, color in sorted_items]
+    colors_array = np.array(gradient_colors)
+    
+    # Interpolate each channel separately
+    interpolated_colors = []
+    for pos in target_positions:
+        interpolated_rgba = []
+        for channel in range(4):  # RGBA channels
+            channel_values = colors_array[:, channel]
+            interpolated_value = np.interp(pos, gradient_positions, channel_values)
+            interpolated_rgba.append(interpolated_value)
+        interpolated_colors.append(tuple(interpolated_rgba))
+    
+    return interpolated_colors
+        
+def _apply_colormap_to_image_via_np(values, gradient_dict):
+    """Apply colormap using numpy interpolation with floating-point precision."""
+    # Extract positions and colors directly in sorted order
+    sorted_items = sorted(gradient_dict.items())
+    sorted_positions = [float(pos) for pos, color in sorted_items]
+    colors_array = as_numpy_array(
+        as_rgba_float_colors(
+            gather(gradient_dict, sorted_positions)
+        )
+    )
+    
+    # Apply colormap using np.interp
+    output = np.zeros(values.shape + (4,), dtype=_float_image_dtype())
+    values_flat = values.flatten()
+    for channel in range(4):  # RGBA channels
+        interp_result = np.interp(values_flat, sorted_positions, colors_array[:, channel])
+        output[..., channel] = interp_result.reshape(values.shape)
+    
+    return output
+
+def _apply_colormap_to_image_via_cv2(values, gradient_dict):
+    """Apply colormap using OpenCV with byte precision (original implementation)."""
+    pip_import('cv2')
+    import cv2
+    
+    # Convert float values back to byte image for cv2
+    image = as_rgb_image(as_byte_image(values), copy=False)
+    
+    # Create colormap using utility function
+    gradient_colors = _gradient_dict_to_list(gradient_dict, res=256)
+    rgb_colors = [color[:3] for color in gradient_colors]  # Strip alpha channel
+    byte_colors = float_colors_to_byte_colors(*rgb_colors)
+    colormap = np.array(byte_colors, dtype=np.uint8).reshape(256, 1, 3)
+    
+    # Apply colormap using cv2
+    image_colorized = cv2.applyColorMap(image, colormap)
+    
+    # Convert BGR to RGB and return as float image
+    image_colorized = cv_bgr_rgb_swap(image_colorized, copy=False)
+    
+    return as_float_image(image_colorized)
+
+def apply_colormap_to_image(image, colormap_name='viridis', *, backend='cv2'):
+    """
+        Apply a colormap to an image or array of values.
+        
+        https://stackoverflow.com/questions/52498777/apply-matplotlib-or-custom-colormap-to-opencv-image/52626636
+        
+        Args:
+            image: Input image as defined by rp.is_image
+            colormap_name: Name of colormap (gradient preset or matplotlib colormap)
+            backend: 'np' (numpy interpolation) or 'cv2' (OpenCV)
+                'cv2' backend is *much* faster, but only does RGB byte images and is less precise
+                'np' is slower and more precise, and uses floating point RGBA images 
+            
+        EXAMPLE:
+            >>> image=load_image('https://www.gaytimes.co.uk/wp-content/uploads/2018/05/Kim-Petras-Thom-Kerr-header.jpg')
+            ... image=horizontally_concatenated_images(full_range(gaussian_kernel(size=get_image_height(image),sigma=50)),image)
+            ... image=vertically_concatenated_images(image,linear_gradient_image(height=50,width=get_image_width(image),direction='horizontal',gradient=['white','black']))
+            ... styles='trans_flag Accent Accent_r Blues Blues_r BrBG BrBG_r BuGn BuGn_r BuPu BuPu_r CMRmap CMRmap_r Dark2 Dark2_r GnBu GnBu_r Greens Greens_r Greys Greys_r OrRd OrRd_r Oranges Oranges_r PRGn PRGn_r Paired Paired_r Pastel1 Pastel1_r Pastel2 Pastel2_r PiYG PiYG_r PuBu PuBuGn PuBuGn_r PuBu_r PuOr PuOr_r PuRd PuRd_r Purples Purples_r RdBu RdBu_r RdGy RdGy_r RdPu RdPu_r RdYlBu RdYlBu_r RdYlGn RdYlGn_r Reds Reds_r Set1 Set1_r Set2 Set2_r Set3 Set3_r Spectral Spectral_r Wistia Wistia_r YlGn YlGnBu YlGnBu_r YlGn_r YlOrBr YlOrBr_r YlOrRd YlOrRd_r afmhot afmhot_r autumn autumn_r binary binary_r bone bone_r brg brg_r bwr bwr_r cividis cividis_r cool cool_r coolwarm coolwarm_r copper copper_r cubehelix cubehelix_r flag flag_r gist_earth gist_earth_r gist_gray gist_gray_r gist_heat gist_heat_r gist_ncar gist_ncar_r gist_rainbow gist_rainbow_r gist_stern gist_stern_r gist_yarg gist_yarg_r gnuplot gnuplot2 gnuplot2_r gnuplot_r gray gray_r hot hot_r hsv hsv_r inferno inferno_r jet jet_r magma magma_r nipy_spectral nipy_spectral_r ocean ocean_r pink pink_r plasma plasma_r prism prism_r rainbow rainbow_r seismic seismic_r spring spring_r summer summer_r tab10 tab10_r tab20 tab20_r tab20b tab20b_r tab20c tab20c_r terrain terrain_r viridis viridis_r winter winter_r'.split()
+            ... styles=shuffled(styles+list(gradient_presets))
+            ... for style in styles:
+            ...                display_image(cv_bgr_rgb_swap(apply_colormap_to_image(image,style,backend='cv2')))
+            ...                input(style)
+    """
+    # Shared preprocessing
+    image = as_numpy_image(image, copy=False)
+    values = as_grayscale_image(as_float_image(image, copy=False), copy=False)
+    gradient_dict = _as_gradient_dict(colormap_name)
+    
+    # Dispatch to backend
+    if backend == 'np':
+        return _apply_colormap_to_image_via_np(values, gradient_dict)
+    elif backend == 'cv2':
+        return _apply_colormap_to_image_via_cv2(values, gradient_dict)
+    else:
+        raise ValueError('Invalid backend "{0}". Valid options: "np", "cv2"'.format(backend))
+
+def _gradient_angle_to_points(height,width,angle):
+    """ See linear_gradient_image's example for a visualization """
+    angle = angle + 90
+    h,w=height,width
+    a=angle/360*tau
+    cx=w/2
+    cy=h/2
+    r=h+w
+    dx=r*_cos(a)
+    dy=r*_sin(a)
+    seg=[[cx,cy],[cx+dx,cy+dy]]
+    rect=[[0,0],[w,0],[w,h],[0,h],[0,0]]
+    [[ix,iy]]=as_points_array(path_intersections(seg,rect))
+    #m is mirror
+    mx=(cx-ix)+cx
+    my=(cy-iy)+cy
+    return [[mx,my],[ix,iy]]
+
+def linear_gradient_image(height: int, width: int, gradient, direction='vertical', *, backend='np'):
+    """Creates an image with a linear gradient between colors.
+    
+    Args:
+        height (int): Height of the output image in pixels
+        width (int): Width of the output image in pixels  
+        gradient: Color gradient specification, can be:
+                 - List of colors: ['red', 'blue', 'green'] - evenly spaced from 0.0 to 1.0
+                 - Dict mapping positions to colors: {0.0: 'red', 0.5: 'blue', 1.0: 'green'}
+                 - Dict can have negative values or values > 1.0 for extended gradients
+                 - Colors can be strings, tuples, hex values (anything as_rgba_float_color accepts)
+                 - Preset name from gradient_presets: 'sunset', 'ocean', 'neon_glow', etc.
+        direction: Gradient direction specification, can be:
+                  - 'vertical': Top to bottom gradient  
+                  - 'horizontal': Left to right gradient
+                  - float: Angle in degrees (0=horizontal right, 90=vertical down, 180=horizontal left, 270=vertical up)
+                  - Length-2 path in pixel coordinates: [(x1,y1), (x2,y2)] for custom direction
+        backend: 'np' (numpy interpolation) or 'cv2' (OpenCV)
+    
+    Returns:
+        numpy.ndarray: RGBA float image with linear gradient
+        
+    EXAMPLES - Basic Usage:
+        >>> img = linear_gradient_image(100, 100, ['red', 'blue'], 'vertical')
+        >>> display_image(img)
+        
+        >>> img = linear_gradient_image(50, 200, ['#ff0000', 'green', (0,0,1,0.5)], 'horizontal')
+        >>> display_image(img)
+        
+        >>> gradient_dict = {-0.5: 'black', 0.0: 'red', 0.7: 'yellow', 1.5: 'white'}
+        >>> img = linear_gradient_image(100, 100, gradient_dict, 'vertical')
+        >>> display_image(img)
+        
+        >>> img = linear_gradient_image(100, 100, ['purple', 'orange'], [(0, 0), (100, 100)])
+        >>> display_image(img)
+        
+        >>> img = linear_gradient_image(200, 200, gradient_presets['sunset'], 'vertical')
+        >>> display_image(img)
+        
+        >>> img = linear_gradient_image(200, 200, 'ocean', 'horizontal')  # preset by name
+        >>> display_image(img)
+        
+        >>> img = linear_gradient_image(300, 300, ['red', 'blue'], 45.0)  # 45 degree angle
+        >>> display_image(img)
+        
+        >>> img = linear_gradient_image(400, 400, ['magenta', 'cyan'], 112.5)  # 112.5 degree angle
+        >>> display_image(img)
+        
+    EXAMPLES - Animated Demo:
+
+        >>> # Animated two-point gradient demo
+        >>> width, height = 512, 512
+        >>> frames = []
+        >>> circle1 = as_easydict(x=150, y=150, vx=2.1, vy=1.8, color_phase=0)
+        >>> circle2 = as_easydict(x=350, y=350, vx=-1.9, vy=-2.3, color_phase=3.14)
+        >>> 
+        >>> for frame_idx in range(540):
+        ...     for circle in [circle1, circle2]:
+        ...         circle.x += circle.vx
+        ...         circle.y += circle.vy
+        ...         if circle.x <= 15 or circle.x >= width - 15: circle.vx *= -1
+        ...         if circle.y <= 15 or circle.y >= height - 15: circle.vy *= -1
+        ...         circle.x = max(15, min(width - 15, circle.x))
+        ...         circle.y = max(15, min(height - 15, circle.y))
+        ...         circle.color_phase += 0.02
+        ...     
+        ...     import numpy as np
+        ...     h1, h2 = circle1.color_phase, circle2.color_phase
+        ...     color1 = (np.sin(h1)+1)/2, (np.sin(h1+2.09)+1)/2, (np.sin(h1+4.19)+1)/2
+        ...     color2 = (np.sin(h2)+1)/2, (np.sin(h2+2.09)+1)/2, (np.sin(h2+4.19)+1)/2
+        ...     
+        ...     gradient_start = (int(circle1.x), int(circle1.y))
+        ...     gradient_end = (int(circle2.x), int(circle2.y))
+        ...     frame = linear_gradient_image(height, width, [color1, color2], [gradient_start, gradient_end])
+        ...     
+        ...     frame = cv_draw_circles(frame, [circle1.x, circle2.x], [circle1.y, circle2.y], 
+        ...                           15, [color1, color2], rim=3, rim_color='black')
+        ...     frames.append(as_byte_image(frame))
+        >>> 
+        >>> video = np.array(frames)
+        >>> save_video(video, 'gradient_circles_demo.mp4', framerate=30)
+        >>> display_video(video)
+
+    EXAMPLES - Gradient Angles Video:
+
+        >>> def draw(image, points):
+        ...     h, w = get_image_dimensions(image)
+        ...     box = [[0, 0], [w, 0], [w, h], [0, h], [0, 0]]
+        ... 
+        ...     box = as_numpy_array(box)
+        ...     points = as_numpy_array(points)
+        ...     xs, ys = as_numpy_array(points.T)
+        ... 
+        ...     image = cv_draw_contour(image, box, color="black")
+        ...     image = cv_draw_arrow(image, *list_flatten(points), color="black", tip_length=0.1)
+        ...     image = cv_draw_circles(image, xs, ys, rim=1)
+        ...     image = cv_draw_circle(image, w / 2, h / 2, rim=1)
+        ...     return image
+        ... 
+        ... 
+        ... def video_demo():
+        ...     video = []
+        ...     h, w = 400, 200
+        ...     gradient = [as_rgba_float_color("light random") for _ in range(50)]
+        ...     for a in eta(range(360)):
+        ...         points = rp.r._gradient_angle_to_points(h, w, a)
+        ...         image = linear_gradient_image(
+        ...             h,
+        ...             w,
+        ...             # gradient_presets.electric_rainbow,
+        ...             gradient,
+        ...             direction=a,
+        ...         )
+        ...         image = draw(image, points).
+        ...         image = labeled_image(image, "{0}°".format(a), font="Futura")
+        ...         video.append(image)
+        ...     return video
+        ... 
+        ... 
+        ... video = video_demo()
+        ... video_path = save_video_mp4(video, "gradient_angles.mp4")
+        ... open_file_with_default_application(video_path)
+        
+    EXAMPLES - Showcase Grid:
+
+        >>> # Showcase all gradient presets in a tiled layout
+        ... size = 180
+        ... gradient_images = []
+        ... gradient_labels = []
+        ... 
+        ... for name, colors in gradient_presets.items():
+        ...     img = linear_gradient_image(size, size, colors, 'vertical')
+        ...     gradient_images.append(img)
+        ...     labeled_img = labeled_image(img, name.replace('_', ' ').title(),
+        ...                                 size=14, background_color=(0,0,0,0.75), text_color='white',font='R:Futura')
+        ...     gradient_labels.append(labeled_img)
+        ... 
+        ... # Create tiled showcase with dark background
+        ... #showcase = tiled_images(gradient_images, border_color='#1a1a1a', border_thickness=8)
+        ... gradient_labels=with_corner_radii(gradient_labels,radius=15)
+        ... labeled_showcase = tiled_images(gradient_labels, border_color='transparent', border_thickness=8)
+        ... labeled_showcase=with_drop_shadow(labeled_showcase,blur=30,x=5,y=5,opacity=.5)
+        ... #labeled_showcase=blend_images(1,labeled_showcase)
+        ... 
+        ... 
+        ... 
+        ... display_image(labeled_showcase)
+        ... path = save_image(labeled_showcase, 'gradient_presets_showcase.png')
+        ... open_file_with_default_application(path)
+        
+    EXAMPLES - Complex Multi-Layer CSS Gradient Recreation with Float Angles and Overlay Blending:
+
+        >>> # Recreate CSS: linear-gradient(112.5deg, rgb(250,109,130) 0%, rgb(250,109,130) 3%, 
+        ... # rgb(219,107,130) 3%, rgb(219,107,130) 34%, rgb(187,104,131) 34%, rgb(187,104,131) 46%, 
+        ... # rgb(156,102,131) 46%, rgb(156,102,131) 51%, rgb(124,99,132) 51%, rgb(124,99,132) 52%, 
+        ... # rgb(93,97,132) 52%, rgb(93,97,132) 76%, rgb(61,94,133) 76%, rgb(61,94,133) 84%, 
+        ... # rgb(30,92,133) 84%, rgb(30,92,133) 100%), linear-gradient(157.5deg, [same colors]),
+        ... # linear-gradient(45deg, [same colors]), linear-gradient(90deg, rgb(71,69,135), rgb(241,26,171));
+        ... # background-blend-mode: overlay,overlay,overlay,normal;
+        ... gradient_dict = {
+        ...     0.0: byte_color_to_float_color((250, 109, 130)),
+        ...     0.029: byte_color_to_float_color((250, 109, 130)),  # Hard stop before 3%
+        ...     0.03: byte_color_to_float_color((219, 107, 130)),
+        ...     0.339: byte_color_to_float_color((219, 107, 130)),  # Hard stop before 34%
+        ...     0.34: byte_color_to_float_color((187, 104, 131)),
+        ...     0.459: byte_color_to_float_color((187, 104, 131)),  # Hard stop before 46%
+        ...     0.46: byte_color_to_float_color((156, 102, 131)),
+        ...     0.509: byte_color_to_float_color((156, 102, 131)),  # Hard stop before 51%
+        ...     0.51: byte_color_to_float_color((124, 99, 132)),
+        ...     0.519: byte_color_to_float_color((124, 99, 132)),   # Hard stop before 52%
+        ...     0.52: byte_color_to_float_color((93, 97, 132)),
+        ...     0.759: byte_color_to_float_color((93, 97, 132)),    # Hard stop before 76%
+        ...     0.76: byte_color_to_float_color((61, 94, 133)),
+        ...     0.839: byte_color_to_float_color((61, 94, 133)),    # Hard stop before 84%
+        ...     0.84: byte_color_to_float_color((30, 92, 133)),
+        ...     1.0: byte_color_to_float_color((30, 92, 133))
+        ... }
+        ... base_gradient = {0.0: byte_color_to_float_color((71, 69, 135)), 1.0: byte_color_to_float_color((241, 26, 171))}
+        ... width, height = 800, 600
+        ... layer_112deg = linear_gradient_image(height, width, gradient_dict, 112.5)  # Float angle support
+        ... layer_157deg = linear_gradient_image(height, width, gradient_dict, 157.5)
+        ... layer_45deg = linear_gradient_image(height, width, gradient_dict, 45.0)
+        ... base_layer = linear_gradient_image(height, width, base_gradient, 90.0)
+        ... complex_result = base_layer
+        ... complex_result = blend_images(complex_result, layer_45deg, mode="overlay")
+        ... complex_result = blend_images(complex_result, layer_157deg, mode="overlay")
+        ... complex_result = blend_images(complex_result, layer_112deg, mode="overlay")
+        ... display_image(complex_result)
+        ... save_image(complex_result, 'complex_css_gradient.png')
+
+    EXAMPLES - Green Multi-Layer CSS Gradient with Hard Color Stops:
+
+        >>> # Recreate CSS: linear-gradient(0deg, rgb(164,211,160) 0%, rgb(164,211,160) 22%, 
+        ... # rgb(141,190,127) 22%, rgb(141,190,127) 61%, rgb(117,169,93) 61%, rgb(117,169,93) 68%, 
+        ... # rgb(94,147,60) 68%, rgb(94,147,60) 92%, rgb(70,126,26) 92%, rgb(70,126,26) 100%),
+        ... # linear-gradient(135deg, [same colors]), linear-gradient(90deg, [same colors]), 
+        ... # linear-gradient(90deg, rgb(255,159,173), rgb(82,81,20)); background-blend-mode: overlay,overlay,overlay,normal;
+        ... green_gradient_dict = {
+        ...     0.0: byte_color_to_float_color((164, 211, 160)),
+        ...     0.219: byte_color_to_float_color((164, 211, 160)),  # Hard stop before 22%
+        ...     0.22: byte_color_to_float_color((141, 190, 127)),   # 22% transition
+        ...     0.609: byte_color_to_float_color((141, 190, 127)),  # Hard stop before 61%
+        ...     0.61: byte_color_to_float_color((117, 169, 93)),    # 61% transition
+        ...     0.679: byte_color_to_float_color((117, 169, 93)),   # Hard stop before 68%
+        ...     0.68: byte_color_to_float_color((94, 147, 60)),     # 68% transition
+        ...     0.919: byte_color_to_float_color((94, 147, 60)),    # Hard stop before 92%
+        ...     0.92: byte_color_to_float_color((70, 126, 26)),     # 92% transition
+        ...     1.0: byte_color_to_float_color((70, 126, 26))       # 100% end
+        ... }
+        ... green_base_gradient = {0.0: byte_color_to_float_color((255, 159, 173)), 1.0: byte_color_to_float_color((82, 81, 20))}
+        ... width, height = 800, 600  # Self-contained dimensions
+        ... green_layer_0deg = linear_gradient_image(height, width, green_gradient_dict, 0.0)    # 0° horizontal
+        ... green_layer_135deg = linear_gradient_image(height, width, green_gradient_dict, 135.0)  # 135° diagonal
+        ... green_layer_90deg = linear_gradient_image(height, width, green_gradient_dict, 90.0)   # 90° vertical
+        ... green_base_layer = linear_gradient_image(height, width, green_base_gradient, 90.0)     # Base layer
+        ... green_final_result = green_base_layer
+        ... green_final_result = blend_images(green_final_result, green_layer_90deg, mode="overlay")
+        ... green_final_result = blend_images(green_final_result, green_layer_135deg, mode="overlay")
+        ... green_final_result = blend_images(green_final_result, green_layer_0deg, mode="overlay")
+        ... display_image(green_final_result)
+        ... save_image(green_final_result, 'exact_green_gradient.png')
+
+    EXAMPLES - Six-Layer Purple-Blue CSS Gradient Recreation (Fully Self-Contained):
+
+        >>> # EXACT CSS: linear-gradient(155deg, rgb(229,176,124) 0%, rgb(229,176,124) 41%,
+        ... # rgb(198,157,133) 41%, rgb(198,157,133) 42%, rgb(167,139,142) 42%, rgb(167,139,142) 44%,
+        ... # rgb(136,120,151) 44%, rgb(136,120,151) 45%, rgb(105,101,159) 45%, rgb(105,101,159) 61%,
+        ... # rgb(74,83,168) 61%, rgb(74,83,168) 78%, rgb(43,64,177) 78%, rgb(43,64,177) 100%),
+        ... # linear-gradient(322deg, rgb(229,176,124) 0%, rgb(229,176,124) 41%, rgb(198,157,133) 41%,
+        ... # rgb(198,157,133) 42%, rgb(167,139,142) 42%, rgb(167,139,142) 44%, rgb(136,120,151) 44%,
+        ... # rgb(136,120,151) 45%, rgb(105,101,159) 45%, rgb(105,101,159) 61%, rgb(74,83,168) 61%,
+        ... # rgb(74,83,168) 78%, rgb(43,64,177) 78%, rgb(43,64,177) 100%), linear-gradient(33deg,
+        ... # rgb(229,176,124) 0%, rgb(229,176,124) 41%, rgb(198,157,133) 41%, rgb(198,157,133) 42%,
+        ... # rgb(167,139,142) 42%, rgb(167,139,142) 44%, rgb(136,120,151) 44%, rgb(136,120,151) 45%,
+        ... # rgb(105,101,159) 45%, rgb(105,101,159) 61%, rgb(74,83,168) 61%, rgb(74,83,168) 78%,
+        ... # rgb(43,64,177) 78%, rgb(43,64,177) 100%), linear-gradient(315deg, rgb(229,176,124) 0%,
+        ... # rgb(229,176,124) 41%, rgb(198,157,133) 41%, rgb(198,157,133) 42%, rgb(167,139,142) 42%,
+        ... # rgb(167,139,142) 44%, rgb(136,120,151) 44%, rgb(136,120,151) 45%, rgb(105,101,159) 45%,
+        ... # rgb(105,101,159) 61%, rgb(74,83,168) 61%, rgb(74,83,168) 78%, rgb(43,64,177) 78%,
+        ... # rgb(43,64,177) 100%), linear-gradient(41deg, rgb(229,176,124) 0%, rgb(229,176,124) 41%,
+        ... # rgb(198,157,133) 41%, rgb(198,157,133) 42%, rgb(167,139,142) 42%, rgb(167,139,142) 44%,
+        ... # rgb(136,120,151) 44%, rgb(136,120,151) 45%, rgb(105,101,159) 45%, rgb(105,101,159) 61%,
+        ... # rgb(74,83,168) 61%, rgb(74,83,168) 78%, rgb(43,64,177) 78%, rgb(43,64,177) 100%),
+        ... # linear-gradient(90deg, rgb(192,100,79), rgb(56,158,172));
+        ... # background-blend-mode: overlay,overlay,overlay,overlay,overlay,normal;
+        ... six_layer_gradient = {
+        ...     0.0: byte_color_to_float_color((229, 176, 124)),    # Light peach
+        ...     0.409: byte_color_to_float_color((229, 176, 124)),  # Hard stop before 41%
+        ...     0.41: byte_color_to_float_color((198, 157, 133)),   # Medium peach-brown
+        ...     0.419: byte_color_to_float_color((198, 157, 133)),  # Hard stop before 42%
+        ...     0.42: byte_color_to_float_color((167, 139, 142)),   # Mauve-brown
+        ...     0.439: byte_color_to_float_color((167, 139, 142)),  # Hard stop before 44%
+        ...     0.44: byte_color_to_float_color((136, 120, 151)),   # Light purple-grey
+        ...     0.449: byte_color_to_float_color((136, 120, 151)),  # Hard stop before 45%
+        ...     0.45: byte_color_to_float_color((105, 101, 159)),   # Medium purple
+        ...     0.609: byte_color_to_float_color((105, 101, 159)),  # Hard stop before 61%
+        ...     0.61: byte_color_to_float_color((74, 83, 168)),     # Blue-purple
+        ...     0.779: byte_color_to_float_color((74, 83, 168)),    # Hard stop before 78%
+        ...     0.78: byte_color_to_float_color((43, 64, 177)),     # Deep blue
+        ...     1.0: byte_color_to_float_color((43, 64, 177))       # Deep blue end
+        ... }
+        ... base_orange_teal = {0.0: byte_color_to_float_color((192, 100, 79)), 1.0: byte_color_to_float_color((56, 158, 172))}
+        ... width, height = 800, 600
+        ... # Create all 6 gradient layers with exact angles from CSS
+        ... layer_155deg = linear_gradient_image(height, width, six_layer_gradient, 155.0)
+        ... layer_322deg = linear_gradient_image(height, width, six_layer_gradient, 322.0)
+        ... layer_33deg = linear_gradient_image(height, width, six_layer_gradient, 33.0)
+        ... layer_315deg = linear_gradient_image(height, width, six_layer_gradient, 315.0)
+        ... layer_41deg = linear_gradient_image(height, width, six_layer_gradient, 41.0)
+        ... base_layer = linear_gradient_image(height, width, base_orange_teal, 90.0)
+        ... # Apply CSS blend modes in exact order: overlay,overlay,overlay,overlay,overlay,normal
+        ... final_result = base_layer  # Start with base (normal blend)
+        ... final_result = blend_images(final_result, layer_41deg, mode="overlay")   # 5th overlay
+        ... final_result = blend_images(final_result, layer_315deg, mode="overlay")  # 4th overlay  
+        ... final_result = blend_images(final_result, layer_33deg, mode="overlay")   # 3rd overlay
+        ... final_result = blend_images(final_result, layer_322deg, mode="overlay")  # 2nd overlay
+        ... final_result = blend_images(final_result, layer_155deg, mode="overlay")  # 1st overlay (top)
+        ... display_image(final_result)
+        ... save_image(final_result, 'six_layer_complex_gradient.png')
+
+    EXAMPLES - Five-Layer Semi-Transparent RGBA Gradient with Normal Blending (Fully Self-Contained):
+
+        >>> # EXACT CSS: linear-gradient(90deg, rgba(41,41,41,0.05) 0%, rgba(41,41,41,0.05) 85%,
+        ... # rgba(4,4,4,0.05) 85%, rgba(4,4,4,0.05) 96%, rgba(121,121,121,0.05) 96%, rgba(121,121,121,0.05) 99%,
+        ... # rgba(230,230,230,0.05) 99%, rgba(230,230,230,0.05) 100%), linear-gradient(90deg, rgba(34,34,34,0.1) 0%,
+        ... # rgba(34,34,34,0.1) 3%, rgba(120,120,120,0.1) 3%, rgba(120,120,120,0.1) 13%, rgba(5,5,5,0.1) 13%,
+        ... # rgba(5,5,5,0.1) 32%, rgba(180,180,180,0.1) 32%, rgba(180,180,180,0.1) 51%, rgba(2,2,2,0.1) 51%,
+        ... # rgba(2,2,2,0.1) 79%, rgba(57,57,57,0.1) 79%, rgba(57,57,57,0.1) 86%, rgba(218,218,218,0.1) 86%,
+        ... # rgba(218,218,218,0.1) 100%), linear-gradient(90deg, rgba(206,206,206,0.09) 0%, rgba(206,206,206,0.09) 25%,
+        ... # rgba(1,1,1,0.09) 25%, rgba(1,1,1,0.09) 39%, rgba(248,248,248,0.09) 39%, rgba(248,248,248,0.09) 45%,
+        ... # rgba(115,115,115,0.09) 45%, rgba(115,115,115,0.09) 49%, rgba(36,36,36,0.09) 49%, rgba(36,36,36,0.09) 60%,
+        ... # rgba(106,106,106,0.09) 60%, rgba(106,106,106,0.09) 68%, rgba(102,102,102,0.09) 68%, rgba(102,102,102,0.09) 71%,
+        ... # rgba(68,68,68,0.09) 71%, rgba(68,68,68,0.09) 100%), linear-gradient(90deg, rgba(87,87,87,0.08) 0%,
+        ... # rgba(87,87,87,0.08) 19%, rgba(9,9,9,0.08) 19%, rgba(9,9,9,0.08) 29%, rgba(243,243,243,0.08) 29%,
+        ... # rgba(243,243,243,0.08) 34%, rgba(74,74,74,0.08) 34%, rgba(74,74,74,0.08) 37%, rgba(151,151,151,0.08) 37%,
+        ... # rgba(151,151,151,0.08) 63%, rgba(13,13,13,0.08) 63%, rgba(13,13,13,0.08) 85%, rgba(111,111,111,0.08) 85%,
+        ... # rgba(111,111,111,0.08) 90%, rgba(125,125,125,0.08) 90%, rgba(125,125,125,0.08) 100%),
+        ... # linear-gradient(90deg, rgb(203,229,39), rgb(101,168,200), rgb(79,126,85));
+        ... # Layer 1 gradient (0.05 alpha)
+        ... layer1_rgba_gradient = {
+        ...     0.0: (41/255, 41/255, 41/255, 0.05),      # rgba(41,41,41,0.05)
+        ...     0.849: (41/255, 41/255, 41/255, 0.05),    # Hard stop before 85%
+        ...     0.85: (4/255, 4/255, 4/255, 0.05),        # rgba(4,4,4,0.05) 85%
+        ...     0.959: (4/255, 4/255, 4/255, 0.05),       # Hard stop before 96%
+        ...     0.96: (121/255, 121/255, 121/255, 0.05),  # rgba(121,121,121,0.05) 96%
+        ...     0.989: (121/255, 121/255, 121/255, 0.05), # Hard stop before 99%
+        ...     0.99: (230/255, 230/255, 230/255, 0.05),  # rgba(230,230,230,0.05) 99%
+        ...     1.0: (230/255, 230/255, 230/255, 0.05)    # rgba(230,230,230,0.05) 100%
+        ... }
+        ... # Layer 2 gradient (0.1 alpha)
+        ... layer2_rgba_gradient = {
+        ...     0.0: (34/255, 34/255, 34/255, 0.1),       # rgba(34,34,34,0.1) 0%
+        ...     0.029: (34/255, 34/255, 34/255, 0.1),     # Hard stop before 3%
+        ...     0.03: (120/255, 120/255, 120/255, 0.1),   # rgba(120,120,120,0.1) 3%
+        ...     0.129: (120/255, 120/255, 120/255, 0.1),  # Hard stop before 13%
+        ...     0.13: (5/255, 5/255, 5/255, 0.1),         # rgba(5,5,5,0.1) 13%
+        ...     0.319: (5/255, 5/255, 5/255, 0.1),        # Hard stop before 32%
+        ...     0.32: (180/255, 180/255, 180/255, 0.1),   # rgba(180,180,180,0.1) 32%
+        ...     0.509: (180/255, 180/255, 180/255, 0.1),  # Hard stop before 51%
+        ...     0.51: (2/255, 2/255, 2/255, 0.1),         # rgba(2,2,2,0.1) 51%
+        ...     0.789: (2/255, 2/255, 2/255, 0.1),        # Hard stop before 79%
+        ...     0.79: (57/255, 57/255, 57/255, 0.1),      # rgba(57,57,57,0.1) 79%
+        ...     0.859: (57/255, 57/255, 57/255, 0.1),     # Hard stop before 86%
+        ...     0.86: (218/255, 218/255, 218/255, 0.1),   # rgba(218,218,218,0.1) 86%
+        ...     1.0: (218/255, 218/255, 218/255, 0.1)     # rgba(218,218,218,0.1) 100%
+        ... }
+        ... # Layer 3 gradient (0.09 alpha)
+        ... layer3_rgba_gradient = {
+        ...     0.0: (206/255, 206/255, 206/255, 0.09),   # rgba(206,206,206,0.09) 0%
+        ...     0.249: (206/255, 206/255, 206/255, 0.09), # Hard stop before 25%
+        ...     0.25: (1/255, 1/255, 1/255, 0.09),        # rgba(1,1,1,0.09) 25%
+        ...     0.389: (1/255, 1/255, 1/255, 0.09),       # Hard stop before 39%
+        ...     0.39: (248/255, 248/255, 248/255, 0.09),  # rgba(248,248,248,0.09) 39%
+        ...     0.449: (248/255, 248/255, 248/255, 0.09), # Hard stop before 45%
+        ...     0.45: (115/255, 115/255, 115/255, 0.09),  # rgba(115,115,115,0.09) 45%
+        ...     0.489: (115/255, 115/255, 115/255, 0.09), # Hard stop before 49%
+        ...     0.49: (36/255, 36/255, 36/255, 0.09),     # rgba(36,36,36,0.09) 49%
+        ...     0.599: (36/255, 36/255, 36/255, 0.09),    # Hard stop before 60%
+        ...     0.60: (106/255, 106/255, 106/255, 0.09),  # rgba(106,106,106,0.09) 60%
+        ...     0.679: (106/255, 106/255, 106/255, 0.09), # Hard stop before 68%
+        ...     0.68: (102/255, 102/255, 102/255, 0.09),  # rgba(102,102,102,0.09) 68%
+        ...     0.709: (102/255, 102/255, 102/255, 0.09), # Hard stop before 71%
+        ...     0.71: (68/255, 68/255, 68/255, 0.09),     # rgba(68,68,68,0.09) 71%
+        ...     1.0: (68/255, 68/255, 68/255, 0.09)       # rgba(68,68,68,0.09) 100%
+        ... }
+        ... # Layer 4 gradient (0.08 alpha)
+        ... layer4_rgba_gradient = {
+        ...     0.0: (87/255, 87/255, 87/255, 0.08),      # rgba(87,87,87,0.08) 0%
+        ...     0.189: (87/255, 87/255, 87/255, 0.08),    # Hard stop before 19%
+        ...     0.19: (9/255, 9/255, 9/255, 0.08),        # rgba(9,9,9,0.08) 19%
+        ...     0.289: (9/255, 9/255, 9/255, 0.08),       # Hard stop before 29%
+        ...     0.29: (243/255, 243/255, 243/255, 0.08),  # rgba(243,243,243,0.08) 29%
+        ...     0.339: (243/255, 243/255, 243/255, 0.08), # Hard stop before 34%
+        ...     0.34: (74/255, 74/255, 74/255, 0.08),     # rgba(74,74,74,0.08) 34%
+        ...     0.369: (74/255, 74/255, 74/255, 0.08),    # Hard stop before 37%
+        ...     0.37: (151/255, 151/255, 151/255, 0.08),  # rgba(151,151,151,0.08) 37%
+        ...     0.629: (151/255, 151/255, 151/255, 0.08), # Hard stop before 63%
+        ...     0.63: (13/255, 13/255, 13/255, 0.08),     # rgba(13,13,13,0.08) 63%
+        ...     0.849: (13/255, 13/255, 13/255, 0.08),    # Hard stop before 85%
+        ...     0.85: (111/255, 111/255, 111/255, 0.08),  # rgba(111,111,111,0.08) 85%
+        ...     0.899: (111/255, 111/255, 111/255, 0.08), # Hard stop before 90%
+        ...     0.90: (125/255, 125/255, 125/255, 0.08),  # rgba(125,125,125,0.08) 90%
+        ...     1.0: (125/255, 125/255, 125/255, 0.08)    # rgba(125,125,125,0.08) 100%
+        ... }
+        ... # Base colorful gradient (no alpha)
+        ... base_colorful_gradient = {
+        ...     0.0: byte_color_to_float_color((203, 229, 39)),   # rgb(203,229,39) - lime green
+        ...     0.5: byte_color_to_float_color((101, 168, 200)),  # rgb(101,168,200) - light blue  
+        ...     1.0: byte_color_to_float_color((79, 126, 85))     # rgb(79,126,85) - forest green
+        ... }
+        ... width, height = 800, 600
+        ... # Create all 5 gradient layers (all 90° horizontal)
+        ... rgba_layer1 = linear_gradient_image(height, width, layer1_rgba_gradient, 90.0)  # 90° horizontal
+        ... rgba_layer2 = linear_gradient_image(height, width, layer2_rgba_gradient, 90.0)  # 90° horizontal
+        ... rgba_layer3 = linear_gradient_image(height, width, layer3_rgba_gradient, 90.0)  # 90° horizontal  
+        ... rgba_layer4 = linear_gradient_image(height, width, layer4_rgba_gradient, 90.0)  # 90° horizontal
+        ... rgba_base = linear_gradient_image(height, width, base_colorful_gradient, 90.0)   # 90° horizontal base
+        ... # Apply normal blending (CSS default for layered backgrounds with alpha)
+        ... rgba_final_result = rgba_base  # Start with colorful base
+        ... rgba_final_result = blend_images(rgba_final_result, rgba_layer4, mode="normal")  # Layer 4 (0.08 alpha)
+        ... rgba_final_result = blend_images(rgba_final_result, rgba_layer3, mode="normal")  # Layer 3 (0.09 alpha)
+        ... rgba_final_result = blend_images(rgba_final_result, rgba_layer2, mode="normal")  # Layer 2 (0.1 alpha)
+        ... rgba_final_result = blend_images(rgba_final_result, rgba_layer1, mode="normal")  # Layer 1 (0.05 alpha, top)
+        ... display_image(rgba_final_result)
+        ... save_image(rgba_final_result, 'five_layer_rgba_gradient.png')
+
+    """
+    assert height >= 0 and width >= 0, 'Height and width must be non-negative'
+    assert gradient is not None, 'Gradient cannot be None'
+    
+    # Convert gradient specification to position-color dict
+    gradient_dict = _as_gradient_dict(gradient)
+    
+    # Convert direction to pixel path
+    direction_strings = dict(vertical=0,horizontal=90)
+    if isinstance(direction, str):
+        if not direction in direction_strings:
+            raise ValueError(
+                "Given direction string "
+                + repr(direction)
+                + " is not in "
+                + repr(list(direction_strings))
+            )
+        direction = direction_strings[direction]
+
+    if is_number(direction):
+        # Convert angle in degrees to CSS gradient direction
+        # CSS: 0° = vertical up, 90° = horizontal right, 180° = vertical down, 270° = horizontal left
+        direction = direction
+        path = _gradient_angle_to_points(height, width, direction)
+    else:
+        path = direction
+
+    path = as_points_array(path)
+    if len(path) != 2:
+        raise ValueError('Direction path must have exactly 2 points')
+
+    start_point, end_point = path
+    direction_vector = end_point - start_point
+    direction_length = magnitude(direction_vector)
+    
+    if direction_length == 0:
+        raise ValueError('Direction vector cannot have zero length')
+    
+    direction_unit = direction_vector / direction_length
+    
+    # Generate coordinate arrays (optimized with xy_float_images)
+    x_coords, y_coords = xy_float_images(
+        height, width,
+        min_x=0, max_x=width  - 1,
+        min_y=0, max_y=height - 1,
+    )
+    
+    # Project each pixel onto gradient direction to get interpolation positions
+    gradient_positions = (
+          (x_coords - start_point[0]) * direction_unit[0]
+        + (y_coords - start_point[1]) * direction_unit[1]
+    ) / direction_length
+    
+    # Use apply_colormap_to_image for colormap application
+    output = apply_colormap_to_image(gradient_positions, gradient_dict, backend=backend)
+    
+    # Convert to RGBA if needed (cv2 backend returns RGB)
+    if backend == 'cv2':
+        output = as_rgba_image(output)
+    
+    assert is_rgba_image(output)
+    return output
+
+
 def blend_images(bot, top, alpha=1, mode="normal"):
     """
     Blends two images together using various blending modes.
@@ -2602,11 +4100,13 @@ def blend_images(bot, top, alpha=1, mode="normal"):
             - "max"      : Takes the maximum pixel value from top and bot
             - "contrast" : Multiplies the bot image by top, centered at .5. 
                            Here, top can be any floating point such as > 1.0 or even -1.0 to invert the image.
+            - "overlay"  : Combines multiply and screen - multiply for dark areas, screen for light areas
             Some modes also support "clip" at the end to force pixel outputs to be between 0 and 1.
                 - "add clip"
                 - "multiply clip"
                 - "subtract clip"
                 - "contrast clip"
+                - "overlay clip"
 
             These modes are inspired by photoshop. 
             NOTE:
@@ -2704,6 +4204,7 @@ def blend_images(bot, top, alpha=1, mode="normal"):
         "multiply", "multiply clip",
         "subtract", "subtract clip",
         "contrast", "contrast clip",
+        "overlay", "overlay clip",
     }
     assert mode in blend_modes, 'Please choose a blend mode from the following options: '+str(blend_modes)
 
@@ -2759,6 +4260,11 @@ def blend_images(bot, top, alpha=1, mode="normal"):
     elif "min"      in mode.split(): output = np.minimum(bot, top)
     elif "max"      in mode.split(): output = np.maximum(bot, top)
     elif "contrast" in mode.split(): output = bot * (1 - alpha) + ((bot - 0.5) * top + 0.5) * alpha
+    elif "overlay"  in mode.split(): 
+        # Overlay blend mode: multiply for dark, screen for light
+        # Formula: if base < 0.5: 2 * base * overlay, else: 1 - 2 * (1-base) * (1-overlay)
+        overlay_result = np.where(bot < 0.5, 2 * bot * top, 1 - 2 * (1 - bot) * (1 - top))
+        output = bot * (1 - alpha) + overlay_result * alpha
 
     if 'clip' in mode.split():
         #If we specify we want to clip the output, it will be constrained between 0 and 1. Useful for some blend modes such as "add clip" etc
@@ -18732,7 +20238,7 @@ def get_source_file(object):
 # region Editor Launchers
 def edit(file_or_object,editor_command='atom'):
     if isinstance(file_or_object,str):
-        return os.system(editor_command +" " + shlex.quote(repr(file_or_object)))# Idk if there's anything worth returning but maybe there is? run_as_subprocess is true so we can edit things in editors like vim, suplemon, emacs etc.
+        return os.system(editor_command +" " + shlex.quote(file_or_object))# Idk if there's anything worth returning but maybe there is? run_as_subprocess is true so we can edit things in editors like vim, suplemon, emacs etc.
     else:
         return edit(get_source_file(object=file_or_object),editor_command=editor_command)
 sublime=lambda x:edit(x,'sublime')
@@ -23331,9 +24837,10 @@ def pseudo_terminal(
         D0L $line_join(x for x in str(ans).splitlines() if x.strip())
         UND $unindent(ans)
         IND $indentify(ans,'    ')
-        CBP ans=$string_from_clipboard();ans=$r.autoformat_python_via_black_macchiato(ans);$string_to_clipboard(ans)
-        CSP ans=$string_from_clipboard();ans=$sort_imports_via_isort(ans);$string_to_clipboard(ans)
-        RFS  $remove_fstrings(ans)
+        CBP ans=$string_from_clipboard();ans=$r.autoformat_python_via_black_macchiato(ans);$string_to_clipboard(ans) #Autoformat Code on Clipboard
+        CSP ans=$string_from_clipboard();ans=$sort_imports_via_isort(ans);$string_to_clipboard(ans) #Sort Imports on Clipboard
+        RFS $remove_fstrings(ans)
+        IRP $r._inline_rp_code(ans)
         RMFS $remove_fstrings(ans) #Remove FStrings
 
         DAPI __import__('rp.pypi_inspection').pypi_inspection.display_all_pypi_info()
@@ -23366,8 +24873,8 @@ def pseudo_terminal(
         CLS CLEAR
         VV !vim
 
-        RCLAHF $r._ensure_rclone_installed() ; $r._run_sys_command("rclone copy --progress --transfers 128 {$shlex.quote(ans)} .") #Quickly copy a network drive folder. Copies the contents, not the folder itself! The 'F' stands for fast, which is because this skips checksums - it wont overwrite any files ever! Add --metadata to preserve date modified etc
-        RCLAH  $r._ensure_rclone_installed() ; $r._run_sys_command("rclone copy --checksum --progress --transfers 128 --metadata {$shlex.quote(ans)} .") #Quickly copy a network drive folder. Copies the contents, not the folder itself!
+        RCLAHF $r._ensure_rclone_installed() ; $r._run_sys_command(f"rclone copy --progress --transfers 128 --metadata {$shlex.quote(ans)} .") #Quickly copy a network drive folder. Copies the contents, not the folder itself! The 'F' stands for fast, which is because this skips checksums - it wont overwrite any files ever!
+        RCLAH  $r._ensure_rclone_installed() ; $r._run_sys_command(f"rclone copy --checksum --progress --transfers 128 --metadata {$shlex.quote(ans)} .") #Quickly copy a network drive folder. Copies the contents, not the folder itself!
 
         DR $r._display_columns(dir(),'dir():')
         DUSHA $fansi_print($human_readable_file_size(sum($get_file_size(x,False)for x in $enlist(ans))),'cyan','bold')
@@ -29808,7 +31315,31 @@ def _cv_contour_to_complex_vector(cv_contour):
 
 #Automatic path conversions (tries to detect the type of path then convert appropriately)
 def as_complex_vector(path):
-    """ Automatically convert path path data """
+    """
+    Convert path data to complex vector format.
+    
+    Automatically detects input format and converts to 1D array of complex numbers
+    where each complex number represents a 2D point (x + yj).
+    
+    Parameters:
+        path: Path data in various formats (complex vector, points array, cv_contour, set, dict, or list)
+    
+    Returns:
+        numpy.ndarray: 1D array of complex numbers [x₁+y₁j, x₂+y₂j, ...]
+    
+    Supported Input Formats:
+        - Complex vector: [1+2j, 3+4j, ...] → unchanged (copied)
+        - Points array: [[1,2], [3,4], ...] → [1+2j, 3+4j, ...]
+        - OpenCV contour: [[[1,2]], [[3,4]], ...] → [1+2j, 3+4j, ...]
+        - Set/dict: Converted to list first, then processed
+    
+    Raises:
+        AssertionError: If input format is not recognized or convertible
+    
+    Usage:
+        >>> as_complex_vector([[1,2], [3,4]])
+        array([1.+2.j, 3.+4.j])
+    """
     if isinstance(path,set) or isinstance(path,dict):path=list(path)
     if   is_complex_vector(path):return                        np.asarray(path.copy())
     elif is_points_array  (path):return   _points_array_to_complex_vector(path)
@@ -29862,7 +31393,35 @@ def as_points_array(path):
     elif is_cv_contour    (path):return     _cv_contour_to_points_array(path)
     else:assert False,'Cannot convert 2d path: path='+repr(path)
 def as_cv_contour(path):
-    """ Automatically convert path data """
+    """
+    Convert path data to OpenCV contour format.
+    
+    Automatically detects input format and converts to OpenCV-compatible 3D array
+    with shape (N, 1, 2) where each point is wrapped in an extra dimension.
+    
+    Parameters:
+        path: Path data in various formats (complex vector, points array, cv_contour, set, dict, or list)
+    
+    Returns:
+        numpy.ndarray: 3D array with shape (N, 1, 2) in OpenCV contour format [[[x₁,y₁]], [[x₂,y₂]], ...]
+    
+    Supported Input Formats:
+        - Complex vector: [1+2j, 3+4j, ...] → [[[1,2]], [[3,4]], ...]
+        - Points array: [[1,2], [3,4], ...] → [[[1,2]], [[3,4]], ...]
+        - OpenCV contour: [[[1,2]], [[3,4]], ...] → unchanged (copied)
+        - Set/dict: Converted to list first, then processed
+    
+    OpenCV Compatibility:
+        Output format is compatible with OpenCV functions like cv2.drawContours(),
+        cv2.contourArea(), cv2.arcLength(), etc.
+    
+    Raises:
+        AssertionError: If input format is not recognized or convertible
+    
+    Usage:
+        >>> as_cv_contour([[1,2], [3,4]])
+        array([[[1, 2]], [[3, 4]]], dtype=int32)
+    """
     if isinstance(path,set) or isinstance(path,dict):path=list(path)
     if   is_complex_vector(path):return _complex_vector_to_cv_contour(path)
     elif is_points_array  (path):return   _points_array_to_cv_contour(path)
@@ -32024,6 +33583,7 @@ def as_rgba_float_color(color,*,clamp=True):
     if is_number(color):
         color = (color, ) * 3
     if len(color) == 3:
+        color = tuple(color)
         color = color + (1,)
     assert len(color) == 4 
     if clamp:
@@ -36016,6 +37576,7 @@ def is_byte_color(color):
     Tags: validation, colors, byte, integer, datatypes, color-processing
     """
     return is_iterable(color) and all(is_number(x) for x in color) and all(np.issubdtype(x.dtype,np.integer) for x in as_numpy_array(color))
+
 def is_float_color(color):
     """
     Check if input represents a floating-point color value.
@@ -36151,6 +37712,7 @@ def float_color_to_hex_color(float_color, hashtag=True):
     Tags: color-conversion, float-to-hex, rgb
     """
     return byte_color_to_hex_color(float_color_to_byte_color(float_color),hashtag=hashtag)
+
 def float_color_to_byte_color(float_color):
     return tuple(round(clamp(x*255,0,255)) for x in float_color)
 
@@ -48399,6 +49961,17 @@ def hsv_to_rgb_float_color(*hsv):
     return colorsys.hsv_to_rgb(*hsv)
 
 
+def rgb_to_hsv_float_color(*rgb):
+    """
+    Converts a floating point RGB color to an HSV one
+    rgb_to_hsv_float_color(r,g,b) ==== rgb_to_hsv_float_color((r,g,b))
+    """
+    import colorsys
+
+    rgb = detuple(rgb)
+    return colorsys.rgb_to_hsv(*rgb)
+
+
 def float_color_to_ansi256(*color):
     """
     Convert RGB values (0.0 to 1.0) to the nearest ANSI 256-color code
@@ -48441,6 +50014,499 @@ def float_color_to_ansi256(*color):
         return 16 + 36 * r + 6 * g + b
 
 
+def convert_colorspace(input_data, src='rgb', dst='hsv'):
+    """
+    Convert between color spaces for colors, images, or videos.
+    
+    Args:
+        input_data: Color tuple (r,g,b), image array (H,W,3), or video (T,H,W,3)
+        src (str): Source color space ('rgb', 'srgb', 'hsv', 'hsl', 'cmy')  
+        dst (str): Destination color space
+        
+    Returns:
+        Converted data in same format as input
+        
+    Examples:
+        >>> # Convert single color
+        >>> convert_colorspaces((1.0, 0.0, 0.0), 'rgb', 'hsv')
+        (0.0, 1.0, 1.0)
+        
+        >>> # Convert image
+        >>> rgb_image = load_image('test.jpg')
+        >>> hsv_image = convert_colorspaces(rgb_image, 'rgb', 'hsv')
+        
+        >>> # Convert video  
+        >>> rgb_video = load_video('test.mp4')
+        >>> hsv_video = convert_colorspaces(rgb_video, 'rgb', 'hsv')
+    """
+    import numpy as np
+    
+    # Input validation
+    if src == dst:
+        return input_data
+        
+    # Supported colorspaces (comprehensive list from new implementation)
+    # supported_spaces = ['rgb', 'linear', 'srgb', 'hsv', 'hsl', 'cmy', 'cmyk', 'xyz', 'lab', 'lch']
+    #
+    # if src not in supported_spaces:
+    #     raise ValueError(f"Unsupported source colorspace: {src}. Supported: {supported_spaces}")
+    # if dst not in supported_spaces:
+    #     raise ValueError(f"Unsupported destination colorspace: {dst}. Supported: {supported_spaces}")
+    
+    # Clean input type detection using RP's validators
+    if is_color(input_data):
+        return _convert_colorspace_color(input_data, src, dst)
+    elif isinstance(input_data, (list, tuple)) and all(is_image(x) or is_color(x) for x in input_data):
+        return [convert_colorspace(x, src, dst) for x in input_data]
+    elif is_image(input_data):  
+        return _convert_colorspace_image(input_data, src, dst)
+    else:
+        raise ValueError("Input must be color, image, or list of colors/images")
+
+
+def _convert_colorspace_color(color, src, dst):
+    """Convert a single color using the same mapping as image conversion - NO SILENT FALLBACKS"""
+    import numpy as np
+    import colorsys
+    import colorspacious
+    
+    # Handle alpha channel
+    has_alpha = len(color) == 4
+    alpha = color[3] if has_alpha else None
+    color_array = np.array(color[:3], dtype=float)
+    
+    # Use same mapping as image function
+    colorspace_methods = {
+        # Linear RGB aliases
+        ('linear', 'rgb'): ('identity', None),
+        ('rgb', 'linear'): ('identity', None),
+        ('linear', 'srgb'): ('colorspacious', 'sRGB1-linear', 'sRGB1'),
+        ('srgb', 'linear'): ('colorspacious', 'sRGB1', 'sRGB1-linear'),
+        
+        # RGB <-> sRGB conversions (gamma correction!)
+        ('rgb', 'srgb'): ('colorspacious', 'sRGB1-linear', 'sRGB1'),
+        ('srgb', 'rgb'): ('colorspacious', 'sRGB1', 'sRGB1-linear'),
+        
+        # Professional color spaces - use colorspacious
+        ('srgb', 'xyz'): ('colorspacious', 'sRGB1', 'XYZ100'),
+        ('xyz', 'srgb'): ('colorspacious', 'XYZ100', 'sRGB1'),
+        ('srgb', 'lab'): ('colorspacious', 'sRGB1', 'CIELab'),
+        ('lab', 'srgb'): ('colorspacious', 'CIELab', 'sRGB1'),
+        ('srgb', 'lch'): ('colorspacious', 'sRGB1', 'CIELCh'),
+        ('lch', 'srgb'): ('colorspacious', 'CIELCh', 'sRGB1'),
+        ('xyz', 'lab'): ('colorspacious', 'XYZ100', 'CIELab'),
+        ('lab', 'xyz'): ('colorspacious', 'CIELab', 'XYZ100'),
+        ('lab', 'lch'): ('colorspacious', 'CIELab', 'CIELCh'),
+        ('lch', 'lab'): ('colorspacious', 'CIELCh', 'CIELab'),
+        
+        # Basic color spaces - use colorsys
+        ('rgb', 'hsv'): ('colorsys', colorsys.rgb_to_hsv),
+        ('hsv', 'rgb'): ('colorsys', colorsys.hsv_to_rgb),
+        ('rgb', 'hsl'): ('colorsys', colorsys.rgb_to_hls, 'hls_order'),
+        ('hsl', 'rgb'): ('colorsys', colorsys.hls_to_rgb, 'hls_order'),
+        
+        # Simple arithmetic conversions
+        ('rgb', 'cmy'): ('arithmetic', lambda x: 1.0 - x),
+        ('cmy', 'rgb'): ('arithmetic', lambda x: 1.0 - x),
+        ('rgb', 'cmyk'): ('arithmetic', 'rgb_to_cmyk'),
+        ('cmyk', 'rgb'): ('arithmetic', 'cmyk_to_rgb'),
+        
+        # Cross-space conversions via RGB hub
+        ('srgb', 'hsv'): ('2step', ['srgb', 'rgb', 'hsv']),
+        ('hsv', 'srgb'): ('2step', ['hsv', 'rgb', 'srgb']),
+        ('srgb', 'hsl'): ('2step', ['srgb', 'rgb', 'hsl']),
+        ('hsl', 'srgb'): ('2step', ['hsl', 'rgb', 'srgb']),
+        ('srgb', 'cmy'): ('2step', ['srgb', 'rgb', 'cmy']),
+        ('cmy', 'srgb'): ('2step', ['cmy', 'rgb', 'srgb']),
+        ('srgb', 'cmyk'): ('2step', ['srgb', 'rgb', 'cmyk']),
+        ('cmyk', 'srgb'): ('2step', ['cmyk', 'rgb', 'srgb']),
+        
+        # Cross-space conversions via sRGB hub for professional spaces
+        ('rgb', 'xyz'): ('2step', ['rgb', 'srgb', 'xyz']),
+        ('xyz', 'rgb'): ('2step', ['xyz', 'srgb', 'rgb']),
+        ('rgb', 'lab'): ('2step', ['rgb', 'srgb', 'lab']),
+        ('lab', 'rgb'): ('2step', ['lab', 'srgb', 'rgb']),
+        ('rgb', 'lch'): ('2step', ['rgb', 'srgb', 'lch']),
+        ('lch', 'rgb'): ('2step', ['lch', 'srgb', 'rgb']),
+        
+        # Identity conversions
+        ('rgb', 'rgb'): ('identity', None),
+        ('linear', 'linear'): ('identity', None),
+        ('srgb', 'srgb'): ('identity', None),
+        ('hsv', 'hsv'): ('identity', None),
+        ('hsl', 'hsl'): ('identity', None),
+        ('cmy', 'cmy'): ('identity', None),
+        ('cmyk', 'cmyk'): ('identity', None),
+        ('xyz', 'xyz'): ('identity', None),
+        ('lab', 'lab'): ('identity', None),
+        ('lch', 'lch'): ('identity', None),
+
+        # Professional perceptual spaces (Oklab family)
+        ('srgb', 'oklab'): ('colorspacious', 'sRGB1', 'OKLab'),
+        ('oklab', 'srgb'): ('colorspacious', 'OKLab', 'sRGB1'),
+        ('srgb', 'oklch'): ('colorspacious', 'sRGB1', 'OKLCh'),
+        ('oklch', 'srgb'): ('colorspacious', 'OKLCh', 'sRGB1'),
+        ('oklab', 'oklch'): ('colorspacious', 'OKLab', 'OKLCh'),
+        ('oklch', 'oklab'): ('colorspacious', 'OKLCh', 'OKLab'),
+
+        ('linear', 'oklab'): ('2step', ['linear', 'srgb', 'oklab']),
+        ('oklab', 'linear'): ('2step', ['oklab', 'srgb', 'linear']),
+    }
+    
+    # Get conversion method - fail loudly if not supported
+    conversion_key = (src.lower(), dst.lower())
+    if conversion_key not in colorspace_methods:
+        raise ValueError(f"Direct conversion from '{src}' to '{dst}' not implemented for colors. Supported conversions: {list(colorspace_methods.keys())}")
+    
+    method_info = colorspace_methods[conversion_key]
+    method_type = method_info[0]
+    
+    # Execute conversion based on method type
+    if method_type == 'identity':
+        result = color_array
+    
+    elif method_type == 'colorspacious':
+        _, cs_src, cs_dst = method_info
+        result = np.array(colorspacious.cspace_convert(color_array, cs_src, cs_dst))
+    
+    elif method_type == 'arithmetic':
+        if method_info[1] == 'rgb_to_cmyk':
+            # RGB to CMYK: compute CMY then extract K
+            cmy = 1.0 - color_array
+            k = min(cmy)
+            if k >= 1.0 - 1e-6:  # Nearly black
+                result = np.array([0.0, 0.0, 0.0, 1.0])
+            else:
+                c = (cmy[0] - k) / (1.0 - k)
+                m = (cmy[1] - k) / (1.0 - k) 
+                y = (cmy[2] - k) / (1.0 - k)
+                result = np.array([c, m, y, k])
+        elif method_info[1] == 'cmyk_to_rgb':
+            # CMYK to RGB
+            c, m, y, k = color_array[0], color_array[1], color_array[2], color_array[3]
+            r = (1.0 - c) * (1.0 - k)
+            g = (1.0 - m) * (1.0 - k) 
+            b = (1.0 - y) * (1.0 - k)
+            result = np.array([r, g, b])
+        else:
+            result = method_info[1](color_array)
+    
+    elif method_type == '2step':
+        # 2-step conversion via intermediate color space
+        path = method_info[1]
+        intermediate_src, intermediate_dst = path[0], path[2]
+        intermediate_space = path[1]
+        
+        # Step 1: convert to intermediate
+        intermediate_result = _convert_colorspace_color(
+            tuple(color_array) + ((alpha,) if has_alpha else ()), 
+            intermediate_src, 
+            intermediate_space
+        )
+        
+        # Step 2: convert from intermediate to final
+        final_result = _convert_colorspace_color(intermediate_result, intermediate_space, intermediate_dst)
+        
+        # Extract result without alpha for processing
+        result = np.array(final_result[:3] if len(final_result) > 3 else final_result)
+        
+        # Alpha handling is done at the end of the function
+        alpha = final_result[3] if len(final_result) > 3 else alpha
+    
+    elif method_type == 'colorsys':
+        conversion_fn = method_info[1] 
+        use_hls_order = len(method_info) > 2 and method_info[2] == 'hls_order'
+        
+        if use_hls_order and src.lower() == 'hsl':
+            # HSL -> RGB: colorsys expects HLS order
+            result = np.array(conversion_fn(color_array[0], color_array[2], color_array[1]))
+        elif use_hls_order and dst.lower() == 'hsl':
+            # RGB -> HSL: colorsys returns HLS, convert to HSL
+            h, l, s = conversion_fn(*color_array)
+            result = np.array([h, s, l])
+        else:
+            # Standard RGB/HSV conversion
+            result = np.array(conversion_fn(*color_array))
+    
+    else:
+        raise ValueError(f"Unknown conversion method: {method_type}")
+    
+    # Re-attach alpha if present  
+    if has_alpha:
+        result = np.concatenate([result, [alpha]])
+        
+    return tuple(result)
+
+
+def _convert_colorspace_image(image, src, dst):
+    """Convert an image using reliable vectorized operations - NO SILENT FALLBACKS"""
+    import numpy as np
+    import colorsys
+    import colorspacious
+    
+    # Handle alpha channel
+    has_alpha = image.shape[2] == 4
+    if has_alpha:
+        alpha_channel = image[:, :, 3:4]
+        color_image = image[:, :, :3]
+    else:
+        alpha_channel = None
+        color_image = image
+    
+    # Color space mapping - determines conversion method with NO fallbacks
+    colorspace_methods = {
+        # Linear RGB aliases  
+        ('linear', 'rgb'): ('identity', None),
+        ('rgb', 'linear'): ('identity', None),
+        ('linear', 'srgb'): ('colorspacious', 'sRGB1-linear', 'sRGB1'),
+        ('srgb', 'linear'): ('colorspacious', 'sRGB1', 'sRGB1-linear'),
+        
+        # RGB <-> sRGB conversions (gamma correction!)
+        ('rgb', 'srgb'): ('colorspacious', 'sRGB1-linear', 'sRGB1'),
+        ('srgb', 'rgb'): ('colorspacious', 'sRGB1', 'sRGB1-linear'),
+        
+        # Professional color spaces - use colorspacious (fastest, most accurate)
+        ('srgb', 'xyz'): ('colorspacious', 'sRGB1', 'XYZ100'),
+        ('xyz', 'srgb'): ('colorspacious', 'XYZ100', 'sRGB1'),
+        ('srgb', 'lab'): ('colorspacious', 'sRGB1', 'CIELab'),
+        ('lab', 'srgb'): ('colorspacious', 'CIELab', 'sRGB1'),
+        ('srgb', 'lch'): ('colorspacious', 'sRGB1', 'CIELCh'),
+        ('lch', 'srgb'): ('colorspacious', 'CIELCh', 'sRGB1'),
+        ('xyz', 'lab'): ('colorspacious', 'XYZ100', 'CIELab'),
+        ('lab', 'xyz'): ('colorspacious', 'CIELab', 'XYZ100'),
+        ('lab', 'lch'): ('colorspacious', 'CIELab', 'CIELCh'),
+        ('lch', 'lab'): ('colorspacious', 'CIELCh', 'CIELab'),
+        
+        # Basic color spaces - use vectorized colorsys
+        ('rgb', 'hsv'): ('colorsys', colorsys.rgb_to_hsv),
+        ('hsv', 'rgb'): ('colorsys', colorsys.hsv_to_rgb),
+        ('rgb', 'hsl'): ('colorsys', colorsys.rgb_to_hls, 'hls_order'),
+        ('hsl', 'rgb'): ('colorsys', colorsys.hls_to_rgb, 'hls_order'),
+        
+        # Simple arithmetic conversions
+        ('rgb', 'cmy'): ('arithmetic', lambda x: 1.0 - x),
+        ('cmy', 'rgb'): ('arithmetic', lambda x: 1.0 - x),
+        ('rgb', 'cmyk'): ('arithmetic', '_rgb_to_cmyk'),
+        ('cmyk', 'rgb'): ('arithmetic', '_cmyk_to_rgb'),
+        
+        # Cross-space conversions via RGB hub
+        ('srgb', 'hsv'): ('2step', ['srgb', 'rgb', 'hsv']),
+        ('hsv', 'srgb'): ('2step', ['hsv', 'rgb', 'srgb']),
+        ('srgb', 'hsl'): ('2step', ['srgb', 'rgb', 'hsl']),
+        ('hsl', 'srgb'): ('2step', ['hsl', 'rgb', 'srgb']),
+        ('srgb', 'cmy'): ('2step', ['srgb', 'rgb', 'cmy']),
+        ('cmy', 'srgb'): ('2step', ['cmy', 'rgb', 'srgb']),
+        ('srgb', 'cmyk'): ('2step', ['srgb', 'rgb', 'cmyk']),
+        ('cmyk', 'srgb'): ('2step', ['cmyk', 'rgb', 'srgb']),
+        
+        # Cross-space conversions via sRGB hub for professional spaces
+        ('rgb', 'xyz'): ('2step', ['rgb', 'srgb', 'xyz']),
+        ('xyz', 'rgb'): ('2step', ['xyz', 'srgb', 'rgb']),
+        ('rgb', 'lab'): ('2step', ['rgb', 'srgb', 'lab']),
+        ('lab', 'rgb'): ('2step', ['lab', 'srgb', 'rgb']),
+        ('rgb', 'lch'): ('2step', ['rgb', 'srgb', 'lch']),
+        ('lch', 'rgb'): ('2step', ['lch', 'srgb', 'rgb']),
+        
+        # Identity conversions
+        ('rgb', 'rgb'): ('identity', None),
+        ('linear', 'linear'): ('identity', None),
+        ('srgb', 'srgb'): ('identity', None),
+        ('hsv', 'hsv'): ('identity', None),
+        ('hsl', 'hsl'): ('identity', None),
+        ('cmy', 'cmy'): ('identity', None),
+        ('cmyk', 'cmyk'): ('identity', None),
+        ('xyz', 'xyz'): ('identity', None),
+        ('lab', 'lab'): ('identity', None),
+        ('lch', 'lch'): ('identity', None),
+
+        # Professional perceptual spaces (Oklab family)
+        ('srgb', 'oklab'): ('colorspacious', 'sRGB1', 'OKLab'),
+        ('oklab', 'srgb'): ('colorspacious', 'OKLab', 'sRGB1'),
+        ('srgb', 'oklch'): ('colorspacious', 'sRGB1', 'OKLCh'),
+        ('oklch', 'srgb'): ('colorspacious', 'OKLCh', 'sRGB1'),
+        ('oklab', 'oklch'): ('colorspacious', 'OKLab', 'OKLCh'),
+        ('oklch', 'oklab'): ('colorspacious', 'OKLCh', 'OKLab'),
+        ('linear', 'oklab'): ('2step', ['linear', 'srgb', 'oklab']),
+        ('oklab', 'linear'): ('2step', ['oklab', 'srgb', 'linear']),
+
+    }
+    
+    # Get conversion method - fail loudly if not supported
+    conversion_key = (src.lower(), dst.lower())
+    if conversion_key not in colorspace_methods:
+        raise ValueError(f"Direct conversion from '{src}' to '{dst}' not implemented. Supported conversions: {list(colorspace_methods.keys())}")
+    
+    method_info = colorspace_methods[conversion_key]
+    method_type = method_info[0]
+    
+    # Execute conversion based on method type
+    if method_type == 'identity':
+        result = color_image
+    
+    elif method_type == 'colorspacious':
+        _, cs_src, cs_dst = method_info
+        result = colorspacious.cspace_convert(color_image, cs_src, cs_dst)
+    
+    elif method_type == 'arithmetic':
+        if method_info[1] == '_rgb_to_cmyk':
+            result = _convert_rgb_to_cmyk_vectorized(color_image)
+        elif method_info[1] == '_cmyk_to_rgb':
+            result = _convert_cmyk_to_rgb_vectorized(color_image)
+        else:
+            result = method_info[1](color_image)
+    
+    elif method_type == 'colorsys':
+        conversion_fn = method_info[1] 
+        use_hls_order = len(method_info) > 2 and method_info[2] == 'hls_order'
+        
+        # Flatten image for vectorized processing
+        original_shape = color_image.shape
+        pixels = color_image.reshape(-1, 3)
+        
+        # Create vectorized function
+        vectorized_fn = np.vectorize(conversion_fn, otypes=[float, float, float])
+        
+        if use_hls_order and src.lower() == 'hsl':
+            # HSL -> RGB: colorsys expects HLS order
+            c1, c2, c3 = vectorized_fn(pixels[:, 0], pixels[:, 2], pixels[:, 1])
+        elif use_hls_order and dst.lower() == 'hsl':
+            # RGB -> HSL: colorsys returns HLS, convert to HSL
+            h, l, s = vectorized_fn(pixels[:, 0], pixels[:, 1], pixels[:, 2])
+            c1, c2, c3 = h, s, l
+        else:
+            # Standard RGB/HSV conversion
+            c1, c2, c3 = vectorized_fn(pixels[:, 0], pixels[:, 1], pixels[:, 2])
+        
+        # Reshape back to image
+        result = np.stack([c1, c2, c3], axis=-1).reshape(original_shape)
+    
+    elif method_type == '2step':
+        # 2-step conversion via intermediate color space
+        path = method_info[1]
+        intermediate_src, intermediate_dst = path[0], path[2]
+        intermediate_space = path[1]
+        
+        # Step 1: convert to intermediate
+        intermediate_result = _convert_colorspace_image(color_image, intermediate_src, intermediate_space)
+        
+        # Step 2: convert from intermediate to final
+        result = _convert_colorspace_image(intermediate_result, intermediate_space, intermediate_dst)
+    
+    else:
+        raise ValueError(f"Unknown conversion method: {method_type}")
+    
+    # Re-attach alpha channel if present  
+    if has_alpha:
+        result = np.concatenate([result, alpha_channel], axis=2)
+        
+    return result
+
+
+def _convert_rgb_to_cmyk_vectorized(rgb_image):
+    """Convert RGB to CMYK using vectorized operations"""
+    import numpy as np
+    
+    # RGB to CMY (1 - RGB)
+    cmy = 1.0 - rgb_image
+    c, m, y = cmy[:, :, 0], cmy[:, :, 1], cmy[:, :, 2]
+    
+    # Calculate K (black) as minimum of C, M, Y
+    k = np.minimum(np.minimum(c, m), y)
+    
+    # Avoid division by zero
+    divisor = 1.0 - k
+    k_mask = divisor > 1e-6  # Avoid numerical issues
+    
+    # Calculate final CMYK values
+    c_final = np.where(k_mask, (c - k) / divisor, 0.0)
+    m_final = np.where(k_mask, (m - k) / divisor, 0.0) 
+    y_final = np.where(k_mask, (y - k) / divisor, 0.0)
+    
+    return np.stack([c_final, m_final, y_final, k], axis=-1)
+
+
+def _convert_cmyk_to_rgb_vectorized(cmyk_image):
+    """Convert CMYK to RGB using vectorized operations"""
+    import numpy as np
+    
+    c, m, y, k = cmyk_image[:, :, 0], cmyk_image[:, :, 1], cmyk_image[:, :, 2], cmyk_image[:, :, 3]
+    
+    # CMYK to RGB conversion
+    r = (1.0 - c) * (1.0 - k)
+    g = (1.0 - m) * (1.0 - k)
+    b = (1.0 - y) * (1.0 - k)
+    
+    return np.stack([r, g, b], axis=-1)
+
+
+def _convert_rgb_to_hsv_vectorized(rgb_image):
+    """Fast vectorized RGB to HSV using numpy + colorsys"""
+    import numpy as np
+    import colorsys
+    
+    # Flatten to 1D array of pixels for processing
+    original_shape = rgb_image.shape
+    pixels = rgb_image.reshape(-1, 3)
+    
+    # Vectorize the colorsys function
+    vectorized_fn = np.vectorize(colorsys.rgb_to_hsv, otypes=[float, float, float])
+    h, s, v = vectorized_fn(pixels[:, 0], pixels[:, 1], pixels[:, 2])
+    
+    # Stack and reshape back
+    return np.stack([h, s, v], axis=-1).reshape(original_shape)
+
+
+def _convert_hsv_to_rgb_vectorized(hsv_image):
+    """Fast vectorized HSV to RGB using numpy + colorsys"""
+    import numpy as np
+    import colorsys
+    
+    # Flatten to 1D array of pixels for processing
+    original_shape = hsv_image.shape
+    pixels = hsv_image.reshape(-1, 3)
+    
+    # Vectorize the colorsys function
+    vectorized_fn = np.vectorize(colorsys.hsv_to_rgb, otypes=[float, float, float])
+    r, g, b = vectorized_fn(pixels[:, 0], pixels[:, 1], pixels[:, 2])
+    
+    # Stack and reshape back
+    return np.stack([r, g, b], axis=-1).reshape(original_shape)
+
+
+def _convert_rgb_to_hsl_vectorized(rgb_image):
+    """Fast vectorized RGB to HSL using numpy + colorsys"""
+    import numpy as np
+    import colorsys
+    
+    # Flatten to 1D array of pixels for processing
+    original_shape = rgb_image.shape
+    pixels = rgb_image.reshape(-1, 3)
+    
+    # Vectorize the colorsys function (note: colorsys uses HLS order)
+    vectorized_fn = np.vectorize(colorsys.rgb_to_hls, otypes=[float, float, float])
+    h, l, s = vectorized_fn(pixels[:, 0], pixels[:, 1], pixels[:, 2])
+    
+    # Stack in HSL order and reshape back
+    return np.stack([h, s, l], axis=-1).reshape(original_shape)
+
+
+def _convert_hsl_to_rgb_vectorized(hsl_image):
+    """Fast vectorized HSL to RGB using numpy + colorsys"""
+    import numpy as np
+    import colorsys
+    
+    # Flatten to 1D array of pixels for processing
+    original_shape = hsl_image.shape
+    pixels = hsl_image.reshape(-1, 3)
+    
+    # Vectorize the colorsys function (note: colorsys expects HLS order)
+    vectorized_fn = np.vectorize(colorsys.hls_to_rgb, otypes=[float, float, float])
+    r, g, b = vectorized_fn(pixels[:, 0], pixels[:, 2], pixels[:, 1])  # H, L, S order
+    
+    # Stack and reshape back
+    return np.stack([r, g, b], axis=-1).reshape(original_shape)
+
+
 
 def get_rgb_byte_color_identity_mapping_image():
     """
@@ -48466,27 +50532,6 @@ def get_rgb_byte_color_identity_mapping_image():
     assert get_image_dimensions(image)==(4096,4096)
     
     return image
-
-def apply_colormap_to_image(image,colormap_name='viridis'):
-    """
-        https://stackoverflow.com/questions/52498777/apply-matplotlib-or-custom-colormap-to-opencv-image/52626636
-        EXAMPLE:
-            image=load_image('https://www.gaytimes.co.uk/wp-content/uploads/2018/05/Kim-Petras-Thom-Kerr-header.jpg')
-           styles='Accent Accent_r Blues Blues_r BrBG BrBG_r BuGn BuGn_r BuPu BuPu_r CMRmap CMRmap_r Dark2 Dark2_r GnBu GnBu_r Greens Greens_r Greys Greys_r OrRd OrRd_r Oranges Oranges_r PRGn PRGn_r Paired Paired_r Pastel1 Pastel1_r Pastel2 Pastel2_r PiYG PiYG_r PuBu PuBuGn PuBuGn_r PuBu_r PuOr PuOr_r PuRd PuRd_r Purples Purples_r RdBu RdBu_r RdGy RdGy_r RdPu RdPu_r RdYlBu RdYlBu_r RdYlGn RdYlGn_r Reds Reds_r Set1 Set1_r Set2 Set2_r Set3 Set3_r Spectral Spectral_r Wistia Wistia_r YlGn YlGnBu YlGnBu_r YlGn_r YlOrBr YlOrBr_r YlOrRd YlOrRd_r afmhot afmhot_r autumn autumn_r binary binary_r bone bone_r brg brg_r bwr bwr_r cividis cividis_r cool cool_r coolwarm coolwarm_r copper copper_r cubehelix cubehelix_r flag flag_r gist_earth gist_earth_r gist_gray gist_gray_r gist_heat gist_heat_r gist_ncar gist_ncar_r gist_rainbow gist_rainbow_r gist_stern gist_stern_r gist_yarg gist_yarg_r gnuplot gnuplot2 gnuplot2_r gnuplot_r gray gray_r hot hot_r hsv hsv_r inferno inferno_r jet jet_r magma magma_r nipy_spectral nipy_spectral_r ocean ocean_r pink pink_r plasma plasma_r prism prism_r rainbow rainbow_r seismic seismic_r spring spring_r summer summer_r tab10 tab10_r tab20 tab20_r tab20b tab20b_r tab20c tab20c_r terrain terrain_r twilight twilight_r twilight_shifted twilight_shifted_r viridis viridis_r winter winter_r'.split()
-           for style in styles:
-               display_image(apply_colormap_to_image(image,style))
-               input(style)
-    """
-    pip_import('cmapy')
-    pip_import('cv2')
-    import cv2
-    import cmapy
-    image=as_numpy_image(image)
-    image=as_rgb_image(image)
-    image=as_byte_image(image)
-    image_colorized = cv2.applyColorMap(image, cmapy.cmap(colormap_name))
-    image_colorized = cv_rgb_bgr_swap(image_colorized)
-    return image_colorized
 
 def zalgo_text(text:str,amount:int=1):
     """
@@ -50441,6 +52486,12 @@ def _sqrt(x):
     if is_torch_tensor(x):return __import__('torch').sqrt(x)
     return math.sqrt(x)
 
+def _cbrt(x):
+    """Sign-preserving cube root for scalar / numpy / torch."""
+    if is_numpy_array (x): return np.cbrt(x)  # handles negatives
+    if is_torch_tensor(x): return th.sign(x) * th.abs(x).pow(1/3)
+    return math.copysign(abs(x)**(1/3), x)
+
 def _abs(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.abs(x)
@@ -50619,13 +52670,13 @@ def _maximum(x, y):
     """ works across libraries - such as numpy, torch """
     if is_numpy_array (x):return np.maximum(x, y)
     if is_torch_tensor(x):return __import__('torch').maximum(x, y)
-    raise ValueError("type not supported: "+str(type(x)))
+    return max(x,y)
 
 def _minimum(x, y):
     """ works across libraries - such as numpy, torch """
     if is_numpy_array (x):return np.minimum(x, y)
     if is_torch_tensor(x):return __import__('torch').minimum(x, y)
-    raise ValueError("type not supported: "+str(type(x)))
+    return min(x,y)
 
 def _max(x, dim=None, keepdim=False):
     """ works across libraries - such as numpy, torch """
@@ -50678,49 +52729,6 @@ def _copy_tensor(x):
 #     raise ValueError("dim parameter not supported for Python scalars")
 
 
-# def crop_tensor(tensor, new_shape):
-#     """
-#     Crop or pad tensor to new shape, preserving original data where dimensions overlap.
-#
-#     Creates a new tensor/array with the requested shape and copies data from
-#     the original tensor where dimensions overlap. Works with both NumPy arrays
-#     and PyTorch tensors. Can make tensors larger (padding with zeros) or smaller (cropping).
-#
-#     Args:
-#         tensor: Input tensor (PyTorch) or array (NumPy)
-#         new_shape: Target shape as tuple of dimensions
-#
-#     Returns:
-#         New tensor/array with requested shape containing original data
-#         where dimensions overlap
-#
-#     Examples:
-#         >>> import numpy as np
-#         ... arr = np.ones((2, 3))
-#         ... print(crop_tensor(arr, (4, 5)))  # returns array of shape (4, 5) with ones in top-left 2x3 area
-#         ... print(crop_tensor(arr, (1, 2)))  # returns array of shape (1, 2) with data cropped from original
-#         [[1. 1. 1. 0. 0.]
-#          [1. 1. 1. 0. 0.]
-#          [0. 0. 0. 0. 0.]
-#          [0. 0. 0. 0. 0.]]
-#         [[1. 1.]]
-#
-#         >>> import torch
-#         ... t = torch.ones((2, 3))
-#         ... print(crop_tensor(t, (4, 5)))  # returns tensor of shape (4, 5) with ones in top-left 2x3 area
-#         ... print(crop_tensor(t, (1, 2))  # returns tensor of shape (1, 2) with data cropped from original
-#         tensor([[1., 1., 1., 0., 0.],
-#                 [1., 1., 1., 0., 0.],
-#                 [0., 0., 0., 0., 0.],
-#                 [0., 0., 0., 0., 0.]])
-#         tensor([[1., 1.]])
-#
-#     """
-#     old_shape = tensor.shape
-#     new_tensor = _zeros_like(tensor, shape=new_shape)
-#     slices = tuple(slice(0, min(o, n)) for o, n in zip(old_shape, new_shape))
-#     new_tensor[slices] = tensor[slices]
-#     return new_tensor
 
 
 def get_bilinear_weights(x, y):
@@ -57562,45 +59570,6 @@ class BoolSet(MutableSet):
     def __repr__(self):
         return self.__class__.__name__+'('+repr(self._data)+')'
 
-
-class DictReader:
-    """ Like a read-only EasyDict - with a super simple implementation """
-    #Note: This class is similar in functionality to the python libraries "easydict" and "addict". You can find them on pypi.
-    #This class, however, is read-only right now.
-
-    def __init__(self,data:dict):
-        #This class makes reading nested dicts easier
-        #Instead of data['a']['b']['c'] you say data.a.b.c
-        #Right now this only reads values from dicts
-        #More functionality might be added later if I need it...
-        #...but for now let's keep it super simple...
-        #In the future this might:
-        #    - Extend the dict class (allow for __getitem__, __setitem__, and other operators)
-        
-        assert isinstance(data,dict)    
-    
-        self._data=data
-        
-    def __getattr__(self,key:str):
-        
-        assert key in self._data, key
-
-        value = self._data[key]
-        
-        return DictReader(value) if isinstance(value,dict) else value
-
-    def __dir__(self):
-        #Great for autocompletion in interactive sessions!
-        return list(self._data)
-
-    def __contains__(self, key):
-        return key in self._data
-
-    def __repr__(self):
-        return 'DictReader('+repr(self._data)+')'
-
-    def __getitem__(self, index):
-        return self._data[index]
 
 if __name__ == "__main__":
     print(end='\r')
