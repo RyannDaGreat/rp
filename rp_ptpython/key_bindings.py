@@ -44,8 +44,8 @@ __all__ = (
 
 def get_all_function_names(code:str):        
     #Return all the names of all functions defined in the given code, in the order that they appear
-    from rp import lrstrip_all_lines,line_split
-    lines=line_split(lrstrip_all_lines(code))
+    from rp import strip_all_lines,line_split
+    lines=line_split(strip_all_lines(code))
     import re
     defs=[line for line in lines if re.fullmatch(r'\s*def\s+\w+\s*\(.*',line)]
     func_names=[d[len('def '):d.find('(')].strip() for d in defs]

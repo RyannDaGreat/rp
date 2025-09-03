@@ -1490,7 +1490,7 @@ def launch_tmux_delegation_cluster(num_workers:int, *, session_name=None,
             - None: Use default roster
             - False: Don't register clients to any roster  
             - ClientRoster: Use this roster
-            - str: Evaluate string to get roster
+            - str: Evaluate string to get roster such as 'ClientRoster("~/porthopper_launcher_roster")'
         delegator_port (int/None/False, optional): Port for delegation server:
             - None: Auto-choose next available port from DEFAULT_DELEGATION_SERVER_PORT (default)
             - False: Don't start delegation server
@@ -1500,6 +1500,7 @@ def launch_tmux_delegation_cluster(num_workers:int, *, session_name=None,
             - 'error': Raise error if session exists (default)
             - 'replace': Kill existing session and create new one
             - 'unique': Create unique session name if name exists
+            - 'skip': Skip without raising an error
         persistent_workers (bool, optional): If True, if a worker dies, it will automatically restart
             with the same port and WE_CLUSTER_RANK and WE_PORT as it used to have. This lets you do things
             like call delegator.evaluate_all("rp.kill_process(rp.get_process_id())", sync=False) to reboot an entire set of workers
@@ -1525,7 +1526,10 @@ def launch_tmux_delegation_cluster(num_workers:int, *, session_name=None,
     # Handle session name conflicts
     if rp.tmux_session_exists(session_name):
         if if_exists == 'error':
-            raise ValueError(f"Tmux session '{session_name}' already exists. Use if_exists='replace' or 'unique'.")
+            raise ValueError(f"Tmux session '{session_name}' already exists. Use if_exists='replace' or 'unique' or 'skip'.")
+        if if_exists == 'skip':
+            rp.fansi_print(f"Tmux session '{session_name}' already exists. Skipping creation.", 'yellow')
+            return
         elif if_exists == 'replace':
             rp.tmux_kill_session(session_name)
             rp.fansi_print(f"Killed existing session '{session_name}'", 'yellow')

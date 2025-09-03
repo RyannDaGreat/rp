@@ -11,6 +11,7 @@ import os
 import time
 import shlex
 import sys
+import operator
 import random
 import warnings
 import traceback
@@ -69,6 +70,7 @@ sys.path.append(_rp_folder)
 from rp.libs.stamp_tensor import stamp_tensor, crop_tensor 
 from rp.libs.tracetraptest import * #A few libs debugging features. These things mostly need to be renamed.
 from rp.libs.debug_comment import debug_comment
+import rp.rp_ptpython.prompt_style as ps
 
 #Lazy load modules for a speed boost
 try:
@@ -589,6 +591,20 @@ def product(x):
     # for y in x[1:]:
     #     out*=y
     # return out
+
+def list_set(x):
+    """
+    Similar to performing list(set(x)), except that it preserves the original order of the items.
+    You could also think of it as list_set≣remove_duplicates
+    Demo:
+          >>> l=[5,4,4,3,3,2,1,1,1]
+          >>> list(set(l))
+          ans=[1,2,3,4,5]
+          >>> list_set(l)  ⟵ This method
+          ans=[5,4,3,2,1]
+    """
+    from more_itertools import unique_everseen  # http://stackoverflow.com/questions/480214/how-do-you-remove-duplicates-from-a-list-in-whilst-preserving-order
+    return list(unique_everseen(x))
 
 def unique(iterable, *, key=identity, lazy=False):
     """
@@ -2562,7 +2578,7 @@ def uniform_float_color_image(height:int,width:int,color:tuple=(0,0,0,0)):
     color = as_rgba_float_color(color)
 
     assert height>=0 and width>=0
-    assert is_number(color) or is_color(color) and len(color) in {3,4}, 'Color should be a number, an RGB float color, or an RGBA float color'
+    assert is_number(color) or is_color_vector(color) and len(color) in {3,4}, 'Color should be a number, an RGB float color, or an RGBA float color'
     
     if is_number(color):
         output = np.ones((height,width),dtype=_float_image_dtype())*color
@@ -2573,6 +2589,71 @@ def uniform_float_color_image(height:int,width:int,color:tuple=(0,0,0,0)):
         assert len(color)==3 and is_rgb_image(output) or len(color)==4 and is_rgba_image(output)
         return output
 
+def uniform_byte_color_image(height:int,width:int,color:tuple=(0,0,0,0)):
+    """ Just like uniform_float_color_image, but with as_byte_image """
+    return as_byte_image(gather_args_call(uniform_float_color_image))
+
+def _is_rgb_color_vector(color):
+    """Check if color is an RGB color vector (3 numeric values)."""
+    return is_color_vector(color) and len(color) == 3
+
+def _assert_is_number(arg_name, arg, func_name=None, frames_back=0):
+    """Private helper to assert that an argument is a number with proper rp-style error message."""
+    if not is_number(arg):
+        if func_name is None:
+            try:
+                func_name = get_current_function_name(frames_back=1+frames_back)
+            except RuntimeError:
+                func_name = "rp._assert_is_number"
+        raise ValueError(func_name + ": " + arg_name + " must be a number, got " + type(arg).__name__ + ": " + str(arg))
+
+def with_color_green(color, green):
+    """Modify the green channel of the color. Returns RGB if input is RGB tuple, otherwise RGBA."""
+    _assert_is_number("green", green)
+    r, g, b, a = as_rgba_float_color(color)
+    return (r, green, b) if _is_rgb_color_vector(color) else (r, green, b, a)
+
+def with_color_red(color, red):
+    """Modify the red channel of the color. Returns RGB if input is RGB tuple, otherwise RGBA."""
+    _assert_is_number("red", red)
+    r, g, b, a = as_rgba_float_color(color)
+    return (red, g, b) if _is_rgb_color_vector(color) else (red, g, b, a)
+
+def with_color_blue(color, blue):
+    """Modify the blue channel of the color. Returns RGB if input is RGB tuple, otherwise RGBA."""
+    _assert_is_number("blue", blue)
+    r, g, b, a = as_rgba_float_color(color)
+    return (r, g, blue) if _is_rgb_color_vector(color) else (r, g, blue, a)
+
+def with_color_alpha(color, alpha):
+    """Modify the alpha channel of the color. Always returns RGBA."""
+    _assert_is_number("alpha", alpha)
+    r, g, b, a = as_rgba_float_color(color)
+    return (r, g, b, alpha)
+
+def with_color_hue(color, hue):
+    """Sets the hue of the color. Returns RGB if input is RGB tuple, otherwise RGBA."""
+    _assert_is_number("hue", hue)
+    r, g, b, a = as_rgba_float_color(color)
+    h, s, v = rgb_to_hsv_float_color(r, g, b)
+    r, g, b = hsv_to_rgb_float_color(hue % 1, s, v)
+    return (r, g, b) if _is_rgb_color_vector(color) else (r, g, b, a)
+
+def with_color_saturation(color, saturation):
+    """Sets the saturation of the color. Returns RGB if input is RGB tuple, otherwise RGBA."""
+    _assert_is_number("saturation", saturation)
+    r, g, b, a = as_rgba_float_color(color)
+    h, s, v = rgb_to_hsv_float_color(r, g, b)
+    r, g, b = hsv_to_rgb_float_color(h, saturation, v)
+    return (r, g, b) if _is_rgb_color_vector(color) else (r, g, b, a)
+
+def with_color_brightness(color, brightness):
+    """Sets the brightness of the color. Returns RGB if input is RGB tuple, otherwise RGBA."""
+    _assert_is_number("brightness", brightness)
+    r, g, b, a = as_rgba_float_color(color)
+    h, s, v = rgb_to_hsv_float_color(r, g, b)
+    r, g, b = hsv_to_rgb_float_color(h, s, brightness)
+    return (r, g, b) if _is_rgb_color_vector(color) else (r, g, b, a)
 
 class DictReader:
     """ Like a read-only EasyDict - with a super simple implementation """
@@ -4189,8 +4270,8 @@ def blend_images(bot, top, alpha=1, mode="normal"):
     """
     
     #Input validation
-    assert is_image(top) or is_color(top) and len(top) in {3,4} or is_number(top) or isinstance(top,str)
-    assert is_image(bot) or is_color(bot) and len(bot) in {3,4} or is_number(bot) or isinstance(bot,str)
+    assert is_image(top) or is_color_vector(top) and len(top) in {3,4} or is_number(top) or isinstance(top,str)
+    assert is_image(bot) or is_color_vector(bot) and len(bot) in {3,4} or is_number(bot) or isinstance(bot,str)
     assert is_image(alpha) or is_number(alpha)
 
     if isinstance(top, str):top=as_rgba_float_color(top)
@@ -4226,8 +4307,8 @@ def blend_images(bot, top, alpha=1, mode="normal"):
     if is_number(bot):bot=float(bot);bot=(bot,bot,bot);assert is_float_color(bot)
 
     #If top or bot are colors, turn them into solid-colored images
-    if is_color (top  ):top  =uniform_float_color_image(height, width, top  )  
-    if is_color (bot  ):bot  =uniform_float_color_image(height, width, bot  )
+    if is_color_vector (top  ):top  =uniform_float_color_image(height, width, top  )  
+    if is_color_vector (bot  ):bot  =uniform_float_color_image(height, width, bot  )
     if is_number(alpha):alpha=uniform_float_color_image(height, width, alpha)
     
     #Whatever top, bot and alpha started as, by this point they should all be images
@@ -4982,7 +5063,10 @@ def video_with_progress_bar(
 def boomerang_video(video):
     if isinstance(video,str):
         video=load_video(video)
-    new_video=list(video)[:-1]+list(video)[::-1][:-1]
+
+    video = list(video)
+    new_video=video[:-1]+video[::-1][:-1]
+
     return new_video
     
 
@@ -6919,7 +7003,7 @@ def _load_files(
 
 
 
-# region  Saving/Loading Images: ［load_image，load_image_from_url，save_image，save_image_jpg］
+# region  Saving/Loading Images: ［load_image，_load_image_from_url，save_image，save_image_jpg］
 
 
 def _load_animated_image_via_pil(location, *, use_cache=True):
@@ -7080,6 +7164,22 @@ def copy_image_to_clipboard(image,*,backend=None):
     elif backend=='pyjpgclipboard': _copy_image_to_clipboard_via_pyjpgclipboard(image) #Only supports RGB
     else: raise ValueError('Invalid backend '+backend)
 
+def _as_rgba_image_if_2_channels(image):
+    """
+    It is possible to load a PNG that has just two channels (Value + Alpha)
+    In this case, we turn it into and RGBA image to make it compatible with everything else
+    """
+
+    H, W, C = image.shape
+
+    if C in {3, 4}:
+        return image
+
+    if C==2:
+        V, A = np.transpose(image,(2,0,1))
+        return np.stack([V, V, V, A], axis=2)
+    
+    raise ValueError("_as_rgba_image_if_2_channels: Expected 2, 3, or 4 channels but got "+str(C))
 
 _load_image_cache={} #Used by all helper funcs: Dict of location -> image
 def load_image(location,*,use_cache=False):
@@ -7101,8 +7201,8 @@ def load_image(location,*,use_cache=False):
       
     See also:
         - load_images(...): Plural version for batch loading
-        - load_image_from_file(...): Direct file loading (no URL support)
-        - load_image_from_url(...): Direct URL loading
+        - _load_image_from_file(...): Direct file loading (no URL support)
+        - _load_image_from_url(...): Direct URL loading
         - load_rgb_image(...): Force RGB conversion (syntactic sugar vs as_rgb_image(load_image(...))
     
     Supported formats (non-exhaustive):
@@ -7118,16 +7218,20 @@ def load_image(location,*,use_cache=False):
 
     # Clean delegation to helpers (each handles its own caching)
     if is_valid_url(location):
-        return load_image_from_url(location, use_cache=use_cache)
+        output = _load_image_from_url(location, use_cache=use_cache)
     else:
-        return load_image_from_file(location, use_cache=use_cache)
+        output = _load_image_from_file(location, use_cache=use_cache)
+
+    output = _as_rgba_image_if_2_channels(output)
+
+    return output
 
 def load_rgb_image(location,*,use_cache=False):
     """
     Like load_image, but makes sure there's no alpha channel
     This function is really only here to save you from having to write it out every time
     """
-    return as_rgb_image(load_image(location,use_cache=use_cache))
+    return as_rgb_image(load_image(location,use_cache=use_cache), copy=False)
 
 class LazyLoadedImages:
     def __init__(self,image_paths:list,*args,**kwargs):
@@ -7292,7 +7396,7 @@ pdf_to_text = load_pdf_as_text
 #    output=[]
 #    show_time_remaining=eta(len(locations))
 
-def load_image_from_file(file_name, *, use_cache=False):
+def _load_image_from_file(file_name, *, use_cache=False):
     """ Can try opencv as a fallback if this ever breaks """
     assert file_exists(file_name),'No such image file exists: '+repr(file_name)
     
@@ -7302,7 +7406,7 @@ def load_image_from_file(file_name, *, use_cache=False):
     # RP cache pattern
     if use_cache:
         if file_name not in _load_image_cache:
-            _load_image_cache[file_name] = load_image_from_file(file_name, use_cache=False)
+            _load_image_cache[file_name] = _load_image_from_file(file_name, use_cache=False)
         return _load_image_cache[file_name].copy()
     elif file_name in _load_image_cache:
         del _load_image_cache[file_name]
@@ -7375,14 +7479,14 @@ def _disable_insecure_request_warning():
         warnings.simplefilter("ignore", InsecureRequestWarning)
         yield
 
-def load_image_from_url(url: str, *, use_cache=False):
+def _load_image_from_url(url: str, *, use_cache=False):
     """
     Url should either be like http://website.com/image.png or like data:image/png;base64,iVBORw0KGgoAAAANSUhEUg...
     Returns a numpy image
     
     With use_cache=True, downloads to persistent file cache and saves images to memory
     """
-    assert url.startswith('data:image') or is_valid_url(url), 'load_image_from_url error: invalid url: ' + repr(url)
+    assert url.startswith('data:image') or is_valid_url(url), '_load_image_from_url error: invalid url: ' + repr(url)
     
     # Memory cache check
     if use_cache and url in _load_image_cache:
@@ -7401,7 +7505,7 @@ def load_image_from_url(url: str, *, use_cache=False):
         # Download the file then load it offline
         with _disable_insecure_request_warning():
             download_url(url, cache_path, skip_existing=True)
-        return load_image_from_file(cache_path, use_cache=True)  # Will add to _load_image_cache if not already there
+        return _load_image_from_file(cache_path, use_cache=True)  # Will add to _load_image_cache if not already there
 
     else:
         # Directly load the image from the web without writing to a file. Requires PIL.
@@ -7421,7 +7525,7 @@ def load_image_from_url(url: str, *, use_cache=False):
         from io import BytesIO
 
         if not connected_to_internet():
-            raise RuntimeError("load_image_from_url: Not connected to internet, cannot load "+url)
+            raise RuntimeError("_load_image_from_url: Not connected to internet, cannot load "+url)
         
         with _disable_insecure_request_warning():
             response = requests.get(url, verify=False)
@@ -12789,20 +12893,6 @@ def invert_list_to_dict(l: list) -> dict:
 def dict_to_list(d: dict) -> list:
     """ Assumes keys should be in ascending order """
     return gather(d,sorted(d.keys()))
-
-def list_set(x):
-    """
-    Similar to performing list(set(x)), except that it preserves the original order of the items.
-    You could also think of it as list_set≣remove_duplicates
-    Demo:
-          >>> l=[5,4,4,3,3,2,1,1,1]
-          >>> list(set(l))
-          ans=[1,2,3,4,5]
-          >>> list_set(l)  ⟵ This method
-          ans=[5,4,3,2,1]
-    """
-    from more_itertools import unique_everseen  # http://stackoverflow.com/questions/480214/how-do-you-remove-duplicates-from-a-list-in-whilst-preserving-order
-    return list(unique_everseen(x))
 
 # ――――――――――――――――――――――
 # Three fansi colors (see the fansi function for all possible color names):
@@ -18303,28 +18393,6 @@ def is_string_literal(s:str):
     except Exception:
         return False
 
-def indentify(s:str,indent='\t'):
-    if isinstance(indent, int):
-        indent=' '*indent
-    return '\n'.join(indent + x for x in s.split('\n'))
-
-def unindent(string, indent=" "):
-    """Removes common leading indentation from a multi-line string. Similar to textwrap.dedent - but allows you to specify your own indent characters."""
-    def count_leading(line, char):
-        return len(line) - len(line.lstrip(char))
-
-    lines = string.splitlines()
-
-    levels = [count_leading(line, indent) for line in lines if line.strip(indent)]
-    indent_level = min(levels)
-
-    new_lines = [line[indent_level * len(indent) :] for line in lines]
-
-    return line_join(new_lines)
-
-def lrstrip_all_lines(s:str):
-    return '\n'.join([x.lstrip().rstrip()for x in s.split('\n')])
-
 random_unicode_hash=lambda l:int_list_to_string([randint(0x110000-1)for x in range(l)])
 
 def search_replace_simul(s:str,replacements:dict):
@@ -18882,7 +18950,7 @@ def display_image_in_terminal_color(image,*,truecolor=True):
         timg_renderer = timg.Renderer()
         
         # Load the image
-        #timg_renderer.load_image_from_file(temp_file)
+        #timg_renderer._load_image_from_file(temp_file)
         timg_renderer.load_image(rp.as_pil_image(image))
         
         # Choose the appropriate rendering method based on truecolor flag
@@ -19184,7 +19252,6 @@ cv2=pip_import('cv2')
 #         r'(?:/?|[/?]\S+)$',re.IGNORECASE).match(url)
 #     return regex is not None and (lambda ans:ans.pos == 0 and ans.endpos == len(url))(g.fullmatch(url))
 
-import rp.rp_ptpython.prompt_style as ps
 ps.__all__+=("PseudoTerminalPrompt",)
 
 _get_prompt_style_cached=None
@@ -20642,6 +20709,16 @@ def exeval(code:str, scope=None):
         12
     """
 
+    # When using exeval in code, its often convenient to be able to do
+    # >>> exeval("""
+    # ...     for x in y:
+    # ...         print(x)
+    # ... """)
+    # But note how that introduces whitespace? Lets remove that safely in the next two lines:
+    code = strip_blank_lines(code)
+    code = unindent(code)
+    # And now, exeval('    print(123)') does not error.
+
     code, directives = _parse_exeval_code(code)
 
     if scope is None:
@@ -21039,10 +21116,10 @@ def _rp_show_custom_line_profile(line_times, line_hits, start_time, end_time):
         print()  # Empty line between files
 
 
-def get_last_line_profile_results():
-    """Get the results from the most recent line profiling session"""
-    global _prev_line_profiler
-    return _prev_line_profiler
+# def get_last_line_profile_results():
+#     """Get the results from the most recent line profiling session"""
+#     global _prev_line_profiler
+#     return _prev_line_profiler
 
 
 # def parse(code):
@@ -21083,7 +21160,6 @@ def run_until_complete(x):
     return get_event_loop().run_until_complete(x)
 
 if __name__=='__main__':fansi_print("Booting rp...",'blue','bold',new_line=False)
-import rp.rp_ptpython.prompt_style as ps
 
 default_python_input_eventloop = None  # Singleton for python_input
 default_ipython_shell = None  # Singleton for python_input
@@ -21504,8 +21580,8 @@ def _dhistory_helper(history:str)->list:
     #Take some python code, rip out just the function definitions, and return them in a list
     def get_all_function_names(code:str):        
         #Return all the names of all functions defined in the given code, in the order that they appear
-        from rp import line_split,lrstrip_all_lines
-        lines=line_split(lrstrip_all_lines(code))
+        from rp import line_split,strip_all_lines
+        lines=line_split(strip_all_lines(code))
         import re
         defs=[line for line in lines if re.fullmatch(r'\s*def\s+\w+\s*\(.*',line)]
         func_names=[d[len('def '):d.find('(')].strip() for d in defs]
@@ -25125,7 +25201,7 @@ def pseudo_terminal(
                             ans=horizontally_concatenated_strings(o,rectangularize=True)
                             return ans
                         strings_input=help_commands_string
-                        strings_input=lrstrip_all_lines(strings_input)
+                        strings_input=strip_all_lines(strings_input)
                         command_list=columnify_strings(strings_input)
 
                         display_help_message_on_error=True# Seems appropriate if they're looking for help
@@ -28547,6 +28623,7 @@ def repr_vars(*vars, sort=True, frames_back=0):
     return "\n" + line_join(output)
 
 def has_len(x):
+    """ Returns True if you can safely call len(x) """
     return hasattr(x,'__len__')
 
 def as_example_comment(code,*,indent=' '*8):
@@ -29226,7 +29303,7 @@ def is_number(x):
         - is_numpy_array: Check if value is a NumPy array
         - is_torch_tensor: Check if value is a PyTorch tensor
         - float_clamp: Uses this function for input validation
-        - is_color: Check if value represents a color
+        - is_color_vector: Check if value represents a color
     
     Technical Note:
         The function intentionally excludes torch tensors to maintain clear separation
@@ -29254,6 +29331,7 @@ def _refresh_autocomplete_module_list():
     get_all_importable_module_names()
 
 def line_join(iterable,separator='\n'):
+    """ Joins a set of strings with the newline character. See also: rp.line_split """
     return separator.join(map(str,iterable))
 
 
@@ -29522,26 +29600,160 @@ def cv_find_contours(image,*,include_every_pixel=False):
 
     return contours
 
-def cv_simplify_contour(contour, epsilon=0.001):
+def dilate_contour(contour,shift=1,*,loop=False):
+    """
+
+    EXAMPLE:
+
+        >>> #Single Image Demo
+        ... image = load_image(
+        ...     "https://www.shutterstock.com/image-vector/vector-illustration-black-silhouette-elk-600nw-736283863.jpg",
+        ...     use_cache=True,
+        ... )
+        ... contour = max(cv_find_contours(image), key=len)
+        ... contour = as_complex_vector(contour)
+        ... contour = circ_gauss_blur(contour, 10)
+        ... contour = evenly_split_path(contour, 1000)
+        ... radii = [-10, 10, 20, 30, 40, 50]
+        ... display_image(
+        ...     contours_to_image(
+        ...         [contour] + [dilate_contour(contour, shift) for shift in radii]
+        ...     )
+        ... )
+
+    EXAMPLE:
+
+        >>> #Wobbles Animation - Jiggly Lines
+        ... 
+        ... image = load_image(
+        ...     "https://www.shutterstock.com/image-vector/vector-illustration-black-silhouette-elk-600nw-736283863.jpg",
+        ...     use_cache=True,
+        ... )
+        ... contour = max(cv_find_contours(image), key=len)
+        ... contour = as_complex_vector(contour)
+        ... contour = circ_gauss_blur(contour, 10)
+        ... contour = evenly_split_path(contour, 1000)
+        ... 
+        ... @globalize_locals
+        ... def animation():
+        ...     for phase in np.linspace(0,tau,num=30):
+        ...         num_wobbles = 100
+        ...         wobble_amplitude = 10
+        ...         wobbles = wobble_amplitude * np.sin(
+        ...             phase + np.linspace(
+        ...                 0,
+        ...                 tau * num_wobbles,
+        ...                 len(contour),
+        ...             )
+        ...         )
+        ...         
+        ...         frame = contours_to_image(
+        ...             [contour] + [dilate_contour(contour, wobbles)],
+        ...             crop=False,
+        ...         )
+        ...         yield frame
+        ... 
+        ... display_video(animation(), loop=True)
+
+    """
+    contour = as_complex_vector(contour)
+
+    if not is_number(shift):
+        #Broadcasting
+        assert len(shift) == len(contour), [len(shift), len(contour)]
+    else:
+        shift = [shift+0j] * len(contour)
+        
+    
+    if loop:
+        contour = [contour[-1]] + list(contour) + [contour[0]]
+
+    num_points=len(contour)
+    f_deltas =  np.diff(contour)             #Forward  Deltas
+    b_deltas = -np.diff(contour[::-1])[::-1] #Backward Deltas
+    
+    nf_deltas = f_deltas / np.abs(f_deltas)
+    nb_deltas = b_deltas / np.abs(b_deltas)
+        
+    μn_deltas = np.zeros(num_points,dtype=f_deltas.dtype) #Avg Normalized Deltas
+    μn_deltas[ :-1]+=f_deltas/2
+    μn_deltas[1:  ]+=b_deltas/2
+    μn_deltas[[0,-1]]*=2
+    
+    nμn_deltas = μn_deltas / np.abs(μn_deltas)
+    
+    output = contour + shift * nμn_deltas * -1j
+    
+    if loop:
+        output = output[1:-1]
+    
+    return output
+
+def cv_simplify_contour(contour, epsilon=1, closed=True):
     """
     Simplifies a closed contour using the Ramer-Douglas-Peucker algorithm.
 
     Parameters:
-    contour (numpy.ndarray): The input contour, a 2D NumPy array of shape (n, 1, 2) or (n, 2), where n is the number of points, OR a complex-numbered vector of shape (n,)
-    epsilon (float, optional): The approximation accuracy, a non-negative value. This is the maximum distance between the original contour and its approximation. A smaller value results in a more accurate approximation. Default is 0.03.
+        contour (numpy.ndarray):
+            The input contour, a 2D NumPy array of shape (n, 1, 2) or (n, 2), where n is the number of points, OR a complex-numbered vector of shape (n,)
+        epsilon (float, optional):
+            The approximation accuracy, a non-negative value. This is the maximum distance between the original contour and its approximation.
+            A smaller value results in a more accurate approximation and more vertices.
+            For size equivariance, make it proportional to the contour length such as epsilon=.05*cv_contour_length(contour)
+            Default is
+        closed (bool, optional): If True, treats the contour as a closed loop, meaning the endpoints might be simplified too.
+            Defaults to True.
 
     Returns:
-    numpy.ndarray: A simplified contour, a 2D NumPy array of shape (m, 2), where m is the number of points in the simplified contour.
+        numpy.ndarray: A simplified contour, a 2D NumPy array of shape (m, 2), where m is the number of points in the simplified contour.
+        
+    EXAMPLE:
+        
+        >>> @globalize_locals
+        ... def animation():
+        ...     image = load_image(
+        ...         "https://www.shutterstock.com/image-vector/vector-illustration-black-silhouette-elk-600nw-736283863.jpg",
+        ...         use_cache=True,
+        ...     )
+        ... 
+        ...     contour = max(cv_find_contours(image), key=len)
+        ...     contour = as_complex_vector(contour)
+        ... 
+        ...     epsilons = np.linspace(0, 15, num=100)
+        ...     for i, epsilon in enumerate(eta(epsilons)):
+        ...         simplified_contour = cv_simplify_contour(contour, epsilon)
+        ...         simplified_contour = as_complex_vector(simplified_contour)
+        ...         shift = 20 + 20j
+        ... 
+        ...         frame = contour_to_image(
+        ...             simplified_contour + shift,
+        ...             crop=False,
+        ...             antialias=True,
+        ...         )
+        ... 
+        ...         frame = image_with_progress_bar(frame, i / (len(epsilons) - 1))
+        ...         frame = labeled_image(frame, f"epsilon={epsilon:.3}", font="Futura")
+        ... 
+        ...         yield frame
+        ... 
+        ... 
+        ... display_video(boomerang_video(animation()), loop=True)
+        
     """
     pip_import("cv2")
     import cv2
 
     big_number = 100000
+    epsilon *= big_number
     contour = as_cv_contour(contour * big_number)  # It turns into ints
     approx_contour = cv2.approxPolyDP(contour, epsilon, closed=True)
     approx_contour = as_points_array(approx_contour)
     approx_contour = approx_contour / big_number
     return approx_contour
+
+
+
+
 
 def cv_distance_to_contour(contour,x,y):
     """
@@ -29686,14 +29898,208 @@ def cv_draw_rectangle(image,
     return image
 
 def cv_contour_length(contour,closed=False):
+    """ Get the length or circumference of a list of 2d points """
     cv2=pip_import('cv2')
     contour=as_cv_contour(contour)
     return cv2.arcLength(contour,closed=closed)
 
 def cv_contour_area(contour):#,closed=False):
+    """ Get the area of a list of 2d points """
     cv2=pip_import('cv2')
     contour=as_cv_contour(contour)
     return cv2.contourArea(contour)
+
+def contour_distance_to_index(contour, distance, *, loop=False):
+    """
+    Convert arc-length distances along a contour to fractional vertex indices.
+    
+    Given a polyline (contour) and one or more distances measured along its edges,
+    this function returns the corresponding index positions as floats. Supports both
+    scalar and vectorized inputs for `distance`.
+    
+    Parameters:
+        - contour (array-like): Path data in any format supported by `as_points_array`
+                                (e.g., list of points, cv2 contour, complex vector).
+                                Represents a 2D polyline of shape (N, 2).
+        - distance (float or array-like): Distance(s) along the path to convert into
+                                          fractional indices. Vectorized: can be scalar
+                                          or iterable of scalars.
+        - loop (bool, optional): If True, treat the path as closed. Distances may be
+                                 negative or exceed the total perimeter and will wrap
+                                 modulo the path length. Default False clamps distances
+                                 to [0, total length].
+    
+    Returns:
+        - float or numpy.ndarray: Fractional index or array of indices.  
+                                  Non-looped: range is [0, N-1].  
+                                  Looped: values are in [0, N).
+    
+    Raises:
+        - ValueError: If the input contour has zero length and indices cannot be determined.
+    
+    EXAMPLES:
+
+        >>> contour_distance_to_index([[0,0],[1,1]],1) # 0.7071067811865475
+        >>> contour_distance_to_index([[0,0],[0,3]],1) # 0.3333333333333333
+        >>> contour_distance_to_index([[0,0],[0,3]],2) # 0.6666666666666666
+        >>> contour_distance_to_index([[0,0],[0,3]],3) # 1.0
+        >>> contour_distance_to_index([[0,0],[0,3]],[0,1,2,3]) # [0.  0.333 0.666 1. ]
+    
+    """
+    if not len(contour): raise ValueError(get_current_function_name()+": contour has 0 length, cannot retrieve any indices")
+
+    contour = as_points_array(contour)
+    distance = as_numpy_array(distance)
+    
+    cumdist = cumulative_euclidean_distances(contour, include_zero=True, loop=loop)
+    total = cumdist[-1]
+
+    if loop:
+        distance = distance % total
+    else:
+        distance = np.clip(distance, 0, total)
+
+    # handle zero-length segments (duplicate distances)                     
+    xp, idx = np.unique(cumdist, return_index=True)
+
+    out = np.interp(distance, xp, idx)
+
+    return out if distance.ndim else float(out)
+
+def trim_contour(contour, start: float, end: float, *, loop=False):
+    """
+    
+    EXAMPLE:
+        
+        >>> image = load_image(
+        ...     "https://www.shutterstock.com/image-vector/vector-illustration-black-silhouette-elk-600nw-736283863.jpg",
+        ...     use_cache=True,
+        ... )
+        ... contour = max(cv_find_contours(image), key=len)
+        ... contour = as_complex_vector(contour)
+        ... contour = cv_simplify_contour(contour,10)
+        ... #contour = circ_gauss_blur(contour, 10)
+        ... #contour = evenly_split_path(contour, 1000)
+        ... 
+        ... @globalize_locals
+        ... def animation():
+        ...     circumference=cv_contour_length(contour)
+        ...     for distance in np.linspace(0,circumference,num=1000):
+        ...         frame=uniform_byte_color_image(*get_image_dimensions(image),'dark blue')
+        ... 
+        ...         end=contour_distance_to_index(contour,distance)
+        ... 
+        ...         trimmed_contour = trim_contour(contour,0,end)
+        ...         
+        ...         frame = cv_draw_contour(frame, trimmed_contour, copy=False,fill=True)
+        ...         frame=image_with_progress_bar(frame,distance/circumference)
+        ...         
+        ...             
+        ...         yield frame
+        ... 
+        ... display_video(animation(), loop=True)
+
+
+    ------------------ TODO: TEST THIS MORE -----------------------
+    ------------------ WRITTEN WITH GPT5 --------------------------
+
+    Trim a contour between two (possibly fractional) vertex indices.
+
+    Returns a new contour that starts at `start` and ends at `end`,
+    interpolating linearly between vertices. If `start > end`, the
+    output traverses backward. If `start == end`, it still returns
+    two points (start and end are identical), so the output length
+    is guaranteed to be at least 2.
+
+    Parameters:
+        - contour (array-like): Path data accepted by `as_points_array`
+                                (e.g., [[x,y],...], cv2 contour, complex vector).
+                                Represents a 2D polyline of shape (N, 2).
+        - start (float): Starting fractional index along the contour.
+        - end (float): Ending fractional index along the contour.
+        - loop (bool, optional): If True, treat the contour as cyclic and allow
+                                 `start`/`end` to wind around multiple times
+                                 (values outside [0, N) are permitted and respected).
+                                 If False, `start` is clipped to ≥ 0 and `end`
+                                 is clipped to ≤ N. Default False.
+
+    Returns:
+        - numpy.ndarray: New contour with shape (M, 2), consisting of:
+                         [point_at(start), (all crossed integer vertices), point_at(end)].
+                         M >= 2 always (even when start == end).
+
+    Notes:
+        - Indices are fractional over vertex positions: 1.5 means halfway between
+          vertex 1 and 2.
+        - For `loop=True`, seams interpolate across the last→first edge naturally.
+        - Duplicated input vertices are fine; interpolation uses vertex indices.
+
+    EXAMPLES:
+
+        # open square, forward
+        >>> trim_contour([[0,0],[1,0],[1,1],[0,1]], 0.5, 2.5, loop=False)
+        # [[0.5 0. ]
+        #  [1.  0. ]
+        #  [1.  1. ]
+        #  [0.5 1. ]]
+
+        # open square, reversed
+        >>> trim_contour([[0,0],[1,0],[1,1],[0,1]], 2.5, 0.5, loop=False)
+        # [[0.5 1. ]
+        #  [1.  1. ]
+        #  [1.  0. ]
+        #  [0.5 0. ]]
+
+        # looped square, winds across seam
+        >>> trim_contour([[0,0],[1,0],[1,1],[0,1]], 3.5, 5.25, loop=True)
+        # [[0.   0.5 ]
+        #  [0.   0.  ]
+        #  [1.   0.  ]
+        #  [1.   0.25]]
+
+        # start == end -> two identical points
+        >>> trim_contour([[0,0],[1,0],[1,1],[0,1]], 1.0, 1.0, loop=False)
+        # [[1. 0.]
+        #  [1. 0.]]
+    """
+    if not len(contour):
+        raise ValueError(get_current_function_name()+": contour has 0 length, cannot trim")
+
+    pts = as_points_array(contour).astype(float)
+    N = len(pts)
+
+    start = float(start)
+    end   = float(end)
+
+    # For non-loop, clamp into [0, N]; for loop, allow any real (multi-wrap).
+    if not loop:
+        if start<0: start = N-start
+        if end  <0: end   = N-end
+        start = np.clip(start, 0.0, float(N))
+        end   = np.clip(end,   0.0, float(N))
+
+    # Per-dimension linear interpolation over vertex index with optional period
+    xp = np.arange(N, dtype=float)
+    period = float(N) if loop else None
+
+    def pos_at(xq):
+        xq = np.asarray(xq, dtype=float)
+        x0 = np.interp(xq, xp, pts[:, 0], period=period)
+        x1 = np.interp(xq, xp, pts[:, 1], period=period)
+        return np.stack([x0, x1], axis=-1)
+
+    # Collect all crossed integer boundaries (inclusive) in traversal order.
+    # Always include both endpoints; ensures output length >= 2.
+    if end > start:
+        ks = np.arange(np.ceil(start), np.floor(end) + 1, 1.0)
+        xq = np.concatenate(([start], ks, [end]))
+    else:
+        ks = np.arange(np.floor(start), np.ceil(end) - 1, -1.0)
+        xq = np.concatenate(([start], ks, [end]))
+
+    return pos_at(xq)
+
+    
 
 def cv_draw_circle(
     image,
@@ -32229,7 +32635,7 @@ def _omni_load(path):
     if ends_with_any(path, '.csv'.split()): return load_csv(path,show_progress=True)
     if ends_with_any(path, '.parquet'.split()): return load_parquet(path,show_progress=True)
     if ends_with_any(path, '.safetensors'.split()): return load_safetensors(path)
-    if ends_with_any(path, '.pt .pth .ckpt'.split()): return __import__('torch').load(path)
+    if ends_with_any(path, '.pt .pth .ckpt'.split()): return __import__('torch').load(path,map_location='cpu')
     if ends_with_any(path, '.lines'.split()): return load_file_lines(path)
     if ends_with_any(path, '.pkl'.split()): return load_pickled_value(path)
     if ends_with_any(path, '.rpo'.split()): return file_to_object(path) #RP Object File
@@ -34101,6 +34507,7 @@ def skia_stamp_image(
     sprite,
     offset = None,
     *,
+    alpha = 1,
     copy: bool = False,
     mode: str = "blend",
     sprite_origin = None,
@@ -34120,9 +34527,10 @@ def skia_stamp_image(
         sprite: Source RGBA uint8 NumPy array to stamp. NOTE: You will get massive speed boost if this is contiguous!
             If stamping the same sprite many times, convert it via np.ascontiguousarray(rp.as_byte_image(rp.as_rgba_image(sprite))) first
         offset: (x, y) position to place the sprite. Defaults to (0, 0).
-        copy: False by default. If True, a copy of the canvas is made. If False, it might modify the canvas in place.
-        mode: Blend mode to use. See SKIA_BLEND_MODES for options like 'blend', 'add', 'multiply', etc.
-        sprite_origin: The anchor point on the sprite. E.g., 'center', 'top-left', or proportional (0.5, 0.5).
+        copy (bool): False by default. If True, a copy of the canvas is made. If False, it might modify the canvas in place.
+        mode (str): Blend mode to use. Available options:
+            blend, replace, add, sub, multiply, screen, overlay, darken, lighten, difference, exclusion, burn, dodge, hue, saturation, luminosity
+        sprite_origin: The anchor point on the sprite. E.g., 'center', 'top-left', or proportional (x,y) form i.e. (0.5, 0.5).
         canvas_origin: The reference point on the canvas for the offset.
 
     Returns:
@@ -34185,6 +34593,7 @@ def skia_stamp_image(
         "blend": skia.BlendMode.kSrcOver,  # Default alpha blending (foreground over background)
         "replace": skia.BlendMode.kSrc,  # Replace canvas with sprite, ignoring alpha
         "add": skia.BlendMode.kPlus,  # Additive blending, good for lighting effects
+        "sub": skia.BlendMode.kPlus,  # Additive blending, good for lighting effects
         # --- Photoshop/CSS Blend Modes ---
         "multiply": skia.BlendMode.kMultiply,  # Multiply the colors, resulting in a darker image
         "screen": skia.BlendMode.kScreen,  # Opposite of multiply, resulting in a brighter image
@@ -34194,6 +34603,12 @@ def skia_stamp_image(
         # --- Other Useful Modes ---
         "difference": skia.BlendMode.kDifference,  # Subtracts the darker color from the lighter one
         "exclusion": skia.BlendMode.kExclusion,  # Similar to difference but with lower contrast
+        "burn": skia.BlendMode.kColorBurn,
+        "dodge": skia.BlendMode.kColorDodge,
+        # --- HSV ---
+        "hue": skia.BlendMode.kHue,
+        "saturation": skia.BlendMode.kSaturation,
+        "luminosity": skia.BlendMode.kLuminosity,
     }
 
     def _parse_origin_to_pixels(origin, shape):
@@ -34271,6 +34686,8 @@ def skia_stamp_image(
 
     # Create a Paint object to define how to draw (e.g., blend mode)
     paint = skia.Paint(BlendMode=blend_mode)
+    if alpha!=1:
+        paint.setAlphaf(alpha)
 
     # Use the surface's canvas to perform the drawing operation
     with surface as skia_canvas:
@@ -34279,6 +34696,39 @@ def skia_stamp_image(
         )
 
     return canvas
+
+
+def skia_stamp_video(bot, top, *, alpha=1, mode: str = "blend", lazy=False, show_progress=False):
+    """
+    Similar to skia_stamp_image, but for video.
+    Please see skia_stamp_image for details.
+    Needs to be ironed out a bit more:
+        - Need to handle different length videos. What if bot is shorter than top?
+        - Need to decide origin and offset: is it 3d (txy) or 2d (xy) with another time_shift and time_origin args etc?
+    """
+    if not lazy:
+        bot = np.ascontiguousarray(as_rgba_images(as_byte_images(bot, copy=False), copy=False))
+        top = np.ascontiguousarray(as_rgba_images(as_byte_images(top, copy=False), copy=False))
+
+    pairs = itertools.zip_longest(bot, top)
+
+    if show_progress:
+        length = max(len(bot), len(top))
+        pairs = eta(pairs, title=get_current_function_name(), length=length)
+
+    def helper():
+        for bot_frame, top_frame in pairs:
+            blended = skia_stamp_image(bot_frame, top_frame, alpha=alpha, mode=mode)
+            yield blended
+
+    output = helper()
+
+    if not lazy:
+        output = list(output)
+        output = as_numpy_array(output)
+
+    return output
+
 
 
 def download_google_font(font_name, *, skip_existing=True):
@@ -37453,7 +37903,7 @@ def random_hex_colors(N, hashtag=True):
     return [random_hex_color(hashtag=hashtag) for _ in range(N)]
 
 
-def is_color(color):
+def is_color_vector(color):
     """
     Check if input represents a color value (any numeric format).
     
@@ -37469,23 +37919,23 @@ def is_color(color):
         
     Examples:
         >>> # Float color values
-        >>> is_color([0.5, 0.8, 0.2])
+        >>> is_color_vector([0.5, 0.8, 0.2])
         True
         
         >>> # Integer/byte color values  
-        >>> is_color([128, 200, 50])
+        >>> is_color_vector([128, 200, 50])
         True
         
         >>> # RGBA with alpha
-        >>> is_color([255, 128, 0, 200])
+        >>> is_color_vector([255, 128, 0, 200])
         True
         
         >>> # Non-numeric values (invalid)
-        >>> is_color(['red', 'green', 'blue'])
+        >>> is_color_vector(['red', 'green', 'blue'])
         False
         
         >>> # Single number (not a color)
-        >>> is_color(128)
+        >>> is_color_vector(128)
         False
         
     Note: Used by uniform_float_color_image and blend_images. Base validation function
@@ -37495,7 +37945,8 @@ def is_color(color):
     
     Tags: validation, colors, numeric, general-purpose
     """
-    return is_iterable(color) and all(is_number(x) for x in color)
+    return is_iterable(color) and len(color) in {3,4} and all(is_number(x) for x in color)
+
 def is_binary_color(color):
     """
     Check if input represents a binary color value (boolean values).
@@ -37533,7 +37984,7 @@ def is_binary_color(color):
     Note: Used by inverted_color for binary color inversion. Part of RP's color type 
     detection system alongside is_float_color and is_byte_color.
     
-    Related: is_float_color, is_byte_color, is_color, is_binary_image
+    Related: is_float_color, is_byte_color, is_color_vector, is_binary_image
     
     Tags: validation, colors, binary, boolean, mask-processing
     """
@@ -37571,7 +38022,7 @@ def is_byte_color(color):
     Note: Used by color conversion functions like byte_color_to_hex_color and inverted_color.
     Part of RP's color type detection system alongside is_float_color and is_binary_color.
     
-    Related: is_float_color, is_binary_color, is_color, byte_color_to_hex_color
+    Related: is_float_color, is_binary_color, is_color_vector, byte_color_to_hex_color
     
     Tags: validation, colors, byte, integer, datatypes, color-processing
     """
@@ -37611,7 +38062,7 @@ def is_float_color(color):
     and inverted_color. Part of RP's color type detection system alongside is_byte_color 
     and is_binary_color.
     
-    Related: is_byte_color, is_binary_color, is_color, as_float_color
+    Related: is_byte_color, is_binary_color, is_color_vector, as_float_color
     
     Tags: validation, colors, float, datatypes, color-processing
     """
@@ -37924,6 +38375,13 @@ def get_color_brightness(color):
     import colorsys
     hue=colorsys.rgb_to_hsv(*color)[2]
     return hue
+
+def get_color_alpha(color):
+    """Returns the alpha value of a color. Returns 1.0 for RGB colors, actual alpha for RGBA colors."""
+    if is_color_vector(color) and len(color) == 3:
+        return 1.0
+    else:
+        return as_rgba_float_color(color)[3]
 
 def get_image_dimensions(image, *, as_dict=False):
     """ Return (height,width) of an image 
@@ -45974,13 +46432,178 @@ def strip_trailing_whitespace(string):
     """
     return '\n'.join([line.rstrip() for line in string.splitlines()])
 
-def delete_empty_lines(string,strip_whitespace=False):
+def strip_all_lines(s:str):
+    return '\n'.join([x.lstrip().rstrip()for x in s.split('\n')])
+
+def indentify(s:str,indent='\t'):
+    if isinstance(indent, int):
+        indent=' '*indent
+    return '\n'.join(indent + x for x in s.split('\n'))
+
+def unindent(string, indent=" "):
+    """Removes common leading indentation from a multi-line string. Similar to textwrap.dedent - but allows you to specify your own indent characters."""
+    def count_leading(line, char):
+        return len(line) - len(line.lstrip(char))
+
+    lines = string.splitlines()
+
+    levels = [count_leading(line, indent) for line in lines if line.strip(indent)]
+    indent_level = min(levels)
+
+    new_lines = [line[indent_level * len(indent) :] for line in lines]
+
+    return line_join(new_lines)
+
+# def delete_empty_lines(string,strip_whitespace=False):
+#     """
+#     Takes a string, and returns a string
+#     Removes all lines of length 0 from the string and returns the result
+#     If strip_whitespace is True, it will also delete lines that have nothing but whitespace
+#     """
+#     return '\n'.join([line for line in string.splitlines() if (line.strip() if strip_whitespace else line)])
+
+def _strip_key(key):
+    """Normalize key into a strip-predicate: callable, None->not, other->__eq__."""
+    if callable(key):
+        return key                   # True => strip
+    if key is None:
+        return operator.not_         # strip falsey values
+    return partial(operator.eq, key) # strip this value
+
+def _list_lstrip_index(x, key):
+    """Index of first element NOT to strip (predicate False), else len(x)."""
+    pred = _strip_key(key)
+    for i in range(len(x)):
+        if not pred(x[i]):
+            return i
+    return len(x)
+
+def _list_rstrip_index(x, key=None):
+    """Index of last element NOT to strip (predicate False), else -1."""
+    pred = _strip_key(key)
+    for i in range(len(x))[::-1]:
+        if not pred(x[i]):
+            return i
+    return -1
+
+def list_lstrip(x, key=bool):
     """
-    Takes a string, and returns a string
-    Removes all lines of length 0 from the string and returns the result
-    If strip_whitespace is True, it will also delete lines that have nothing but whitespace
+    Strip from the left while predicate is True (i.e., while elements match what to strip).
+
+    See `list_strip` for `key` semantics.
+
+    Examples:
+    >>> list_lstrip(['','hi',0])         # --> ['', 'hi', 0] (empty string is falsy)
+    >>> list_lstrip([0,0,1,2])           # --> [0, 0, 1, 2] (0 is falsy)
+    >>> list_lstrip(['x','y','x'], 'y')  # --> ['x','y','x']
+    >>> list_lstrip([1,None,2], None)    # --> [1, None, 2]
+    >>> list_lstrip(['a','b'], bool)     # --> [] (all strings are truthy)
     """
-    return '\n'.join([line for line in string.splitlines() if (line.strip() if strip_whitespace else line)])
+    l = _list_lstrip_index(x, key)
+    return x[l:]
+
+def list_rstrip(x, key=bool):
+    """
+    Strip from the right while predicate is True (i.e., while elements match what to strip).
+
+    See `list_strip` for `key` semantics.
+
+    Examples:
+    >>> list_rstrip(['hi',0,0])          # --> ['hi', 0, 0] (0 is falsy)
+    >>> list_rstrip([0,1,2,0])           # --> [0, 1, 2, 0] (0 is falsy)
+    >>> list_rstrip(['a','b','a'],'a')   # --> ['a','b']
+    >>> list_rstrip([1,None,2], None)    # --> [1, None, 2]
+    >>> list_rstrip(['x','y'], bool)     # --> [] (all strings are truthy)
+    """
+    r = _list_rstrip_index(x, key)
+    return x[:r+1]
+
+def list_strip(x, key=bool):
+    """
+    Strip from both ends while predicate is True.
+
+    `key` defines what to strip:
+      - callable: used as-is; elements where `key(elem)` is True are stripped.
+      - None: strip falsey values (like whitespace for strings).
+      - other value: strip elements equal to that value.
+
+    Examples:
+    >>> list_strip(['','Hello','world',0], None)    # --> ['Hello','world']
+    >>> list_strip([0,0,5,6,0], None)               # --> [5,6]
+    >>> list_strip(['x','y','x','y'],'y')           # --> ['x','y','x']
+    >>> list_strip([0,1,0,2,0], lambda v:v==0)      # --> [1,0,2]
+    >>> list_strip([1,None,2,3], None)              # --> [1, None, 2, 3]
+    >>> list_strip([None,0,False], None)            # --> []
+    """
+    l = _list_lstrip_index(x, key)
+    r = _list_rstrip_index(x, key)
+    return x[l:r+1]
+
+def strip_empty_lines(string: str) -> str:
+    r"""
+    Remove leading/trailing empty lines.
+
+    An empty line is exactly "" (length 0).
+    Whitespace-only lines (e.g. "   ") are preserved.
+
+    Examples:
+    >>> strip_empty_lines("\nHello\n\n")
+    'Hello'
+    >>> strip_empty_lines("   \nHi\n")
+    '   \nHi'
+    """
+    lines = string.splitlines()
+    lines = list_strip(lines, key=operator.not_)
+    return "\n".join(lines)
+
+
+def strip_blank_lines(string: str) -> str:
+    r"""
+    Remove leading/trailing blank lines.
+
+    A blank line is empty or contains only whitespace.
+
+    Examples:
+    >>> strip_blank_lines("\nHello\n\n")
+    'Hello'
+    >>> strip_blank_lines("   \nHi\n")
+    'Hi'
+    """
+    lines = string.splitlines()
+    lines = list_strip(lines, key=lambda s: s.strip() == "")
+    return "\n".join(lines)
+
+
+def delete_empty_lines(string: str, strip_whitespace: bool = False) -> str:
+    r"""
+    Delete all empty lines in the string.
+
+    If strip_whitespace is True, also delete lines that contain only whitespace.
+
+    Examples:
+    >>> delete_empty_lines("A\n\nB\n   \nC")
+    'A\nB\n   \nC'
+    >>> delete_empty_lines("A\n\nB\n   \nC", strip_whitespace=True)
+    'A\nB\nC'
+    """
+    return "\n".join(
+        line for line in string.splitlines()
+        if (line.strip() if strip_whitespace else line)
+    )
+
+
+def delete_blank_lines(string: str) -> str:
+    r"""
+    Delete all blank lines in the string.
+
+    A blank line is empty or contains only whitespace.
+
+    Examples:
+    >>> delete_blank_lines("A\n\nB\n   \nC")
+    'A\nB\nC'
+    """
+    return "\n".join(line for line in string.splitlines() if line.strip())
+
 
 def propagate_whitespace(string):
     """
@@ -49574,7 +50197,6 @@ def _rgb_to_hsv_via_numba(rgb_image):
     return hsv_image
 
 
-
 #OLDER, SLOWER VERSION (27x slower than numba)
 #def rgb_to_hsv(image):
 #    #Takes an RGB image and returns an HSV image
@@ -49971,6 +50593,97 @@ def rgb_to_hsv_float_color(*rgb):
     rgb = detuple(rgb)
     return colorsys.rgb_to_hsv(*rgb)
 
+def srgb_to_linear(image):
+    """
+    Converts an sRGB image array to linear RGB.
+    Can make linear operations on images look better.
+
+    The sRGB color space is a "gamma-corrected" space that approximates
+    human vision. Most image files (JPG, PNG) and displays use sRGB.
+    Linear RGB has a direct, linear relationship with light intensity,
+    making it suitable for physically accurate rendering calculations
+    like lighting and blending.
+
+    Args:
+        image: A NumPy array representing an image in sRGB color space.
+                  Values are expected to be in the range [0, 1].
+
+    Returns:
+        A NumPy array of the same shape in linear RGB color space.
+        
+    EXAMPLE:
+        (please see sister func linear_to_srgb's docstring for EXAMPLE code)
+        
+    """
+    # The conversion formula is piecewise
+    # C_linear = C_srgb / 12.92, if C_srgb <= 0.04045
+    # C_linear = ((C_srgb + 0.055) / 1.055) ^ 2.4, if C_srgb > 0.04045
+    if is_image(image): image=as_float_image(image,copy=False)
+    return np.where(
+        image <= 0.04045,
+        image / 12.92,
+        ((image + 0.055) / 1.055) ** 2.4
+    )
+
+def linear_to_srgb(image):
+    """
+    Converts a linear RGB image array to sRGB.
+    Can make linear operations on images look better.    
+    
+    TODO: Let this func offically support more than just numpy images, since its an elementwise function.
+
+    This is the inverse of the srgb_to_linear conversion, often called
+    "gamma correction." It's the final step before displaying an image
+    or saving it to a standard file format.
+
+    Args:
+        image: A NumPy array representing an image in linear RGB.
+               Values are expected to be in the range [0, 1].
+
+    Returns:
+        A NumPy array of the same shape in sRGB color space.
+
+    EXAMPLE:
+        
+        >>> images = as_rgb_images(
+        ...     as_float_images(
+        ...         resize_images_to_min_size(
+        ...             crop_images_to_square(
+        ...                 load_images(
+        ...                     [
+        ...                         "https://i.guim.co.uk/img/media/fcf3d31f6631c127a30df753728eabca4c619755/0_503_1747_1048/master/1747.jpg?width=1200&height=1200&quality=85&auto=format&fit=crop&s=42a30da05bde8462e3b968705c9e6768",
+        ...                         "https://carsonridgecabins.com/wp-content/uploads/2025/04/shutterstock_67819000.jpg",
+        ...                     ],
+        ...                     use_cache=True,
+        ...                 )
+        ...             )
+        ...         )
+        ...     )
+        ... )
+        ... blend1 = blend(*images, 0.5)
+        ... blend2 = linear_to_srgb(
+        ...     blend(srgb_to_linear(images[0]), srgb_to_linear(images[1]), 0.5)
+        ... )
+        ... preview_image = horizontally_concatenated_images(
+        ...     labeled_images(
+        ...         [blend1, blend2],
+        ...         ["Naive Blending", "Gamma-Corrected Blending"],
+        ...         size=30,
+        ...         font="Futura",
+        ...     )
+        ... )
+        ... display_image(preview_image)        
+
+    """
+    # The conversion formula is the inverse of sRGB to linear
+    # C_srgb = C_linear * 12.92, if C_linear <= 0.0031308
+    # C_srgb = 1.055 * (C_linear ^ (1/2.4)) - 0.055, if C_linear > 0.0031308
+    if is_image(image): image=as_float_image(image,copy=False)
+    return np.where(
+        image <= 0.0031308,
+        image * 12.92,
+        1.055 * (image ** (1.0 / 2.4)) - 0.055
+    )
 
 def float_color_to_ansi256(*color):
     """
@@ -53926,16 +54639,16 @@ def compose_rgb_image(r,g,b):
         
     Tags: image, rgb, channels, composition, color, processing
     """
-    r=as_grayscale_image(r)
-    g=as_grayscale_image(g)
-    b=as_grayscale_image(b)
+    r=as_grayscale_image(r, copy=False)
+    g=as_grayscale_image(g, copy=False)
+    b=as_grayscale_image(b, copy=False)
     assert is_grayscale_image(r),'Each channel must be a matrix, not a tensor'
     assert is_grayscale_image(g),'Each channel must be a matrix, not a tensor'
     assert is_grayscale_image(b),'Each channel must be a matrix, not a tensor'
     assert r.shape==g.shape==b.shape,'All channels must have the same shape'
-    r=as_float_image(r)
-    g=as_float_image(g)
-    b=as_float_image(b)
+    r=as_float_image(r, copy=False)
+    g=as_float_image(g, copy=False)
+    b=as_float_image(b, copy=False)
     return np.stack((r,g,b),axis=2)
 
 def compose_rgba_image(r,g,b,a):
@@ -54014,19 +54727,19 @@ def compose_rgba_image(r,g,b,a):
         
     Tags: image, rgba, channels, composition, transparency, alpha
     """
-    r=as_grayscale_image(r)
-    g=as_grayscale_image(g)
-    b=as_grayscale_image(b)
-    a=as_grayscale_image(a)
+    r=as_grayscale_image(r, copy=False)
+    g=as_grayscale_image(g, copy=False)
+    b=as_grayscale_image(b, copy=False)
+    a=as_grayscale_image(a, copy=False)
     assert is_grayscale_image(r),'Each channel must be a matrix, not a tensor'
     assert is_grayscale_image(g),'Each channel must be a matrix, not a tensor'
     assert is_grayscale_image(b),'Each channel must be a matrix, not a tensor'
     assert is_grayscale_image(a),'Each channel must be a matrix, not a tensor'
     assert r.shape==g.shape==b.shape==a.shape,'All channels must have the same shape'
-    r=as_float_image(r)
-    g=as_float_image(g)
-    b=as_float_image(b)
-    a=as_float_image(a)
+    r=as_float_image(r, copy=False)
+    g=as_float_image(g, copy=False)
+    b=as_float_image(b, copy=False)
+    a=as_float_image(a, copy=False)
     return np.stack((r,g,b,a),axis=2)
 
 def compose_image_from_channels(*channels):
