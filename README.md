@@ -160,4 +160,9 @@ Because it saves you time. Instead of stitching together many small libraries an
 For example, the `rp.explore_torch_module(...)` function lets you interactively explore pytorch modules and pipelines. 
 <img width="3456" height="2084" alt="image" src="https://github.com/user-attachments/assets/18dc9196-7101-40d4-beb6-f8a262370caf" />
 
+RP also contains many tools for dealing with images and graphics. For example, this paint application is bundled as a demo
+<img width="1264" height="831" alt="image" src="https://github.com/user-attachments/assets/23627339-d894-447d-aa95-0d1855492222" />
+( Video: https://www.youtube.com/watch?v=RqmV44Kckr8 )
+
+
 There are several useful tools that I will be adding to documentation in the coming months.
