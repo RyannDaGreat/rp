@@ -34749,38 +34749,73 @@ def skia_stamp_video(bot, top, *, alpha=1, mode: str = "blend", lazy=False, show
 # Private: cached unit-UV grid and triangle indices for a (H_g, W_g) mesh
 # -----------------------------------------------------------------------------
 
+# @lru_cache(maxsize=256)
+# def _meshgrid_uv_and_indices(H_g, W_g):
+#     """
+#     Returns (uv_unit, indices) for a regular H_g x W_g grid.
+#
+#     uv_unit: ndarray [H_g, W_g, 2] with UV in 0..1
+#     indices: 1D int32 array of triangle indices (two tris per cell), flattened.
+#     """
+#     import numpy as np
+#
+#     if H_g<=1 or W_g<=1:
+#         raise ValueError
+#
+#     u = np.linspace(0.0, 1.0, W_g, dtype=np.float32)
+#     v = np.linspace(0.0, 1.0, H_g, dtype=np.float32)
+#     UU, VV = np.meshgrid(u, v, indexing="xy")
+#     uv_unit = np.stack([UU, VV], axis=-1)  # [H_g, W_g, 2]
+#
+#     cols = W_g
+#     r = np.arange(H_g - 1, dtype=np.int64)[:, None]
+#     c = np.arange(W_g - 1, dtype=np.int64)[None, :]
+#
+#     v0 = r * cols + c
+#     v1 = v0 + 1
+#     v3 = v0 + cols
+#     v2 = v3 + 1
+#
+#     tri1 = np.stack([v0, v1, v2], axis=-1)
+#     tri2 = np.stack([v0, v2, v3], axis=-1)
+#     indices = np.concatenate([tri1, tri2], axis=-1).reshape(-1).astype(np.int32)
+#     return uv_unit, indices
+
+
 @lru_cache(maxsize=256)
 def _meshgrid_uv_and_indices(H_g, W_g):
     """
     Returns (uv_unit, indices) for a regular H_g x W_g grid.
 
-    uv_unit: ndarray [H_g, W_g, 2] with UV in 0..1
+    uv_unit: ndarray [H_g, W_g, 2] with UV in 0..1 (geometry unchanged)
     indices: 1D int32 array of triangle indices (two tris per cell), flattened.
     """
     import numpy as np
-
-    if H_g<=1 or W_g<=1:
+    if H_g <= 1 or W_g <= 1:
         raise ValueError
 
+    # UV geometry (unchanged)
     u = np.linspace(0.0, 1.0, W_g, dtype=np.float32)
     v = np.linspace(0.0, 1.0, H_g, dtype=np.float32)
     UU, VV = np.meshgrid(u, v, indexing="xy")
     uv_unit = np.stack([UU, VV], axis=-1)  # [H_g, W_g, 2]
 
-    cols = W_g
-    r = np.arange(H_g - 1, dtype=np.int64)[:, None]
-    c = np.arange(W_g - 1, dtype=np.int64)[None, :]
+    # Cell row/col indices
+    r = np.arange(H_g - 1, dtype=np.int64)[:, None]  # 0..H-2
+    c = np.arange(W_g - 1, dtype=np.int64)[None, :]  # 0..W-2
 
-    v0 = r * cols + c
+    # Row-major numbering: idx = r*W + c
+    stride = W_g
+    v0 = r * stride + c
     v1 = v0 + 1
-    v3 = v0 + cols
+    v3 = v0 + stride
     v2 = v3 + 1
 
     tri1 = np.stack([v0, v1, v2], axis=-1)
     tri2 = np.stack([v0, v2, v3], axis=-1)
     indices = np.concatenate([tri1, tri2], axis=-1).reshape(-1).astype(np.int32)
-    return uv_unit, indices
 
+    return uv_unit, indices
 
 # -----------------------------------------------------------------------------
 # Private: interp → Skia SamplingOptions (STRICT; no fallbacks)
@@ -34846,9 +34881,22 @@ def skia_draw_mesh_grid(
         interp (str, optional): Texture sampling filter. 'bilinear' (default) or 'nearest'.
         mipmap (bool, optional): Build/use mipmaps when sampling the texture. Default True.
 
+    Note: The mesh's height*width cannot exceed 2**16. Please prepare your mesh accordingly.
+          This is because Skia can't handle a mesh larger than this and will throw errors.
+
     Returns:
         numpy.ndarray: RGBA byte image (H, W, 4). If copy=False, this *may* be the
         same array (modified in place); always use the returned value.
+
+    EXAMPLE:
+
+        >>> # Sanity check
+        >>> image=load_image('https://github.com/RyannDaGreat/Images/blob/master/test_images/lenna.png?raw=true',use_cache=True)
+        ... canvas=uniform_byte_color_image(512,512,'translucent green')
+        ... grid=xy_float_images(10,10).transpose(1,2,0)*512
+        ... output=skia_draw_mesh_grid(canvas,grid,image)
+        ... display_image(output)
+
     """
     import rp
     rp.pip_import('skia')
@@ -34873,17 +34921,15 @@ def skia_draw_mesh_grid(
         raise ValueError("mesh must be a NumPy array of shape [H_g, W_g, 2], but got shape="
                          + str(getattr(mesh, "shape", None)))
 
-    H_g, W_g = int(mesh.shape[0]), int(mesh.shape[1])
+    H_g, W_g = mesh.shape[0], mesh.shape[1]
     if H_g < 2 or W_g < 2:
         return canvas
 
     # --- Cached UV grid + indices ---
-    if H_g <=1 or W_g <=1:
-        return canvas
     uv_unit, indices = _meshgrid_uv_and_indices(H_g, W_g)
 
-    # --- Vectorized build of vertices ---
-    tex_h, tex_w = int(texture.shape[0]), int(texture.shape[1])
+    # --- Vectorized build of vertices (flatten with matching order) ---
+    tex_h, tex_w = texture.shape[0], texture.shape[1]
 
     mesh_f = np.ascontiguousarray(mesh.reshape(-1, 2), dtype=np.float32)
 
@@ -34895,13 +34941,22 @@ def skia_draw_mesh_grid(
     positions = [skia.Point(float(p[0]), float(p[1])) for p in mesh_f]
     texcoords = [skia.Point(float(t[0]), float(t[1])) for t in uv_f]
 
-    verts = skia.Vertices.MakeCopy(
-        skia.Vertices.kTriangles_VertexMode,
-        positions,
-        texcoords,
-        None,
-        indices.tolist(),
-    )
+    try:
+        verts = skia.Vertices.MakeCopy(
+            skia.Vertices.kTriangles_VertexMode,
+            positions,
+            texcoords,
+            None,
+            indices.tolist(),
+        )
+    except RuntimeError as e:
+        raise RuntimeError(
+            get_current_function_name()
+            + " : "
+            + str(e)
+            + " : This is likely becuause the mesh is too large! Mesh size is "
+            + str(mesh.shape)
+        )
 
     # --- Skia surface + shader + paint ---
     surface = skia.Surface(canvas)
@@ -35008,9 +35063,20 @@ def skia_draw_trail(
         ...     for shift in eta(shifts):
         ...         ribbon_image = roll_image(text_image,dx=shift)
         ...         drawn_image = skia_draw_trail(image,contour,ribbon_image,)
+    thickness = as_numpy_array(thickness)
         ...         yield drawn_image
         ...         
         ... display_video(make_video(),loop=True)
+
+    EXAMPLE:
+
+        >>> #Sanity Check: Make sure it renders from left to right
+        ... image=load_image('https://github.com/RyannDaGreat/Images/blob/master/test_images/lenna.png?raw=true',use_cache=True)
+        ... canvas=uniform_byte_color_image(512,512,'translucent green')
+        ... contour=[[0,256],[512,256]]
+        ... output=skia_draw_trail(canvas,contour,image,thickness=512,copy=True)
+        ... output=cv_draw_arrow(output,*list_flatten(contour))
+        ... display_image(output)
 
     EXAMPLE:
         
@@ -35100,41 +35166,43 @@ def skia_draw_trail(
 
     #ARG:
     #    v_subdivs (int): Number of rows across the ribbon thickness (>=2). Default 30.
-    v_subdivs=6   # <--- vertical subdivisions across thickness
 
-    import numpy as np
+    n = len(contour)
+    if n < 2:
+        return canvas
 
-    # ---- guard subdivisions ----
-    v_subdivs = int(v_subdivs) if v_subdivs is not None else 30
-    if v_subdivs < 2:
-        v_subdivs = 2
+    v_subdivs=8   # <--- vertical subdivisions across thickness. More looks better.
+    while n * v_subdivs > 2**16 and v_subdivs >2:
+        #Theres a limit to the mesh size before skia crashes...
+        #I think that limit is 2**16 (from empirical tests)
+        v_subdivs -= 1
+    if n * v_subdivs > 2**16:
+        #If it's still to long, we have to reduce the number of contour points
+        contour = as_complex_vector(contour)
+        contour = resize_vector(contour, 2**15) #Playing it safe
+        contour = as_points_array(contour)
+        n = len(contour)
+    # print(n * v_subdivs, '>', 2**16, "=", v_subdivs, "*", n) #This debugging worked - it works for arbitrarily long trails now
+    pts = as_points_array(contour).astype(np.float32, copy=False)
 
     # ---- Normalize radii ----
     if thickness is None:
         thickness = 15.0
-    if outer_radius is None:
-        outer_radius = thickness / 2.0
-    if inner_radius is None:
-        inner_radius = thickness / 2.0
-
-    pts = as_points_array(contour).astype(np.float32, copy=False)
-    n = int(len(pts))
-    if n < 2:
-        return canvas
+    thickness = as_numpy_array(thickness)
+    if outer_radius is None: outer_radius = thickness / 2.0
+    if inner_radius is None: inner_radius = thickness / 2.0
 
     # Scalar → per-vertex arrays (length n)
-    if is_number(outer_radius):
-        outer_radius = [outer_radius] * n
-    if is_number(inner_radius):
-        inner_radius = [inner_radius] * n
+    if is_number(outer_radius): outer_radius = [outer_radius] * n
+    if is_number(inner_radius): inner_radius = [inner_radius] * n
 
     outer_radius = resize_vector(outer_radius, n, interp='linear')
     inner_radius = resize_vector(inner_radius, n, interp='linear')
 
     # ---- rails via dilate_contour (left-hand normal basis) ----
     cont_c  = as_complex_vector(pts)
-    outer_c = dilate_contour(cont_c, shift= as_numpy_array(outer_radius), loop=loop)
-    inner_c = dilate_contour(cont_c, shift=-as_numpy_array(inner_radius), loop=loop)
+    outer_c = dilate_contour(cont_c, shift=-as_numpy_array(outer_radius), loop=loop)
+    inner_c = dilate_contour(cont_c, shift= as_numpy_array(inner_radius), loop=loop)
 
     outer_xy = np.column_stack([outer_c.real, outer_c.imag]).astype(np.float32, copy=False)
     inner_xy = np.column_stack([inner_c.real, inner_c.imag]).astype(np.float32, copy=False)
@@ -35144,17 +35212,33 @@ def skia_draw_trail(
     t = np.linspace(0.0, 1.0, v_subdivs, dtype=np.float32)[:, None, None]  # [S,1,1]
     mesh = (1.0 - t) * inner_xy[None, :, :] + t * outer_xy[None, :, :]
 
+    #Triangle ordering correction: Makes sure the ordering of triangles on the mesh allows later
+    #points in the trail to be rendered on top. Important for self-intersections to be rendered correctly
+    #Otherwise, the left part of the trail is always on top and the right always on bottom regardless
+    #of how far along the trail a given point is.
+    mesh    = mesh   .transpose(1,0,2)
+    texture = texture.transpose(1,0,2)
+
     # ---- delegate to mesh renderer ----
-    return skia_draw_mesh_grid(
-        canvas,
-        mesh,
-        texture,
-        alpha=alpha,
-        copy=copy,
-        mode=mode,
-        interp=interp,
-        mipmap=mipmap,
-    )
+    try:
+        return skia_draw_mesh_grid(
+            canvas,
+            mesh,
+            texture,
+            alpha=alpha,
+            copy=copy,
+            mode=mode,
+            interp=interp,
+            mipmap=mipmap,
+        )
+    except RuntimeError as e:
+        raise RuntimeError(
+            get_current_function_name()
+            + " : "
+            + str(e)
+            + " : This is becuause the number of points in the contour is too large! len(contour)=="
+            + str(len(contour))
+        )
     
 
 def download_google_font(font_name, *, skip_existing=True):
@@ -56057,17 +56141,17 @@ def get_mac_address_vendor(address:str)->str:
     from mac_vendor_lookup import MacLookup
     return MacLookup().lookup(address)
 
-try:
-    # import numpy as np
-    def autoimportable_module(module_name):
-        class LazyloadedModule(type(rp)):
-            def __getattribute__(self,key):
-                return getattr(pip_import(module_name),key)
-        return LazyloadedModule(module_name)
-    # np=autoimportable_module('numpy')
-    # icecream=autoimportable_module('icecream')
-except:
-    print("Warning: Cannot import numpy. Please excuse any 'np is None' errors, or try rp.pip_install('numpy')")
+# try:
+#     # import numpy as np
+#     def autoimportable_module(module_name):
+#         class LazyloadedModule(type(rp)):
+#             def __getattribute__(self,key):
+#                 return getattr(pip_import(module_name),key)
+#         return LazyloadedModule(module_name)
+#     # np=autoimportable_module('numpy')
+#     # icecream=autoimportable_module('icecream')
+# except:
+#     print("Warning: Cannot import numpy. Please excuse any 'np is None' errors, or try rp.pip_install('numpy')")
 
 def PynputCasette(actions=None):
     """
