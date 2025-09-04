@@ -544,7 +544,7 @@ def list_roll(x,shift=0):
     """
     Demo:
         >>> for _ in range(10):
-                print(list_roll(range(10),_))
+        ...     print(list_roll(range(10),_))
         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
         [9, 0, 1, 2, 3, 4, 5, 6, 7, 8]
         [8, 9, 0, 1, 2, 3, 4, 5, 6, 7]
@@ -557,7 +557,7 @@ def list_roll(x,shift=0):
         [1, 2, 3, 4, 5, 6, 7, 8, 9, 0] 
     Efficiency Test/Comparison: https://chatgpt.com/share/7de702fb-3aef-4f7a-b3f6-2ecc0d2c9fec
     """
-    if not shift:
+    if not shift or not len(x):
         return list(x)
     shift %= len(x)
     return list(x[-shift:]) + list(x[:-shift])
@@ -19557,13 +19557,19 @@ def split_into_n_sublists(l, n):
 
     >>> split_into_n_sublists([], 3)
     [[], [], []]
+
+    >>> split_into_n_sublists('abdef',2)
+    ['ab', 'def']
+
+    >>> split_into_n_sublists('abdef',3)
+    ['a', 'bd', 'ef']
     """
 
     if n <= 0:
         raise ValueError("rp.split_into_n_sublists: n must be greater than 0 but n is "+str(n))
 
     if isinstance(l, str):
-        return ''.join(split_into_n_sublists(list(l), n))
+        return [''.join(x) for x in split_into_n_sublists(list(l), n)]
 
     L = len(l)
     indices = [int(i * L / n) for i in range(n + 1)]
@@ -19846,6 +19852,7 @@ def _rotate_rgb_image(image, angle_in_degrees, interp='bilinear'):
 
 
 def open_url_in_web_browser(url:str):
+    """ Assuming you're able to, will open the given website in a browser. On terminals this might be a TUI, and on desktops usually a GUI like Chrome """
     from webbrowser import open
     open(url)
 
@@ -34501,6 +34508,41 @@ def skia_text_to_image(
 
     return surface.toarray()
 
+_skia_blend_modes = {
+    # --- Common Modes ---
+    "blend": "kSrcOver",         # Default alpha blending (foreground over background)
+    "replace": "kSrc",           # Replace canvas with sprite, ignoring alpha
+    "add": "kPlus",              # Additive blending, good for lighting effects
+    # --- Photoshop/CSS Blend Modes ---
+    "multiply": "kMultiply",     # Multiply the colors, resulting in a darker image
+    "screen": "kScreen",         # Opposite of multiply, resulting in a brighter image
+    "overlay": "kOverlay",       # Combines multiply and screen for contrast
+    "darken": "kDarken",         # Selects the darker of the two pixels
+    "lighten": "kLighten",       # Selects the lighter of the two pixels
+    # --- Other Useful Modes ---
+    "difference": "kDifference", # Subtracts the darker color from the lighter one
+    "exclusion": "kExclusion",   # Similar to difference but with lower contrast
+    "burn": "kColorBurn",
+    "dodge": "kColorDodge",
+    # --- HSV ---
+    "hue": "kHue",
+    "saturation": "kSaturation",
+    "luminosity": "kLuminosity",
+}
+
+def _get_skia_blend_mode(mode:str):
+    mode = mode.lower()
+    pip_import("skia")
+    import skia
+
+    if not isinstance(mode, str):
+        raise ValueError("_get_skia_blend_mode: Modes must be strings, but got "+str(type(mode)))
+
+    try:
+        return getattr(skia.BlendMode, _skia_blend_modes[mode])
+
+    except AttributeError:
+        raise ValueError("_get_skia_blend_mode: Invalid mode "+repr(mode)+" - please choose from "+repr(list(_skia_blend_modes)))
 
 def skia_stamp_image(
     canvas,
@@ -34588,29 +34630,6 @@ def skia_stamp_image(
     canvas = rp.as_rgba_image(rp.as_byte_image(canvas, copy=False), copy=False)
     canvas = np.ascontiguousarray(canvas) #Makes it faster for subsequent calls
 
-    SKIA_BLEND_MODES = {
-        # --- Common Modes ---
-        "blend": skia.BlendMode.kSrcOver,  # Default alpha blending (foreground over background)
-        "replace": skia.BlendMode.kSrc,  # Replace canvas with sprite, ignoring alpha
-        "add": skia.BlendMode.kPlus,  # Additive blending, good for lighting effects
-        "sub": skia.BlendMode.kPlus,  # Additive blending, good for lighting effects
-        # --- Photoshop/CSS Blend Modes ---
-        "multiply": skia.BlendMode.kMultiply,  # Multiply the colors, resulting in a darker image
-        "screen": skia.BlendMode.kScreen,  # Opposite of multiply, resulting in a brighter image
-        "overlay": skia.BlendMode.kOverlay,  # Combines multiply and screen for contrast
-        "darken": skia.BlendMode.kDarken,  # Selects the darker of the two pixels
-        "lighten": skia.BlendMode.kLighten,  # Selects the lighter of the two pixels
-        # --- Other Useful Modes ---
-        "difference": skia.BlendMode.kDifference,  # Subtracts the darker color from the lighter one
-        "exclusion": skia.BlendMode.kExclusion,  # Similar to difference but with lower contrast
-        "burn": skia.BlendMode.kColorBurn,
-        "dodge": skia.BlendMode.kColorDodge,
-        # --- HSV ---
-        "hue": skia.BlendMode.kHue,
-        "saturation": skia.BlendMode.kSaturation,
-        "luminosity": skia.BlendMode.kLuminosity,
-    }
-
     def _parse_origin_to_pixels(origin, shape):
         """Converts a proportional or named origin into pixel coordinates."""
         if origin is None:
@@ -34631,7 +34650,7 @@ def skia_stamp_image(
                 "bottom": (0.5, 1.0),
                 "bottom right": (1.0, 1.0),
             }
-            prop_x, prop_y = origin_map.get(origin.lower().replace(" ", ""), (0.0, 0.0))
+            prop_x, prop_y = origin_map[origin.lower()]
         else:
             # Assumes a tuple/list of proportional coordinates (x, y)
             prop_x, prop_y = origin[0], origin[1]
@@ -34650,11 +34669,7 @@ def skia_stamp_image(
             "Both canvas and sprite must be 3D RGBA NumPy arrays (H, W, 4)."
         )
 
-    blend_mode = SKIA_BLEND_MODES.get(mode.lower())
-    if blend_mode is None:
-        raise ValueError(
-            "Unknown blend mode '" + mode + "'. Available modes are: " + str(list(SKIA_BLEND_MODES.keys()))
-        )
+    blend_mode = _get_skia_blend_mode(mode)
 
     if copy:
         canvas = canvas.copy()
@@ -34730,6 +34745,417 @@ def skia_stamp_video(bot, top, *, alpha=1, mode: str = "blend", lazy=False, show
     return output
 
 
+# -----------------------------------------------------------------------------
+# Private: cached unit-UV grid and triangle indices for a (H_g, W_g) mesh
+# -----------------------------------------------------------------------------
+
+@lru_cache(maxsize=256)
+def _meshgrid_uv_and_indices(H_g, W_g):
+    """
+    Returns (uv_unit, indices) for a regular H_g x W_g grid.
+
+    uv_unit: ndarray [H_g, W_g, 2] with UV in 0..1
+    indices: 1D int32 array of triangle indices (two tris per cell), flattened.
+    """
+    import numpy as np
+
+    if H_g<=1 or W_g<=1:
+        raise ValueError
+
+    u = np.linspace(0.0, 1.0, W_g, dtype=np.float32)
+    v = np.linspace(0.0, 1.0, H_g, dtype=np.float32)
+    UU, VV = np.meshgrid(u, v, indexing="xy")
+    uv_unit = np.stack([UU, VV], axis=-1)  # [H_g, W_g, 2]
+
+    cols = W_g
+    r = np.arange(H_g - 1, dtype=np.int64)[:, None]
+    c = np.arange(W_g - 1, dtype=np.int64)[None, :]
+
+    v0 = r * cols + c
+    v1 = v0 + 1
+    v3 = v0 + cols
+    v2 = v3 + 1
+
+    tri1 = np.stack([v0, v1, v2], axis=-1)
+    tri2 = np.stack([v0, v2, v3], axis=-1)
+    indices = np.concatenate([tri1, tri2], axis=-1).reshape(-1).astype(np.int32)
+    return uv_unit, indices
+
+
+# -----------------------------------------------------------------------------
+# Private: interp → Skia SamplingOptions (STRICT; no fallbacks)
+# -----------------------------------------------------------------------------
+_skia_interp_modes = {
+    "bilinear": "kLinear",
+    "nearest":  "kNearest",
+}
+
+def _get_skia_sampling(interp):
+    """
+    Map string interp -> Skia SamplingOptions (STRICT).
+    Supported: 'bilinear', 'nearest' only.
+    """
+    from rp import pip_import
+    pip_import("skia")
+    import skia
+
+    if not isinstance(interp, str):
+        raise ValueError("_get_skia_sampling: Interp must be a string, but got " + str(type(interp)))
+
+    key = interp.lower()
+    mode = _skia_interp_modes.get(key)
+    if mode is None:
+        raise ValueError("_get_skia_sampling: Invalid interp " + repr(interp)
+                         + " - please choose from " + repr(list(_skia_interp_modes)))
+
+    # Build SamplingOptions strictly for the requested filter
+    filt = getattr(skia.FilterMode, mode)  # kLinear or kNearest
+    return skia.SamplingOptions(filt)
+
+
+
+def skia_draw_mesh_grid(
+    canvas,
+    mesh,
+    texture,
+    *,
+    alpha=1,
+    copy=False,
+    mode=None,
+    interp="bilinear",
+    mipmap=False
+):
+    """
+    Draws a textured mesh grid onto a canvas using the high-performance Skia library.
+    Signature and argument conventions mirror rp.skia_stamp_image.
+
+    The mesh is a regular grid of control points; each cell is rendered as two textured
+    triangles (via skia.Vertices). The full texture is mapped across the mesh domain.
+
+    Args:
+        canvas: Target RGBA uint8 NumPy array to draw onto. (H, W, 4)
+        mesh (np.ndarray): Float array of shape [H_g, W_g, 2] giving per-vertex XY *pixel*
+            destinations on the canvas (X = column / width axis, Y = row / height axis).
+            Requires H_g >= 2 and W_g >= 2 to form triangles.
+        texture: Source RGBA uint8 NumPy array providing the texels mapped over the mesh.
+                 The entire texture is mapped from (u,v)∈[0,1]x[0,1] across the grid.
+        alpha (float, optional): 0..1 global opacity multiplier for the draw. Default 1.
+        copy (bool, optional): If True, draw onto a copy of `canvas`. If False (default),
+            the function may draw in-place (like skia_stamp_image).
+        mode (str, optional): Blend mode string used for compositing onto the destination.
+        interp (str, optional): Texture sampling filter. 'bilinear' (default) or 'nearest'.
+        mipmap (bool, optional): Build/use mipmaps when sampling the texture. Default True.
+
+    Returns:
+        numpy.ndarray: RGBA byte image (H, W, 4). If copy=False, this *may* be the
+        same array (modified in place); always use the returned value.
+    """
+    import rp
+    rp.pip_import('skia')
+    import skia
+    import numpy as np
+
+    if mode is None:
+        mode = 'blend'
+
+    # --- Normalize inputs ---
+    canvas  = rp.as_rgba_image(rp.as_byte_image(canvas , copy=False), copy=False)
+    texture = rp.as_rgba_image(rp.as_byte_image(texture, copy=False), copy=False)
+    canvas = np.ascontiguousarray(canvas)
+    if copy:
+        canvas = canvas.copy()
+
+    # --- Validate mesh (explicit, 3.5-safe) ---
+    if not (hasattr(mesh, "shape") and hasattr(mesh, "ndim")):
+        raise ValueError("mesh must be a NumPy array of shape [H_g, W_g, 2], but got type="
+                         + str(type(mesh)))
+    if not (mesh.ndim == 3 and mesh.shape[-1] == 2):
+        raise ValueError("mesh must be a NumPy array of shape [H_g, W_g, 2], but got shape="
+                         + str(getattr(mesh, "shape", None)))
+
+    H_g, W_g = int(mesh.shape[0]), int(mesh.shape[1])
+    if H_g < 2 or W_g < 2:
+        return canvas
+
+    # --- Cached UV grid + indices ---
+    if H_g <=1 or W_g <=1:
+        return canvas
+    uv_unit, indices = _meshgrid_uv_and_indices(H_g, W_g)
+
+    # --- Vectorized build of vertices ---
+    tex_h, tex_w = int(texture.shape[0]), int(texture.shape[1])
+
+    mesh_f = np.ascontiguousarray(mesh.reshape(-1, 2), dtype=np.float32)
+
+    uv_px = np.empty_like(uv_unit)
+    uv_px[..., 0] = uv_unit[..., 0] * tex_w
+    uv_px[..., 1] = uv_unit[..., 1] * tex_h
+    uv_f = np.ascontiguousarray(uv_px.reshape(-1, 2), dtype=np.float32)
+
+    positions = [skia.Point(float(p[0]), float(p[1])) for p in mesh_f]
+    texcoords = [skia.Point(float(t[0]), float(t[1])) for t in uv_f]
+
+    verts = skia.Vertices.MakeCopy(
+        skia.Vertices.kTriangles_VertexMode,
+        positions,
+        texcoords,
+        None,
+        indices.tolist(),
+    )
+
+    # --- Skia surface + shader + paint ---
+    surface = skia.Surface(canvas)
+
+    texture = np.ascontiguousarray(texture)
+    tex_image = skia.Image.fromarray(texture, copy=False)
+
+    sampling = _get_skia_sampling(interp)   # STRICT: 'bilinear' or 'nearest'
+    shader = tex_image.makeShader(skia.TileMode.kClamp, skia.TileMode.kClamp, sampling)
+
+    sampling = _get_skia_sampling(interp)   # STRICT: 'bilinear' or 'nearest'
+    # If requested, upgrade SamplingOptions to include mipmaps (when minifying).
+    if mipmap:
+        filt = skia.FilterMode.kLinear if interp == "bilinear" else skia.FilterMode.kNearest
+        sampling = skia.SamplingOptions(filt, skia.MipmapMode.kLinear)
+    shader = tex_image.makeShader(
+        skia.TileMode.kClamp, skia.TileMode.kClamp, sampling
+    )
+
+    blend_mode = _get_skia_blend_mode(mode)
+    paint = skia.Paint(BlendMode=blend_mode)
+    paint.setShader(shader)
+    if alpha != 1:
+        paint.setAlphaf(float(alpha))
+
+    with surface as sk:
+        sk.drawVertices(verts, paint, skia.BlendMode.kModulate)
+
+    return canvas
+
+def skia_draw_trail(
+    canvas,
+    contour,
+    texture,
+    thickness=None,
+    *,
+    alpha=1,
+    loop=False,
+    mode=None,
+    copy=True,
+    inner_radius=None,
+    outer_radius=None,
+    interp='bilinear',
+    mipmap=False
+):
+    """
+    Draw a textured ribbon following a 2D contour.
+
+    Builds a SxN mesh (S=v_subdivs) from the contour by dilating it inward and outward
+    (using dilate_contour) and interpolating rows between inner and outer rails.
+    U runs along the contour (0→1), V spans inner(0)→outer(1).
+
+    Args:
+        canvas: Target RGBA uint8 NumPy array (H, W, 4).
+        contour: Path in any RP format (points, complex, cv contour, etc).
+        texture: RGBA uint8 image used as the ribbon texture.
+        thickness (float, optional): Convenience diameter (px). If provided and
+            inner/outer not set, both radii default to thickness/2.
+        alpha (float): 0..1 opacity multiplier.
+        loop (bool): Whether the contour is closed.
+        mode (str): Blend mode string (see _get_skia_blend_mode).
+        copy (bool): Draw on a copy of the canvas if True.
+        inner_radius (float or array, optional): Per-vertex inward offset (px).
+        outer_radius (float or array, optional): Per-vertex outward offset (px).
+        interp (str): 'bilinear' or 'nearest' (STRICT).
+
+    Returns:
+        numpy.ndarray: RGBA (H, W, 4). If copy=False, may be the same array.
+        
+
+    DEMO: Paint Studio App
+        >>> #!/bin/bash
+        >>> #SEE DEMO VIDEO: https://www.youtube.com/watch?v=RqmV44Kckr8
+        >>> rp exec 'exeval(load_gist(url))' ---url https://gist.github.com/SqrtRyan/32d82baa50383a4dda0f4e5771c1674b
+
+    EXAMPLE: Animate text rolling around a mooose
+
+        >>> #Draw Text Around a Moose
+        ... image = load_image(
+        ...     "https://www.shutterstock.com/image-vector/vector-illustration-black-silhouette-elk-600nw-736283863.jpg",
+        ...     use_cache=True,
+        ... )
+        ... contour = max(cv_find_contours(image), key=len)
+        ... contour = as_complex_vector(contour)
+        ... contour = circ_gauss_blur(contour, 5)
+        ... contour=dilate_contour(contour,7)
+        ... contour = circ_gauss_blur(contour, 5)
+        ... contour = evenly_split_path(contour, 1000)
+        ... 
+        ... repeats=40
+        ... text = 'I am a Moose! ' * repeats
+        ... text_image = skia_text_to_image(text,color='white blue cyan')
+        ... text_image=with_drop_shadow(text_image)
+        ... text_image=with_drop_shadow(text_image)
+        ... text_image=with_drop_shadow(text_image)
+        ... text_image=with_drop_shadow(text_image)
+        ... 
+        ... text_image=vertically_flipped_image(text_image)
+        ... 
+        ... width=get_image_width(text_image)
+        ... 
+        ... def make_video():
+        ...     shifts = np.linspace(0,width/repeats,num=60,endpoint=False)
+        ...     for shift in eta(shifts):
+        ...         ribbon_image = roll_image(text_image,dx=shift)
+        ...         drawn_image = skia_draw_trail(image,contour,ribbon_image,)
+        ...         yield drawn_image
+        ...         
+        ... display_video(make_video(),loop=True)
+
+    EXAMPLE:
+        
+        >>> def demo_trail_number_2(
+        ...     *,
+        ...     H=720,
+        ...     W=720,
+        ...     font_size=560,
+        ...     #stroke_url="https://www.onlygfx.com/wp-content/uploads/2022/03/simple-gold-brush-stroke-banner-1.png",
+        ...     stroke_url="https://www.onlygfx.com/wp-content/uploads/2017/05/colorful-watercolor-brush-stroke-banner-2-25-1024x229.png",
+        ...     interp="bilinear",
+        ...     loop=False,             # R is open outline by default; keep False
+        ...     seed=None,
+        ...     mode=None,
+        ...     mipmap=True,
+        ...     alpha=1,
+        ... ):
+        ...     import rp, numpy as np
+        ... 
+        ...     # --- background canvas ---
+        ...     canvas = rp.uniform_float_color_image(H, W, "gray gray blue")
+        ...     canvas = rp.as_rgba_image(rp.as_byte_image(canvas, copy=False), copy=False)
+        ... 
+        ...     # --- load texture (gold brush stroke) ---
+        ...     tex = load_image(stroke_url, use_cache=True)  # RGBA uint8
+        ... 
+        ...     # --- render 'R' to a mask using Skia (large, centered) ---
+        ...     rp.pip_import('skia'); import skia
+        ...     # Create a text image: big white 'R' on black
+        ...     txt_surface = skia.Surface(W, H)
+        ...     c = txt_surface.getCanvas()
+        ...     c.clear(skia.Color(0,0,0,255))
+        ...     paint = skia.Paint(AntiAlias=True, Color=skia.Color(255,255,255,255))
+        ...     # Typeface & layout
+        ...     font = skia.Font(skia.Typeface(None, skia.FontStyle.Bold()), font_size)
+        ...     # Measure and center
+        ...     bounds = font.measureText("2", skia.TextEncoding.kUTF8)
+        ...     # Approx center draw (Skia text baseline mechanics): tweak Y to center visually
+        ...     x = (W - bounds) * 0.5
+        ...     y = (H + font_size * 0.35) * 0.5
+        ...     c.drawString("2", x, y, font, paint)
+        ...     text_img = txt_surface.makeImageSnapshot().toarray()  # RGBA
+        ... 
+        ...     # --- get contour of the letter (largest contour) ---
+        ...     mask = rp.as_grayscale_image(text_img, copy=False)
+        ...     contours = cv_find_contours(mask)
+        ...     if not contours:
+        ...         return canvas
+        ...     contour = max(contours, key=len)
+        ...     contour = as_complex_vector(contour)
+        ...     
+        ...     
+        ... 
+        ...     # optional smoothing & resampling for nicer trails
+        ...     contour = circ_gauss_blur(contour, 2)
+        ...     contour = evenly_split_path(contour, 1800)  # dense path
+        ...     contour_pts = as_points_array(contour)
+        ...     contour_pts = contour_pts[::-1]
+        ... 
+        ...     # --- draw trail with vertical subdivisions (default 30) ---
+        ...     # Make the ribbon width vary slightly for a brushy feel
+        ...     n = len(contour_pts)
+        ...     u = np.linspace(0.0, 1.0, n, dtype=np.float32)
+        ...     wobble = .25 * np.sin(10*np.pi*3.0*u)
+        ...     inner = 22.0 + 6.0 * wobble
+        ...     outer = 42.0 + 10.0 * wobble
+        ... 
+        ...     out = skia_draw_trail(
+        ...         canvas,
+        ...         contour_pts,
+        ...         tex,
+        ...         thickness=None,
+        ...         alpha=alpha,
+        ...         loop=loop,
+        ...         mode=mode,
+        ...         copy=True,
+        ...         inner_radius=inner,
+        ...         outer_radius=outer,
+        ...         interp=interp,
+        ...         mipmap=mipmap,
+        ...         # v_subdivs defaults to 30; you can pass v_subdivs=40 for extra smoothness
+        ...     )
+        ...     return out
+        ... display_image(demo_trail_number_2())
+        
+    """
+
+    #ARG:
+    #    v_subdivs (int): Number of rows across the ribbon thickness (>=2). Default 30.
+    v_subdivs=6   # <--- vertical subdivisions across thickness
+
+    import numpy as np
+
+    # ---- guard subdivisions ----
+    v_subdivs = int(v_subdivs) if v_subdivs is not None else 30
+    if v_subdivs < 2:
+        v_subdivs = 2
+
+    # ---- Normalize radii ----
+    if thickness is None:
+        thickness = 15.0
+    if outer_radius is None:
+        outer_radius = thickness / 2.0
+    if inner_radius is None:
+        inner_radius = thickness / 2.0
+
+    pts = as_points_array(contour).astype(np.float32, copy=False)
+    n = int(len(pts))
+    if n < 2:
+        return canvas
+
+    # Scalar → per-vertex arrays (length n)
+    if is_number(outer_radius):
+        outer_radius = [outer_radius] * n
+    if is_number(inner_radius):
+        inner_radius = [inner_radius] * n
+
+    outer_radius = resize_vector(outer_radius, n, interp='linear')
+    inner_radius = resize_vector(inner_radius, n, interp='linear')
+
+    # ---- rails via dilate_contour (left-hand normal basis) ----
+    cont_c  = as_complex_vector(pts)
+    outer_c = dilate_contour(cont_c, shift= as_numpy_array(outer_radius), loop=loop)
+    inner_c = dilate_contour(cont_c, shift=-as_numpy_array(inner_radius), loop=loop)
+
+    outer_xy = np.column_stack([outer_c.real, outer_c.imag]).astype(np.float32, copy=False)
+    inner_xy = np.column_stack([inner_c.real, inner_c.imag]).astype(np.float32, copy=False)
+
+    # ---- interpolate S rows between inner (v=0) and outer (v=1) ----
+    # mesh shape [S, N, 2]
+    t = np.linspace(0.0, 1.0, v_subdivs, dtype=np.float32)[:, None, None]  # [S,1,1]
+    mesh = (1.0 - t) * inner_xy[None, :, :] + t * outer_xy[None, :, :]
+
+    # ---- delegate to mesh renderer ----
+    return skia_draw_mesh_grid(
+        canvas,
+        mesh,
+        texture,
+        alpha=alpha,
+        copy=copy,
+        mode=mode,
+        interp=interp,
+        mipmap=mipmap,
+    )
+    
 
 def download_google_font(font_name, *, skip_existing=True):
     """
@@ -45676,6 +46102,7 @@ def get_english_rhymes_via_datamuse(word):
     return _datamuse_words_request('rel_rhy',word)
 
 def get_english_synonyms(word):
+    """ Attempts to return all english synonyms for a given word string, returns a list of strings """
     try:
         return get_english_synonyms_via_datamuse(word)
     except Exception:
@@ -45683,6 +46110,7 @@ def get_english_synonyms(word):
 
 @memoized
 def fibonacci(n):
+    """ Given an int, returns the fibbonacci sequence at that index """
     assert n>=0
     if n<71:
         #Although this method is beautiful, it's not accurate past n=70 (due to floating point precision)
@@ -51900,7 +52328,15 @@ def torch_resize_images(*images, size, interp="auto", copy=True):
     return resized
 
 
-def torch_remap_image(image, x, y, *, relative=False, interp='bilinear', add_alpha_mask=False, use_cached_meshgrid=False):
+def torch_remap_image(
+    image,
+    x,
+    y,
+    *,
+    relative=False,
+    interp="bilinear",
+    add_alpha_mask=False
+):
     """
     Remap an image tensor using the given x and y coordinate tensors.
     Out-of-bounds regions will be given 0's
@@ -52825,17 +53261,19 @@ def _sign(x):
     if is_torch_tensor(x):return __import__('torch').sign(x)
     return -1 if x < 0 else (1 if x > 0 else 0)
 
-def _degrees(x):
-    """ works across libraries - such as numpy, torch, pure python """
-    if is_numpy_array (x):return np.degrees(x)
-    if is_torch_tensor(x):return __import__('torch').rad2deg(x)
-    return math.degrees(x)
+#Nah don't need this, just multiply by 360/rp.tau - more explicit that way
+# def _degrees(x):
+#     """ works across libraries - such as numpy, torch, pure python """
+#     if is_numpy_array (x):return np.degrees(x)
+#     if is_torch_tensor(x):return __import__('torch').rad2deg(x)
+#     return math.degrees(x)
 
-def _radians(x):
-    """ works across libraries - such as numpy, torch, pure python """
-    if is_numpy_array (x):return np.radians(x)
-    if is_torch_tensor(x):return __import__('torch').deg2rad(x)
-    return math.radians(x)
+#Nah don't need this, just multiply by rp.tau/360 - more explicit that way
+# def _radians(x):
+#     """ works across libraries - such as numpy, torch, pure python """
+#     if is_numpy_array (x):return np.radians(x)
+#     if is_torch_tensor(x):return __import__('torch').deg2rad(x)
+#     return math.radians(x)
 
 def _create_array_like(x, *, func_name, shape=None, dtype=None):
     """Helper function for creating arrays/tensors across libraries"""
@@ -52875,7 +53313,6 @@ def _zeros_like(x, *, shape=None, dtype=None):
 def _ones_like(x, *, shape=None, dtype=None):
     """Works across libraries - such as numpy, torch"""
     return _create_array_like(x, func_name='ones', shape=shape, dtype=dtype)
-
 
 def _randn_like(x, *, shape=None, dtype=None):
     """Works across libraries - such as numpy, torch"""
@@ -59859,12 +60296,94 @@ def resize_list(array:list, length: int):
 def resize_lists(*arrays:list, length:int):
     """ Plural of rp.resize_list """
     arrays = detuple(arrays)
-    as_numpy = is_numpy_array(arrays)
 
     output = [resize_list(array, length) for array in arrays]
 
-    if as_numpy: output = as_numpy_array(output)
+    if   is_numpy_array (arrays): output = as_numpy_array(output)
+    elif is_torch_tensor(arrays): output = __import__('torch').tensor(output)
+
     return output
+
+def resize_vector(x, length: int, *, interp: str = "linear", loop: bool = False):
+    """
+    Resize a 1D sequence to `length` using 'nearest' or 'linear'.
+
+    Returns:
+      - np.ndarray for list/ndarray inputs
+      - torch.Tensor for torch inputs
+    Always 1-D (asserted). No reshaping internally.
+
+    Rules:
+      - 'nearest' → endpoint grid, first always included, loop ignored
+      - 'linear'  → np.interp / F.interpolate(align_corners=True)
+      - loop=True → only for 'linear', appends first sample once
+      - length==0 → empty, length==1 → first element
+
+    EXAMPLES:
+
+        >>> resize_vector([0,1,2,3,4], 3, "nearest")        # → [0,2,4]
+        >>> resize_vector([0,1,2,3,4], 1, "nearest")        # → [0]
+        >>> resize_vector([0,1,2,3,4], 0, "nearest")        # → []
+        >>> resize_vector(np.array([0.,10.]), 5, "linear")  # → [0.,2.5,5.,7.5,10.]
+        >>> resize_vector([7.5], 4, "linear")               # → [7.5,7.5,7.5,7.5]
+        >>> resize_vector([0,100,200], 7, "linear", loop=1) # → [0.,50.,100.,150.,200.,100.,0.]
+        >>> resize_vector(torch.tensor([0.,10.,20.,30.]),3,"nearest") # → tensor([0.,10.,30.])
+        >>> resize_vector(torch.tensor([0.,10.,20.,30.]),7,"linear")  # → tensor([0.,5.,10.,15.,20.,25.,30.])
+        >>> resize_vector(torch.tensor([1.],dtype=torch.float16),4,"linear").dtype # → torch.float32
+        >>> resize_vector(torch.tensor([0.,1.]).cuda(),4,"linear").device          # → cuda:0
+
+    """
+    assert isinstance(length, int) and length >= 0
+    mode = interp.lower()
+    assert mode in ("nearest", "linear")
+
+    if is_torch_tensor(x):
+        th = __import__("torch")
+        import torch.nn.functional as F
+        assert x.dim() == 1, "resize_vector: torch input must be 1D, got dim="+str(x.dim())
+        xt = x
+
+        if length == 0:
+            return xt[:0]
+
+        if mode == "nearest":
+            return resize_list(xt, length)  # nearest BEFORE looping
+
+        if loop and xt.numel() > 1:
+            xt = th.cat([xt, xt[:1]])
+
+        t = xt.to(dtype=th.float32).view(1, 1, -1)
+        out = F.interpolate(t, size=length, mode="linear", align_corners=True)
+        return out.view(-1)
+
+    else:
+        arr = as_numpy_array(x)
+        assert arr.ndim == 1, "resize_vector: NumPy input must be 1D, got ndim="+str(arr.ndim)
+
+        if length == 0:
+            return arr[:0]
+
+        if mode == "nearest":
+            return as_numpy_array(resize_list(arr, length))  # nearest BEFORE looping
+
+        if loop and arr.size > 1:
+            arr = np.concatenate([arr, arr[:1]])
+
+        xp = np.linspace(0.0, 1.0, num=arr.size, endpoint=True)
+        xi = np.linspace(0.0, 1.0, num=length, endpoint=True)
+        return np.interp(xi, xp, arr)
+
+def resize_vectors(*vectors, length:int, interp="linear", loop:bool = False):
+    """ Plural of resize_vector """
+    vectors = detuple(vectors)
+    
+    output = [resize_vector(vector, length=length, interp=interp, loop=loop) for vector in vectors]
+
+    if   is_numpy_array (vectors): output = as_numpy_array(output)
+    elif is_torch_tensor(vectors): output = __import__('torch').tensor(output)
+
+    return output
+
 
 def resize_lists_to_max_len(*lists):
     """
