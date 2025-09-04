@@ -2116,8 +2116,8 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             return
           endif
 
-          " Get the git commits with SHA and message (limit to 100)
-          let git_output = system('git log --oneline -n 100')
+          " Get the git commits with SHA and message (limit to 10000)
+          let git_output = system('git log --oneline -n 10000')
           
           if v:shell_error
             echoerr "Failed to get git commits: " . git_output
