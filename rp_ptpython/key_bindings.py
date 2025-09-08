@@ -2884,6 +2884,7 @@ def load_python_bindings(python_input):
                                          '\\sim':'sort_imports',
                                          '\\cim':'clean_imports',
                                          '\\rms':'remove_star',
+                                         '\\rmfs':'remove_fstrings',
                                          '\\bla':'black',
                                          '\\gpt':'gpt',
                                          '\\dgx':'deepgenx',
@@ -2915,6 +2916,7 @@ def load_python_bindings(python_input):
                                          '\\sw':'strip_whitespace',
                                          '\\sc':'strip_comments',
                                          '\\sdo':'strip_docstrings',
+                                         '\\sbl':'strip_blank_lines',
                                          '\\mla':'multi line arguments',
                                          '\\fo':'for',
                                          '\\fi':'import_from_swap',
@@ -3342,6 +3344,17 @@ def load_python_bindings(python_input):
                                     text=buffer.document.text
                                     text=strip_python_docstrings(text)
                                     # replace_buffer_text(buffer, text)
+                                    replace_buffer_text(buffer, text)
+                                if header=='strip_blank_lines':
+                                    from rp import strip_blank_lines
+                                    text=buffer.document.text
+                                    text=strip_blank_lines(text)
+                                    # replace_buffer_text(buffer, text)
+                                    replace_buffer_text(buffer, text)
+                                if header=='remove_fstrings':
+                                    import rp
+                                    text=buffer.document.text
+                                    text=rp.remove_fstrings(text)
                                     replace_buffer_text(buffer, text)
                                 if header=='inline_rp':
                                     from rp.r import _inline_rp_code
