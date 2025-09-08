@@ -4563,7 +4563,8 @@ def with_drop_shadow(
     y=0,
     color=(0, 0, 0, 1),
     blur=10,
-    opacity=1
+    opacity=1,
+    kernel='gauss'
 ):
     """
     Applies a drop shadow to an image
@@ -4574,7 +4575,14 @@ def with_drop_shadow(
     image=as_float_image(image,copy=False)
     alpha=get_image_alpha(image)
     shadow_alpha=shift_image(alpha,x,y,allow_growth=False)
-    shadow_alpha=cv_gauss_blur(shadow_alpha,sigma=blur)
+
+    if kernel=='gauss':
+        shadow_alpha=cv_gauss_blur(shadow_alpha,sigma=blur)
+    elif kernel=='box':
+        shadow_alpha=cv_box_blur(shadow_alpha,diameter=blur)
+    else:
+        assert False, kernel
+
     height,width=get_image_dimensions(image)
     shadow=with_alpha_channel(uniform_float_color_image(height,width,color),shadow_alpha*opacity,copy=False)
     return blend_images(shadow,image)
@@ -13715,6 +13723,74 @@ def force_restore_warnings():
     warnings.filterwarnings("default")
 def TemporarilySuppressConsoleOutput():
     return TemporarilySetAttr(sys.stdout, write=_muted_stdout_write)
+
+class TeeStdout:
+    def __init__(self):
+        """
+        Context manager that captures stdout while still printing it to the console.
+
+        It correctly captures ANSI colorings by treating the context as a tty
+
+        This class duplicates all output written to `sys.stdout`, so text is both:
+        - Displayed in the terminal immediately.
+        - Stored in an internal buffer that can be accessed later.
+
+        Attributes:
+            text (str): The captured output as a single string.
+
+        Example:
+            >>> with TeeStdout() as tee:
+            ...     print("Hello, world!")
+            ... 
+            Hello, world!
+            >>> print("Captured:\n" + tee.text)
+            Captured:
+            Hello, world!
+
+        Nested Example:
+            >>> with TeeStdout() as tee1:
+            ...     print("Captured only by tee1")
+            ...     with TeeStdout() as tee2:
+            ...         print("Captured by both tee1 and tee2")
+            ...
+            Captured only by tee1
+            Captured by both tee1 and tee2
+            >>> print("tee1 buffer:\n" + tee1.text)
+            tee1 buffer:
+            Captured only by tee1
+            Captured by both tee1 and tee2
+            >>> print("tee2 buffer:\n" + tee2.text)
+            tee2 buffer:
+            Captured by both tee1 and tee2
+        """
+        self._buf = io.StringIO()
+        self._orig = None
+
+    def __enter__(self):
+        self._orig = sys.stdout
+        sys.stdout = self
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        sys.stdout = self._orig
+
+    def write(self, s):
+        self._orig.write(s); self._orig.flush()  # show immediately
+        self._buf.write(s)
+        return len(s)
+
+    def flush(self):
+        self._orig.flush(); self._buf.flush()
+
+    def isatty(self):
+        return getattr(self._orig, "isatty", lambda: False)()
+    
+    @property
+    def text(self):
+        return self._buf.getvalue()
+
+
+
 # def toggle_console_output ⟵ I was going to implement this, but then decided against it: it could get really annoying/confusing if used often.
 # endregion
 # region Ryan's Inspector: ［rinsp］
@@ -20508,6 +20584,74 @@ def get_default_shell():
     """Returns the path to the user's default shell."""
     return os.environ.get('SHELL', '/bin/sh')  # Fallback to '/bin/sh' if SHELL is not set
 
+def _bash_quote_cstring(code):
+    r"""
+    Like shlex.quote, but creates a cstring $'like\nthis' where newlines are escaped as \n
+    """
+
+    if not '\n' in code:
+        return code
+
+    # Map of safe ASCII
+    SAFE_CHARS = set(
+        b" !\"#$%&()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`"
+        b"abcdefghijklmnopqrstuvwxyz{|}~"
+    )
+    ESCAPE_MAP = {
+        0x07: r"\a",
+        0x08: r"\b",
+        0x09: r"\t",
+        0x0A: r"\n",
+        0x0B: r"\v",
+        0x0C: r"\f",
+        0x0D: r"\r",
+    }
+
+    def encode_bytes(data: bytes) -> str:
+        """Encode arbitrary bytes into a Bash $'…' ANSI-C string literal."""
+        out = []
+        for b in data:
+            if b in ESCAPE_MAP:
+                out.append(ESCAPE_MAP[b])
+            elif b == 0x5C:  # backslash
+                out.append(r"\\")
+            elif b == 0x27:  # single quote
+                out.append(r"\'")
+            elif b in SAFE_CHARS:
+                out.append(chr(b))
+            else:
+                out.append("\\x{0:02x}".format(b))
+        return "$'" + "".join(out) + "'"
+
+    data = code.encode("utf-8", "surrogateescape")  # preserve all bytes
+    payload = encode_bytes(data)
+
+    return payload
+
+def format_bash_to_oneliner(code: str) -> str:
+    r'''
+    Turn a Bash code string into a one-liner that runs it with 100% correctness.
+    The returned line is human-readable (ANSI-C $'..' style, no base64).
+    
+    EXAMPLE:
+
+        >>> format_bash_to_oneliner("""
+        ...         setopt AUTO_PUSHD
+        ...         alias -- -='popd'
+        ... 
+        ...         killport()
+        ...         {
+        ...             lsof -ti tcp:$1 | xargs kill
+        ...         }
+        ... """)
+        eval $'\n        setopt AUTO_PUSHD\n        alias -- -=\'popd\'\n\n        killport()\n        {\n            lsof -ti tcp:$1 | xargs kill\n        }\n'
+
+    '''
+    payload = _bash_quote_cstring(code)
+
+    # Return a runnable one-liner
+    return "eval " + payload    #Does not work in sh, only bash and zsh etc
+    return "bash -c " + payload #Safer - but starts as subprocess
 
 
 
@@ -32535,6 +32679,84 @@ def memoized(function):
     memoized_function.cache = cache
     return memoized_function
 
+def memoized_lru(function_or_maxsize=None, *, maxsize=128):
+    """
+    LRU (Least Recently Used) version of memoized. Evicts least recently used items when cache reaches maxsize.
+    Uses args_hash to handle complex arguments like the original memoized function so it can handle nearly any python object, unlike functools.lru_cache
+    
+    Example:
+        >>> @memoized_lru(2)  # or @memoized_lru(maxsize=2)
+        ... def expensive_func(x):
+        ...     return x ** 2
+        >>> expensive_func(1); print(expensive_func.cache)
+        OrderedDict({...})
+        >>> expensive_func(2); print(expensive_func.cache)  
+        OrderedDict({...: 1, ...: 4})
+        >>> expensive_func(3); print(expensive_func.cache)  # evicts 1
+        OrderedDict({...: 4, ...: 9})
+        >>> expensive_func.maxsize
+        2
+        >>> expensive_func.maxsize = 10  # Can be changed dynamically
+        >>> expensive_func.maxsize
+        10
+
+    Example:
+        >>> @memoized_lru(maxsize=3)
+        ... def expensive_func(x):
+        ...     return x**2
+        ... 
+        ... for arg in [
+        ...     1,2,3,                     #Fill the cache
+        ...     as_numpy_array([1, 2, 3]), #It can hash most python objects
+        ...     as_numpy_array([1, 2, 3]), #No cache change
+        ...     3,                         #Bring 3**2 to the front
+        ...     4,                         #4th element: starts deleting items (replaces 2**2)
+        ... ]:
+        ...     expensive_func(arg)
+        ...     print(arg, '\t', expensive_func.cache.values())
+        ... 
+        1       odict_values([1])                      
+        2       odict_values([1, 4])                   
+        3       odict_values([1, 4, 9])                
+        [1 2 3] odict_values([4, 9, array([1, 4, 9])]) 
+        [1 2 3] odict_values([4, 9, array([1, 4, 9])]) 
+        3       odict_values([4, array([1, 4, 9]), 9]) 
+        4       odict_values([array([1, 4, 9]), 9, 16])
+    """
+    # Handle @memoized_lru(123) as shorthand for maxsize=123
+    if isinstance(function_or_maxsize, int):
+        maxsize = function_or_maxsize
+        function_or_maxsize = None
+    
+    def decorator(func):
+        import functools
+        from collections import OrderedDict
+        assert callable(func), "You can't memoize something that isn't a function (you tried to memoize "+repr(func)+", which isn't callable)"
+        
+        cache = OrderedDict()
+        
+        @functools.wraps(func)
+        def memoized_function(*args, **kwargs):
+            key = args_hash(func, *args, **kwargs)
+            if key in cache:
+                cache.move_to_end(key)
+                return cache[key]
+            result = func(*args, **kwargs)
+            cache[key] = result
+            if len(cache) > memoized_function.maxsize:
+                cache.popitem(last=False)
+            return result
+        
+        memoized_function.original_function = func
+        memoized_function.cache = cache
+        memoized_function.maxsize = maxsize
+        return memoized_function
+    
+    if function_or_maxsize is None:
+        return decorator
+    else:
+        return decorator(function_or_maxsize)
+
 def memoized_property(method):
     """
     This method is meant to be used as a substitute for @property
@@ -32593,7 +32815,7 @@ def _omni_save_default_extension(x):
     return ''
 
 
-def _omni_load(path):
+def omni_load(path):
     """
     Internal smart file loading dispatcher based on file extension and type detection.
     
@@ -32651,7 +32873,9 @@ def _omni_load(path):
     if is_utf8_file(path): return load_text_file(path)
     return file_to_object(path)
 
-def _omni_save(object, path, *, auto_extension=False):
+_omni_load = omni_load
+
+def omni_save(object, path, *, auto_extension=False):
 
     if auto_extension and not has_file_extension(path):
         path += _omni_save_default_extension(object)
@@ -32672,6 +32896,8 @@ def _omni_save(object, path, *, auto_extension=False):
     if isinstance(object, str): return save_text_file(object, path)
     if isinstance(object, bytes): return bytes_to_file(object, path)
     return object_to_file(object,path)
+
+_omni_save = omni_save
 
 def file_cache_call(
     path,
@@ -34673,6 +34899,11 @@ def skia_stamp_image(
 
     if copy:
         canvas = canvas.copy()
+
+    if not all(sprite.shape) or not all(canvas.shape):
+        #Avoid skia errors like "ValueError: Width and height must be greater than 0. (width=0, height=60)"
+
+        return canvas
 
     if 0 in sprite.shape:
         # Edge case: Don't draw anything
@@ -40555,6 +40786,97 @@ def get_youtube_video_thumbnail(url_or_id,*,use_cache=False,output='image'):
     
     thumbnail_image = load_image(thumbnail_url, use_cache=use_cache)
     return thumbnail_image
+
+
+def _as_tiktok_url(string: str) -> str:
+    """
+    Normalize any TikTok string form into a canonical URL.
+
+    This function extracts the username and video ID from different possible
+    TikTok formats and returns a normalized URL in the form:
+
+        https://www.tiktok.com/@<username>/video/<video_id>?is_copy_url=1&is_from_webapp=v1
+
+    Accepted input formats include:
+    - A bare TikTok path:
+        "@islanduniverse.3d/video/7539708490512616734"
+    - A TikTok URL without query parameters:
+        "https://www.tiktok.com/@islanduniverse.3d/video/7539708490512616734"
+    - A TikTok URL with arbitrary query parameters:
+        "https://www.tiktok.com/@islanduniverse.3d/video/7539708490512616734?is_copy_url=1&is_from_webapp=v1"
+
+    In all cases, the return value is normalized to include the standard query:
+        ?is_copy_url=1&is_from_webapp=v1
+
+    Args:
+        string (str): TikTok video string in one of the accepted formats.
+
+    Returns:
+        str: Canonical TikTok video URL.
+
+    Raises:
+        ValueError: If the input string does not contain a valid TikTok pattern.
+
+    Example:
+        >>> _as_tiktok_url("@islanduniverse.3d/video/7539708490512616734")
+        "https://www.tiktok.com/@islanduniverse.3d/video/7539708490512616734?is_copy_url=1&is_from_webapp=v1"
+    """
+    # Extract username and video ID
+    m = re.search(r"@([\w\.\-]+)/video/(\d+)", string)
+    if not m:
+        raise ValueError("Could not parse TikTok string: "+repr(string))
+
+    username, video_id = m.groups()
+    return "https://www.tiktok.com/@"+str(username)+"/video/"+str(video_id)+"?is_copy_url=1&is_from_webapp=v1"
+
+def download_tiktok_video(url: str, path=None):
+    """
+    Given a url, returns a path to an mp4 file
+    Downloads a tiktok video   
+    
+    url:
+        URL or ID of the tiktok video. Equivalent examples:
+            1. @islanduniverse.3d/video/7539708490512616734
+            2. https://www.tiktok.com/@islanduniverse.3d/video/7539708490512616734
+            3. https://www.tiktok.com/@islanduniverse.3d/video/7539708490512616734?is_copy_url=1&is_from_webapp=v1
+        All of the above are equivalent inputs
+
+    EXAMPLE:
+        >>> download_tiktok_video('https://www.tiktok.com/@islanduniverse.3d/video/7484653502833364270?is_copy_url=1&is_from_webapp=v1')
+        /Users/ryan/@islanduniverse.3d_video_7484653502833364270.mp4
+    
+    """
+    pip_import("pyktok")
+    import pyktok as pyk
+    
+    url=_as_tiktok_url(url)
+
+    with TemporarilySuppressConsoleOutput():
+        #It prints stuff at the end
+        #It's not a progress indicator
+        result = pyk.save_tiktok(
+            url,
+            metadata_fn=temporary_file_path("csv"),
+            save_video=True,
+            browser_name=None,
+            return_fns=True,
+        )
+    
+    video_path   =result['video_fn']
+    metadata_path=result['metadata_fn']
+
+    # #TODO: If we want metadata in the future, play around with this
+    # #Disabled for now because the function signature is simple when it just returns a string
+    # metadata = load_csv(metadata_path)
+    # metadata = as_easydict({x: y.item() for x, y in dict(metadata).items()})
+    # metadata.video_path = video_path
+    
+    video_path = get_absolute_path(video_path)
+    if path is not None:
+        video_path = move_file(video_path, path)
+        
+    return video_path
+
 
 def _moviepy_VideoFileClip(path, *args, **kwargs):
     """ Moviepy 2 has breaking changes! They moved a class. See https://zulko.github.io/moviepy/getting_started/updating_to_v2.html """
@@ -49226,7 +49548,9 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
         elif isinstance(command, str):
             command = command.splitlines()
         elif len(command) == 1:
-            command = command[0]
+            # Keep single-item lists as lists so we can expand multiline strings below.
+            # Collapsing happens later (after expansion) in the pane loop.
+            pass        
         
         #Expand any more multiline strings
         if not isinstance(command, str):
@@ -49247,7 +49571,8 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
         panes = []
 
         if isinstance(pane_commands, str):
-            pane_commands = pane_commands.splitlines()
+            # pane_commands = pane_commands.splitlines()
+            pane_commands = [pane_commands]
         assert is_listlike(pane_commands)
 
         for command in pane_commands:
@@ -49267,6 +49592,7 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
         config["windows"].append(window)
 
     return yaml.dump(config, default_flow_style=False, sort_keys=False, width=9999999)
+
 
 def tmuxp_launch_session_from_yaml(session_yaml,*,attach=False):
     """
@@ -60988,6 +61314,61 @@ def monkey_patch(target, name=None):
         """
         setattr(target, name or func.__name__, func)
     return patcher
+
+def copy_with(obj, **kwargs):
+    """
+    Return a shallow copy of an object with some attributes overridden.
+
+    Useful for immutable-style programming: instead of mutating in-place,
+    you create a modified copy.
+
+    Example:
+        >>> class Point:
+        ...     def __init__(self, x, y):
+        ...         self.x = x
+        ...         self.y = y
+        ...     def __repr__(self):
+        ...         return f"Point(x={self.x}, y={self.y})"
+        ...
+        >>> p1 = Point(1, 2)
+        >>> p2 = copy_with(p1, x=10, y=20)
+        >>> p1
+        Point(x=1, y=2)
+        >>> p2
+        Point(x=10, y=20)
+        >>> p1 is p2
+        False
+    """
+    out = copy(obj)
+    for key, value in kwargs.items():
+        setattr(out, key, value)
+    return out
+
+
+class CopyWithMixin:
+    """
+    Mixin that adds a .copy_with(**kwargs) method to objects.
+
+    Useful for immutable-style programming: instead of mutating in-place,
+    you create a modified copy.
+
+    Example:
+        >>> class Point(CopyWithMixin):
+        ...     def __init__(self, x, y):
+        ...         self.x = x
+        ...         self.y = y
+        ...     def __repr__(self):
+        ...         return f"Point(x={self.x}, y={self.y})"
+        ...
+        >>> p1 = Point(1, 2)
+        >>> p2 = p1.copy_with(x=10)
+        >>> p1
+        Point(x=1, y=2)
+        >>> p2
+        Point(x=10, y=2)
+    """
+    def copy_with(self, **kwargs):
+        return copy_with(self, **kwargs)
 
 def _inline_rp_code(code):
     #/p is a big library, and some people might not like that.
