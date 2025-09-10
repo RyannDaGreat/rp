@@ -12,6 +12,7 @@ import time
 import shlex
 import sys
 import operator
+import platform
 import random
 import warnings
 import traceback
@@ -15625,7 +15626,7 @@ def append_line_to_file(line:str,file_path:str):
         file_path (str): Path to the target file. File will be created if it doesn't exist, as well as any missing parent folders.
     
     Returns:
-        None: This function operates via side effects (file modification).
+        str: The file path modified
     
     Examples:
         >>> # Create a new file with first line
@@ -15644,6 +15645,7 @@ def append_line_to_file(line:str,file_path:str):
         
     Tags: file-io, text-processing, logging, configuration
     """
+    file_path = os.path.expanduser(file_path)
     if not file_exists(file_path):
         string_to_text_file(file_path,line)
     else:
@@ -15653,6 +15655,42 @@ def append_line_to_file(line:str,file_path:str):
         finally:
             file.close()
     return file_path
+
+def append_line_to_files(line: str, *file_paths):
+    """
+    Append a line (or multiline string) to one or more files.
+    Creates files and missing parent directories as needed.
+
+    Args:
+        line: Text to append. May contain newlines.
+        *file_paths: One or more file paths. You can also pass a list.
+
+    Returns:
+        List of paths that were written, after ~ expansion etc.
+
+    Raises:
+        ValueError: If no paths are provided or a path refers to a directory.
+        TypeError: If any path is not a string.
+    """
+    file_paths=_detuple_paths(file_paths)
+
+    #Validation: Paths are strings
+    non_str = {type(p).__name__ for p in file_paths if not isinstance(p, str)}
+    if non_str:
+        raise TypeError("rp.append_line_to_files: all paths must be str; got types: " + ", ".join(non_str))
+
+    #Validation: Paths are not folders
+    folder_paths = [p for p in file_paths if is_a_folder(p)]
+    if folder_paths:
+        raise ValueError("rp.append_line_to_files: these paths are directories, not files: " + ", ".join(map(repr,folder_paths)))
+
+    written = []
+    for path in file_paths:
+        written_path = append_line_to_file(line, path)
+        written.append(written_path)
+
+    return written
+
 
 def as_easydict(*args, **kwargs):
     """
@@ -19118,9 +19156,16 @@ def display_video_in_terminal_color(frames, *, loop=True, framerate=None, displa
     """
     import time
 
+    if isinstance(frames, str):
+        assert is_video_file(frames),frames
+        frames = load_video(frames,show_progress=True)
+
     while True:
         for i, f in enumerate(frames):
             start_time = time.time() if framerate else None
+
+            h = get_terminal_height()*2-4
+            f = resize_image_to_fit(f, height=h, allow_growth=False)
 
             display_image(f)
             _terminal_move_cursor_to_top_left()
@@ -24784,8 +24829,6 @@ def pseudo_terminal(
 
         # GO GC
 
-        MON MONITOR
-
         VD VDA
 
         TRAD treealldir
@@ -24892,11 +24935,14 @@ def pseudo_terminal(
         GOO  $open_google_search_in_web_browser(str(ans))
         GOOP $open_google_search_in_web_browser($string_from_clipboard())
 
+        #SYSTEM MONITORING TOOLS
+        MON MONITOR
         SMI $os.system("nvidia-smi");
         NVI $pip_import('nvitop');$pip_import('nvitop.__main__').main()
         NVT $r._ensure_nvtop_installed();$os.system("nvtop");#sudo_apt_install_nvtop
         ZSH $r._ensure_zsh_installed();$os.system("zsh");
         BOP TOP
+        BTOP $r._ensure_btop_installed();$r._run_sys_command('btop')
 
         bashtop $r._run_bashtop() #Good where BOP doesn't work and MON is too basic
 
@@ -41226,6 +41272,60 @@ def load_videos(
 
     return gather_args_call(load_files, load, paths)
 
+def load_video_via_decord(path, indices=None, *, as_dict=False):
+    """
+    Load video frames with decord.
+    Often faster than using rp.load_video, especially if only a subset of frames are needed
+
+    Args:
+        path: Video path (or URL).
+        indices:
+            - None: all frames
+            - int: evenly sample that many frames
+            - slice: slice of frames
+            - iterable: explicit frame indices
+        as_dict: If True, return {'video': frames, 'indices': resolved_indices, 'num_frames': int}.
+                 Note: resolved_indices may differ from the input if an int or None was given.
+                 Note: num_frames reflects the number of frames in the full video file
+
+    Returns:
+        ndarray (T, H, W, C) or dict if as_dict=True.
+        
+    """
+    pip_import("decord")
+    import decord
+
+    if not file_exists(path) and is_valid_url(path):
+        url = path
+        with TemporarilyDownloadUrl(url) as path:
+            return load_video_via_decord(url)
+
+    reader = decord.VideoReader(path)
+    num_frames = len(reader)
+
+    if indices is None:
+        indices=range(num_frames)
+    elif isinstance(indices, int):
+        indices = resize_list(range(num_frames), indices)
+    elif isinstance(indices, slice):
+        indices = range(num_frames)[indices]
+    else:
+        assert is_iterable(indices)
+        indices = list(indices)
+
+    with decord.bridge._BridgeScope("native"):
+        # This scope ensures it always returns the same type
+        # This function should be agnostic to backend, meaning it might not always use decord in the future
+        # So, let's KISS
+        video = reader.get_batch(indices)
+        video = video.asnumpy()
+        
+    if as_dict:
+        return gather_vars("video", "indices","num_frames")
+
+    return video
+
+
 def save_video_avi(frames,path:str=None,framerate:int=30):
     """
     Saves the frames of the video to an .avi file
@@ -47993,6 +48093,52 @@ def _run_sys_command(*command, title='SYS COMMAND'):
     print(message)
     return os.system(command)
 
+def _ensure_shell_has_path(*, mac=None, linux=None, windows=None, unix=None):
+    """
+    Add a directory to the shell PATH for the current process and future logins.
+
+    Args:
+        mac: Path to add when running on macOS.
+        linux: Path to add when running on Linux.
+        windows: Path to add when running on Windows (not implemented).
+        unix: Fallback for both mac and linux if specific values are not given.
+
+    Notes:
+        - Modifies os.environ["PATH"] immediately for this process.
+        - Appends an `export PATH=...:$PATH` line to common shell rc files
+          (~/.zshrc, ~/.zprofile, ~/.bashrc, ~/.bash_profile, ~/.profile).
+        - Rejects paths containing ":" on POSIX, since ":" is the PATH separator.
+        - This affects the OS shell environment, not Python’s sys.path.
+    """
+    
+    if mac   is None: mac   = unix
+    if linux is None: linux = unix
+
+    if mac and currently_running_mac() or linux and currently_running_linux():
+        path = mac if currently_running_mac() else linux
+        path = os.path.expanduser(str(path)).strip()
+
+        if path in os.environ['PATH'].split(':'):
+            return #No action needed
+
+        path = os.path.expanduser(str(path))
+
+        if ":" in path:
+            raise ValueError("PATH entries on POSIX cannot contain ':': " + path)
+
+        # For this current process
+        os.environ["PATH"] = path + ":" + os.environ.get("PATH", "")
+
+        # For new shell sessions
+        rc_paths = ["~/.zshrc", "~/.zprofile", "~/.bashrc", "~/.bash_profile", "~/.profile"]
+        new_line = "export PATH=" + shlex.quote(path) + ":$PATH  # Added by RP"
+        append_line_to_files(new_line, rc_paths)
+        fansi_print('r._ensure_shell_has_path: Wrote '+repr(new_line)+" to files: "+repr(rc_paths), 'green bold')
+            
+    elif windows and currently_running_windows():
+        raise NotImplementedError
+
+
 def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, force=False):
     """ Attempts to install a program on various operating systems """
 
@@ -48013,13 +48159,14 @@ def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, force=Fa
     elif currently_running_mac()    : command = mac
     elif currently_running_windows(): command = windows
 
-    if   starts_with_any(command, 'brew ', 'yes | brew '): _ensure_brew_installed()
-    elif starts_with_any(command, 'curl ', 'yes | curl '): _ensure_curl_installed()
-    elif starts_with_any(command, 'npm ' , 'yes | npm ' ): _ensure_npm_installed()
-    elif starts_with_any(command, 'apt ' , 'apt-get '   ): command = 'sudo '+command
-    elif starts_with_any(command, 'snap ' ,'yes | snap' ): command = 'sudo '+command
+    if   starts_with_any(command, 'brew ' , 'yes | brew ' ): _ensure_brew_installed()
+    elif starts_with_any(command, 'curl ' , 'yes | curl ' ): _ensure_curl_installed()
+    elif starts_with_any(command, 'npm '  , 'yes | npm '  ): _ensure_npm_installed()
+    elif starts_with_any(command, 'apt '  , 'apt-get '    ): command = 'sudo '+command
+    elif starts_with_any(command, 'snap ' , 'yes | snap'  ): _ensure_snap_installed() ; command = 'sudo '+command
+    elif starts_with_any(command, 'cargo ', 'yes | cargo '): _ensure_cargo_installed()
     elif starts_with_any(command, 'winget '): command = command + ' -e --accept-source-agreements'
-
+ 
     assert connected_to_internet()
 
     error_code =_run_sys_command(command)
@@ -48032,10 +48179,20 @@ def _brew_install(x):
     command = 'brew install '+shlex.quote(x)
     _run_sys_command(command)
 
+def _ensure_cargo_installed():
+    _ensure_installed(
+        'cargo',
+        mac   = 'curl https://sh.rustup.rs -sSf | sh', #https://doc.rust-lang.org/cargo/getting-started/installation.html
+        linux = 'curl https://sh.rustup.rs -sSf | sh', #https://doc.rust-lang.org/cargo/getting-started/installation.html
+        windows='echo Please Visit https://doc.rust-lang.org/cargo/getting-started/installation.html', # I haven't automated it for windows yet
+    )
+    _ensure_shell_has_path(unix="~/.cargo/bin")
+
 def _ensure_brew_installed():
     assert not currently_running_windows(), 'r._ensure_brew_installed: brew isnt supported on Windows. Try WSL? See https://docs.brew.sh/Installation'
     if not system_command_exists('brew'):
-        _run_sys_command('''/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"''')
+        _run_sys_command('''sudo -v && NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"''')
+    _ensure_shell_has_path(linux="/home/linuxbrew/.linuxbrew/bin")
     assert system_command_exists('brew'), 'r._ensure_brew_installed: Failed to automatically install homebrew. Please see https://brew.sh'
 
 def _ensure_wget_installed():
@@ -48161,6 +48318,14 @@ def _ensure_npm_installed():
     )
     _ensure_node_installed() #https://github.com/anthropics/claude-code/issues/113 - taupirho's response
 
+def _ensure_zellij_installed():
+    _ensure_installed(
+        'zellij',
+        mac  ='cargo install --locked zellij',
+        linux='cargo install --locked zellij',
+        windows=None,
+    )
+
 def _ensure_nvm_installed():
     _ensure_curl_installed()
     _ensure_installed(
@@ -48187,6 +48352,15 @@ def _ensure_git_installed():
         windows='winget install --id=Git.Git',#https://winstall.app/apps/Git.Git
     )
     pip_import('git',auto_yes=True)
+
+def _ensure_btop_installed():
+    _ensure_installed(
+        'btop',
+        mac='brew install btop',
+        linux='brew install btop',
+        windows=None,
+    )
+
 
 def _install_ollama(force=False):
     _ensure_installed(
@@ -56854,7 +57028,7 @@ def _fzf_multi_grep(extensions='',print_instructions=True,text_files=None,single
 
         output=_iterfzf(text_lines_walk(),multi=True,exact=True,preview='echo {} | %s %s %i FDT '%(
             json.dumps(sys.executable),
-            json.dumps(get_module_path("rp.experimental.stdin_python_highlighter")),
+            json.dumps(get_module_path("rp.libs.stdin_python_highlighter")),
             preview_width),
         ) #
     else:
@@ -61315,7 +61489,7 @@ def monkey_patch(target, name=None):
         setattr(target, name or func.__name__, func)
     return patcher
 
-def copy_with(obj, **kwargs):
+def copy_with_attr(obj, **kwargs):
     """
     Return a shallow copy of an object with some attributes overridden.
 
@@ -61331,7 +61505,7 @@ def copy_with(obj, **kwargs):
         ...         return f"Point(x={self.x}, y={self.y})"
         ...
         >>> p1 = Point(1, 2)
-        >>> p2 = copy_with(p1, x=10, y=20)
+        >>> p2 = copy_with_attr(p1, x=10, y=20)
         >>> p1
         Point(x=1, y=2)
         >>> p2
@@ -61345,30 +61519,31 @@ def copy_with(obj, **kwargs):
     return out
 
 
-class CopyWithMixin:
-    """
-    Mixin that adds a .copy_with(**kwargs) method to objects.
-
-    Useful for immutable-style programming: instead of mutating in-place,
-    you create a modified copy.
-
-    Example:
-        >>> class Point(CopyWithMixin):
-        ...     def __init__(self, x, y):
-        ...         self.x = x
-        ...         self.y = y
-        ...     def __repr__(self):
-        ...         return f"Point(x={self.x}, y={self.y})"
-        ...
-        >>> p1 = Point(1, 2)
-        >>> p2 = p1.copy_with(x=10)
-        >>> p1
-        Point(x=1, y=2)
-        >>> p2
-        Point(x=10, y=2)
-    """
-    def copy_with(self, **kwargs):
-        return copy_with(self, **kwargs)
+#UNCOMMENT IF YOU EVER NEED IT. SO FAR, NEVER USED IT.
+# class CopyWithMixin:
+#     """
+#     Mixin that adds a .copy_with_attr(**kwargs) method to objects.
+#
+#     Useful for immutable-style programming: instead of mutating in-place,
+#     you create a modified copy.
+#
+#     Example:
+#         >>> class Point(CopyWithMixin):
+#         ...     def __init__(self, x, y):
+#         ...         self.x = x
+#         ...         self.y = y
+#         ...     def __repr__(self):
+#         ...         return f"Point(x={self.x}, y={self.y})"
+#         ...
+#         >>> p1 = Point(1, 2)
+#         >>> p2 = p1.copy_with_attr(x=10)
+#         >>> p1
+#         Point(x=1, y=2)
+#         >>> p2
+#         Point(x=10, y=2)
+#     """
+#     def copy_with_attr(self, **kwargs):
+#         return copy_with_attr(self, **kwargs)
 
 def _inline_rp_code(code):
     #/p is a big library, and some people might not like that.
@@ -61617,13 +61792,6 @@ def get_visible_gpu_ids():
 
 def get_all_gpu_ids():
     """ If you are on a device with GPU's, returns [0, 1, 2, ... (num gpus - 1) ] """
-
-    #If the CUDA_VISIBLE_DEVICES environment variable is set, respect it!
-    cuda_visible_devices = get_cuda_visible_devices()
-    if cuda_visible_devices:
-        return cuda_visible_devices
-
-    #Otherwise, return ALL gpu's
     return list(range(get_gpu_count()))
 
 
@@ -61912,7 +62080,7 @@ def print_gpu_summary(
         Optional[str]: If silent, returns the GPU summary as a string, including ANSI escape sequences for color. Else, returns None.
 
     Example:
-        >>> print_gpu_summary()
+        >>> print_gpu_summary()  # All GPUs visible, no Visible column shown
         ┏━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
         ┃ GPU ID ┃       Name       ┃      Used      ┃   Free ┃  Total ┃ Temp ┃ Processes                   ┃
         ┡━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
@@ -61921,6 +62089,16 @@ def print_gpu_summary(
         │   2    │ NVIDIA RTX A5000 │  12.1GB  50.5% │ 11.9GB │ 24.0GB │ 43°C │ ryan 11.8GB: 1794352 11.8GB │
         │   3    │ NVIDIA RTX A5000 │ 311.6MB   1.3% │ 23.7GB │ 24.0GB │ 39°C │                             │
         └────────┴──────────────────┴────────────────┴────────┴────────┴──────┴─────────────────────────────┘
+        
+        >>> # With CUDA_VISIBLE_DEVICES=0,2, Visible column appears and rows 1,3 are dimmed
+        ┏━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+        ┃ GPU ID ┃ Visible ┃       Name       ┃      Used      ┃   Free ┃  Total ┃ Temp ┃ Processes                   ┃
+        ┡━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+        │   0    │   Yes   │ NVIDIA RTX A5000 │  13.9GB  57.7% │ 10.1GB │ 24.0GB │ 35°C │ ryan 13.5GB: 1763785 13.5GB │
+        │   1    │   No    │ NVIDIA RTX A5000 │ 311.6MB   1.3% │ 23.7GB │ 24.0GB │ 43°C │                             │
+        │   2    │   Yes   │ NVIDIA RTX A5000 │  12.1GB  50.5% │ 11.9GB │ 24.0GB │ 43°C │ ryan 11.8GB: 1794352 11.8GB │
+        │   3    │   No    │ NVIDIA RTX A5000 │ 311.6MB   1.3% │ 23.7GB │ 24.0GB │ 39°C │                             │
+        └────────┴─────────┴──────────────────┴────────────────┴────────┴────────┴──────┴─────────────────────────────┘
     """
     pip_import('rich')
     from rich.console import Console
@@ -61928,9 +62106,18 @@ def print_gpu_summary(
     from rich.table import Table
     import rich
 
+    # Get GPU data - show all hardware GPUs
+    gpu_ids = get_all_gpu_ids()
+    visible_gpu_ids = get_visible_gpu_ids()
+    
+    # Determine if we need to show the Visible column
+    show_visible_column = len(visible_gpu_ids) < len(gpu_ids)
+    
     # Create a table with a pretty border
     table = Table(show_header=True, header_style="bold magenta", title_justify="center")
     table.add_column("GPU ID", style="dim", justify="center")
+    if show_visible_column:
+        table.add_column("Visible", style="dim", justify="center")
     table.add_column("Name", style="dim", justify="center")
     table.add_column("Used", style="red", justify="center")
     table.add_column("Free", style="green", justify="right")
@@ -61941,9 +62128,6 @@ def print_gpu_summary(
         table.add_column("Util", style="yellow", justify="center")
     if include_processes:
         table.add_column("Processes", style="cyan", justify="left")
-
-    # Get GPU data
-    gpu_ids = get_all_gpu_ids()
     for gpu_id in gpu_ids:
         name = get_gpu_name(gpu_id)
         used_vram = get_used_vram(gpu_id)
@@ -61985,16 +62169,32 @@ def print_gpu_summary(
         else:
             process_column_text = ""
 
-        table.add_row(
-            str(gpu_id),
-            name,
-            used_vram_text,
-            free_vram,
-            total_vram,
-            temperature_text if include_temperature else "",
-            utilization if include_utilization else "",
-            process_column_text,
-        )
+        # Determine if GPU is visible based on CUDA_VISIBLE_DEVICES
+        is_visible = gpu_id in visible_gpu_ids
+        visible_text = "[green]Yes[/]" if is_visible else "[red]No[/]"
+
+        # Apply dimming to cell content for non-visible GPUs
+        def dim_if_not_visible(text):
+            return text if is_visible else "[dim]{}[/]".format(text)
+
+        # Build row data conditionally including visible column
+        row_data = [dim_if_not_visible(str(gpu_id))]
+        if show_visible_column:
+            row_data.append(visible_text)  # Don't dim the visible column itself
+        row_data.extend([
+            dim_if_not_visible(name),
+            dim_if_not_visible(used_vram_text),
+            dim_if_not_visible(free_vram),
+            dim_if_not_visible(total_vram),
+        ])
+        if include_temperature:
+            row_data.append(dim_if_not_visible(temperature_text))
+        if include_utilization:
+            row_data.append(dim_if_not_visible(utilization))
+        if include_processes:
+            row_data.append(dim_if_not_visible(process_column_text))
+
+        table.add_row(*row_data)
     console = Console()
     with console.capture() as capture:
         console.print(table)
@@ -62778,6 +62978,7 @@ known_pypi_module_package_names={
     'zalgo_text': 'zalgo-text',
 
     'hitherdither' : "git+https://www.github.com/hbldh/hitherdither",
+    'decord' : "eva-decord" if currently_running_mac() else "decord", #https://www.piwheels.org/project/eva-decord/ - decord doesn't pip install on mac
 }
 
 
