@@ -157,7 +157,11 @@ def edit_event_buffer_in_vim(event):
         from rp import text_file_to_string,temporary_file_path,string_to_text_file
         import subprocess
 
-        path=temporary_file_path()+'.py'
+        SHELL_MODE = text.startswith('!')
+        if SHELL_MODE:
+            text=text[1:]
+
+        path=temporary_file_path()+('.bash' if SHELL_MODE else '.py')
         string_to_text_file(path,text)
 
         lineno=document.text_before_cursor.count('\n')
@@ -177,6 +181,8 @@ def edit_event_buffer_in_vim(event):
             return True
 
         text=text_file_to_string(path)
+        if SHELL_MODE:
+            text='!'+text
 
         from rp import delete_file
         delete_file(path)
@@ -2268,7 +2274,11 @@ def handle_character(buffer,char,event=None):
                 'mv' :'!mv',
                 'cp' :'!cp -r',
                 'cpr':'!cp -r',
-                'rmrf':'!rm -rf',
+                'cpal':'!cp -al',
+                'cpl':'!cp -al',
+                'cpa':'!cp -al',
+                'rcl':'!rclone copy --progress --transfers 128 --checksum --metadata ',
+                'nvm':'!source ~/.nvm/nvm.sh ; nvm',
 
                 'l':'LSS',
                 'a':'ACAT',
@@ -2277,6 +2287,7 @@ def handle_character(buffer,char,event=None):
                 #Danger!
                 'rm':'!rm',
                 'rmd':'!rmdir',
+                'rmrf':'!rm -rf',
                 # 'rmr':'!rm -rf',
                 # 'rmm':'!rm -rf',
                 
@@ -5047,12 +5058,12 @@ def load_python_bindings(python_input):
                 buffer=event.cli.current_buffer
                 original_code = buffer.document.text
                 import rp.rp_ptpython.r_iterm_comm as ric
-                # code = '__import__("rp").r_iterm_comm.aicode_result=__import__("rp").r._run_claude_code('+repr(original_code)+') # Using AI to edit your code'
+                # code = '__import__("rp").r_iterm_comm.aicode_result=__import__("rp").r._run_ai_coder_cli('+repr(original_code)+') # Using AI to edit your code'
                 # run_arbitrary_code_without_destroying_buffer(code, event, put_in_history=False)
                 import rp
                 rp.r._disable_terminal_mouse_reporting()
                 rp.r._terminal_move_cursor_to_bottom_and_new_line()
-                aicode_result=rp.r._run_claude_code(original_code)
+                aicode_result=rp.r._run_ai_coder_cli(original_code)
                 new_code=aicode_result.code
                 old_cursor_pos = buffer.document.cursor_position
                 new_cursor_pos=calculate_new_cursor_pos(old_cursor_pos, original_code, new_code)

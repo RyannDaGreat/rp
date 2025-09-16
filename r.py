@@ -578,6 +578,36 @@ def list_flatten(list_2d):
 
     return list(chain.from_iterable(list_2d))
 
+def list_diff(array, *, lazy=False, sub=operator.sub, show_progress=False):
+    """ 
+    Like np.diff but on general python iterables 
+    
+    EXAMPLES:
+        >>> list_diff([1,2,3,4])                                             # --> [1, 1, 1]
+        >>> list_diff(                    [x**2 for x in [0,1,2,3,4,5] ])    # --> [1, 3, 5, 7, 9]
+        >>> list_diff(list_diff(          [x**2 for x in [0,1,2,3,4,5] ]))   # --> [2, 2, 2, 2]
+        >>> list_diff(list_diff(list_diff([x**2 for x in [0,1,2,3,4,5] ])))  # --> [0, 0, 0]
+
+    """
+    def helper():
+        items = array
+
+        items = iter(items)
+        prev_item = next(items)
+
+        for item in items:
+            yield sub(item, prev_item)
+            prev_item = item
+
+    if show_progress:
+        array = eta(array, "rp.list_diff")
+    output = helper()
+    if not lazy:
+        output = list(output)
+
+    return output
+
+
 list_pop=list_flatten#Just because I'm used to list_pop, even though it doesn't make much sense lol. Thought of 'popping' the inner brackets of [[a,b],[c,d]] to [a,b,c,d] as if the inner brackets looked like bubbles to be popped. Has no relationship to popping an item off a stack or queue lol
 # endregion
 # region ［summation，product］
@@ -15569,7 +15599,7 @@ load_text_file = text_file_to_string
 
 def load_file_lines(file_path, use_cache=False):
     """ Returns all the lines in a file as a list of strings """
-    return line_split(text_file_to_string(file_path, use_cache))
+    return line_split(text_file_to_string(file_path, use_cache=use_cache))
 
 def save_file_lines(lines, file_path):
     """
@@ -21135,7 +21165,7 @@ def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,lin
         
         if line_profile:
             # Cleanup: handle any remaining function calls and final line timing
-            current_time = _time()
+            current_time = time.perf_counter()
             
             # Complete any remaining function calls on the stack
             while call_stack:
@@ -21158,6 +21188,7 @@ def _pterm_exeval(code,*dicts,exec=exec,eval=eval,tictoc=False,profile=False,lin
                 fansi_print("Preparing the LINEPROF display (the line profiler, toggle with LINEPROF)...",'blue','underlined')
                 
                 if line_times:
+                    print(line_times)
                     _rp_show_custom_line_profile(line_times, line_hits, _start_time, _end_time)
                 else:
                     fansi_print("No line profiling data collected",'yellow','bold')
@@ -21187,12 +21218,14 @@ def _rp_show_custom_line_profile(line_times, line_hits, start_time, end_time):
     import time
     import linecache
     
-    # Group by filename
+    # Group by filename - include ALL lines that have either hits or timing data
     files = {}
-    for (filename, lineno), time_spent in line_times.items():
+    all_lines = set(line_times.keys()) | set(line_hits.keys())
+    for (filename, lineno) in all_lines:
         if filename not in files:
             files[filename] = []
         hits = line_hits.get((filename, lineno), 0)
+        time_spent = line_times.get((filename, lineno), 0.0)
         files[filename].append((lineno, hits, time_spent))
     
     # Use wall clock time - handle case where end_time is None (e.g., Ctrl+C)
@@ -21227,7 +21260,11 @@ def _rp_show_custom_line_profile(line_times, line_hits, start_time, end_time):
         hits_width = max(9, len(str(max_hits)))
         
         # Header with visual bar column
-        header = "{'Line #':<{line_width<<<RIGHTBRACE>>> {'Hits':<{hits_width<<<RIGHTBRACE>>> {'Time':<12} {'Per Hit':<8} {'% Time':<8} {'Bar':<20}  Line Contents"
+        header = "{:<{lw}} {:<{hw}} {:<12} {:<8} {:<8} {:<20}  {}".format(
+            "Line #", "Hits", "Time", "Per Hit", "% Time", "Bar", "Line Contents",
+            lw=line_width, hw=hits_width
+        )
+
         print(header)
         print('=' * len(header))
         
@@ -21307,7 +21344,11 @@ def _rp_show_custom_line_profile(line_times, line_hits, start_time, end_time):
                 final_code = ""
             
             # Format the row with visual bar
-            print("{lineno:<{line_width<<<RIGHTBRACE>>> {hits:<{hits_width<<<RIGHTBRACE>>> {time_spent:<12.6f} {per_hit:<8.6f} {percent:<8.1f} {time_bar:<20}  {final_code}")
+            print("{:<{lw}} {:<{hw}} {:<12.6f} {:<8.6f} {:<8.1f} {:<20}  {}".format(
+                lineno, hits, time_spent, per_hit, percent, time_bar, final_code,
+                lw=line_width, hw=hits_width
+            ))
+
         
         print()  # Empty line between files
 
@@ -24858,6 +24899,9 @@ def pseudo_terminal(
         RVN  RYAN VIMRC NO
         RRNG  RYAN RANGERRC
 
+        BASHRC VIM ~/.bashrc
+        ZSHRC VIM ~/.zshrc
+
         strip ans.strip()
         sp    ans.strip()
 
@@ -25139,7 +25183,9 @@ def pseudo_terminal(
         NGP $print_notebook_gpu_summary()
         
         LEA  [eval(str(x)) for x in ans]
+        ELA  [eval(str(x)) for x in ans]
         EVLA [eval(str(x)) for x in ans]
+        ELJA [eval(str(x)) for x in ans.splitlines()]
 
         PAF ans=$string_from_clipboard(); ans=ans.splitlines() if '\\n' in ans else ans[1:-1].split("' '") if ans.startswith("'") and ans.endswith("'") else ans #Paste Files (for MacOS when you copy multiple files)
 
@@ -26191,7 +26237,14 @@ def pseudo_terminal(
                     elif user_message.endswith('?i') and not '\n' in user_message:
                         user_message=user_message[:-2]
                         fansi_print("?i --> PyPI Package Inspection:","blue",'bold')
-                        value=eval(user_message,scope())
+                        try:
+                            value=eval(user_message,scope())
+                        except Exception as e:
+                            try:
+                                value = get_module_path_from_name(user_message)
+                            except Exception:
+                                raise e
+
                         import rp.libs.pypi_inspection as pi
                         pi.display_module_pypi_info(value)
 
@@ -48093,6 +48146,8 @@ def _run_sys_command(*command, title='SYS COMMAND'):
     print(message)
     return os.system(command)
 
+_all_shell_rc_paths = ["~/.zshrc", "~/.zprofile", "~/.bashrc", "~/.bash_profile", "~/.profile"]
+
 def _ensure_shell_has_path(*, mac=None, linux=None, windows=None, unix=None):
     """
     Add a directory to the shell PATH for the current process and future logins.
@@ -48130,17 +48185,15 @@ def _ensure_shell_has_path(*, mac=None, linux=None, windows=None, unix=None):
         os.environ["PATH"] = path + ":" + os.environ.get("PATH", "")
 
         # For new shell sessions
-        rc_paths = ["~/.zshrc", "~/.zprofile", "~/.bashrc", "~/.bash_profile", "~/.profile"]
         new_line = "export PATH=" + shlex.quote(path) + ":$PATH  # Added by RP"
-        append_line_to_files(new_line, rc_paths)
+        append_line_to_files(new_line, _all_shell_rc_paths)
         fansi_print('r._ensure_shell_has_path: Wrote '+repr(new_line)+" to files: "+repr(rc_paths), 'green bold')
             
     elif windows and currently_running_windows():
         raise NotImplementedError
 
-
-def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, force=False):
-    """ Attempts to install a program on various operating systems """
+def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, force=False) -> bool:
+    """ Attempts to install a program on various operating systems. Returns True if we install something. """
 
     assert isinstance(name,    str)
     assert isinstance(linux,   str) or linux   is None
@@ -48149,7 +48202,7 @@ def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, force=Fa
 
     if not force and system_command_exists(name):
         #Don't reinstall what we've already installed
-        return
+        return False
 
     if   currently_running_linux()   and linux   is None: raise RuntimeError('r._ensure_installed('+repr(name)+'): Linux not supported!')
     elif currently_running_mac()     and mac     is None: raise RuntimeError('r._ensure_installed('+repr(name)+'): MacOS not supported!')
@@ -48162,6 +48215,8 @@ def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, force=Fa
     if   starts_with_any(command, 'brew ' , 'yes | brew ' ): _ensure_brew_installed()
     elif starts_with_any(command, 'curl ' , 'yes | curl ' ): _ensure_curl_installed()
     elif starts_with_any(command, 'npm '  , 'yes | npm '  ): _ensure_npm_installed()
+    elif starts_with_any(command, 'nvm '  , 'yes | nvm '  ): _ensure_nvm_installed() ; command = _nvm_command_string(command, remove_prefix=True)
+    elif starts_with_any(command, 'go '   , 'yes | go '   ): _ensure_go_installed()
     elif starts_with_any(command, 'apt '  , 'apt-get '    ): command = 'sudo '+command
     elif starts_with_any(command, 'snap ' , 'yes | snap'  ): _ensure_snap_installed() ; command = 'sudo '+command
     elif starts_with_any(command, 'cargo ', 'yes | cargo '): _ensure_cargo_installed()
@@ -48174,16 +48229,26 @@ def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, force=Fa
     if error_code:
         raise RuntimeError('r._ensure_installed('+name+'): Failed to run system command with error code %i: %s' % (error_code, command))
 
+    return True #We installed something
+
 def _brew_install(x):
     _ensure_brew_installed()
     command = 'brew install '+shlex.quote(x)
     _run_sys_command(command)
 
+def _ensure_go_installed():
+    _ensure_installed(
+        'go',
+        mac   = 'brew install golang-go',
+        linux = 'apt install golang-go --yes',
+        windows='winget install --id=GoLang.Go', # https://winstall.app/apps/GoLang.Go
+    )
+
 def _ensure_cargo_installed():
     _ensure_installed(
         'cargo',
-        mac   = 'curl https://sh.rustup.rs -sSf | sh', #https://doc.rust-lang.org/cargo/getting-started/installation.html
-        linux = 'curl https://sh.rustup.rs -sSf | sh', #https://doc.rust-lang.org/cargo/getting-started/installation.html
+        mac   = 'curl https://sh.rustup.rs -sSf | sh -s -- -y', #https://doc.rust-lang.org/cargo/getting-started/installation.html
+        linux = 'curl https://sh.rustup.rs -sSf | sh -s -- -y', #https://doc.rust-lang.org/cargo/getting-started/installation.html
         windows='echo Please Visit https://doc.rust-lang.org/cargo/getting-started/installation.html', # I haven't automated it for windows yet
     )
     _ensure_shell_has_path(unix="~/.cargo/bin")
@@ -48233,6 +48298,7 @@ def _ensure_ffmpeg_installed():
         else:                             assert False, "Please install ffmpeg!"
 
 def _ensure_claudecode_installed():
+    _ensure_node_installed(min_version=18)
     _ensure_installed(
         'claude',
         # https://github.com/anthropics/claude-code
@@ -48242,12 +48308,22 @@ def _ensure_claudecode_installed():
     )
 
 def _ensure_gemini_cli_installed():
+    _ensure_node_installed(min_version=18)
     _ensure_installed(
         'gemini',
         # https://github.com/google-gemini/gemini-cli
         mac    ='npm install -g @google/gemini-cli',
         linux  ='npm install -g @google/gemini-cli',
         windows='npm install -g @google/gemini-cli',
+    )
+
+def _ensure_opencode_installed():
+    _ensure_installed(
+        'opencode',
+        # https://github.com/sst/opencode
+        mac    ='brew install sst/tap/opencode',
+        linux  ='brew install sst/tap/opencode',
+        windows=None,
     )
 
 def _ensure_snap_installed():
@@ -48327,15 +48403,77 @@ def _ensure_zellij_installed():
     )
 
 def _ensure_nvm_installed():
-    _ensure_curl_installed()
-    _ensure_installed(
-        'nvm',
-        mac  ='curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash',
-        linux='curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash',
-        windows='winget install --id CoreyButler.NVMforWindows', #https://winget.run/pkg/CoreyButler/NVMforWindows
+    """Install nvm if missing and make sure it's sourced in future shells."""
+
+    if file_exists(get_absolute_path('~/.nvm/nvm.sh')):
+        #It's likely not in the path because of the way nvm works
+        return
+
+    installed_something = _ensure_installed(
+        "nvm",
+        mac="curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash",
+        linux="curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash",
+        windows="winget install --id CoreyButler.NVMforWindows",
     )
 
-def _ensure_node_installed():
+    if installed_something and currently_running_unix():
+        exports = r'export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
+        append_line_to_files(exports, _all_shell_rc_paths)
+
+
+def _get_node_version():
+    """
+    Return (major, minor, patch) or raise if node is missing/broken.
+
+    EXAMPLE:
+        >>> _get_node_version()
+        ans = (24, 1, 0)
+        >>> !node -v
+        v24.1.0
+
+    """
+    import subprocess, re
+
+    try:
+        res = subprocess.run(["node", "-v"], capture_output=True, text=True, check=True)
+        version_string = (res.stdout or res.stderr).strip()
+    except Exception as e:
+        raise RuntimeError("r._get_node_version: Failed to run `node -v`: %s" % str(e))
+
+    if not version_string.startswith("v"):
+        raise RuntimeError(
+            "r._get_node_version: Unexpected output from `node -v`: %r" % version_string
+        )
+
+    m = re.match(r"v(\d+)\.(\d+)\.(\d+)", version_string)
+    if not m:
+        raise RuntimeError(
+            "r._get_node_version: Could not parse version string %r" % version_string
+        )
+
+    A, B, C = map(int, m.groups())
+    return A, B, C
+
+def _nvm_command_string(nvm_args, *, remove_prefix: bool = False) -> str:
+    """Generate NVM command with proper sourcing."""
+    if not isinstance(nvm_args, str):
+        # Python 3.5 compatible version of shlex.join() (which was added in 3.8)
+        nvm_args = ' '.join(shlex.quote(arg) for arg in nvm_args)
+    
+    if remove_prefix:
+        if nvm_args.startswith('yes | nvm '):
+            nvm_args = nvm_args[10:]
+        elif nvm_args.startswith('nvm '):
+            nvm_args = nvm_args[4:]
+
+    return 'bash -c "source ~/.nvm/nvm.sh && nvm ' + shlex.quote(nvm_args) + '"'
+
+def _nvm_install_latest_node_version():
+    _ensure_nvm_installed()
+    return _run_sys_command(_nvm_command_string("install node"))
+
+
+def _ensure_node_installed(*,min_version:int=None):
     _ensure_nvm_installed()
     _ensure_installed(
         'node',
@@ -48343,6 +48481,18 @@ def _ensure_node_installed():
         linux='nvm install --lts',
         windows='nvm install --lts',#https://winget.run/pkg/OpenJS/NodeJS
     )
+
+    A,B,C=_get_node_version()
+
+    if min_version is not None and A < min_version:
+        fansi_print(
+            "r._ensure_node_installed(%i): node is out of date - we have version %i.%i.%i but need at least version %i"
+            % (min_version, A, B, C, min_version),
+            "green bold",
+        )
+        # _nvm_install_specific_node_version(min_version)
+        _nvm_install_latest_node_version()
+        rp.fansi_print("r._ensure_node_installed: Updated node version! PLEASE NOTE: You may have to restart rp from a new shell to install things with it", 'yellow yellow italic bold on dark red')
 
 def _ensure_git_installed():
     _ensure_installed(
@@ -48361,6 +48511,14 @@ def _ensure_btop_installed():
         windows=None,
     )
 
+def _ensure_shfmt_installed():
+    _ensure_installed(
+        'shfmt',
+        mac   = 'brew install shfmt',
+        linux = 'apt install shfmt',
+        windows='winget install --id=mvdan.shfmt',
+    )
+ 
 
 def _install_ollama(force=False):
     _ensure_installed(
@@ -48403,7 +48561,6 @@ def _launch_vscode_web_server(port=None):
         port = get_next_free_port(51235)
     _run_sys_command('code serve-web --host 0.0.0.0 --without-connection-token --port '+str(port)+' --accept-server-license-terms --disable-telemetry')
 
- 
 #THIS FUNCTION INSTALLS IT FINE! BUT I DIDN'T FINISH MAKING IT USEFUL YET. UNCOMMENT ONCE I HAVE WRAPPERS FOR IT.
 # def _install_grounded_sam_2(grounded_sam_dir: str = None, force=False):
 #     """
@@ -48611,16 +48768,27 @@ def _terminal_move_cursor_to_bottom_and_new_line():
     _terminal_move_cursor_to_bottom_left()
     print()
 
-def _run_ai_cli_coder(code, command='claude'):
+
+_default_ai_coder_cli_command = "claude"
+def _run_ai_coder_cli(code, command=None):
     """
     Given code as either a path or a string, edits that code using a cli-based coder (such as gemini-cli or claudecode).
     
     If the given code is a file path, makes a temporary directory and works there,
     creating an editme.py file. If the code is a string, it creates a temporary
     workspace with the code in editme.py. Auto-commits changes via git thread.
+
+    If you want to switch the default command, please set something like this:
+        rp.r._default_ai_coder_cli_command = "claude"
+        rp.r._default_ai_coder_cli_command = "claude --dangerously-skip-permissions"
+        rp.r._default_ai_coder_cli_command = "claude --dangerously-skip-permissions --append-system-prompt 'Check if editme.py exists. If it does, this is the file the user is implicitly referencing.'"
+        rp.r._default_ai_coder_cli_command = "codex"
+        rp.r._default_ai_coder_cli_command = "cursor-agent"
+        rp.r._default_ai_coder_cli_command = "gemini"
     
     Args:
         code: A file path, directory path, or string containing code to edit
+        command: The command to launch the AI coder
         
     Returns:
         EasyDict with keys:
@@ -48628,6 +48796,9 @@ def _run_ai_cli_coder(code, command='claude'):
             - workdir: Path to the temporary working directory
     """
     import subprocess
+
+    if command is None:
+        command = _default_ai_coder_cli_command
     
     _ensure_git_installed()
 
@@ -48685,7 +48856,7 @@ def _run_ai_cli_coder(code, command='claude'):
             
         try:
             #Make sure it doesnt block the above thread!
-            subprocess.run("claude", shell=True)
+            subprocess.run(command, shell=True)
         finally:
             done=True
 
@@ -48702,14 +48873,14 @@ def _run_ai_cli_coder(code, command='claude'):
             return gather_vars("workdir")
 
 def _run_claude_code(code):
-    """ See rp.r._run_ai_cli_coder.__doc__ """
+    """ See rp.r._run_ai_coder_cli.__doc__ """
     _ensure_claudecode_installed()
-    return _run_ai_cli_coder(code,'claude')
+    return _run_ai_coder_cli(code,'claude')
 
 def _run_gemini_cli(code):
-    """ See rp.r._run_ai_cli_coder.__doc__ """
+    """ See rp.r._run_ai_coder_cli.__doc__ """
     _ensure_gemini_cli_installed()
-    return _run_ai_cli_coder(code,'gemini')
+    return _run_ai_coder_cli(code,'gemini')
 
 
 def _configure_filebrowser():
@@ -49200,10 +49371,9 @@ def local_paste():
     return bytes_to_object(file.read())
     
 def _run_tmux_command(command):
-    """Utility function to run a tmux command.
+    """
+    Utility function to run a tmux command.
 
-    Enhanced Documentation:
-    ========================
     Private helper function that executes tmux commands and returns their output.
     Used internally by other tmux-related functions for consistent command execution.
 
@@ -49218,44 +49388,51 @@ def _run_tmux_command(command):
         >>> _run_tmux_command(['tmux', 'list-sessions'])  # doctest: +SKIP
         >>> _run_tmux_command('tmux -V')  # doctest: +SKIP
 
-    Related Functions:
-        - tmux_get_current_session_name(): Get current tmux session
-        - tmux_get_current_window_name(): Get current tmux window
-        - shell_command(): Higher-level shell command execution
-
     Usage Patterns:
         - Internal helper for tmux operations
         - Consistent tmux command execution with error handling
         - Returns clean output (stripped whitespace)
 
-    Notes:
-        - Private function (starts with _), not exported by default
-        - Uses subprocess.run with capture_output=True
-        - Returns stripped stdout for consistent formatting
-
     Tags: tmux, subprocess, private, helper, terminal
     """
     import subprocess
-    result = subprocess.run(command, text=True, capture_output=True)
+
+    if isinstance(command, str):
+        command = shlex.split(command)
+
+    result = subprocess.run(
+        command,
+        text=True,
+        capture_output=True,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            "rp.r._run_tmux_command: tmux command failed: "
+            + result.stderr.strip()
+            + result.stdout.strip()
+        )
+
     return result.stdout.strip()
 
-def tmux_get_current_pane_index() -> int:
+# NOT WELL DEFINED. By pid or by active?
+def tmux_get_active_pane_index() -> int:
     """Returns the index of the current tmux pane."""
     return int(_run_tmux_command("tmux display -p -t '{down-of}' '#{pane_index}'".split()))
 
-def tmux_get_current_window_index() -> int:
+def tmux_get_active_window_index() -> int:
     """Returns the index of the current tmux window."""
     return int(_run_tmux_command(["tmux", "display-message", "-p", "#{window_index}"]))
 
-def tmux_get_current_window_name() -> str:
+def tmux_get_active_window_name() -> str:
     """Returns the name of the current tmux window."""
     return _run_tmux_command(["tmux", "display-message", "-p", "#{window_name}"])
 
-def tmux_get_current_session_index() -> int:
+def tmux_get_active_session_index() -> int:
     """Returns the index of the current tmux session."""
     return int(_run_tmux_command(["tmux", "display-message", "-p", "#{session_index}"]))
 
-def tmux_get_current_session_name() -> str:
+def tmux_get_active_session_name() -> str:
     """
     Returns:
         str: The name of the current tmux session.
@@ -49265,11 +49442,78 @@ def tmux_get_current_session_name() -> str:
 
     Examples:
         # Within a tmux session
-        >>> tmux_get_current_session_name()
+        >>> tmux_get_active_session_name()
         'mysession'
     """
-    assert running_in_tmux(), 'rp.tmux_get_current_session_name: This function must be called while running in tmux'
+    assert running_in_tmux(), 'rp.tmux_get_active_session_name: This function must be called while running in tmux'
     return _run_tmux_command('tmux display-message -p #{session_name}'.split())
+
+
+
+def get_process_tty(pid: int = None) -> str:
+    """
+    Return the controlling TTY for a given PID as a full device path
+    (e.g. '/dev/pts/3' or '/dev/ttys002').
+
+    Args:
+        pid (int | None): Process ID. If None, uses get_process_id().
+
+    Returns:
+        str: Full TTY path.
+
+    Raises:
+        ValueError: If the process has no controlling TTY.
+        subprocess.CalledProcessError: If ps command fails.
+    """
+    import subprocess
+    if pid is None:
+        pid = get_process_id()
+
+    tty = subprocess.check_output(
+        ["ps", "-o", "tty=", "-p", str(pid)], text=True
+    ).strip()
+
+    if not tty or tty == "?":
+        raise ValueError("PID %s has no controlling TTY" % pid)
+
+    if not tty.startswith("/"):
+        tty = "/dev/" + tty
+    return tty
+
+
+def tmux_get_process_pane_index(pid: int= None) -> int:
+    """
+    Return the tmux pane index (#{pane_index}) for the given PID.
+
+    Args:
+        pid (int | None): Target process ID. If None, uses get_process_id().
+
+    Returns:
+        int: The tmux pane index.
+
+    Raises:
+        ValueError: If no matching tmux pane is found.
+        subprocess.CalledProcessError: If tmux command fails.
+    """
+    import subprocess
+    if pid is None:
+        pid = get_process_id()
+
+    tty = get_process_tty(pid)
+
+    panes = subprocess.check_output(
+        ["tmux", "list-panes", "-a", "-F", "#{pane_tty} #{pane_index}"],
+        text=True
+    )
+
+    for line in panes.splitlines():
+        pane_tty, pane_index = line.split()
+        if pane_tty == tty:
+            return int(pane_index)
+
+    raise ValueError("No tmux pane index found for TTY %s (PID %s)" % (tty, pid))
+
+
 
 def _get_all_tmux_windows():
     """Returns a list of all window indexes in the current tmux session."""
@@ -49278,7 +49522,7 @@ def _get_all_tmux_windows():
 
 def _tmux_close_windows(filter_condition):
     """Closes tmux windows based on a filtering condition function, private to this module."""
-    current_window = tmux_get_current_window_index()
+    current_window = tmux_get_active_window_index()
     all_windows = _get_all_tmux_windows()
     windows_to_close = [w for w in all_windows if filter_condition(w, current_window)]
 
@@ -49300,7 +49544,7 @@ def tmux_close_other_windows():
 
 def tmux_close_other_sessions():
     """Closes all tmux sessions except the current one."""
-    current_session = tmux_get_current_session_name()
+    current_session = tmux_get_active_session_name()
     all_sessions = tmux_get_all_session_names()
     sessions_to_close = [s for s in all_sessions if s != current_session]
 
@@ -49312,16 +49556,20 @@ tmux_kill_other_sessions = tmux_close_other_sessions
 
 def tmux_detach_other_clients():
     """Detaches all other clients from the current tmux session."""
-    current_session = tmux_get_current_session_name()
+    current_session = tmux_get_active_session_name()
     all_clients = _get_all_tmux_clients(current_session)
-    current_client = _get_current_tmux_client()
+    current_client = _get_active_tmux_client_tty()
     clients_to_detach = [c for c in all_clients if c != current_client]
 
     # Detach each client
     for client in clients_to_detach:
         _run_tmux_command(['tmux', 'detach-client', '-t', client])
 
-def _get_current_tmux_client():
+def tmux_detach_all_clients():
+    """Detaches all other clients from the current tmux session."""
+    os.system('tmux list-sessions -F "#{session_name}" | xargs -I % tmux detach -s %')
+
+def _get_active_tmux_client_tty():
     """Returns the ID of the current tmux client."""
     return _run_tmux_command(['tmux', 'display-message', '-p', '#{client_tty}'])
 
@@ -49357,7 +49605,7 @@ def tmux_get_unique_session_name(name=""):
     
     return candidate_name
 
-def tmux_get_current_session_name():
+def tmux_get_active_session_name():
     """
     Returns:
         str: The name of the current tmux session.
@@ -49367,10 +49615,10 @@ def tmux_get_current_session_name():
 
     Examples:
         # Within a tmux session
-        >>> tmux_get_current_session_name()
+        >>> tmux_get_active_session_name()
         'mysession'
     """
-    assert running_in_tmux(), 'rp.tmux_get_current_session_name: This function must be called while running in tmux'
+    assert running_in_tmux(), 'rp.tmux_get_active_session_name: This function must be called while running in tmux'
     return _run_tmux_command('tmux display-message -p #{session_name}'.split())
 
 def tmux_session_exists(session_name):
@@ -49483,26 +49731,35 @@ def tmux_type_in_all_panes(keystrokes: str, *, session: str = None, window: str 
         subprocess.run(command, check=True)
 
 
-def tmux_get_scrollback() -> str:
+def tmux_get_scrollback(with_ansi=True) -> str:
     """
     Gets the scrollback buffer of the current tmux pane.
-    
+
     Returns:
         str: The scrollback buffer content.
     """
     import subprocess
+
     try:
         # Capture the scrollback buffer using tmux capture-pane and save to stdout
         result = subprocess.run(
-            ["tmux", "capture-pane", "-p", "-S", "-"],
+            [
+                "tmux",
+                "capture-pane",
+                *["-e"] * bool(with_ansi),
+                "-p",
+                "-S",
+                "-",
+            ],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
         return result.stdout
     except subprocess.CalledProcessError as e:
         # Handle errors (e.g., not in a tmux session)
         raise RuntimeError("Failed to get tmux scrollback: " + str(e))
+
 
 #Keeping this function private until it works perfectly!
 def _tmux_reset_all_panes(*, session: str = None, window: str = None):
@@ -59355,6 +59612,12 @@ def autoformat_python_via_black_macchiato(python_code_snippet: str, max_line_len
             
             return output_file.getvalue()
 
+def autoformat_bash_via_beautysh(code):
+    """ Uses https://github.com/lovesegfault/beautysh to autoformat bash code """
+    pip_import('beautysh')
+    import beautysh
+    output,_=beautysh.Beautify().beautify_string(code)
+    return output
 
 def autoformat_html_via_bs4(code: str) -> str:
     """Given a string of HTML, autoformats it"""
@@ -59500,9 +59763,9 @@ def as_pil_image(image, copy=True):
 
     return fromarray(image)
 
-def as_pil_images(images):
+def as_pil_images(images, *, copy=True):
     """ Will convert an array of images to PIL images if it isn't already - supports BCHW torch tensors, PIL images, list of numpy images, etc """
-    return [as_pil_image(x) for x in images]
+    return [as_pil_image(x, copy=copy) for x in images]
 
 def as_numpy_image(image,*,copy=True):
     """ Will convert an image to HWC np.ndarray form if it isn't already - supports CHW torch tensors, PIL images etc 
@@ -62116,8 +62379,7 @@ def print_gpu_summary(
     # Create a table with a pretty border
     table = Table(show_header=True, header_style="bold magenta", title_justify="center")
     table.add_column("GPU ID", style="dim", justify="center")
-    if show_visible_column:
-        table.add_column("Visible", style="dim", justify="center")
+    if show_visible_column: table.add_column("Visible", justify="center")
     table.add_column("Name", style="dim", justify="center")
     table.add_column("Used", style="red", justify="center")
     table.add_column("Free", style="green", justify="right")
@@ -62128,6 +62390,9 @@ def print_gpu_summary(
         table.add_column("Util", style="yellow", justify="center")
     if include_processes:
         table.add_column("Processes", style="cyan", justify="left")
+
+    # Get GPU data
+    gpu_ids = get_all_gpu_ids()
     for gpu_id in gpu_ids:
         name = get_gpu_name(gpu_id)
         used_vram = get_used_vram(gpu_id)
@@ -62171,30 +62436,20 @@ def print_gpu_summary(
 
         # Determine if GPU is visible based on CUDA_VISIBLE_DEVICES
         is_visible = gpu_id in visible_gpu_ids
-        visible_text = "[green]Yes[/]" if is_visible else "[red]No[/]"
+        visible_text = "[green]Yes[/]" if is_visible else "[red][dim]No[/][/]"
 
-        # Apply dimming to cell content for non-visible GPUs
-        def dim_if_not_visible(text):
-            return text if is_visible else "[dim]{}[/]".format(text)
+        table.add_row(
+            str(gpu_id),
+            *[visible_text] * show_visible_column,
+            name,
+            used_vram_text,
+            free_vram,
+            total_vram,
+            temperature_text if include_temperature else "",
+            utilization if include_utilization else "",
+            process_column_text,
+        )
 
-        # Build row data conditionally including visible column
-        row_data = [dim_if_not_visible(str(gpu_id))]
-        if show_visible_column:
-            row_data.append(visible_text)  # Don't dim the visible column itself
-        row_data.extend([
-            dim_if_not_visible(name),
-            dim_if_not_visible(used_vram_text),
-            dim_if_not_visible(free_vram),
-            dim_if_not_visible(total_vram),
-        ])
-        if include_temperature:
-            row_data.append(dim_if_not_visible(temperature_text))
-        if include_utilization:
-            row_data.append(dim_if_not_visible(utilization))
-        if include_processes:
-            row_data.append(dim_if_not_visible(process_column_text))
-
-        table.add_row(*row_data)
     console = Console()
     with console.capture() as capture:
         console.print(table)
@@ -63010,7 +63265,7 @@ class _rp_persistent_set:
 
 
 _pip_import_blacklist=_rp_persistent_set()
-
+_pip_import_lock = threading.Lock()
 _pip_import_autoyes=False #This will always be a private variable, but it might be exposed via a function
 def pip_import(module_name,package_name=None,*,auto_yes=False):
     """
@@ -63086,24 +63341,39 @@ def pip_import(module_name,package_name=None,*,auto_yes=False):
             print('TODO: This message tells you how to remove items from the blacklist')
 
     import importlib
+
     try:
+        #No need for action
         return importlib.import_module(module_name)
+
     except ImportError:
         if module_exists(module_name) or module_name in _pip_import_blacklist:
-            raise #We're getting an import error for some reason other than not having installed the module
+            raise  # We're getting an import error for some reason other than not having installed the module
+
         if connected_to_internet():
-            if auto_yes or rp.r._pip_import_autoyes or running_in_google_colab() or input_yes_no("Failed to import module "+repr(module_name)+'. You might be able to get this module by installing package '+repr(package_name)+' with pip. Would you like to try that?'):
-                print("Attempting to install",package_name,'with pip...')
-                pip_install(package_name)
-                fansi_print("pip_import: successfully installed package "+repr(package_name)+"; attempting to import it...",'green',new_line=False)
-                assert module_exists(module_name),'pip_import: error: Internal assertion failed (rp thought we successfully installed your package, but perhaps it didnt actually work, or maybe this package isn\'t compatiable with this version of python. Right now I dont know how to detect this).'# pip_import needs to be fixed if you see this message.'
-                out=pip_import(module_name,package_name)#This shouldn't recurse more than once
-                fansi_print("success!",'green')
-                return out
-            else:
-                print("...very well then. Throwing an import error...")
-                offer_to_blacklist()
-                raise
+            with _pip_import_lock:
+
+                # Double-check: another thread might have installed it while we waited
+                try:
+                    # If we started 32 threads and each one had a pip_import, we don't want each thread to try installing 
+                    return importlib.import_module(module_name)
+                except ImportError:
+                    pass  # Still not available, proceed with installation
+                
+                if auto_yes or rp.r._pip_import_autoyes or running_in_google_colab() or input_yes_no("Failed to import module "+repr(module_name)+'. You might be able to get this module by installing package '+repr(package_name)+' with pip. Would you like to try that?'):
+                    print("Attempting to install",package_name,'with pip...')
+                    pip_install(package_name)
+                    fansi_print("pip_import: successfully installed package "+repr(package_name)+"; attempting to import it...",'green',new_line=False)
+                    assert module_exists(module_name),'pip_import: error: Internal assertion failed (rp thought we successfully installed your package, but perhaps it didnt actually work, or maybe this package isn\'t compatiable with this version of python. Right now I dont know how to detect this).'# pip_import needs to be fixed if you see this message.'
+                    out=pip_import(module_name,package_name)#This shouldn't recurse more than once
+                    fansi_print("success!",'green')
+                    return out
+
+                else:
+                    print("...very well then. Throwing an import error...")
+                    offer_to_blacklist()
+                    raise
+
         else:
             #We would fail to install the package becuase we have no internet
             fansi_print("pip_import: normally we would try to install your package via pip, but you're not connected to the internet. Failed to pip_install("+repr(package_name)+')')
