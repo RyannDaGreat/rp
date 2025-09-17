@@ -21791,6 +21791,7 @@ def _python_input(scope,header='',enable_ptpython=True,iPython=False):
                 except:
                     print_stack_trace(E)
                 fansi_print("The prompt_toolkit version of pseudo_terminal crashed; reverting to the command-line version...",'cyan','bold')
+                fansi_print("Type 'PT ON' to restore the enhanced TUI interface.",'yellow','bold')
             else:
                 if running_in_google_colab():
                     reason="you're running in Google Colab, and not in a terminal."
@@ -21801,6 +21802,8 @@ def _python_input(scope,header='',enable_ptpython=True,iPython=False):
                 fansi_print("Defaulting to the command-line (aka PT OFF) version because "+reason,'cyan','bold')
 
             _printed_a_big_annoying_pseudo_terminal_error=True
+            # Reset the event loop singleton to allow recovery via PT ON
+            default_python_input_eventloop = None
 
         return input(header)
 
@@ -22800,8 +22803,10 @@ def _cpah(paths,method=None):
         paths=line_split(paths)
     if isinstance(paths,str):
         paths=[paths]
-    for path in paths:
-        method(path,'.')
+    output = [method(path,'.') for path in paths]
+    if len(output)==1:
+        return get_only(output)
+    return output
 
 def _get_env_info():
     """
@@ -25132,6 +25137,8 @@ def pseudo_terminal(
 
         CCA  $r._run_claude_code(ans).code
         CCH  $r._run_claude_code('.')
+        CCHD $r._run_claude_code('.',fullperm=True)
+        CHD  $r._run_claude_code('.',fullperm=True)
         GEM  $r._run_gemini_cli('.')
         GEMA $r._run_gemini_cli(ans).code
 
@@ -25332,6 +25339,10 @@ def pseudo_terminal(
                             fansi_print("PWD: "+_fansi_highlight_path(get_current_directory()),"blue",'bold')
 
                         user_message=get_user_input(lambda:scope(),header=_get_prompt_style(),enable_ptpython=enable_ptpython)
+                        # Check if PT crashed and explicitly turn it off
+                        if enable_ptpython and _printed_a_big_annoying_pseudo_terminal_error:
+                            enable_ptpython = False
+                            fansi_print("PT automatically turned OFF due to crash. Use 'PT ON' to re-enable.", 'cyan', 'bold')
                         try:
                             if 'numpy' in str(type(get_ans)) and is_numpy_array(get_ans()):
                                 set_numpy_print_options(linewidth=max(0,get_terminal_width()-len('ans = ')))#Make for prettier numpy printing, by dynamically adjusting the linewidth each time we enter a command
@@ -25509,6 +25520,7 @@ def pseudo_terminal(
                         except Exception as e:
                             fansi_print("...failed to PT RESET!", 'red', 'underlined')
                             print_stack_trace(e)
+
 
                     elif user_message == 'SET STYLE':
                         set_prompt_style()
@@ -25836,6 +25848,9 @@ def pseudo_terminal(
                         fansi_print("PROMPT TOOLKIT ON --> enable_ptpython=True","blue")
                         if _printed_a_big_annoying_pseudo_terminal_error:
                             fansi_print("Warning: PT ON crashed, so PT ON might not be available right now. This could be because PT ON crashed, or you're using a terminal that doesn't support it. Will attempt to PT ON anyway, though.","red")
+                        # Always reset event loop on PT ON to ensure clean state after any potential crashes
+                        # fansi_print("Resetting event loop for clean startup...","yellow")
+                        default_python_input_eventloop = None  # Reset the singleton to force recreation
                         _printed_a_big_annoying_pseudo_terminal_error=False
                         enable_ptpython=True
 
@@ -25845,14 +25860,19 @@ def pseudo_terminal(
                         use_modifier=True
 
                     elif user_message == "PT":
-                        fansi_print("PT --> PROMPT TOOLKIT TOGGLE --> enable_ptpython=not enable_ptpython (Toggles between PT ON and PT OFF)","blue",'bold')
                         enable_ptpython=not enable_ptpython
                         use_modifier=True
 
                         if enable_ptpython:
+                            fansi_print("PT TOGGLE --> Turning TUI ON (enhanced interface with autocomplete, syntax highlighting) --> enable_ptpython=True","blue",'bold')
                             if _printed_a_big_annoying_pseudo_terminal_error:
                                 fansi_print("Warning: PT ON crashed, so PT ON might not be available right now. This could be because PT ON crashed, or you're using a terminal that doesn't support it. Will attempt to PT ON anyway, though.","red")
+                            # Always reset event loop when toggling PT on to ensure clean state after any potential crashes
+                            # fansi_print("Resetting event loop for clean startup...","yellow")
+                            default_python_input_eventloop = None  # Reset the singleton to force recreation
                             _printed_a_big_annoying_pseudo_terminal_error=False
+                        else:
+                            fansi_print("PT TOGGLE --> Turning TUI OFF (basic command line interface) --> enable_ptpython=False","blue",'bold')
 
                     elif user_message == "LEVEL":
                         #TODO: add more info:
@@ -42768,15 +42788,60 @@ def get_home_directory():
 
 
 
-def copy_file(from_path,to_path):
-    "Copy a single file from from_path to to_path, where to_path is either a folder or a file that will be overridden"
-    assert file_exists(from_path),'copy_file copies a file from from_path to to_path, but from_path='+repr(from_path)+' is not a file'
-    # assert path_exists(to_path),'to_path must be either a directory or a file that will be overwritten, but to_path='+repr(to_path)+' does not exist' # <--- This seems silly. If this assertion still seems silly in the year 2022...get rid of it forever lol
-    import shutil
-    if is_a_directory(to_path):
-        to_path=path_join(to_path,get_file_name(from_path))
-    shutil.copyfile(from_path,to_path)
-    return to_path
+# def copy_file(from_path,to_path):
+#     "Copy a single file from from_path to to_path, where to_path is either a folder or a file that will be overridden"
+#     assert file_exists(from_path),'copy_file copies a file from from_path to to_path, but from_path='+repr(from_path)+' is not a file'
+#     # assert path_exists(to_path),'to_path must be either a directory or a file that will be overwritten, but to_path='+repr(to_path)+' does not exist' # <--- This seems silly. If this assertion still seems silly in the year 2022...get rid of it forever lol
+#     import shutil
+#     if is_a_directory(to_path):
+#         to_path=path_join(to_path,get_file_name(from_path))
+#     shutil.copyfile(from_path,to_path)
+#     return to_path
+
+
+def copy_file(src, dst, show_progress=False):
+    """
+    Drop-in replacement for shutil.copy with optional progress bar.
+    - If dst is a directory, the file is copied inside it.
+    - Preserves only permission bits (like shutil.copy).
+    - Always returns the path to the new file.
+    - show_progress=True adds a tqdm progress bar.
+    """
+    import os, shutil
+    pip_import("tqdm")
+    import tqdm
+
+    buffer_size = 1024 * 1024  # 1MB chunks
+
+    # If dst is a directory, append basename of src
+    if os.path.isdir(dst):
+        dst = os.path.join(dst, os.path.basename(src))
+
+    if not show_progress:
+        # ⚡ Fast path: delegate to shutil.copy directly
+        shutil.copy(src, dst)
+        return dst
+
+    total_size = os.path.getsize(src)
+
+    # Configure tqdm separately → keeps the with-block tidy
+    pbar = tqdm.tqdm(
+        total=total_size,
+        unit="B",
+        unit_scale=True,
+        desc="Copying " + os.path.basename(src)
+    )
+
+    with open(src, "rb") as fsrc, open(dst, "wb") as fdst, pbar:
+        for buf in iter(lambda: fsrc.read(buffer_size), b""):
+            fdst.write(buf)
+            pbar.update(len(buf))
+
+    # Match shutil.copy: copy permission bits only
+    shutil.copymode(src, dst)
+
+    return dst
+
 
 def copy_paths(
     from_paths,
@@ -46334,11 +46399,12 @@ def download_url_to_cache(url, cache_dir=None, skip_existing=True, hash_func=Non
     elif file_exists(url):
         #Can also be useful for getting things off NFS for faster loading
         if not skip_existing or not file_exists(cache_path):
-            import shutil
-            shutil.copy(
-                url,
-                cache_path,
-            )
+            # import shutil
+            # shutil.copy(
+            #     url,
+            #     cache_path,
+            # )
+            copy_file(url, cache_path, show_progress=show_progress)
         return cache_path
     elif folder_exists(url):
         if not skip_existing or not folder_exists(cache_path):
@@ -48466,7 +48532,7 @@ def _nvm_command_string(nvm_args, *, remove_prefix: bool = False) -> str:
         elif nvm_args.startswith('nvm '):
             nvm_args = nvm_args[4:]
 
-    return 'bash -c "source ~/.nvm/nvm.sh && nvm ' + shlex.quote(nvm_args) + '"'
+    return 'bash -c ' + shlex.quote('source ~/.nvm/nvm.sh && nvm ' + nvm_args)
 
 def _nvm_install_latest_node_version():
     _ensure_nvm_installed()
@@ -48872,10 +48938,11 @@ def _run_ai_coder_cli(code, command=None):
         else:
             return gather_vars("workdir")
 
-def _run_claude_code(code):
+def _run_claude_code(code,*,fullperm=False):
     """ See rp.r._run_ai_coder_cli.__doc__ """
     _ensure_claudecode_installed()
-    return _run_ai_coder_cli(code,'claude')
+    command = 'claude --dangerously-skip-permissions' if fullperm else 'claude'
+    return _run_ai_coder_cli(code,command)
 
 def _run_gemini_cli(code):
     """ See rp.r._run_ai_coder_cli.__doc__ """
