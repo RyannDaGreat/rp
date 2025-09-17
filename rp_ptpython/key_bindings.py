@@ -2175,6 +2175,9 @@ def handle_character(buffer,char,event=None):
             buffer.cursor_right(len('not i'))
             buffer.insert_text('n ')
             return True
+        # if char=='C':
+        #     #CRASH DUMMY TEST TO TEST PT ON RECOVERY
+        #     1/0
         if before and char=='\n' and not after and 'print'.startswith(before) and not before in ric.globa:
             #If the variable doesn't exist and would cause an error,
             #Replace something like ‹pri› --->  ‹print(ans)›
