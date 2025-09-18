@@ -25165,7 +25165,8 @@ def pseudo_terminal(
         CSP ans=$string_from_clipboard();ans=$sort_imports_via_isort(ans);$string_to_clipboard(ans) #Sort Imports on Clipboard
         RFS $remove_fstrings(ans)
         IRP $r._inline_rp_code(ans)
-        RMFS $remove_fstrings(ans) #Remove FStrings
+        RMFS $remove_fstrings(ans)
+        SBL $strip_blank_lines(ans)
 
         DAPI __import__('rp.pypi_inspection').pypi_inspection.display_all_pypi_info()
 
@@ -56770,12 +56771,29 @@ class _BundledPath:
     def __repr__(self):
         return '<rp.r._BundledPath: is_file='+str(self.is_file)+', data='+human_readable_file_size(len(self.data))+', path='+repr(self.path)+'>'
 
+class _BundledPaths:
+    """ Multiple paths bundled together """
+    def __init__(self, paths_data):
+        # paths_data is a list of tuples: [(is_file, data, path), ...]
+        self.paths_data = paths_data
+        self.is_multiple = True
+
+    def __repr__(self):
+        total_size = sum(len(data) for _, data, _ in self.paths_data)
+        return f'<_BundledPaths: {len(self.paths_data)} items, {human_readable_file_size(total_size)}>'
+
 def web_paste_path(path=None,*,ask_to_replace=True):
     """ FP (file paste) """
     data = web_paste()
     return gather_args_call(_paste_path_from_bundle, data,path=path)
 
 def _paste_path_from_bundle(data,path=None, *,ask_to_replace=True):
+    # Handle multiple paths
+    if isinstance(data, _BundledPaths):
+        return [_paste_path_from_bundle(_BundledPath(is_file, file_data, file_path), path, ask_to_replace=ask_to_replace)
+                for is_file, file_data, file_path in data.paths_data]
+
+    # Original single path handling
     try:
         assert isinstance(data,_BundledPath)
     except Exception:
@@ -56818,21 +56836,23 @@ def _paste_path_from_bundle(data,path=None, *,ask_to_replace=True):
                     delete_file(temp_zip)
     return path
 
-def web_copy_path(path:str=None, *, show_progress=False):
+def web_copy_path(path=None, *, show_progress=False):
     """ FC (file copy) """
+    if isinstance(path, (list, tuple)):
+        return [web_copy_path(p, show_progress=show_progress) for p in path]
+
     if is_a_module(path):
         path = get_module_path(path)
     web_copy(_copy_path_to_bundle(path), show_progress=show_progress)
     return path
 
-def _copy_path_to_bundle(path:str=None):
+def _copy_path_to_bundle(path=None):
     if path is None:
         path=input_select_path(message='Select a file or folder for web_copy_path:')
         path=get_relative_path(path)
     assert path_exists(path),'Path does not exist: '+str(path)
     data=file_to_bytes(path) if is_a_file(path) else zip_folder_to_bytes(path)
-    file_object = _BundledPath(is_a_file(path),data,path)
-    return file_object
+    return _BundledPath(is_a_file(path),data,path)
 
 
 def get_all_local_ip_addresses():
