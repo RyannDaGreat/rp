@@ -324,9 +324,11 @@ class PythonCompleter(Completer):
         def scandir_path_before_cursor():
             try:
                 return os.scandir(get_path_before_cursor())
-            except Exception:
-                #Please ignore for  now
-                pass
+            except (OSError, PermissionError, FileNotFoundError, NotADirectoryError, ValueError):
+                # Handle filesystem errors and invalid path values during completion
+                # OSError: file name too long, network issues, etc.
+                # ValueError: embedded null bytes in path
+                return []
                 
         if starts_with_any(before_line,'CDH ') and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
