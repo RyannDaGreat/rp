@@ -273,10 +273,14 @@ class PythonCompleter(Completer):
                 if path_before_cursor is not None:
                     #For completing CD and TAKE etc
                     entry=entry[len(path_before_cursor):]
-                elif entry.startswith('./'): 
+                elif entry.startswith('./'):
                     #For completing in strings primarily
                     #This is just bloat
                     entry =entry[len('./'):]
+                # For FCOPY, quote paths with spaces for proper multi-file handling
+                if before_line.startswith('FCOPY ') and ' ' in entry:
+                    import shlex
+                    return shlex.quote(entry)
                 return entry
             out = entry.path
             if entry.is_dir():

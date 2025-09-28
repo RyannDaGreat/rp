@@ -29,6 +29,7 @@ from contextlib import contextmanager
 from math import factorial
 import datetime
 from collections.abc import MutableSet
+from collections import Counter
 
 #Make glob both a function and module
 import glob
@@ -11518,10 +11519,19 @@ def gather(iterable,*indices, as_dict=False, strict=True):
     # indices=delist(indices)
     assert is_iterable(iterable),"The 'iterable' parameter you fed in is not an iterable!"
     assert is_iterable(indices),"You need to feed in a list of indices, not just a single index.  indices == " + str(indices)
+
+    def valid_index(it, i):
+        #Silly. TODO: Optimize
+        try:
+            it[i]
+            return True
+        except (KeyError, IndexError, TypeError):
+            return False
+
     if not as_dict:
-        return [iterable[i] for i in indices if (not strict or i in iterable)]  # ≣list(map(lambda i:iterable[i],indices))
+        return [iterable[i] for i in indices if (strict or valid_index(iterable, i))]
     else:
-        return {i:iterable[i] for i in indices if (not strict or i in iterable)}
+        return {i:iterable[i] for i in indices if (strict or valid_index(iterable, i))}
 
 def pop_gather(x,*indices):
     """
@@ -23974,35 +23984,47 @@ def pseudo_terminal(
         class UndoRedoStack():
             #TODO: This can be used for PREV, NEXT, CDB, UNDO, REDO, PREVMORE, NEXTMORE
             def __init__(self,clear_redo_on_do=True):
-                self.undo_stack=[]
-                self.redo_stack=[]
+                self.history = []  # All items in order
+                self.current_index = -1  # Index of current item (-1 means nothing)
                 self.clear_redo_on_do=clear_redo_on_do
 
             def can_undo(self):
-                return len(self.undo_stack)!=0
+                # Can undo if we're not at the beginning
+                return self.current_index > 0
 
             def can_redo(self):
-                return len(self.redo_stack)!=0
+                # Can redo if we're not at the end
+                return self.current_index < len(self.history) - 1
 
             def undo(self):
-                output=self.undo_stack.pop()
-                self.redo_stack.insert(0,output)
-                return output
-                
+                if not self.can_undo():
+                    raise IndexError("Cannot undo: already at earliest error")
+                self.current_index -= 1
+                return self.history[self.current_index]
+
             def redo(self):
-                output=self.redo_stack.pop(0)
-                self.undo_stack.append(output)
-                return output
-                
+                if not self.can_redo():
+                    raise IndexError("Cannot redo: already at latest error")
+                self.current_index += 1
+                return self.history[self.current_index]
+
             def do(self,value):
                 if self.clear_redo_on_do:
-                    self.redo_stack.clear()
-                self.undo_stack.append(value)
+                    # Remove everything after current position
+                    self.history = self.history[:self.current_index + 1]
+                self.history.append(value)
+                self.current_index = len(self.history) - 1
 
             def do_if_new(self,value):
-                if self.undo_stack and self.undo_stack[-1]==value:
+                if self.current_index >= 0 and self.history[self.current_index]==value:
                     return
                 self.do(value)
+
+            def get_current(self):
+                """Get the current error without changing position"""
+                if self.current_index >= 0:
+                    return self.history[self.current_index]
+                return None
 
         error_stack=UndoRedoStack(clear_redo_on_do=False)
 
@@ -24855,9 +24877,9 @@ def pseudo_terminal(
 
         64P  ans=$printed($string_from_clipboard()) ; $fansi_print($human_readable_file_size(len( ans )), 'bold cyan') ; ans=$base64_to_object(ans)    #Copy object via Base64 String
         64C _ans64=$printed($object_to_base64(ans)) ; $fansi_print($human_readable_file_size(len(_ans64)), 'bold cyan') ; $string_to_clipboard(_ans64) #Copy object via Base64 String
-        64FC  ans=$object_to_base64($r._copy_path_to_bundle(None)); $string_to_clipboard(ans) #Base-64 File Copy
-        64FCA ans=$object_to_base64($r._copy_path_to_bundle(ans )); $string_to_clipboard(ans) #Base-64 File Copy Ans
-        64FCH ans=$object_to_base64($r._copy_path_to_bundle('.' )); $string_to_clipboard(ans) #Base-64 File Copy Here
+        64FC  ans=$object_to_base64($r._copy_paths_to_bundle(None)); $string_to_clipboard(ans) #Base-64 File Copy
+        64FCA ans=$object_to_base64($r._copy_paths_to_bundle(ans )); $string_to_clipboard(ans) #Base-64 File Copy Ans
+        64FCH ans=$object_to_base64($r._copy_paths_to_bundle('.' )); $string_to_clipboard(ans) #Base-64 File Copy Here
         64FP  ans=$r._paste_path_from_bundle($base64_to_object($string_from_clipboard())) #Copy file via Base64 String
         64FPA ans=$r._paste_path_from_bundle($base64_to_object(ans                     )) #Copy file via Base64 String
         IPA   $bytes_to_object($decode_image_to_bytes($load_image_from_clipboard())) #Image Object-Paste
@@ -24869,9 +24891,9 @@ def pseudo_terminal(
         IFPO  ans=$open_file_with_default_application($r._paste_path_from_bundle($bytes_to_object($decode_image_to_bytes($load_image_from_clipboard())))) #Image File-Paste
         ICO   ($display_image if $running_in_jupyter_notebook() else $partial($display_image_in_terminal_imgcat, pixels_per_line=300))($encode_bytes_to_image($object_to_bytes(ans                          ))) #Image Object-Copy (Works best in ITerm2)
         IMCO  ($display_image if $running_in_jupyter_notebook() else $partial($display_image_in_terminal_imgcat, pixels_per_line=300))($encode_bytes_to_image($object_to_bytes(ans                          ))) #Image Object-Copy (Works best in ITerm2)
-        IFC   ($display_image if $running_in_jupyter_notebook() else $partial($display_image_in_terminal_imgcat, pixels_per_line=300))($encode_bytes_to_image($object_to_bytes($r._copy_path_to_bundle(None)))) #Image File-Copy (Works best in ITerm2)
-        IFCA  ($display_image if $running_in_jupyter_notebook() else $partial($display_image_in_terminal_imgcat, pixels_per_line=300))($encode_bytes_to_image($object_to_bytes($r._copy_path_to_bundle(ans )))) #Image File-Copy Ans (Works best in ITerm2)
-        IFCH  ($display_image if $running_in_jupyter_notebook() else $partial($display_image_in_terminal_imgcat, pixels_per_line=300))($encode_bytes_to_image($object_to_bytes($r._copy_path_to_bundle('.' )))) #Image File-Copy Here (Works best in ITerm2)
+        IFC   ($display_image if $running_in_jupyter_notebook() else $partial($display_image_in_terminal_imgcat, pixels_per_line=300))($encode_bytes_to_image($object_to_bytes($r._copy_paths_to_bundle(None)))) #Image File-Copy (Works best in ITerm2)
+        IFCA  ($display_image if $running_in_jupyter_notebook() else $partial($display_image_in_terminal_imgcat, pixels_per_line=300))($encode_bytes_to_image($object_to_bytes($r._copy_paths_to_bundle(ans )))) #Image File-Copy Ans (Works best in ITerm2)
+        IFCH  ($display_image if $running_in_jupyter_notebook() else $partial($display_image_in_terminal_imgcat, pixels_per_line=300))($encode_bytes_to_image($object_to_bytes($r._copy_paths_to_bundle('.' )))) #Image File-Copy Here (Works best in ITerm2)
 
         # GO GC
 
@@ -24902,6 +24924,9 @@ def pseudo_terminal(
         RRY  RYAN RPRC YES
         RVY  RYAN VIMRC YES
         RVN  RYAN VIMRC NO
+        RVCP  RYAN VIMRC COPY
+        RVHL  RYAN VIMRC HARD LINK
+        RVSL  RYAN VIMRC SOFT LINK
         RRNG  RYAN RANGERRC
 
         BASHRC VIM ~/.bashrc
@@ -25062,7 +25087,7 @@ def pseudo_terminal(
         # CPAH $copy_path(ans,'.')
         CAH  $r._cpah(ans)
         CPAH $r._cpah(ans)
-        HLAH $r._cpah(ans,method=make_hardlink)#HardLink Ans Here
+        HLAH $r._cpah(ans,method=$partial($make_hardlink,recursive=True))#HardLink Ans Here
         # CPPH $copy_path($string_from_clipboard(),'.')
         # CPH  $copy_path($string_from_clipboard(),'.')
         CPPH $r._cpah($string_from_clipboard())
@@ -26084,11 +26109,12 @@ def pseudo_terminal(
 
                     elif user_message in {"#PREV","PREV"}:
                         fansi_print("PREV -->  ans = ‹the previous value of ans›:","blue",'bold')
-                        if ans_history:
-                            ans_redo_history.append(ans_history.pop())
-                        if not ans_history:
+                        if len(ans_history) <= 1:
+                            # If history has 0 or 1 items, we can't go back
                             fansi_print("    [Cannot get PREV ans because ans_history is empty]",'red')
                         else:
+                            # Pop from history and push current to redo
+                            ans_redo_history.append(ans_history.pop())
                             set_ans(ans_history[-1],save_history=False,force_green=True)#Because ans_history isn't updated when we know that we have a duplicate ans value, we can logically conclude that it should be green (and not yellow)
                             successful_command_history.append("#PREV")# We put this here in case the user wants to analyze the history when brought back into normal python code
                     elif user_message in {"#NEXT","NEXT"}:
@@ -26953,11 +26979,17 @@ def pseudo_terminal(
                             user_message='ans = '+repr(get_absolute_path('~/.tmux.conf'))
 
 
-                        elif user_message=='RYAN VIMRC' or user_message=='RYAN VIMRC YES' or user_message=='RYAN VIMRC NO':
+                        elif user_message in ['RYAN VIMRC', 'RYAN VIMRC YES', 'RYAN VIMRC NO', 'RYAN VIMRC COPY', 'RYAN VIMRC HARD LINK', 'RYAN VIMRC SOFT LINK']:
 
                             confirm = not 'YES' in user_message
                             if 'NO' in user_message:
                                 confirm = 'NO'
+                            elif 'COPY' in user_message:
+                                confirm = 'COPY'  # COPY means copy vimrc without packages
+                            elif 'HARD LINK' in user_message:
+                                confirm = 'HARD LINK'  # Hard link vimrc without packages
+                            elif 'SOFT LINK' in user_message:
+                                confirm = 'SOFT LINK'  # Soft link vimrc without packages
                             _set_ryan_vimrc(confirm = confirm)
                             user_message='ans = '+repr(get_absolute_path('~/.vimrc'))
 
@@ -27079,7 +27111,7 @@ def pseudo_terminal(
 
                                 
                         elif user_message=='PREVMORE':
-                            fansi_print("NEXTMORE --> sets the error to the next error in history",'red','bold')
+                            fansi_print("PREVMORE --> sets the error to the previous error in history",'red','bold')
                             if error_stack.can_undo():
                                 error=error_stack.undo()
                                 print(fansi('ERROR: ','red','bold')+fansi(error,'red'))
@@ -42542,7 +42574,7 @@ def delete_file(path,*,permanent=True,strict=True):
 
 
 
-def delete_folder(path,*,recursive=True,permanent=True):
+def delete_folder(path, *, recursive=True, permanent=True, strict=True):
     """
     Will recursively delete a folder and all of its contents
      permanent exists for safety reasons. It can be False in case you make a stupid mistake like deleting this file. When false, it will send your files to the trash bin on your system (Mac,Windows,Linux, etc)
@@ -42552,16 +42584,22 @@ def delete_folder(path,*,recursive=True,permanent=True):
      pip3 install Send2Trash
     """
     import shutil
-    assert os.path.exists(path),"r.delete_folder: There is no folder to delete. The path you specified, '" + path + "', does not exist!"  
-    assert folder_exists(path),"r.delete_folder: The path you selected exists, but is not a folder: %s"%path
-    if permanent:
-        if not recursive:
-            assert is_empty_folder(path),'delete_folder: Cannot delete folder because its not empty and recursive==False. Folder: '+repr(path)
-        shutil.rmtree(path)
-    else:
-        pip_import('send2trash')
-        import send2trash  
-        send2trash.send2trash(path)  
+
+    if folder_exists(path):
+        if permanent:
+            if not recursive:
+                assert is_empty_folder(path),'delete_folder: Cannot delete folder because its not empty and recursive==False. Folder: '+repr(path)
+            shutil.rmtree(path)
+        else:
+            pip_import('send2trash')
+            import send2trash  
+            send2trash.send2trash(path)  
+
+    elif strict:
+        assert path_exists(path),"r.delete_folder: There is no folder to delete. The path you specified, '" + path + "', does not exist!"  
+        assert folder_exists(path), "r.delete_folder: The path you selected exists, but is not a folder: %s"%path
+        assert False, "unreachable line"
+
 
 def delete_symlink(path):
     """
@@ -45419,7 +45457,7 @@ def unicode_loading_bar(n,chars='▏▎▍▌▋▊▉█'):
     """
 
     assert is_number(n),'Input assumption'
-    assert n>=0,'Input assumption'
+    assert n>=0,'Input assumption that n>=0 but n='+repr(n)
     assert isinstance(chars,str),'Input assumption'
     assert len(chars)>=1,'Input assumption'
     n=int(n)
@@ -47496,6 +47534,9 @@ def indentify(s:str,indent='\t'):
 
 def unindent(string, indent=" "):
     """Removes common leading indentation from a multi-line string. Similar to textwrap.dedent - but allows you to specify your own indent characters."""
+    if not string:
+        return string
+
     def count_leading(line, char):
         return len(line) - len(line.lstrip(char))
 
@@ -47906,42 +47947,92 @@ def _set_ryan_vimrc(confirm=False):
         /opt/homebrew/Cellar/python@3.12/3.12.2_1/Frameworks/Python.framework/Versions/3.12/bin/python3 -m pip install ropevim  --brea
         k-system-packages
 
-    confirm is a janky argument rn lol 'NO' means we install packages but do not replace vimrc
-    True means we ask for confirmation before replacing vimrc file
-    False means we don't ask and replace the vimrc file
-    In all cases right now we still install pip dependenceis
+    confirm parameter options:
+    - 'NO' means we install packages but do not replace vimrc
+    - 'COPY' means copy vimrc file without installing packages (skip package installation, only copy ryan_vimrc.py to ~/.vimrc)
+    - 'HARD LINK' means create hard link to ryan_vimrc.py without installing packages (skip package installation, create hard link from ~/.vimrc to ryan_vimrc.py)
+    - 'SOFT LINK' means create symbolic link to ryan_vimrc.py without installing packages (skip package installation, create symlink from ~/.vimrc to ryan_vimrc.py)
+    - True means we ask for confirmation before replacing vimrc file
+    - False means we don't ask and replace the vimrc file
     Only pseudo_terminal uses this confirm argument (and it will stay that way) so it's not a big deal this is messy, it can be cleaned later. The default is to autoinstall without asking.
     """
 
-    #Mar 2025: Bug in vim for highlighting f-strings. Fix suggested from here: https://stackoverflow.com/questions/70261663/vim-syntax-highlighting-of-a-python-formatted-string
-    os.system(
-        """
-        mkdir -p "$HOME/.vim/syntax"
-        curl -s https://raw.githubusercontent.com/vim/vim/21c6d8b5b6ef510c9c78b9dfb89a41146599505f/runtime/syntax/python.vim \
-          > "$HOME/.vim/syntax/python.vim"
-        """
-    )
+    # Check if this is one of the new modes that skip setup phases
+    skip_setup_phases = confirm in ['COPY', 'HARD LINK', 'SOFT LINK']
 
-    packages = 'isort black-macchiato pyflakes removestar ropevim drawille pudb pynvim'.split()
+    # Phase 1: Python syntax fix (skip for new modes)
+    if not skip_setup_phases:
+        #Mar 2025: Bug in vim for highlighting f-strings. Fix suggested from here: https://stackoverflow.com/questions/70261663/vim-syntax-highlighting-of-a-python-formatted-string
+        os.system(
+            """
+            mkdir -p "$HOME/.vim/syntax"
+            curl -s https://raw.githubusercontent.com/vim/vim/21c6d8b5b6ef510c9c78b9dfb89a41146599505f/runtime/syntax/python.vim \
+              > "$HOME/.vim/syntax/python.vim"
+            """
+        )
 
-    for package in packages:
-        try:
-            _vim_pip_install(package)
-            if package == 'black-macchiato':
-                pip_import('macchiato', package, auto_yes=True)
-            else:
-                pip_import(package, auto_yes=True)
-        except Exception:
-            print("Skipped pip install ..."+str(package))
+    # Phase 2: Package installation (skip for new modes)
+    if not skip_setup_phases:
+        packages = 'isort black-macchiato pyflakes removestar ropevim drawille pudb pynvim'.split()
 
-    # if not confirm or input_yes_no("Overwrite current vimrc?"):
-    if not confirm=='NO' and (not confirm or input_yes_no('Would you like to add Ryan Burgert\'s vim settings to your ~/.vimrc?')):
-        vimrc_path=get_absolute_path('~/.vimrc')
+        for package in packages:
+            try:
+                _vim_pip_install(package)
+                if package == 'black-macchiato':
+                    pip_import('macchiato', package, auto_yes=True)
+                else:
+                    pip_import(package, auto_yes=True)
+            except Exception:
+                print("Skipped pip install ..."+str(package))
+
+    # Phase 3: Vimrc file handling
+    should_handle_vimrc = False
+    if skip_setup_phases:
+        # For new modes, always handle vimrc (no user prompt)
+        should_handle_vimrc = True
+    elif not confirm=='NO' and (not confirm or input_yes_no('Would you like to add Ryan Burgert\'s vim settings to your ~/.vimrc?')):
+        should_handle_vimrc = True
+
+    if should_handle_vimrc:
+        vimrc_path = get_absolute_path('~/.vimrc')
+        ryan_vimrc_path = get_module_path_from_name('rp.ryan_vimrc')
+
+        # Create backup if vimrc exists
         if file_exists(vimrc_path):
-            copy_file(vimrc_path, vimrc_path+'___rp_auto_backup___'+format_current_date()) #Create a backup of the current vimrc
+            backup_path = vimrc_path + '___rp_auto_backup___' + format_current_date()
+            copy_file(vimrc_path, backup_path)
+            print("Created backup: {0}".format(backup_path))
 
-        vimrc=text_file_to_string(get_module_path_from_name('rp.ryan_vimrc'))
-        string_to_text_file(vimrc_path,vimrc)
+        # Handle different vimrc operations based on confirm mode
+        if confirm == 'COPY':
+            # Copy the ryan_vimrc.py content to ~/.vimrc
+            vimrc = text_file_to_string(ryan_vimrc_path)
+            string_to_text_file(vimrc_path, vimrc)
+            print("Copied vimrc content from {0} to {1}".format(ryan_vimrc_path, vimrc_path))
+
+        elif confirm == 'HARD LINK':
+            # Create hard link from ~/.vimrc to ryan_vimrc.py
+            import os
+            if file_exists(vimrc_path):
+                os.remove(vimrc_path)
+            os.link(ryan_vimrc_path, vimrc_path)
+            print("Created hard link from {0} to {1}".format(vimrc_path, ryan_vimrc_path))
+
+        elif confirm == 'SOFT LINK':
+            # Create symbolic link from ~/.vimrc to ryan_vimrc.py
+            import os
+            if file_exists(vimrc_path):
+                os.remove(vimrc_path)
+            os.symlink(ryan_vimrc_path, vimrc_path)
+            print("Created symbolic link from {0} to {1}".format(vimrc_path, ryan_vimrc_path))
+
+        else:
+            # Default behavior: copy content
+            vimrc = text_file_to_string(ryan_vimrc_path)
+            string_to_text_file(vimrc_path, vimrc)
+
+    # Phase 4: Vim plugin setup (skip for new modes)
+    if not skip_setup_phases and should_handle_vimrc:
         shell_command('git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim')
         os.system('vim +PluginInstall +qall')
         print("Finished setting your ~/.vimrc vim settings. Give it a try! Enter 'ans?v' without quotes to see your new ~/.vimrc file")
@@ -48213,7 +48304,7 @@ def _run_sys_command(*command, title='SYS COMMAND'):
     print(message)
     return os.system(command)
 
-_all_shell_rc_paths = ["~/.zshrc", "~/.zprofile", "~/.bashrc", "~/.bash_profile", "~/.profile"]
+_all_shell_rc_paths = ["~/.zshrc", "~/.bashrc"]
 
 def _ensure_shell_has_path(*, mac=None, linux=None, windows=None, unix=None):
     """
@@ -48259,13 +48350,17 @@ def _ensure_shell_has_path(*, mac=None, linux=None, windows=None, unix=None):
     elif windows and currently_running_windows():
         raise NotImplementedError
 
-def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, force=False) -> bool:
+def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, unix=None, force=False) -> bool:
     """ Attempts to install a program on various operating systems. Returns True if we install something. """
 
     assert isinstance(name,    str)
     assert isinstance(linux,   str) or linux   is None
     assert isinstance(mac,     str) or mac     is None
     assert isinstance(windows, str) or windows is None
+    assert isinstance(unix,    str) or unix    is None
+
+    if mac   is None: mac   = unix
+    if linux is None: linux = unix
 
     if not force and system_command_exists(name):
         #Don't reinstall what we've already installed
@@ -48306,16 +48401,15 @@ def _brew_install(x):
 def _ensure_go_installed():
     _ensure_installed(
         'go',
-        mac   = 'brew install golang-go',
-        linux = 'apt install golang-go --yes',
+        mac    = 'brew install golang-go',
+        linux  = 'apt install golang-go --yes',
         windows='winget install --id=GoLang.Go', # https://winstall.app/apps/GoLang.Go
     )
 
 def _ensure_cargo_installed():
     _ensure_installed(
         'cargo',
-        mac   = 'curl https://sh.rustup.rs -sSf | sh -s -- -y', #https://doc.rust-lang.org/cargo/getting-started/installation.html
-        linux = 'curl https://sh.rustup.rs -sSf | sh -s -- -y', #https://doc.rust-lang.org/cargo/getting-started/installation.html
+        unix   = 'curl https://sh.rustup.rs -sSf | sh -s -- -y', #https://doc.rust-lang.org/cargo/getting-started/installation.html
         windows='echo Please Visit https://doc.rust-lang.org/cargo/getting-started/installation.html', # I haven't automated it for windows yet
     )
     _ensure_shell_has_path(unix="~/.cargo/bin")
@@ -48369,8 +48463,7 @@ def _ensure_claudecode_installed():
     _ensure_installed(
         'claude',
         # https://github.com/anthropics/claude-code
-        mac    ='npm install -g @anthropic-ai/claude-code',
-        linux  ='npm install -g @anthropic-ai/claude-code',
+        unix   ='npm install -g @anthropic-ai/claude-code',
         windows='npm install -g @anthropic-ai/claude-code',
     )
 
@@ -48379,8 +48472,7 @@ def _ensure_gemini_cli_installed():
     _ensure_installed(
         'gemini',
         # https://github.com/google-gemini/gemini-cli
-        mac    ='npm install -g @google/gemini-cli',
-        linux  ='npm install -g @google/gemini-cli',
+        unix   ='npm install -g @google/gemini-cli',
         windows='npm install -g @google/gemini-cli',
     )
 
@@ -48388,8 +48480,7 @@ def _ensure_opencode_installed():
     _ensure_installed(
         'opencode',
         # https://github.com/sst/opencode
-        mac    ='brew install sst/tap/opencode',
-        linux  ='brew install sst/tap/opencode',
+        unix   ='brew install sst/tap/opencode',
         windows=None,
     )
 
@@ -48464,8 +48555,7 @@ def _ensure_npm_installed():
 def _ensure_zellij_installed():
     _ensure_installed(
         'zellij',
-        mac  ='cargo install --locked zellij',
-        linux='cargo install --locked zellij',
+        unix='cargo install --locked zellij',
         windows=None,
     )
 
@@ -48478,14 +48568,21 @@ def _ensure_nvm_installed():
 
     installed_something = _ensure_installed(
         "nvm",
-        mac="curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash",
-        linux="curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash",
+        unix="curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash",
         windows="winget install --id CoreyButler.NVMforWindows",
     )
 
     if installed_something and currently_running_unix():
         exports = r'export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
         append_line_to_files(exports, _all_shell_rc_paths)
+
+def _ensure_gcloud_installed():
+    _ensure_installed(
+        'gcloud',
+        unix='curl -sSL https://sdk.cloud.google.com | bash',
+        windows='winget install Google.CloudSDK',
+    )
+
 
 
 def _get_node_version():
@@ -48544,8 +48641,7 @@ def _ensure_node_installed(*,min_version:int=None):
     _ensure_nvm_installed()
     _ensure_installed(
         'node',
-        mac='nvm install --lts',
-        linux='nvm install --lts',
+        unix   ='nvm install --lts',
         windows='nvm install --lts',#https://winget.run/pkg/OpenJS/NodeJS
     )
 
@@ -48573,16 +48669,15 @@ def _ensure_git_installed():
 def _ensure_btop_installed():
     _ensure_installed(
         'btop',
-        mac='brew install btop',
-        linux='brew install btop',
+        unix  ='brew install btop',
         windows=None,
     )
 
 def _ensure_shfmt_installed():
     _ensure_installed(
         'shfmt',
-        mac   = 'brew install shfmt',
-        linux = 'apt install shfmt',
+        mac    = 'brew install shfmt',
+        linux  = 'apt install shfmt',
         windows='winget install --id=mvdan.shfmt',
     )
  
@@ -52529,6 +52624,31 @@ def curl_bytes(url):
 
     # Convert the file contents to a bytestring and return it
     return BytesIO(response.content).getvalue()
+
+def ntfy_send(message:str, topic='rp'):
+    """ Send a message via ntfy - a free app requiring no API keys. Great for pining about finished jobs etc! Go to ntfy.sh - it's wonderful """
+    pip_import('requests')
+    import requests
+    
+    assert connected_to_internet()
+    
+    url = "https://ntfy.sh/"+topic
+    headers = {
+        #PRIORITIES:
+        #    Num  Name      Description
+        #    1    min       Lowest importance (no sound, no vibration)
+        #    2    low       Low importance
+        #    3    default   Normal importance (default if not set)
+        #    4    high      High importance (e.g. rings/vibrates)
+        #    5    urgent    Highest importance (persistent alarm, maximum visibility)
+        "Priority": "default"
+    }
+    data = message
+    
+    response = requests.post(url, headers=headers, data=data)
+    
+    if not response.status_code==200:
+        raise IOError(response.status_code)
 
 
 def get_computer_name():
@@ -56780,7 +56900,7 @@ class _BundledPaths:
 
     def __repr__(self):
         total_size = sum(len(data) for _, data, _ in self.paths_data)
-        return f'<_BundledPaths: {len(self.paths_data)} items, {human_readable_file_size(total_size)}>'
+        return '<_BundledPaths: {0} items, {1}>'.format(len(self.paths_data), human_readable_file_size(total_size))
 
 def web_paste_path(path=None,*,ask_to_replace=True):
     """ FP (file paste) """
@@ -56808,11 +56928,14 @@ def _paste_path_from_bundle(data,path=None, *,ask_to_replace=True):
             bytes_to_file(data.data,temp_zip)
             unzip_to_folder(temp_zip,temp_dir)
             all_paths_here=get_all_paths(include_files=True,include_folders=True,relative=True)
+            moved_paths = []
             for new_path in get_all_paths(temp_dir,include_files=True,include_folders=True):
                 if get_file_name(new_path) in all_paths_here and ask_to_replace:
                     if not request_replace(new_path):
                         continue
-                move_path(path,'.')
+                destination = move_path(new_path,'.')
+                moved_paths.append(destination)
+            return delist(moved_paths) if moved_paths else None
         finally:
             if file_exists(temp_zip):
                 delete_file(temp_zip)
@@ -56838,21 +56961,44 @@ def _paste_path_from_bundle(data,path=None, *,ask_to_replace=True):
 
 def web_copy_path(path=None, *, show_progress=False):
     """ FC (file copy) """
-    if isinstance(path, (list, tuple)):
-        return [web_copy_path(p, show_progress=show_progress) for p in path]
-
-    if is_a_module(path):
-        path = get_module_path(path)
-    web_copy(_copy_path_to_bundle(path), show_progress=show_progress)
+    web_copy(_copy_paths_to_bundle(path), show_progress=show_progress)
     return path
 
-def _copy_path_to_bundle(path=None):
-    if path is None:
-        path=input_select_path(message='Select a file or folder for web_copy_path:')
-        path=get_relative_path(path)
-    assert path_exists(path),'Path does not exist: '+str(path)
-    data=file_to_bytes(path) if is_a_file(path) else zip_folder_to_bytes(path)
-    return _BundledPath(is_a_file(path),data,path)
+def _copy_paths_to_bundle(paths=None):
+    """
+    Handle copying single path or multiple paths to a bundle.
+
+    Args:
+        paths: Can be a single path (str) or multiple paths (list/tuple).
+               If None, prompts for path selection.
+
+    Returns:
+        _BundledPath for single path, _BundledPaths for multiple paths.
+
+    Note: Despite the plural name, this function handles both single
+          and multiple paths - single paths are automatically wrapped
+          in a list for processing.
+    """
+    if paths is None:
+        paths = input_select_path(message='Select a file or folder for web_copy_path:')
+        paths = get_relative_path(paths)
+
+    if not isinstance(paths, (list, tuple)):
+        paths = [paths]
+
+    paths_data = []
+    for path in paths:
+        if is_a_module(path):
+            path = get_module_path(path)
+        assert path_exists(path), 'Path does not exist: {0}'.format(path)
+        data = file_to_bytes(path) if is_a_file(path) else zip_folder_to_bytes(path)
+        paths_data.append((is_a_file(path), data, path))
+
+    if len(paths_data) == 1:
+        is_file, data, path = get_only(paths_data)
+        return _BundledPath(is_file, data, path)
+    else:
+        return _BundledPaths(paths_data)
 
 
 def get_all_local_ip_addresses():
@@ -59993,45 +60139,124 @@ def as_torch_image(image, *, device=None, dtype=None, copy=False):
         assert False,'Unsupported image type: '+str(type(image))
 
 _load_safetensors_cache={}
-def load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, use_cache=False, keys_only=False, metadata=False):
+def _load_safetensors_metadata(path, device="cpu"):
+    """Helper to extract metadata from a safetensors file."""
+    pip_import("safetensors")
+    from safetensors import safe_open
+    with safe_open(path, framework="pt", device=device) as f:
+        return as_easydict(f.metadata())
+
+
+def _load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, include_tensors=True, include_shapes=False, include_dtypes=False):
     """
-    Loads tensors from a .safetensors file.
+    Internal helper that always returns dict[key] -> dict mapping.
+    Values are empty dicts if nothing requested.
+    """
+    pip_import("safetensors")
+    from safetensors import safe_open
+
+    # Load Safetensors file
+    with safe_open(path, framework="pt", device=device) as f:
+        def get_tensor(k): return f.get_tensor(k)
+        def get_shape(k): return f.get_slice(k).get_shape()
+        def get_dtype(k):
+            dtype_str = str(f.get_slice(k).get_dtype())
+            import torch
+            dtype_map = {
+                "F32": torch.float32,
+                "F16": torch.float16,
+                "BF16": torch.bfloat16,
+                "F64": torch.float64,
+                "I8": torch.int8,
+                "I16": torch.int16,
+                "I32": torch.int32,
+                "I64": torch.int64,
+                "U8": torch.uint8,
+                "BOOL": torch.bool,
+            }
+            return dtype_map.get(dtype_str, dtype_str)  # fallback to string if unknown
+
+        keys = f.keys()
+
+        if show_progress:
+            keys = rp.eta(keys, title="rp.load_safetensors")
+
+        data = {}
+        for k in keys:
+            if verbose:
+                print("    - " + str(k))
+
+            item = {}
+            if include_tensors: item['tensor'] = get_tensor(k)
+            if include_shapes: item['shape'] = get_shape(k)
+            if include_dtypes: item['dtype'] = get_dtype(k)
+            data[k] = item
+
+        return data
+
+
+def load_safetensors(
+    path,
+    device="cpu",
+    *,
+    show_progress=False,
+    verbose=False,
+    use_cache=False,
+    include_tensors=True,
+    include_shapes=False,
+    include_dtypes=False,
+    include_metadata=False
+):
+    """
+    Loads tensors from a .safetensors file with flexible output options.
 
     Args:
         path (str): Path to .safetensors file, or a glob for safetensor files, or a list of files
         device (str, optional): Device (cpu, cuda, etc.). Defaults to 'cpu'.
         show_progress (bool, optional): Show progress bar. Defaults to False.
         verbose (bool, optional): Print tensor names. Defaults to False.
-        keys_only (bool): If True, returns a list of key strings
-        metadata (bool): If True, returns (regular output, metadata)
-            where metadata is a dict of str -> str
+        include_tensors (bool): Include tensor data. Defaults to True.
+        include_shapes (bool): Include tensor shapes as lists. Defaults to False.
+        include_dtypes (bool): Include tensor dtypes as torch.dtype objects. Defaults to False.
+        include_metadata (bool): If True, returns (data, metadata) tuple. Defaults to False.
 
     Returns:
-        easydict: Easydict of tensors, or if keys_only, a list of strings
+        - All False: List of tensor names
+        - One True: Dict[name -> value] (tensor/shape/dtype)
+        - Multiple True: Dict[name -> EasyDict] with .tensor/.shape/.dtype attributes
+        - include_metadata=True: (data, metadata) tuple
         
     Reference: https://huggingface.co/docs/safetensors/en/index
 
     EXAMPLE:
-        >>> LS
-        config.json
-        diffusion_pytorch_model-00001-of-00002.safetensors
-        diffusion_pytorch_model-00002-of-00002.safetensors
-        diffusion_pytorch_model.safetensors.index.json
-        >>> keys = load_safetensors('*.safetensors', keys_only=True)
-        >>> print(len(keys))
-        1024
-        >>> print(keys[:5])
-        ['patch_embed.proj.bias', 'patch_embed.proj.weight', 'patch_embed.text_proj.bias', 'patch_embed.text_proj.weight', 'time_embedding.linear_1.bias']
-        >>> state = load_safetensors('*.safetensors', keys_only=False)
-        >>> print(state[keys[0]].shape)
-        torch.Size([3072])
+        >>> # Just get tensor names
+        >>> keys = load_safetensors('model.safetensors', include_tensors=False)
+        >>> print(keys[:3])
+        ['layer1.weight', 'layer1.bias', 'layer2.weight']
+
+        >>> # Get only shapes
+        >>> shapes = load_safetensors('model.safetensors', include_tensors=False, include_shapes=True)
+        >>> print(shapes['layer1.weight'])
+        [512, 256]
+
+        >>> # Get shapes and dtypes together
+        >>> info = load_safetensors('model.safetensors', include_tensors=False, include_shapes=True, include_dtypes=True)
+        >>> print(info['layer1.weight'])
+        {'shape': [512, 256], 'dtype': torch.float32}
+
+        >>> # Get only dtypes
+        >>> dtypes = load_safetensors('model.safetensors', include_tensors=False, include_dtypes=True)
+        >>> print(dtypes['layer1.weight'])
+        torch.float32
+
+        >>> # Default behavior - load tensors
+        >>> tensors = load_safetensors('model.safetensors')
+        >>> print(tensors['layer1.weight'].shape)
+        torch.Size([512, 256])
 
     """
-    pip_import("safetensors")
-    from safetensors import safe_open
-
     # Handle Cache
-    cache_key = handy_hash([path, device, keys_only, metadata])
+    cache_key = handy_hash([path, device, include_tensors, include_shapes, include_dtypes, include_metadata])
     cache = _load_safetensors_cache
     if use_cache:
         if cache_key not in cache:
@@ -60040,52 +60265,41 @@ def load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, 
     elif cache_key in cache:
         del cache[cache_key]
 
-    #Handle globs/folders of shards
     if not file_exists(path):
-        #Sometimes we have multiple shards like ckpt_001.safetensors, ckpt_002.safetensors etc
-
+        # Handle globs/folders of shards (i.e. multiple files)
         subpaths = rp_glob(path)
         if not subpaths:
-            subpaths = rp_glob(get_absolute_path(path)) #Maybe replacing ~ with /home etc will help? 
+            subpaths = rp_glob(get_absolute_path(path))
             if not subpaths:
-                #If we still can't find anything...raise an error.
                 raise FileNotFoundError('rp.load_safetensors: No safetensor files at '+str(path))
 
-        output_tensors, output_metadatas = list_transpose([gather_args_call(load_safetensors, subpath, metadata=True) for subpath in subpaths])
-        if keys_only:
-            tensors = list_flatten(output_tensors)
-        else:
-            tensors = merged_dicts(output_tensors)
-        meta = merged_dicts(output_metadatas)
-            
-    #Handle a single safetensors file
-    else:
-        # Load Safetensors file
-        with safe_open(path, framework="pt", device=device) as f:
-            keys = f.keys()
-            
-            if keys_only:
-                tensors = list(keys)
-            
-            else:
-                tensors = {}
-                if show_progress:
-                    keys = rp.eta(keys, title="rp.load_safetensors")
-                for k in keys:
-                    if verbose:
-                        print("    - " + str(k))
-                    tensors[k] = f.get_tensor(k)
-            
-                tensors = as_easydict(tensors)
-    
-            if metadata:
-                meta = f.metadata()
-                meta = as_easydict(meta)
+        # Recursively load all shards and merge
+        shard_results = [gather_args_call(_load_safetensors, subpath) for subpath in subpaths]
+        raw_data = merged_dicts(shard_results)
 
-    if metadata:
-        return tensors, meta
+        metadata_path = subpaths[0]
+
     else:
-        return tensors
+        # Handle single file
+        raw_data = gather_args_call(_load_safetensors, path)
+        metadata_path = path
+
+    # Post-process based on what was requested
+    num_includes = include_tensors + include_shapes + include_dtypes
+
+    if num_includes == 0:
+        result = list(raw_data.keys())
+    else:
+        value_func = get_only_value if num_includes==1 else as_easydict
+        result = {k: value_func(v) for k, v in raw_data.items()}
+        result = as_easydict(result)
+
+    #Possibly output a tuple with metadata
+    if include_metadata:
+        metadata_dict = _load_safetensors_metadata(metadata_path, device)
+        return result, metadata_dict
+    else:
+        return result
 
 
 def save_safetensors(tensors, path, metadata=None, *, verbose=False):
@@ -63200,6 +63414,8 @@ known_pypi_module_package_names={
     'glances': 'Glances',
     'google': 'protobuf',
     'google_auth_oauthlib': 'google-auth-oauthlib',
+    'googleapiclient': 'google-api-python-client',
+    'google_auth_httplib2': 'google-auth-httplib2',
     'gpt_2_simple': 'gpt-2-simple',
     'greptile': 'Greptile',
     'grpc': 'grpcio',
@@ -63729,8 +63945,13 @@ def fuzzy_match(array, target, equals=lambda x, y: x == y):
 
 def get_only(collection):
     """Return the sole item of the collection."""
-    assert len(collection) == 1, "Expected length of 1 but got len "+str(len(collection))
+    if len(collection) != 1: raise ValueError("Expected collection with 1 item but got "+str(len(collection)))
     return next(iter(collection))
+
+def get_only_value(dictionary):
+    """Return the sole value from a dictionary."""
+    if len(dictionary) != 1: raise ValueError("Expected dictionary with 1 key but got "+str(len(dictionary)))
+    return next(iter(dictionary.values()))
 
 
 del re #re is random element
