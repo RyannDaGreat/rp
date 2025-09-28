@@ -506,6 +506,45 @@ def get_inputmode_tokens(cli, python_input):
     return result
 
 
+def format_tui_time():
+    """Format time for TUI display with optional timezone support"""
+    import datetime
+    import rp
+
+    remove_beginning_zero = lambda x: x[1:] if x[0] == '0' else x
+    now = datetime.datetime.now()
+
+    # Convert timezone if configured
+    default_timezone = rp.r._default_timezone
+    if default_timezone:
+        try:
+            import pytz
+            # Convert the timezone using the same translation as format_date
+            translated_tz = rp.r._translate_timezone(default_timezone)
+            target_timezone = pytz.timezone(translated_tz)
+            # Convert current time to the target timezone
+            now = now.astimezone(target_timezone)
+        except (ImportError, KeyError):
+            # If pytz not available or timezone invalid, use local time
+            pass
+
+    # Format time (now either in local time or converted timezone)
+    hour = now.hour % 12
+    hour = hour if hour else 12  # Convert 0 hour to 12 for 12-hour clock
+    minute = now.minute
+    am_pm = "AM" if now.hour < 12 else "PM"
+
+    time_str = ("{hour}:{minute:02d}{am_pm}".format(hour=hour, minute=minute, am_pm=am_pm)).lower()
+
+    # Add timezone abbreviation if available
+    if now.tzinfo is not None:
+        tz_abbr = now.strftime("%Z")
+        if tz_abbr:
+            time_str += " " + tz_abbr
+
+    return time_str
+
+
 def show_sidebar_button_info(python_input):
     """
     Create `Layout` for the information in the right-bottom corner.
@@ -543,7 +582,7 @@ def show_sidebar_button_info(python_input):
             if hasattr(python_input,'show_battery_life') and python_input.show_battery_life
             else []
         ),
-        (token,(remove_beginning_zero(datetime.datetime.now().strftime("%I:%M%p")).lower())),# put the time here
+        (token, format_tui_time()),# put the time here
         (token, ' '),
         (token.Key, '[F2]', toggle_sidebar),
         (token, ' Menu', toggle_sidebar),

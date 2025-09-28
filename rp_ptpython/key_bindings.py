@@ -4009,10 +4009,14 @@ def load_python_bindings(python_input):
     def _(event):
         buffer=event.cli.current_buffer
         document=buffer.document
+        original_cursor_position = document.cursor_position_col
         buffer.cursor_right(10000)
         current_line=document.current_line
         # buffer.insert_line_below()
         buffer.insert_text("\n"+current_line)
+        # Move cursor to same column position on the new line
+        buffer.cursor_position = buffer.document.translate_row_col_to_index(
+            buffer.document.cursor_position_row, original_cursor_position)
     def current_line_index(buffer):
         #returns current line number, starting from 0
         return buffer.document.text_before_cursor.count('\n')
