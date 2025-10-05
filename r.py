@@ -7417,24 +7417,19 @@ def _load_pdf_as_text_via_pdfminer(path):
     return extract_text(path)
 
 extract_pdf_text = load_pdf_as_text
-pdf_to_text = load_pdf_as_text
+# pdf_to_text = load_pdf_as_text
 
+def load_docx_as_text(path):
+    """ Given a DOCX file, returns the text content as a string """
+    pip_import('docx')
+    from docx import Document
 
+    doc = Document(path)
+    paragraphs = [paragraph.text for paragraph in doc.paragraphs]
+    return '\n'.join(paragraphs)
 
-#     output=[]
-#     for i,location in enumerate(locations):
-#         image=load_image(location,use_cache=use_cache)
-#         output.append(image)
-#         if display_progress:
-#             show_time_remaining(i)
-
-#     return [load_image(location,use_cache=use_cache) for location in locations]
-
-#def load_images_in_parallel(*locations,use_cache=False):
-#    #This is like load_images, except it runs faster.
-#    locations=delist(detuple(locations))
-#    output=[]
-#    show_time_remaining=eta(len(locations))
+extract_docx_text = load_docx_as_text
+# docx_to_text = load_docx_as_text
 
 def _load_image_from_file(file_name, *, use_cache=False):
     """ Can try opencv as a fallback if this ever breaks """
@@ -43513,73 +43508,126 @@ def get_unique_copy_path(path: str, *, suffix: str = "_copy%i") -> str:
     return path
 
 _get_cutscene_frame_numbers_cache={}
-def get_cutscene_frame_numbers(video_path,*,use_cache=False):
+def get_cutscene_frame_numbers(video,*,use_cache=False,include_start=False,include_end=False):
     """
-    Returns a list of ints containing all the framenumers of the cutscenes in a video
-    Confirmed to work with mp4 files
-    Note: Right now this only supports reading from a video file, as opposed to reading from a numpy array containing
+    Returns frame numbers where scene cuts occur.
+
+    By default returns only actual scene cuts (where new scenes begin after a transition).
+    Frame 0 is NOT a cut (it's the video start), and len(video) is NOT a cut (it's beyond the end).
+
+    Example with 81-frame video: Actual cuts at frames 38, 66
+        - include_start=False, include_end=False (default, pure cuts): [38, 66]
+        - include_start=False, include_end=True  (with end marker): [38, 66, 81]
+        - include_start=True,  include_end=False (scene starts): [0, 38, 66]
+        - include_start=True,  include_end=True  (all bounds): [0, 38, 66, 81]
+
+    Scenes are:
+        - Scene 0: frames 0-37 (38 frames)
+        - Scene 1: frames 38-65 (28 frames)
+        - Scene 2: frames 66-80 (15 frames)
+
+    Args:
+        video: Either a path to a video file (str) or a video array (numpy THWC, torch TCHW, or list of images)
+        use_cache: If True, cache results for both file paths and arrays (uses handy_hash for arrays)
+        include_start: If True, prepend 0 (first frame of first scene, not an actual cut)
+        include_end: If True, append len(video) (end marker for slicing, not an actual cut)
+
+    Returns:
+        list of int: Frame numbers based on include_start/include_end settings
+
     pip install scenedetect
     Code from https://pyscenedetect-manual.readthedocs.io/en/latest/api/scene_manager.html#scenemanager-example
     EXAMPLE:
-        video_path=download_youtube_video('https://www.youtube.com/watch?v=K5qACexzwOI')
-        cutscene_frames_numbers=get_cutscene_frame_numbers(video_path)
-        for i,frame in enumerate(load_video_stream(video_path)):
-            if i in cutscene_frames_numbers:
-                input('Hit enter to continue')
-            cv_imshow(frame)
-            sleep(1/30)
+        >>> video_path=download_youtube_video('https://www.youtube.com/watch?v=K5qACexzwOI')
+        ... cutscene_frames_numbers=get_cutscene_frame_numbers(video_path)
+        ... for i,frame in enumerate(load_video_stream(video_path)):
+        ...     if i in cutscene_frames_numbers:
+        ...         input('Hit enter to continue')
+        ...     cv_imshow(frame)
+        ...     sleep(1/30)
     """
     pip_import('cv2')#Needed for scenedetect
     pip_import('scenedetect')
+    from scenedetect import open_video, SceneManager, ContentDetector
 
-    video_path=get_absolute_path(video_path) #This is important for caching. 
-    if video_path in _get_cutscene_frame_numbers_cache:
-        return _get_cutscene_frame_numbers_cache[video_path]
+    # Determine cache key and convert video to canonical form
+    is_path = isinstance(video, str)
+    if is_path:
+        if not path_exists(video):
+            raise OSError('Path does not exist: ' + repr(video))
+        if not file_exists(video):
+            raise OSError('Path is not a file: ' + repr(video))
+        cache_key = get_absolute_path(video)
+    else:
+        video = as_numpy_video(video)
+        if use_cache:
+            cache_key = handy_hash(video)
 
-    # Standard PySceneDetect imports:
-    from scenedetect.video_manager import VideoManager
-    from scenedetect.scene_manager import SceneManager
-    # For caching detection metrics and saving/loading to a stats file
-    from scenedetect.stats_manager import StatsManager
+    # Check cache
+    if use_cache and cache_key in _get_cutscene_frame_numbers_cache:
+        return _get_cutscene_frame_numbers_cache[cache_key]
 
-    # For content-aware scene detection:
-    from scenedetect.detectors.content_detector import ContentDetector
+    # Process video - get actual cuts only
+    if is_path:
+        video_stream = open_video(cache_key)
+        scene_manager = SceneManager()
+        scene_manager.add_detector(ContentDetector())
+        scene_manager.detect_scenes(video=video_stream)
+        # Extract actual cuts (exclude start/end that SceneManager adds)
+        scene_list = scene_manager.get_scene_list()
+        cuts = [x[1].frame_num for x in scene_list]
+        video_length = scene_list[-1][1].frame_num if scene_list else 0
+    else:
+        detector = ContentDetector()
+        cuts = []
+        for frame_num in range(len(video)):
+            frame_bgr = cv_rgb_bgr_swap(as_byte_image(video[frame_num]), copy=False)
+            cuts.extend(detector.process_frame(frame_num, frame_bgr))
+        cuts.extend(detector.post_process(len(video)))
+        cuts = sorted(cuts)
+        video_length = len(video)
 
-    # type: (str) -> List[Tuple[FrameTimecode, FrameTimecode]]
-    video_manager = VideoManager([video_path])
-    stats_manager = StatsManager()
-    # Construct our SceneManager and pass it our StatsManager.
-    scene_manager = SceneManager(stats_manager)
+    # Add start/end markers based on parameters
+    output = []
+    if include_start:
+        output.append(0)
+    output.extend(cuts)
+    if include_end and (not output or output[-1] != video_length):
+        output.append(video_length)
 
-    # Add ContentDetector algorithm (each detector's constructor
-    # takes detector options, e.g. threshold).
-    scene_manager.add_detector(ContentDetector())
-    base_timecode = video_manager.get_base_timecode()
-
-    # We save our stats file to {VIDEO_PATH}.stats.csv.
-
-    scene_list = []
-
-    try:
-        # Set downscale factor to improve processing speed.
-        video_manager.set_downscale_factor()
-
-        # Start video_manager.
-        video_manager.start()
-
-        # Perform scene detection on video_manager.
-        scene_manager.detect_scenes(frame_source=video_manager)
-
-        # Obtain list of detected scenes.
-        scene_list = scene_manager.get_scene_list(base_timecode)
-        # Each scene is a tuple of (start, end) FrameTimecodes.
-
-    finally:
-        video_manager.release()
-
-    output = [x[1].frame_num for x in scene_list]
-    _get_cutscene_frame_numbers_cache[video_path]=output#The output of this is so small that it's probably ok to store it even if use_cache is False. It's unlikely our memory will run out because of this...
+    if use_cache:
+        _get_cutscene_frame_numbers_cache[cache_key] = output
     return output
+
+def get_cutscene_slices(video, *, use_cache=False):
+    """
+    Returns slices for each scene in a video, suitable for indexing video arrays.
+
+    Each slice represents one continuous scene. The slices partition the entire video
+    with no gaps or overlaps. Use these to extract individual scenes: video[slice].
+
+    Note: Always calls get_cutscene_frame_numbers with include_start=True and include_end=True
+    internally to get proper slice boundaries, regardless of default settings.
+
+    Example: If actual cuts are at frames 38, 66 in an 81-frame video, returns:
+        [slice(0, 38), slice(38, 66), slice(66, 81)]
+    Which extracts:
+        - Scene 0: video[0:38]   (frames 0-37, 38 frames total)
+        - Scene 1: video[38:66]  (frames 38-65, 28 frames total)
+        - Scene 2: video[66:81]  (frames 66-80, 15 frames total)
+
+    Args:
+        video: Either a path to a video file (str) or a video array (numpy THWC, torch TCHW, or list of images)
+        use_cache: If True, cache results for both file paths and arrays
+
+    Returns:
+        list of slice: Slices for each scene, suitable for indexing video arrays
+    """
+    frame_numbers = get_cutscene_frame_numbers(video, use_cache=use_cache, include_start=True, include_end=True)
+    slices = [slice(x, y) for x, y in zip(frame_numbers[:-1], frame_numbers[1:])]
+    return slices
+
+    
 
 def remove_duplicate_frames(video, *, lazy=False, show_progress=False, as_indices=False):
     """
@@ -46135,12 +46183,68 @@ def is_gs_url(url):
     "Returns true if the given string is an Google Cloud Storage URL"
     return isinstance(url,str) and url.startswith('gs://')
 
+def is_google_drive_url(url):
+    """
+    Check if a URL is a Google Drive URL.
+
+    Supports formats:
+    - https://drive.google.com/file/d/FILE_ID/view
+    - https://drive.google.com/uc?id=FILE_ID
+    - https://drive.google.com/open?id=FILE_ID
+
+    >>> is_google_drive_url("https://drive.google.com/file/d/1ABC123def456/view")
+    True
+    >>> is_google_drive_url("https://drive.google.com/uc?id=1ABC123def456")
+    True
+    >>> is_google_drive_url("https://example.com/file.txt")
+    False
+    """
+    if not isinstance(url, str):
+        return False
+
+    import re
+    patterns = [
+        r'https://drive\.google\.com/file/d/[a-zA-Z0-9_-]+',
+        r'https://drive\.google\.com/uc\?id=[a-zA-Z0-9_-]+',
+        r'https://drive\.google\.com/open\?id=[a-zA-Z0-9_-]+',
+        r'https://docs.google.com/document/d.*',
+    ]
+
+    for pattern in patterns:
+        if re.match(pattern, url):
+            return True
+    return False
+
+#COMMENTED NOT BECAUSE IT DOESNT WORK (IT DOES), BUT BECAUSE WE NO LONGER NEED IT
+# def get_google_drive_file_id(url):
+#     """
+#     Get the file ID from a Google Drive URL.
+#
+#     >>> get_google_drive_file_id("https://drive.google.com/file/d/1ABC123def456/view")
+#     '1ABC123def456'
+#     >>> get_google_drive_file_id("https://drive.google.com/uc?id=1XYZ789abc")
+#     '1XYZ789abc'
+#     """
+#     import re
+#     patterns = [
+#         r'https://drive\.google\.com/file/d/([a-zA-Z0-9_-]+)',
+#         r'https://drive\.google\.com/uc\?id=([a-zA-Z0-9_-]+)',
+#         r'https://drive\.google\.com/open\?id=([a-zA-Z0-9_-]+)',
+#     ]
+#
+#     for pattern in patterns:
+#         match = re.match(pattern, url)
+#         if match:
+#             return match.group(1)
+#
+#     raise ValueError("Not a valid Google Drive URL or could not extract file ID from: {}".format(url))
+
 def download_url(url, path=None, *, skip_existing=False, show_progress=False, timeout=None):
     """
     Download files from URLs with multi-protocol support and automatic path handling.
-    
-    Supports HTTP/HTTPS, AWS S3, Google Cloud Storage, Google Colossus (/cns paths), 
-    and YouTube video downloads. Automatically chooses appropriate download method 
+
+    Supports HTTP/HTTPS, AWS S3, Google Cloud Storage, Google Drive, Google Colossus (/cns paths),
+    and YouTube video downloads. Automatically chooses appropriate download method
     based on URL format and creates parent directories as needed.
     
     Enhanced Documentation:
@@ -46163,6 +46267,7 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
         - HTTP/HTTPS: Uses requests with streaming and chunked download
         - AWS S3 (s3://): Uses AWS CLI with quiet/verbose options  
         - Google Cloud Storage (gs://): Uses gsutil with recursive copy
+        - Google Drive (drive.google.com): Uses gdown for authenticated downloads
         - Google Colossus (/cns/): Uses internal fileutil for Google systems
         - YouTube: Delegates to download_youtube_video() with format selection
     
@@ -46202,27 +46307,27 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
     assert timeout is None or isinstance(timeout, (int, float)), 'timeout should be a number or None, but got type ' + repr(type(timeout))
 
     if is_a_folder(path):
-        root = path
-        path = path_join(root, get_file_name(url))
+        dst_path = path_join(root, get_file_name(url))
+        dst_root = path
 
     else:
-        if path is None:
-            path= './' + get_file_name(url)
+        dst_path= './' + get_file_name(url) if path is None else path
+        dst_root = get_path_parent(dst_path)
 
         #Create the parent directory of the destination if it doesn't already exist
-        root = get_path_parent(path)
-        if not path_exists(root):
-            make_directory(root)
+        if not path_exists(dst_root):
+            make_directory(dst_root)
 
-    if skip_existing and path_exists(path):
+
+    if skip_existing and path_exists(dst_path):
         #Don't download anything - skip it if it already exists
-        return path
+        return dst_path
 
     if is_s3_url(url):
         import subprocess
 
         try:
-            aws_args = ['aws', 's3', 'cp', url, path] 
+            aws_args = ['aws', 's3', 'cp', url, dst_path] 
             if not show_progress:
                 aws_args+=['--quiet']
             if timeout:
@@ -46230,11 +46335,11 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
                 aws_args.extend(['--cli-read-timeout', str(timeout)]) # Add timeout for s3 cli
             subprocess.check_call(aws_args)
         except subprocess.TimeoutExpired:
-            raise TimeoutError("rp.download_url timed out downloading s3 url %s to path %s"%(url,path))  # Removed after {timeout} seconds as timeout is optional
+            raise TimeoutError("rp.download_url timed out downloading s3 url %s to path %s"%(url,dst_path))  # Removed after {timeout} seconds as timeout is optional
         except subprocess.CalledProcessError as e:
-            raise Exception("rp.download_url failed to download s3 url %s to path %s: "%(url,path) + str(e))
+            raise Exception("rp.download_url failed to download s3 url %s to path %s: "%(url,dst_path) + str(e))
 
-        return path
+        return dst_path
     
     elif is_gs_url(url):
 
@@ -46242,18 +46347,18 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
 
         try:
             kwargs = dict()
-            gs_args = ['gsutil', 'cp', '-r', url, path]
+            gs_args = ['gsutil', 'cp', '-r', url, dst_path]
             if timeout:
                 gs_args = ['timeout', str(timeout)] + gs_args
             if not show_progress:
                 kwargs.update(dict(stderr=subprocess.DEVNULL))
             subprocess.check_call(gs_args,**kwargs)
         except subprocess.TimeoutExpired:
-            raise TimeoutError("rp.download_url timed out downloading Google Cloud Storage url %s to path %s"%(url,path))
+            raise TimeoutError("rp.download_url timed out downloading Google Cloud Storage url %s to path %s"%(url,dst_path))
         except subprocess.CalledProcessError as e:
-            raise Exception("rp.download_url failed to download Google Cloud Storage url %s to path %s: "%(url,path) + str(e))
+            raise Exception("rp.download_url failed to download Google Cloud Storage url %s to path %s: "%(url,dst_path) + str(e))
 
-        return path
+        return dst_path
     
     elif url.startswith('/cns/') and system_command_exists('fileutil', use_cache=True) and not folder_exists('/cns'):
         #We're on an internal Google computer and want to download a file from colossus
@@ -46266,20 +46371,36 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
             if timeout:
                 fileutil_args+=['--fileutil_timeout',str(timeout)] #Not a guarantee - in the doc it says its aspirational
                 fileutil_args = ['timeout', str(timeout*2)] + fileutil_args #So we kill it if it takes 2x as long as the deadline
-            fileutil_args+=[url,path]
+            fileutil_args+=[url,dst_path]
             if not show_progress:
                 kwargs.update(dict(stderr=subprocess.DEVNULL))
             subprocess.check_call(fileutil_args,**kwargs)
         except subprocess.TimeoutExpired:
-            raise TimeoutError("rp.download_url timed out downloading Google Colossus url %s to path %s"%(url,path))
+            raise TimeoutError("rp.download_url timed out downloading Google Colossus url %s to path %s"%(url,dst_path))
         except subprocess.CalledProcessError as e:
-            raise Exception("rp.download_url failed to download Google Colossus url %s to path %s: "%(url,path) + str(e))
+            raise Exception("rp.download_url failed to download Google Colossus url %s to path %s: "%(url,dst_path) + str(e))
 
-        return path
+        return dst_path
 
+    elif is_google_drive_url(url):
+        #EXAMPLE:
+        #    >>> download_url('https://docs.google.com/document/d/1LEYMqILsRe0EajUlpC-V_xZ9AcWlkRUKM2poCjP5Ixs/edit?usp=drive_link')
+        #    ans = ./My actual resume.docx
+
+        pip_import('gdown')
+        import gdown
+
+        if path is None:
+            #We can't use the default dst_path as it would take the file name from the URL which is often junk
+            #It needs to end with "/" to treat it as a folder
+            dst_path = root + "/"
+
+        output_path = gdown.download(url=url, output=dst_path, fuzzy=True, quiet=not show_progress)
+
+        return output_path
 
     elif _is_youtube_video_url(url):
-        return download_youtube_video(url, path, skip_existing=skip_existing, show_progress=show_progress, timeout=timeout) # Pass timeout to youtube download
+        return download_youtube_video(url, dst_path, skip_existing=skip_existing, show_progress=show_progress, timeout=timeout) # Pass timeout to youtube download
 
     elif is_valid_url(url):
         pip_import('requests')
@@ -46298,7 +46419,7 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
 
         total_size = int(response.headers.get('content-length', 0))
         chunk_size = 1024**2  # 1 MB per iteration
-        with open(path, 'wb') as file:
+        with open(dst_path, 'wb') as file:
             iterator = response.iter_content(chunk_size)
             
             if show_progress:
@@ -46309,7 +46430,7 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
             for data in iterator:
                 file.write(data)
 
-        return path
+        return dst_path
 
     else:
         raise ValueError("Invalid URL: "+str(url)[:1000])
@@ -63394,6 +63515,7 @@ known_pypi_module_package_names={
     'deprecate': 'pyDeprecate',
     'diff_match_patch': 'diff-match-patch',
     'dns': 'dnspython',
+    'docx': 'python-docx',
     'dockerpycreds': 'docker-pycreds',
     'dot_parser': 'pydotz',
     'dotenv': 'python-dotenv',
