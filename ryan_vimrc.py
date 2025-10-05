@@ -99,6 +99,12 @@ nnoremap td :tab split<cr>
 nnoremap tn :tabnew<cr>
 nnoremap ts :tab split<cr>
 nnoremap tc :tab close<cr>
+" Close all tabs to the right and left
+command! TabCloseRight execute (tabpagenr()+1).',$tabdo tabclose'
+command! TabCloseLeft execute '1,'.(tabpagenr()-1).'tabdo tabclose'
+command! TabCloseOther tabonly
+command! TabToStart tabmove 0
+command! TabToEnd tabmove
 nnoremap \co gg"+yG<c-o>zz
 nnoremap <esc>w <c-w>
 
@@ -200,10 +206,20 @@ Plugin 'jistr/vim-nerdtree-tabs' "Make NERDTree persist across different tabs
 
 " Plugin 'tpope/vim-commentary' "Allows commenting out code with 'gcc' etc
 Plugin 'tomtom/tcomment_vim' " JS in HTML isn't commented right with tpope's. This is hopefully more powerful. https://github.com/tpope/vim-commentary/issues/60
+" Disable tcomment's g< and g> mappings to allow vim-swap to work
+let g:tcomment_maps = 0
+" Manually map the comment commands we want to keep
+nmap gcc :TComment<CR>
+vmap gc :TComment<CR>
+" Map gc as an operator for motions like gck, gc4k, gcip, etc
+map <silent> gc <Plug>TComment_gc
 "Shortcut to comment out functions in python without commenting whitespace below them...
 nmap gcd vifokgc
 
 Plugin 'mhinz/vim-startify' "Shows the startup menu
+" Make 'q' quit immediately on Startify screen and swap file warnings
+autocmd FileType startify nnoremap <buffer> q :q<CR>
+autocmd SwapExists * nnoremap <buffer> q :q<CR>
 " Plugin 'dkprice/vim-easygrep' "Currently disabled until I figure out a good way to use it
 " plugin from http://vim-scripts.org/vim/scripts.html
 " Plugin 'L9'
@@ -271,6 +287,8 @@ set cursorline
 
 "Highlight all search results
 set hlsearch
+" Keep search highlighting after CtrlP
+nnoremap <silent> <leader>h :set hlsearch<CR>
 
 " noremap : ;
 noremap ; :
@@ -465,7 +483,34 @@ function! Fansi()
     
     
     call RyanHighlightDefaults()
-    
+
+    " Override diff colors to maintain diffnav highlighting
+    :hi DiffAdd ctermfg=111 ctermbg=236 cterm=reverse
+    :hi DiffChange ctermfg=188 ctermbg=236 cterm=reverse
+    :hi DiffDelete ctermfg=222 ctermbg=236 cterm=reverse
+    :hi DiffText ctermfg=145 ctermbg=236 cterm=reverse
+    :hi DiffNavSeparator ctermbg=240 ctermfg=248
+    :hi DiffNavFilename ctermbg=240 ctermfg=248
+    :hi DiffNavFilenameText ctermbg=240 ctermfg=white cterm=bold
+
+    " Refresh diffnav buffers after color scheme change
+    let l:current_buf = bufnr('%')
+    for l:buf in range(1, bufnr('$'))
+        if getbufvar(l:buf, '&filetype') ==# 'diff' && getbufvar(l:buf, 'diff_nav_mode') !=# ''
+            if bufexists(l:buf) && buflisted(l:buf)
+                silent! execute 'buffer ' . l:buf
+                silent! doautocmd Syntax
+                silent! syntax match DiffNavSeparator /╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱/
+                silent! syntax match DiffNavFilename /╱\+\s\+.*\s\+╱\+/
+                silent! syntax match DiffNavFilenameText /\(╱\+\s\+\)\@<=\S.*\S\(\s\+╱\+\)\@=/ contained containedin=DiffNavFilename
+                silent! highlight DiffNavSeparator ctermbg=240 ctermfg=248
+                silent! highlight DiffNavFilename ctermbg=240 ctermfg=248
+                silent! highlight DiffNavFilenameText ctermbg=240 ctermfg=white cterm=bold
+            endif
+        endif
+    endfor
+    silent! execute 'buffer ' . l:current_buf
+
     "Display the color
     echo g:colors_name
 
@@ -587,6 +632,11 @@ function RyanHighlightDefaults()
     :hi DiffChange ctermfg=188 ctermbg=236 cterm=reverse
     :hi DiffDelete ctermfg=222 ctermbg=236 cterm=reverse
     :hi DiffText ctermfg=145 ctermbg=236 cterm=reverse
+
+    " Restore CtrlP match highlighting after color scheme change
+    :hi CtrlPMatch ctermfg=cyan ctermbg=NONE cterm=bold
+    :hi CtrlPLinePre ctermfg=cyan ctermbg=NONE
+
 
 endfunction
 
@@ -852,8 +902,8 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
         nmap <F4>g : GitGutterToggle <CR>
         nmap <leader>jg : GitGutterToggle <CR>
 
-        " Gitgutter Commit Selection
-        nnoremap <leader>jG :call<space>GitGutterSelectDiffBase()<CR>
+        " Gitgutter Commit Selection (refresh NERDTree after)
+        nnoremap <leader>jG :call<space>GitGutterSelectDiffBase()<CR>:NERDTreeRefreshRoot<CR>
         
         "Doesn't work - idk why
         " " NerdTree
@@ -875,7 +925,8 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
     "GIT STUFF:
         "NERDTREE:
             " A plugin that lets us see which files are modified in NERDTree
-            Plugin 'Xuyuanp/nerdtree-git-plugin'
+            " MODIFIED: Syncs with GitGutter - when you use \jG, NERDTree git signs update too
+            Plugin 'RyannDaGreat/nerdtree-git-plugin'
             let g:NERDTreeGitStatusIndicatorMapCustom = {
                             \ 'Modified'  :'✹',
                             \ 'Staged'    :'✚',
@@ -940,6 +991,7 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             
             Plugin 'tpope/vim-fugitive'
             nnoremap <Leader>gB :Git blame<CR>
+
             " In this mode, press 'p' to preview (don't use <CR>)
     "PYTHON STUFF:
         "IMPORT SORT: ^i
@@ -1260,7 +1312,9 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
                 nmap <silent> [v <Plug>(SelectPrevious)
                 nmap <silent> ]v <Plug>(SelectNext)
                 Plugin 'Matt-A-Bennett/vim-visual-history'
-    
+                " Fix visual-history plugin - initialize ALL its buffer variables because it doesn't do it properly
+                autocmd BufEnter,BufNew,CursorMoved,TextChanged,InsertLeave * if !exists('b:reselecting') | let b:reselecting=0 | let b:vis_mark_record=[] | let b:vis_mark_record_pointer=0 | let b:record_length=10000 | let b:old_number_of_lines=line('$') | let b:selection_check_count=3 | endif
+
     "NAVIGATION:
         "SEARCHING: * / \ff \fr
             " TIP:  add \c at the end of a search to make it case-insensitive.   /ryan\c   matches   Ryan
@@ -2186,9 +2240,466 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
             else
               echo "GitGutter diff base set to " . g:gitgutter_diff_base
             endif
+
+            " Trigger diff nav refresh
+            doautocmd User GitGutterBaseChanged
           else
             echo "Failed to parse commit information"
           endif
+        endfunction
+
+    "DIFF NAVIGATOR g\gg g\gv g\gs:
+        " g\gg = new tab, g\gv = vertical split, g\gs = horizontal split
+        " Enter/click = navigate to file, q = quit, r = refresh
+        " Auto-refreshes when entering pane or using \jG to change base
+        nnoremap g\gg :call ShowCumulativeDiff('tab')<CR>
+        nnoremap g\gv :call ShowCumulativeDiff('vsplit')<CR>
+        nnoremap g\gs :call ShowCumulativeDiff('split')<CR>
+
+        function! DiffNavFoldExpr(lnum)
+            let l:line = getline(a:lnum)
+            " Header lines are not folded
+            if l:line =~ '^╱'
+                return '0'
+            " Start a new fold right after the header block
+            elseif a:lnum > 1 && getline(a:lnum - 1) =~ '^╱' && l:line !~ '^╱'
+                return '>1'
+            " Continue the fold until we hit another header
+            elseif l:line =~ '^\(diff\|index\|@@\|+++\|---\|+\|-\| \)' || (l:line =~ '^\s*$' && a:lnum > 1 && getline(a:lnum - 1) !~ '^╱')
+                return '1'
+            endif
+            return '0'
+        endfunction
+
+        function! DiffNavFoldText()
+            " Look backwards from fold start to find the filename in the header
+            for l:lnum in range(v:foldstart - 1, 1, -1)
+                let l:line = getline(l:lnum)
+                if l:line =~ '╱\+\s\+.*\s\+╱\+'
+                    let l:filename = substitute(l:line, '^╱\+\s\+\(.*\)\s\+╱\+$', '\1', '')
+                    let l:num_lines = v:foldend - v:foldstart + 1
+                    return '▶ ' . l:filename . ' (' . l:num_lines . ' lines)'
+                elseif l:line =~ '^╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱'
+                    " Stop at the top of the current header block
+                    break
+                endif
+            endfor
+            " Fallback if no filename found
+            let l:num_lines = v:foldend - v:foldstart + 1
+            return '▶ File (' . l:num_lines . ' lines)'
+        endfunction
+
+        function! ShowCumulativeDiff(mode)
+            " Determine diff base - if no custom base, show working directory changes
+            if exists('g:gitgutter_diff_base') && !empty(g:gitgutter_diff_base)
+                let l:base = g:gitgutter_diff_base
+            else
+                let l:base = ''  " Empty means working directory changes
+            endif
+
+            " Store the target window for split modes
+            let l:target_win = winnr()
+
+            " Create diff nav pane
+            if a:mode ==# 'tab'
+                tabnew
+            elseif a:mode ==# 'vsplit'
+                vnew
+            elseif a:mode ==# 'split'
+                new
+            endif
+
+            " Immediately set buffer as scratch to prevent swap files
+            setlocal buftype=nofile noswapfile nobuflisted
+
+            " Get and format diff content
+            if empty(l:base)
+                " For MAIN mode, show both staged and unstaged changes
+                let l:staged_content = systemlist('git diff --no-color --cached')
+                let l:unstaged_content = systemlist('git diff --no-color')
+                let l:diff_content = l:staged_content + l:unstaged_content
+
+                " If no staged/unstaged changes in MAIN mode, show empty message
+                if len(l:diff_content) == 0
+                    let l:empty_msg = ' ( EMPTY DIFF AT [MAIN] ) '
+                    let l:separator_width = 78
+                    let l:msg_len = len(l:empty_msg)
+                    let l:padding = (l:separator_width - l:msg_len) / 2
+                    let l:left_pad = repeat('╱', l:padding)
+                    let l:right_pad = repeat('╱', l:separator_width - l:msg_len - l:padding)
+                    let l:centered_msg = l:left_pad . l:empty_msg . l:right_pad
+                    let l:diff_content = ['╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱', l:centered_msg, '╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱']
+                endif
+            else
+                " For custom base, compare against that commit
+                let l:diff_content = systemlist('git diff --no-color ' . l:base)
+            endif
+            let l:formatted_content = []
+            let l:current_file = ''
+
+            for l:line in l:diff_content
+                " Skip "\ No newline at end of file" lines
+                if l:line =~ '^\\ No newline at end of file'
+                    continue
+                endif
+
+                " Add file headers for better readability
+                if l:line =~ '^diff --git'
+                    " Extract filename from current diff line for the header
+                    let l:filename = substitute(l:line, '^diff --git a/\(.*\) b/.*$', '\1', '')
+                    let l:separator_width = 78
+                    let l:filename_len = len(l:filename)
+                    let l:padding = (l:separator_width - l:filename_len - 2) / 2
+                    let l:left_pad = repeat('╱', l:padding)
+                    let l:right_pad = repeat('╱', l:separator_width - l:filename_len - 2 - l:padding)
+                    let l:filename_line = l:left_pad . ' ' . l:filename . ' ' . l:right_pad
+
+                    " Only add spacing if this isn't the first file
+                    if !empty(l:current_file)
+                        call add(l:formatted_content, '')
+                        call add(l:formatted_content, '')
+                    endif
+
+                    call add(l:formatted_content, '╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱')
+                    call add(l:formatted_content, l:filename_line)
+                    call add(l:formatted_content, '╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱')
+                    call add(l:formatted_content, '')
+                    call add(l:formatted_content, '')
+
+                    let l:current_file = l:line
+                endif
+                call add(l:formatted_content, l:line)
+            endfor
+
+            call setline(1, l:formatted_content)
+
+            " Set filetype to diff for syntax highlighting
+            setfiletype diff
+
+            " Add custom highlighting for file separators
+            syntax match DiffNavSeparator /╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱/
+            syntax match DiffNavFilename /╱\+\s\+.*\s\+╱\+/
+            syntax match DiffNavFilenameText /\(╱\+\s\+\)\@<=\S.*\S\(\s\+╱\+\)\@=/ contained containedin=DiffNavFilename
+            highlight DiffNavSeparator ctermbg=240 ctermfg=248
+            highlight DiffNavFilename ctermbg=240 ctermfg=248
+            highlight DiffNavFilenameText ctermbg=240 ctermfg=white cterm=bold
+
+            " Set up file-based folding
+            setlocal foldmethod=expr
+            setlocal foldexpr=DiffNavFoldExpr(v:lnum)
+            setlocal foldtext=DiffNavFoldText()
+            setlocal foldlevel=99
+
+            " Make buffer read-only (already set as nofile/noswapfile earlier)
+            setlocal readonly nomodifiable
+
+            " Store mode and target window for navigation
+            let b:diff_nav_mode = a:mode
+            let b:diff_nav_target_win = l:target_win
+
+            " Add navigation mappings
+            nnoremap <buffer> <CR> :call NavigateToDiffFile()<CR>
+            nnoremap <buffer> <2-LeftMouse> :call NavigateToDiffFile()<CR>
+            nnoremap <buffer> q :call CloseDiffNav()<CR>
+            nnoremap <buffer> r :call RefreshDiffNav()<CR>
+
+
+            " Auto-refresh on GitGutter base change and file saves
+            " Create a global autocmd for GitGutter base changes and file saves
+            if !exists('g:diff_nav_autocmd_created')
+                augroup DiffNavAutoRefresh
+                    autocmd!
+                    autocmd User GitGutterBaseChanged call RefreshAllDiffNavPanes()
+                    autocmd BufWritePost * call RefreshAllDiffNavPanes()
+                    autocmd FocusGained * call RefreshAllDiffNavPanes()
+                augroup END
+                let g:diff_nav_autocmd_created = 1
+            endif
+
+            " Use a global counter to ensure unique buffer names
+            if !exists('g:diff_nav_counter')
+                let g:diff_nav_counter = 0
+            endif
+            let g:diff_nav_counter += 1
+
+            " Set unique buffer name based on diff base and counter
+            if exists('g:gitgutter_diff_base') && !empty(g:gitgutter_diff_base)
+                let l:buffer_name = '[Diff#' . g:diff_nav_counter . ': ' . g:gitgutter_diff_base[0:6] . ']'
+            else
+                let l:buffer_name = '[Diff#' . g:diff_nav_counter . ': MAIN]'
+            endif
+
+            " Use silent! to suppress error if buffer name already exists somehow
+            silent! execute 'file ' . fnameescape(l:buffer_name)
+        endfunction
+
+        function! NavigateToDiffFile()
+            let l:mode = exists('b:diff_nav_mode') ? b:diff_nav_mode : 'tab'
+            let l:target_win = exists('b:diff_nav_target_win') ? b:diff_nav_target_win : 1
+
+            let l:line = getline('.')
+            let l:current_line_num = line('.')
+
+            " Skip separator lines
+            if l:line =~ '^====*$'
+                return
+            endif
+
+            " Find the current file by looking backwards for +++ line
+            let l:filename = ''
+            let l:last_hunk_line = 0
+
+            for l:i in range(l:current_line_num, 1, -1)
+                let l:check_line = getline(l:i)
+
+                " Skip separator lines
+                if l:check_line =~ '^====*$'
+                    continue
+                endif
+
+                " Found the filename
+                if l:check_line =~ '^+++ b/\(.*\)$'
+                    let l:filename = substitute(l:check_line, '^+++ b/\(.*\)$', '\1', '')
+                    break
+                endif
+
+                " Track the most recent hunk header
+                if l:check_line =~ '^@@ -\d\+,\d\+ +\(\d\+\),\d\+ @@' && l:last_hunk_line == 0
+                    let l:last_hunk_line = substitute(l:check_line, '^@@ -\d\+,\d\+ +\(\d\+\),\d\+ @@.*$', '\1', '')
+                endif
+            endfor
+
+            if empty(l:filename)
+                echo "Could not find filename in diff"
+                return
+            endif
+
+            " Calculate target line number
+            let l:target_line = 1
+            if l:line =~ '^@@ -\d\+,\d\+ +\(\d\+\),\d\+ @@'
+                let l:target_line = substitute(l:line, '^@@ -\d\+,\d\+ +\(\d\+\),\d\+ @@.*$', '\1', '')
+            elseif l:line =~ '^[+ -]' && l:last_hunk_line > 0
+                let l:line_offset = 0
+                for l:i in range(l:current_line_num, 1, -1)
+                    let l:check_line = getline(l:i)
+                    if l:check_line =~ '^@@ -\d\+,\d\+ +\(\d\+\),\d\+ @@'
+                        break
+                    endif
+                    if l:check_line =~ '^[+ ]'
+                        let l:line_offset += 1
+                    endif
+                endfor
+                let l:target_line = l:last_hunk_line + l:line_offset - 1
+            endif
+
+            " Calculate cursor position relative to window to preserve visual positioning
+            let l:diff_window_top = line('w0')
+            let l:diff_window_bottom = line('w$')
+            let l:diff_cursor_line = line('.')
+            let l:cursor_offset_from_top = l:diff_cursor_line - l:diff_window_top
+
+            " Navigate based on mode
+            if l:mode ==# 'tab'
+                silent! execute 'tabnew +' . l:target_line . ' ' . l:filename
+                " Position the target line at the same visual offset from top
+                let l:scroll_to_line = l:target_line - l:cursor_offset_from_top
+                if l:scroll_to_line < 1
+                    let l:scroll_to_line = 1
+                endif
+                execute 'normal! ' . l:scroll_to_line . 'Gzt'
+                execute 'normal! ' . l:target_line . 'G'
+            else
+                " For splits, go to target window or create new one
+                if l:mode ==# 'vsplit' || l:mode ==# 'split'
+                    " Try to go to the other split
+                    let l:current_win = winnr()
+                    wincmd w
+                    if winnr() == l:current_win
+                        " No other split exists, create one
+                        if l:mode ==# 'vsplit'
+                            vsplit
+                        else
+                            split
+                        endif
+                    endif
+                    silent! execute 'edit +' . l:target_line . ' ' . l:filename
+                    " Position the target line at the same visual offset from top
+                    let l:scroll_to_line = l:target_line - l:cursor_offset_from_top
+                    if l:scroll_to_line < 1
+                        let l:scroll_to_line = 1
+                    endif
+                    execute 'normal! ' . l:scroll_to_line . 'Gzt'
+                    execute 'normal! ' . l:target_line . 'G'
+                    " Don't return focus to diffnav in split modes - stay in the file
+                endif
+            endif
+        endfunction
+
+        function! CloseDiffNav()
+            let l:mode = exists('b:diff_nav_mode') ? b:diff_nav_mode : 'tab'
+            if l:mode ==# 'tab'
+                tabclose
+            else
+                close
+            endif
+        endfunction
+
+        function! RefreshDiffNav()
+            " Only refresh if this is actually a diff nav buffer
+            if !exists('b:diff_nav_mode')
+                return
+            endif
+
+            " Store current context to restore after refresh
+            let l:current_line = line('.')
+            let l:current_context = ''
+
+            " Find the current file context by looking for the nearest filename header
+            for l:i in range(l:current_line, 1, -1)
+                let l:check_line = getline(l:i)
+                if l:check_line =~ '╱\+\s\+.*\s\+╱\+'
+                    " Extract filename from header
+                    let l:current_context = substitute(l:check_line, '.*╱\+\s\+\(.*\)\s\+╱\+.*', '\1', '')
+                    break
+                endif
+            endfor
+
+            " Get current diff base - if no custom base, show working directory changes
+            if exists('g:gitgutter_diff_base') && !empty(g:gitgutter_diff_base)
+                let l:base = g:gitgutter_diff_base
+            else
+                let l:base = ''  " Empty means working directory changes
+            endif
+
+            " Get and format fresh diff content
+            if empty(l:base)
+                " For MAIN mode, show both staged and unstaged changes
+                let l:staged_content = systemlist('git diff --no-color --cached')
+                let l:unstaged_content = systemlist('git diff --no-color')
+                let l:diff_content = l:staged_content + l:unstaged_content
+
+                " If no staged/unstaged changes in MAIN mode, show empty message
+                if len(l:diff_content) == 0
+                    let l:empty_msg = ' ( EMPTY DIFF AT [MAIN] ) '
+                    let l:separator_width = 78
+                    let l:msg_len = len(l:empty_msg)
+                    let l:padding = (l:separator_width - l:msg_len) / 2
+                    let l:left_pad = repeat('╱', l:padding)
+                    let l:right_pad = repeat('╱', l:separator_width - l:msg_len - l:padding)
+                    let l:centered_msg = l:left_pad . l:empty_msg . l:right_pad
+                    let l:diff_content = ['╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱', l:centered_msg, '╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱']
+                endif
+            else
+                " For custom base, compare against that commit
+                let l:diff_content = systemlist('git diff --no-color ' . l:base)
+            endif
+
+            " Check if content has actually changed
+            let l:new_content_hash = sha256(join(l:diff_content, "\n"))
+            if exists('b:diff_nav_content_hash') && b:diff_nav_content_hash ==# l:new_content_hash
+                return
+            endif
+            let b:diff_nav_content_hash = l:new_content_hash
+
+            let l:formatted_content = []
+            let l:current_file = ''
+
+            for l:line in l:diff_content
+                " Add file headers for better readability
+                if l:line =~ '^diff --git'
+                    " Extract filename from current diff line for the header
+                    let l:filename = substitute(l:line, '^diff --git a/\(.*\) b/.*$', '\1', '')
+                    let l:separator_width = 78
+                    let l:filename_len = len(l:filename)
+                    let l:padding = (l:separator_width - l:filename_len - 2) / 2
+                    let l:left_pad = repeat('╱', l:padding)
+                    let l:right_pad = repeat('╱', l:separator_width - l:filename_len - 2 - l:padding)
+                    let l:filename_line = l:left_pad . ' ' . l:filename . ' ' . l:right_pad
+
+                    " Only add spacing if this isn't the first file
+                    if !empty(l:current_file)
+                        call add(l:formatted_content, '')
+                        call add(l:formatted_content, '')
+                    endif
+
+                    call add(l:formatted_content, '╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱')
+                    call add(l:formatted_content, l:filename_line)
+                    call add(l:formatted_content, '╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱')
+                    call add(l:formatted_content, '')
+                    call add(l:formatted_content, '')
+
+                    let l:current_file = l:line
+                endif
+                call add(l:formatted_content, l:line)
+            endfor
+
+            " Update buffer content
+            setlocal modifiable
+            silent! call deletebufline('%', 1, '$')
+            silent! call setline(1, l:formatted_content)
+            setlocal nomodifiable readonly
+
+            " Add custom highlighting for file separators
+            syntax match DiffNavSeparator /╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱/
+            syntax match DiffNavFilename /╱\+\s\+.*\s\+╱\+/
+            syntax match DiffNavFilenameText /\(╱\+\s\+\)\@<=\S.*\S\(\s\+╱\+\)\@=/ contained containedin=DiffNavFilename
+            highlight DiffNavSeparator ctermbg=240 ctermfg=248
+            highlight DiffNavFilename ctermbg=240 ctermfg=248
+            highlight DiffNavFilenameText ctermbg=240 ctermfg=white cterm=bold
+
+            " Set up file-based folding
+            setlocal foldmethod=expr
+            setlocal foldexpr=DiffNavFoldExpr(v:lnum)
+            setlocal foldtext=DiffNavFoldText()
+            setlocal foldlevel=99
+
+            " Restore cursor position to the same file context
+            if !empty(l:current_context)
+                " Find the same file in the refreshed content
+                for l:i in range(1, line('$'))
+                    let l:check_line = getline(l:i)
+                    if l:check_line =~ '╱\+\s\+.*\s\+╱\+' && l:check_line =~ l:current_context
+                        execute 'normal! ' . l:i . 'G'
+                        break
+                    endif
+                endfor
+            else
+                " Fallback: go to first line
+                execute 'normal! gg'
+            endif
+
+
+            " Update buffer name to show it's refreshed
+            if b:diff_nav_mode ==# 'tab'
+                file [Diff Navigator ●]
+            else
+                file [Diff Nav ●]
+            endif
+        endfunction
+
+        function! RefreshAllDiffNavPanes()
+            " Save current tab/window
+            let l:current_tab = tabpagenr()
+            let l:current_win = winnr()
+
+            " Iterate through all tabs
+            for l:tab in range(1, tabpagenr('$'))
+                silent! execute 'tabnext ' . l:tab
+
+                " Iterate through all windows in this tab
+                for l:win in range(1, winnr('$'))
+                    silent! execute l:win . 'wincmd w'
+
+                    " Check if this window has a diff nav buffer
+                    if exists('b:diff_nav_mode')
+                        silent! call RefreshDiffNav()
+                    endif
+                endfor
+            endfor
+
+            " Restore original tab/window
+            silent! execute 'tabnext ' . l:current_tab
+            silent! execute l:current_win . 'wincmd w'
         endfunction
 
 "Plugin 'maralla/completor.vim'
