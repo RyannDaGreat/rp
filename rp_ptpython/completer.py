@@ -409,7 +409,9 @@ class PythonCompleter(Completer):
         if re.fullmatch(r'.*\`\w*',before_line)\
             or (before_line.startswith('RUN ') and not ('\n' in before) and not after):#not after and not '\n' in before and re.fullmatch(before_line):
             import os
-            yield from yield_from_candidates([x for x in os.listdir() if any(x.endswith(e) for e in '.py .rpy'.split())])
+            # Check if buffer starts with ! to determine file extensions (bash vs python)
+            extensions = '.sh .bash .zsh'.split() if document.text.lstrip().startswith('!') else '.py .rpy'.split()
+            yield from yield_from_candidates([x for x in os.listdir() if any(x.endswith(e) for e in extensions)])
             return 
         if (before_line.startswith('!') or before_line.startswith('ARG ')) and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
