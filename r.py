@@ -20189,18 +20189,21 @@ def _print_status(x):
 
     _print_status_prev_len = len(x)
 
-def _eta(total_n,*,min_interval,title):
+def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,completion_unit="items"):
     """
     Internal ETA implementation that creates a progress tracking function.
-    
+
     Args:
-        total_n (int): Total number of items to process
-        min_interval (float): Minimum seconds between display updates 
+        total_n (int or None): Total number of items to process. If None, only tracks elapsed time without ETA.
+        min_interval (float): Minimum seconds between display updates
         title (str): Display title for progress messages
-        
+        format_value (callable): Function to format progress values (default: str)
+        completion_verb (str): Verb for completion message (default: "Did")
+        completion_unit (str): Unit name for completion message (default: "items")
+
     Returns:
         callable: Progress function that accepts current count and updates display
-        
+
     Example:
         >>> a = eta(2000,title='test')
         ... for i in range(2000):
@@ -20208,6 +20211,9 @@ def _eta(total_n,*,min_interval,title):
         ...     a(i)
     """
     from datetime import timedelta
+
+    if completion_verb is None:
+        completion_verb = "Did"
 
     timer = tic()
     interval_timer = tic()
@@ -20221,18 +20227,44 @@ def _eta(total_n,*,min_interval,title):
         num_chars = round(len(string) * proportion)
         return fansi(string[:num_chars], style) + string[num_chars:]
 
+    if total_n is None:
+        # Unknown total - just track progress without ETA, but show rate
+        def display_progress_only(time_elapsed_in_seconds, COMPLETED_SO_FAR):
+            nonlocal interval_timer
+
+            if interval_timer()>=min_interval:
+                interval_timer=tic()
+                temp=timedelta(seconds=time_elapsed_in_seconds)
+
+                # Calculate average rate
+                if time_elapsed_in_seconds > 0:
+                    rate = COMPLETED_SO_FAR / time_elapsed_in_seconds
+                    rate_str = "\tRATE={0}/s".format(format_value(rate))
+                else:
+                    rate_str = ""
+
+                return _print_status(title + "T=" + str(temp) + rate_str + "\t" + format_value(COMPLETED_SO_FAR))
+
+        def out(n):
+            return display_progress_only(timer(), COMPLETED_SO_FAR=n)
+
+        return out
+
     def display_eta(proportion_completed,time_elapsed_in_seconds,TOTAL_TO_COMPLETE,COMPLETED_SO_FAR):
         nonlocal interval_timer
         nonlocal shown_done
 
-        done = proportion_completed >= 1
+        done = COMPLETED_SO_FAR >= TOTAL_TO_COMPLETE
+
+        if shown_done:
+            return  # Already printed completion, don't print again
 
         if interval_timer()>=min_interval or done and not shown_done:
             interval_timer=tic()
 
             # Estimated time of arrival printer
             temp=timedelta(seconds=time_elapsed_in_seconds)
-            progress = "\tProgress: " + str(COMPLETED_SO_FAR) + "/" + str(TOTAL_TO_COMPLETE)
+            progress = "\tProgress: " + format_value(COMPLETED_SO_FAR) + "/" + format_value(TOTAL_TO_COMPLETE)
 
             if proportion_completed <= 0:
                 return _print_status(
@@ -20263,7 +20295,7 @@ def _eta(total_n,*,min_interval,title):
                 )
                 if not done
                 # else title + "COMPLETED IN " + str(temp) + progress + "\n"
-                else title + "Done! Did %i items in %s" % (COMPLETED_SO_FAR, temp) + "\n"
+                else title + "Done! %s %s %s in %s" % (completion_verb, format_value(COMPLETED_SO_FAR).strip(), completion_unit, temp) + "\n"
             )
 
 
@@ -26174,7 +26206,7 @@ def pseudo_terminal(
                         fansi_print("    ...please wait, communicating with "+repr(_web_clipboard_url)+"...","blue",new_line=False)
                         from time import time
                         start_time=time()
-                        new_ans=web_paste()
+                        new_ans=web_paste(show_progress=True)
                         fansi_print("done in "+str(time()-start_time)[:6]+' seconds!',"blue",new_line=True)
 
                         if isinstance(new_ans,str):
@@ -26819,7 +26851,7 @@ def pseudo_terminal(
                             fansi_print("    ...please wait, communicating with "+repr(_web_clipboard_url)+"...","blue",new_line=False)
                             from time import time
                             start_time=time()
-                            path=web_paste_path()
+                            path=web_paste_path(show_progress=True)
                             fansi_print("done in "+str(time()-start_time)[:6]+' seconds!',"blue",new_line=True)
                             user_message=repr(path)
 
@@ -41077,6 +41109,7 @@ def _as_tiktok_url(string: str) -> str:
         >>> _as_tiktok_url("@islanduniverse.3d/video/7539708490512616734")
         "https://www.tiktok.com/@islanduniverse.3d/video/7539708490512616734?is_copy_url=1&is_from_webapp=v1"
     """
+    import re
     # Extract username and video ID
     m = re.search(r"@([\w\.\-]+)/video/(\d+)", string)
     if not m:
@@ -49672,26 +49705,62 @@ def decode_image_to_bytes(image)->bytes:
 
 _web_clipboard_url = 'https://ryanpythonide.pythonanywhere.com'#By sqrtryan@gmail.com account
 
+def _eta_bytes(total_bytes, *, min_interval, title, completion_verb=None):
+    """
+    ETA tracker specifically for byte transfers that formats sizes as KB/MB/GB.
+
+    Args:
+        total_bytes (int or None): Total number of bytes to process. If None, only tracks elapsed time.
+        min_interval (float): Minimum seconds between display updates
+        title (str): Display title for progress messages
+        completion_verb (str): Verb for completion message (default: "Completed" if None)
+
+    Returns:
+        callable: Progress function that accepts current byte count
+    """
+    max_width = len("1023.9BB") # Max possible width is "1023.9XX" where XX is 2-char unit like BB, YB, etc.
+    def format_bytes(n):
+        return human_readable_file_size(n).rjust(max_width)
+
+    return _eta(
+        total_bytes,
+        min_interval=min_interval,
+        title=title,
+        format_value=format_bytes,
+        completion_verb=completion_verb,
+        completion_unit="",
+    )
+
 class _WebCopyProgressTracker:
     """Tracks progress for web copy data uploads"""
-    def __init__(self, data, callback):
+    def __init__(self, data, callback, chunk_size=8192):
         self.bytes_read = 0
         self.total_size = len(data)
         self.callback = callback
         self.data = data
-        
+        self.chunk_size = chunk_size
+
     def update(self, bytes_count):
         self.bytes_read += bytes_count
         self.callback(self.bytes_read)
         return self.bytes_read
-        
+
     def read(self, size=-1):
         if size == -1:
             size = len(self.data) - self.bytes_read
-        
+
         chunk = self.data[self.bytes_read:self.bytes_read + size]
         self.update(len(chunk))
         return chunk
+
+    def __iter__(self):
+        """Yield chunks for requests library to iterate over"""
+        while self.bytes_read < self.total_size:
+            chunk = self.data[self.bytes_read:self.bytes_read + self.chunk_size]
+            if not chunk:
+                break
+            self.update(len(chunk))
+            yield chunk
 
 def _web_copy(data:object, *, show_progress=False)->None:
     """ Make the request for web-copying. Can also upload arbitrary HTML pages. """
@@ -49703,12 +49772,12 @@ def _web_copy(data:object, *, show_progress=False)->None:
     from io import BytesIO
     
     if show_progress:
-        display_progress = _eta(len(data), title="Web Copy", min_interval=1/60)
-        
+        display_progress = _eta_bytes(len(data), title="Web Copy", min_interval=1/60, completion_verb="Sent")
+
         # Create a tracker that will monitor the upload progress
-        new_data = _WebCopyProgressTracker(data, display_progress)
-        if is_iterable(new_data):
-            data = new_data #3.5-friendly
+        if sys.version_info >= (3, 6):
+            data = _WebCopyProgressTracker(data, display_progress)
+        #else: Python 3.5 doesn't handle file-like objects properly in requests
         
     response = requests.post(_web_clipboard_url, data=data)
 
@@ -49722,14 +49791,11 @@ def web_copy(data:object, *, show_progress=False)->None:
     response=_web_copy(object_to_bytes(data), show_progress=show_progress)
     assert response.status_code==200,'Got bad status code that wasnt 200: '+str(response.status_code)
 
-def web_paste():
+def web_paste(*, show_progress=False):
     """ Get an object from RyanPython's server's clipboard """
     assert connected_to_internet(),"Can't connect to the internet"
-    pip_import('requests')
-    import requests         
-    response=requests.get(_web_clipboard_url) 
-    assert response.status_code==200,'Got bad status code that wasnt 200: '+str(response.status_code)
-    return bytes_to_object(response.content)
+    data = curl_bytes(_web_clipboard_url, show_progress=show_progress)
+    return bytes_to_object(data)
 
 def tmux_copy(string:str):
     """ Copies a string to tmux's clipboard, assuming tmux is running and installed """
@@ -52813,22 +52879,20 @@ def _launch_ranger():
 
     return out
 
-def curl(url:str)->str:
+def curl(url:str, *, show_progress=False)->str:
     """
     Meant to imitate the 'curl' command in linux
     Sends a get request to the given URL and returns the result string
     """
-    pip_import('requests')
-    import requests
-    response=requests.request('GET',url)
-    return response.text
+    return curl_bytes(url, show_progress=show_progress).decode('utf-8')
 
-def curl_bytes(url):
+def curl_bytes(url, *, show_progress=False):
     """
     Fetches a file from a specified URL and returns its bytes
 
     Parameters:
         url (str): The URL of the file to fetch.
+        show_progress (bool): If True, displays download progress bar
 
     Returns:
         bytes: The bytestring of the file data.
@@ -52848,12 +52912,37 @@ def curl_bytes(url):
     import requests
     from io import BytesIO
 
-    # Fetch the file from the URL
-    response = requests.get(url)
-    response.raise_for_status()  # Raises an HTTPError for bad responses if any
+    if show_progress:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
 
-    # Convert the file contents to a bytestring and return it
-    return BytesIO(response.content).getvalue()
+        content_length = response.headers.get('content-length')
+        total_bytes = int(content_length) if content_length else None
+        display_progress = _eta_bytes(total_bytes, title="Download", min_interval=1/60, completion_verb="Downloaded")
+
+        from time import time as time_time
+        start_time = time_time()
+        chunks = []
+        bytes_received = 0
+        for chunk in response.iter_content(chunk_size=8192):
+            chunks.append(chunk)
+            bytes_received += len(chunk)
+            display_progress(bytes_received)
+
+        # Force final update to show completion
+        if total_bytes is not None:
+            display_progress(total_bytes)
+        else:
+            # For unknown size, print completion message
+            from datetime import timedelta
+            elapsed = time_time() - start_time
+            _print_status("Download: Done! Downloaded {0} in {1}\n".format(human_readable_file_size(bytes_received), timedelta(seconds=elapsed)))
+
+        return b''.join(chunks)
+    else:
+        response = requests.get(url)
+        response.raise_for_status()
+        return BytesIO(response.content).getvalue()
 
 def ntfy_send(message:str, topic='rp'):
     """ Send a message via ntfy - a free app requiring no API keys. Great for pining about finished jobs etc! Go to ntfy.sh - it's wonderful """
@@ -57132,9 +57221,9 @@ class _BundledPaths:
         total_size = sum(len(data) for _, data, _ in self.paths_data)
         return '<_BundledPaths: {0} items, {1}>'.format(len(self.paths_data), human_readable_file_size(total_size))
 
-def web_paste_path(path=None,*,ask_to_replace=True):
+def web_paste_path(path=None,*,ask_to_replace=True, show_progress=False):
     """ FP (file paste) """
-    data = web_paste()
+    data = web_paste(show_progress=show_progress)
     return gather_args_call(_paste_path_from_bundle, data,path=path)
 
 def _paste_path_from_bundle(data,path=None, *,ask_to_replace=True):
