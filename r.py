@@ -48440,7 +48440,7 @@ def _ensure_shell_has_path(*, mac=None, linux=None, windows=None, unix=None):
     Notes:
         - Modifies os.environ["PATH"] immediately for this process.
         - Appends an `export PATH=...:$PATH` line to common shell rc files
-          (~/.zshrc, ~/.zprofile, ~/.bashrc, ~/.bash_profile, ~/.profile).
+          (~/.zshrc, ~/.bashrc etc - see r._all_shell_rc_paths).
         - Rejects paths containing ":" on POSIX, since ":" is the PATH separator.
         - This affects the OS shell environment, not Python’s sys.path.
     """
@@ -63904,7 +63904,17 @@ def check_pip_requirements(file='requirements.txt', silent=False):
 
     assert file_exists(file), 'check_pip_requirements: requirements file not found: '+str(file)
 
-    import pkg_resources
+    try:
+        # importlib.metadata is the modern standard library replacement (Python 3.8+)
+        # pkg_resources is deprecated and will be removed in setuptools 81+ (2025-11-30)
+        from importlib.metadata import distributions
+        # Normalize to match pkg_resources.key: lowercase and replace underscores with hyphens
+        installed_packages = {dist.name.lower().replace('_', '-'): dist.version for dist in distributions()}
+    except ImportError:
+        # Fallback for Python < 3.8
+        import pkg_resources
+        installed_packages = {pkg.key: pkg.version for pkg in pkg_resources.working_set}
+
     from pip._internal.req.req_file import parse_requirements
     from pip._internal.req.constructors import install_req_from_parsed_requirement
     from pip._internal.network.session import PipSession
@@ -63923,8 +63933,6 @@ def check_pip_requirements(file='requirements.txt', silent=False):
     satisfied = []
     conflicted = []
     missing = []
-
-    installed_packages = {pkg.key: pkg.version for pkg in pkg_resources.working_set}
 
     for requirement in requirements:
         req_to_install = install_req_from_parsed_requirement(requirement)
