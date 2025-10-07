@@ -5399,11 +5399,8 @@ def load_python_bindings(python_input):
         #Abandon the current buffer. But still save it to history.
 
         buffer=event.cli.current_buffer
-
-        # If buffer is empty, restore last executed doc + cursor pos
-        if not try_restore_last_buffer(buffer):
-            buffer.append_to_history()
-            event.cli.abort()
+        buffer.append_to_history()
+        event.cli.abort()
         # print(buffer._redo_stack)
         # buffer.redo()
 
