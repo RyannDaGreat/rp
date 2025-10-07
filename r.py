@@ -26114,7 +26114,7 @@ def pseudo_terminal(
                             do_string_copy=True
 
                             #Attempt to copy file paths
-                            if currently_running_desktop() and (
+                            if currently_running_desktop() and not running_in_ssh() and (
                                 isinstance(get_ans(), str)
                                 or has_len(get_ans())
                                 and len(get_ans()) <= 100
@@ -26124,6 +26124,7 @@ def pseudo_terminal(
                                     copy_paths_to_clipboard(get_ans())
                                     #If we succesfully copied, it should also have been copied as a string too
                                     do_string_copy=False
+                                    rp.fansi_print("COPY: Copied the files/paths to system clipboard!",'blue italic')
                                 except NotImplementedError:
                                     #Unsupported OS right now
                                     pass
