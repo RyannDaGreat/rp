@@ -1294,6 +1294,8 @@ def handle_character(buffer,char,event=None):
         before_line_ends_with_number=before_tokens and before_tokens[-1].type==tokenize.NUMBER
     refresh_strings_from_buffer()
 
+    shell = text.startswith('!')
+
     if char=='\n' and after_line in ['"',"'"]:
         #Even if (especially if) we're in a string...
         #On \n:  ‹'|'›  -/->  ‹'\n|'›
@@ -1305,17 +1307,17 @@ def handle_character(buffer,char,event=None):
         meta_pressed(clear=True)
         return True
 
-    if char==' ' and before=='[' and after==']':
+    if not shell and char==' ' and before=='[' and after==']':
         # [|] --> [ans|]
         buffer.insert_text('ans')
         return True
 
-    if char==' ' and before.endswith(']') and after.startswith(']'):
+    if not shell and char==' ' and before.endswith(']') and after.startswith(']'):
         # [[ans]|] --> [[ans],|]
         buffer.insert_text(',')
         return True
 
-    if char==' ' and before.endswith('],') and after.startswith(']'):
+    if not shell and char==' ' and before.endswith('],') and after.startswith(']'):
         # [[ans],|] --> [[ans]]|
         buffer.delete_before_cursor()
         buffer.cursor_right()
@@ -1338,16 +1340,19 @@ def handle_character(buffer,char,event=None):
         #         lines=['!']+lines
         # text='\n'.join(lines)
 
+        was_empty = not text
         if text.startswith('!'):
             text=text[1:]
         else:
             text='!'+text
 
         replace_buffer_text(buffer,text)
+        if was_empty:
+            buffer.cursor_position = 1  # Put cursor after the '!'
         meta_pressed(clear=True)
         return True
 
-    if char=='\n' and before_line.lstrip().startswith('except ') and before_line.endswith(' as ') and after_line==':':
+    if not shell and char=='\n' and before_line.lstrip().startswith('except ') and before_line.endswith(' as ') and after_line==':':
         #except Exception as |:      < \n >      ---->    except Exception:\n    |
         buffer.delete_before_cursor(len(' as '))
         buffer.cursor_right(1)
@@ -1355,14 +1360,14 @@ def handle_character(buffer,char,event=None):
         return True
 
         
-    if char=='\n' and before_line.lstrip().startswith('except ') and before_line.endswith(' ') and after_line==':':
+    if not shell and char=='\n' and before_line.lstrip().startswith('except ') and before_line.endswith(' ') and after_line==':':
         #except |:      < \n >      ---->    except:\n    |
         buffer.delete_before_cursor(len(' '))
         buffer.cursor_right(1)
         buffer.insert_text('\n'+get_indent(before_line)+'    ')
         return True
 
-    if char in 'fe\n' and not before_line.strip() and not after_line.strip():
+    if not shell and char in 'fe\n' and not before_line.strip() and not after_line.strip():
         """  
         try:\npass\n    |            <e>         try:\n    pass\n    except |:
         try:\npass\n    |            <f>         try:\n    pass\n    finally:\n    |
@@ -1422,7 +1427,7 @@ def handle_character(buffer,char,event=None):
         buffer.insert_text(char)#Don't do anything but write the damn character lol
         return True
 
-    if last_pressed_dash and char in '-=' and not in_string_or_comment and not after_line.strip() and re.fullmatch(r' *[a-zA-Z_0-9]+\_',before_line):
+    if not shell and last_pressed_dash and char in '-=' and not in_string_or_comment and not after_line.strip() and re.fullmatch(r' *[a-zA-Z_0-9]+\_',before_line):
         buffer.delete_before_cursor()
         buffer.insert_text('-')#Trigger '--' or '-=' indirectly by replacing the '_' with a '-' where applicable (aka NOT if the user made the _ by typing _ with the shift key. This is one of the rare instances where stateful is OK)
     if char=='-':last_pressed_dash=True
@@ -1445,7 +1450,7 @@ def handle_character(buffer,char,event=None):
 
 
 
-    if not in_string_or_comment:#This is just for visual purposes, so I can put the lines in a block of code and document ,after_line)it
+    if not in_string_or_comment and not shell:#This is just for visual purposes, so I can put the lines in a block of code and document ,after_line)it
       #region ..= and =.. in-place operators
         if char=='.' and before_line.endswith('=.') and not ' ' in before_line.strip() and before_line.count('=.')==1 and not before_line.endswith('==.') and not before_line.endswith('!=.'):
             #The '=..' in-place operator
@@ -2695,6 +2700,7 @@ def load_python_bindings(python_input):
                     after_line=document.current_line_after_cursor
                     before=document.text_before_cursor
                     after= document.text_after_cursor
+                    shell = document.text.startswith('!')
                     if self_dot_var_equals_var(buffer,char) or setting_index(buffer,char):
                         return
                     token,name,found=token_name_found_of_interest(before_line)
@@ -2723,7 +2729,7 @@ def load_python_bindings(python_input):
                                        "'" in before_line and after_line.count("'")==before_line.count("'") or \
                                        '#' in before_line
                     keywords={'with', 'nonlocal', 'while', 'None', 'global', 'as', 'is', 'and', 'else', 'yield', 'raise', 'del', 'break', 'in', 'not', 'False', 'assert', 'try', 'def', 'return', 'if', 'finally', 'lambda', 'for', 'from', 'True', 'pass', 'continue', 'elif', 'except', 'class', 'or', 'import', 'async', 'await'}
-                    if before_line.strip() and not might_be_in_string_or_comment:
+                    if not shell and before_line.strip() and not might_be_in_string_or_comment:
                         if not starts_with_any(before_line.lstrip() , 'from ','import '):
                             i_triggers_ifelse=False
                             if True:
@@ -5952,6 +5958,12 @@ def load_python_bindings(python_input):
             above_line=    line_above(b)
         refresh_strings_from_buffer()
 
+        #On enter: !| -> !\n|
+        if before=='!' and not after:
+            buffer.insert_text('\n')
+            return
+
+        shell = b.document.text.startswith('!')
         single_line = above_line is None
         def auto_pass():#try automatically adding a 'pass' keyword if it helps to avoid a syntax error; return True if we add a 'pass'
             if not single_line and not current_line.strip() and above_line.rstrip().endswith(':'):
@@ -6018,7 +6030,7 @@ def load_python_bindings(python_input):
                 buffer.insert_text('ans')
                 # 
                 refresh_strings_from_buffer()
-        if not (single_line and token_exists(current_line.strip())):
+        if not shell and not (single_line and token_exists(current_line.strip())):
             import rp.rp_ptpython.r_iterm_comm
             enter_completable_keywords=dict(fo='for _ in ans:',e='else:',t='try:',b='break',c='continue',f='finally:',p='pass',r='return',y='yield',d='def _():',w='while True:',i='if True:')#enter-completion of keywords that don't need to take arguments
             single_line_enabled_keywords={'fo','f','i','t','d','w'}-set(rp.rp_ptpython.r_iterm_comm.globa)
