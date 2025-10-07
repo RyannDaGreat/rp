@@ -991,22 +991,37 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
     styles.update(DEFAULT_STYLE_EXTENSIONS)
     styles.update(processed_python_style)
     styles.update(processed_ui_style)
-    
+
+    # Add alpha blending to SelectedText (theme dictionaries override the default, so add it back)
+    if Token.SelectedText in styles:
+        selected_style = styles[Token.SelectedText]
+        parts = []
+        for part in selected_style.split():
+            if part.startswith('fg:#') and len(part) == 10:
+                parts.append(part + '1A')  # 10% fg alpha
+            elif part.startswith('bg:#') and len(part) == 10:
+                parts.append(part + '4D')  # 30% bg alpha
+            elif part.startswith('#') and len(part) == 7:
+                parts.append('fg:' + part + '1A')
+            else:
+                parts.append(part)
+        styles[Token.SelectedText] = ' '.join(parts)
+
     # Apply contrast adjustment between background and foreground as the very last step
     # This ensures it's applied after all other transformations
     if ui_bg_fg_contrast != 1.0:
         styles = adjust_fg_bg_contrast(styles, ui_bg_fg_contrast)
     
-    # Apply code transformations to code-related elements like whitespace, indent guides, and cursor line
+    # Apply code transformations to code-related elements like whitespace, indent guides, cursor, and injected regions
     # These are part of the code display, so they should have the same transformations applied
     code_tokens = {
         Token.IndentGuide: '#303030',
         Token.Whitespace: '#252525',
         Token.Whitespace.Space: '#252525',
         Token.Whitespace.Tab: '#FF2525',
-        Token.CursorLine: 'bg:#2a3438',
-        # Token.CursorColumn: 'bg:#3c464a'
-        Token.CursorColumn: 'bg:#1c262a'
+        Token.CursorLine: 'bg:#2a343880',      # 50% alpha
+        Token.CursorColumn: 'bg:#1c262a80',    # 50% alpha
+        Token.InjectedLanguage: 'noinherit bg:#0d2b0d'  # Language injection regions
     }
     
     # Apply code UI-specific transformations to these tokens
@@ -1045,32 +1060,46 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
 import colorsys
 
 def hex_to_rgb(hex_color):
-    """Convert hex color to RGB floats (0.0-1.0)"""
+    """Convert hex color to RGB floats (0.0-1.0), preserving alpha if present"""
     if hex_color.startswith('#'):
         hex_color = hex_color[1:]
     try:
         r = int(hex_color[0:2], 16) / 255.0
         g = int(hex_color[2:4], 16) / 255.0
         b = int(hex_color[4:6], 16) / 255.0
+        # Check if alpha channel is present (8 hex digits total)
+        if len(hex_color) == 8:
+            a = int(hex_color[6:8], 16) / 255.0
+            return (r, g, b, a)
         return (r, g, b)
     except Exception:
         return (0, 0, 0)  # Default to black on error
 
-def rgb_to_hex(r, g, b):
-    """Convert RGB floats to hex color string"""
+def rgb_to_hex(r, g, b, a=None):
+    """Convert RGB floats to hex color string, preserving alpha if provided"""
     r_hex = '{0:02x}'.format(max(0, min(255, int(r * 255))))
     g_hex = '{0:02x}'.format(max(0, min(255, int(g * 255))))
     b_hex = '{0:02x}'.format(max(0, min(255, int(b * 255))))
+    if a is not None:
+        a_hex = '{0:02x}'.format(max(0, min(255, int(a * 255))))
+        return '#{0}{1}{2}{3}'.format(r_hex, g_hex, b_hex, a_hex)
     return '#{0}{1}{2}'.format(r_hex, g_hex, b_hex)
 
 def transform_color(color, transform_func):
-    """Apply a transform function to a color in hex format"""
+    """Apply a transform function to a color in hex format, preserving alpha"""
     if not color.startswith('#'):
         return color
     try:
-        r, g, b = hex_to_rgb(color)
-        r, g, b = transform_func(r, g, b)
-        return rgb_to_hex(r, g, b)
+        result = hex_to_rgb(color)
+        # Check if alpha was returned
+        if len(result) == 4:
+            r, g, b, a = result
+            r, g, b = transform_func(r, g, b)
+            return rgb_to_hex(r, g, b, a)
+        else:
+            r, g, b = result
+            r, g, b = transform_func(r, g, b)
+            return rgb_to_hex(r, g, b)
     except Exception:
         return color
 
@@ -1156,66 +1185,6 @@ def adjust_saturation_range_string(style_str, min_saturation=0.0, max_saturation
     """Adjust saturation range of colors in a style string"""
     return transform_style_string(style_str, saturation_range_transform(min_saturation, max_saturation))
 
-def force_black_white(style_dict):
-    """
-    Force all foreground/background pairs to be black and white.
-    
-    Args:
-        style_dict: Dictionary of token -> style strings
-        
-    Returns:
-        New style dictionary with black and white colors
-    """
-    new_style_dict = {}
-    
-    for token, style_str in style_dict.items():
-        if not style_str:
-            new_style_dict[token] = style_str
-            continue
-            
-        # Parse the style string into components
-        parts = style_str.split()
-        fg_part = None
-        bg_part = None
-        other_parts = []
-        
-        # Identify foreground and background colors
-        for part in parts:
-            if part.startswith('bg:#'):
-                bg_part = part
-            elif part.startswith('#'):
-                fg_part = part
-            else:
-                other_parts.append(part)
-        
-        # If we don't have both fg and bg, skip this token
-        if not fg_part or not bg_part:
-            new_style_dict[token] = style_str
-            continue
-        
-        # Extract RGB values
-        fg_r, fg_g, fg_b = hex_to_rgb(fg_part)
-        bg_r, bg_g, bg_b = hex_to_rgb(bg_part[3:])  # Skip the "bg:" prefix
-        
-        # Calculate brightness for foreground and background
-        fg_brightness = 0.299*fg_r + 0.587*fg_g + 0.114*fg_b
-        bg_brightness = 0.299*bg_r + 0.587*bg_g + 0.114*bg_b
-        
-        # Set to black and white based on which was originally brighter
-        if fg_brightness >= bg_brightness:
-            # Foreground was brighter, so make it white and background black
-            new_fg = "#ffffff"
-            new_bg = "bg:#000000"
-        else:
-            # Background was brighter, so make it white and foreground black
-            new_fg = "#000000"
-            new_bg = "bg:#ffffff"
-        
-        # Construct the new style string
-        new_parts = other_parts + [new_fg, new_bg]
-        new_style_dict[token] = ' '.join(new_parts)
-    
-    return new_style_dict
 
 def adjust_fg_bg_contrast(style_dict, min_brightness_delta=0.0):
     """
@@ -3383,8 +3352,8 @@ dracula={
     Token.Comment.PreprocFile                          : '#6272a4                           ',
     Token.Comment.Single                               : '#6272a4                           ',
     Token.Comment.Special                              : '#6272a4                           ',
-    Token.CursorColumn                                 : '           bg:#3c464a             ',
-    Token.CursorLine                                   : '                         bg:#2a3438',
+    Token.CursorColumn                                 : '           bg:#3c464a80             ',
+    Token.CursorLine                                   : '                         bg:#2a343880',
     Token.Digraph                                      : '#4444ff                           ',
     Token.Docstring                                    : '#84bbc9                           ',
     Token.Error                                        : '#f8f8f2                           ',

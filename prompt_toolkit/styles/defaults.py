@@ -24,11 +24,11 @@ DEFAULT_STYLE_EXTENSIONS = {
     # Whitespace visualization
     Token.Whitespace:                             '#303030',
 
-    # Highlighting of select text in document.
-    Token.SelectedText:                           'reverse',
+    # Highlighting of select text in document - alpha applied programmatically
+    Token.SelectedText:                           'bg:#4466aa fg:#ffffff',
 
-    Token.CursorColumn:                           'bg:#3c464a',
-    Token.CursorLine:                             'bg:#2a3438',
+    Token.CursorColumn:                           'bg:#3c464a80',  # 50% alpha
+    Token.CursorLine:                             'bg:#2a343880',  # 50% alpha
     Token.ColorColumn:                            'bg:#ccaacc',
 
     # Highlighting of matching brackets - must be very vivid to show on top of cursor line
@@ -93,6 +93,9 @@ DEFAULT_STYLE_EXTENSIONS = {
     Token.Whitespace.Space:                       '#252525',  
     Token.Whitespace.Tab:                         '#252525',
     Token.WordOccurrences:                        'underline',
+
+    # Language injection regions (e.g., """#!bash ... """)
+    Token.InjectedLanguage:                       'noinherit bg:#0d2b0d',
 
     # When Control-C has been pressed. Grayed.
     Token.Aborted:                                '#888888',

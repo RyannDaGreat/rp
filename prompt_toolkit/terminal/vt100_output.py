@@ -251,7 +251,8 @@ class _EscapeCodeCache(dict):
         self.ansi_colors_only = to_simple_filter(ansi_colors_only)
 
     def __missing__(self, attrs):
-        fgcolor, bgcolor, bold, underline, italic, blink, reverse = attrs
+        fgcolor, bgcolor, bold, underline, italic, blink, reverse, color_alpha, bgcolor_alpha = attrs
+        # Note: color_alpha and bgcolor_alpha are already blended into fgcolor/bgcolor by merge_attrs()
         parts = []
 
         parts.extend(self._colors_to_code(fgcolor, bgcolor))
@@ -476,7 +477,9 @@ class Vt100_Output(Output):
         self.write_raw('\x1b[?1049l')
 
     def enable_mouse_support(self):
-        self.write_raw('\x1b[?1000h')
+        # Enable button-event tracking (1002) instead of normal tracking (1000)
+        # This sends press, release, AND motion events while button is held (drag)
+        self.write_raw('\x1b[?1002h')
 
         # Enable urxvt Mouse mode. (For terminals that understand this.)
         self.write_raw('\x1b[?1015h')
@@ -488,7 +491,7 @@ class Vt100_Output(Output):
         #       extensions.
 
     def disable_mouse_support(self):
-        self.write_raw('\x1b[?1000l')
+        self.write_raw('\x1b[?1002l')
         self.write_raw('\x1b[?1015l')
         self.write_raw('\x1b[?1006l')
 

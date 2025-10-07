@@ -13,10 +13,10 @@ from rp.prompt_toolkit.layout.lexers import SimpleLexer
 from rp.prompt_toolkit.layout.margins import PromptMargin
 from rp.prompt_toolkit.layout.menus import CompletionsMenu, MultiColumnCompletionsMenu
 from rp.prompt_toolkit.layout.processors import (
-    ConditionalProcessor, AppendAutoSuggestion, HighlightSearchProcessor, 
-    HighlightSelectionProcessor, HighlightMatchingBracketProcessor, 
+    ConditionalProcessor, AppendAutoSuggestion, HighlightSearchProcessor,
+    HighlightSelectionProcessor, HighlightMatchingBracketProcessor,
     Processor, Transformation, IndentGuideProcessor, ShowWhitespaceProcessor,
-    HighlightWordOccurrencesProcessor
+    HighlightWordOccurrencesProcessor, HighlightInjectedLanguageProcessor
 )
 from rp.prompt_toolkit.layout.screen import Char
 from rp.prompt_toolkit.layout.toolbars import CompletionsToolbar, ArgToolbar, SearchToolbar, ValidationToolbar, SystemToolbar, TokenListToolbar
@@ -684,7 +684,9 @@ def create_layout(python_input,
                 lexer=lexer,
                 input_processors=[
                     # Order matters here! We want to ensure brackets are highlighted properly
-                    # First highlight selections 
+                    # First add background highlighting for injected languages
+                    HighlightInjectedLanguageProcessor(),
+                    # Then highlight selections
                     HighlightSelectionProcessor(),
                     DisplayMultipleCursors(DEFAULT_BUFFER),
                     # Then highlight search results

@@ -226,7 +226,8 @@ class Win32Output(Output):
                      self.default_attrs)
 
     def set_attributes(self, attrs):
-        fgcolor, bgcolor, bold, underline, italic, blink, reverse = attrs
+        fgcolor, bgcolor, bold, underline, italic, blink, reverse, color_alpha, bgcolor_alpha = attrs
+        # Note: color_alpha and bgcolor_alpha are already blended into fgcolor/bgcolor by merge_attrs()
 
         # Start from the default attributes.
         attrs = self.default_attrs

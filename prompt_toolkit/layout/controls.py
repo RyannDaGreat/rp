@@ -703,6 +703,12 @@ class BufferControl(UIControl):
                     buffer.exit_selection()
                     buffer.cursor_position = index
 
+                elif mouse_event.event_type == MouseEventType.MOUSE_MOVE:
+                    # Live drag selection: start selection if not already active, then move cursor
+                    if not buffer.selection_state:
+                        buffer.start_selection(selection_type=SelectionType.CHARACTERS)
+                    buffer.cursor_position = index
+
                 elif mouse_event.event_type == MouseEventType.MOUSE_UP:
                     # When the cursor was moved to another place, select the text.
                     # (The >1 is actually a small but acceptable workaround for

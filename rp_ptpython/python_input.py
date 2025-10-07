@@ -63,6 +63,14 @@ def get_history_line_limit():
     from rp.r import _globa_pyin
     return _globa_pyin[0].history_number_of_lines
 
+def set_mouse_scroll_lines(number_of_lines):
+    from rp.r import _globa_pyin
+    _globa_pyin[0].mouse_scroll_lines=number_of_lines
+    return number_of_lines
+def get_mouse_scroll_lines():
+    from rp.r import _globa_pyin
+    return getattr(_globa_pyin[0], 'mouse_scroll_lines', 3)
+
 class OptionCategory(object):
     def __init__(self,title,options):
         assert isinstance(title,six.text_type)
@@ -645,6 +653,26 @@ class PythonInput(object):
                             '     1000000':lambda:set_history_line_limit(1000000     ),
                             '    10000000':lambda:set_history_line_limit(10000000    ),
                             '999999999999':lambda:set_history_line_limit(999999999999),
+                       }),
+
+                Option(title='Mouse Scroll Lines',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
+
+                       description='How many lines should the mouse wheel scroll at a time?',
+                       get_current_value=lambda:str(get_mouse_scroll_lines()).rjust(12),
+                       get_values=lambda:{'asdpoa':lambda:None,
+                            '           1':lambda:set_mouse_scroll_lines(1),
+                            '           2':lambda:set_mouse_scroll_lines(2),
+                            '           3':lambda:set_mouse_scroll_lines(3),
+                            '           4':lambda:set_mouse_scroll_lines(4),
+                            '           5':lambda:set_mouse_scroll_lines(5),
+                            '           6':lambda:set_mouse_scroll_lines(6),
+                            '           7':lambda:set_mouse_scroll_lines(7),
+                            '           8':lambda:set_mouse_scroll_lines(8),
+                            '           9':lambda:set_mouse_scroll_lines(9),
+                            '          10':lambda:set_mouse_scroll_lines(10),
+                            '          15':lambda:set_mouse_scroll_lines(15),
+                            '          20':lambda:set_mouse_scroll_lines(20),
                        }),
 
                 Option(title='Prompt Height Percent',

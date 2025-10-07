@@ -9,6 +9,7 @@ from six import with_metaclass
 __all__ = (
     'Attrs',
     'DEFAULT_ATTRS',
+    'NONE_ATTRS',
     'ANSI_COLOR_NAMES',
     'Style',
     'DynamicStyle',
@@ -16,7 +17,7 @@ __all__ = (
 
 
 #: Style attributes.
-Attrs = namedtuple('Attrs', 'color bgcolor bold underline italic blink reverse')
+Attrs = namedtuple('Attrs', 'color bgcolor bold underline italic blink reverse color_alpha bgcolor_alpha')
 """
 :param color: Hexadecimal string. E.g. '000000' or Ansi color name: e.g. 'ansiblue'
 :param bgcolor: Hexadecimal string. E.g. 'ffffff' or Ansi color name: e.g. 'ansired'
@@ -25,11 +26,17 @@ Attrs = namedtuple('Attrs', 'color bgcolor bold underline italic blink reverse')
 :param italic: Boolean
 :param blink: Boolean
 :param reverse: Boolean
+:param color_alpha: Float 0.0-1.0 for foreground color alpha (1.0 = opaque)
+:param bgcolor_alpha: Float 0.0-1.0 for background color alpha (1.0 = opaque)
 """
 
 #: The default `Attrs`.
 DEFAULT_ATTRS = Attrs(color=None, bgcolor=None, bold=False, underline=False,
-                      italic=False, blink=False, reverse=False)
+                      italic=False, blink=False, reverse=False, color_alpha=1.0, bgcolor_alpha=1.0)
+
+#: An `Attrs` with all attributes set to None (for style parsing)
+NONE_ATTRS = Attrs(color=None, bgcolor=None, bold=None, underline=None,
+                   italic=None, blink=None, reverse=None, color_alpha=1.0, bgcolor_alpha=1.0)
 
 
 #: ``Attrs.bgcolor/fgcolor`` can be in either 'ffffff' format, or can be any of

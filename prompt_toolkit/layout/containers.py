@@ -1598,22 +1598,32 @@ class Window(Container):
         " Scroll window down. "
         info = self.render_info
 
+        # Get configurable scroll amount
+        from rp.r import _globa_pyin
+        scroll_lines = getattr(_globa_pyin[0], 'mouse_scroll_lines', 3) if _globa_pyin[0] else 3
+
         if self.vertical_scroll < info.content_height - info.window_height:
             if info.cursor_position.y <= info.configured_scroll_offsets.top:
-                self.content.move_cursor_down(cli)
+                for _ in range(scroll_lines):
+                    self.content.move_cursor_down(cli)
 
-            self.vertical_scroll += 1
+            self.vertical_scroll += scroll_lines
 
     def _scroll_up(self, cli):
         " Scroll window up. "
         info = self.render_info
 
+        # Get configurable scroll amount
+        from rp.r import _globa_pyin
+        scroll_lines = getattr(_globa_pyin[0], 'mouse_scroll_lines', 3) if _globa_pyin[0] else 3
+
         if info.vertical_scroll > 0:
             # TODO: not entirely correct yet in case of line wrapping and long lines.
             if info.cursor_position.y >= info.window_height - 1 - info.configured_scroll_offsets.bottom:
-                self.content.move_cursor_up(cli)
+                for _ in range(scroll_lines):
+                    self.content.move_cursor_up(cli)
 
-            self.vertical_scroll -= 1
+            self.vertical_scroll -= scroll_lines
 
     def walk(self, cli):
         # Only yield self. A window doesn't have children.

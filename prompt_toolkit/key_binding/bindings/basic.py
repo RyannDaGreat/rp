@@ -5,7 +5,7 @@ from rp.prompt_toolkit.enums import DEFAULT_BUFFER
 from rp.prompt_toolkit.filters import HasSelection, Condition, EmacsInsertMode, ViInsertMode
 from rp.prompt_toolkit.keys import Keys
 from rp.prompt_toolkit.layout.screen import Point
-from rp.prompt_toolkit.mouse_events import MouseEventType, MouseEvent
+from rp.prompt_toolkit.mouse_events import MouseEventType, MouseEvent, MouseButton, MouseModifier
 from rp.prompt_toolkit.renderer import HeightIsUnknownError
 from rp.prompt_toolkit.utils import suspend_to_background_supported, is_windows
 
@@ -237,6 +237,88 @@ def load_mouse_bindings():
     Key bindings, required for mouse support.
     (Mouse events enter through the key binding system.)
     """
+    # Modifier helpers
+    NO_MODIFIER = frozenset()
+    SHIFT = frozenset([MouseModifier.SHIFT])
+    ALT = frozenset([MouseModifier.ALT])
+    SHIFT_ALT = frozenset([MouseModifier.SHIFT, MouseModifier.ALT])
+    CONTROL = frozenset([MouseModifier.CONTROL])
+    SHIFT_CONTROL = frozenset([MouseModifier.SHIFT, MouseModifier.CONTROL])
+    ALT_CONTROL = frozenset([MouseModifier.ALT, MouseModifier.CONTROL])
+    SHIFT_ALT_CONTROL = frozenset([MouseModifier.SHIFT, MouseModifier.ALT, MouseModifier.CONTROL])
+    UNKNOWN_MODIFIER = frozenset()
+
+    # Xterm SGR mouse events: comprehensive mapping with button, event type, and modifiers
+    xterm_sgr_mouse_events = {
+        # Mouse up events
+        (0, 'm'): (MouseButton.LEFT, MouseEventType.MOUSE_UP, NO_MODIFIER),
+        (4, 'm'): (MouseButton.LEFT, MouseEventType.MOUSE_UP, SHIFT),
+        (8, 'm'): (MouseButton.LEFT, MouseEventType.MOUSE_UP, ALT),
+        (12, 'm'): (MouseButton.LEFT, MouseEventType.MOUSE_UP, SHIFT_ALT),
+        (16, 'm'): (MouseButton.LEFT, MouseEventType.MOUSE_UP, CONTROL),
+        (20, 'm'): (MouseButton.LEFT, MouseEventType.MOUSE_UP, SHIFT_CONTROL),
+        (24, 'm'): (MouseButton.LEFT, MouseEventType.MOUSE_UP, ALT_CONTROL),
+        (28, 'm'): (MouseButton.LEFT, MouseEventType.MOUSE_UP, SHIFT_ALT_CONTROL),
+
+        (1, 'm'): (MouseButton.MIDDLE, MouseEventType.MOUSE_UP, NO_MODIFIER),
+        (2, 'm'): (MouseButton.RIGHT, MouseEventType.MOUSE_UP, NO_MODIFIER),
+
+        # Mouse down events
+        (0, 'M'): (MouseButton.LEFT, MouseEventType.MOUSE_DOWN, NO_MODIFIER),
+        (4, 'M'): (MouseButton.LEFT, MouseEventType.MOUSE_DOWN, SHIFT),
+        (8, 'M'): (MouseButton.LEFT, MouseEventType.MOUSE_DOWN, ALT),
+        (12, 'M'): (MouseButton.LEFT, MouseEventType.MOUSE_DOWN, SHIFT_ALT),
+        (16, 'M'): (MouseButton.LEFT, MouseEventType.MOUSE_DOWN, CONTROL),
+        (20, 'M'): (MouseButton.LEFT, MouseEventType.MOUSE_DOWN, SHIFT_CONTROL),
+        (24, 'M'): (MouseButton.LEFT, MouseEventType.MOUSE_DOWN, ALT_CONTROL),
+        (28, 'M'): (MouseButton.LEFT, MouseEventType.MOUSE_DOWN, SHIFT_ALT_CONTROL),
+
+        (1, 'M'): (MouseButton.MIDDLE, MouseEventType.MOUSE_DOWN, NO_MODIFIER),
+        (2, 'M'): (MouseButton.RIGHT, MouseEventType.MOUSE_DOWN, NO_MODIFIER),
+
+        # Mouse drag/move events (codes 32-63)
+        (32, 'M'): (MouseButton.LEFT, MouseEventType.MOUSE_MOVE, NO_MODIFIER),
+        (36, 'M'): (MouseButton.LEFT, MouseEventType.MOUSE_MOVE, SHIFT),
+        (40, 'M'): (MouseButton.LEFT, MouseEventType.MOUSE_MOVE, ALT),
+        (44, 'M'): (MouseButton.LEFT, MouseEventType.MOUSE_MOVE, SHIFT_ALT),
+        (48, 'M'): (MouseButton.LEFT, MouseEventType.MOUSE_MOVE, CONTROL),
+        (52, 'M'): (MouseButton.LEFT, MouseEventType.MOUSE_MOVE, SHIFT_CONTROL),
+        (56, 'M'): (MouseButton.LEFT, MouseEventType.MOUSE_MOVE, ALT_CONTROL),
+        (60, 'M'): (MouseButton.LEFT, MouseEventType.MOUSE_MOVE, SHIFT_ALT_CONTROL),
+
+        (33, 'M'): (MouseButton.MIDDLE, MouseEventType.MOUSE_MOVE, NO_MODIFIER),
+        (34, 'M'): (MouseButton.RIGHT, MouseEventType.MOUSE_MOVE, NO_MODIFIER),
+        (35, 'M'): (MouseButton.NONE, MouseEventType.MOUSE_MOVE, NO_MODIFIER),
+
+        # Scroll events
+        (64, 'M'): (MouseButton.NONE, MouseEventType.SCROLL_UP, NO_MODIFIER),
+        (65, 'M'): (MouseButton.NONE, MouseEventType.SCROLL_DOWN, NO_MODIFIER),
+    }
+
+    # Typical mouse events (older terminals)
+    typical_mouse_events = {
+        32: (MouseButton.LEFT, MouseEventType.MOUSE_DOWN, UNKNOWN_MODIFIER),
+        33: (MouseButton.MIDDLE, MouseEventType.MOUSE_DOWN, UNKNOWN_MODIFIER),
+        34: (MouseButton.RIGHT, MouseEventType.MOUSE_DOWN, UNKNOWN_MODIFIER),
+        35: (MouseButton.UNKNOWN, MouseEventType.MOUSE_UP, UNKNOWN_MODIFIER),
+
+        64: (MouseButton.LEFT, MouseEventType.MOUSE_MOVE, UNKNOWN_MODIFIER),
+        65: (MouseButton.MIDDLE, MouseEventType.MOUSE_MOVE, UNKNOWN_MODIFIER),
+        66: (MouseButton.RIGHT, MouseEventType.MOUSE_MOVE, UNKNOWN_MODIFIER),
+        67: (MouseButton.NONE, MouseEventType.MOUSE_MOVE, UNKNOWN_MODIFIER),
+
+        96: (MouseButton.NONE, MouseEventType.SCROLL_UP, UNKNOWN_MODIFIER),
+        97: (MouseButton.NONE, MouseEventType.SCROLL_DOWN, UNKNOWN_MODIFIER),
+    }
+
+    # Urxvt mouse events (minimal)
+    urxvt_mouse_events = {
+        32: (MouseButton.UNKNOWN, MouseEventType.MOUSE_DOWN, UNKNOWN_MODIFIER),
+        35: (MouseButton.UNKNOWN, MouseEventType.MOUSE_UP, UNKNOWN_MODIFIER),
+        96: (MouseButton.NONE, MouseEventType.SCROLL_UP, UNKNOWN_MODIFIER),
+        97: (MouseButton.NONE, MouseEventType.SCROLL_DOWN, UNKNOWN_MODIFIER),
+    }
+
     registry = Registry()
 
     @registry.add_binding(Keys.Vt100MouseEvent)
@@ -252,16 +334,18 @@ def load_mouse_bindings():
         if event.data[2] == 'M':
             # Typical.
             mouse_event, x, y = map(ord, event.data[3:])
-            mouse_event = {
-                32: MouseEventType.MOUSE_DOWN,
-                35: MouseEventType.MOUSE_UP,
-                96: MouseEventType.SCROLL_UP,
-                97: MouseEventType.SCROLL_DOWN,
-            }.get(mouse_event)
+
+            # Lookup in typical events dictionary
+            event_info = typical_mouse_events.get(mouse_event)
+            if event_info:
+                mouse_button, mouse_event_type, mouse_modifiers = event_info
+            else:
+                # Unknown event, skip
+                return
 
             # Handle situations where `PosixStdinReader` used surrogateescapes.
-            if x >= 0xdc00: x-= 0xdc00
-            if y >= 0xdc00: y-= 0xdc00
+            if x >= 0xdc00: x -= 0xdc00
+            if y >= 0xdc00: y -= 0xdc00
 
             x -= 32
             y -= 32
@@ -282,25 +366,26 @@ def load_mouse_bindings():
 
             # Parse event type.
             if sgr:
-                mouse_event = {
-                    (0, 'M'): MouseEventType.MOUSE_DOWN,
-                    (0, 'm'): MouseEventType.MOUSE_UP,
-                    (64, 'M'): MouseEventType.SCROLL_UP,
-                    (65, 'M'): MouseEventType.SCROLL_DOWN,
-                }.get((mouse_event, m))
+                event_info = xterm_sgr_mouse_events.get((mouse_event, m))
+                if event_info:
+                    mouse_button, mouse_event_type, mouse_modifiers = event_info
+                else:
+                    # Unknown event, skip
+                    return
             else:
-                mouse_event = {
-                    32: MouseEventType.MOUSE_DOWN,
-                    35: MouseEventType.MOUSE_UP,
-                    96: MouseEventType.SCROLL_UP,
-                    97: MouseEventType.SCROLL_DOWN,
-                    }.get(mouse_event)
+                event_info = urxvt_mouse_events.get(mouse_event)
+                if event_info:
+                    mouse_button, mouse_event_type, mouse_modifiers = event_info
+                else:
+                    # Fallback to MOUSE_MOVE for unknown codes
+                    mouse_button, mouse_event_type, mouse_modifiers = (
+                        MouseButton.UNKNOWN, MouseEventType.MOUSE_MOVE, UNKNOWN_MODIFIER)
 
         x -= 1
         y -= 1
 
         # Only handle mouse events when we know the window height.
-        if event.cli.renderer.height_is_known and mouse_event is not None:
+        if event.cli.renderer.height_is_known and mouse_event_type is not None:
             # Take region above the layout into account. The reported
             # coordinates are absolute to the visible part of the terminal.
             try:
@@ -310,8 +395,11 @@ def load_mouse_bindings():
 
             # Call the mouse handler from the renderer.
             handler = event.cli.renderer.mouse_handlers.mouse_handlers[x,y]
-            handler(event.cli, MouseEvent(position=Point(x=x, y=y),
-                                          event_type=mouse_event))
+            handler(event.cli, MouseEvent(
+                position=Point(x=x, y=y),
+                event_type=mouse_event_type,
+                button=mouse_button,
+                modifiers=mouse_modifiers))
 
     @registry.add_binding(Keys.WindowsMouseEvent)
     def _(event):

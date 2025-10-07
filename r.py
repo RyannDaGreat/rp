@@ -23360,13 +23360,19 @@ def _display_columns(entries,title=None):
     print(columns)
 
 def _input_select_multiple_history_multiline(history_filename=history_filename,old_code=None):
-    history=text_file_to_string(history_filename)
-    paragraphs=history.split('\n\n')
+    #VERSION 1: WITH DATES AND IN SYNC WITH OTHER CONCURRENT RP'S BUT SLOWER
+    # history=text_file_to_string(history_filename)
+    # paragraphs=history.split('\n\n')
+    # def process_paragraph(paragraph):
+    #     lines=paragraph.splitlines()
+    #     lines[1:]=[x[1:] for x in lines[1:]]
+    #     return line_join(lines)
+
+    #VERSION 2: NO DATES BUT MUCH FASTER
+    paragraphs=_globa_pyin[0].history.strings
+    process_paragraph = identity
+
     paragraphs=paragraphs[::-1]
-    def process_paragraph(paragraph):
-        lines=paragraph.splitlines()
-        lines[1:]=[x[1:] for x in lines[1:]]
-        return line_join(lines)
     paragraphs=(process_paragraph(x) for x in paragraphs)
     return _input_select_multiple_paragraphs(paragraphs, old_code=old_code)
 

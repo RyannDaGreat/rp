@@ -248,23 +248,87 @@ class LazyBashLexer(LazyLexer):
         shell.BashLexer.tokens['basic'] += [(r'(^|!|\b)(' + '|'.join(re.escape(x) for x in commands) + r')(?=[\s)\`]|$)', Name.Function),]
 
 
-class FastPygmentsTokenizer:
-    def __init__(self,pygments_lexer=None):
-        if pygments_lexer is None:
-            # Lazy import of default lexer
-            import six
-            if six.PY2:
-                from pygments.lexers import PythonLexer
-                pygments_lexer = PythonLexer()
-            else:
-                from pygments.lexers import Python3Lexer
-                pygments_lexer = Python3Lexer()
-        self.old_text=''
-        self.token_cache=[]
-        self.pygments_lexer=pygments_lexer
-        
-        # <CLAUDE CODE START: Initialize language lexers for multi-language highlighting>
-        # Common lexer options
+class LanguageInjectionMixin:
+    """
+    Shared functionality for language injection across different tokenizers.
+    Provides language lexer initialization and tokenizer caching for recursive injection.
+
+    This mixin enables syntax highlighting of embedded languages within strings using
+    a simple comment-style annotation syntax. Supports 46 languages with full recursive
+    nesting capabilities.
+
+    Note: Language injection implementation developed with the assistance of Claude 4.5.
+
+    Supported Languages:
+        Shell:      bash, sh, shell, zsh
+        Web:        javascript/js, html, css, xml, yaml/yml, json, typescript/ts
+        Databases:  sql
+        Backend:    python/py, ruby/rb, php, perl/pl, java, scala, kotlin/kt
+        Systems:    c, cpp/c++/cxx, rust/rs, go/golang, csharp/cs
+        Mobile:     swift, objc/objectivec, dart
+        Other:      makefile/make, markdown/md, diff/patch
+
+    Features:
+        - Recursive language injection (any depth)
+        - Python f-strings with interpolations preserved
+        - Bash single and double-quoted strings
+        - Bash variable interpolations ($var, $(cmd), ${var}) preserved
+        - Adjacent string concatenation in bash
+        - Correct token position ordering
+
+    Featured Example - Shell mode with multi-nested injection:
+        >>> # Shell mode (! prefix) with Python containing bash containing nested code
+        >>> code = \"\"\"
+        ... HELLO=123
+        ... rp exec "
+        ...     print(123)
+        ...     $HELLO
+        ...     '''
+        ...         echo hello
+        ...     '''#sh
+        ... "#py
+        ... \"\"\"
+        >>> # Result: Three nesting levels:
+        >>> #   1. Bash (shell mode) with $HELLO preserved as bash variable
+        >>> #   2. Python code with print() highlighted
+        >>> #   3. Nested shell script with echo highlighted
+
+    Basic Examples:
+        >>> # Python with embedded SQL
+        >>> code = \"\"\"
+        ... query = '''
+        ... SELECT * FROM users WHERE age > 18
+        ... '''#sql
+        ... \"\"\"
+
+        >>> # Python f-string with embedded SQL (interpolations preserved as Python)
+        >>> code = \"\"\"
+        ... query = f'''
+        ... SELECT * FROM {table_name} WHERE id = {user_id}
+        ... '''#sql
+        ... \"\"\"
+
+        >>> # Bash with embedded Python (single quotes)
+        >>> code = "python3 -c 'print(\"hello\")'#py"
+
+        >>> # Bash with embedded SQL (double quotes with variables preserved)
+        >>> code = 'echo "SELECT * FROM $table WHERE id=$id"#sql'
+
+        >>> # Adjacent bash strings treated as concatenated
+        >>> code = 'echo "SELECT""FROM""users"#sql'
+
+        >>> # Triple-nested: Python -> Bash -> HTML
+        >>> code = \"\"\"
+        ... cmd = f'''
+        ... echo '<html><body>Hello World</body></html>'#html
+        ... '''#bash
+        ... \"\"\"
+
+        >>> # Bash with command substitution preserved
+        >>> code = 'echo "Hello $(whoami) world"#html'
+    """
+    def _init_language_lexers(self, primary_lexer=None):
+        """Initialize all language lexers for injection support."""
         lexer_options = {'stripnl': False, 'stripall': False, 'ensurenl': False}
 
         # Create lazy lexers - imports and initialization deferred until first use
@@ -294,70 +358,511 @@ class FastPygmentsTokenizer:
         self.dart_lexer = LazyLexer('pygments.lexers', 'DartLexer', **lexer_options)
         self.markdown_lexer = LazyLexer('pygments.lexers', 'MarkdownLexer', **lexer_options)
         self.diff_lexer = LazyLexer('pygments.lexers', 'DiffLexer', **lexer_options)
-        
+
+        # Use primary_lexer for python if provided, otherwise create lazy lexer
+        if primary_lexer is not None:
+            self.python_lexer = primary_lexer
+        else:
+            self.python_lexer = LazyLexer('pygments.lexers', 'Python3Lexer', **lexer_options)
+
         # Map language identifiers to lexers
         self.language_lexers = {
             # Shell scripting
-            'bash': self.bash_lexer,
-            'sh': self.bash_lexer,
-            'shell': self.bash_lexer,
-            'zsh': self.bash_lexer,
-            
+            'bash': self.bash_lexer, 'sh': self.bash_lexer, 'shell': self.bash_lexer, 'zsh': self.bash_lexer,
+
             # Web development
-            'javascript': self.javascript_lexer,
-            'js': self.javascript_lexer,
+            'javascript': self.javascript_lexer, 'js': self.javascript_lexer,
             'html': self.html_lexer,
             'css': self.css_lexer,
             'xml': self.xml_lexer,
-            'yaml': self.yaml_lexer,
-            'yml': self.yaml_lexer,
+            'yaml': self.yaml_lexer, 'yml': self.yaml_lexer,
             'json': self.json_lexer,
-            'typescript': self.typescript_lexer,
-            'ts': self.typescript_lexer,
-            
+            'typescript': self.typescript_lexer, 'ts': self.typescript_lexer,
+
             # Databases
             'sql': self.sql_lexer,
-            
+
             # Backend languages
-            'python': self.pygments_lexer,
-            'py': self.pygments_lexer,
-            'ruby': self.ruby_lexer,
-            'rb': self.ruby_lexer,
+            'python': self.python_lexer, 'py': self.python_lexer,
+            'ruby': self.ruby_lexer, 'rb': self.ruby_lexer,
             'php': self.php_lexer,
-            'perl': self.perl_lexer,
-            'pl': self.perl_lexer,
+            'perl': self.perl_lexer, 'pl': self.perl_lexer,
             'java': self.java_lexer,
             'scala': self.scala_lexer,
-            'kotlin': self.kotlin_lexer,
-            'kt': self.kotlin_lexer,
-            
+            'kotlin': self.kotlin_lexer, 'kt': self.kotlin_lexer,
+
             # Systems programming
             'c': self.c_lexer,
-            'cpp': self.cpp_lexer,
-            'c++': self.cpp_lexer,
-            'cxx': self.cpp_lexer,
-            'rust': self.rust_lexer,
-            'rs': self.rust_lexer,
-            'go': self.go_lexer,
-            'golang': self.go_lexer,
-            'csharp': self.csharp_lexer,
-            'cs': self.csharp_lexer,
-            
+            'cpp': self.cpp_lexer, 'c++': self.cpp_lexer, 'cxx': self.cpp_lexer,
+            'rust': self.rust_lexer, 'rs': self.rust_lexer,
+            'go': self.go_lexer, 'golang': self.go_lexer,
+            'csharp': self.csharp_lexer, 'cs': self.csharp_lexer,
+
             # Mobile development
             'swift': self.swift_lexer,
-            'objc': self.objc_lexer,
-            'objectivec': self.objc_lexer,
+            'objc': self.objc_lexer, 'objectivec': self.objc_lexer,
             'dart': self.dart_lexer,
-            
+
             # Other useful formats
-            'makefile': self.makefile_lexer,
-            'make': self.makefile_lexer,
-            'markdown': self.markdown_lexer,
-            'md': self.markdown_lexer,
-            'diff': self.diff_lexer,
-            'patch': self.diff_lexer,
+            'makefile': self.makefile_lexer, 'make': self.makefile_lexer,
+            'markdown': self.markdown_lexer, 'md': self.markdown_lexer,
+            'diff': self.diff_lexer, 'patch': self.diff_lexer,
         }
-        # <CLAUDE CODE END: Initialize language lexers for multi-language highlighting>
+
+        self._language_tokenizers_cache = {}
+
+    def _get_language_tokenizer(self, lang):
+        """
+        Get or create a wrapped tokenizer for the specified language.
+        This enables recursive language injection by wrapping each language's lexer
+        in the appropriate tokenizer that can detect nested language tags.
+        """
+        lang_lower = lang.lower()
+
+        # Return from cache if already created
+        if lang_lower in self._language_tokenizers_cache:
+            return self._language_tokenizers_cache[lang_lower]
+
+        # Get the lexer for this language
+        if lang_lower not in self.language_lexers:
+            return None
+
+        lexer = self.language_lexers[lang_lower]
+
+        # Wrap it in appropriate tokenizer for recursive support
+        # Use BashTokenizer for bash to enable language injection in bash strings
+        if lang_lower in ('bash', 'sh', 'shell', 'zsh'):
+            tokenizer = BashTokenizer(lexer)
+        else:
+            tokenizer = FastPygmentsTokenizer(lexer)
+
+        # Cache it
+        self._language_tokenizers_cache[lang_lower] = tokenizer
+
+        return tokenizer
+
+
+class BashTokenizer(LanguageInjectionMixin):
+    """
+    Bash tokenizer with language injection support for strings.
+
+    Supports language injection in both single-quoted and double-quoted bash strings
+    using the '#lang' annotation syntax. Automatically handles bash variable interpolations
+    and adjacent string concatenation.
+
+    Implementation developed with the assistance of Claude 4.5.
+
+    Features:
+        - Single-quoted strings: No expansion, full content highlighted
+        - Double-quoted strings: Variables ($var, $(cmd), ${var}) preserved as bash
+        - Adjacent strings: "hello""world" concatenated before highlighting
+        - All 46 languages supported (inherited from LanguageInjectionMixin)
+        - Recursive injection: bash strings can contain other languages with their own injections
+
+    Single-Quoted String Examples:
+        >>> # Python code in single-quoted bash string
+        >>> bash_code = "python3 -c 'print(123)'#py"
+        >>> # Result: 'print' and '123' highlighted as Python
+
+        >>> # HTML in single-quoted bash string
+        >>> bash_code = "echo '<div>Hello</div>'#html"
+        >>> # Result: '<div>', 'Hello', '</div>' highlighted as HTML
+
+    Double-Quoted String Examples:
+        >>> # SQL with bash variable (variable NOT highlighted as SQL)
+        >>> bash_code = 'echo "SELECT * FROM $table"#sql'
+        >>> # Result: 'SELECT', 'FROM' highlighted as SQL, '$table' as bash variable
+
+        >>> # Multiple variables preserved
+        >>> bash_code = 'echo "SELECT * FROM $table WHERE id=$id"#sql'
+        >>> # Result: SQL keywords highlighted, both $table and $id preserved
+
+        >>> # Command substitution preserved
+        >>> bash_code = 'echo "Hello $(whoami) world"#html'
+        >>> # Result: 'Hello' and 'world' highlighted as HTML, '$(whoami)' preserved
+
+        >>> # Variable expansion ${} syntax preserved
+        >>> bash_code = 'echo "User: ${USER}"#html'
+        >>> # Result: 'User: ' highlighted as HTML, '${USER}' preserved
+
+    Adjacent String Concatenation Examples:
+        >>> # Adjacent strings treated as one concatenated string
+        >>> bash_code = 'echo "hello""world"#html'
+        >>> # Result: 'hello' and 'world' both highlighted as HTML (concatenated)
+
+        >>> # SQL fragments concatenated
+        >>> bash_code = 'echo "SELECT""FROM""users"#sql'
+        >>> # Result: All three keywords highlighted as SQL
+
+        >>> # Mixed: adjacent strings with variables
+        >>> bash_code = 'echo "hello"$name"world"#html'
+        >>> # Result: 'hello' and 'world' highlighted, $name preserved
+
+    Recursive Injection Examples:
+        >>> # Bash containing Python with nested strings
+        >>> python_code = \"\"\"
+        ... cmd = f'''
+        ... python3 -c 'print(123)'#py
+        ... '''#bash
+        ... \"\"\"
+        >>> # Result: Python code inside bash string is highlighted as Python
+    """
+    def __init__(self, bash_lexer=None):
+        if bash_lexer is None:
+            from pygments.lexers import BashLexer
+            bash_lexer = BashLexer(stripnl=False, stripall=False, ensurenl=False)
+        self.bash_lexer = bash_lexer
+        self.old_text = ''
+        self.token_cache = []
+
+        # Initialize shared language lexers
+        self._init_language_lexers()
+
+    def get_tokens_unprocessed(self, text, start_pos=0):
+        """Tokenize bash code with language injection support."""
+        from pygments.token import Token
+
+        raw_tokens = list(self.bash_lexer.get_tokens_unprocessed(text))
+
+        i = 0
+        while i < len(raw_tokens):
+            pos, token_type, token_text = raw_tokens[i]
+
+            # Check for quoted strings (single or double)
+            if token_type == Token.Literal.String.Single or token_type == Token.Literal.String.Double:
+                # Collect all consecutive tokens for this string
+                # For single quotes: Pygments returns one token
+                # For double quotes: Pygments may return multiple tokens if there are $var, $(cmd), ${var}
+                string_tokens = [(pos, token_type, token_text)]
+                interpolation_tokens = []  # For double-quoted strings with $var expansion
+                j = i + 1
+
+                # Collect tokens until we find something that's not part of the string
+                while j < len(raw_tokens):
+                    next_pos, next_type, next_text = raw_tokens[j]
+
+                    # For double-quoted strings, collect interpolations separately
+                    if token_type == Token.Literal.String.Double:
+                        # Check if this is an adjacent double-quoted string (bash concatenation)
+                        if next_type == Token.Literal.String.Double:
+                            string_tokens.append((next_pos, next_type, next_text))
+                            j += 1
+                            continue
+                        # Check if this is a variable expansion to skip
+                        elif next_type in (Token.Name.Variable, Token.Keyword, Token.Literal.String.Interpol):
+                            # Collect the entire interpolation
+                            if next_text == '$(':
+                                # Command substitution: collect until closing )
+                                interp_tokens = [(next_pos, next_type, next_text)]
+                                j += 1
+                                paren_count = 1
+                                while j < len(raw_tokens) and paren_count > 0:
+                                    p, t, txt = raw_tokens[j]
+                                    interp_tokens.append((p, t, txt))
+                                    if t == Token.Keyword and txt == ')':
+                                        paren_count -= 1
+                                    j += 1
+                                interpolation_tokens.extend(interp_tokens)
+                                continue
+                            elif next_text == '${':
+                                # Variable expansion: collect until closing }
+                                interp_tokens = [(next_pos, next_type, next_text)]
+                                j += 1
+                                while j < len(raw_tokens):
+                                    p, t, txt = raw_tokens[j]
+                                    interp_tokens.append((p, t, txt))
+                                    if t == Token.Literal.String.Interpol and txt == '}':
+                                        j += 1
+                                        break
+                                    j += 1
+                                interpolation_tokens.extend(interp_tokens)
+                                continue
+                            elif next_text.startswith('$'):
+                                # Simple variable: $var
+                                interpolation_tokens.append((next_pos, next_type, next_text))
+                                j += 1
+                                continue
+
+                    # Not part of the string, stop collecting
+                    break
+
+                # Check if there's a language tag after the string
+                if j < len(raw_tokens):
+                    comment_pos, comment_type, comment_text = raw_tokens[j]
+                    if (comment_type == Token.Comment.Single or comment_type == Token.Text) and comment_text.startswith('#'):
+                        lang = comment_text[1:].strip()
+                        if lang.lower() in self.language_lexers:
+                            # Determine quote type
+                            if token_type == Token.Literal.String.Single:
+                                opening_quote = "'"
+                                closing_quote = "'"
+                                # Single-quoted: entire content in one token, strip quotes
+                                inner_content = token_text[1:-1] if token_text.startswith("'") and token_text.endswith("'") else token_text
+                            else:  # Double-quoted
+                                opening_quote = '"'
+                                closing_quote = '"'
+
+                            # Get language tokenizer
+                            language_tokenizer = self._get_language_tokenizer(lang)
+                            if language_tokenizer:
+                                injected_suffix = (':', 'InjectedLanguage')
+
+                                if token_type == Token.Literal.String.Single:
+                                    # Single-quoted: simple case, no interpolations
+                                    yield (pos + start_pos, token_type, opening_quote)
+
+                                    content_start = pos + start_pos + len(opening_quote)
+                                    for content_pos, content_type, content_text in language_tokenizer.get_tokens_unprocessed(inner_content):
+                                        marked_type = content_type + injected_suffix
+                                        yield (content_start + content_pos, marked_type, content_text)
+
+                                    closing_pos = pos + start_pos + len(token_text) - len(closing_quote)
+                                    yield (closing_pos, token_type, closing_quote)
+
+                                    # Yield comment tag
+                                    yield (comment_pos + start_pos, comment_type, comment_text)
+
+                                    # Skip both string and comment tokens
+                                    i = j + 1
+                                    continue
+                                else:
+                                    # Double-quoted: complex case with potential interpolations
+                                    # Check if this is a simple string (no interpolations)
+                                    if len(string_tokens) == 1 and not interpolation_tokens:
+                                        # Simple case: entire string in one token like "hello world"
+                                        # Extract content between quotes
+                                        full_text = token_text
+                                        if full_text.startswith('"') and full_text.endswith('"') and len(full_text) >= 2:
+                                            inner_content = full_text[1:-1]
+
+                                            # Yield opening quote
+                                            yield (pos + start_pos, token_type, '"')
+
+                                            # Yield highlighted content
+                                            content_start = pos + start_pos + 1
+                                            for content_pos, content_type, content_text in language_tokenizer.get_tokens_unprocessed(inner_content):
+                                                marked_type = content_type + injected_suffix
+                                                yield (content_start + content_pos, marked_type, content_text)
+
+                                            # Yield closing quote
+                                            closing_pos = pos + start_pos + len(full_text) - 1
+                                            yield (closing_pos, token_type, '"')
+
+                                            # Yield comment tag
+                                            yield (comment_pos + start_pos, comment_type, comment_text)
+
+                                            i = j + 1
+                                            continue
+
+                                    # Complex case: multiple tokens with interpolations or adjacent strings
+                                    # For adjacent strings like "hello""world", concatenate contents and highlight as one
+                                    tokens_to_yield = []
+
+                                    # Separate complete strings (like "hello") from fragments (like just "hello )
+                                    # Complete strings have both opening and closing quotes
+                                    fragments = []  # List of (pos, content_without_quotes)
+                                    quote_positions = []  # List of (pos, quote_char) for rendering
+
+                                    for str_pos, str_type, str_text in string_tokens:
+                                        if str_text == '"':
+                                            # Standalone opening or closing quote
+                                            quote_positions.append((str_pos, '"'))
+                                        elif str_text.startswith('"') and str_text.endswith('"') and len(str_text) >= 2:
+                                            # Complete string like "hello"
+                                            quote_positions.append((str_pos, '"'))
+                                            fragments.append((str_pos + 1, str_text[1:-1]))  # Strip quotes
+                                            quote_positions.append((str_pos + len(str_text) - 1, '"'))
+                                        elif str_text.startswith('"'):
+                                            # Fragment starting with quote like "hello
+                                            quote_positions.append((str_pos, '"'))
+                                            fragments.append((str_pos + 1, str_text[1:]))
+                                        elif str_text.endswith('"'):
+                                            # Fragment ending with quote like world"
+                                            fragments.append((str_pos, str_text[:-1]))
+                                            quote_positions.append((str_pos + len(str_text) - 1, '"'))
+                                        else:
+                                            # Middle fragment with no quotes
+                                            fragments.append((str_pos, str_text))
+
+                                    # Concatenate all content fragments for highlighting
+                                    concatenated_content = ''.join(f[1] for f in fragments)
+
+                                    # Highlight the concatenated content
+                                    if concatenated_content:
+                                        content_tokens = list(language_tokenizer.get_tokens_unprocessed(concatenated_content))
+
+                                        # Map highlighted tokens back to original positions in source
+                                        for tok_pos, tok_type, tok_text in content_tokens:
+                                            # Find which fragment(s) this token spans
+                                            current_offset = 0
+                                            tok_start_in_concat = tok_pos
+                                            tok_end_in_concat = tok_pos + len(tok_text)
+
+                                            for frag_pos, frag_text in fragments:
+                                                frag_start = current_offset
+                                                frag_end = current_offset + len(frag_text)
+
+                                                # Check if this token overlaps with this fragment
+                                                if tok_start_in_concat < frag_end and tok_end_in_concat > frag_start:
+                                                    # Calculate the overlap
+                                                    overlap_start = max(tok_start_in_concat, frag_start)
+                                                    overlap_end = min(tok_end_in_concat, frag_end)
+
+                                                    # Extract the overlapping text
+                                                    text_start_in_token = overlap_start - tok_start_in_concat
+                                                    text_end_in_token = text_start_in_token + (overlap_end - overlap_start)
+                                                    overlap_text = tok_text[text_start_in_token:text_end_in_token]
+
+                                                    # Calculate position in original source
+                                                    pos_in_fragment = overlap_start - frag_start
+                                                    actual_pos = frag_pos + pos_in_fragment
+
+                                                    marked_type = tok_type + injected_suffix
+                                                    tokens_to_yield.append((actual_pos + start_pos, marked_type, overlap_text))
+
+                                                current_offset = frag_end
+
+                                    # Add quote tokens
+                                    for q_pos, q_char in quote_positions:
+                                        tokens_to_yield.append((q_pos + start_pos, Token.Literal.String.Double, q_char))
+
+                                    # Add interpolations as-is (bash variables/commands)
+                                    for interp_pos, interp_type, interp_text in interpolation_tokens:
+                                        tokens_to_yield.append((interp_pos + start_pos, interp_type, interp_text))
+
+                                    # Add comment tag
+                                    tokens_to_yield.append((comment_pos + start_pos, comment_type, comment_text))
+
+                                    # Sort by position and yield
+                                    tokens_to_yield.sort(key=lambda t: t[0])
+                                    for token in tokens_to_yield:
+                                        yield token
+
+                                    # Skip all processed tokens
+                                    i = j + 1
+                                    continue
+
+            # Regular token
+            yield (pos + start_pos, token_type, token_text)
+            i += 1
+
+
+class FastPygmentsTokenizer(LanguageInjectionMixin):
+    """
+    Fast Python tokenizer with language injection support.
+
+    Provides syntax highlighting for Python code with support for embedding other
+    languages within string literals using the '#lang' annotation syntax. Handles
+    f-string interpolations correctly, preserving Python expressions while highlighting
+    the string content in the target language.
+
+    Language injection features developed with the assistance of Claude 4.5.
+
+    Features:
+        - Support for all Python string types (', ", ''', \"\"\")
+        - F-string interpolations preserved as Python tokens
+        - All 46 languages supported (inherited from LanguageInjectionMixin)
+        - Recursive injection for nested language strings
+        - Incremental tokenization with caching for performance
+        - Correct token position ordering for cursor positioning
+
+    Basic String Examples:
+        >>> # SQL in regular Python string
+        >>> code = \"\"\"
+        ... query = '''
+        ... SELECT * FROM users WHERE age > 18
+        ... '''#sql
+        ... \"\"\"
+        >>> # Result: 'SELECT', 'FROM', 'users', 'WHERE', 'age', '18' highlighted as SQL
+
+        >>> # JavaScript in Python string
+        >>> code = \"\"\"
+        ... script = '''
+        ... function hello() { return 'world'; }
+        ... '''#js
+        ... \"\"\"
+        >>> # Result: JavaScript keywords and syntax highlighted
+
+        >>> # HTML in Python string
+        >>> code = 'html = "<div>Hello</div>"#html'
+        >>> # Result: '<div>', 'Hello', '</div>' highlighted as HTML
+
+    F-String Examples (Interpolations Preserved):
+        >>> # SQL with Python variables preserved
+        >>> code = \"\"\"
+        ... query = f'''
+        ... SELECT * FROM {table_name} WHERE id = {user_id}
+        ... '''#sql
+        ... \"\"\"
+        >>> # Result: SQL keywords highlighted, {table_name} and {user_id} as Python
+
+        >>> # HTML with Python expressions preserved
+        >>> code = \"\"\"
+        ... html = f'''
+        ... <div class="{css_class}">{content}</div>
+        ... '''#html
+        ... \"\"\"
+        >>> # Result: HTML tags highlighted, {css_class} and {content} as Python
+
+        >>> # Bash with Python variables
+        >>> code = \"\"\"
+        ... cmd = f'''
+        ... echo "Processing {filename}"
+        ... '''#bash
+        ... \"\"\"
+        >>> # Result: Bash syntax highlighted, {filename} as Python
+
+    Nested/Recursive Injection Examples:
+        >>> # Python -> Bash -> HTML (triple-nested)
+        >>> code = \"\"\"
+        ... cmd = f'''
+        ... echo '<html><body>Hello World</body></html>'#html
+        ... '''#bash
+        ... \"\"\"
+        >>> # Result: Python (outer) -> Bash (middle) -> HTML (inner) all highlighted
+
+        >>> # Python -> Bash -> SQL
+        >>> code = \"\"\"
+        ... script = '''
+        ... mysql -e 'SELECT * FROM users'#sql
+        ... '''#bash
+        ... \"\"\"
+        >>> # Result: SQL keywords highlighted within bash within Python
+
+        >>> # Complex nesting with f-strings
+        >>> code = \"\"\"
+        ... cmd = f'''
+        ... echo "SELECT * FROM {table}"#sql
+        ... '''#bash
+        ... \"\"\"
+        >>> # Result: SQL highlighted, {table} as Python, all within bash
+
+    Shebang Syntax Examples:
+        >>> # Alternative annotation using #! (hashbang)
+        >>> code = \"\"\"
+        ... query = '''#!sql
+        ... SELECT * FROM users
+        ... '''
+        ... \"\"\"
+        >>> # Result: SQL highlighting with #! on first line
+    """
+    def __init__(self,pygments_lexer=None):
+        if pygments_lexer is None:
+            # Lazy import of default lexer
+            import six
+            if six.PY2:
+                from pygments.lexers import PythonLexer
+                pygments_lexer = PythonLexer()
+            else:
+                from pygments.lexers import Python3Lexer
+                pygments_lexer = Python3Lexer()
+        self.old_text=''
+        self.token_cache=[]
+        self.pygments_lexer=pygments_lexer
+
+        # Initialize shared language lexers, using pygments_lexer as the primary Python lexer
+        self._init_language_lexers(primary_lexer=pygments_lexer)
+
     def _set_new_text(self,text):
         # from rp import longest_common_prefix
         #Used to invalidate the token_cache
@@ -445,24 +950,60 @@ class FastPygmentsTokenizer:
                 # Check if this is a string token
                 if any(token_type == t or str(token_type).startswith(str(t) + '.') for t in string_token_types):
                     # This is the start of a string - collect all consecutive string tokens
-                    string_tokens = [(pos, token_type, token_text)]
+                    # Check if previous token was an f-string prefix
+                    string_tokens = []
+                    if i > 0 and raw_tokens[i-1][1] == Token.Literal.String.Affix:
+                        string_tokens.append(raw_tokens[i-1])
+                    string_tokens.append((pos, token_type, token_text))
                     string_start = i
                     current_pos = pos + len(token_text)
                     j = i + 1
                     
-                    # Collect all consecutive string tokens
+                    # Collect all consecutive string tokens (including f-string parts, tracking interpolations)
+                    interpolation_tokens = []  # Tokens inside {expr} - keep as Python
                     while j < len(raw_tokens):
                         next_pos, next_type, next_text = raw_tokens[j]
+
+                        # For f-strings: collect interpolated expressions separately
+                        if (next_type == Token.Literal.String.Interpol or next_type == Token.Punctuation) and next_text in '{}':
+                            if next_text == '{':
+                                # Start of interpolation - collect until matching }
+                                interp_tokens = [(next_pos, next_type, next_text)]
+                                brace_count = 1
+                                j += 1
+                                while j < len(raw_tokens) and brace_count > 0:
+                                    p, t, txt = raw_tokens[j]
+                                    interp_tokens.append((p, t, txt))
+                                    if t == Token.Punctuation or t == Token.Literal.String.Interpol:
+                                        if txt == '{': brace_count += 1
+                                        elif txt == '}': brace_count -= 1
+                                    j += 1
+                                interpolation_tokens.extend(interp_tokens)
+                                current_pos = interp_tokens[-1][0] + len(interp_tokens[-1][2])
+                                continue
+
                         # If not consecutive or not a string token, break
                         if next_pos != current_pos or not any(next_type == t or str(next_type).startswith(str(t) + '.') for t in string_token_types):
                             break
-                        
+
                         # Add this string token to our collection
                         string_tokens.append((next_pos, next_type, next_text))
                         current_pos = next_pos + len(next_text)
                         j += 1
                     
-                    # If we have more than one string token or a single one with a language tag, process it
+                    # Helper: yield tokens in position order (interleaving language and Python)
+                    def yield_with_interpolations_as_python(lang_tokens):
+                        # Adjust interpolation positions
+                        interp_adjusted = [(t[0] + start_pos, t[1], t[2]) for t in interpolation_tokens]
+
+                        # Merge and sort by position
+                        all_tokens = sorted(lang_tokens + interp_adjusted, key=lambda t: t[0])
+
+                        # Yield in position order
+                        for token in all_tokens:
+                            self.token_cache.append(token)
+                            yield token
+
                     if len(string_tokens) > 0 or '#!' in token_text:
                         # Combine all string tokens into a single string
                         combined_text = ''.join(t[2] for t in string_tokens)
@@ -569,8 +1110,9 @@ class FastPygmentsTokenizer:
                                     
                                     # 3. The language tag as a hashbang
                                     shebang_text = combined_text[bang_pos:first_line_end].strip()
+                                    injected_suffix = (':', 'InjectedLanguage')
                                     tokens_to_yield.append(
-                                        (combined_pos + bang_pos, Token.Comment.Hashbang, shebang_text)
+                                        (combined_pos + bang_pos, Token.Comment.Hashbang + injected_suffix, shebang_text)
                                     )
                                     
                                     # 4. Add the newline if present
@@ -584,28 +1126,30 @@ class FastPygmentsTokenizer:
                                         if closing_quotes and remaining_content.endswith(closing_quotes):
                                             remaining_content = remaining_content[:-len(closing_quotes)]
                                         
-                                        # Use language-specific lexer for the main content
-                                        language_lexer = self.language_lexers[lang.lower()]
-                                        content_tokens = language_lexer.get_tokens_unprocessed(remaining_content)
+                                        # Use language-specific tokenizer for the main content (enables recursive injection)
+                                        language_tokenizer = self._get_language_tokenizer(lang)
+                                        content_tokens = language_tokenizer.get_tokens_unprocessed(remaining_content)
                                         
                                         # Add with adjusted positions
+                                        # Append :Token.InjectedLanguage to add background overlay
                                         content_start = combined_pos + first_line_end + 1
+                                        injected_suffix = (':', 'InjectedLanguage')
                                         for content_pos, content_type, content_text in content_tokens:
+                                            marked_type = content_type + injected_suffix
                                             tokens_to_yield.append(
-                                                (content_start + content_pos, content_type, content_text)
+                                                (content_start + content_pos, marked_type, content_text)
                                             )
                                     
                                     # 6. Add closing quotes if present
                                     if closing_quotes:
-                                        closing_pos = combined_pos + len(combined_text) - len(closing_quotes)
+                                        # Use actual position from string_tokens
+                                        closing_pos = string_tokens[-1][0] + start_pos
                                         tokens_to_yield.append(
                                             (closing_pos, Token.Literal.String, closing_quotes)
                                         )
                                 
-                                # Yield all tokens
-                                for token in tokens_to_yield:
-                                    self.token_cache.append(token)
-                                    yield token
+                                # Yield all tokens (skipping f-string interpolations)
+                                yield from yield_with_interpolations_as_python(tokens_to_yield)
                                 
                                 # Skip all the tokens we've processed
                                 i = j
@@ -621,27 +1165,71 @@ class FastPygmentsTokenizer:
                                     
                                     # Process using language-specific lexer with comment tag
                                     tokens_to_yield = []
-                                    
+
                                     # 1. Opening quotes
                                     if opening_quotes:
                                         tokens_to_yield.append(
                                             (combined_pos, Token.Literal.String, opening_quotes)
                                         )
-                                    
-                                    # 2. Content with language-specific highlighting
-                                    language_lexer = self.language_lexers[lang.lower()]
-                                    content_tokens = language_lexer.get_tokens_unprocessed(content)
-                                    
-                                    # Add with adjusted positions
-                                    content_start = combined_pos + len(opening_quotes)
-                                    for content_pos, content_type, content_text in content_tokens:
-                                        tokens_to_yield.append(
-                                            (content_start + content_pos, content_type, content_text)
-                                        )
+
+                                    # 2. Content with language-specific highlighting (enables recursive injection)
+                                    # For f-strings with interpolations: process each string fragment separately
+                                    language_tokenizer = self._get_language_tokenizer(lang)
+                                    injected_suffix = (':', 'InjectedLanguage')
+
+                                    if interpolation_tokens:
+                                        # Process each string token fragment through the language lexer
+                                        # Skip first token if it's the opening quotes, skip last if closing quotes
+                                        string_content_tokens = string_tokens[:]
+                                        # Remove prefix if present
+                                        if string_content_tokens and string_content_tokens[0][1] == Token.Literal.String.Affix:
+                                            string_content_tokens = string_content_tokens[1:]
+                                        # Remove opening quotes
+                                        if string_content_tokens and string_content_tokens[0][2] in ('"""', "'''", '"', "'"):
+                                            string_content_tokens = string_content_tokens[1:]
+                                        # Remove closing quotes
+                                        if string_content_tokens and string_content_tokens[-1][2] in ('"""', "'''", '"', "'"):
+                                            string_content_tokens = string_content_tokens[:-1]
+
+                                        # Highlight each fragment
+                                        for str_pos, str_type, str_text in string_content_tokens:
+                                            frag_tokens = list(language_tokenizer.get_tokens_unprocessed(str_text))
+
+                                            # If lexer returned no tokens (e.g., just whitespace), yield original
+                                            if not frag_tokens:
+                                                tokens_to_yield.append(
+                                                    (str_pos + start_pos, str_type + injected_suffix, str_text)
+                                                )
+                                            else:
+                                                for frag_pos, frag_type, frag_text in frag_tokens:
+                                                    marked_type = frag_type + injected_suffix
+                                                    final_pos = str_pos + start_pos + frag_pos
+                                                    tokens_to_yield.append(
+                                                        (final_pos, marked_type, frag_text)
+                                                    )
+                                    else:
+                                        # No interpolations - process normally
+                                        content_tokens = language_tokenizer.get_tokens_unprocessed(content)
+                                        content_start = combined_pos + len(opening_quotes)
+                                        for content_pos, content_type, content_text in content_tokens:
+                                            marked_type = content_type + injected_suffix
+                                            tokens_to_yield.append(
+                                                (content_start + content_pos, marked_type, content_text)
+                                            )
                                     
                                     # 3. Closing quotes
                                     if closing_quotes:
-                                        closing_pos = combined_pos + len(combined_text) - len(closing_quotes)
+                                        # Calculate closing position based on combined_text length
+                                        # For f-strings with interpolations, string_tokens has multiple elements
+                                        # and the last element is the closing quotes
+                                        # For regular strings, Pygments returns one token with the entire string
+                                        # so we need to calculate the position
+                                        if interpolation_tokens:
+                                            # F-string: use actual position from string_tokens
+                                            closing_pos = string_tokens[-1][0] + start_pos
+                                        else:
+                                            # Regular string: calculate from combined_text length
+                                            closing_pos = combined_pos + len(combined_text) - len(closing_quotes)
                                         tokens_to_yield.append(
                                             (closing_pos, Token.Literal.String, closing_quotes)
                                         )
@@ -651,10 +1239,8 @@ class FastPygmentsTokenizer:
                                         (comment_pos + start_pos, Token.Comment.Single, comment_text)
                                     )
                                     
-                                    # Yield all tokens
-                                    for token in tokens_to_yield:
-                                        self.token_cache.append(token)
-                                        yield token
+                                    # Yield all tokens (skipping f-string interpolations)
+                                    yield from yield_with_interpolations_as_python(tokens_to_yield)
                                     
                                     # Skip all the tokens we've processed including the comment
                                     i = j + 1
@@ -663,10 +1249,18 @@ class FastPygmentsTokenizer:
                     # If no language tag was found, or language not supported,
                     # just yield all collected string tokens normally
                     if not language_found:
+                        # Merge string and interpolation tokens, sorted by position
+                        all_tokens = []
                         for str_pos, str_type, str_text in string_tokens:
-                            adjusted_token = (str_pos + start_pos, str_type, str_text)
-                            self.token_cache.append(adjusted_token)
-                            yield adjusted_token
+                            all_tokens.append((str_pos + start_pos, str_type, str_text))
+                        for token in interpolation_tokens:
+                            all_tokens.append((token[0] + start_pos, token[1], token[2]))
+
+                        # Sort by position and yield
+                        all_tokens.sort(key=lambda t: t[0])
+                        for token in all_tokens:
+                            self.token_cache.append(token)
+                            yield token
                         i = j
                         continue
                 
@@ -758,10 +1352,10 @@ class PygmentsLexer(Lexer):
             )
         return self._lazy_bash_lexer
 
-    @property  
+    @property
     def fast_bash_tokenizer(self):
         if self._lazy_bash_tokenizer is None:
-            self._lazy_bash_tokenizer = FastPygmentsTokenizer(self.fast_bash_lexer)
+            self._lazy_bash_tokenizer = BashTokenizer(self.fast_bash_lexer)
         return self._lazy_bash_tokenizer
 
     def get_lexer(self, document):

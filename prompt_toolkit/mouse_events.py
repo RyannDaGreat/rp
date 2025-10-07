@@ -19,18 +19,41 @@ from __future__ import unicode_literals
 
 __all__ = (
     'MouseEventType',
+    'MouseButton',
+    'MouseModifier',
     'MouseEvent'
 )
 
 
 class MouseEventType:
+    """Mouse event types."""
     MOUSE_UP = 'MOUSE_UP'
     MOUSE_DOWN = 'MOUSE_DOWN'
     SCROLL_UP = 'SCROLL_UP'
     SCROLL_DOWN = 'SCROLL_DOWN'
+    # Triggered when the left mouse button is held down and the mouse moves
+    MOUSE_MOVE = 'MOUSE_MOVE'
 
 
 MouseEventTypes = MouseEventType  # Deprecated: plural for backwards compatibility.
+
+
+class MouseButton:
+    """Mouse button types."""
+    LEFT = 'LEFT'
+    MIDDLE = 'MIDDLE'
+    RIGHT = 'RIGHT'
+    # When we're scrolling, or just moving the mouse and not pressing a button
+    NONE = 'NONE'
+    # This is for when we don't know which mouse button was pressed
+    UNKNOWN = 'UNKNOWN'
+
+
+class MouseModifier:
+    """Mouse modifier keys."""
+    SHIFT = 'SHIFT'
+    ALT = 'ALT'
+    CONTROL = 'CONTROL'
 
 
 class MouseEvent(object):
@@ -39,10 +62,15 @@ class MouseEvent(object):
 
     :param position: `Point` instance.
     :param event_type: `MouseEventType`.
+    :param button: `MouseButton` (optional, defaults to UNKNOWN).
+    :param modifiers: frozenset of `MouseModifier` (optional, defaults to empty).
     """
-    def __init__(self, position, event_type):
+    def __init__(self, position, event_type, button=None, modifiers=None):
         self.position = position
         self.event_type = event_type
+        self.button = button if button is not None else MouseButton.UNKNOWN
+        self.modifiers = modifiers if modifiers is not None else frozenset()
 
     def __repr__(self):
-        return 'MouseEvent(%r, %r)' % (self.position, self.event_type)
+        return 'MouseEvent(%r, %r, %r, %r)' % (
+            self.position, self.event_type, self.button, self.modifiers)

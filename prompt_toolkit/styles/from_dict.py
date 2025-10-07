@@ -11,7 +11,7 @@ try:
 except ImportError:
     from collections import Mapping #Python 3.10+
 
-from .base import Style, DEFAULT_ATTRS, ANSI_COLOR_NAMES
+from .base import Style, DEFAULT_ATTRS, NONE_ATTRS, ANSI_COLOR_NAMES
 from .defaults import DEFAULT_STYLE_EXTENSIONS
 from .utils import merge_attrs, split_token_in_parts
 from six.moves import range
@@ -27,17 +27,25 @@ def _colorformat(text):
 
     Like in Pygments, but also support the ANSI color names.
     (These will map to the colors of the 16 color palette.)
+
+    Returns tuple (color, alpha) where alpha is 0.0-1.0 (default 1.0).
+    Supports #RRGGBBAA format for colors with alpha.
     """
     if text[0:1] == '#':
         col = text[1:]
         if col in ANSI_COLOR_NAMES:
-            return col
+            return (col, 1.0)
+        elif len(col) == 8:
+            # #RRGGBBAA format
+            color = col[:6]
+            alpha = int(col[6:8], 16) / 255.0
+            return (color, alpha)
         elif len(col) == 6:
-            return col
+            return (col, 1.0)
         elif len(col) == 3:
-            return col[0]*2 + col[1]*2 + col[2]*2
+            return (col[0]*2 + col[1]*2 + col[2]*2, 1.0)
     elif text == '':
-        return text
+        return (text, 1.0)
 
     raise ValueError('Wrong color format %r' % text)
 
@@ -74,8 +82,8 @@ def style_from_dict(style_dict, include_defaults=True):
     # (Loop through the tokens in order. Sorting makes sure that
     # we process the parent first.)
     for ttype, styledef in sorted(style_dict.items()):
-        # Start from parent Attrs or default Attrs.
-        attrs = DEFAULT_ATTRS
+        # Start from NONE_ATTRS so only specified attributes are set
+        attrs = NONE_ATTRS
 
         if 'noinherit' not in styledef:
             for i in range(1, len(ttype) + 1):
@@ -121,10 +129,15 @@ def style_from_dict(style_dict, include_defaults=True):
 
             # Colors.
 
+            elif part.startswith('fg:'):
+                color, color_alpha = _colorformat(part[3:])
+                attrs = attrs._replace(color=color, color_alpha=color_alpha)
             elif part.startswith('bg:'):
-                attrs = attrs._replace(bgcolor=_colorformat(part[3:]))
+                bgcolor, bgcolor_alpha = _colorformat(part[3:])
+                attrs = attrs._replace(bgcolor=bgcolor, bgcolor_alpha=bgcolor_alpha)
             else:
-                attrs = attrs._replace(color=_colorformat(part))
+                color, color_alpha = _colorformat(part)
+                attrs = attrs._replace(color=color, color_alpha=color_alpha)
 
         token_to_attrs[ttype] = attrs
 

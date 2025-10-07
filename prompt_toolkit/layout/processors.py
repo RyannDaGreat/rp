@@ -43,6 +43,7 @@ __all__ = (
     'IndentGuideProcessor',
     'ShowWhitespaceProcessor',
     'HighlightWordOccurrencesProcessor',
+    'HighlightInjectedLanguageProcessor',
 )
 
 
@@ -732,11 +733,13 @@ class IndentGuideProcessor(Processor):
                 # Make sure we have enough tokens for this indentation level
                 while i >= len(tokens):
                     tokens.append((Token, ' '))
-                # Replace with indent guide
-                tokens[i] = (Token.IndentGuide, guide_char)
+                # Append indent guide token to preserve backgrounds
+                existing_token = tokens[i][0]
+                tokens[i] = (existing_token + (':', ) + Token.IndentGuide, guide_char)
             elif i < len(tokens) and tokens[i][1].isspace():
-                # For non-empty lines or Regular mode, only replace existing whitespace
-                tokens[i] = (Token.IndentGuide, guide_char)
+                # For non-empty lines or Regular mode, append to existing token
+                existing_token = tokens[i][0]
+                tokens[i] = (existing_token + (':', ) + Token.IndentGuide, guide_char)
         
         return Transformation(tokens)
 
@@ -884,14 +887,14 @@ class ShowWhitespaceProcessor(Processor):
                 # Skip tokens that are already special (like indent guides)
                 if Token.IndentGuide in token:
                     continue
-                    
-                # Replace spaces with visible spaces
+
+                # Append whitespace token to preserve backgrounds
                 if text == ' ':
-                    tokens[i] = (Token.Whitespace.Space, space_char)
-                
-                # Replace tabs with visible tabs
+                    tokens[i] = (token + (':', ) + Token.Whitespace.Space, space_char)
+
+                # Append whitespace token to preserve backgrounds
                 elif text == '\t':
-                    tokens[i] = (Token.Whitespace.Tab, tab_char)
+                    tokens[i] = (token + (':', ) + Token.Whitespace.Tab, tab_char)
         
         if current_mode in ['Leading', 'Lead+Trail']:
             # For 'Leading' mode - only show whitespace up to the first non-whitespace character
@@ -905,46 +908,61 @@ class ShowWhitespaceProcessor(Processor):
                     continue
                 
                 # Skip tokens that are already special (like indent guides)
-                if Token.IndentGuide in token:
+                if 'IndentGuide' in token:
                     continue
-                
-                # Replace spaces with visible spaces
+
+                # Append whitespace token to preserve backgrounds
                 if text == ' ':
-                    tokens[i] = (Token.Whitespace.Space, space_char)
-                
-                # Replace tabs with visible tabs
+                    tokens[i] = (token + (':', ) + Token.Whitespace.Space, space_char)
+
+                # Append whitespace token to preserve backgrounds
                 elif text == '\t':
-                    tokens[i] = (Token.Whitespace.Tab, tab_char)
-                
-                # If this token is not whitespace, mark that we found non-whitespace
-                elif text not in (' ', '\t'):
+                    tokens[i] = (token + (':', ) + Token.Whitespace.Tab, tab_char)
+
+                # If this token is not whitespace (and not an indent guide), mark that we found non-whitespace
+                # Indent guides should be treated as whitespace for leading/trailing detection
+                elif text not in (' ', '\t') and 'IndentGuide' not in token:
                     found_non_whitespace = True
                     
         if current_mode in ['Trailing', 'Lead+Trail']:
             # For 'Trailing' mode - only show whitespace after the last non-whitespace character
             
-            # First find the last non-whitespace token
+            # First find the last non-whitespace token (excluding indent guides)
             last_non_whitespace_idx = -1
             for i in range(len(tokens) - 1, -1, -1):
                 token, text = tokens[i]
-                if text not in (' ', '\t'):
+                # Indent guides should be treated as whitespace
+                if text not in (' ', '\t') and Token.IndentGuide not in token:
                     last_non_whitespace_idx = i
                     break
             
             # Then process only trailing whitespace
             for i in range(last_non_whitespace_idx + 1, len(tokens)):
                 token, text = tokens[i]
-                
+
                 # Skip tokens that are already special (like indent guides)
                 if Token.IndentGuide in token:
                     continue
-                
-                # Replace spaces with visible spaces
+
+                # Append whitespace token to preserve backgrounds
                 if text == ' ':
-                    tokens[i] = (Token.Whitespace.Space, space_char)
-                
-                # Replace tabs with visible tabs
+                    tokens[i] = (token + (':', ) + Token.Whitespace.Space, space_char)
+
+                # Append whitespace token to preserve backgrounds
                 elif text == '\t':
-                    tokens[i] = (Token.Whitespace.Tab, tab_char)
-        
+                    tokens[i] = (token + (':', ) + Token.Whitespace.Tab, tab_char)
+
+        return Transformation(tokens)
+
+
+class HighlightInjectedLanguageProcessor(Processor):
+    """
+    Placeholder processor for language-injected string regions.
+
+    The lexer now handles adding :Token.InjectedLanguage directly,
+    so this processor just passes tokens through unchanged.
+    """
+
+    def apply_transformation(self, cli, document, lineno, source_to_display, tokens):
+        """No transformation needed - lexer handles it."""
         return Transformation(tokens)
