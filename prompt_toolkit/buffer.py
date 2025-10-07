@@ -111,6 +111,7 @@ def _return_document_handler(cli, buffer):
             ric.dont_erase_buffer_on_enter.clear()#Do erase the buffer now. This is a one-time-thing.
         else:
             buffer.reset()
+
     cli.pre_run_callables.append(reset_this_buffer)
 
 
@@ -1211,6 +1212,11 @@ class Buffer(object):
         # Validate first. If not valid, set validation exception.
         if not self.validate():
             return
+
+        # Save document state before adding to history (for Ctrl+E/Ctrl+Q restore)
+        if self.text.strip():
+            import rp.rp_ptpython.r_iterm_comm as ric
+            ric.last_ctrl_e_doc = (self.document.text, self.document.cursor_position)
 
         # Save at the tail of the history. (But don't if the last entry the
         # history is already the same.)

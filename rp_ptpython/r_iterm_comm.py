@@ -21,6 +21,7 @@ dont_erase_buffer_on_enter=[]#as opposed to [True], which is truthy
 completion_style=['good']#should be either ['good'] or ['fast']
 debug_height=20#The height of the debugger toolbar
 successful_commands=[]
+last_ctrl_e_doc = None  # Store last executed doc from Ctrl+E (text, cursor_position, vertical_scroll_offset)
 options={
 	'top_space':0,
 	'min_bot_space':15,

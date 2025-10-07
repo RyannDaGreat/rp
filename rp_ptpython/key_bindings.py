@@ -51,6 +51,18 @@ def get_all_function_names(code:str):
     func_names=[d[len('def '):d.find('(')].strip() for d in defs]
     return func_names
 
+def try_restore_last_buffer(buffer):
+    """
+    If buffer is empty, restore last executed doc + cursor position.
+    Returns True if restored, False otherwise.
+    """
+    import rp.rp_ptpython.r_iterm_comm as ric
+    if not buffer.document.text.strip() and ric.last_ctrl_e_doc is not None:
+        text, cursor_pos = ric.last_ctrl_e_doc
+        buffer.document = Document(text, min(cursor_pos, len(text)))
+        return True
+    return False
+
 def run_code_without_destroying_buffer(event,put_in_history=True):
     #Run the code in the buffer without clearing it or destroying cursor position etc
     buffer=event.cli.current_buffer
@@ -79,6 +91,11 @@ def handle_run_cell(event):
     #Happens when we press control+w or alt+w
     #Run current cell between the boundary prefixes
     buffer=event.cli.current_buffer
+
+    # If buffer is empty, try to restore last buffer
+    if try_restore_last_buffer(buffer):
+        return
+
     def main():
         text=buffer.document.text
         shell_mode=text.startswith('!')
@@ -1430,7 +1447,7 @@ def handle_character(buffer,char,event=None):
     if not shell and last_pressed_dash and char in '-=' and not in_string_or_comment and not after_line.strip() and re.fullmatch(r' *[a-zA-Z_0-9]+\_',before_line):
         buffer.delete_before_cursor()
         buffer.insert_text('-')#Trigger '--' or '-=' indirectly by replacing the '_' with a '-' where applicable (aka NOT if the user made the _ by typing _ with the shift key. This is one of the rare instances where stateful is OK)
-    if char=='-':last_pressed_dash=True
+    if not shell and char=='-':last_pressed_dash=True
     else:        last_pressed_dash=False
 
         
@@ -1672,7 +1689,7 @@ def handle_character(buffer,char,event=None):
       #endregion
 
       #region
-        if char=='-':
+        if not shell and char=='-':
             if re.fullmatch(r'.* for [a-zA-Z_0-9]+',before_line):
                 #[x for y| in]  --->  [x for y_| in]
                 buffer.insert_text('_')
@@ -1939,7 +1956,7 @@ def handle_character(buffer,char,event=None):
             buffer.cursor_left()
             buffer.insert_text(char)
             return True
-        if char=='-':
+        if not shell and char=='-':
             if re.fullmatch(r'( )*for [a-zA-Z_]+',before_line):
                 #`   for abc|`  --->   `   for abc_|`
                 buffer.insert_text('_')
@@ -2012,14 +2029,14 @@ def handle_character(buffer,char,event=None):
                 #on space: `if x:re`         -->  `if x:return|`  -->  `if x:return |`
                 #on space: `if x:y`          -->  `if x:yield|`   -->  `if x:yield |`
                 #on space: `with x as y:con  -->  `if x:return|`  -->  `if x:continue |`
-        if char==' ' and re.fullmatch(r'.*[\(\[\, ]\-',before_line):
+        if not shell and char==' ' and re.fullmatch(r'.*[\(\[\, ]\-',before_line):
             #if -|:   --->   if _ |:
             #print(-|)   --->   print(_,|)
             #print(_,-|)   --->   print(_,_|)
             buffer.delete_before_cursor()
             buffer.insert_text('_')
             refresh_strings_from_buffer()
-        if char=='\n' \
+        if not shell and char=='\n' \
              and before_line.endswith('-')\
              and (re.fullmatch(r' *[^\w\(\{].*',after_line) or not after_line.strip())\
              and re.fullmatch(r'(\s*)|(.*[^\w\s]\s*\-)',before_line):
@@ -2056,7 +2073,7 @@ def handle_character(buffer,char,event=None):
             buffer.insert_text(char)
             buffer.cursor_left(l+1)
             return True
-        if char=='=' and re.fullmatch(r' *[\-][\)\]\.\+\*\&\%\@\>\<\/\[\(]',before_line):
+        if not shell and char=='=' and re.fullmatch(r' *[\-][\)\]\.\+\*\&\%\@\>\<\/\[\(]',before_line):
             #  `-+=x`  --->     `_+=x|`
             #`  -)=f`  --->   `  _=f(_|)`
             # ` -.=x`  --->    ` _=_.x|`
@@ -2064,7 +2081,7 @@ def handle_character(buffer,char,event=None):
             buffer.delete_before_cursor()
             buffer.insert_text('_')
             buffer.cursor_right()
-        if char=='=' and re.fullmatch(r' +[\-]',before_line):
+        if not shell and char=='=' and re.fullmatch(r' +[\-]',before_line):
             #`if _:\n\t-=5`  --->   `if _:\n\t_=5|`
             buffer.delete_before_cursor()
             buffer.insert_text('_')
@@ -2078,11 +2095,11 @@ def handle_character(buffer,char,event=None):
             buffer.insert_text('()')
             buffer.cursor_left()
             return True
-        if char=='=' and before_line.endswith('-') and after_line.strip().endswith(':'):
+        if not shell and char=='=' and before_line.endswith('-') and after_line.strip().endswith(':'):
             #   `if -=5`  --->  `if _=5:`  --->  `if _==5|:`
             buffer.delete_before_cursor()
             buffer.insert_text('_')
-        if char in '<>/%^&@+[,*' and before_line.endswith('-'):
+        if not shell and char in '<>/%^&@+[,*' and before_line.endswith('-'):
             #- is treated like _ when an syntax-breaking operator comes after it
             #`-*5` --->  `_*5`
             buffer.delete_before_cursor()
@@ -2154,7 +2171,7 @@ def handle_character(buffer,char,event=None):
             buffer.insert_text('_')
             buffer.cursor_right(len(' in '))
             return True
-        if char in '- \n' and starts_with_any(before_line.lstrip(),'nonlocal ','global ','del '):
+        if not shell and char in '- \n' and starts_with_any(before_line.lstrip(),'nonlocal ','global ','del '):
             #After nonlocal and global,
             if char=='-':
                 #‹nonlocal -var-name› ---> ‹nonlocal _var_name›
@@ -2257,10 +2274,10 @@ def handle_character(buffer,char,event=None):
             buffer.insert_text(':')
             return True
 
-        if char=='-' and before_line.lstrip().startswith('def ') and before_line.endswith(')') and after_line==':':
+        if not shell and char=='-' and before_line.lstrip().startswith('def ') and before_line.endswith(')') and after_line==':':
             buffer.insert_text('->')
             return True
-        if (char=='-' or char=='>') and before_line.lstrip().startswith('def ') and before_line.endswith(')->') and after_line==':':
+        if not shell and (char=='-' or char=='>') and before_line.lstrip().startswith('def ') and before_line.endswith(')->') and after_line==':':
             #Do nothing
             return True
 
@@ -5065,7 +5082,11 @@ def load_python_bindings(python_input):
         def _(event):
             if not meta_pressed():
                 #Run the buffer without erasing it or disturbing cursor position
-                run_code_without_destroying_buffer(event)
+                buffer = event.cli.current_buffer
+
+                # If buffer is empty, restore last executed doc + cursor pos
+                if not try_restore_last_buffer(buffer):
+                    run_code_without_destroying_buffer(event)
             else:
                 global aicode_result
                 buffer=event.cli.current_buffer
@@ -5378,8 +5399,11 @@ def load_python_bindings(python_input):
         #Abandon the current buffer. But still save it to history.
 
         buffer=event.cli.current_buffer
-        buffer.append_to_history()
-        event.cli.abort()
+
+        # If buffer is empty, restore last executed doc + cursor pos
+        if not try_restore_last_buffer(buffer):
+            buffer.append_to_history()
+            event.cli.abort()
         # print(buffer._redo_stack)
         # buffer.redo()
 
@@ -5464,7 +5488,8 @@ def load_python_bindings(python_input):
             # print('GAGAGAGA')
 
             from rp import is_namespaceable
-            if inc_or_dec == '-' and all(is_namespaceable(x) for x in before_line if x not in ' ') and starts_with_any(before_line.lstrip(),'def ','class '):# When writing the title of a function, you don't have to use _ you can type - and it will turn it into _
+            shell = document.text.startswith('!')
+            if not shell and inc_or_dec == '-' and all(is_namespaceable(x) for x in before_line if x not in ' ') and starts_with_any(before_line.lstrip(),'def ','class '):# When writing the title of a function, you don't have to use _ you can type - and it will turn it into _
                 #(on -)
                 #def |(): ---> def _|():
                 #     AND
@@ -5472,7 +5497,7 @@ def load_python_bindings(python_input):
                 buffer.insert_text('_')
                 return
             if inc_or_dec=='-' :
-                if is_namespaceable(before_line.strip()) and before_line.rstrip()==before_line and not single_line:
+                if not shell and is_namespaceable(before_line.strip()) and before_line.rstrip()==before_line and not single_line:
                     #If multiline, and we're starting a line, and we're continuing some variable name, assume that we don't want to create an expression.
                     #Example:
                     #def f():
@@ -5480,7 +5505,7 @@ def load_python_bindings(python_input):
                     buffer.insert_text('_')
                     return
 
-                if before_line.endswith('for ')and starts_with_any(after_line,' in)',' in}',' in]'):
+                if not shell and before_line.endswith('for ')and starts_with_any(after_line,' in)',' in}',' in]'):
                     buffer.insert_text('_')
                     buffer.cursor_right(3)
                     buffer.insert_text(' ')
@@ -5515,7 +5540,7 @@ def load_python_bindings(python_input):
             #     buffer.insert_text('+')
             #     return
 
-            if inc_or_dec=='-' and before_line.lstrip()=='for ' and after_line.rstrip()==' in :':
+            if not shell and inc_or_dec=='-' and before_line.lstrip()=='for ' and after_line.rstrip()==' in :':
                 #(on -)
                 #for | in : --> for _ in |:
                 buffer.insert_text('_')
@@ -5530,14 +5555,14 @@ def load_python_bindings(python_input):
                 else:
                     buffer.insert_text(inc_or_dec)
                     buffer.cursor_left()
-            elif inc_or_dec=='-' and before_line.endswith('-'):
+            elif not shell and inc_or_dec=='-' and before_line.endswith('-'):
                 #becuase then we dont have to reach for the shify key (default blank vairable is _ in for loops)
                 #print(-|) ---> print(_|)
                 buffer.delete_before_cursor()
                 buffer.insert_text('_')
-            elif inc_or_dec=='-' and before_line.endswith('-=1'):
+            elif not shell and inc_or_dec=='-' and before_line.endswith('-=1'):
                 #(when we wanted to make an underscore but got -=1, just press - again...)
-                #x-=1| ---> x_| 
+                #x-=1| ---> x_|
                 buffer.delete_before_cursor(3)
                 buffer.insert_text('_')
             else:
@@ -5649,7 +5674,7 @@ def load_python_bindings(python_input):
 
     for char in '"\'':
         thing2(char)
-    @handle(',',filter=~vi_mode_enabled&microcompletions_enabled)  
+    @handle(',',filter=~vi_mode_enabled&microcompletions_enabled)
     def _(event):
         #Comma event
         buffer=event.cli.current_buffer
@@ -5659,6 +5684,7 @@ def load_python_bindings(python_input):
         after= document.text_after_cursor
         before_line=document.current_line_before_cursor
         after_line=document.current_line_after_cursor
+        shell = document.text.startswith('!')
         if before_line.lstrip()=='for ' and after_line.rstrip()==' in :':
             #for | in:  --->  for i,e in enumerate(|):
             buffer.insert_text('i,e')
@@ -5683,7 +5709,7 @@ def load_python_bindings(python_input):
             buffer.insert_text(',')
             buffer.cursor_left()
             return
-        if before_line.endswith('-'):
+        if not shell and before_line.endswith('-'):
             #Turning the '-' into a '_' where a '-' would be syntactically invalid
             buffer.delete_before_cursor()
             buffer.insert_text('_')
@@ -6011,11 +6037,11 @@ def load_python_bindings(python_input):
             buffer.cursor_left(len(' in :'))
             refresh_strings_from_buffer()
 
-        if before_line.lstrip()=='for 'and after_line.rstrip()==' in :':
+        if not shell and before_line.lstrip()=='for 'and after_line.rstrip()==' in :':
             #for | in :   --->   for _ in |:   (we don't stop here, it eventually goes to "for _ in ans": see the next 'if' block)
             buffer.insert_text('_')
             # buffer.insert_text('ans')
-            # 
+            #
             refresh_strings_from_buffer()
 
         if after_line.rstrip()==' in :':
@@ -6075,8 +6101,8 @@ def load_python_bindings(python_input):
                 #Which is a syntax error. Autocorrect it to:
                 #import w as x,y as z
                 buffer.delete_before_cursor(2)
-            if before_line.lstrip() in ('def ','class ') and current_line.strip() in ('def ():','def (self):','class :') :
-                #def |():  --->  'def ans():\n|'  or 'def _():\n|' 
+            if not shell and before_line.lstrip() in ('def ','class ') and current_line.strip() in ('def ():','def (self):','class :') :
+                #def |():  --->  'def ans():\n|'  or 'def _():\n|'
                 #class |:  --->  class _:\n|
                 if single_line:
                     buffer.insert_text('ans')

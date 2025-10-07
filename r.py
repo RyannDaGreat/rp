@@ -7045,6 +7045,88 @@ def _load_files(
 
 # region  Saving/Loading Images: ［load_image，_load_image_from_url，save_image，save_image_jpg］
 
+def copy_paths_to_clipboard(*paths):
+    """ 
+    Copies files to the system clipboard, as opposed to just the file paths
+    It also copies the path as a string though:
+        Basically if you try to paste in a place that only accepts strings it only pastes that string
+        But if you paste in let's say finder, it will paste the actual file
+    Currently only works on MacOS. TODO: Windows, Linux
+    """
+    
+    paths=detuple(paths)
+    if isinstance(paths,str):
+        paths=[paths]
+    if not all(isinstance(x, str) for x in paths):
+        raise ValueError('Not all given paths were strings: '+repr(paths))
+
+    if currently_running_mac():
+        
+        from subprocess import run
+        import sys
+
+        pip_import('AppKit')
+        pip_import('Foundation')
+        pip_import('objc')
+
+        code = r"""
+        #!/bin/python
+        from pathlib import Path
+        from AppKit import NSPasteboard, NSPasteboardItem, NSPasteboardTypeString
+        from Foundation import NSURL
+        import objc
+
+        # Expect: 'paths' is a tuple of original strings, and 'resolved_paths' is the same length,
+        # each a resolved absolute POSIX path string (validated to exist).
+        with objc.autorelease_pool():
+            pb = NSPasteboard.generalPasteboard()
+            pb.clearContents()
+
+            items = []
+            for original_str, resolved_str in zip(paths, resolved_paths):
+                # File URL from the resolved absolute path
+                url = NSURL.fileURLWithPath_(resolved_str)
+
+                item = NSPasteboardItem.alloc().init()
+                # 1) Plain-text string representation (what you typed in)
+                item.setString_forType_(original_str, NSPasteboardTypeString)
+                # 2) File URL representation for apps that accept files
+                #    'public.file-url' expects a URL string (e.g., 'file:///...')
+                item.setString_forType_(url.absoluteString(), "public.file-url")
+
+                items.append(item)
+
+            ok = pb.writeObjects_(items)
+            if not ok:
+                raise RuntimeError("Failed to write items to the pasteboard.")
+        """
+
+        # Pre-validate & prepare the resolved absolute paths on the Python side
+        # so the exec'd snippet can trust 'resolved_paths'.
+        from pathlib import Path
+        resolved = []
+        for p in paths:
+            ap = Path(p).expanduser().resolve()
+            if not ap.exists():
+                raise FileNotFoundError(ap)
+            resolved.append(str(ap))
+
+        command = [
+            sys.executable, "-m", "rp", "exec", code,
+            "--paths", repr(tuple(paths)),
+            "--resolved_paths", repr(tuple(resolved)),
+        ]
+        
+        run(command, check=True)
+
+
+    elif currently_running_linux():
+        #TODO
+        raise NotImplementedError
+
+    elif currently_running_windows():
+        #TODO
+        raise NotImplementedError
 
 def _load_animated_image_via_pil(location, *, use_cache=True):
     """
@@ -26028,9 +26110,35 @@ def pseudo_terminal(
                             fansi_print("COPY --> r.copy_image_to_clipboard(ans)","blue")
                             copy_image_to_clipboard(get_ans())
                         else:
-                            #Can copy text to clipboard
-                            fansi_print("COPY --> r.string_to_clipboard(str(ans))","blue")
-                            copy(str(get_ans()))
+                            
+                            do_string_copy=True
+
+                            #Attempt to copy file paths
+                            if currently_running_desktop() and (
+                                isinstance(get_ans(), str)
+                                or has_len(get_ans())
+                                and len(get_ans()) <= 100
+                                and all(isinstance(x, str) for x in get_ans())
+                            ):
+                                try:
+                                    copy_paths_to_clipboard(get_ans())
+                                    #If we succesfully copied, it should also have been copied as a string too
+                                    do_string_copy=False
+                                except NotImplementedError:
+                                    #Unsupported OS right now
+                                    pass
+                                except FileNotFoundError as e:
+                                    #Fair enough, no need to be loud about it
+                                    pass
+                                except Exception as e:
+                                    #For now, hide errors...
+                                    print_stack_trace()
+
+
+                            if do_string_copy:
+                                #Can copy text to clipboard
+                                fansi_print("COPY --> r.string_to_clipboard(str(ans))","blue")
+                                copy(str(get_ans()))
 
                     elif user_message == "VARS":
                         if _get_pterm_verbose(): fansi_print("VARS --> ans = user_created_variables (AKA all the names you created in this pseudo_terminal session):","blue")
@@ -46307,8 +46415,8 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
     assert timeout is None or isinstance(timeout, (int, float)), 'timeout should be a number or None, but got type ' + repr(type(timeout))
 
     if is_a_folder(path):
-        dst_path = path_join(root, get_file_name(url))
         dst_root = path
+        dst_path = path_join(dst_root, get_file_name(url))
 
     else:
         dst_path= './' + get_file_name(url) if path is None else path
@@ -46393,7 +46501,7 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
         if path is None:
             #We can't use the default dst_path as it would take the file name from the URL which is often junk
             #It needs to end with "/" to treat it as a folder
-            dst_path = root + "/"
+            dst_path = dst_root + "/"
 
         output_path = gdown.download(url=url, output=dst_path, fuzzy=True, quiet=not show_progress)
 
@@ -63507,6 +63615,12 @@ known_pypi_module_package_names={
     # 'cv2': 'opencv-python',
     # 'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? (Update: so far, so good!)
     'cv2': 'opencv-python opencv-contrib-python', #But that didn't work for get_edge_drawing...https://github.com/Comfy-Org/ComfyUI-Manager/discussions/708
+    'AppKit':         'pyobjc-framework-Cocoa',
+    'Cocoa':          'pyobjc-framework-Cocoa',
+    'CoreFoundation': 'pyobjc-framework-Cocoa',
+    'Foundation':     'pyobjc-framework-Cocoa',
+    'PyObjCTools': 'pyobjc-core',
+    'objc':        'pyobjc-core',
     'pi_heif':'pi-heif',
     'cython': 'Cython',
     'pdfminer':'pdfminer.six',
@@ -63656,7 +63770,6 @@ known_pypi_module_package_names={
     'yapftests': 'yapf',
     'yaml':'PyYAML',
     'zalgo_text': 'zalgo-text',
-
     'hitherdither' : "git+https://www.github.com/hbldh/hitherdither",
     'decord' : "eva-decord" if currently_running_mac() else "decord", #https://www.piwheels.org/project/eva-decord/ - decord doesn't pip install on mac
 }
@@ -64131,4 +64244,5 @@ del re #re is random element
 
 
 # Version Oct24 2021
+
 
