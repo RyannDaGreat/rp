@@ -1282,6 +1282,276 @@ def post_handler(binding:_Binding,event:KeyPressEvent,old_document:Document):
         commented_parenthesizer_automator.buffer_refresh_parenthesization(buffer)#This is optimized and only makes changes if nessecary
 
 
+def sync_comment_block_written_by_claude(buffer, char):
+    """
+    Synchronize decorative comment blocks after typing/deleting a character.
+
+    Author: Claude Code (Anthropic AI)
+
+    Detects and syncs decorative comment blocks (rectangles) like:
+        ########################################
+        ############## HELLO WORLD #############
+        ########################################
+
+    Features:
+    - Rectangle detection: Only syncs blocks where all lines have same initial length
+    - Typing support: Expands all rows to match widest
+    - Backspace/delete support: Shrinks all rows when deleting
+
+    Examples:
+        #####              ######             #######################
+        ##|##   + #   ->   ###|##     or     ####    Hello    | ####
+        #####              ######             #### Hello World!  ##|##
+                                              #######################
+
+        Backspace shrinks blocks:
+        #####              ####
+        ##|##   + \b  ->   #|##
+        #####              ####
+
+    Returns True if character was handled, False otherwise.
+    """
+    from rp.prompt_toolkit.document import Document
+
+    doc = buffer.document
+    text = doc.text
+    lines = text.split('\n')
+    current_line_idx = doc.cursor_position_row
+
+    # Bounds check
+    if current_line_idx >= len(lines):
+        return False
+
+    # Check if current line is a comment
+    current_line = lines[current_line_idx]
+    current_stripped = current_line.strip()
+
+    # Only process if we're in a comment line that starts and ends with #
+    if not current_stripped.startswith('#') or not current_stripped.endswith('#'):
+        return False
+
+    # Find block boundaries (consecutive lines that start and end with #)
+    start_idx = current_line_idx
+    end_idx = current_line_idx
+
+    # Expand upward to find block start
+    while start_idx > 0:
+        prev_line = lines[start_idx - 1].strip()
+        if not prev_line or not prev_line.startswith('#') or not prev_line.endswith('#'):
+            break
+        start_idx -= 1
+
+    # Expand downward to find block end
+    while end_idx < len(lines) - 1:
+        next_line = lines[end_idx + 1].strip()
+        if not next_line or not next_line.startswith('#') or not next_line.endswith('#'):
+            break
+        end_idx += 1
+
+    # Get all lines in the block
+    block_lines = [lines[i] for i in range(start_idx, end_idx + 1)]
+
+    # Check if this is a rectangle (all lines have same length initially)
+    initial_lengths = [len(line.strip()) for line in block_lines]
+    is_rectangle = len(set(initial_lengths)) == 1
+
+    # Only sync if this is a proper rectangle
+    if not is_rectangle:
+        return False
+
+    # Handle space or tab at the beginning of a line
+    cursor_col = doc.cursor_position_col
+    if cursor_col == 0 and char in (' ', '\t'):
+        # Determine indent amount
+        indent_amount = 1 if char == ' ' else 4
+        indent_str = ' ' * indent_amount
+
+        # Add indent to all lines in the block
+        new_block_lines = []
+        for i in range(start_idx, end_idx + 1):
+            new_block_lines.append(indent_str + lines[i])
+
+        # Build new document with indented block
+        new_lines = lines[:start_idx] + new_block_lines + lines[end_idx + 1:]
+        new_text = '\n'.join(new_lines)
+
+        # Calculate new cursor position (stay at beginning of line but account for indent)
+        lines_before_cursor = new_lines[:current_line_idx]
+        new_cursor_pos = sum(len(l) + 1 for l in lines_before_cursor) + indent_amount
+
+        # Update buffer
+        buffer.document = Document(text=new_text, cursor_position=new_cursor_pos)
+        return True
+
+    # Handle backspace or delete
+    if char in ('\b', '\x7f'):  # \b is backspace, \x7f is delete
+        # For backspace
+        if char == '\b':
+            buffer.delete_before_cursor()
+        # For delete
+        else:
+            buffer.delete()
+
+        # Re-get document state after deletion
+        doc = buffer.document
+        text = doc.text
+        lines = text.split('\n')
+
+        # Revalidate bounds
+        if current_line_idx >= len(lines):
+            return True
+
+        # Re-find block with same logic
+        start_idx = current_line_idx
+        end_idx = current_line_idx
+
+        while start_idx > 0:
+            prev_line = lines[start_idx - 1].strip()
+            if not prev_line or not prev_line.startswith('#') or not prev_line.endswith('#'):
+                break
+            start_idx -= 1
+
+        while end_idx < len(lines) - 1:
+            next_line = lines[end_idx + 1].strip()
+            if not next_line or not next_line.startswith('#') or not next_line.endswith('#'):
+                break
+            end_idx += 1
+
+        block_lines = [lines[i] for i in range(start_idx, end_idx + 1)]
+
+        # Find minimum width (for shrinking)
+        min_width = min(len(line.strip()) for line in block_lines)
+        min_width = max(min_width, 2)  # Minimum width is 2
+
+        # Rebuild each line to match min width
+        new_block_lines = []
+        changed = False
+
+        for line in block_lines:
+            original_indent = len(line) - len(line.lstrip())
+            stripped = line.strip()
+            current_width = len(stripped)
+
+            if current_width > min_width:
+                # Need to shrink - preserve content structure
+                # Count leading and trailing #'s
+                leading_hashes = len(stripped) - len(stripped.lstrip('#'))
+                trailing_hashes = len(stripped) - len(stripped.rstrip('#'))
+                content_start = leading_hashes
+                content_end = len(stripped) - trailing_hashes
+
+                if content_start < content_end:
+                    # Has content - preserve it
+                    content = stripped[content_start:content_end]
+                    # Calculate hash padding on each side
+                    total_hashes = min_width - len(content)
+                    if total_hashes >= 2:
+                        left_hashes = total_hashes // 2
+                        right_hashes = total_hashes - left_hashes
+                        new_stripped = '#' * left_hashes + content + '#' * right_hashes
+                    else:
+                        # Can't fit content, just use hashes
+                        new_stripped = '#' * min_width
+                else:
+                    # Pure hashes
+                    new_stripped = '#' * min_width
+
+                new_line = ' ' * original_indent + new_stripped
+                new_block_lines.append(new_line)
+                changed = True
+            else:
+                # Already at min width
+                new_block_lines.append(line)
+
+        if changed:
+            # Build new document with synced block
+            new_lines = lines[:start_idx] + new_block_lines + lines[end_idx + 1:]
+            new_text = '\n'.join(new_lines)
+
+            # Preserve cursor position
+            cursor_col = doc.cursor_position_col
+            lines_before_cursor = new_lines[:current_line_idx]
+            new_cursor_pos = sum(len(l) + 1 for l in lines_before_cursor) + cursor_col
+
+            # Update buffer
+            buffer.document = Document(text=new_text, cursor_position=new_cursor_pos)
+
+        return True
+
+    # Handle normal character insertion
+    buffer.insert_text(char)
+
+    # Re-get document state after insertion
+    doc = buffer.document
+    text = doc.text
+    lines = text.split('\n')
+    current_line_idx = doc.cursor_position_row
+
+    if current_line_idx >= len(lines):
+        return True
+
+    # Re-find block after insertion
+    start_idx = current_line_idx
+    end_idx = current_line_idx
+
+    while start_idx > 0:
+        prev_line = lines[start_idx - 1].strip()
+        if not prev_line or not prev_line.startswith('#') or not prev_line.endswith('#'):
+            break
+        start_idx -= 1
+
+    while end_idx < len(lines) - 1:
+        next_line = lines[end_idx + 1].strip()
+        if not next_line or not next_line.startswith('#') or not next_line.endswith('#'):
+            break
+        end_idx += 1
+
+    # Get all lines in the block
+    block_lines = [lines[i] for i in range(start_idx, end_idx + 1)]
+
+    # Find maximum width across all lines in block (minimum 2)
+    max_width = max(len(line.strip()) for line in block_lines)
+    max_width = max(max_width, 2)
+
+    # Rebuild each line to match max width by padding right side with #'s
+    new_block_lines = []
+    changed = False
+
+    for line in block_lines:
+        original_indent = len(line) - len(line.lstrip())
+        stripped = line.strip()
+        current_width = len(stripped)
+
+        if current_width < max_width:
+            # Need to pad - add #'s to the right
+            padding_needed = max_width - current_width
+            new_stripped = stripped + '#' * padding_needed
+            new_line = ' ' * original_indent + new_stripped
+            new_block_lines.append(new_line)
+            changed = True
+        else:
+            # Already at max width
+            new_block_lines.append(line)
+
+    # If nothing changed, still return True (we inserted the char)
+    if not changed:
+        return True
+
+    # Build new document with synced block
+    new_lines = lines[:start_idx] + new_block_lines + lines[end_idx + 1:]
+    new_text = '\n'.join(new_lines)
+
+    # Preserve cursor position (same line and column)
+    cursor_col = doc.cursor_position_col
+    lines_before_cursor = new_lines[:current_line_idx]
+    new_cursor_pos = sum(len(l) + 1 for l in lines_before_cursor) + cursor_col
+
+    # Update buffer
+    buffer.document = Document(text=new_text, cursor_position=new_cursor_pos)
+
+    return True
+
+
 def handle_character(buffer,char,event=None):
     #This function should receive all VISIBLE keystrokes (such as 'a','b','c','1','2','3' but also ' ','\n','.','$' etc)
     #But it should NOT receive things like backspace, backtab, or other control keys that aren't actually part of the code
@@ -1312,6 +1582,12 @@ def handle_character(buffer,char,event=None):
     refresh_strings_from_buffer()
 
     shell = text.startswith('!')
+
+    # Decorative comment block synchronization (Written by Claude)
+    # Only check for comment blocks when we're actually in a comment line
+    if char != '\n' and current_line.strip().startswith('#'):
+        if sync_comment_block_written_by_claude(buffer, char):
+            return True
 
     if char=='\n' and after_line in ['"',"'"]:
         #Even if (especially if) we're in a string...
@@ -1494,6 +1770,12 @@ def handle_character(buffer,char,event=None):
       #endregion
 
       #region pluralize list comprehension (must come before space stoppers)
+        # Dict comprehension: {x:y for x in |.items()} → {x:y for x in ans.items() |}
+        if char==' ' and '\n' not in text and after_line.startswith('.items()}') and before_line.count('{')==1:
+            buffer.insert_text('ans')
+            buffer.cursor_right(len('.items()'))
+            buffer.insert_text(' ')
+            return True
         if char==' ' and (starts_with_any(after_line,']',':')) and re.fullmatch(r'((.* for)|(for)) [a-zA-Z_0-9]+ in ',before_line):
             #[thing(index) for index in |] --->  [thing(index) for index in indices|] #TO BE IMPROVED LATER. THIS IS JUST A PROOF OF CONCEPT RIGHT NOW.
             name=before_line.rstrip().split(' ')[-2]
@@ -1516,7 +1798,7 @@ def handle_character(buffer,char,event=None):
                 buffer.insert_text('ans')
                 return True
             # buffer.insert_text(plural_noun(name))#If we can't find a name that fits, and 'ans' isn't an option, just choose a plural name
-            # return True 
+            # return True
         keywords={'async','await','with', 'nonlocal', 'while', 'None', 'global', 'as', 'is', 'and', 'else', 'yield', 'raise', 'del', 'break', 'in', 'not', 'False', 'assert', 'try', 'def', 'return', 'if', 'finally', 'lambda', 'for', 'from', 'True', 'pass', 'continue', 'elif', 'except', 'class', 'or', 'import'}
         from rp import is_namespaceable
         if char==' ' and (before_line=='for ' or before_line.endswith(' for ')) and starts_with_any(after_line,' in]','in)','in}',' in '):
@@ -1877,6 +2159,18 @@ def handle_character(buffer,char,event=None):
         if char=='\n' and not after_line and before_line.endswith(':'):
             buffer.insert_text('\n'+get_indent(before_line)+'    ')
             return True
+
+        # CLAUDE WROTE THIS PARAGRAPH: Colon-text swap: if |:x → if x|: (works for space and enter)
+        if char in ' \n':
+            if endswithany(before_line,'if ','for ','while ','elif ','with ') and after_line.startswith(':'):
+                text_after_colon = after_line[1:]
+                if text_after_colon:
+                    buffer.delete(count=len(after_line))
+                    buffer.insert_text(text_after_colon + ':')
+                    buffer.cursor_left()
+                    if char==' ':
+                        return True
+
         if char=='=' and before_line.endswith('.') and after_line.strip():
             #`if x.=5`   -->  `if x>=5|:`
             buffer.delete_before_cursor()
@@ -2265,6 +2559,33 @@ def handle_character(buffer,char,event=None):
             buffer.insert_text('?'*i)
         if char=='\n' and before_line.lstrip() in {'while ','if '} and after_line.strip()==':':
             buffer.insert_text('True')
+
+        #CLAUDE WROTE THIS PARAGRAPH
+        # Dict comprehension: {x:y for x in |} + ; → {x:y for x in |.items()}
+        # Also: {x:y for x,y in |} + ; → {x:y for x,y in |.items()}
+        # Also: {x:y for x| in} + ; → {x:y for x in |.items()}
+        if char==';':
+            # Check for dict comprehension pattern
+            if re.search(r'\{.*:.*\bfor\b', before_line):
+                # Pattern 1: {x:y for x in |} or {x:y for x,y in |}
+                if before_line.endswith(' in ') and after_line.startswith('}'):
+                    # <{k;v f; >  -->  {k:v for k,v in ans.items()}
+                    buffer.insert_text('.items()')
+                    buffer.cursor_left(len('.items()'))
+                    return True
+                # Pattern 2: {x:y for x| in} or {x:y for x,y| in}
+                elif re.match(r'\s+in[}\s]', after_line):
+                    if re.search(r'\bfor\s+$', before_line):
+                        buffer.insert_text('k,v')
+                        #If triggered the next "if" will also trigger
+                    if re.search(r'\bfor\s+[\w,]*$', before_line):
+                        # Insert ' in ' and then '.items()'
+                        buffer.delete(len(' in'))  # Remove the ' in' from after cursor
+                        buffer.insert_text(' in .items()')
+                        buffer.cursor_left(len('.items()'))
+                        return True
+
+
         if char==';' and after_line.startswith('}'):
             #On ‹;›: ‹{x|}›  --->  ‹x:|›
             buffer.insert_text(':')
@@ -2606,7 +2927,7 @@ def load_python_bindings(python_input):
     #     buffer.insert_text(")")
     #     buffer.cursor_left(count=1)
 #endregion
-    for char in r'''`~!@#$%^&*()-_=+[{]}\|;:'",<.>/?']''':
+    for char in r'''`~!@#$%^&*()-_=+[{]}\|;:'",<.>/?']''' + '\n':
         def go(c):
             @handle(c,filter=~vi_mode_enabled&microcompletions_enabled)
             def _(event):
@@ -2819,6 +3140,23 @@ def load_python_bindings(python_input):
                                                     # buffer.cursor_left(len(' else'))
                                                     return
                                 if char=='f':
+                                    # NEW RULE: Nested list comprehension
+                                    # [x | for x in z] → [x for | in  for x in z]
+                                    if (before_line.count('[') > before_line.count(']') or
+                                        before_line.count('{') > before_line.count('}') or
+                                        before_line.count('(') > before_line.count(')')):
+                                        # We're inside brackets/braces/parens (comprehension context)
+                                        if re.fullmatch(r'^.*[a-zA-Z_0-9\)\}\]\'\"] +', before_line):
+                                            # Check if after_line starts with "for ... in" pattern (we're before existing comprehension clause)
+                                            if re.match(r'\s*for\s+\w+\s+in\s+', after_line):
+                                                if not endswithany(before_line.strip(), *keywords):
+                                                    # Insert nested for clause before the existing one
+                                                    if not before_line.endswith(' '):
+                                                        buffer.insert_text(' ')
+                                                    buffer.insert_text('for  in ')
+                                                    buffer.cursor_left(len(' in '))
+                                                    return
+                                if char=='f':
                                     #f-->if
                                     if re.fullmatch(r'^.*[a-zA-Z_0-9\)\}\]\'\"] +',before_line):
                                         #x=x f|   --->   x=x if | else
@@ -2853,8 +3191,47 @@ def load_python_bindings(python_input):
                                             if re.fullmatch(r'.*[\]\}\)\'\"a-zA-Z0-9_] *',before_line):
                                                 if not re.fullmatch(r'.*[^a-zA-Z0-9_](if|and|or|not|while|with|else|elif|is|yield) ',before_line):#prevent: return x if not negative  ——> return x if not in egative| else
                                                     if not re.fullmatch(r'[0-9]+[a-zA-Z_].*',before_line[::-1]):#Prevent: nuts2nuts  —>  nuts2 in uts
-                                                        buffer.insert_text('in ' if char=='n' else 'is ')
-                                                        return
+                                                        # Don't do n→'in' or s→'is' in comprehensions RIGHT AFTER 'for x in'
+                                                        # [x for x in items |n] should NOT become [x for x in items in |]
+                                                        # But DO allow it after 'if': [x for x in items if x |n] → [x for x in items if x in |]
+                                                        in_comprehension = (before_line.count('[') > before_line.count(']') or
+                                                                          before_line.count('{') > before_line.count('}') or
+                                                                          before_line.count('(') > before_line.count(')'))
+                                                        if in_comprehension and re.search(r'\bfor\b.*\bin\b', before_line):
+                                                            # Check if we're after 'if' - if so, DO expand
+                                                            if re.search(r'\bif\b', before_line):
+                                                                # We have 'if' after 'for...in', so allow expansion
+                                                                buffer.insert_text('in ' if char=='n' else 'is ')
+                                                                return
+                                                            else:
+                                                                # No 'if' yet, don't expand n/s (auto-if will handle it)
+                                                                pass  # Fall through to auto-if rule or default insertion
+                                                        else:
+                                                            buffer.insert_text('in ' if char=='n' else 'is ')
+                                                            return
+
+                                # NEW RULE: Auto-insert 'if' before invalid letters in comprehensions
+                                # [x for x in items |y] should become [x for x in items if y|]
+                                # But NOT after 'in e', 'in z', 'in r' (those are shortcuts)
+                                # And NOT for letters that have valid expansions (a/o/i/f)
+                                # Note: n/s fall through here now (they don't expand in comprehensions)
+                                if char in 'bcdegh jklmnpqrstuvwxyz':  # Letters without expansions (excluding a/o/i/f)
+                                    # Check if we're in a comprehension context
+                                    if (before_line.count('[') > before_line.count(']') or
+                                        before_line.count('{') > before_line.count('}') or
+                                        before_line.count('(') > before_line.count(')')):
+                                        # Check if we have 'for ... in ...' pattern
+                                        if re.search(r'\bfor\b.*\bin\b', before_line):
+                                            # Check if we're right after an expression (not after 'in ')
+                                            # And NOT in the shortcut position (after 'in e', 'in z', 'in r')
+                                            if (before_line.endswith(' ') and
+                                                not endswithany(before_line, ' in e ', ' in z ', ' in r ') and
+                                                not endswithany(before_line, ' if ', ' and ', ' or ', ' not ', ' is ', ' in ')):
+                                                # Check if after cursor is end of comprehension
+                                                if starts_with_any(after_line, ']', '}', ')', ' for', ':'):
+                                                    # Insert 'if ' before this character
+                                                    buffer.insert_text('if ' + char)
+                                                    return True
 
                     if char=='m' and meta_pressed(clear=True):
                         # ⌥ + m ---> MORE
@@ -4183,6 +4560,41 @@ def load_python_bindings(python_input):
             return
         before_line=before.split('\n')[-1]# all on same line, but before cursor
         after_line=after.split('\n')[0]# ditto but after cursor
+
+        
+        #CLAUDE WROTE THIS PARAGRAPH
+        # NEW RULE: if or -> for in comprehensions
+        # [x for y in x if or|] + space → [x for y in x for |]
+        if before_line.endswith(' if or') and starts_with_any(after_line, ']', '}', ')'):
+            # We're in a comprehension and have "if or" before cursor
+            if (before_line.count('[') > before_line.count(']') or
+                before_line.count('{') > before_line.count('}') or
+                before_line.count('(') > before_line.count(')')):
+                # Delete "if or" (5 characters, keep the space before "if") and replace with "for "
+                buffer.delete_before_cursor(5)
+                buffer.insert_text('for ')
+                return
+
+        #CLAUDE WROTE THIS PARAGRAPH
+        # NEW RULE: for variable + space -> for variable in
+        # [x for x in y for x|] + space → [x for x in y for x in |]
+        import re
+        if re.search(r'for\s+\w+$', before_line):
+            # We have "for <variable>|" at end of before_line
+            if (before_line.count('[') > before_line.count(']') or
+                before_line.count('{') > before_line.count('}') or
+                before_line.count('(') > before_line.count(')')):
+                # Check if there's already " in" after cursor (with or without trailing space)
+                m = re.match(r'(\s+in)(\s+|(?=[^\w]))', after_line)
+                if m:
+                    # Delete the " in" part (but keep what comes after)
+                    buffer.delete(len(m.group(1)))
+                    buffer.insert_text(' in ')
+                else:
+                    # Just insert " in "
+                    buffer.insert_text(' in ')
+                return
+
         if before_line.endswith(' in len') and starts_with_any(after_line,*'}])'):
                 #[x for x in len|]  --->  [x for x in range(len(|))]
                 buffer.delete_before_cursor(3)
@@ -4534,10 +4946,19 @@ def load_python_bindings(python_input):
                 buffer.cursor_left(len(' in'))
             elif before_line.endswith(',if'):
                 #Because when we're in functions, hitting space makes commas, we can still do 'for', 'if', etc
-                #print(x,if)  -->  print(x for | in)
+                # Check if we're in a comprehension (has 'for ... in')
+                in_comprehension = ((before_line.count('[') > before_line.count(']') or
+                                    before_line.count('{') > before_line.count('}') or
+                                    before_line.count('(') > before_line.count(')')) and
+                                   re.search(r'\bfor\b.*\bin\b', before_line))
                 buffer.delete_before_cursor(3)
-                buffer.insert_text(' if  else')
-                buffer.cursor_left(len(' else'))
+                if in_comprehension:
+                    # In comprehension: print(x for x in y,if|) --> print(x for x in y if |)
+                    buffer.insert_text(' if ')
+                else:
+                    # Regular ternary: print(x,if|) --> print(x if | else)
+                    buffer.insert_text(' if  else')
+                    buffer.cursor_left(len(' else'))
             elif before_line.lstrip()=='else:'and not after_line.strip():
                 #else:|   --->   elif |:
                 buffer.delete_before_cursor(len('else:'))
@@ -5261,6 +5682,42 @@ def load_python_bindings(python_input):
                 buffer.cursor_right(len(al))
                 buffer.delete_before_cursor(len(bl+al))
                 return
+
+            def satisfies(string):
+                b,a=string.split('|')
+                if bl==b and al.startswith(a):
+                    return b,a
+                return None
+            for string in {
+                "for | in :",
+                "for |:",
+                "while |:",
+                "if |:",
+                "elif |:",
+                "except |:",
+                "finally:|",
+                "finally|:",
+                "lambda |:",
+                "lambda|:",
+                "lambda:|",
+                "with |:",
+                "from |",
+                "import |",
+                "return |",
+                "return|",
+                "pass|",
+                "else:|",
+                "yield |",
+                "yield|",
+                "assert |",
+            }:
+                ba=satisfies(string)
+                if ba is not None:
+                    b,a=ba
+                    buffer.cursor_right(len(a))
+                    buffer.delete_before_cursor(len(a+b))
+                    return
+
             if before and after:
                 if after_line.strip()in {':','():'} and before_line.lstrip() in {'def ','while ','for ','class ','if ','elif ','else','except ','lambda ','with ','try'}:
                     #  '    def |:'   -->   '    |'
@@ -5293,6 +5750,11 @@ def load_python_bindings(python_input):
 
     @handle(Keys.Backspace,eager=True)
     def _(event):
+        buffer = event.cli.current_buffer
+        # Check for decorative comment block sync first
+        if sync_comment_block_written_by_claude(buffer, '\b'):
+            return
+
         if meta_pressed():
             do_backspace(event)#We expect at least two characters to dissapear; so eat through one-char wide spaces (for example, "def |a()" --> "|a()", not "def|a()")
             c=alt_backspace_char_class(event)
@@ -5647,6 +6109,12 @@ def load_python_bindings(python_input):
                 before_line=document.current_line_before_cursor
                 after_line=document.current_line_after_cursor
 
+                # Check if we're closing an existing quote (odd count = unmatched opening quote)
+                def has_unmatched_quote(text, quote_char):
+                    """Check if there's an unmatched opening quote"""
+                    # Simple count - more sophisticated parsing would handle escapes
+                    return before_line.count(quote_char) % 2 == 1
+
                 if after.startswith(char) and not before.endswith(char):
                     buffer.cursor_right()
                 # else:
@@ -5654,6 +6122,16 @@ def load_python_bindings(python_input):
                 #     buffer.cursor_left()
                 #     buffer.insert_text(char)
 
+                elif before_line.endswith(char):
+                    # Right after a quote - auto-pair for string concatenation
+                    # "Hello"| + " → "Hello""|"  (not just "Hello""|)
+                    buffer.insert_text(char)
+                    buffer.insert_text(char)
+                    buffer.cursor_left()
+                elif has_unmatched_quote(before_line, char):
+                    # We're closing an existing quote - just insert the char
+                    # " Hello World | + " → " Hello World "|
+                    buffer.insert_text(char)
                 elif (before and after and before[-1]+after[0] in {"[]","()","{}",",}",",)",",]",'+)','+,','+}','+]'}) or (not after_line or not before and not after or before and after and before[-1]in'(=!#%&*+,-./:;<>^|~' and after[0]in')=!#%&*+,-./ :;<>^|~' or before and after and before[-1]+after[0] in 2*char):
                     #| --> "|"
                     #| --> '|'
@@ -5740,7 +6218,11 @@ def load_python_bindings(python_input):
 
     @handle(Keys.Delete)
     def _(event):
-        event.cli.current_buffer.delete()
+        buffer = event.cli.current_buffer
+        # Check for decorative comment block sync first
+        if sync_comment_block_written_by_claude(buffer, '\x7f'):
+            return
+        buffer.delete()
 
     @handle(Keys.ControlSpace)# For commenting
     def _(event):  # Parenthesis completion
