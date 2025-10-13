@@ -45,7 +45,7 @@ copy = copy.copy
 
 # Files that RP maintains
 _rp_folder                    = __file__[: -len("r.py")]
-_site_packages                = _rp_folder[: -len("rp")]
+_site_packages                = _rp_folder[: -len("/rp/")]
 _local_clipboard_string_path  = os.path.join(_rp_folder, "r.py.rp_local_clipboard")
 _cd_history_path              = os.path.join(_rp_folder, "r.py.rp_cd_history.txt")
 _pyin_settings_file_path      = os.path.join(_rp_folder, "r.py.rp_pyin_settings")
@@ -7119,6 +7119,76 @@ def copy_paths_to_clipboard(*paths):
         
         run(command, check=True)
 
+
+    elif currently_running_linux():
+        #TODO
+        raise NotImplementedError
+
+    elif currently_running_windows():
+        #TODO
+        raise NotImplementedError
+
+def paste_paths_from_clipboard():
+    """
+    Pastes file paths from the system clipboard that were copied as files (e.g., from Finder).
+    Returns a list of file path strings.
+    If only a single file was copied, still returns a list with one element.
+    If no file paths are in the clipboard, returns an empty list.
+    Currently only works on MacOS. TODO: Windows, Linux
+
+    Example:
+        >>> # Copy some files in Finder, then:
+        >>> paths = paste_paths_from_clipboard()
+        >>> paths
+        ['/Users/username/Documents/file1.txt', '/Users/username/Documents/file2.txt']
+    """
+
+    if currently_running_mac():
+        from subprocess import run, PIPE
+        import sys
+
+        pip_import('AppKit')
+        pip_import('Foundation')
+        pip_import('objc')
+
+        code = r"""
+        #!/bin/python
+        from AppKit import NSPasteboard
+        from Foundation import NSURL
+        import objc
+        import json
+
+        with objc.autorelease_pool():
+            pb = NSPasteboard.generalPasteboard()
+
+            # Try to read file URLs from the pasteboard
+            # The type we're looking for is "public.file-url"
+            urls = pb.readObjectsForClasses_options_([NSURL], None)
+
+            paths = []
+            if urls:
+                for url in urls:
+                    if url.isFileURL():
+                        # Convert file URL to path string
+                        path = url.path()
+                        if path:
+                            paths.append(path)
+
+            # Print as JSON so we can easily parse it
+            print(json.dumps(paths))
+        """
+
+        command = [
+            sys.executable, "-m", "rp", "exec", code,
+        ]
+
+        result = run(command, check=True, capture_output=True, text=True)
+
+        # Parse the JSON output
+        import json
+        paths = json.loads(result.stdout.strip())
+
+        return paths
 
     elif currently_running_linux():
         #TODO
@@ -20189,7 +20259,7 @@ def _print_status(x):
 
     _print_status_prev_len = len(x)
 
-def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,completion_unit="items"):
+def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,completion_unit="items",start_n=0,format_rate=None):
     """
     Internal ETA implementation that creates a progress tracking function.
 
@@ -20200,6 +20270,7 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
         format_value (callable): Function to format progress values (default: str)
         completion_verb (str): Verb for completion message (default: "Did")
         completion_unit (str): Unit name for completion message (default: "items")
+        start_n (int): Starting count for resumed operations (default: 0)
 
     Returns:
         callable: Progress function that accepts current count and updates display
@@ -20211,6 +20282,15 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
         ...     a(i)
     """
     from datetime import timedelta
+
+    if min_interval is None: min_interval=.05
+    if title is None: "r.eta"
+
+    if format_rate is None: 
+        if format_value is str:
+            format_rate = partial(str.format, '{:.2f}')
+        else:
+            format_rate=format_value
 
     if completion_verb is None:
         completion_verb = "Did"
@@ -20250,7 +20330,7 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
 
         return out
 
-    def display_eta(proportion_completed,time_elapsed_in_seconds,TOTAL_TO_COMPLETE,COMPLETED_SO_FAR):
+    def display_eta(proportion_for_eta,time_elapsed_in_seconds,TOTAL_TO_COMPLETE,COMPLETED_SO_FAR):
         nonlocal interval_timer
         nonlocal shown_done
 
@@ -20266,7 +20346,18 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
             temp=timedelta(seconds=time_elapsed_in_seconds)
             progress = "\tProgress: " + format_value(COMPLETED_SO_FAR) + "/" + format_value(TOTAL_TO_COMPLETE)
 
-            if proportion_completed <= 0:
+            # Calculate transfer rate (only count items transferred in this session)
+            if time_elapsed_in_seconds > 0:
+                items_transferred = COMPLETED_SO_FAR - start_n
+                rate = items_transferred / time_elapsed_in_seconds
+                rate_str = "\tRATE=" + format_rate(rate) + "/s"
+            else:
+                rate_str = ""
+
+            # Visual progress bar shows actual completion
+            proportion_for_bar = COMPLETED_SO_FAR / TOTAL_TO_COMPLETE if TOTAL_TO_COMPLETE > 0 else 1.0
+
+            if proportion_for_eta <= 0:
                 return _print_status(
                     title
                     + "NO PROGRESS; INFINITE TIME REMAINING. T="
@@ -20274,7 +20365,7 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
                     + (progress)
                 )
 
-            eta = float(time_elapsed_in_seconds) / proportion_completed
+            eta = float(time_elapsed_in_seconds) / proportion_for_eta
             # Estimated time of arrival
             etr = eta - time_elapsed_in_seconds  # Estimated time remaining
 
@@ -20290,8 +20381,10 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
                     + str(timedelta(seconds=eta))
                     + "\tT="
                     + str(temp)
-                    + progress,
-                    proportion_completed,
+                    + progress
+                    + '   '
+                    + rate_str,
+                    proportion_for_bar,
                 )
                 if not done
                 # else title + "COMPLETED IN " + str(temp) + progress + "\n"
@@ -20300,8 +20393,14 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
 
 
     def out(n):
+        # Calculate proportion based on work done in this session
+        if total_n - start_n > 0:
+            proportion = (n - start_n) / (total_n - start_n)
+        else:
+            proportion = 1.0  # Already at or past total
+
         return display_eta(
-            n / total_n,
+            proportion,
             timer(),
             TOTAL_TO_COMPLETE=total_n,
             COMPLETED_SO_FAR=n,
@@ -20342,7 +20441,7 @@ class eta:
     Note: Uses ANSI color inversion so text and progress bar share the same space - no width competition.
     """
 
-    def __init__(self, x, title='r.eta', min_interval=.05, length=None):
+    def __init__(self, x:int, title:str=None, min_interval:float=None, length:int=None):
         assert isinstance(x, int) or hasattr(x, '__len__') or length is not None
 
         if length is not None:
@@ -22922,7 +23021,29 @@ def _cpah(paths,method=None):
         paths=line_split(paths)
     if isinstance(paths,str):
         paths=[paths]
-    output = [method(path,'.') for path in paths]
+
+    # Show progress if we're copying files (not just symlinks or moves)
+    show_progress = method == copy_path or method == copy_file or method == copy_directory
+
+    if show_progress:
+        if len(paths) == 1:
+            # Single file/directory - show progress for the copy operation if it's a file
+            path = paths[0]
+            if file_exists(path):
+                # It's a file, use copy_file with show_progress
+                output = [copy_file(path, '.', show_progress=True)]
+            else:
+                # It's a directory or doesn't exist, use the regular method
+                output = [method(path, '.')]
+        else:
+            # Multiple files - use eta to show overall progress
+            output = []
+            for path in eta(paths, title='Copying %s paths' % len(paths)):
+                output.append(method(path, '.'))
+    else:
+        # Not copying files, just do it without progress
+        output = [method(path, '.') for path in paths]
+
     if len(output)==1:
         return get_only(output)
     return output
@@ -23815,6 +23936,32 @@ def _convert_powerpoint_file(path,message=None):
     from rp.libs.powerpoint_converter import process_powerpoint_file
     return process_powerpoint_file(path)
 
+def _get_gitignore_path():
+    """Get the path to the .gitignore file in the current git repository."""
+    git_repo = get_parent_folder(get_git_repo_root())
+    return path_join(git_repo, '.gitignore')
+
+def _git_add_ans(paths):
+    """Helper to git add paths from ans, handling both single paths and lists."""
+    import os
+    import shlex
+
+    # Handle newline-separated strings
+    if isinstance(paths, str) and '\n' in paths:
+        paths = line_split(paths)
+    # Convert single string to list
+    if isinstance(paths, str):
+        paths = [paths]
+
+    # Print what we're doing
+    if len(paths) == 1:
+        fansi_print('GADA/GADDA --> git add --> Adding '+str(paths[0])+' to git staging area', 'blue', 'bold')
+    else:
+        fansi_print('GADA/GADDA --> git add --> Adding '+str(len(paths))+' file(s) to git staging area', 'blue', 'bold')
+
+    # Git add each path
+    for path in paths:
+        os.system('git add --verbose ' + shlex.quote(str(path)))
 
 def _write_default_gitignore():
     types_to_ignore='pyc bak swh swi swj swk swl swm swn swo swp un~ gstmp ipynb_checkpoints DS_Store'.split()
@@ -23828,8 +23975,7 @@ def _write_default_gitignore():
 
     new_text = "\n" + line_join(new_lines) + "\n\n"
 
-    git_repo = get_parent_folder(get_git_repo_root())
-    file = path_join(git_repo, '.gitignore')
+    file = _get_gitignore_path()
 
     if not file_exists(file) or new_text.strip() not in load_text_file(file):
         append_line_to_file(new_text,file)
@@ -25358,6 +25504,14 @@ def pseudo_terminal(
         IGNORE    $r._write_default_gitignore()
         GIG       $r._write_default_gitignore()
         GPL !git pull
+        GPULL !git pull
+        GPUSH !git push
+        GADA $r._git_add_ans(ans)
+        GADDA $r._git_add_ans(ans)
+        IGNA $append_line_to_file(str(ans),$r._get_gitignore_path())
+        GIGA $append_line_to_file(str(ans),$r._get_gitignore_path())
+        IGA $append_line_to_file(str(ans),$r._get_gitignore_path())
+        VIG $vim($r._get_gitignore_path())
 
         PPTA $r._convert_powerpoint_file(ans)
         PPT $r._convert_powerpoint_file($input_select_file(file_extension_filter='pptx'),message='Select a powerpoint file')
@@ -26166,8 +26320,8 @@ def pseudo_terminal(
                                 except NotImplementedError:
                                     #Unsupported OS right now
                                     pass
-                                except FileNotFoundError as e:
-                                    #Fair enough, no need to be loud about it
+                                except (FileNotFoundError, OSError):
+                                    #Not a valid path, silently fall back to string copy
                                     pass
                                 except Exception as e:
                                     #For now, hide errors...
@@ -26178,6 +26332,33 @@ def pseudo_terminal(
                                 #Can copy text to clipboard
                                 fansi_print("COPY --> r.string_to_clipboard(str(ans))","blue")
                                 copy(str(get_ans()))
+
+                    elif user_message == "PASTE":
+                        #Attempt to paste file paths from clipboard
+                        if currently_running_desktop() and not running_in_ssh():
+                            try:
+                                paths = paste_paths_from_clipboard()
+                                if paths:
+                                    fansi_print("PASTE --> r.paste_paths_from_clipboard()","blue")
+                                    fansi_print("PASTE: Pasted %s file path(s) from clipboard!" % len(paths),'blue italic')
+                                    set_ans(paths if len(paths) > 1 else paths[0])
+                                else:
+                                    #Fall back to string paste
+                                    fansi_print("PASTE --> r.string_from_clipboard()","blue")
+                                    set_ans(string_from_clipboard())
+                            except NotImplementedError:
+                                #Unsupported OS, fall back to string paste
+                                fansi_print("PASTE --> r.string_from_clipboard()","blue")
+                                set_ans(string_from_clipboard())
+                            except Exception as e:
+                                #On error, fall back to string paste
+                                print_stack_trace()
+                                fansi_print("PASTE --> r.string_from_clipboard() (fallback)","blue")
+                                set_ans(string_from_clipboard())
+                        else:
+                            #SSH or not desktop, just do string paste
+                            fansi_print("PASTE --> r.string_from_clipboard()","blue")
+                            set_ans(string_from_clipboard())
 
                     elif user_message == "VARS":
                         if _get_pterm_verbose(): fansi_print("VARS --> ans = user_created_variables (AKA all the names you created in this pseudo_terminal session):","blue")
@@ -26607,17 +26788,25 @@ def pseudo_terminal(
                             paths=sorted(paths,key=is_a_directory)
 
                         for item in paths:
+
+                            extra_style = " "
+                            folder_style=' bold '
+                            if get_file_name(item).startswith('.'):
+                                #Hidden files: Faded
+                                extra_style += ' faded italic '
+                                folder_style=''
+
                             if is_symbolic_link(item):
                                 if is_a_directory(item):
-                                    print_line(fansi(item,'green','bold'))
+                                    print_line(fansi(item,extra_style+'green'+folder_style))
                                 else:
-                                    print_line(fansi(item,'green'))
+                                    print_line(fansi(item,extra_style+'green'))
                             elif is_a_directory(item):
-                                print_line(fansi(item,'cyan','bold'))
+                                print_line(fansi(item,extra_style+'cyan'+folder_style))
                             elif is_a_file(item):
-                                print_line(fansi(item,'gray'))
+                                print_line(fansi(item,extra_style+'gray'))
                             else:
-                                print_line(fansi(item,'red'))
+                                print_line(fansi(item,extra_style+'red'))
 
                         text=line_join(printed_lines)
 
@@ -28163,6 +28352,7 @@ def pseudo_terminal(
                                                 break
                                         return i
                                     old_user_message=user_message
+                                    user_messsage=strip_blank_lines(user_message)
                                     _nls=number_of_leading_spaces(user_message)
                                     user_message=user_message.split('\n')
                                     for i,user_message_line in enumerate(user_message):
@@ -42981,46 +43171,96 @@ def get_home_directory():
 #     return to_path
 
 
-def copy_file(src, dst, show_progress=False):
+def copy_file(src, dst, show_progress=False, resume=False):
     """
-    Drop-in replacement for shutil.copy with optional progress bar.
+    Atomic, resumable file copy with verification.
+
+    - Atomic: destination only appears when complete (uses temp file + rename)
+    - Resumable: interrupted copies can resume from where they left off (if resume=True)
+    - Verified: checks source file size and modification time before resuming
     - If dst is a directory, the file is copied inside it.
-    - Preserves only permission bits (like shutil.copy).
+    - Preserves permissions (like shutil.copy).
     - Always returns the path to the new file.
-    - show_progress=True adds a tqdm progress bar.
+    - show_progress=True displays clean progress with ETA and transfer rate.
+    - resume=False forces restart from beginning (deletes partial file)
+
+    Resume safety:
+    - Compares source mtime vs partial file mtime
+    - Only resumes if source hasn't been modified after partial file created
+    - Also checks that partial size < source size
+    - If source changed, restarts from beginning
+    - Partial files kept on error to allow resume on next call
     """
-    import os, shutil
-    pip_import("tqdm")
-    import tqdm
+    import os
+    import shutil
 
     buffer_size = 1024 * 1024  # 1MB chunks
 
-    # If dst is a directory, append basename of src
+    def check_can_resume():
+        """Returns byte offset to start copying from (0 = start fresh)"""
+        if not resume:
+            if os.path.exists(temp_dst):
+                os.remove(temp_dst)
+            return 0
+
+        if not os.path.exists(temp_dst):
+            return 0
+
+        try:
+            partial_stat = os.stat(temp_dst)
+            partial_size = partial_stat.st_size
+        except OSError:
+            return 0
+
+        # Source modified after partial created? Restart
+        if src_mtime > partial_stat.st_mtime:
+            os.remove(temp_dst)
+            return 0
+
+        # Partial >= source size? Something wrong, restart
+        if partial_size >= total_size:
+            os.remove(temp_dst)
+            return 0
+
+        return partial_size
+
+    def do_copy(start_offset):
+        """Copy file from start_offset to end"""
+        file_mode = 'ab' if start_offset > 0 else 'wb'
+
+        if not show_progress:
+            with open(src, 'rb') as fsrc, open(temp_dst, file_mode) as fdst:
+                fsrc.seek(start_offset)
+                shutil.copyfileobj(fsrc, fdst, buffer_size)
+            return
+
+        progress = _eta_bytes(total_size, title="Copying "+os.path.basename(src), start_n=start_offset)
+        with open(src, 'rb') as fsrc, open(temp_dst, file_mode) as fdst:
+            fsrc.seek(start_offset)
+            bytes_copied = start_offset
+            for buf in iter(lambda: fsrc.read(buffer_size), b""):
+                fdst.write(buf)
+                bytes_copied += len(buf)
+                progress(bytes_copied)
+
+    # Main logic
     if os.path.isdir(dst):
         dst = os.path.join(dst, os.path.basename(src))
 
-    if not show_progress:
-        # ⚡ Fast path: delegate to shutil.copy directly
-        shutil.copy(src, dst)
-        return dst
+    dst_dir = os.path.dirname(dst) or '.'
+    dst_name = os.path.basename(dst)
+    temp_dst = os.path.join(dst_dir, dst_name+'.rp_copy_file_partial')
 
-    total_size = os.path.getsize(src)
+    src_stat = os.stat(src)
+    total_size = src_stat.st_size
+    src_mtime = src_stat.st_mtime
 
-    # Configure tqdm separately → keeps the with-block tidy
-    pbar = tqdm.tqdm(
-        total=total_size,
-        unit="B",
-        unit_scale=True,
-        desc="Copying " + os.path.basename(src)
-    )
+    start_offset = check_can_resume()
 
-    with open(src, "rb") as fsrc, open(dst, "wb") as fdst, pbar:
-        for buf in iter(lambda: fsrc.read(buffer_size), b""):
-            fdst.write(buf)
-            pbar.update(len(buf))
+    do_copy(start_offset)
 
-    # Match shutil.copy: copy permission bits only
-    shutil.copymode(src, dst)
+    shutil.copymode(src, temp_dst)
+    os.replace(temp_dst, dst)
 
     return dst
 
@@ -48714,6 +48954,14 @@ def _ensure_rclone_installed():
         windows='winget install --id=Rclone.Rclone', #https://rclone.org/install/
     )
 
+def _ensure_rsync_installed():
+    _ensure_installed(
+        'rsync',
+        mac='brew install rsync',
+        linux='apt install rsync --yes',
+        windows='winget install --id=cwRsync.cwRsync',  # https://winstall.app/apps/cwRsync.cwRsync
+    )
+
 def _ensure_ffmpeg_installed():
     _ensure_installed(
         'ffmpeg',
@@ -49711,7 +49959,7 @@ def decode_image_to_bytes(image)->bytes:
 
 _web_clipboard_url = 'https://ryanpythonide.pythonanywhere.com'#By sqrtryan@gmail.com account
 
-def _eta_bytes(total_bytes, *, min_interval, title, completion_verb=None):
+def _eta_bytes(total_bytes, *, min_interval=None, title=None, completion_verb=None, start_n=0):
     """
     ETA tracker specifically for byte transfers that formats sizes as KB/MB/GB.
 
@@ -49720,6 +49968,7 @@ def _eta_bytes(total_bytes, *, min_interval, title, completion_verb=None):
         min_interval (float): Minimum seconds between display updates
         title (str): Display title for progress messages
         completion_verb (str): Verb for completion message (default: "Completed" if None)
+        start_n (int): Starting byte count for resumed operations (default: 0)
 
     Returns:
         callable: Progress function that accepts current byte count
@@ -49735,6 +49984,7 @@ def _eta_bytes(total_bytes, *, min_interval, title, completion_verb=None):
         format_value=format_bytes,
         completion_verb=completion_verb,
         completion_unit="",
+        start_n=start_n,
     )
 
 class _WebCopyProgressTracker:
