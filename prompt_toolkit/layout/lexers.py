@@ -845,6 +845,23 @@ class FastPygmentsTokenizer(LanguageInjectionMixin):
         ... '''
         ... \"\"\"
         >>> # Result: SQL highlighting with #! on first line
+
+        >>> # Shebang paths work too
+        >>> code = \"\"\"
+        ... script = '''#!/bin/bash
+        ... echo "hello"
+        ... '''
+        ... \"\"\"
+        >>> # Result: Bash highlighting (extracts 'bash' from path)
+
+    DOCTYPE Syntax Examples:
+        >>> # HTML can use <!DOCTYPE html> as language marker
+        >>> code = \"\"\"
+        ... page = '''<!DOCTYPE html>
+        ... <html><body>Hello</body></html>
+        ... '''
+        ... \"\"\"
+        >>> # Result: Full HTML highlighting including DOCTYPE
     """
     def __init__(self,pygments_lexer=None):
         if pygments_lexer is None:
@@ -1076,9 +1093,87 @@ class FastPygmentsTokenizer(LanguageInjectionMixin):
                         
                         # Check for language tag in the content
                         bang_pos = combined_text.find('#!')
+                        doctype_pos = combined_text.lower().find('<!doctype html')
                         language_found = False
-                        
-                        if bang_pos >= 0:
+
+                        # Check for <!DOCTYPE html> first (case-insensitive)
+                        if doctype_pos >= 0:
+                            # Treat <!DOCTYPE html> as an HTML language marker
+                            lang = 'html'
+
+                            # Find the end of the DOCTYPE declaration (usually ">")
+                            doctype_end = combined_text.find('>', doctype_pos)
+                            if doctype_end == -1:
+                                doctype_end = len(combined_text)
+                            else:
+                                doctype_end += 1  # Include the ">"
+
+                            # If we recognize this language, use its lexer
+                            if lang.lower() in self.language_lexers:
+                                language_found = True
+
+                                # Process using HTML lexer
+                                tokens_to_yield = []
+
+                                # Calculate the positions of different parts
+                                if opening_quotes:
+                                    # 1. Opening quotes as string literal
+                                    opening_len = len(opening_quotes)
+                                    chars_seen = 0
+
+                                    for str_pos, str_type, str_text in string_tokens:
+                                        if chars_seen >= opening_len:
+                                            break
+
+                                        # Check if this token is entirely part of opening quotes
+                                        if chars_seen + len(str_text) <= opening_len:
+                                            # Entire token is part of opening quotes
+                                            tokens_to_yield.append(
+                                                (str_pos + start_pos, str_type, str_text)
+                                            )
+                                            chars_seen += len(str_text)
+                                        else:
+                                            # Token spans opening quotes and content
+                                            # Split it: yield only the opening quotes part
+                                            quote_part = str_text[:opening_len - chars_seen]
+                                            tokens_to_yield.append(
+                                                (str_pos + start_pos, str_type, quote_part)
+                                            )
+                                            chars_seen = opening_len
+                                            break
+
+                                    # 2. Process entire content with HTML highlighting
+                                    language_tokenizer = self._get_language_tokenizer(lang)
+                                    content_start = combined_pos + len(opening_quotes)
+
+                                    # Extract content without closing quotes
+                                    html_content = combined_text[len(opening_quotes):]
+                                    if closing_quotes and html_content.endswith(closing_quotes):
+                                        html_content = html_content[:-len(closing_quotes)]
+
+                                    # Highlight the HTML content
+                                    injected_suffix = (':', 'InjectedLanguage')
+                                    for content_pos, content_type, content_text in language_tokenizer.get_tokens_unprocessed(html_content):
+                                        marked_type = content_type + injected_suffix
+                                        tokens_to_yield.append(
+                                            (content_start + content_pos, marked_type, content_text)
+                                        )
+
+                                    # 3. Add closing quotes if present
+                                    if closing_quotes:
+                                        closing_pos = combined_pos + len(combined_text) - len(closing_quotes)
+                                        tokens_to_yield.append(
+                                            (closing_pos, Token.Literal.String, closing_quotes)
+                                        )
+
+                                # Yield all tokens
+                                yield from yield_with_interpolations_as_python(tokens_to_yield)
+
+                                # Skip all the tokens we've processed
+                                i = j
+                                continue
+
+                        elif bang_pos >= 0:
                             # Extract language identifier
                             first_line_end = combined_text.find('\n', bang_pos)
                             if first_line_end == -1:
@@ -1097,9 +1192,30 @@ class FastPygmentsTokenizer(LanguageInjectionMixin):
                                 # Calculate the positions of different parts
                                 if opening_quotes:
                                     # 1. Opening quotes as string literal
-                                    tokens_to_yield.append(
-                                        (combined_pos, Token.Literal.String, opening_quotes)
-                                    )
+                                    # Split opening quotes from string_tokens correctly
+                                    opening_len = len(opening_quotes)
+                                    chars_seen = 0
+
+                                    for str_pos, str_type, str_text in string_tokens:
+                                        if chars_seen >= opening_len:
+                                            break
+
+                                        # Check if this token is entirely part of opening quotes
+                                        if chars_seen + len(str_text) <= opening_len:
+                                            # Entire token is part of opening quotes
+                                            tokens_to_yield.append(
+                                                (str_pos + start_pos, str_type, str_text)
+                                            )
+                                            chars_seen += len(str_text)
+                                        else:
+                                            # Token spans opening quotes and content
+                                            # Split it: yield only the opening quotes part
+                                            quote_part = str_text[:opening_len - chars_seen]
+                                            tokens_to_yield.append(
+                                                (str_pos + start_pos, str_type, quote_part)
+                                            )
+                                            chars_seen = opening_len
+                                            break
                                     
                                     # 2. Content before the language tag, if any
                                     if bang_pos > len(opening_quotes):
@@ -1142,8 +1258,8 @@ class FastPygmentsTokenizer(LanguageInjectionMixin):
                                     
                                     # 6. Add closing quotes if present
                                     if closing_quotes:
-                                        # Use actual position from string_tokens
-                                        closing_pos = string_tokens[-1][0] + start_pos
+                                        # Calculate position from the end of combined_text
+                                        closing_pos = combined_pos + len(combined_text) - len(closing_quotes)
                                         tokens_to_yield.append(
                                             (closing_pos, Token.Literal.String, closing_quotes)
                                         )
