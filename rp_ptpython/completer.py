@@ -7,6 +7,7 @@ from rp.prompt_toolkit.contrib.regular_languages.compiler import compile as comp
 from rp.prompt_toolkit.contrib.regular_languages.completion import GrammarCompleter
 
 from rp.rp_ptpython.utils import get_jedi_script_from_document
+from rp.rp_ptpython.completion_schema import PROGRAM_DESCRIPTIONS
 # from rp import printed,fansi_print
 import re
 
@@ -193,6 +194,8 @@ class PythonCompleter(Completer):
         after=document.text_after_cursor
         before=document.text_before_cursor
 
+        # Check if we're in shell mode (buffer starts with !)
+        shell_mode = document.text.startswith('!')
 
         import re
         from rp import ring_terminal_bell
@@ -410,12 +413,64 @@ class PythonCompleter(Completer):
             or (before_line.startswith('RUN ') and not ('\n' in before) and not after):#not after and not '\n' in before and re.fullmatch(before_line):
             import os
             # Check if buffer starts with ! to determine file extensions (bash vs python)
-            extensions = '.sh .bash .zsh'.split() if document.text.lstrip().startswith('!') else '.py .rpy'.split()
+            extensions = '.sh .bash .zsh'.split() if shell_mode else '.py .rpy'.split()
             yield from yield_from_candidates([x for x in os.listdir() if any(x.endswith(e) for e in extensions)])
             return 
+        # Complete variable names when $ is typed in shell mode
+        # Use lexer tokens to detect if cursor is at a variable position
+        if shell_mode:
+            import os
+            from pygments.token import Token as PygToken
+
+            # Check if cursor is in a bash variable context using lexer tokens
+            cursor_in_variable = False
+            try:
+                from pygments.lexers import BashLexer
+                bash_lexer = BashLexer()
+                tokens = list(bash_lexer.get_tokens_unprocessed(document.text))
+
+                cursor_pos = document.cursor_position
+                for pos, token_type, token_text in tokens:
+                    token_end = pos + len(token_text)
+                    # Check if cursor is within or right after a $ variable token
+                    if token_type in (PygToken.Name.Variable, PygToken.Literal.String.Interpol):
+                        if pos <= cursor_pos <= token_end:
+                            cursor_in_variable = True
+                            break
+                    # Check if cursor is right after $ or ${
+                    elif token_text in ('$', '${') and token_end == cursor_pos:
+                        cursor_in_variable = True
+                        break
+                    # Check if we just typed $ (it might not be tokenized as variable yet)
+                    elif pos <= cursor_pos <= token_end and '$' in token_text:
+                        # Check if $ is right before cursor
+                        dollar_offset = token_text.rfind('$')
+                        if dollar_offset >= 0 and pos + dollar_offset <= cursor_pos <= pos + dollar_offset + 1:
+                            cursor_in_variable = True
+                            break
+            except:
+                # Fallback: check for $ in before_line
+                cursor_in_variable = '$' in before_line
+
+            if cursor_in_variable:
+                # Collect all environment variables from current process
+                env_vars = set(os.environ.keys())
+
+                # Parse current buffer for variable assignments
+                buffer_vars = set()
+                for var_match in re.finditer(r'\b(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=', document.text):
+                    buffer_vars.add(var_match.group(1))
+
+                # Combine both, prioritizing buffer vars
+                all_vars = sorted(buffer_vars) + sorted(env_vars - buffer_vars)
+
+                yield from yield_from_candidates(all_vars)
+                return
+
         if (before_line.startswith('!') or before_line.startswith('ARG ')) and not ('\n' in before) and not after:#not after and not '\n' in before and re.fullmatch(before_line):
             import os
             bls=before_line.split()
+
             if before_line.startswith('!sudo apt install'):
                 yield from yield_from_candidates(get_apt_completions())
                 return
@@ -430,7 +485,15 @@ class PythonCompleter(Completer):
                     and before_line==before_line.strip()
                 ):
                     import rp
-                    yield from yield_from_candidates(rp.r._get_cached_system_commands())
+                    # Get system commands and create completions with descriptions
+                    system_commands = rp.r._get_cached_system_commands()
+                    filtered_commands = ryan_completion_matches(origin, tuple(system_commands))
+                    for cmd in filtered_commands:
+                        description = PROGRAM_DESCRIPTIONS.get(cmd, '')
+                        completion = Completion(text=cmd, start_position=-len(origin), display=cmd, display_meta=description)
+                        sorting_priorities[cmd] = MAX_SORTING_PRIORITY
+                        yield completion
+                    return
             else:
                 yield from yield_from_candidates([x for x in os.listdir()])
             return 
@@ -559,7 +622,7 @@ class PythonCompleter(Completer):
         warnings.simplefilter('ignore')
 
         global completion_cache_pre_origin_doc
-        from rp import tic,toc,ptoctic,ptoc 
+        from rp import tic,toc,ptoctic,ptoc
         # tic()
         origin=document.get_word_before_cursor()
         import rp.rp_ptpython.r_iterm_comm as ric
@@ -577,6 +640,46 @@ class PythonCompleter(Completer):
         after_line=document.current_line_after_cursor
         after=document.text_after_cursor
         before=document.text_before_cursor
+
+        # BASH COMPLETION
+        if document.text.startswith('!'):
+            try:
+                from rp.rp_ptpython.completion_schema import get_completions_for_command, get_bash_origin
+
+                bash_text = document.text.lstrip()[1:]
+                bash_cursor_pos = document.cursor_position - (len(document.text) - len(document.text.lstrip())) - 1
+
+                schema_completions = get_completions_for_command(bash_text, bash_cursor_pos)
+                if schema_completions:
+                    bash_origin = get_bash_origin(document.text, document.cursor_position)
+                    has_descriptions = isinstance(schema_completions, dict)
+                    completion_list = list(schema_completions.keys()) if has_descriptions else schema_completions
+
+                    # Only use fuzzy matching if there's actually a prefix to filter by
+                    # Otherwise preserve the order from the completion schema
+                    if bash_origin:
+                        filtered_completions = ryan_completion_matches(bash_origin, tuple(completion_list))
+                    else:
+                        filtered_completions = completion_list
+
+                    for completion_text in filtered_completions:
+                        if has_descriptions:
+                            value = schema_completions.get(completion_text, '')
+                            # Handle both tuple format (display, description) and string format
+                            if isinstance(value, tuple):
+                                display_text, description = value
+                            else:
+                                display_text = completion_text
+                                description = value
+                        else:
+                            display_text = completion_text
+                            description = ''
+
+                        yield Completion(text=completion_text, start_position=-len(bash_origin),
+                                        display=display_text, display_meta=description)
+                    return
+            except Exception:
+                pass
 
         if not after_line and set(before_line)==set('u'):#not after and not '\n' in before and re.fullmatch(before_line):
             #Complete uuuuuu --> CDU that dir   (lets us see where we're going in the completions! No need to count)
