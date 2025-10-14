@@ -476,6 +476,7 @@ def seq(funcs,*init):
         if temp is not None:
             init=temp
     return init
+
 def par(funcsᆢvoids,*params):
     """Executes multiple functions in parallel with the same arguments.
 
@@ -20284,7 +20285,7 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
     from datetime import timedelta
 
     if min_interval is None: min_interval=.05
-    if title is None: "r.eta"
+    if title is None: title="r.eta"
 
     if format_rate is None: 
         if format_value is str:
@@ -25498,19 +25499,23 @@ def pseudo_terminal(
         QPH  $r._input_select_multiple_history() #Query Prompt-Toolkit History Lines (F3)
         QVH  $r._input_select_multiple_history($pterm_history_filename) #Query VHISTORY
 
-        GITIGNORE $r._write_default_gitignore()
+        GITI      $r._write_default_gitignore()
+        GIGN      $r._write_default_gitignore()
         GITIGN    $r._write_default_gitignore()
+        GITIGNORE $r._write_default_gitignore()
         IGN       $r._write_default_gitignore()
         IGNORE    $r._write_default_gitignore()
         GIG       $r._write_default_gitignore()
-        GPL !git pull
+        GPL   !git pull
+        GPUL  !git pull
         GPULL !git pull
+        GPSH  !git push
         GPUSH !git push
         GADA $r._git_add_ans(ans)
         GADDA $r._git_add_ans(ans)
+        IGA  $append_line_to_file(str(ans),$r._get_gitignore_path())
         IGNA $append_line_to_file(str(ans),$r._get_gitignore_path())
         GIGA $append_line_to_file(str(ans),$r._get_gitignore_path())
-        IGA $append_line_to_file(str(ans),$r._get_gitignore_path())
         VIG $vim($r._get_gitignore_path())
 
         PPTA $r._convert_powerpoint_file(ans)
@@ -64587,6 +64592,8 @@ del re #re is random element
 #     assert callable(f)
 #     default_args=f.
 #     args=[args]
+
+
 
 
 # Version Oct24 2021
