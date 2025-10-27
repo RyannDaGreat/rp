@@ -16,6 +16,7 @@ try_eval_mem_text=""
 ans=None
 clipboard_text=""#Should be in sync with pyperclip if its not broken
 current_candidates=[]#Is overwritten in completer.py of rp_ptpython, and used in space-completion of callables
+signature_cache_hit=False#Set to True when signature uses cached Jedi interpreter
 enable_space_autocompletions=[]#Make this list non-empty BY MUTATING IT to enable space completions (make bool(enable_space_autocompletions) True
 dont_erase_buffer_on_enter=[]#as opposed to [True], which is truthy
 completion_style=['good']#should be either ['good'] or ['fast']

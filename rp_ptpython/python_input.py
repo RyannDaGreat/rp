@@ -33,7 +33,7 @@ from .key_bindings import load_python_bindings,load_sidebar_bindings,load_confir
 from .layout import create_layout,CompletionVisualisation
 from .prompt_style import IPythonPrompt,ClassicPrompt
 from .style import get_all_code_styles,get_all_ui_styles,generate_style
-from .utils import get_jedi_script_from_document,document_is_multiline_python
+from .utils import document_is_multiline_python
 from .validator import PythonValidator
 
 from functools import partial
@@ -168,13 +168,25 @@ class PythonInput(object):
 
         self.show_parenthesis_automator=False
 
-        self._completer=_completer or PythonCompleter(self.get_globals,self.get_locals)
+        self._completer=_completer or PythonCompleter(
+            self.get_globals,
+            self.get_locals,
+            allow_jedi_dynamic_imports=lambda: self.allow_jedi_dynamic_imports
+        )
         self._validator=_validator or PythonValidator(self.get_compiler_flags)
         self.history=FileHistory(history_filename) if history_filename else InMemoryHistory()
         # Use lazy lexer creation to defer imports until needed
         if _lexer is None:
             from rp.prompt_toolkit.layout.lexers import LazyPygmentsLexer
-            self._lexer = LazyPygmentsLexer()
+            from rp.rp_ptpython.jedi_lexer import JediLexer
+            base_lexer = LazyPygmentsLexer()
+            # Wrap with Jedi semantic highlighting (uses runtime globals/locals)
+            self._lexer = JediLexer(
+                base_lexer,
+                self.get_globals,
+                self.get_locals,
+                get_enabled=lambda: self.enable_semantic_highlighting
+            )
         else:
             self._lexer = _lexer
         self._extra_buffers=_extra_buffers
@@ -188,6 +200,8 @@ class PythonInput(object):
         self._extra_buffer_processors=_extra_buffer_processors or []
 
         # Settings.
+        # NOTE: When adding new settings here, also add them to _default_pyin_settings in r.py
+        # so they can be saved/loaded with PT SAVE and PT RESET commands.
         self.show_signature=False
         self.show_docstring=False
         self.show_realtime_input=False
@@ -210,6 +224,8 @@ class PythonInput(object):
         self.enable_input_validation=True
         self.enable_auto_suggest=False
         self.enable_mouse_support=False
+        self.allow_jedi_dynamic_imports=False  # When False, prevent Jedi from importing unloaded modules (faster on NFS)
+        self.enable_semantic_highlighting=True  # When True, use Jedi to add semantic highlighting (callables, modules)
         self.indent_guides_mode='Propagate'  # 'Off', 'Regular', or 'Propagate'
         self.show_whitespace='Off'  # 'Off', 'All', or 'Leading'
         self.highlight_cursor_line=False  # Highlight the background of the cursor line
@@ -487,14 +503,6 @@ class PythonInput(object):
                         # is_visible=lambda:getattr(self,'show_all_options',True),
                               description="When enabled, don't indent automatically.",
                               field_name='paste_mode'),
-                Option(title='Complete while typing',
-                       description="Generate autocompletions automatically while typing. "
-                                   'Don\'t require pressing TAB. (Not compatible with "History search".)',
-                       get_current_value=lambda:['off','on'][self.complete_while_typing],
-                       get_values=lambda:{
-                           'on':lambda:enable('complete_while_typing'),
-                           'off':lambda:disable('complete_while_typing'),
-                       }),
                 Option(title='History search',
                         is_visible=lambda:getattr(self,'show_all_options',True),
                        description='When pressing the up-arrow, filter the history on input starting '
@@ -517,11 +525,6 @@ class PythonInput(object):
                               description='In case of syntax errors, move the cursor to the error '
                                           'instead of showing a traceback of a SyntaxError.',
                               field_name='enable_input_validation'),
-                simple_option(title='Auto suggestion',
-                    is_visible=lambda:getattr(self,'show_all_options',True),
-                              description='Auto suggest inputs by looking at the history. '
-                                          'Pressing right arrow or Ctrl-E will complete the entry.',
-                              field_name='enable_auto_suggest'),
                 Option(title='Accept input on enter',
                     is_visible=lambda:getattr(self,'show_all_options',True),
                        description='Amount of ENTER presses required to execute input when the cursor '
@@ -535,15 +538,6 @@ class PythonInput(object):
                        }),
             ]),
             OptionCategory('Display',[
-                Option(title='Completions',
-                       description='Visualisation to use for displaying the completions. (Multiple columns, one column, a toolbar or nothing.)',
-                       get_current_value=lambda:self.completion_visualisation,
-                       get_values=lambda:{
-                           CompletionVisualisation.NONE:lambda:enable('completion_visualisation',CompletionVisualisation.NONE),
-                           CompletionVisualisation.POP_UP:lambda:enable('completion_visualisation',CompletionVisualisation.POP_UP),
-                           CompletionVisualisation.MULTI_COLUMN:lambda:enable('completion_visualisation',CompletionVisualisation.MULTI_COLUMN),
-                           CompletionVisualisation.TOOLBAR:lambda:enable('completion_visualisation',CompletionVisualisation.TOOLBAR),
-                       }),
                 #I DISABLED THIS BECAUSE IT'S DEPRECATED NOW - NOW YOU USE 'SET STYLE'
                 # Option(title='Prompt',
                 #         is_visible=lambda:getattr(self,'show_all_options',True),
@@ -555,13 +549,6 @@ class PythonInput(object):
 
                               description='Insert a blank line after the output.',
                               field_name='insert_blank_line_after_output'),
-                simple_option(title='Show signature',
-                              description='Display function signatures.',
-                              field_name='show_signature'),
-                simple_option(title='Show docstring',
-                        is_visible=lambda:getattr(self,'show_all_options',True),
-                              description='Display function docstrings.',
-                              field_name='show_docstring'),
                 simple_option(title='Show line numbers',
                         is_visible=lambda:getattr(self,'show_all_options',True),
                               description='Show line numbers when the input consists of multiple lines.',
@@ -820,6 +807,37 @@ class PythonInput(object):
                               description='Highlight matching parenthesis, when the cursor is on or right after one.',
                               field_name='highlight_matching_parenthesis'),
 
+            ]),
+            OptionCategory('Completion',[
+                Option(title='Complete while typing',
+                       description="Generate autocompletions automatically while typing. "
+                                   'Don\'t require pressing TAB. (Not compatible with "History search".)',
+                       get_current_value=lambda:['off','on'][self.complete_while_typing],
+                       get_values=lambda:{
+                           'on':lambda:enable('complete_while_typing'),
+                           'off':lambda:disable('complete_while_typing'),
+                       }),
+                simple_option(title='Auto suggestion',
+                    is_visible=lambda:getattr(self,'show_all_options',True),
+                              description='Auto suggest inputs by looking at the history. '
+                                          'Pressing right arrow or Ctrl-E will complete the entry.',
+                              field_name='enable_auto_suggest'),
+                simple_option(title='Show signature',
+                              description='Display function signatures.',
+                              field_name='show_signature'),
+                simple_option(title='Show docstring',
+                        is_visible=lambda:getattr(self,'show_all_options',True),
+                              description='Display function docstrings.',
+                              field_name='show_docstring'),
+                simple_option(title='Jedi dynamic imports',
+                    is_visible=lambda:getattr(self,'show_all_options',True),
+                              description='Allow Jedi to import unloaded modules for completions. '
+                                          'Disable for faster completions on NFS.',
+                              field_name='allow_jedi_dynamic_imports'),
+                simple_option(title='Semantic highlighting',
+                              description='Use Jedi to highlight callables and modules with semantic colors. '
+                                          'Disable for slightly faster typing.',
+                              field_name='enable_semantic_highlighting'),
             ]),
             OptionCategory('Ryan Python',[
                 # Option(title='Sand Creature',
@@ -1167,15 +1185,34 @@ class PythonInput(object):
         document=buffer.document
 
         def run():
-            script=get_jedi_script_from_document(document,self.get_locals(),self.get_globals())
-            import rp.rp_ptpython.r_iterm_comm
-            rp.rp_ptpython.r_iterm_comm.script_debug=script
-            # from r import pseudo_terminal
-            # pseudo_terminal(locals(),enable_ptpython=False)
-            # Show signatures in help text.
-            if script:
+            from .completer import get_jedi_interpreter
+            try:
+                # Use same backspacing logic as completions to hit the cache
+                cache_info = self._completer.get_cache_key_for_document(document)
+
+                # Try to get cached interpreter first
+                jedi_info = self._completer._completion_cache.get_cached_interpreter(
+                    cache_info.cache_text,
+                    cache_info.cache_pos
+                )
+
+                is_cache_hit = jedi_info is not None
+
+                # If not cached, compute it
+                if jedi_info is None:
+                    jedi_info = get_jedi_interpreter(
+                        cache_info.cache_text,
+                        cache_info.cache_pos,
+                        self.get_globals(),
+                        self.get_locals()
+                    )
+
+                import rp.rp_ptpython.r_iterm_comm
+                rp.rp_ptpython.r_iterm_comm.script_debug = jedi_info.interpreter
+                rp.rp_ptpython.r_iterm_comm.signature_cache_hit = is_cache_hit
+                # Show signatures in help text.
                 try:
-                    signatures=script.call_signatures()
+                    signatures = jedi_info.interpreter.get_signatures(jedi_info.line, jedi_info.column)
                 except ValueError:
                     # e.g. in case of an invalid \\x escape.
                     signatures=[]
@@ -1196,8 +1233,8 @@ class PythonInput(object):
                             signatures[0].params
                     except AttributeError:
                         pass
-            else:
-                signatures=[]
+            except Exception:
+                signatures = []
 
             self._get_signatures_thread_running=False
 

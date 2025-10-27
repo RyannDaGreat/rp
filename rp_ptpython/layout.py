@@ -10,7 +10,7 @@ from rp.prompt_toolkit.layout.containers import Window, HSplit, VSplit, FloatCon
 from rp.prompt_toolkit.layout.controls import BufferControl, TokenListControl, FillControl, UIContent
 from rp.prompt_toolkit.layout.dimension import LayoutDimension
 from rp.prompt_toolkit.layout.lexers import SimpleLexer
-from rp.prompt_toolkit.layout.margins import PromptMargin
+from rp.prompt_toolkit.layout.margins import PromptMargin, FoldMargin
 from rp.prompt_toolkit.layout.menus import CompletionsMenu, MultiColumnCompletionsMenu
 from rp.prompt_toolkit.layout.processors import (
     ConditionalProcessor, AppendAutoSuggestion, HighlightSearchProcessor,
@@ -221,6 +221,10 @@ def signature_toolbar(python_input):
             sig = python_input.signatures[0]  # Always take the first one.
 
             append((Signature, ' '))
+            # Show cache hit indicator
+            import rp.rp_ptpython.r_iterm_comm as ric
+            if getattr(ric, 'signature_cache_hit', False):
+                append((Signature, 'HIT '))
             try:
                 append((Signature, sig.full_name))
             except:# IndexError but Also AttributeError: 'NoneType' object has no attribute 'split'
@@ -278,11 +282,8 @@ def signature_toolbar(python_input):
         filter=
             # Show only when there is a signature
             HasSignature(python_input) &
-            # And there are no completions to be shown. (would cover signature pop-up.)
-            ~(HasCompletions() & (show_completions_menu(python_input) |
-                                   show_multi_column_completions_menu(python_input)))
             # Signature needs to be shown.
-            & ShowSignature(python_input) &
+            ShowSignature(python_input) &
             # Not done yet.
             ~IsDone())
 
@@ -728,7 +729,10 @@ def create_layout(python_input,
                 # Make sure that we always see the result of an reverse-i-search:
                 preview_search=True,
             ),
-            left_margins=[PythonPromptMargin(python_input)],
+            left_margins=[
+                FoldMargin(get_buffer=lambda cli: cli.buffers[DEFAULT_BUFFER]),
+                PythonPromptMargin(python_input),
+            ],
             # Scroll offsets. The 1 at the bottom is important to make sure the
             # cursor is never below the "Press [Meta+Enter]" message which is a float.
             scroll_offsets=ScrollOffsets(bottom=1, left=4, right=4),
@@ -773,6 +777,7 @@ def create_layout(python_input,
                     floats=[
                         Float(xcursor=True,
                               ycursor=True,
+                              ycursor_offset=lambda cli: 2 if python_input.signatures else 1,
                               content=CompletionsMenu(
                                   scroll_offset=Integer.from_callable(
                                       lambda:python_input.completion_menu_scroll_offset),
@@ -780,6 +785,7 @@ def create_layout(python_input,
                                   extra_filter=show_completions_menu(python_input))),
                         Float(xcursor=True,
                               ycursor=True,
+                              ycursor_offset=lambda cli: 2 if python_input.signatures else 1,
                               content=MultiColumnCompletionsMenu(
                                   extra_filter=show_multi_column_completions_menu(python_input))),
                         Float(xcursor=True,

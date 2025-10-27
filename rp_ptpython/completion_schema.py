@@ -590,22 +590,22 @@ class Token(object):
 
 def tokenize_bash_command(text):
     """
-    Tokenize bash command text into meaningful tokens.
+    Tokenize bash command text into meaningful tokens using simple splitting.
 
     Returns list of Token objects representing the command structure.
+    This uses simple whitespace splitting to avoid interfering with syntax highlighting.
     """
-    from pygments.lexers import BashLexer
-    from pygments.token import Token as PygToken
-
-    lexer = BashLexer()
-    raw_tokens = list(lexer.get_tokens_unprocessed(text))
-
-    # Filter out whitespace and combine into meaningful tokens
+    # Simple tokenization by whitespace - good enough for completion purposes
+    # Avoids using BashLexer which can interfere with syntax highlighting
     tokens = []
-    for pos, token_type, token_text in raw_tokens:
-        # Skip pure whitespace unless it's significant
-        if token_text.strip():
-            tokens.append(Token(token_text.strip(), token_type, pos))
+    pos = 0
+
+    # Split by whitespace while tracking positions
+    for token_text in text.split():
+        # Find actual position in original text
+        pos = text.find(token_text, pos)
+        tokens.append(Token(token_text, None, pos))
+        pos += len(token_text)
 
     return tokens
 
@@ -698,10 +698,47 @@ def get_completions_for_command(text, cursor_pos):
             # Silently fail - don't break completions
             return None
 
-    # FALLBACK: Try to parse man page for unknown commands
-    # Only if we're in a flag context (token starts with -)
+    # FALLBACK 1: Auto-parse subcommands if at position 0 (right after command name)
+    # This helps commands like 'claude' get automatic subcommand completion
+    if cursor_token_idx == 0 and is_after:
+        try:
+            subcommands = _parse_subcommands_from_help(command_name)
+            if subcommands:
+                return subcommands
+        except Exception:
+            # Silently fail - continue to flag parsing
+            pass
+
+    # FALLBACK 1.5: Auto-parse NESTED subcommands if at position 1+ (after first subcommand)
+    # Examples: 'docker network ', 'gh pr ', 'kubectl get '
+    # Try calling help on the subcommand: 'docker network --help', 'gh pr --help'
+    if cursor_token_idx >= 1 and is_after and not _is_flag_context(tokens, cursor_token_idx, is_after):
+        try:
+            # Build the compound command (e.g., 'docker network', 'gh pr')
+            compound_cmd = ' '.join([t.text for t in tokens[:cursor_token_idx + 1]])
+            nested_subcommands = _parse_subcommands_from_help(compound_cmd)
+            if nested_subcommands:
+                return nested_subcommands
+        except Exception:
+            # Silently fail - continue to flag parsing
+            pass
+
+    # FALLBACK 2: Try to parse flags for specific subcommand context
+    # Examples: 'docker run --', 'cargo build --', 'gh label --'
+    # Call help on the subcommand to get its specific flags
     if _is_flag_context(tokens, cursor_token_idx, is_after):
         try:
+            # If we have a subcommand, try parsing its specific help
+            # Build compound command from all non-flag tokens before current position
+            # E.g., 'gh label --' -> 'gh label', 'docker run --detach --' -> 'docker run'
+            non_flag_tokens = [t.text for t in tokens[:cursor_token_idx+1] if not t.text.startswith('-')]
+            if len(non_flag_tokens) >= 2:
+                compound_cmd = ' '.join(non_flag_tokens)
+                subcommand_flags = _parse_manpage_flags(compound_cmd)
+                if subcommand_flags:
+                    return subcommand_flags
+
+            # Fallback to main command flags
             manpage_flags = _parse_manpage_flags(command_name)
             if manpage_flags:
                 return manpage_flags
@@ -2335,51 +2372,6 @@ def _rp_completions(tokens, cursor_token_idx, is_after):
     return None
 
 
-@register_completion_schema('claude')
-def _claude_completions(tokens, cursor_token_idx, is_after):
-    """Completion schema for claude command."""
-    current_token = tokens[cursor_token_idx] if cursor_token_idx < len(tokens) else None
-
-    if current_token and current_token.text.startswith('-'):
-        return {
-            '-d': '-d/--debug: enable debug mode',
-            '--debug': '--debug/-d: enable debug mode',
-            '--verbose': 'enable verbose output',
-            '-p': '-p/--print: print response without formatting',
-            '--print': '--print/-p: print response without formatting',
-            '--output-format': 'output format (text, json, markdown)',
-            '--input-format': 'input format (text, markdown, auto)',
-            '--mcp-debug': 'enable MCP debug mode',
-            '--dangerously-skip-permissions': 'skip permission checks (dangerous)',
-            '--replay-user-messages': 'replay user messages from session',
-            '--allowedTools': 'comma-separated list of allowed tools',
-            '--disallowedTools': 'comma-separated list of disallowed tools',
-            '--mcp-config': 'path to MCP configuration file',
-            '--system-prompt': 'custom system prompt',
-            '--append-system-prompt': 'append to default system prompt',
-            '--permission-mode': 'permission mode (auto, interactive, none)',
-            '-c': '-c/--continue: continue previous session',
-            '--continue': '--continue/-c: continue previous session',
-            '-r': '-r/--resume: resume previous session',
-            '--resume': '--resume/-r: resume previous session',
-            '--fork-session': 'fork from specific session',
-            '--model': 'model to use (e.g., claude-3-5-sonnet-20241022)',
-            '--fallback-model': 'fallback model if primary unavailable',
-            '--settings': 'settings file path',
-            '--add-dir': 'add directory to context',
-            '--ide': 'IDE mode (vscode, cursor, etc.)',
-            '--strict-mcp-config': 'strict MCP config validation',
-            '--session-id': 'specific session ID to use',
-            '--agents': 'enable agent mode',
-            '--setting-sources': 'sources for settings',
-            '-v': '-v/--version: show version',
-            '--version': '--version/-v: show version',
-            '-h': '-h/--help: show help message',
-            '--help': '--help/-h: show help message',
-        }
-
-    return None
-
 
 @register_completion_schema('gemini')
 def _gemini_completions(tokens, cursor_token_idx, is_after):
@@ -2436,328 +2428,7 @@ def _gemini_completions(tokens, cursor_token_idx, is_after):
     return None
 
 
-@register_completion_schema('docker')
-def _docker_completions(tokens, cursor_token_idx, is_after):
-    """Completion schema for docker commands."""
-    # Check for flags
-    if _is_flag_context(tokens, cursor_token_idx, is_after):
-        subcommand = tokens[1].text if len(tokens) > 1 else ''
 
-        if subcommand == 'run':
-            return {
-                '--detach': '--detach/-d: run container in background',
-                '-d': '-d/--detach: run container in background',
-                '--interactive': '--interactive/-i: keep STDIN open',
-                '-i': '-i/--interactive: keep STDIN open',
-                '--tty': '--tty/-t: allocate pseudo-TTY',
-                '-t': '-t/--tty: allocate pseudo-TTY',
-                '--rm': 'automatically remove container when it exits',
-                '--name': 'assign a name to the container',
-                '--volume': '--volume/-v: bind mount a volume',
-                '-v': '-v/--volume: bind mount a volume',
-                '--publish': '--publish/-p: publish container port to host',
-                '-p': '-p/--publish: publish container port to host',
-                '--env': '--env/-e: set environment variables',
-                '-e': '-e/--env: set environment variables',
-                '--network': 'connect container to a network',
-                '--restart': 'restart policy (no, on-failure, always, unless-stopped)',
-                '--memory': 'memory limit',
-                '--cpus': 'number of CPUs'
-            }
-        elif subcommand == 'build':
-            return {
-                '--tag': '--tag/-t: name and optionally tag (name:tag)',
-                '-t': '-t/--tag: name and optionally tag (name:tag)',
-                '--file': '--file/-f: name of the Dockerfile',
-                '-f': '-f/--file: name of the Dockerfile',
-                '--no-cache': 'do not use cache when building',
-                '--pull': 'always attempt to pull newer version of image',
-                '--build-arg': 'set build-time variables',
-                '--target': 'set target build stage',
-                '--platform': 'set platform (linux/amd64, linux/arm64, etc.)'
-            }
-        elif subcommand == 'ps':
-            return {
-                '--all': '--all/-a: show all containers (default shows just running)',
-                '-a': '-a/--all: show all containers (default shows just running)',
-                '--quiet': '--quiet/-q: only display container IDs',
-                '-q': '-q/--quiet: only display container IDs',
-                '--filter': 'filter output based on conditions',
-                '--format': 'format output using Go template',
-                '--size': 'display total file sizes'
-            }
-        elif subcommand == 'logs':
-            return {
-                '--follow': '--follow/-f: follow log output',
-                '-f': '-f/--follow: follow log output',
-                '--tail': 'number of lines to show from end of logs',
-                '--timestamps': '--timestamps/-t: show timestamps',
-                '-t': '-t/--timestamps: show timestamps',
-                '--since': 'show logs since timestamp',
-                '--until': 'show logs before timestamp'
-            }
-        elif subcommand == 'exec':
-            return {
-                '--interactive': '--interactive/-i: keep STDIN open',
-                '-i': '-i/--interactive: keep STDIN open',
-                '--tty': '--tty/-t: allocate pseudo-TTY',
-                '-t': '-t/--tty: allocate pseudo-TTY',
-                '--detach': '--detach/-d: run command in background',
-                '-d': '-d/--detach: run command in background',
-                '--user': '--user/-u: username or UID',
-                '-u': '-u/--user: username or UID',
-                '--workdir': '--workdir/-w: working directory',
-                '-w': '-w/--workdir: working directory',
-                '--env': '--env/-e: set environment variables',
-                '-e': '-e/--env: set environment variables'
-            }
-        elif subcommand in ('images', 'image'):
-            return {
-                '--all': '--all/-a: show all images (default hides intermediate)',
-                '-a': '-a/--all: show all images (default hides intermediate)',
-                '--quiet': '--quiet/-q: only display image IDs',
-                '-q': '-q/--quiet: only display image IDs',
-                '--filter': 'filter output based on conditions',
-                '--format': 'format output using Go template',
-                '--digests': 'show digests'
-            }
-        else:
-            return ['--help']
-
-    if cursor_token_idx == 0 and is_after:
-        return {
-            'run': 'Run a command in a new container',
-            'ps': 'List containers',
-            'images': 'List images',
-            'pull': 'Download an image from a registry',
-            'push': 'Upload an image to a registry',
-            'build': 'Build an image from a Dockerfile',
-            'exec': 'Execute a command in a running container',
-            'logs': 'Fetch the logs of a container',
-            'stop': 'Stop one or more running containers',
-            'start': 'Start one or more stopped containers',
-            'restart': 'Restart one or more containers',
-            'rm': 'Remove one or more containers',
-            'rmi': 'Remove one or more images',
-            'compose': 'Docker Compose',
-            'inspect': 'Return low-level information on Docker objects',
-            'attach': 'Attach local standard input, output, and error streams to a running container',
-            'cp': 'Copy files/folders between a container and the local filesystem',
-            'create': 'Create a new container',
-            'kill': 'Kill one or more running containers',
-            'network': 'Manage networks',
-            'volume': 'Manage volumes',
-            'system': 'Manage Docker',
-            'container': 'Manage containers',
-            'image': 'Manage images'
-        }
-
-    elif cursor_token_idx == 1:
-        subcommand = tokens[1].text if len(tokens) > 1 else ''
-
-        # Complete nested subcommands only when the subcommand is complete and cursor is after it
-        # This matches the git completion pattern
-        if subcommand == 'network' and is_after:
-            return {
-                'ls': 'List networks',
-                'create': 'Create a network',
-                'rm': 'Remove one or more networks',
-                'inspect': 'Display detailed information on one or more networks',
-                'connect': 'Connect a container to a network',
-                'disconnect': 'Disconnect a container from a network',
-                'prune': 'Remove all unused networks'
-            }
-        elif subcommand == 'volume' and is_after:
-            return {
-                'ls': 'List volumes',
-                'create': 'Create a volume',
-                'rm': 'Remove one or more volumes',
-                'inspect': 'Display detailed information on one or more volumes',
-                'prune': 'Remove all unused local volumes'
-            }
-        elif subcommand == 'system' and is_after:
-            return {
-                'df': 'Show docker disk usage',
-                'prune': 'Remove unused data',
-                'events': 'Get real time events from the server',
-                'info': 'Display system-wide information'
-            }
-        elif subcommand == 'container' and is_after:
-            return {
-                'ls': 'List containers',
-                'start': 'Start one or more stopped containers',
-                'stop': 'Stop one or more running containers',
-                'restart': 'Restart one or more containers',
-                'rm': 'Remove one or more containers',
-                'prune': 'Remove all stopped containers',
-                'inspect': 'Display detailed information on one or more containers'
-            }
-        elif subcommand == 'image' and is_after:
-            return {
-                'ls': 'List images',
-                'build': 'Build an image from a Dockerfile',
-                'rm': 'Remove one or more images',
-                'prune': 'Remove unused images',
-                'pull': 'Download an image from a registry',
-                'push': 'Upload an image to a registry',
-                'tag': 'Create a tag TARGET_IMAGE that refers to SOURCE_IMAGE',
-                'inspect': 'Display detailed information on one or more images'
-            }
-
-    return None
-
-
-@register_completion_schema('pip')
-def _pip_completions(tokens, cursor_token_idx, is_after):
-    """Completion schema for pip commands."""
-    # Check for flags
-    if _is_flag_context(tokens, cursor_token_idx, is_after):
-        subcommand = tokens[1].text if len(tokens) > 1 else ''
-        common_flags = {
-            '--help': 'show help message',
-            '-h': '-h/--help: show help',
-            '--version': 'show version',
-            '-V': '-V/--version: show version',
-            '--verbose': 'verbose output',
-            '-v': '-v/--verbose: verbose output',
-            '--quiet': 'quiet mode',
-            '-q': '-q/--quiet: quiet mode',
-            '--debug': 'debug mode',
-            '--isolated': 'isolated mode',
-            '--require-virtualenv': 'require virtualenv',
-            '--python': 'python interpreter',
-            '--log': 'log file path',
-            '--no-input': 'disable prompting for input',
-            '--keyring-provider': 'keyring provider',
-            '--proxy': 'proxy server',
-            '--retries': 'maximum retries',
-            '--timeout': 'timeout in seconds',
-            '--exists-action': 'action when path exists',
-            '--trusted-host': 'trusted host',
-            '--cert': 'certificate path',
-            '--client-cert': 'client certificate path',
-            '--cache-dir': 'cache directory',
-            '--no-cache-dir': 'disable cache',
-            '--disable-pip-version-check': 'disable pip version check',
-            '--no-color': 'disable colored output',
-            '--use-feature': 'enable new functionality',
-            '--use-deprecated': 'enable deprecated functionality',
-            '--resume-retries': 'resume retries',
-        }
-
-        flag_mapping = {
-            'install': [
-                '--requirement', '-r', '--constraint', '-c', '--no-deps', '--pre',
-                '--editable', '-e', '--dry-run', '--target', '-t', '--platform',
-                '--python-version', '--implementation', '--abi', '--user', '--root',
-                '--prefix', '--src', '--upgrade', '-U', '--upgrade-strategy',
-                '--force-reinstall', '-I', '--ignore-installed', '--ignore-requires-python',
-                '--no-build-isolation', '--use-pep517', '--check-build-dependencies',
-                '--break-system-packages', '--config-settings', '-C', '--global-option',
-                '--compile', '--no-compile', '--no-warn-script-location',
-                '--no-warn-conflicts', '--no-binary', '--only-binary', '--prefer-binary',
-                '--require-hashes', '--progress-bar', '--root-user-action', '--report',
-                '--group', '--no-clean', '--index-url', '-i', '--extra-index-url',
-                '--no-index', '--find-links', '-f'
-            ],
-            'uninstall': [
-                '--requirement', '-r', '--yes', '-y', '--root-user-action',
-                '--break-system-packages'
-            ],
-            'list': [
-                '--outdated', '-o', '--uptodate', '-u', '--editable', '-e', '--local', '-l',
-                '--user', '--path', '--pre', '--format', '--not-required',
-                '--exclude-editable', '--include-editable', '--exclude', '--index-url', '-i',
-                '--extra-index-url', '--no-index', '--find-links', '-f'
-            ],
-            'show': [
-                '--files', '-f'
-            ],
-            'freeze': [
-                '--requirement', '-r', '--local', '-l', '--user', '--path',
-                '--all', '--exclude-editable', '--exclude'
-            ],
-            'download': [
-                '--requirement', '-r', '--constraint', '-c', '--no-deps', '--pre',
-                '--editable', '-e', '--dry-run', '--platform', '--python-version',
-                '--implementation', '--abi', '--dest', '-d', '--src',
-                '--ignore-requires-python', '--no-build-isolation', '--use-pep517',
-                '--check-build-dependencies', '--prefer-binary', '--require-hashes',
-                '--progress-bar', '--no-binary', '--only-binary', '--index-url', '-i',
-                '--extra-index-url', '--no-index', '--find-links', '-f'
-            ],
-            'wheel': [
-                '--requirement', '-r', '--constraint', '-c', '--no-deps', '--pre',
-                '--editable', '-e', '--wheel-dir', '-w', '--no-build-isolation',
-                '--use-pep517', '--check-build-dependencies', '--config-settings', '-C',
-                '--global-option', '--no-binary', '--only-binary', '--prefer-binary',
-                '--require-hashes', '--progress-bar', '--no-clean', '--index-url', '-i',
-                '--extra-index-url', '--no-index', '--find-links', '-f'
-            ],
-            'cache': [
-                '--format'
-            ],
-            'check': [],
-            'config': [
-                '--global', '--user', '--site', '--editor'
-            ],
-            'debug': [],
-            'hash': [
-                '--algorithm'
-            ],
-            'inspect': [
-                '--path', '--local', '--user'
-            ],
-            'search': [],
-            'completion': [
-                '--bash', '--zsh', '--fish'
-            ],
-            'index': [
-                '--index-url', '-i', '--extra-index-url', '--no-index',
-                '--find-links', '-f', '--ignore-requires-python', '--pre'
-            ],
-        }
-
-        return _get_subcommand_flags(subcommand, flag_mapping, common_flags)
-
-    # Subcommands at position 0
-    result = _complete_at_position_zero(cursor_token_idx, is_after,
-                                        {
-                                            'install': 'Install packages',
-                                            'uninstall': 'Uninstall packages',
-                                            'list': 'List installed packages',
-                                            'show': 'Show package information',
-                                            'freeze': 'Output installed packages in requirements format',
-                                            'inspect': 'Inspect Python environment',
-                                            'download': 'Download packages',
-                                            'wheel': 'Build wheels from requirements',
-                                            'hash': 'Compute hashes of package archives',
-                                            'search': 'Search PyPI for packages',
-                                            'check': 'Verify installed packages',
-                                            'config': 'Manage pip configuration',
-                                            'cache': 'Inspect and manage pip cache',
-                                            'index': 'Inspect information from package indexes',
-                                            'debug': 'Show debug information',
-                                            'completion': 'Generate shell completion',
-                                            'help': 'Show help',
-                                            'lock': 'Generate lockfile'
-                                        })
-    if result:
-        return result
-
-    # Subcommands for pip cache
-    if cursor_token_idx == 1:
-        subcommand = tokens[1].text if len(tokens) > 1 else ''
-        if subcommand == 'cache':
-            return {
-                'list': 'List cached packages',
-                'info': 'Show cache information for package',
-                'remove': 'Remove cached wheels',
-                'purge': 'Remove all cached files',
-                'dir': 'Show cache directory path'
-            }
-
-    return None# ============================================================================
 # Helper functions for complex completions
 # ============================================================================
 
@@ -2839,38 +2510,60 @@ def _parse_manpage_flags(command):
 
         # Try man page first (use col -b to clean up formatting)
         help_text = None
-        try:
-            man_result = subprocess.run(
-                ['man', command],
-                capture_output=True,
-                text=True,
-                timeout=2
-            )
-            if man_result.returncode == 0 and len(man_result.stdout) > 100:
-                # Clean man page formatting with col -b
-                try:
-                    col_result = subprocess.run(
-                        ['col', '-b'],
-                        input=man_result.stdout,
-                        capture_output=True,
-                        text=True,
-                        timeout=1
-                    )
-                    if col_result.returncode == 0:
-                        help_text = col_result.stdout
-                    else:
-                        help_text = man_result.stdout
-                except:
-                    help_text = man_result.stdout
-        except:
-            pass
 
-        # Fall back to --help
+        # Handle compound commands like "docker run" -> ["docker", "run"]
+        cmd_parts = command.split()
+
+        # Try man page for compound commands (e.g., "man docker-run")
+        if len(cmd_parts) > 1:
+            man_compound = '-'.join(cmd_parts)
+            try:
+                man_result = subprocess.run(
+                    ['man', man_compound],
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                if man_result.returncode == 0 and len(man_result.stdout) > 100:
+                    help_text = man_result.stdout
+            except:
+                pass
+
+        # Try regular man page
+        if not help_text:
+            try:
+                man_result = subprocess.run(
+                    ['man', cmd_parts[0]],
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                if man_result.returncode == 0 and len(man_result.stdout) > 100:
+                    # Clean man page formatting with col -b
+                    try:
+                        col_result = subprocess.run(
+                            ['col', '-b'],
+                            input=man_result.stdout,
+                            capture_output=True,
+                            text=True,
+                            timeout=1
+                        )
+                        if col_result.returncode == 0:
+                            help_text = col_result.stdout
+                        else:
+                            help_text = man_result.stdout
+                    except:
+                        help_text = man_result.stdout
+            except:
+                pass
+
+        # Fall back to --help for compound commands (e.g., ["docker", "run", "--help"])
         if not help_text:
             for help_flag in ['--help', '-h', 'help']:
                 try:
+                    cmd_with_help = cmd_parts + [help_flag]
                     result = subprocess.run(
-                        [command, help_flag],
+                        cmd_with_help,
                         capture_output=True,
                         text=True,
                         timeout=2
@@ -2895,20 +2588,22 @@ def _parse_manpage_flags(command):
             re.MULTILINE
         )
 
-        # Pattern for --help output: "  -a, --all   description"
+        # Pattern for --help output: "  -a, --all   description" or "  -R, --repo [ARG]   description"
+        # Handles optional argument placeholders like [HOST/]OWNER/REPO or FILE or KEY=VALUE
         help_pattern1 = re.compile(
-            r'^\s{2,}(-[a-zA-Z0-9](?:,?\s+--[a-z0-9][-a-z0-9]*)?)\s{2,}(.+?)$',
+            r'^\s{2,}((?:-[a-zA-Z0-9](?:,?\s+)?)?--?[a-zA-Z0-9][-a-zA-Z0-9]*)(?:\s+(?:\[[^\]]+\]|[A-Z_/=]+)+)?\s{2,}(.+?)$',
             re.MULTILINE
         )
 
-        # Pattern for simple flags: "  --flag  description"
+        # Pattern for simple flags: "  --flag  description" or "-flag=ARG  description"
+        # Also matches flags at start of line (0 or more spaces)
         help_pattern2 = re.compile(
-            r'^\s{2,}(--?[a-zA-Z0-9][-a-zA-Z0-9]*)\s{2,}(.+?)$',
+            r'^\s*(--?[a-zA-Z0-9][-a-zA-Z0-9]*(?:=[A-Z_]+)?)\s{2,}(.+?)$',
             re.MULTILINE
         )
 
-        # Usage line fallback: "[-a] [-v] [--verbose]"
-        usage_pattern = re.compile(r'\[(-[a-zA-Z0-9]|--[a-z0-9][-a-z0-9]*)\]')
+        # Usage line fallback: "[-a] [-v] [--verbose]" or "[-R] [--Repo]"
+        usage_pattern = re.compile(r'\[(-[a-zA-Z0-9]|--[a-zA-Z0-9][-a-zA-Z0-9]*)\]')
 
         # Try all patterns
         for pattern in [man_pattern, help_pattern1, help_pattern2]:
@@ -2922,8 +2617,8 @@ def _parse_manpage_flags(command):
                     desc = desc[:77] + '...'
 
                 # Parse out individual flags from "flag_part"
-                # Could be "-a", "-a, --all", or "--all"
-                flag_matches = re.findall(r'--?[a-zA-Z0-9@][-a-zA-Z0-9]*', flag_part)
+                # Could be "-a", "-a, --all", "--all", or "-flag=ARG"
+                flag_matches = re.findall(r'--?[a-zA-Z0-9@][-a-zA-Z0-9]*(?:=[A-Z_]+)?', flag_part)
 
                 if len(flag_matches) == 2:
                     # Both short and long form
@@ -2940,6 +2635,49 @@ def _parse_manpage_flags(command):
             _COMPLETION_CACHE[cache_key] = CachedResult(flags, ttl)
             return flags
 
+        # If man page had no parseable flags, try --help as fallback
+        # (Some commands have man pages but --help is more structured)
+        if not flags and help_text:
+            # Check if we used man page (by checking if help_text came from man)
+            # If so, try --help as well
+            for help_flag in ['--help', '-h', 'help']:
+                try:
+                    result = subprocess.run(
+                        [command, help_flag],
+                        capture_output=True,
+                        text=True,
+                        timeout=2
+                    )
+                    output = result.stdout + result.stderr
+                    if len(output) > 50:
+                        # Try parsing --help output
+                        for pattern in [man_pattern, help_pattern1, help_pattern2]:
+                            for match in pattern.finditer(output):
+                                try:
+                                    flag_part = match.group(1).strip()
+                                    desc = match.group(2).strip()
+                                    desc = desc.split('.')[0].strip()
+                                    if len(desc) > 80:
+                                        desc = desc[:77] + '...'
+                                    flag_matches = re.findall(r'--?[a-zA-Z0-9@][-a-zA-Z0-9]*(?:=[A-Z_]+)?', flag_part)
+                                    if len(flag_matches) == 2:
+                                        short, long = flag_matches
+                                        flags[short] = "{0}/{1}: {2}".format(short, long, desc)
+                                        flags[long] = "{0}/{1}: {2}".format(long, short, desc)
+                                    elif len(flag_matches) == 1:
+                                        flag = flag_matches[0]
+                                        flags[flag] = desc
+                                except Exception:
+                                    continue
+                        if flags:
+                            break
+                except Exception:
+                    continue
+
+        if flags:
+            _COMPLETION_CACHE[cache_key] = CachedResult(flags, ttl)
+            return flags
+
         # Fall back to usage pattern (just flag names from usage)
         # Only if we found nothing else
         usage_flags = set(usage_pattern.findall(help_text))
@@ -2949,6 +2687,224 @@ def _parse_manpage_flags(command):
             return result
 
         # Cache negative result too (avoid repeated parsing)
+        _COMPLETION_CACHE[cache_key] = CachedResult(None, ttl)
+        return None
+
+
+def _parse_subcommands_from_help(command, help_text=None):
+    """
+    Parse subcommands from --help output automatically.
+
+    This is a fallback for commands without explicit subcommand schemas.
+    Returns dict of {subcommand: description} or None if parsing fails.
+
+    Matches common formats:
+    - "Commands:" followed by "  subcommand    description"
+    - "CORE COMMANDS" followed by "  auth:    Authenticate..."
+    - "Management Commands:" followed by "  builder    Manage builds"
+
+    Args:
+        command: Command name (e.g., 'claude')
+        help_text: Pre-fetched help text (optional, will fetch if None)
+
+    Returns:
+        dict of {subcommand: description} or None
+    """
+    # Check cache first
+    cache_key = 'subcommands_{0}'.format(command)
+    ttl = 3600  # 1 hour
+
+    with _CACHE_LOCK:
+        if cache_key not in _CACHE_LOCKS:
+            _CACHE_LOCKS[cache_key] = Lock()
+        lock = _CACHE_LOCKS[cache_key]
+
+    with lock:
+        # Check cache
+        if cache_key in _COMPLETION_CACHE:
+            cached = _COMPLETION_CACHE[cache_key]
+            if not cached.is_expired():
+                return cached.result
+
+        # Get help text if not provided
+        if not help_text:
+            try:
+                # Handle compound commands like "docker network" -> ["docker", "network", "--help"]
+                cmd_parts = command.split()
+                cmd_parts.append('--help')
+                result = subprocess.run(
+                    cmd_parts,
+                    capture_output=True,
+                    text=True,
+                    timeout=2
+                )
+                help_text = result.stdout + result.stderr
+                if len(help_text) < 50:
+                    _COMPLETION_CACHE[cache_key] = CachedResult(None, ttl)
+                    return None
+            except Exception:
+                _COMPLETION_CACHE[cache_key] = CachedResult(None, ttl)
+                return None
+
+        subcommands = {}
+
+        # Pattern 1: Standard "Commands:" section
+        # Matches:  "  subcommand    description"
+        #          "  auth:        Authenticate gh"
+        #          "  buildx*      Docker Buildx"
+        #          "  install [options] [target]    Install stuff"
+        #          "  cryptdecode Cryptdecode..."  (only 1 space for long command names)
+        # Captures command name, skips optional parameters in brackets/parens/angles, then captures description
+        # Changed from \s{2,} to \s+ to handle commands with only 1 space before description
+        standard_pattern = re.compile(
+            r'^\s+([a-z][-a-z0-9]*[*:]?)(?:\s+\[[^\]]+\]|\s+\([^\)]+\)|\s+<[^>]+>)*\s+(.+?)$',
+            re.MULTILINE
+        )
+
+        # Find "Commands:" or similar section headers (case-insensitive)
+        section_markers = [
+            'Commands:',
+            'COMMANDS',
+            'CORE COMMANDS',
+            'Management Commands:',
+            'Available Commands:',
+            'Common Commands:',
+        ]
+
+        # Look for commands section
+        for marker in section_markers:
+            # Find section header (case-insensitive)
+            marker_lower = marker.lower()
+            text_lower = help_text.lower()
+
+            marker_pos = text_lower.find(marker_lower)
+            if marker_pos == -1:
+                continue
+
+            # Extract text after this section (until next section or 5000 chars)
+            # Increased from 1000 to 5000 to handle commands like rclone with many subcommands
+            section_start = marker_pos + len(marker)
+            section_text = help_text[section_start:section_start + 5000]
+
+            # Find where this section ends (next all-caps header or empty line pattern)
+            next_section = re.search(r'\n[A-Z][A-Z\s]+:\s*\n', section_text)
+            if next_section:
+                section_text = section_text[:next_section.start()]
+
+            # Parse subcommands from this section
+            for match in standard_pattern.finditer(section_text):
+                try:
+                    subcommand = match.group(1).strip()
+                    desc = match.group(2).strip()
+
+                    # Clean up subcommand name (remove trailing : or *)
+                    subcommand = subcommand.rstrip(':*')
+
+                    # Skip if it looks like a flag (starts with -)
+                    if subcommand.startswith('-'):
+                        continue
+
+                    # Skip if subcommand is the same as the program name
+                    # This avoids false matches like "brew commands" being parsed as "brew" subcommand
+                    if subcommand.lower() == command.lower():
+                        continue
+
+                    # Clean up description
+                    desc = desc.split('\n')[0].strip()  # Take first line only
+                    if len(desc) > 80:
+                        desc = desc[:77] + '...'
+
+                    subcommands[subcommand] = desc
+                except Exception:
+                    continue
+
+            # If we found subcommands in this section, stop looking
+            # But require at least 2 subcommands to avoid false positives
+            # (e.g., "brew commands" and "man brew" shouldn't count as valid subcommands)
+            if len(subcommands) >= 2:
+                break
+
+        # If Pattern 1 found fewer than 2 subcommands, it's likely a false positive
+        # Clear it so other patterns can try
+        if len(subcommands) < 2:
+            subcommands = {}
+
+        # Pattern 2: Comma-separated format (npm, yarn, etc.)
+        # Example: "All commands:\n\n    access, adduser, audit, bugs, cache, ci, completion,\n    config, dedupe..."
+        if not subcommands:
+            comma_markers = ['All commands:', 'Available commands:', 'Commands:']
+            for marker in comma_markers:
+                marker_lower = marker.lower()
+                text_lower = help_text.lower()
+                marker_pos = text_lower.find(marker_lower)
+                if marker_pos == -1:
+                    continue
+
+                # Extract text after marker (until next section or 500 chars)
+                section_start = marker_pos + len(marker)
+                section_text = help_text[section_start:section_start + 500]
+
+                # Stop at next section header (all caps line or double newline)
+                next_section = re.search(r'\n\n[A-Z]', section_text)
+                if next_section:
+                    section_text = section_text[:next_section.start()]
+
+                # Extract comma-separated command names
+                # Remove leading/trailing whitespace and split by comma
+                commands_text = re.sub(r'\s+', ' ', section_text).strip()
+                if ',' in commands_text:
+                    for cmd in commands_text.split(','):
+                        cmd = cmd.strip()
+                        # Only keep valid command names (letters, hyphens, underscores)
+                        if re.match(r'^[a-z][a-z0-9_-]*$', cmd):
+                            subcommands[cmd] = ''  # No descriptions in comma format
+
+                if subcommands:
+                    break
+
+        # Pattern 3: "program command" format (brew, git, etc.)
+        # Example: "brew search TEXT\n  brew info [FORMULA]...\n  brew install FORMULA..."
+        # Looks for lines starting with the program name followed by a command
+        if not subcommands:
+            # Only use this pattern if we see multiple "program subcommand" lines
+            # This avoids false positives from "man program" or "program --help"
+            program_pattern = re.compile(
+                rf'^\s*{re.escape(command)}\s+([a-z][a-z0-9_-]+)',
+                re.MULTILINE | re.IGNORECASE
+            )
+
+            candidates = {}
+            for match in program_pattern.finditer(help_text):
+                try:
+                    subcommand = match.group(1).strip().lower()
+
+                    # Skip if it looks like a flag
+                    if subcommand.startswith('-'):
+                        continue
+
+                    # Skip common non-subcommands (but keep "help" as it's a valid subcommand for many programs)
+                    if subcommand in {'option', 'options', 'command', 'usage', 'version'}:
+                        continue
+
+                    # Skip if the subcommand is the same as the program name (avoids "man brew" matching "brew")
+                    if subcommand == command.lower():
+                        continue
+
+                    candidates[subcommand] = ''  # No descriptions available in this format
+                except Exception:
+                    continue
+
+            # Only use this pattern if we found at least 3 subcommands
+            # This reduces false positives
+            if len(candidates) >= 3:
+                subcommands = candidates
+
+        # Cache and return
+        if subcommands:
+            _COMPLETION_CACHE[cache_key] = CachedResult(subcommands, ttl)
+            return subcommands
+
+        # Cache negative result
         _COMPLETION_CACHE[cache_key] = CachedResult(None, ttl)
         return None
 
@@ -3481,293 +3437,6 @@ def _make_completions(tokens, cursor_token_idx, is_after):
     return None
 
 
-@register_completion_schema('brew')
-def _brew_completions(tokens, cursor_token_idx, is_after):
-    """Completion schema for brew commands."""
-    # Check for flags
-    if _is_flag_context(tokens, cursor_token_idx, is_after):
-        subcommand = tokens[1].text if len(tokens) > 1 else ''
-        common_flags = {
-            '--help': 'show help message',
-            '-h': '-h/--help: show help',
-            '--version': 'show version',
-            '-v': '-v/--version: show version',
-            '--verbose': 'verbose output',
-            '--debug': 'debug mode',
-            '-d': '-d/--debug: debug mode',
-            '--quiet': 'quiet mode',
-            '-q': '-q/--quiet: quiet mode',
-        }
-
-        flag_mapping = {
-            'install': {
-                '--cask': '--cask: install a cask instead of formula',
-                '--casks': '--casks: treat all named arguments as casks',
-                '--formula': '--formula: treat all named arguments as formulae',
-                '--formulae': '--formulae: treat all named arguments as formulae',
-                '--force': '--force/-f: force install even if already installed',
-                '-f': '-f/--force: force install even if already installed',
-                '--verbose': '--verbose: print verbose output',
-                '--debug': '--debug: display debugging information',
-                '--build-from-source': '--build-from-source/-s: compile from source',
-                '-s': '-s/--build-from-source: compile from source',
-                '--force-bottle': '--force-bottle: install from bottle if available',
-                '--include-test': '--include-test: install test dependencies',
-                '--HEAD': '--HEAD: install HEAD version',
-                '--fetch-HEAD': '--fetch-HEAD: fetch HEAD version',
-                '--keep-tmp': '--keep-tmp: keep temporary files',
-                '--debug-symbols': '--debug-symbols: include debug symbols',
-                '--build-bottle': '--build-bottle: prepare formula for bottling',
-                '--skip-post-install': '--skip-post-install: skip post-install steps',
-                '--skip-link': '--skip-link: skip linking step',
-                '--as-dependency': '--as-dependency: mark as dependency',
-                '--bottle-arch': '--bottle-arch: specify bottle architecture',
-                '--interactive': '--interactive/-i: interactive mode',
-                '-i': '-i/--interactive: interactive mode',
-                '--git': '--git/-g: use git to download',
-                '-g': '-g/--git: use git to download',
-                '--overwrite': '--overwrite: overwrite existing files',
-                '--binaries': '--binaries: enable binary linking for casks',
-                '--no-binaries': '--no-binaries: disable binary linking for casks',
-                '--require-sha': '--require-sha: require SHA verification',
-                '--quarantine': '--quarantine: enable macOS quarantine',
-                '--no-quarantine': '--no-quarantine: disable macOS quarantine',
-                '--adopt': '--adopt: adopt existing artifacts',
-                '--skip-cask-deps': '--skip-cask-deps: skip cask dependencies',
-                '--zap': '--zap: remove all files associated with cask',
-                '--appdir': '--appdir: specify app directory',
-                '--keyboard-layoutdir': '--keyboard-layoutdir: specify keyboard layout directory',
-                '--colorpickerdir': '--colorpickerdir: specify color picker directory',
-                '--prefpanedir': '--prefpanedir: specify preference pane directory',
-                '--qlplugindir': '--qlplugindir: specify QuickLook plugin directory',
-                '--mdimporterdir': '--mdimporterdir: specify metadata importer directory',
-                '--dictionarydir': '--dictionarydir: specify dictionary directory',
-                '--fontdir': '--fontdir: specify font directory',
-                '--servicedir': '--servicedir: specify service directory',
-                '--input-methoddir': '--input-methoddir: specify input method directory',
-                '--internet-plugindir': '--internet-plugindir: specify internet plugin directory',
-                '--audio-unit-plugindir': '--audio-unit-plugindir: specify audio unit plugin directory',
-                '--vst-plugindir': '--vst-plugindir: specify VST plugin directory',
-                '--vst3-plugindir': '--vst3-plugindir: specify VST3 plugin directory',
-                '--screen-saverdir': '--screen-saverdir: specify screen saver directory',
-                '--language': '--language: specify language',
-                '--display-times': '--display-times: display install times',
-                '--dry-run': '--dry-run/-n: show what would be done',
-                '-n': '-n/--dry-run: show what would be done',
-                '--ask': '--ask: prompt before actions',
-                '--cc': '--cc: specify compiler',
-                '--ignore-dependencies': '--ignore-dependencies: skip dependencies',
-                '--only-dependencies': '--only-dependencies: install only dependencies',
-            },
-            'uninstall': {
-                '--cask': '--cask: uninstall a cask',
-                '--casks': '--casks: treat all named arguments as casks',
-                '--formula': '--formula: treat all named arguments as formulae',
-                '--formulae': '--formulae: treat all named arguments as formulae',
-                '--force': '--force/-f: force uninstall',
-                '-f': '-f/--force: force uninstall',
-                '--zap': '--zap: remove all files associated with cask',
-                '--ignore-dependencies': '--ignore-dependencies: skip dependencies',
-            },
-            'upgrade': {
-                '--cask': '--cask: upgrade casks only',
-                '--casks': '--casks: treat all named arguments as casks',
-                '--formula': '--formula: treat all named arguments as formulae',
-                '--formulae': '--formulae: treat all named arguments as formulae',
-                '--force': '--force/-f: force upgrade',
-                '-f': '-f/--force: force upgrade',
-                '--verbose': '--verbose: print verbose output',
-                '--debug': '--debug: display debugging information',
-                '--build-from-source': '--build-from-source/-s: compile from source',
-                '-s': '-s/--build-from-source: compile from source',
-                '--interactive': '--interactive/-i: interactive mode',
-                '-i': '-i/--interactive: interactive mode',
-                '--force-bottle': '--force-bottle: install from bottle if available',
-                '--fetch-HEAD': '--fetch-HEAD: fetch HEAD version',
-                '--keep-tmp': '--keep-tmp: keep temporary files',
-                '--debug-symbols': '--debug-symbols: include debug symbols',
-                '--overwrite': '--overwrite: overwrite existing files',
-                '--skip-cask-deps': '--skip-cask-deps: skip cask dependencies',
-                '--greedy': '--greedy/-g: upgrade casks with auto-updates or latest versions',
-                '-g': '-g/--greedy: upgrade casks with auto-updates or latest versions',
-                '--greedy-latest': '--greedy-latest: upgrade casks with latest versions',
-                '--greedy-auto-updates': '--greedy-auto-updates: upgrade casks with auto-updates',
-                '--binaries': '--binaries: enable binary linking for casks',
-                '--no-binaries': '--no-binaries: disable binary linking for casks',
-                '--require-sha': '--require-sha: require SHA verification',
-                '--quarantine': '--quarantine: enable macOS quarantine',
-                '--no-quarantine': '--no-quarantine: disable macOS quarantine',
-                '--appdir': '--appdir: specify app directory',
-                '--keyboard-layoutdir': '--keyboard-layoutdir: specify keyboard layout directory',
-                '--colorpickerdir': '--colorpickerdir: specify color picker directory',
-                '--prefpanedir': '--prefpanedir: specify preference pane directory',
-                '--qlplugindir': '--qlplugindir: specify QuickLook plugin directory',
-                '--mdimporterdir': '--mdimporterdir: specify metadata importer directory',
-                '--dictionarydir': '--dictionarydir: specify dictionary directory',
-                '--fontdir': '--fontdir: specify font directory',
-                '--servicedir': '--servicedir: specify service directory',
-                '--input-methoddir': '--input-methoddir: specify input method directory',
-                '--internet-plugindir': '--internet-plugindir: specify internet plugin directory',
-                '--audio-unit-plugindir': '--audio-unit-plugindir: specify audio unit plugin directory',
-                '--vst-plugindir': '--vst-plugindir: specify VST plugin directory',
-                '--vst3-plugindir': '--vst3-plugindir: specify VST3 plugin directory',
-                '--screen-saverdir': '--screen-saverdir: specify screen saver directory',
-                '--language': '--language: specify language',
-                '--display-times': '--display-times: display install times',
-                '--dry-run': '--dry-run/-n: show what would be done',
-                '-n': '-n/--dry-run: show what would be done',
-                '--ask': '--ask: prompt before actions',
-            },
-            'list': {
-                '--formula': '--formula: list formulae only',
-                '--formulae': '--formulae: list formulae only',
-                '--cask': '--cask: list casks only',
-                '--casks': '--casks: list casks only',
-                '--full-name': '--full-name: show full names',
-                '--versions': '--versions: show versions',
-                '--multiple': '--multiple: show multiple versions only',
-                '--pinned': '--pinned: show pinned formulae only',
-                '--installed-on-request': '--installed-on-request: show requested formulae',
-                '--installed-as-dependency': '--installed-as-dependency: show dependency formulae',
-                '--poured-from-bottle': '--poured-from-bottle: show bottled formulae',
-                '--built-from-source': '--built-from-source: show source-built formulae',
-                '-1': '-1: one entry per line',
-                '-l': '-l: long format',
-                '-r': '-r: reverse order',
-                '-t': '-t: sort by time modified',
-            },
-            'search': {
-                '--formula': '--formula: search formulae only',
-                '--formulae': '--formulae: search formulae only',
-                '--cask': '--cask: search casks only',
-                '--casks': '--casks: search casks only',
-                '--desc': '--desc: search descriptions',
-                '--eval-all': '--eval-all: evaluate all available formulae',
-                '--pull-request': '--pull-request: search pull requests',
-                '--open': '--open: search open PRs only',
-                '--closed': '--closed: search closed PRs only',
-                '--alpine': '--alpine: search Alpine packages',
-                '--repology': '--repology: search Repology packages',
-                '--macports': '--macports: search MacPorts packages',
-                '--fink': '--fink: search Fink packages',
-                '--opensuse': '--opensuse: search openSUSE packages',
-                '--fedora': '--fedora: search Fedora packages',
-                '--archlinux': '--archlinux: search Arch Linux packages',
-                '--debian': '--debian: search Debian packages',
-                '--ubuntu': '--ubuntu: search Ubuntu packages',
-            },
-            'info': {
-                '--formula': '--formula: show formula info only',
-                '--formulae': '--formulae: show formula info only',
-                '--cask': '--cask: show cask info only',
-                '--casks': '--casks: show cask info only',
-                '--github': '--github: open GitHub page',
-                '--json': '--json: output in JSON format',
-                '--installed': '--installed: show installed versions',
-                '--all': '--all: show all versions',
-                '--analytics': '--analytics: show analytics data',
-            },
-            'cleanup': {
-                '--prune': '--prune: remove all cached files older than specified days',
-                '--prune-prefix': '--prune-prefix: remove only prefix cache',
-                '--dry-run': '--dry-run/-n: show what would be removed',
-                '-n': '-n/--dry-run: show what would be removed',
-                '-s': '-s: scrub cache including downloads',
-            },
-            'doctor': {
-                '--list-checks': '--list-checks: list all checks',
-                '--audit-debug': '--audit-debug: enable audit debugging',
-            },
-            'update': {
-                '--merge': '--merge: use git merge to apply updates',
-                '--auto-update': '--auto-update: run auto-update',
-                '--force': '--force: force update',
-            },
-        }
-
-        return _get_subcommand_flags(subcommand, flag_mapping, common_flags)
-
-    # Subcommands at position 0
-    result = _complete_at_position_zero(cursor_token_idx, is_after,
-                                        {
-                                            'install': 'install a formula or cask',
-                                            'uninstall': 'uninstall a formula or cask',
-                                            'update': 'fetch latest version of Homebrew and formulae',
-                                            'upgrade': 'upgrade outdated formulae and casks',
-                                            'search': 'search for formulae and casks',
-                                            'info': 'display information about a formula or cask',
-                                            'list': 'list installed formulae and casks',
-                                            'ls': 'alias for list',
-                                            'doctor': 'check system for potential problems',
-                                            'cleanup': 'remove old versions and cache files',
-                                            'tap': 'tap a formula repository',
-                                            'untap': 'remove a tapped repository',
-                                            'services': 'manage background services',
-                                            'deps': 'show dependencies for a formula',
-                                            'uses': 'show formulae that depend on a formula',
-                                            'outdated': 'list outdated formulae and casks',
-                                            'pin': 'pin a formula to prevent upgrades',
-                                            'unpin': 'unpin a formula to allow upgrades',
-                                            'analytics': 'control analytics settings',
-                                            'autoremove': 'remove unused dependencies',
-                                            'bundle': 'bundler for Homebrew',
-                                            'cask': 'manage casks',
-                                            'commands': 'list all available commands',
-                                            'completions': 'generate shell completions',
-                                            'config': 'show Homebrew configuration',
-                                            'configure': 'configure Homebrew',
-                                            'desc': 'display description of a formula',
-                                            'developer': 'developer commands',
-                                            'diagnostic': 'run diagnostics',
-                                            'edit': 'edit a formula',
-                                            'env': 'show Homebrew environment',
-                                            'fetch': 'download formula source',
-                                            'formulae': 'list available formulae',
-                                            'casks': 'list available casks',
-                                            'gist-logs': 'upload logs to a new Gist',
-                                            'home': 'open formula homepage',
-                                            'leaves': 'list installed formulae not required by others',
-                                            'link': 'symlink a formula',
-                                            'linkage': 'check library links',
-                                            'log': 'show git log for a formula',
-                                            'migrate': 'migrate renamed formula',
-                                            'missing': 'check for missing dependencies',
-                                            'options': 'display install options for a formula',
-                                            'postinstall': 'rerun post-install steps',
-                                            'readall': 'read all formulae',
-                                            'reinstall': 'reinstall a formula',
-                                            'shellenv': 'print shell environment variables',
-                                            'tap-info': 'show detailed tap information',
-                                            'test': 'run tests for a formula',
-                                            'unlink': 'unlink a formula',
-                                            'update-reset': 'reset Homebrew to latest origin/master',
-                                            'vendor-install': 'install vendor gems',
-                                            'which-formula': 'show which formula provides a command',
-                                        })
-    if result:
-        return result
-
-    # Subcommands for specific commands
-    if cursor_token_idx >= 1:
-        subcommand = tokens[1].text if len(tokens) > 1 else ''
-        if subcommand in ('install', 'uninstall', 'info', 'upgrade', 'deps', 'uses'):
-            result = _complete_subcommand_at_position(cursor_token_idx, is_after, 1, _get_brew_formulae())
-            if result:
-                return result
-        elif subcommand == 'services':
-            if cursor_token_idx == 1:
-                return {
-                    'start': 'start a service',
-                    'stop': 'stop a service',
-                    'restart': 'restart a service',
-                    'run': 'run a service without starting at login',
-                    'list': 'list all services',
-                    'cleanup': 'remove unused service files',
-                    'info': 'show service information',
-                    'kill': 'kill a service by name',
-                }
-
-    return None
 
 
 @register_completion_schema('ssh')
@@ -3800,170 +3469,6 @@ def _ssh_completions(tokens, cursor_token_idx, is_after):
         return _parse_ssh_config_hosts()
     return None
 
-
-@register_completion_schema('cargo')
-def _cargo_completions(tokens, cursor_token_idx, is_after):
-    """Completion schema for cargo commands."""
-    # Check for flags
-    if _is_flag_context(tokens, cursor_token_idx, is_after):
-        subcommand = tokens[1].text if len(tokens) > 1 else ''
-
-        if subcommand in ('build', 'run', 'test', 'bench'):
-            return {
-                '--release': '--release/-r: build with optimizations',
-                '-r': '-r/--release: build with optimizations',
-                '--verbose': '--verbose/-v: use verbose output',
-                '-v': '-v/--verbose: use verbose output',
-                '--quiet': '--quiet/-q: no output printed to stdout',
-                '-q': '-q/--quiet: no output printed to stdout',
-                '--all-features': '--all-features: activate all available features',
-                '--no-default-features': '--no-default-features: do not activate default features',
-                '--features': '--features/-F: space/comma-separated list of features',
-                '-F': '-F/--features: space/comma-separated list of features',
-                '--target': '--target: build for the target triple',
-                '--bin': '--bin: build only the specified binary',
-                '--lib': '--lib: build only library',
-                '--example': '--example: build only the specified example',
-                '--jobs': '--jobs/-j: number of parallel jobs',
-                '-j': '-j/--jobs: number of parallel jobs',
-                '--message-format': '--message-format: error format (human/json/short)',
-                '--color': '--color: coloring (auto/always/never)',
-                '--frozen': '--frozen: require Cargo.lock is up to date',
-                '--locked': '--locked: require Cargo.lock and cache are up to date',
-                '--offline': '--offline: run without accessing network',
-                '--config': '--config: override config value',
-                '--manifest-path': '--manifest-path: path to Cargo.toml',
-                '--ignore-rust-version': '--ignore-rust-version: ignore rust-version in manifest',
-                '--timings': '--timings: timing information',
-                '--future-incompat-report': '--future-incompat-report: display future incompatibilities',
-                '--profile': '--profile: build with specified profile',
-                '--target-dir': '--target-dir: directory for build artifacts',
-                '--help': '--help: print help information',
-            }
-        elif subcommand == 'new':
-            return {
-                '--bin': '--bin: create binary package (default)',
-                '--lib': '--lib: create library package',
-                '--name': '--name: set package name',
-                '--vcs': '--vcs: initialize version control (git/hg/none)',
-                '--edition': '--edition: set Rust edition (2015/2018/2021)',
-                '--registry': '--registry: set registry to use',
-                '--help': '--help: print help information',
-            }
-        elif subcommand == 'init':
-            return {
-                '--bin': '--bin: create binary package (default)',
-                '--lib': '--lib: create library package',
-                '--name': '--name: set package name',
-                '--vcs': '--vcs: initialize version control (git/hg/none)',
-                '--edition': '--edition: set Rust edition (2015/2018/2021)',
-                '--registry': '--registry: set registry to use',
-                '--help': '--help: print help information',
-            }
-        elif subcommand == 'publish':
-            return {
-                '--dry-run': '--dry-run: perform checks without uploading',
-                '--allow-dirty': '--allow-dirty: allow dirty working directory',
-                '--no-verify': '--no-verify: skip build verification',
-                '--registry': '--registry: registry to publish to',
-                '--token': '--token: API token to authenticate with',
-                '--index': '--index: registry index URL',
-                '--help': '--help: print help information',
-            }
-        elif subcommand == 'install':
-            return {
-                '--version': '--version: specify version to install',
-                '--git': '--git: git URL to install from',
-                '--branch': '--branch: git branch to install from',
-                '--tag': '--tag: git tag to install from',
-                '--rev': '--rev: git revision to install from',
-                '--path': '--path: filesystem path to install from',
-                '--bins': '--bins: install all binaries',
-                '--examples': '--examples: install all examples',
-                '--root': '--root: directory to install packages into',
-                '--force': '--force: force overwriting existing binaries',
-                '--no-track': '--no-track: do not track installation',
-                '--help': '--help: print help information',
-            }
-        elif subcommand == 'search':
-            return {
-                '--limit': '--limit: limit number of results',
-                '--index': '--index: registry index to search',
-                '--registry': '--registry: registry to search',
-                '--help': '--help: print help information',
-            }
-        elif subcommand == 'tree':
-            return {
-                '--all': '--all: show all packages in workspace',
-                '--depth': '--depth: maximum display depth',
-                '--no-dedupe': '--no-dedupe: show duplicate dependencies',
-                '--duplicates': '--duplicates: show only duplicate dependencies',
-                '--edges': '--edges: type of edges to display',
-                '--invert': '--invert: invert dependency graph',
-                '--package': '--package: package to use as root',
-                '--help': '--help: print help information',
-            }
-        elif subcommand == 'metadata':
-            return {
-                '--format-version': '--format-version: metadata format version',
-                '--no-deps': '--no-deps: exclude dependencies',
-                '--filter-platform': '--filter-platform: only include dependencies for target',
-                '--help': '--help: print help information',
-            }
-        else:
-            return {
-                '--help': '--help: print help information',
-                '--version': '--version: print version information',
-                '--verbose': '--verbose/-v: use verbose output',
-                '-v': '-v/--verbose: use verbose output',
-                '--quiet': '--quiet/-q: no output printed to stdout',
-                '-q': '-q/--quiet: no output printed to stdout',
-                '--color': '--color: coloring (auto/always/never)',
-                '--frozen': '--frozen: require Cargo.lock is up to date',
-                '--locked': '--locked: require Cargo.lock and cache are up to date',
-                '--offline': '--offline: run without accessing network',
-            }
-
-    if cursor_token_idx == 0 and is_after:
-        return {
-            'build': 'compile the current package',
-            'check': 'check the current package without producing an executable',
-            'clean': 'remove target directory and build artifacts',
-            'doc': 'build package documentation',
-            'new': 'create a new Cargo package',
-            'init': 'initialize a new Cargo package in an existing directory',
-            'run': 'build and execute the main binary',
-            'test': 'run the tests',
-            'bench': 'run the benchmarks',
-            'update': 'update dependencies in Cargo.lock',
-            'search': 'search packages on crates.io',
-            'publish': 'publish package to crates.io',
-            'install': 'install a Rust binary',
-            'uninstall': 'uninstall a Rust binary',
-            'add': 'add dependency to Cargo.toml',
-            'remove': 'remove dependency from Cargo.toml',
-            'fmt': 'format the code using rustfmt',
-            'clippy': 'run the Clippy linter',
-            'fix': 'automatically fix compiler warnings',
-            'tree': 'display dependency tree',
-            'metadata': 'output package metadata in JSON',
-            'pkgid': 'print a package ID specification',
-            'verify-project': 'verify Cargo.toml is valid',
-            'locate-project': 'print Cargo.toml location',
-            'vendor': 'vendor all dependencies locally',
-            'yank': 'remove a version from crates.io index',
-            'fetch': 'fetch dependencies from network',
-            'package': 'assemble distributable tarball',
-            'owner': 'manage crate owners on crates.io',
-            'login': 'save API token for crates.io',
-            'logout': 'remove API token from local storage',
-            'report': 'generate and display build reports',
-            'version': 'show version information',
-            'help': 'display help information',
-            'config': 'inspect Cargo configuration',
-            'info': 'display information about a package',
-        }
-    return None
 
 
 @register_completion_schema('docker-compose')
@@ -4267,140 +3772,6 @@ def _journalctl_completions(tokens, cursor_token_idx, is_after):
         }
 
     # journalctl doesn't have subcommands at position 0
-    return None
-
-@register_completion_schema('kubectl')
-def _kubectl_completions(tokens, cursor_token_idx, is_after):
-    """Completion schema for kubectl commands."""
-    # Check for flags
-    if _is_flag_context(tokens, cursor_token_idx, is_after):
-        subcommand = tokens[1].text if len(tokens) > 1 else ''
-
-        common_flags = {
-            '--namespace': '--namespace/-n: specify namespace',
-            '-n': '-n/--namespace: specify namespace',
-            '--all-namespaces': '--all-namespaces/-A: list objects across all namespaces',
-            '-A': '-A/--all-namespaces: list objects across all namespaces',
-            '--help': '--help: print help information',
-        }
-
-        if subcommand == 'get':
-            return {**common_flags, **{
-                '--output': '--output/-o: output format (json/yaml/wide/name/custom-columns)',
-                '-o': '-o/--output: output format (json/yaml/wide/name/custom-columns)',
-                '--watch': '--watch/-w: watch for changes',
-                '-w': '-w/--watch: watch for changes',
-                '--show-labels': '--show-labels: show all labels as last column',
-                '--selector': '--selector/-l: selector (label query) to filter on',
-                '-l': '-l/--selector: selector (label query) to filter on',
-                '--field-selector': '--field-selector: selector (field query) to filter on',
-                '--sort-by': '--sort-by: sort list by specified field',
-            }}
-        elif subcommand == 'describe':
-            return {**common_flags, **{
-                '--show-events': '--show-events: show events related to resource',
-            }}
-        elif subcommand == 'delete':
-            return {**common_flags, **{
-                '--force': '--force: force deletion without grace period',
-                '--grace-period': '--grace-period: seconds before resource is forcefully terminated',
-                '--cascade': '--cascade: control cascading deletion',
-                '--now': '--now: delete immediately without grace period',
-            }}
-        elif subcommand == 'apply':
-            return {**common_flags, **{
-                '--filename': '--filename/-f: file or directory containing configuration',
-                '-f': '-f/--filename: file or directory containing configuration',
-                '--recursive': '--recursive/-R: process directory recursively',
-                '-R': '-R/--recursive: process directory recursively',
-                '--dry-run': '--dry-run: preview changes without applying',
-                '--force': '--force: force apply by deleting and recreating',
-                '--prune': '--prune: automatically delete unused resources',
-            }}
-        elif subcommand == 'logs':
-            return {**common_flags, **{
-                '--follow': '--follow/-f: stream logs',
-                '-f': '-f/--follow: stream logs',
-                '--tail': '--tail: lines of recent log to display',
-                '--timestamps': '--timestamps: include timestamps on each line',
-                '--previous': '--previous/-p: print logs from previous instance',
-                '-p': '-p/--previous: print logs from previous instance',
-                '--since': '--since: show logs since relative time or timestamp',
-                '--container': '--container/-c: container name',
-                '-c': '-c/--container: container name',
-            }}
-        elif subcommand == 'exec':
-            return {**common_flags, **{
-                '--stdin': '--stdin/-i: pass stdin to container',
-                '-i': '-i/--stdin: pass stdin to container',
-                '--tty': '--tty/-t: allocate pseudo-TTY',
-                '-t': '-t/--tty: allocate pseudo-TTY',
-                '--container': '--container/-c: container name',
-                '-c': '-c/--container: container name',
-            }}
-        elif subcommand == 'scale':
-            return {**common_flags, **{
-                '--replicas': '--replicas: new desired number of replicas',
-                '--current-replicas': '--current-replicas: precondition for current size',
-            }}
-        else:
-            return common_flags
-
-    if cursor_token_idx == 0 and is_after:
-        return {
-            'get': 'display one or many resources',
-            'describe': 'show details of a specific resource',
-            'create': 'create a resource from a file or stdin',
-            'delete': 'delete resources',
-            'apply': 'apply a configuration to a resource',
-            'logs': 'print logs for a container in a pod',
-            'exec': 'execute a command in a container',
-            'port-forward': 'forward local ports to a pod',
-            'scale': 'set a new size for a deployment or replicaset',
-            'rollout': 'manage the rollout of a resource',
-            'top': 'display resource (CPU/memory) usage',
-            'config': 'modify kubeconfig files',
-            'edit': 'edit a resource on the server',
-            'patch': 'update fields of a resource',
-            'replace': 'replace a resource by file or stdin',
-            'expose': 'expose a resource as a new Kubernetes service',
-            'run': 'run a particular image on the cluster',
-            'set': 'set specific features on objects',
-            'label': 'update labels on a resource',
-            'annotate': 'update annotations on a resource',
-            'drain': 'drain node in preparation for maintenance',
-            'cordon': 'mark node as unschedulable',
-            'uncordon': 'mark node as schedulable',
-            'taint': 'update the taints on one or more nodes',
-            'attach': 'attach to a running container',
-            'cp': 'copy files to/from containers'
-        }
-
-    elif cursor_token_idx == 1:
-        subcommand = tokens[1].text if len(tokens) > 1 else ''
-
-        if subcommand in ('get', 'describe', 'delete', 'edit', 'patch', 'scale', 'logs'):
-            return _get_kubectl_resources()
-        elif subcommand == 'config':
-            return {
-                'view': 'display merged kubeconfig settings',
-                'get-contexts': 'list all contexts',
-                'use-context': 'set the current context',
-                'set-context': 'set a context entry in kubeconfig',
-                'current-context': 'display the current context',
-                'get-clusters': 'display clusters defined in kubeconfig',
-                'set-credentials': 'set user credentials in kubeconfig'
-            }
-        elif subcommand == 'rollout':
-            return {
-                'status': 'show the status of a rollout',
-                'history': 'view rollout history',
-                'undo': 'undo a previous rollout',
-                'pause': 'pause a resource rollout',
-                'resume': 'resume a paused rollout',
-                'restart': 'restart a resource'
-            }
-
     return None
 
 
@@ -5289,443 +4660,6 @@ def _streamlit_completions(tokens, cursor_token_idx, is_after):
     return None
 
 
-@register_completion_schema('gh')
-def _gh_completions(tokens, cursor_token_idx, is_after):
-    """Completion schema for gh (GitHub CLI) commands."""
-    # Check for flags
-    if _is_flag_context(tokens, cursor_token_idx, is_after):
-        subcommand = tokens[1].text if len(tokens) > 1 else ''
-        subsubcommand = tokens[2].text if len(tokens) > 2 else ''
-
-        common_flags = {
-            '--help': 'show help message',
-            '--version': 'show version information',
-        }
-
-        if subcommand == 'pr':
-            if subsubcommand == 'create':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--title': 'pull request title', '-t': '-t/--title: pull request title',
-                    '--body': 'pull request body', '-b': '-b/--body: pull request body',
-                    '--draft': 'create as draft pull request',
-                    '--web': 'open browser to create PR', '-w': '-w/--web: open browser',
-                    '--base': 'base branch for PR', '-B': '-B/--base: base branch',
-                    '--head': 'head branch for PR', '-H': '-H/--head: head branch',
-                    '--fill': 'use commit info for title/body',
-                    '--assignee': 'assign user by login', '-a': '-a/--assignee: assign user',
-                    '--label': 'add label by name', '-l': '-l/--label: add label',
-                    '--milestone': 'add to milestone', '-m': '-m/--milestone: add to milestone',
-                    '--project': 'add to project', '-p': '-p/--project: add to project',
-                    '--reviewer': 'request reviewer', '-r': '-r/--reviewer: request reviewer',
-                }
-            elif subsubcommand == 'list':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--state': 'filter by state', '-s': '-s/--state: filter by state',
-                    '--label': 'filter by label', '-l': '-l/--label: filter by label',
-                    '--base': 'filter by base branch', '-B': '-B/--base: filter by base',
-                    '--limit': 'max number to fetch', '-L': '-L/--limit: max number',
-                    '--author': 'filter by author', '-A': '-A/--author: filter by author',
-                    '--assignee': 'filter by assignee', '-a': '-a/--assignee: filter by assignee',
-                    '--search': 'search pull requests', '-S': '-S/--search: search PRs',
-                    '--web': 'open in browser', '-w': '-w/--web: open browser',
-                }
-            elif subsubcommand == 'view':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--web': 'open PR in browser', '-w': '-w/--web: open browser',
-                    '--comments': 'show PR comments', '-c': '-c/--comments: show comments',
-                }
-            elif subsubcommand == 'checkout':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--branch': 'local branch name', '-b': '-b/--branch: branch name',
-                    '--detach': 'checkout in detached HEAD state',
-                    '--force': 'force checkout', '-f': '-f/--force: force checkout',
-                }
-            elif subsubcommand == 'merge':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--merge': 'merge with merge commit', '-m': '-m/--merge: merge commit',
-                    '--squash': 'squash and merge', '-s': '-s/--squash: squash merge',
-                    '--rebase': 'rebase and merge', '-r': '-r/--rebase: rebase merge',
-                    '--delete-branch': 'delete branch after merge', '-d': '-d/--delete-branch: delete branch',
-                    '--auto': 'enable auto-merge', '--disable-auto': 'disable auto-merge',
-                }
-            elif subsubcommand == 'close':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--delete-branch': 'delete branch after closing', '-d': '-d/--delete-branch: delete branch',
-                }
-            elif subsubcommand == 'diff':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--patch': 'show diff in patch format', '-p': '-p/--patch: patch format',
-                }
-            elif subsubcommand == 'review':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--approve': 'approve pull request', '-a': '-a/--approve: approve',
-                    '--request-changes': 'request changes', '-r': '-r/--request-changes: request changes',
-                    '--comment': 'comment without approval', '-c': '-c/--comment: comment',
-                    '--body': 'review comment body', '-b': '-b/--body: review body',
-                }
-            elif subsubcommand == 'checks':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '-i': '-i/--interval: refresh interval', '--interval': 'refresh interval for watch',
-                    '--watch': 'watch checks until completion', '-w': '-w/--watch: watch checks',
-                    '--web': 'open checks in browser',
-                }
-            elif subsubcommand == 'comment':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '-b': '-b/--body: comment body', '--body': 'comment body text',
-                    '-F': '-F/--body-file: read from file', '--body-file': 'read body from file',
-                    '-e': '-e/--editor: open editor', '--editor': 'open editor for body',
-                    '-w': '-w/--web: open browser', '--web': 'open browser to comment',
-                }
-            elif subsubcommand == 'edit':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--add-assignee': 'add assignee by login', '--add-label': 'add label by name',
-                    '--add-project': 'add to project', '--add-reviewer': 'add reviewer by login',
-                    '-B': '-B/--base: change base branch', '--base': 'change base branch',
-                    '-b': '-b/--body: new body text', '--body': 'new body text',
-                    '-F': '-F/--body-file: read from file', '--body-file': 'read body from file',
-                    '-m': '-m/--milestone: edit milestone', '--milestone': 'edit milestone',
-                    '--remove-assignee': 'remove assignee', '--remove-label': 'remove label',
-                    '--remove-project': 'remove from project', '--remove-reviewer': 'remove reviewer',
-                    '-t': '-t/--title: new title', '--title': 'new title',
-                }
-            else:
-                return common_flags
-
-        elif subcommand == 'repo':
-            if subsubcommand == 'create':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--public': 'make repository public', '--private': 'make repository private',
-                    '--clone': 'clone after creating', '-c': '-c/--clone: clone after creating',
-                    '--description': 'repository description', '-d': '-d/--description: description',
-                    '--homepage': 'repository homepage URL', '-h': '-h/--homepage: homepage URL',
-                    '--enable-issues': 'enable issues', '--enable-wiki': 'enable wiki',
-                    '--gitignore': 'gitignore template', '-g': '-g/--gitignore: gitignore',
-                    '--license': 'license template', '-l': '-l/--license: license',
-                    '--team': 'team with access', '-t': '-t/--team: team',
-                    '--template': 'template repository',
-                }
-            elif subsubcommand == 'clone':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--depth': 'clone depth for shallow clone',
-                }
-            elif subsubcommand == 'fork':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--clone': 'clone fork after creating',
-                    '--remote': 'add remote for fork',
-                    '--org': 'organization to fork to',
-                }
-            elif subsubcommand == 'view':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--web': 'open repository in browser', '-w': '-w/--web: open browser',
-                    '--branch': 'view specific branch', '-b': '-b/--branch: specific branch',
-                }
-            elif subsubcommand == 'list':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--limit': 'max repositories to list', '-L': '-L/--limit: max repos',
-                    '--language': 'filter by language', '-l': '-l/--language: filter language',
-                    '--source': 'show source repositories', '--fork': 'show forked repositories',
-                    '--archived': 'show archived repositories', '--no-archived': 'exclude archived',
-                }
-            elif subsubcommand == 'delete':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--confirm': 'confirm deletion without prompting',
-                }
-            elif subsubcommand == 'archive':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '-y': '-y/--confirm: confirm without prompting', '--confirm': 'confirm without prompting',
-                }
-            else:
-                return common_flags
-
-        elif subcommand == 'issue':
-            if subsubcommand == 'create':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--title': 'issue title', '-t': '-t/--title: issue title',
-                    '--body': 'issue body', '-b': '-b/--body: issue body',
-                    '--web': 'open browser to create', '-w': '-w/--web: open browser',
-                    '--assignee': 'assign user by login', '-a': '-a/--assignee: assign user',
-                    '--label': 'add label by name', '-l': '-l/--label: add label',
-                    '--milestone': 'add to milestone', '-m': '-m/--milestone: add to milestone',
-                    '--project': 'add to project', '-p': '-p/--project: add to project',
-                }
-            elif subsubcommand == 'list':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--state': 'filter by state', '-s': '-s/--state: filter by state',
-                    '--label': 'filter by label', '-l': '-l/--label: filter by label',
-                    '--author': 'filter by author', '-A': '-A/--author: filter by author',
-                    '--assignee': 'filter by assignee', '-a': '-a/--assignee: filter by assignee',
-                    '--limit': 'max number to fetch', '-L': '-L/--limit: max number',
-                    '--search': 'search issues', '-S': '-S/--search: search issues',
-                    '--web': 'open in browser', '-w': '-w/--web: open browser',
-                }
-            elif subsubcommand == 'view':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--web': 'open PR in browser', '-w': '-w/--web: open browser',
-                    '--comments': 'show PR comments', '-c': '-c/--comments: show comments',
-                }
-            elif subsubcommand in ('close', 'reopen'):
-                return common_flags
-            else:
-                return common_flags
-
-        elif subcommand == 'gist':
-            if subsubcommand == 'create':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--public': 'create public gist', '-p': '-p/--public: public gist',
-                    '--secret': 'create secret gist', '-s': '-s/--secret: secret gist',
-                    '--description': 'gist description', '-d': '-d/--description: description',
-                    '--filename': 'filename for gist', '-f': '-f/--filename: filename',
-                    '--web': 'open in browser', '-w': '-w/--web: open browser',
-                }
-            elif subsubcommand == 'list':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--limit': 'max number to list', '-L': '-L/--limit: max number',
-                    '--public': 'show only public gists', '--secret': 'show only secret gists',
-                }
-            elif subsubcommand == 'view':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--web': 'open in browser', '-w': '-w/--web: open browser',
-                    '--raw': 'show raw gist content', '-r': '-r/--raw: raw content',
-                    '--files': 'show specific files', '-f': '-f/--files: specific files',
-                }
-            elif subsubcommand in ('edit', 'delete'):
-                return common_flags
-            else:
-                return common_flags
-
-        elif subcommand == 'release':
-            if subsubcommand == 'create':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--title': 'release title', '-t': '-t/--title: release title',
-                    '--notes': 'release notes', '-n': '-n/--notes: release notes',
-                    '--draft': 'create as draft', '-d': '-d/--draft: draft release',
-                    '--prerelease': 'mark as prerelease', '-p': '-p/--prerelease: prerelease',
-                    '--target': 'target commit or branch',
-                    '--notes-file': 'read notes from file', '-F': '-F/--notes-file: notes file',
-                    '--generate-notes': 'auto-generate release notes',
-                }
-            elif subsubcommand == 'list':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--limit': 'max number to list', '-L': '-L/--limit: max number',
-                }
-            elif subsubcommand == 'view':
-                return {
-                    '--help': 'show help message', '--version': 'show version information',
-                    '--web': 'open in browser', '-w': '-w/--web: open browser',
-                }
-            elif subsubcommand in ('delete', 'download'):
-                return common_flags
-            else:
-                return common_flags
-
-        elif subcommand == 'workflow':
-            if subsubcommand in ('list', 'view', 'run', 'enable', 'disable'):
-                return common_flags
-            else:
-                return common_flags
-
-        elif subcommand == 'run':
-            if subsubcommand in ('list', 'view', 'rerun', 'cancel', 'watch', 'download'):
-                return common_flags
-            else:
-                return common_flags
-
-        else:
-            return common_flags
-
-    # Main subcommands after 'gh'
-    if cursor_token_idx == 0 and is_after:
-        return {
-            'repo': 'manage repositories',
-            'pr': 'manage pull requests',
-            'issue': 'manage issues',
-            'gist': 'manage gists',
-            'release': 'manage releases',
-            'auth': 'authenticate with GitHub',
-            'config': 'manage configuration',
-            'api': 'make API requests',
-            'workflow': 'manage GitHub Actions workflows',
-            'run': 'manage workflow runs',
-            'secret': 'manage GitHub secrets',
-            'alias': 'manage command aliases',
-            'extension': 'manage gh extensions',
-            'browse': 'open repository in browser',
-            'codespace': 'manage GitHub Codespaces',
-            'gpg-key': 'manage GPG keys',
-            'label': 'manage labels',
-            'search': 'search GitHub',
-            'status': 'show GitHub status',
-            'help': 'display help information',
-            'version': 'show version information',
-        }
-
-    elif cursor_token_idx == 1:
-        subcommand = tokens[1].text if len(tokens) > 1 else ''
-
-        # Subcommands for 'gh repo'
-        if subcommand == 'repo':
-            return {
-                'create': 'create a new repository',
-                'clone': 'clone a repository locally',
-                'fork': 'fork a repository',
-                'view': 'view repository details',
-                'list': 'list repositories',
-                'delete': 'delete a repository',
-                'archive': 'archive a repository',
-                'edit': 'edit repository settings',
-                'rename': 'rename a repository',
-                'sync': 'sync a forked repository',
-            }
-
-        # Subcommands for 'gh pr'
-        elif subcommand == 'pr':
-            return {
-                'create': 'create a pull request',
-                'list': 'list pull requests',
-                'view': 'view a pull request',
-                'checkout': 'check out a pull request locally',
-                'merge': 'merge a pull request',
-                'close': 'close a pull request',
-                'status': 'show status of pull requests',
-                'diff': 'view pull request diff',
-                'review': 'review a pull request',
-                'ready': 'mark pull request as ready for review',
-                'reopen': 'reopen a closed pull request',
-                'edit': 'edit a pull request',
-                'comment': 'add a comment to a pull request',
-                'checks': 'show pull request checks',
-            }
-
-        # Subcommands for 'gh issue'
-        elif subcommand == 'issue':
-            return {
-                'create': 'create a new issue',
-                'list': 'list issues',
-                'view': 'view an issue',
-                'close': 'close an issue',
-                'reopen': 'reopen a closed issue',
-                'status': 'show status of issues',
-                'edit': 'edit an issue',
-                'comment': 'add a comment to an issue',
-                'delete': 'delete an issue',
-                'transfer': 'transfer an issue to another repository',
-            }
-
-        # Subcommands for 'gh gist'
-        elif subcommand == 'gist':
-            return {
-                'create': 'create a new gist',
-                'list': 'list gists',
-                'view': 'view a gist',
-                'edit': 'edit a gist',
-                'delete': 'delete a gist',
-                'clone': 'clone a gist locally',
-            }
-
-        # Subcommands for 'gh release'
-        elif subcommand == 'release':
-            return {
-                'create': 'create a new release',
-                'list': 'list releases',
-                'view': 'view release details',
-                'delete': 'delete a release',
-                'download': 'download release assets',
-                'upload': 'upload release assets',
-            }
-
-        # Subcommands for 'gh auth'
-        elif subcommand == 'auth':
-            return {
-                'login': 'authenticate with GitHub',
-                'logout': 'log out of GitHub',
-                'status': 'show authentication status',
-                'refresh': 'refresh authentication token',
-                'setup-git': 'configure git to use GitHub CLI',
-            }
-
-        # Subcommands for 'gh config'
-        elif subcommand == 'config':
-            return {
-                'get': 'get a configuration value',
-                'set': 'set a configuration value',
-                'list': 'list configuration values',
-            }
-
-        # Subcommands for 'gh workflow'
-        elif subcommand == 'workflow':
-            return {
-                'list': 'list workflows',
-                'view': 'view workflow details',
-                'run': 'run a workflow',
-                'enable': 'enable a workflow',
-                'disable': 'disable a workflow',
-            }
-
-        # Subcommands for 'gh run'
-        elif subcommand == 'run':
-            return {
-                'list': 'list workflow runs',
-                'view': 'view workflow run details',
-                'rerun': 'rerun a workflow',
-                'cancel': 'cancel a workflow run',
-                'watch': 'watch a workflow run',
-                'download': 'download workflow run artifacts',
-                'delete': 'delete a workflow run',
-            }
-
-        # Subcommands for 'gh secret'
-        elif subcommand == 'secret':
-            return {
-                'list': 'list secrets',
-                'set': 'set a secret value',
-                'remove': 'remove a secret',
-            }
-
-        # Subcommands for 'gh alias'
-        elif subcommand == 'alias':
-            return {
-                'list': 'list aliases',
-                'set': 'set an alias',
-                'delete': 'delete an alias',
-            }
-
-        # Subcommands for 'gh extension'
-        elif subcommand == 'extension':
-            return {
-                'list': 'list installed extensions',
-                'install': 'install an extension',
-                'remove': 'remove an extension',
-                'upgrade': 'upgrade extensions',
-                'create': 'create a new extension',
-            }
-
-    return None
 
 
 @register_completion_schema('vim')
@@ -7045,84 +5979,6 @@ def _cmake_completions(tokens, cursor_token_idx, is_after):
     return None
 
 
-@register_completion_schema('node')
-def _node_completions(tokens, cursor_token_idx, is_after):
-    """Completion schema for node (Node.js) commands."""
-    if _is_flag_context(tokens, cursor_token_idx, is_after):
-        return {
-            '-v': '-v/--version: print Node.js version',
-            '--version': '--version/-v: print Node.js version',
-            '-e': '-e/--eval: evaluate script',
-            '--eval': '--eval/-e: evaluate script',
-            '-p': '-p/--print: evaluate script and print result',
-            '--print': '--print/-p: evaluate script and print result',
-            '-r': '-r/--require: module to preload',
-            '--require': '--require/-r: module to preload',
-            '-i': '-i/--interactive: REPL mode even with stdin',
-            '--interactive': '--interactive/-i: REPL mode even with stdin',
-            '--inspect': 'activate inspector on host:port (default: 127.0.0.1:9229)',
-            '--inspect-brk': 'activate inspector and break before user code starts',
-            '--inspect-port': 'set port for inspector',
-            '--no-deprecation': 'silence deprecation warnings',
-            '--trace-warnings': 'show stack traces on warnings',
-            '--trace-deprecation': 'show stack traces on deprecations',
-            '--throw-deprecation': 'throw error on deprecations',
-            '--max-old-space-size': 'set max old space size (MB)',
-            '--max-new-space-size': 'set max new space size (MB)',
-            '--experimental-modules': 'enable ES module support',
-            '--experimental-vm-modules': 'enable ES module support in VM',
-            '--experimental-worker': 'enable experimental Worker threads',
-            '--experimental-repl-await': 'enable top-level await in REPL',
-            '--experimental-json-modules': 'enable JSON module support',
-            '--experimental-wasm-modules': 'enable WebAssembly module support',
-            '--no-warnings': 'silence all warnings',
-            '--trace-events-enabled': 'track trace events',
-            '--redirect-warnings': 'redirect warnings to file',
-            '--help': '--help/-h: print help',
-            '-h': '-h/--help: print help',
-            '--abort-on-uncaught-exception': 'abort on uncaught exception',
-            '--enable-source-maps': 'enable source map support',
-            '--experimental-import-meta-resolve': 'enable experimental import.meta.resolve()',
-            '--experimental-loader': 'use experimental ES module loader',
-            '--experimental-network-imports': 'enable network module imports',
-            '--experimental-policy': 'use policy file',
-            '--experimental-specifier-resolution': 'select module resolution algorithm',
-            '--heapsnapshot-near-heap-limit': 'generate heap snapshot near heap limit',
-            '--heapsnapshot-signal': 'generate heap snapshot on signal',
-            '--icu-data-dir': 'set ICU data directory',
-            '--input-type': 'set input type (module/commonjs)',
-            '--loader': 'use custom loader',
-            '--no-force-async-hooks-checks': 'disable async hooks checks',
-            '--preserve-symlinks': 'preserve symlinks when resolving',
-            '--preserve-symlinks-main': 'preserve symlinks when resolving main module',
-            '--prof': 'generate V8 profiler output',
-            '--prof-process': 'process V8 profiler output',
-            '--cpu-prof': 'start CPU profiler',
-            '--heap-prof': 'start heap profiler',
-            '--security-revert': 'revert security-related change',
-            '--tls-cipher-list': 'set TLS cipher list',
-            '--tls-keylog': 'log TLS key material',
-            '--tls-max-v1.2': 'set max TLS version to 1.2',
-            '--tls-max-v1.3': 'set max TLS version to 1.3',
-            '--tls-min-v1.0': 'set min TLS version to 1.0',
-            '--tls-min-v1.1': 'set min TLS version to 1.1',
-            '--tls-min-v1.2': 'set min TLS version to 1.2',
-            '--tls-min-v1.3': 'set min TLS version to 1.3',
-            '--trace-event-categories': 'categories to trace',
-            '--trace-event-file-pattern': 'trace event file pattern',
-            '--trace-sigint': 'enable SIGINT tracing',
-            '--trace-sync-io': 'trace synchronous I/O',
-            '--trace-tls': 'trace TLS operations',
-            '--track-heap-objects': 'track heap object allocations',
-            '--unhandled-rejections': 'set behavior for unhandled promise rejections',
-            '--use-bundled-ca': 'use bundled CA store',
-            '--use-openssl-ca': 'use OpenSSL CA store',
-            '--v8-pool-size': 'set V8 thread pool size',
-            '--zero-fill-buffers': 'zero-fill Buffer and SlowBuffer instances',
-            '--check': '--check/-c: check syntax without executing',
-            '-c': '-c/--check: check syntax without executing',
-        }
-    return None
 
 
 @register_completion_schema('bash')
@@ -7327,77 +6183,77 @@ def _which_completions(tokens, cursor_token_idx, is_after):
 # Group E: Advanced Tool Commands
 # ============================================================================
 
-@register_completion_schema('rclone')
-def _rclone_completions(tokens, cursor_token_idx, is_after):
-    """Completion schema for rclone commands."""
-    # Check for flags
-    if _is_flag_context(tokens, cursor_token_idx, is_after):
-        return {
-            '--help': '--help/-h: show help',
-            '-h': '-h/--help: show help',
-            '--version': '--version/-V: show version',
-            '-V': '-V/--version: show version',
-            '--config': 'path to config file',
-            '--dry-run': '--dry-run/-n: perform trial run without making changes',
-            '-n': '-n/--dry-run: perform trial run without making changes',
-            '--verbose': '--verbose/-v: verbose output',
-            '-v': '-v/--verbose: verbose output',
-            '--quiet': '--quiet/-q: quiet mode',
-            '-q': '-q/--quiet: quiet mode',
-            '--progress': '--progress/-P: show progress',
-            '-P': '-P/--progress: show progress',
-            '--transfers': 'number of file transfers to run in parallel',
-            '--checkers': 'number of checkers to run in parallel',
-            '--bwlimit': 'bandwidth limit in KBytes/s',
-            '--exclude': 'exclude files matching pattern',
-            '--include': 'include files matching pattern',
-        }
-
-    # Subcommands at position 0
-    result = _complete_at_position_zero(cursor_token_idx, is_after, {
-        'copy': 'copy files from source to dest',
-        'sync': 'make source and dest identical',
-        'move': 'move files from source to dest',
-        'delete': 'remove files in path',
-        'purge': 'remove path and all contents',
-        'mkdir': 'make directory',
-        'rmdir': 'remove directory',
-        'ls': 'list objects in path',
-        'lsl': 'list objects with size and modification time',
-        'lsd': 'list all directories in path',
-        'lsf': 'list objects with formatting',
-        'mount': 'mount remote as file system',
-        'cat': 'concatenate files and send to stdout',
-        'size': 'print total size of objects in path',
-        'check': 'check files for corruption',
-        'md5sum': 'produce md5sum file',
-        'sha1sum': 'produce sha1sum file',
-        'copyto': 'copy files from source to dest without creating directory',
-        'moveto': 'move file or directory from source to dest',
-        'copyurl': 'copy url content to dest',
-        'serve': 'serve remote over protocol',
-        'config': 'enter interactive configuration',
-        'genautocomplete': 'generate shell autocomplete script',
-        'about': 'get quota information',
-        'authorize': 'remote authorization',
-        'cleanup': 'clean up remote',
-        'dedupe': 'interactively find duplicate files',
-        'link': 'generate public link to file/folder',
-        'listremotes': 'list configured remotes',
-        'tree': 'list contents in tree format',
-        'ncdu': 'explore remote with text UI',
-        'rcat': 'copy stdin to file on remote',
-        'rcd': 'run rclone daemon',
-        'selfupdate': 'update rclone binary',
-        'test': 'run test subcommand',
-        'touch': 'create new file or update timestamp',
-        'version': 'show version',
-    })
-    if result:
-        return result
-    return None
-
-
+# @register_completion_schema('rclone')
+# def _rclone_completions(tokens, cursor_token_idx, is_after):
+#     """Completion schema for rclone commands."""
+#     # Check for flags
+#     if _is_flag_context(tokens, cursor_token_idx, is_after):
+#         return {
+#             '--help': '--help/-h: show help',
+#             '-h': '-h/--help: show help',
+#             '--version': '--version/-V: show version',
+#             '-V': '-V/--version: show version',
+#             '--config': 'path to config file',
+#             '--dry-run': '--dry-run/-n: perform trial run without making changes',
+#             '-n': '-n/--dry-run: perform trial run without making changes',
+#             '--verbose': '--verbose/-v: verbose output',
+#             '-v': '-v/--verbose: verbose output',
+#             '--quiet': '--quiet/-q: quiet mode',
+#             '-q': '-q/--quiet: quiet mode',
+#             '--progress': '--progress/-P: show progress',
+#             '-P': '-P/--progress: show progress',
+#             '--transfers': 'number of file transfers to run in parallel',
+#             '--checkers': 'number of checkers to run in parallel',
+#             '--bwlimit': 'bandwidth limit in KBytes/s',
+#             '--exclude': 'exclude files matching pattern',
+#             '--include': 'include files matching pattern',
+#         }
+#
+#     # Subcommands at position 0
+#     result = _complete_at_position_zero(cursor_token_idx, is_after, {
+#         'copy': 'copy files from source to dest',
+#         'sync': 'make source and dest identical',
+#         'move': 'move files from source to dest',
+#         'delete': 'remove files in path',
+#         'purge': 'remove path and all contents',
+#         'mkdir': 'make directory',
+#         'rmdir': 'remove directory',
+#         'ls': 'list objects in path',
+#         'lsl': 'list objects with size and modification time',
+#         'lsd': 'list all directories in path',
+#         'lsf': 'list objects with formatting',
+#         'mount': 'mount remote as file system',
+#         'cat': 'concatenate files and send to stdout',
+#         'size': 'print total size of objects in path',
+#         'check': 'check files for corruption',
+#         'md5sum': 'produce md5sum file',
+#         'sha1sum': 'produce sha1sum file',
+#         'copyto': 'copy files from source to dest without creating directory',
+#         'moveto': 'move file or directory from source to dest',
+#         'copyurl': 'copy url content to dest',
+#         'serve': 'serve remote over protocol',
+#         'config': 'enter interactive configuration',
+#         'genautocomplete': 'generate shell autocomplete script',
+#         'about': 'get quota information',
+#         'authorize': 'remote authorization',
+#         'cleanup': 'clean up remote',
+#         'dedupe': 'interactively find duplicate files',
+#         'link': 'generate public link to file/folder',
+#         'listremotes': 'list configured remotes',
+#         'tree': 'list contents in tree format',
+#         'ncdu': 'explore remote with text UI',
+#         'rcat': 'copy stdin to file on remote',
+#         'rcd': 'run rclone daemon',
+#         'selfupdate': 'update rclone binary',
+#         'test': 'run test subcommand',
+#         'touch': 'create new file or update timestamp',
+#         'version': 'show version',
+#     })
+#     if result:
+#         return result
+#     return None
+#
+#
 @register_completion_schema('qpdf')
 def _qpdf_completions(tokens, cursor_token_idx, is_after):
     """Completion schema for qpdf commands."""

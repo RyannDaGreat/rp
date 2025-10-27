@@ -5168,6 +5168,10 @@ def slowmo_video_via_rife(video):
     finally:
         if folder_exists(input_dir ): delete_folder(input_dir )
         if folder_exists(output_dir): delete_folder(output_dir)
+
+    #I found this created a duplicate last frame
+    new_video=new_video[:-1]
+
     return new_video
 
 
@@ -5244,7 +5248,6 @@ def crop_image_to_square(image, *, origin="center", grow=False, copy=True):
         (this means it pads the image with black transparent pixels)
     """
     assert is_image(image)
-    assert isinstance(origin,str)
     
     if grow:
         size = max(get_image_dimensions(image))
@@ -7608,6 +7611,10 @@ def _load_image_from_file(file_name, *, use_cache=False):
     if get_file_extension(file_name).upper()=='HEIC':
         #Apple photo format - use dedicated HEIC loader
         return _load_image_heic(file_name)
+
+    if get_file_extension(file_name).upper()=='PDF':
+        #Assume it's 1 page. Load the image.
+        return load_pdf_as_images(file_name)[0]
 
     if is_video_file(file_name):
         return load_video(file_name, length=1, show_progress=False)[0]
@@ -16673,6 +16680,63 @@ def get_my_public_ip_address():
         return get('http://ipgrab.io').text.strip()
 # endregion
 
+def get_my_zerotier_ip_addresses() -> dict:
+    """Get ZeroTier network names and their assigned IP addresses.
+
+    Returns:
+        Dictionary mapping network name to IP address (with CIDR notation).
+
+    Raises:
+        RuntimeError: If zerotier-cli command fails.
+
+    Examples:
+        >>> addresses = get_zerotier_ip_addresses()
+        >>> isinstance(addresses, dict)
+        True
+        >>> all(isinstance(k, str) and isinstance(v, str) for k, v in addresses.items())
+        True
+    """
+    import subprocess
+    import json
+    import ipaddress
+    import socket
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
+    result = subprocess.run(
+        ['sudo', 'zerotier-cli', 'listnetworks'],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError("zerotier-cli failed: {0}".format(result.stderr))
+
+    networks = {}
+    for line in result.stdout.strip().split('\n'):
+        if line.startswith('200 listnetworks '):
+            parts = line.split()
+            # Format: 200 listnetworks <nwid> <name> <mac> <status> <type> <dev> <ips>
+            # MAC address is in format XX:XX:XX:XX:XX:XX
+            if len(parts) >= 8:
+                # Find the MAC address (contains colons)
+                mac_idx = None
+                for i, part in enumerate(parts):
+                    if ':' in part and len(part.split(':')) == 6:
+                        mac_idx = i
+                        break
+
+                if mac_idx and mac_idx >= 4:
+                    # Name is everything between index 3 and mac_idx
+                    name = ' '.join(parts[3:mac_idx])
+                    # IP is the last part
+                    ip_address = parts[-1]
+                    networks[name] = ip_address
+
+    return networks
+
+
+
 def deepcopy_multiply(iterable,factor: int):
     """
     Used for multiplying lists without copying their addresses
@@ -19489,6 +19553,124 @@ def get_edge_drawing(image):
     return edge_map
 
 
+def remove_background_via_apple(image):
+    """
+    Remove background from an image using Apple's Vision framework (macOS 14+).
+
+    Uses Apple's native VNGenerateForegroundInstanceMaskRequest to detect and extract
+    the foreground subject, replacing the background with transparency.
+
+    Args:
+        image: Input image in any format accepted by is_image() (PIL, numpy array HWC, or path str)
+
+    Returns:
+        RGBA image (numpy array HW4) with transparent background
+
+    Raises:
+        OSError: If not running on macOS or macOS < 14 (Sonoma)
+        Exception: If Vision framework fails to detect foreground or generate mask
+
+    Examples:
+        >>> photo = load_image('portrait.jpg')
+        >>> cutout = remove_background_via_apple(photo)
+        >>> save_image(cutout, 'cutout.png')
+
+        >>> # Composite on new background
+        ... subject = remove_background_via_apple(load_image('person.jpg'))
+        ... new_bg = load_image('sunset.jpg')
+        ... result = alpha_blend(subject, new_bg)
+
+    Platform Requirements:
+        - macOS 14 (Sonoma) or newer
+        - pyobjc-framework-Vision
+        - pyobjc-framework-Quartz
+
+    Tags: segmentation, background-removal, vision, apple, macos, image-processing
+    """
+    import platform
+
+    if isinstance(image, str):
+        image = load_image(image)
+
+    assert is_image(image), 'remove_background_via_apple: Input must be an image as defined by is_image()'
+
+    if not currently_running_mac():
+        raise OSError('remove_background_via_apple requires macOS')
+
+    # Check macOS version
+    # VNGenerateForegroundInstanceMaskRequest requires macOS 14+
+    mac_version = platform.mac_ver()[0]
+    major_version = int(mac_version.split('.')[0]) if mac_version else 0
+    if major_version < 14:
+        raise OSError(
+            'remove_background_via_apple requires macOS 14 (Sonoma) or newer. '
+            'Currently on macOS ' + str(mac_version) + '.'
+        )
+
+    # Import dependencies
+    Vision = pip_import('Vision')
+    Quartz = pip_import('Quartz')
+    from Quartz import CIImage, CIContext, CIFilter, CGColorSpaceCreateDeviceRGB, kCIFormatRGBA8
+    Foundation = pip_import('Foundation')
+
+    # Convert to RGBA and encode to PNG bytes
+    rgba_image = as_rgba_image(image, copy=False)
+    png_bytes = encode_image_to_bytes(rgba_image, 'png')
+
+    # Convert PNG bytes to CIImage
+    ns_data = Foundation.NSData.dataWithData_(png_bytes)
+    ci_image = CIImage.imageWithData_(ns_data)
+    if ci_image is None:
+        raise ValueError("Failed to create CIImage from image data")
+
+    # Create and perform Vision request for foreground mask
+    request = Vision.VNGenerateForegroundInstanceMaskRequest.alloc().init()
+    handler = Vision.VNImageRequestHandler.alloc().initWithCIImage_options_(ci_image, None)
+
+    success, error = handler.performRequests_error_([request], None)
+    if not success:
+        error_msg = error.localizedDescription() if error else "Unknown error"
+        raise Exception("Vision request failed: " + str(error_msg))
+
+    # Get mask from results
+    results = request.results()
+    if not results:
+        raise Exception("No foreground instances detected in image")
+
+    # Generate mask for all detected instances
+    first_result = results[0]
+    all_instances = first_result.allInstances()
+    mask_pixel_buffer, error = first_result.generateScaledMaskForImageForInstances_fromRequestHandler_error_(
+        all_instances, handler, None
+    )
+    if error:
+        error_msg = error.localizedDescription() if hasattr(error, 'localizedDescription') else str(error)
+        raise Exception("Failed to generate mask: " + str(error_msg))
+
+    # Convert mask CVPixelBuffer to CIImage
+    mask_ci_image = CIImage.imageWithCVPixelBuffer_(mask_pixel_buffer)
+
+    # Apply mask using CIBlendWithMask filter
+    # Combines original image with mask, transparent background
+    blend_filter = CIFilter.filterWithName_("CIBlendWithMask")
+    blend_filter.setValue_forKey_(ci_image, "inputImage")
+    blend_filter.setValue_forKey_(mask_ci_image, "inputMaskImage")
+    blend_filter.setValue_forKey_(CIImage.emptyImage(), "inputBackgroundImage")
+    output_ci_image = blend_filter.outputImage()
+
+    # Render CIImage to PNG bytes
+    context = CIContext.context()
+    color_space = CGColorSpaceCreateDeviceRGB()
+    png_data = context.PNGRepresentationOfImage_format_colorSpace_options_(
+        output_ci_image, kCIFormatRGBA8, color_space, None
+    )
+    if png_data is None:
+        raise Exception("Failed to render output image to PNG")
+
+    # Decode PNG bytes back to numpy RGBA image
+    return decode_bytes_to_image(bytes(png_data))
+
+
 # noinspection PyTypeChecker
 def print_latex_image(latex: str):
     r"""
@@ -20052,7 +20234,7 @@ def rotate_image(image, angle_in_degrees, interp="bilinear"):
     rgb=rotate(as_rgb_image(image,copy=False))
     return with_alpha_channel(rgb,alpha,copy=False)
 
-def rotate_images(*images, angle, interp='bilinear', show_progress=False, lazy=False):
+def rotate_images(*images, angle, interp='bilinear', show_progress=False):
     """ 
     Plural of rotate_image. Arguments are broadcastable. 
     Angles are measured in degrees!
@@ -20079,6 +20261,8 @@ def rotate_images(*images, angle, interp='bilinear', show_progress=False, lazy=F
     if is_iterable(angle)         : angle = list(angle)
     if not isinstance(interp, str): interp = list(interp)
 
+    images = list(images)
+
     kwarg_sets = broadcast_kwargs(
         dict(
             image=images,
@@ -20092,8 +20276,7 @@ def rotate_images(*images, angle, interp='bilinear', show_progress=False, lazy=F
 
     output = (rotate_image(**kwarg_set) for kwarg_set in kwarg_sets)
 
-    if not lazy:
-        output = list(output)
+    output = list(output)
     
     return output
 
@@ -21709,6 +21892,8 @@ _default_pyin_settings=dict(
     show_status_bar=True,
     wrap_lines=True,
     complete_while_typing=True,
+    allow_jedi_dynamic_imports=False,  # When False, prevent Jedi from importing unloaded modules (faster on NFS)
+    enable_semantic_highlighting=True,  # When True, use Jedi to add semantic highlighting (callables, modules)
     vi_mode=False,
     paste_mode=False  ,
     confirm_exit=True  ,
@@ -21988,6 +22173,7 @@ def _python_input(scope,header='',enable_ptpython=True,iPython=False):
 
             with no_gc(): #One of the bottlenecks of prompt-toolkit is that it triggers the gc so much, something to do with redraws or somethin' idk. But during input let's disable garbage collection.
                 #If this causes memory leaks, make a new context like reduce_gc_frequency(scale_factor=10) etc
+                pyin._completer.clear_cache()  # Clear completion cache at start of each input
                 try:
                     code_obj = default_python_input_eventloop.run()
                 except ValueError as e:
@@ -23048,6 +23234,51 @@ def _cpah(paths,method=None):
     if len(output)==1:
         return get_only(output)
     return output
+
+def _common_path_prefix_refactoring(list_of_str):
+    """
+    EXAMPLE (non-string):
+         >>> [[1,2,3],[1,2,2]]
+        ans = [[1, 2, 3], [1, 2, 2]]
+         >>> cppr
+        Transformed input to 'r._common_path_prefix_refactoring(ans)' because variable 'cppr' doesn't exist but is a shortcut in SHORTCUTS
+        ans = [[1, 2] + x for x in [[3], [2]]]
+
+    EXAMPLE (string-based):
+        PASTE: Pasted 13 file path(s) from clipboard!
+        ans = ['/Users/ryan/CleanCode/Projects/Google2025_Paper/UserStudy/video_pairs_20/Cheerleader.mp4ATI_0019--[Seed 5819] Cheerleader.mp4_film_strip_5.png', '/Users/ryan/CleanCode/Projects/Google2025_Paper/UserStudy/video_pairs_20/City Biker.mp4ATI_0065--[Seed 9567] City Biker.mp4', '/Users/ryan/CleanCode/Projects/Google2025_Paper/UserStudy/video_pairs_20/City Biker.mp4ATI_0065--[Seed 9567] City Biker.mp4_film_strip_3.png', '/Users/ryan/CleanCode/Projects/Google2025_Paper/UserStudy/video_pairs_20/City Biker.mp4ATI_0065--[Seed 9567] City Biker.mp4_film_strip_4.png', '/Users/ryan/CleanCode/Projects/Google2025_Paper/UserStudy/video_pairs_20/City Biker.mp4ATI_0065--[Seed 9567] City Biker.mp4_film_strip_5.png', '/Users/ryan/CleanCode/Projects/Google2025_Paper/UserStudy/video_pairs_20/Hot Air Baloons_ Slow camera, make baloons rise.mp4ATI_0089--[Seed 875] Hot Air Baloons_ Slow camera, make baloons rise.mp4', '/Users/ryan/CleanCode/Projects/Google2025_Paper/UserStudy/video_pairs_20/Hot Air Baloons_ Slow camera, make baloons rise.mp4ATI_0089--[Seed 875] Hot Air Baloons_ Slow camera, make baloons rise.mp4_film_strip_3.png', '/Users/ryan/CleanCode/Projects/Google2025_Paper/UserStudy/video_pairs_20/Hot Air Baloons_ Slow camera, make baloons rise.mp4ATI_0089--[Seed 875] Hot Air Baloons_ Slow camera, make baloons rise.mp4_film_strip_4.png', '/Users/ryan/CleanCode/Projects/Google2025_Paper/UserStudy/video_pairs_20/Hot Air Baloons_ Slow camera, make baloons rise.mp4ATI_0089--[Seed 875] Hot Air Baloons_ Slow camera, make baloons rise.mp4_film_strip_5.png', '/Users/ryan/CleanCode/Projects/Google2025_Paper/UserStudy/video_pairs_20/Judge_ Walk In From Right + Zoom_copy1.mp4ATI_0045--[Seed 5176] Judge_ Walk In From Right + Zoom_copy1.mp4', '/Users/ryan/CleanCode/Projects/Google2025_Paper/UserStudy/video_pairs_20/Judge_ Walk In From Right + Zoom_copy1.mp4ATI_0045--[Seed 5176] Judge_ Walk In From Right + Zoom_copy1.mp4_film_strip_3.png', '/Users/ryan/CleanCode/Projects/Google2025_Paper/UserStudy/video_pairs_20/Judge_ Walk In From Right + Zoom_copy1.mp4ATI_0045--[Seed 5176] Judge_ Walk In From Right + Zoom_copy1.mp4_film_strip_4.png', '/Users/ryan/CleanCode/Projects/Google2025_Paper/UserStudy/video_pairs_20/Judge_ Walk In From Right + Zoom_copy1.mp4ATI_0045--[Seed 5176] Judge_ Walk In From Right + Zoom_copy1.mp4_film_strip_5.png']
+         >>> _common_path_prefix_refactoring(ans)
+        ans = paths = [
+            "/Users/ryan/CleanCode/Projects/Google2025_Paper/UserStudy/video_pairs_20/" + x
+            for x in [
+                "Cheerleader.mp4ATI_0019--[Seed 5819] Cheerleader.mp4_film_strip_5.png",
+                "City Biker.mp4ATI_0065--[Seed 9567] City Biker.mp4",
+                "City Biker.mp4ATI_0065--[Seed 9567] City Biker.mp4_film_strip_3.png",
+                "City Biker.mp4ATI_0065--[Seed 9567] City Biker.mp4_film_strip_4.png",
+                "City Biker.mp4ATI_0065--[Seed 9567] City Biker.mp4_film_strip_5.png",
+                "Hot Air Baloons_ Slow camera, make baloons rise.mp4ATI_0089--[Seed 875] Hot Air Baloons_ Slow camera, make baloons rise.mp4",
+                "Hot Air Baloons_ Slow camera, make baloons rise.mp4ATI_0089--[Seed 875] Hot Air Baloons_ Slow camera, make baloons rise.mp4_film_strip_3.png",
+                "Hot Air Baloons_ Slow camera, make baloons rise.mp4ATI_0089--[Seed 875] Hot Air Baloons_ Slow camera, make baloons rise.mp4_film_strip_4.png",
+                "Hot Air Baloons_ Slow camera, make baloons rise.mp4ATI_0089--[Seed 875] Hot Air Baloons_ Slow camera, make baloons rise.mp4_film_strip_5.png",
+                "Judge_ Walk In From Right + Zoom_copy1.mp4ATI_0045--[Seed 5176] Judge_ Walk In From Right + Zoom_copy1.mp4",
+                "Judge_ Walk In From Right + Zoom_copy1.mp4ATI_0045--[Seed 5176] Judge_ Walk In From Right + Zoom_copy1.mp4_film_strip_3.png",
+                "Judge_ Walk In From Right + Zoom_copy1.mp4ATI_0045--[Seed 5176] Judge_ Walk In From Right + Zoom_copy1.mp4_film_strip_4.png",
+                "Judge_ Walk In From Right + Zoom_copy1.mp4ATI_0045--[Seed 5176] Judge_ Walk In From Right + Zoom_copy1.mp4_film_strip_5.png",
+            ]
+        ]
+    """
+    ans = list_of_str
+    if isinstance(ans,str):
+        ans=ans.splitlines()
+    prefix = longest_common_prefix(ans)
+    if prefix:
+        suffixes = [x[len(prefix) :] for x in ans]
+        ans = "["+repr(prefix)+"+x for x in "+repr(suffixes)+"]"
+    else:
+        ans=repr(ans)
+    ans = autoformat_python_via_black(ans)
+    return ans
+
 
 def _get_env_info():
     """
@@ -25027,6 +25258,7 @@ def pseudo_terminal(
         WPI    decode_image_from_bytes(web_paste())
 
         DI $display_image(ans) if $is_image(ans) else $display_video(ans)
+        DAI $display_alpha_image(ans) if $is_image(ans) else $display_video(with_alpha_checkerboards(ans,lazy=True))
         DV $display_video(ans)
         DVL $display_video(ans,loop=True)
 
@@ -25096,7 +25328,7 @@ def pseudo_terminal(
         VHD  $vim($r._cd_history_path);ans=$r._cd_history_path
         HDV  $vim($r._cd_history_path);ans=$r._cd_history_path
 
-        GMP $get_module_path(ans)
+        GMP $get_module_path(ans) if isinstance(ans,str) or $is_a_module(ans) else $get_module_paths(ans)
 
         DA CDA
 
@@ -25112,6 +25344,8 @@ def pseudo_terminal(
         EA     RUNA
 
         CPR !$PY -m rp call check_pip_requirements
+
+        CPPR $r._common_path_prefix_refactoring(ans)
 
         BAA  $os.system('bash '+str(ans))
         ZSHA $os.system('bash '+str(ans)O
@@ -25131,9 +25365,9 @@ def pseudo_terminal(
 
         CM RMORE
 
-        GPP $get_path_parent(ans)
+        GPP $get_path_parent(ans) if isinstance(ans,str) else $get_paths_parents(ans)
         GFN $get_file_name(ans) if isinstance(ans,str) else $get_file_names(ans)
-        GPN $get_path_name(ans)
+        GPN $get_path_name(ans) if isinstance(ans,str) else $get_path_names(ans)
         SFE $strip_file_extension(ans) if isinstance(ans,str) else $strip_file_extensions(ans)
         GFE $get_file_extension(ans) if isinstance(ans,str) else $get_file_extensions(ans)
 
@@ -25289,6 +25523,7 @@ def pseudo_terminal(
         JL PYM jupyter lab
         UNCOMMIT !git reset --soft HEAD^
         REATTACH_MASTER !git branch temp-recovery-branch ; git checkout temp-recovery-branch ; git checkout master ; git merge temp-recovery-branch ; git branch -d temp-recovery-branch #Reattach from the reflog to master
+        GRBL $git_revert_blank_lines()
         PULL !git pull
         PUL  !git pull
 
@@ -25340,6 +25575,7 @@ def pseudo_terminal(
         COA $vscode(ans)
 
         SG $save_gist(ans)
+        SGCO ans=$save_gist(ans) ; $string_to_clipboard(ans)
         LG $load_gist(input($fansi('URL:','blue','bold')))
         LGA $load_gist(ans)
         OG  $load_gist($input_select(options=$line_split($text_file_to_string($path_join($get_parent_folder($get_module_path($rp)),'old_gists.txt')))))
@@ -25454,6 +25690,10 @@ def pseudo_terminal(
         IRP $r._inline_rp_code(ans)
         RMFS $remove_fstrings(ans)
         SBL $strip_blank_lines(ans)
+        SL  $line_join(sorted(str(ans).splitlines()))
+        UL  $line_join(unique(str(ans).splitlines()))
+        RL  $line_join(reversed(str(ans).splitlines()))
+        RCL $line_join(x[::-1] for x in str(ans).splitlines())
 
         DAPI __import__('rp.pypi_inspection').pypi_inspection.display_all_pypi_info()
 
@@ -26312,11 +26552,12 @@ def pseudo_terminal(
 
                             #Attempt to copy file paths
                             if currently_running_desktop() and not running_in_ssh() and (
-                                isinstance(get_ans(), str)
-                                or has_len(get_ans())
+                                isinstance(get_ans(), str) and get_ans()
+                                or has_len(get_ans()) and len(get_ans())
                                 and len(get_ans()) <= 100
                                 and all(isinstance(x, str) for x in get_ans())
                             ):
+                                print(repr(get_ans()))
                                 try:
                                     copy_paths_to_clipboard(get_ans())
                                     #If we succesfully copied, it should also have been copied as a string too
@@ -26344,26 +26585,38 @@ def pseudo_terminal(
                             try:
                                 paths = paste_paths_from_clipboard()
                                 if paths:
+                                    new_ans=(paths if len(paths) > 1 else paths[0])
                                     fansi_print("PASTE --> r.paste_paths_from_clipboard()","blue")
                                     fansi_print("PASTE: Pasted %s file path(s) from clipboard!" % len(paths),'blue italic')
-                                    set_ans(paths if len(paths) > 1 else paths[0])
                                 else:
                                     #Fall back to string paste
-                                    fansi_print("PASTE --> r.string_from_clipboard()","blue")
-                                    set_ans(string_from_clipboard())
+                                    new_ans=(string_from_clipboard())
                             except NotImplementedError:
                                 #Unsupported OS, fall back to string paste
-                                fansi_print("PASTE --> r.string_from_clipboard()","blue")
-                                set_ans(string_from_clipboard())
+                                new_ans=(string_from_clipboard())
                             except Exception as e:
                                 #On error, fall back to string paste
                                 print_stack_trace()
-                                fansi_print("PASTE --> r.string_from_clipboard() (fallback)","blue")
-                                set_ans(string_from_clipboard())
+                                new_ans=(string_from_clipboard())
+
+                            if not new_ans:
+                                try:
+                                    import PIL
+                                    new_ans = load_image_from_clipboard()
+                                    fansi_print("PASTE --> r.load_image_from_clipboard()","blue")
+                                except ImportError:
+                                    pass #Dont pip install this crap on pasting empty strings
+                                except RuntimeError:
+                                    pass #Leave it an empty string
+
+                            if isinstance(new_ans, str):
+                                fansi_print("PASTE --> r.string_from_clipboard()","blue")
+
+                            set_ans(new_ans)
                         else:
                             #SSH or not desktop, just do string paste
-                            fansi_print("PASTE --> r.string_from_clipboard()","blue")
                             set_ans(string_from_clipboard())
+                            fansi_print("PASTE --> r.string_from_clipboard()","blue")
 
                     elif user_message == "VARS":
                         if _get_pterm_verbose(): fansi_print("VARS --> ans = user_created_variables (AKA all the names you created in this pseudo_terminal session):","blue")
@@ -34061,9 +34314,7 @@ def labeled_image(image,
         label=as_rgb_image(label)
         
         label=crop_image(label,height=height,origin='center')
-        label=crop_image(label,width=image_width,origin={'left'  :'top left'    ,
-                                                         'right' :'bottom right',
-                                                         'center':'center'      ,}[align])
+        label=crop_image(label,width=image_width,origin=align)
 
         #Apply colors to label
         #We need to turn the RGB byte color into RGBA float color.
@@ -34273,8 +34524,7 @@ def cv_text_to_image(text,
             )
         )
 
-    origin = {"left": "top left", "center": "center", "right": "bottom right"}[align]
-    return grid_concatenated_images([[x] for x in images], origin=origin)
+    return grid_concatenated_images([[x] for x in images], origin=align)
 
 def _single_line_cv_text_to_image(text,*,scale,font,thickness,color,tight_fit,background_color):
     """
@@ -34962,10 +35212,7 @@ def pil_text_to_image(
 
     image_grid = [[x] for x in image_lines]
 
-    image = grid_concatenated_images(
-        image_grid,
-        origin={"left": "top left", "center": "center", "right": "bottom right"}[align],
-    )
+    image = grid_concatenated_images(image_grid, origin=align)
 
     color = np.asarray(list(color), dtype=np.float32)
     background_color = np.asarray(list(background_color), dtype=np.float32)
@@ -37778,10 +38025,6 @@ def horizontally_concatenated_images(*image_list,origin=None):
     TODO: Implement the origin argument for both this func and vertically_concatenated_images
     """
 
-    #Right now crop_images doesn't support origins such as simply 'top' and 'bottom'
-    if origin=='top': origin='top left'
-    if origin=='bottom': origin='bottom right'
-
     image_list=detuple(image_list)
 
     if origin is None:
@@ -37839,8 +38082,6 @@ def vertically_concatenated_images(*image_list,origin=None):
     """
     image_list=detuple(image_list)
 
-    if origin=='right': origin='bottom right'
-    if origin=='left' : origin=None
     if origin is not None and not is_numpy_array(image_list):
         #Todo: make it more efficient. But also, it's totally stable and will work perfectly.
         assert isinstance(origin, str)
@@ -43252,9 +43493,9 @@ def copy_file(src, dst, show_progress=False, resume=False):
     if os.path.isdir(dst):
         dst = os.path.join(dst, os.path.basename(src))
 
-    dst_dir = os.path.dirname(dst) or '.'
-    dst_name = os.path.basename(dst)
-    temp_dst = os.path.join(dst_dir, dst_name+'.rp_copy_file_partial')
+    dst_dir = get_parent_folder(dst)
+    dst_name = get_path_name(dst)
+    temp_dst = path_join(dst_dir, dst_name+'.rp_copy_file_partial')
 
     src_stat = os.stat(src)
     total_size = src_stat.st_size
@@ -44370,13 +44611,13 @@ def crop_image(image, height: int = None, width: int = None, origin=None, copy=F
     if origin is None: origin = 'top left'
 
     assert is_image(image)
-    image = as_numpy_image(image, copy=copy)
+    image = as_numpy_image(image, copy=False)
     image_width  = get_image_width (image)
     image_height = get_image_height(image)
     assert (image_height, image_width) == image.shape[:2]
 
     if height is None:height=image_height
-    if width  is None:width =image_width 
+    if width  is None:width =image_width
     height=int(height)
     width =int(width)
     assert height>=0 and width>=0, 'Images can\'t have a negative height or width'
@@ -44390,46 +44631,11 @@ def crop_image(image, height: int = None, width: int = None, origin=None, copy=F
 
     if not any(get_image_dimensions(image)):
         #Handle cropping images that have height or width==0, allowing for zero-padding
-        #Todo: This can probably be more elegant, but whatever...
         if is_grayscale_image(image): return np.zeros((height,width  )).astype(image.dtype)
         if is_rgb_image      (image): return np.zeros((height,width,3)).astype(image.dtype)
         if is_rgba_image     (image): return np.zeros((height,width,4)).astype(image.dtype)
 
-    origins=['top left','center','bottom right'] #TODO: Possibly add more origins
-    assert origin in origins,'Invalid origin: %s. Please select from %s'%(repr(origin),repr(origins))
-
-    if origin=='bottom right':
-        out = image
-
-        out = horizontally_flipped_image(out)
-        out = vertically_flipped_image  (out)
-
-        out = crop_image(out, height = height, width = width)
-
-        out = horizontally_flipped_image(out)
-        out = vertically_flipped_image  (out)
-
-        return out
-
-    if origin=='center':
-        out = image
-        out = crop_image(out, height = (height+image_height)//2, width = (width+image_width)//2 )
-        out = crop_image(out, height = height, width = width, origin = 'bottom right')
-        return out
-
-    blank_pixel=np.zeros(image.shape[2:],dtype=image.dtype)
-    out=blank_pixel
-    out=np.expand_dims(out,0)
-    out=np.repeat(out,width,0)
-    out=np.expand_dims(out,0)
-    out=np.repeat(out,height,0)
-    
-    common_width =min(width ,image_width )
-    common_height=min(height,image_height)
-    
-    out[:common_height,:common_width]+=image[:common_height,:common_width]
-    
-    return out
+    return crop_tensor(image, crop_shape=(height, width), origin=origin, copy=copy)
 
 
 
@@ -44445,14 +44651,14 @@ def crop_images(images, height:int = None, width:int=None, origin='top left', *,
 
 def crop_videos(videos, height:int = None, width:int=None, origin='top left', *, show_progress=False, lazy=False, lazy_frames=False):
     """Crop multiple videos to specified dimensions. See crop_image for details.
-    
+
     Args: videos, height=None, width=None, origin='top left', show_progress=False, lazy=False, lazy_frames=False
     Returns: Generator of cropped video frames
     """
     output = (crop_images(video, height=height, width=width, origin=origin, lazy=lazy_frames) for video in videos)
 
     if show_progress:
-        output = eta(output, 'rp.crop_images', length=len(images))
+        output = eta(output, 'rp.crop_images', length=len(videos))
     if not lazy:
         output = list(output)
     return output
@@ -46266,6 +46472,10 @@ def get_module_path(module):
         # ERROR: TypeError: <module 'rp.git.tapnet' (namespace) from ['/usr/local/google/home/burgert/.local/lib/python3.12/site-packages/rp/git/tapnet']> is a built-in module
         return module.__path__[0]
 
+def get_module_paths(*modules):
+    "Plural of get_module_path"
+    return [get_module_path(x) for x in detuple(modules)]
+
 def is_a_module(object):
     import builtins
     return type(object)==type(builtins)
@@ -47558,45 +47768,78 @@ def path_intersects_point(path,point)->bool:
     return paths_intersect([point],path)
 
 
-def reduce_wrap(func):
+def reduce_wrap(func=None, *, detuple=False):
     """
     Decorator that extends a binary (two-argument) function to accept variable arguments.
     The function should be associative and commutative for this to work correctly.
-    
+
     Args:
         func: A function that takes exactly two arguments and returns a result
               of the same type.
-    
+        detuple: If True, allows passing either multiple args OR a single iterable.
+
     Returns:
         A decorated function that accepts any number of arguments and applies the binary
         function in a pairwise fashion using functools.reduce.
-        
+
     Examples:
         @reduce_wrap
         def add(a, b):
             return a + b
-            
+
         add(1, 2)          # Returns 3
         add(1, 2, 3, 4)    # Returns 10
-        add()              # Raises TypeError: At least one argument is required
         add(5)             # Returns 5
+
+        @reduce_wrap(detuple=True)
+        def multiply(a, b):
+            return a * b
+
+        multiply(2, 3, 4)      # Returns 24
+        multiply([2, 3, 4])    # Returns 24
     """
     import functools
-    @functools.wraps(func)
-    def wrapper(*args):
-        if not args:
-            raise TypeError(func.__name__ + "() requires at least one argument")
-        if len(args) == 1:
-            return args[0]
-        
-        return functools.reduce(func, args)
-    
-    # Add note about varargs extension
-    wrapper.__doc__ = (wrapper.__doc__ or "") + "\n\nThis function accepts variable arguments (*args)."
-    
-    return wrapper
 
-@reduce_wrap
+    def decorator(f):
+        @functools.wraps(f)
+        def wrapper(*args):
+            if not args:
+                raise TypeError(f.__name__ + "() requires at least one argument")
+
+            if detuple:
+                args = globals()['detuple'](args)
+                # After detuple, check what we have
+                try:
+                    arg_len = len(args)
+                except TypeError:
+                    # Not iterable (e.g., a single scalar after detuple), return as-is
+                    return args
+                # Strings should be treated as atomic, not as iterables of characters
+                if isinstance(args, str):
+                    return args
+                # If it's a tuple, it must have had >1 element originally (detuple doesn't unwrap those)
+                # If it's another iterable (list, etc), check length
+                if isinstance(args, tuple) or arg_len > 1:
+                    return functools.reduce(f, args)
+                elif arg_len == 1:
+                    return args[0]
+                else:
+                    return args
+            else:
+                if len(args) == 1:
+                    return args[0]
+                return functools.reduce(f, args)
+
+        wrapper.__doc__ = (wrapper.__doc__ or "") + "\n\nThis function accepts variable arguments (*args)."
+        return wrapper
+
+    # Support both @reduce_wrap and @reduce_wrap(detuple=True)
+    if func is None:
+        return decorator
+    else:
+        return decorator(func)
+
+@reduce_wrap(detuple=True)
 def longest_common_prefix(a,b):
     """
     Written by Ryan Burgert, 2020. Written for efficiency's sake.
@@ -47630,7 +47873,7 @@ def longest_common_prefix(a,b):
     return a[:s]
 
 
-@reduce_wrap
+@reduce_wrap(detuple=True)
 def longest_common_suffix(a,b):
     """
     This funcion is analagous to longest_common_prefix. See it for more documentation.
@@ -47648,7 +47891,7 @@ def longest_common_suffix(a,b):
     return out
 
 
-@reduce_wrap
+@reduce_wrap(detuple=True)
 def longest_common_substring(a,b):
     """
     https://pypi.org/project/pylcs/
@@ -63972,6 +64215,8 @@ known_pypi_module_package_names={
     'Foundation':     'pyobjc-framework-Cocoa',
     'PyObjCTools': 'pyobjc-core',
     'objc':        'pyobjc-core',
+    'Vision':      'pyobjc-framework-Vision',
+    'Quartz':      'pyobjc-framework-Quartz',
     'pi_heif':'pi-heif',
     'cython': 'Cython',
     'pdfminer':'pdfminer.six',
@@ -64113,6 +64358,7 @@ known_pypi_module_package_names={
     'typed_ast': 'typed-ast',
     'typing_extensions': 'typing-extensions',
     'websocket': 'websocket-client',
+    'speech_recognition' : 'SpeechRecognition',
     'websockets/extensions': 'websockets',
     'werkzeug': 'Werkzeug',
     'wheel-platform-tag-is-broken-on-empty-wheels-see-issue-141': 'sklearn',
@@ -64323,6 +64569,57 @@ def git_import(repo,token=None,*,pull=False):
     except ImportError:
         fansi_print('rp_git_import: Failed to import repo='+repr(repo), 'red', 'bold')
         raise
+
+
+def git_revert_blank_lines():
+    """
+    Revert hunks that are entirely blank and have equal adds/removes.
+    Claude often randomly changes whitespace in blank lines making git diffs hard to read for no reason
+    Only effects unstaged lines
+    """
+    #Uses --unified=0 to get individual hunks.
+    try:
+        from unidiff import PatchSet
+    except ImportError:
+        print("Install unidiff: pip install unidiff")
+        return
+
+    # Use --unified=0 to get separate hunks for each change
+    diff = shell_command('git diff --unified=0')
+    if not diff:
+        return
+
+    patches = PatchSet(diff)
+
+    for patch in patches:
+        # Load current file
+        lines = load_file_lines(patch.path)
+
+        # Process hunks in reverse to maintain line numbers
+        for hunk in reversed(list(patch)):
+            added = []
+            removed = []
+
+            for line in hunk:
+                if line.is_added:
+                    added.append(line)
+                elif line.is_removed:
+                    removed.append(line)
+
+            # Check: same number of lines AND all blank
+            if len(added) == len(removed) and len(added) > 0:
+                if all(l.value.strip() == '' for l in added + removed):
+                    # This hunk is all blank with equal lines - revert it
+                    # The line number is directly where the change is (no context with unified=0)
+                    pos = hunk.target_start - 1
+
+                    # Replace added lines with removed lines
+                    for i, rem_line in enumerate(removed):
+                        if pos + i < len(lines):
+                            lines[pos + i] = rem_line.value.rstrip('\n')
+
+        # Save the file
+        save_file_lines(lines, patch.path)
 
 
 def check_pip_requirements(file='requirements.txt', silent=False):
@@ -64597,5 +64894,4 @@ del re #re is random element
 
 
 # Version Oct24 2021
-
 

@@ -963,7 +963,11 @@ def generate_style(python_style, ui_style, code_invert_colors=False, code_invert
     processed_ui_style = {}
     for token, style_str in ui_style.items():
         processed_style = style_str
-        
+
+        # Add underline to all Signature tokens
+        if 'Signature' in str(token) and 'underline' not in processed_style.lower():
+            processed_style = processed_style.strip() + ' underline'
+
         # Apply UI brightness inversion if enabled
         if ui_invert_brightness:
             processed_style = invert_brightness_string(processed_style)
@@ -1347,6 +1351,7 @@ win32_code_style = {
     Name.Variable:             '',
 }
 default_ui_style = {
+    Token.Callable:                               'bold #00ffff',  # Jedi semantic highlighting for callables
     Token.LineNumber:'#aa6666 bg:#002222',
     # Classic prompt.
     Token.Prompt:                                 'bold',

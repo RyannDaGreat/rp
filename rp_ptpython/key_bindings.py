@@ -3283,6 +3283,7 @@ def load_python_bindings(python_input):
                                              '\\ev':'extract_variable',
                                              '\\py':'python',
                                              '\\dtl':'delete to line',
+                                             '\\sh':'shell',
                                              '\\go':'goto',
                                              '\\lo':'load',
                                              '\\sa':'save',
@@ -3379,6 +3380,7 @@ def load_python_bindings(python_input):
                                          '\\qph':'query_pt_history',
                                          '\\und':'unindent',
                                          '\\ind':'indent',
+                                         '\\pwd':'pwd',
                                          '\\rcl':'reverse_columns',
                                          '\\stp':'strip',
                                          '\\spl':'splitlines',
@@ -3442,6 +3444,20 @@ def load_python_bindings(python_input):
                                             text=buffer.document.text
                                             try:
                                                 modifier=eval(arg,r_iterm_comm.globa);text=modifier(text);buffer.document=Document(text,buffer.document.cursor_position,buffer.document.selection)
+                                            except BaseException as E:
+                                                buffer.insert_text("\nERROR: "+str(E)+"\n(Undo to make me go away)\n")
+                                    if header=='shell':
+                                         #DEMO: Type        
+                                         #`lambda x:x.replace('foo','bar')\p
+                                         #into the buffer (with a whole bunch of foo's which will be turned into bar's')
+                                        if before_line.count('`')==1:#give a lambda that takes one argument
+                                            import rp
+                                            arg=before_line.split('`')[1].split('\\')[0]
+                                            buffer.delete_before_cursor(len(arg+'`'))
+                                            text=buffer.document.text
+                                            try:
+                                                output=rp.shell_command(arg)
+                                                buffer.insert_text(repr(output))
                                             except BaseException as E:
                                                 buffer.insert_text("\nERROR: "+str(E)+"\n(Undo to make me go away)\n")
                                     if header=='load':
@@ -3817,6 +3833,9 @@ def load_python_bindings(python_input):
                                         replace_buffer_text(buffer, text)
                                     except BaseException as e:
                                         buffer.insert_text('#sort_imports: Error: '+str(e).replace('\n',' ; '))
+                                if header=='pwd':
+                                    import rp
+                                    buffer.insert_text(repr(rp.get_current_directory()))
                                 if header=='clean_imports':
                                     import rp
                                     try:
@@ -6355,20 +6374,30 @@ def load_python_bindings(python_input):
     @handle(Keys.BackTab,filter=IsMultiline())
     def _(event):
         """
-        When tab should insert whitespace, do that instead of completion.
+        Smart shift+tab: go backwards in completions if we're actively selecting one,
+        or if the line has no leading whitespace (can't unindent). Otherwise unindent.
         """
-        # from r import mini_terminal
         buffer=event.cli.current_buffer
         after_line = buffer.document.current_line_after_cursor
         before_line = buffer.document.current_line_before_cursor
-        # flag=before_line.strip() and before_line#has some whitespace characters on it
+        current_line = buffer.document.current_line
+
+        # If we have an active completion selected, go backwards in completions
+        if has_selected_completion(buffer):
+            buffer.complete_previous()
+            return
+
+        # If the line has no leading whitespace, can't unindent, so go backwards in completions
+        if not current_line.startswith(' '):
+            buffer.complete_previous()
+            return
+
+        # Otherwise, do normal unindenting
         N=min(4,number_of_leading_spaces(before_line+after_line))
-        # i=0
         if not after_line.strip() and not before_line.strip():
             for i in range(4):
                 if buffer.document.current_line_before_cursor:
                     buffer.delete_before_cursor(1)
-
             return
         for _ in range(N):
             try:
@@ -6380,13 +6409,9 @@ def load_python_bindings(python_input):
                     buffer.transform_current_line(lambda x:x[1:])
                     if not flag and buffer.document.current_line_before_cursor.strip():
                         buffer.cursor_left()
-                # buffer.transform_current_line(lambda x:(x[1:]if x.startswith(' '*4)else x.lstrip()))
-                # buffer.transform_current_line(lambda x:(x[4:]if x.startswith(' '*4)else x.lstrip()))
             except:
                 pass# Error migght happen if cursor is in bad place. Not sure what to do about that; but its an edge case so I'm just gonna squelch it.
         #endregion
-        # if flag:
-            # buffer.cursor_right(i)
     from rp import ring_terminal_bell ,text_to_speech
     def try_to_unindent(buffer,*matching_prefixes):
         b=buffer
