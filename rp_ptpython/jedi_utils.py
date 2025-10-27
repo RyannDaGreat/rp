@@ -245,7 +245,7 @@ def get_jedi_interpreter(code, cursor_pos, globals_dict, locals_dict, allow_dyna
 
             if not in_namespace and not in_sys_modules:
                 # Module not imported yet - don't let Jedi import it
-                raise ValueError(f"Module '{module_name}' not imported yet - refusing to import for completion")
+                raise ValueError("Module '{0}' not imported yet - refusing to import for completion".format(module_name))
 
     # Compute line and column from cursor position
     line = code.count("\n", 0, cursor_pos) + 1

@@ -9,7 +9,7 @@ __all__ = (
 
 
 #: When to trigger the `onInputTimeout` event.
-INPUT_TIMEOUT = .5
+INPUT_TIMEOUT = .1
 
 
 class EventLoop(with_metaclass(ABCMeta, object)):

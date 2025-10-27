@@ -18,6 +18,7 @@ __all__ = (
     'ScrollbarMargin',
     'ConditionalMargin',
     'PromptMargin',
+    'FoldMargin',
 )
 
 
@@ -251,3 +252,91 @@ class PromptMargin(Margin):
             last_y = y
 
         return tokens
+
+
+class FoldMargin(Margin):
+    """
+    Margin that displays fold indicators.
+
+    Shows:
+    - ▽ for open fold start lines
+    - △ for closed fold start lines
+    - ┆ (vertical bars) for lines inside open folds (nested = multiple bars)
+    - Nothing for normal lines
+
+    :param get_buffer: Callable that takes a CommandLineInterface and returns
+        the Buffer instance to check for folds.
+    """
+    def __init__(self, get_buffer=None):
+        self.get_buffer = get_buffer
+
+    def get_width(self, cli, get_ui_content):
+        """
+        Calculate width needed for fold indicators.
+        Width = 1 for the fold indicator itself
+        """
+        return 1
+
+    def create_margin(self, cli, window_render_info, width, height):
+        """
+        Create the fold margin content.
+        """
+        from rp.prompt_toolkit.mouse_events import MouseEventType
+
+        # Get buffer
+        if self.get_buffer:
+            buffer = self.get_buffer(cli)
+        else:
+            buffer = cli.current_buffer
+
+        fold_manager = buffer.fold_manager
+
+        result = []
+        last_lineno = None
+
+        def handle_mouse(cli, mouse_event, lineno):
+            """
+            Mouse handler for fold indicators - toggle fold on click.
+            """
+            if mouse_event.event_type == MouseEventType.MOUSE_UP:
+                fold = fold_manager.is_fold_start_line(lineno)
+                if fold:
+                    # Toggle the fold
+                    fold.is_open = not fold.is_open
+            return None
+
+        for y, lineno in enumerate(window_render_info.displayed_lines):
+            # Only display indicator if this is a new line
+            if lineno != last_lineno and lineno is not None:
+                # Check if this is a fold start line
+                fold = fold_manager.is_fold_start_line(lineno)
+
+                if fold:
+                    # Show triangle for fold start
+                    if fold.is_open:
+                        # Open fold: downward triangle
+                        char = '▽'
+                        token = Token.FoldMargin.Open
+                    else:
+                        # Closed fold: right triangle
+                        char = '△'
+                        token = Token.FoldMargin.Closed
+
+                    # Make it clickable
+                    result.append((token, char, lambda cli, mouse, lineno=lineno: handle_mouse(cli, mouse, lineno)))
+                else:
+                    # Check fold depth (how many open folds contain this line)
+                    depth = fold_manager.get_fold_depth_at_line(lineno)
+
+                    if depth > 0:
+                        # Inside open fold(s): show vertical bars
+                        char = '┆' * min(depth, width)  # Limit to margin width
+                        result.append((Token.FoldMargin.Bar, char))
+                    else:
+                        # Normal line: no indicator
+                        result.append((Token.FoldMargin, ' '))
+
+            last_lineno = lineno
+            result.append((Token, '\n'))
+
+        return result

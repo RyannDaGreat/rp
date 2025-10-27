@@ -76,7 +76,7 @@ def get_word_before_cursor_custom(document):
     return text[i + 1:]
 
 
-def get_last_name(s: str) -> str | None:
+def get_last_name(s: str) -> str :
     """
     origin often has punctuation in it like origin=='np.this.that.this'
 

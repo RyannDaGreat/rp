@@ -41,10 +41,181 @@ __all__ = (
     'EditReadOnlyBuffer',
     'AcceptAction',
     'Buffer',
+    'FoldManager',
     'indent',
     'unindent',
     'reshape_text',
 )
+
+
+class Fold(object):
+    """
+    Represents a fold region in the buffer.
+
+    :param start_line: Starting line number (inclusive, 0-indexed)
+    :param end_line: Ending line number (inclusive, 0-indexed)
+    :param is_open: Whether the fold is currently open or closed
+    """
+    def __init__(self, start_line, end_line, is_open=False):
+        assert start_line < end_line, "Fold must span at least 2 lines"
+        self.start_line = start_line
+        self.end_line = end_line
+        self.is_open = is_open
+
+    def contains_line(self, line):
+        """Check if this fold contains the given line number."""
+        return self.start_line < line <= self.end_line
+
+    def __repr__(self):
+        state = 'open' if self.is_open else 'closed'
+        return 'Fold(lines %d-%d, %s)' % (self.start_line, self.end_line, state)
+
+
+class FoldManager(object):
+    """
+    Manages fold regions for a buffer.
+    Handles creating, opening, closing folds and mapping between logical and visual lines.
+    """
+    def __init__(self):
+        self.folds = []  # List of Fold objects
+
+    def add_fold(self, start_line, end_line, is_open=False):
+        """Create a new fold region."""
+        fold = Fold(start_line, end_line, is_open)
+        self.folds.append(fold)
+        self._sort_folds()
+
+    def _sort_folds(self):
+        """Sort folds by start line."""
+        self.folds.sort(key=lambda f: f.start_line)
+
+    def remove_fold_at_line(self, line):
+        """Remove fold containing the given line."""
+        for fold in self.folds:
+            if fold.start_line == line or fold.contains_line(line):
+                self.folds.remove(fold)
+                return True
+        return False
+
+    def toggle_fold_at_line(self, line):
+        """Toggle fold state at the given line."""
+        fold = self.get_fold_at_line(line)
+        if fold:
+            fold.is_open = not fold.is_open
+            return True
+        return False
+
+    def open_fold_at_line(self, line):
+        """Open fold at the given line."""
+        fold = self.get_fold_at_line(line)
+        if fold:
+            fold.is_open = True
+            return True
+        return False
+
+    def close_fold_at_line(self, line):
+        """Close fold at the given line."""
+        fold = self.get_fold_at_line(line)
+        if fold:
+            fold.is_open = False
+            return True
+        return False
+
+    def get_fold_at_line(self, line):
+        """Get the fold containing the given line (including start line)."""
+        for fold in self.folds:
+            if fold.start_line == line or fold.contains_line(line):
+                return fold
+        return None
+
+    def get_folds_containing_line(self, line):
+        """Get all folds that contain the given line (for nesting)."""
+        containing_folds = []
+        for fold in self.folds:
+            if fold.contains_line(line) or fold.start_line == line:
+                containing_folds.append(fold)
+        return containing_folds
+
+    def get_fold_depth_at_line(self, line):
+        """
+        Get the nesting depth of folds at the given line.
+        Returns the number of open folds that contain this line.
+        """
+        depth = 0
+        for fold in self.folds:
+            # Count open folds that contain this line (but not the fold start line itself)
+            if fold.is_open and fold.contains_line(line):
+                depth += 1
+        return depth
+
+    def is_fold_start_line(self, line):
+        """Check if this line is the start of any fold."""
+        for fold in self.folds:
+            if fold.start_line == line:
+                return fold
+        return None
+
+    def is_line_visible(self, line):
+        """Check if a line should be visible (not folded)."""
+        for fold in self.folds:
+            if not fold.is_open and fold.contains_line(line):
+                return False
+        return True
+
+    def get_visible_lines(self, total_lines):
+        """
+        Get list of visible line numbers given total line count.
+        Returns a list of line numbers that should be displayed.
+        """
+        return [i for i in range(total_lines) if self.is_line_visible(i)]
+
+    def logical_to_visual(self, logical_line, total_lines):
+        """
+        Convert a logical line number (in the full text) to a visual line number (in the display).
+        Returns None if the line is hidden in a fold.
+        """
+        if not self.is_line_visible(logical_line):
+            return None
+
+        visual = 0
+        for i in range(logical_line):
+            if self.is_line_visible(i):
+                visual += 1
+        return visual
+
+    def visual_to_logical(self, visual_line, total_lines):
+        """
+        Convert a visual line number (in the display) to a logical line number (in the full text).
+        """
+        visible_count = 0
+        for i in range(total_lines):
+            if self.is_line_visible(i):
+                if visible_count == visual_line:
+                    return i
+                visible_count += 1
+        return total_lines - 1  # Return last line if we go past the end
+
+    def adjust_folds_for_edit(self, start_line, lines_added):
+        """
+        Adjust fold positions after text is inserted or deleted.
+
+        :param start_line: Line where edit occurred
+        :param lines_added: Number of lines added (negative if lines were deleted)
+        """
+        for fold in self.folds[:]:  # Iterate over copy
+            if fold.start_line >= start_line:
+                fold.start_line += lines_added
+                fold.end_line += lines_added
+            elif fold.end_line >= start_line:
+                fold.end_line += lines_added
+
+            # Remove folds that became invalid
+            if fold.start_line >= fold.end_line or fold.start_line < 0:
+                self.folds.remove(fold)
+
+    def clear(self):
+        """Remove all folds."""
+        self.folds = []
 
 
 class EditReadOnlyBuffer(Exception):
@@ -285,6 +456,9 @@ class Buffer(object):
 
         # Document cache. (Avoid creating new Document instances.)
         self._document_cache = FastDictCache(Document, size=10)
+
+        # Fold manager for vim-style folding
+        self.fold_manager = FoldManager()
 
         self.reset(initial_document=initial_document)
 
@@ -595,6 +769,15 @@ class Buffer(object):
         self.cursor_position += self.document.get_cursor_up_position(
             count=count, preferred_column=original_column)
 
+        # Skip folded lines - keep moving up until we hit a visible line
+        while not self.fold_manager.is_line_visible(self.document.cursor_position_row):
+            if self.document.cursor_position_row <= 0:
+                break
+            offset = self.document.get_cursor_up_position(count=1, preferred_column=original_column)
+            if offset == 0:  # Can't move further up
+                break
+            self.cursor_position += offset
+
         # Remember the original column for the next up/down movement.
         self.preferred_column = original_column
 
@@ -603,6 +786,15 @@ class Buffer(object):
         original_column = self.preferred_column or self.document.cursor_position_col
         self.cursor_position += self.document.get_cursor_down_position(
             count=count, preferred_column=original_column)
+
+        # Skip folded lines - keep moving down until we hit a visible line
+        while not self.fold_manager.is_line_visible(self.document.cursor_position_row):
+            if self.document.cursor_position_row >= self.document.line_count - 1:
+                break
+            offset = self.document.get_cursor_down_position(count=1, preferred_column=original_column)
+            if offset == 0:  # Can't move further down
+                break
+            self.cursor_position += offset
 
         # Remember the original column for the next up/down movement.
         self.preferred_column = original_column

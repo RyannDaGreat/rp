@@ -2520,8 +2520,9 @@ def _parse_manpage_flags(command):
             try:
                 man_result = subprocess.run(
                     ['man', man_compound],
-                    capture_output=True,
-                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    universal_newlines=True,
                     timeout=2
                 )
                 if man_result.returncode == 0 and len(man_result.stdout) > 100:
@@ -2534,8 +2535,9 @@ def _parse_manpage_flags(command):
             try:
                 man_result = subprocess.run(
                     ['man', cmd_parts[0]],
-                    capture_output=True,
-                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    universal_newlines=True,
                     timeout=2
                 )
                 if man_result.returncode == 0 and len(man_result.stdout) > 100:
@@ -2544,8 +2546,9 @@ def _parse_manpage_flags(command):
                         col_result = subprocess.run(
                             ['col', '-b'],
                             input=man_result.stdout,
-                            capture_output=True,
-                            text=True,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            universal_newlines=True,
                             timeout=1
                         )
                         if col_result.returncode == 0:
@@ -2564,8 +2567,9 @@ def _parse_manpage_flags(command):
                     cmd_with_help = cmd_parts + [help_flag]
                     result = subprocess.run(
                         cmd_with_help,
-                        capture_output=True,
-                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        universal_newlines=True,
                         timeout=2
                     )
                     output = result.stdout + result.stderr
@@ -2644,8 +2648,9 @@ def _parse_manpage_flags(command):
                 try:
                     result = subprocess.run(
                         [command, help_flag],
-                        capture_output=True,
-                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        universal_newlines=True,
                         timeout=2
                     )
                     output = result.stdout + result.stderr
@@ -2734,8 +2739,9 @@ def _parse_subcommands_from_help(command, help_text=None):
                 cmd_parts.append('--help')
                 result = subprocess.run(
                     cmd_parts,
-                    capture_output=True,
-                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    universal_newlines=True,
                     timeout=2
                 )
                 help_text = result.stdout + result.stderr
@@ -2869,7 +2875,7 @@ def _parse_subcommands_from_help(command, help_text=None):
             # Only use this pattern if we see multiple "program subcommand" lines
             # This avoids false positives from "man program" or "program --help"
             program_pattern = re.compile(
-                rf'^\s*{re.escape(command)}\s+([a-z][a-z0-9_-]+)',
+                r'^\s*{}\s+([a-z][a-z0-9_-]+)'.format(re.escape(command)),
                 re.MULTILINE | re.IGNORECASE
             )
 

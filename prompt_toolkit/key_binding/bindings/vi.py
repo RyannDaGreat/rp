@@ -1426,6 +1426,82 @@ def load_vi_bindings(get_search_state=None):
 
             w.vertical_scroll = y
 
+    # Folding commands
+    @operator('z', 'f')
+    def _(event, text_object):
+        """
+        Create fold operator. (zf in vim)
+        """
+        buff = event.current_buffer
+        start, end = text_object.operator_range(buff.document)
+
+        # Convert character positions to line numbers
+        start_line = buff.document.translate_index_to_position(start + buff.cursor_position)[0]
+        end_line = buff.document.translate_index_to_position(end + buff.cursor_position)[0]
+
+        # Create the fold (closed by default)
+        if start_line < end_line:
+            buff.fold_manager.add_fold(start_line, end_line, is_open=False)
+
+    @handle('z', 'o', filter=navigation_mode)
+    def _(event):
+        """
+        Open fold at cursor. (zo in vim)
+        """
+        buff = event.current_buffer
+        current_line = buff.document.cursor_position_row
+
+        if not buff.fold_manager.open_fold_at_line(current_line):
+            # If no fold at current line, try to find the fold we're inside
+            fold = buff.fold_manager.get_fold_at_line(current_line)
+            if fold:
+                buff.fold_manager.open_fold_at_line(fold.start_line)
+
+    @handle('z', 'c', filter=navigation_mode)
+    def _(event):
+        """
+        Close fold at cursor. (zc in vim)
+        """
+        buff = event.current_buffer
+        current_line = buff.document.cursor_position_row
+
+        if not buff.fold_manager.close_fold_at_line(current_line):
+            # If no fold at current line, try to find the fold we're inside
+            fold = buff.fold_manager.get_fold_at_line(current_line)
+            if fold:
+                buff.fold_manager.close_fold_at_line(fold.start_line)
+
+    @handle('z', 'a', filter=navigation_mode)
+    def _(event):
+        """
+        Toggle fold at cursor. (za in vim)
+        """
+        buff = event.current_buffer
+        current_line = buff.document.cursor_position_row
+
+        if not buff.fold_manager.toggle_fold_at_line(current_line):
+            # If no fold at current line, try to find the fold we're inside
+            fold = buff.fold_manager.get_fold_at_line(current_line)
+            if fold:
+                buff.fold_manager.toggle_fold_at_line(fold.start_line)
+
+    @handle('z', 'd', filter=navigation_mode)
+    def _(event):
+        """
+        Delete fold at cursor. (zd in vim)
+        """
+        buff = event.current_buffer
+        current_line = buff.document.cursor_position_row
+        buff.fold_manager.remove_fold_at_line(current_line)
+
+    @handle('z', 'E', filter=navigation_mode)
+    def _(event):
+        """
+        Delete all folds. (zE in vim)
+        """
+        buff = event.current_buffer
+        buff.fold_manager.clear()
+
     @text_object('%')
     def _(event):
         """

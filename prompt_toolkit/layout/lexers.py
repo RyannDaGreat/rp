@@ -236,10 +236,10 @@ class LazyBashLexer(LazyLexer):
         return self._lexer
     
     def _add_system_commands_to_pterm_bash_highlighter(self):
-        """ 
-        This function lets us syntax-highlight any system commands in the !<shell stuff> in pterm seen upon boot 
+        """
+        This function lets us syntax-highlight any system commands in the !<shell stuff> in pterm seen upon boot
         It can't update them over time right now, it's a one-time thing
-        """ 
+        """
         import pygments.lexers.shell as shell
         import re
         import rp

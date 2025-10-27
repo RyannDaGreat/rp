@@ -40,7 +40,7 @@ class Candidate:
         return self._match_text if self._match_text is not None else self.name
 
     def __repr__(self):
-        return f'Candidate({self.name!r}, priority={self.priority})'
+        return 'Candidate({!r}, priority={})'.format(self.name, self.priority)
 
 
 # Cache key info for a document

@@ -17,6 +17,7 @@ from rp.prompt_toolkit.cache import SimpleCache
 from rp.prompt_toolkit.filters import to_cli_filter, ViInsertMode, EmacsInsertMode
 from rp.prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from rp.prompt_toolkit.reactive import Integer
+from rp.prompt_toolkit.selection import SelectionType
 from rp.prompt_toolkit.token import Token
 from rp.prompt_toolkit.utils import take_using_weights, get_cwidth
 
@@ -463,7 +464,7 @@ class FloatContainer(Container):
                 height = fl_height
             # Near cursor
             elif fl.ycursor:
-                ypos = cursor_position.y + 1
+                ypos = cursor_position.y + fl.get_ycursor_offset(cli)
 
                 height = fl_height
                 if height is None:
@@ -548,10 +549,11 @@ class Float(object):
 
     :param content: :class:`.Container` instance.
     :param hide_when_covering_content: Hide the float when it covers content underneath.
+    :param ycursor_offset: Offset from cursor position when ycursor=True (default: 1). Can be int or callable.
     """
     def __init__(self, top=None, right=None, bottom=None, left=None,
                  width=None, height=None, get_width=None, get_height=None,
-                 xcursor=False, ycursor=False, content=None,
+                 xcursor=False, ycursor=False, ycursor_offset=1, content=None,
                  hide_when_covering_content=False):
         assert isinstance(content, Container)
         assert width is None or get_width is None
@@ -570,9 +572,16 @@ class Float(object):
 
         self.xcursor = xcursor
         self.ycursor = ycursor
+        self._ycursor_offset = ycursor_offset
 
         self.content = content
         self.hide_when_covering_content = hide_when_covering_content
+
+    def get_ycursor_offset(self, cli):
+        """Get the ycursor offset, evaluating if it's a callable."""
+        if callable(self._ycursor_offset):
+            return self._ycursor_offset(cli)
+        return self._ycursor_offset
 
     def get_width(self, cli):
         if self._width:
@@ -1152,32 +1161,160 @@ class Window(Container):
             y_max=write_position.ypos + write_position.height,
             handler=mouse_handler)
 
-        # Render and copy margins.
+        # Line number margin mouse handler for line selection (like VSCode)
+        def line_number_margin_mouse_handler(cli, mouse_event):
+            """
+            Mouse handler for the line number margin that selects whole lines when
+            clicking/dragging, similar to VSCode behavior.
+            """
+            from .controls import BufferControl
+
+            # Only handle if this is a BufferControl with a buffer
+            if not isinstance(self.content, BufferControl):
+                return NotImplemented
+
+            buffer = self.content._buffer(cli)
+            if not buffer:
+                return NotImplemented
+
+            # Map screen Y coordinate to document row
+            y = mouse_event.position.y
+            max_y = write_position.ypos + len(visible_line_to_row_col) - 1
+            y = min(max_y, y)
+
+            # Get the row number from the visible line mapping
+            relative_y = y - write_position.ypos
+            if relative_y not in visible_line_to_row_col:
+                return NotImplemented
+
+            row, _ = visible_line_to_row_col[relative_y]
+
+            # Calculate cursor position at start of the line
+            line_start_index = buffer.document.translate_row_col_to_index(row, 0)
+
+            if mouse_event.event_type == MouseEventType.MOUSE_DOWN:
+                # Start line selection
+                buffer.cursor_position = line_start_index
+                buffer.start_selection(selection_type=SelectionType.LINES)
+                return None  # Event handled
+
+            elif mouse_event.event_type == MouseEventType.MOUSE_MOVE:
+                # Only continue line selection if drag started in gutter
+                # (indicated by existing LINES selection)
+                if buffer.selection_state and buffer.selection_state.type == SelectionType.LINES:
+                    buffer.cursor_position = line_start_index
+                    return None  # Event handled
+                else:
+                    # Drag started in text area, let text handler handle it
+                    return NotImplemented
+
+            elif mouse_event.event_type == MouseEventType.MOUSE_UP:
+                # Only finalize if this was a gutter drag
+                if buffer.selection_state and buffer.selection_state.type == SelectionType.LINES:
+                    buffer.cursor_position = line_start_index
+                    return None  # Event handled
+                else:
+                    return NotImplemented
+
+            return NotImplemented
+
+        # Render and copy margins, registering mouse handlers for each.
         move_x = 0
+        from rp.prompt_toolkit.layout.margins import FoldMargin
 
         def render_margin(m, width):
-            " Render margin. Return `Screen`. "
+            " Render margin. Return TokenListControl and UIContent. "
             # Retrieve margin tokens.
             tokens = m.create_margin(cli, self.render_info, width, write_position.height)
 
             # Turn it into a UIContent object.
-            # already rendered those tokens using this size.)
-            return TokenListControl.static(tokens).create_content(
-                cli, width + 1, write_position.height)
+            control = TokenListControl.static(tokens)
+            content = control.create_content(cli, width + 1, write_position.height)
+            return control, content
+
+        # Track FoldMargin position to exclude from line selection handler
+        fold_margin_x_min = None
+        fold_margin_x_max = None
 
         for m, width in zip(self.left_margins, left_margin_widths):
             # Create screen for margin.
-            margin_screen = render_margin(m, width)
+            margin_control, margin_screen = render_margin(m, width)
 
             # Copy and shift X.
             self._copy_margin(cli, margin_screen, screen, write_position, move_x, width)
+
+            # Register mouse handler for each margin type
+            if isinstance(m, FoldMargin):
+                # Track fold margin position
+                fold_margin_x_min = write_position.xpos + move_x
+                fold_margin_x_max = write_position.xpos + move_x + width
+
+                # Create a handler that directly toggles folds
+                def make_fold_margin_handler(fold_margin):
+                    def fold_margin_mouse_handler(cli, mouse_event):
+                        # Only handle MOUSE_UP events
+                        if mouse_event.event_type != MouseEventType.MOUSE_UP:
+                            return NotImplemented
+
+                        # Get buffer
+                        if fold_margin.get_buffer:
+                            buffer = fold_margin.get_buffer(cli)
+                        else:
+                            buffer = cli.current_buffer
+
+                        # Map y coordinate to line number
+                        y = mouse_event.position.y - write_position.ypos
+
+                        # Get line number from visible_line_to_row_col
+                        try:
+                            lineno = visible_line_to_row_col[y][0]
+                        except (KeyError, IndexError):
+                            return NotImplemented
+
+                        # Check if this line has a fold
+                        fold = buffer.fold_manager.is_fold_start_line(lineno)
+                        if fold:
+                            # Toggle the fold
+                            fold.is_open = not fold.is_open
+                            return None  # Event handled
+
+                        return NotImplemented
+                    return fold_margin_mouse_handler
+
+                mouse_handlers.set_mouse_handler_for_range(
+                    x_min=write_position.xpos + move_x,
+                    x_max=write_position.xpos + move_x + width,
+                    y_min=write_position.ypos,
+                    y_max=write_position.ypos + write_position.height,
+                    handler=make_fold_margin_handler(m))
+
             move_x += width
+
+        # Register line number selection handler for non-FoldMargin area
+        if left_margin_widths:
+            # Calculate the area excluding FoldMargin
+            if fold_margin_x_min is not None:
+                # Line numbers are after the fold margin
+                line_num_x_min = fold_margin_x_max
+                line_num_x_max = write_position.xpos + sum(left_margin_widths)
+            else:
+                # No fold margin, use entire left margin area
+                line_num_x_min = write_position.xpos
+                line_num_x_max = write_position.xpos + sum(left_margin_widths)
+
+            if line_num_x_min < line_num_x_max:
+                mouse_handlers.set_mouse_handler_for_range(
+                    x_min=line_num_x_min,
+                    x_max=line_num_x_max,
+                    y_min=write_position.ypos,
+                    y_max=write_position.ypos + write_position.height,
+                    handler=line_number_margin_mouse_handler)
 
         move_x = write_position.width - sum(right_margin_widths)
 
         for m, width in zip(self.right_margins, right_margin_widths):
             # Create screen for margin.
-            margin_screen = render_margin(m, width)
+            margin_control, margin_screen = render_margin(m, width)
 
             # Copy and shift X.
             self._copy_margin(cli, margin_screen, screen, write_position, move_x, width)
@@ -1219,6 +1356,11 @@ class Window(Container):
             while y < write_position.height and lineno < line_count:
                 # Take the next line and copy it in the real screen.
                 line = ui_content.get_line(lineno)
+
+                # Skip lines that return None (e.g., folded lines)
+                if line is None:
+                    lineno += 1
+                    continue
 
                 col = 0
                 x = -horizontal_scroll

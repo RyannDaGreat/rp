@@ -634,13 +634,39 @@ class BufferControl(UIControl):
         get_processed_line = self._create_get_processed_line_func(cli, document)
         self._last_get_processed_line = get_processed_line
 
+        # Handle folding: keep full line_count but return None for hidden lines
+        fold_manager = buffer.fold_manager
+
         def translate_rowcol(row, col):
             " Return the content column for this coordinate. "
             return Point(y=row, x=get_processed_line(row).source_to_display(col))
 
-        def get_line(i):
-            " Return the tokens for a given line number. "
-            tokens = get_processed_line(i).tokens
+        def get_line(logical_line):
+            " Return the tokens for a given logical line number (accounting for folds). "
+            from rp.prompt_toolkit.token import Token
+
+            # Check if this line is hidden inside a fold (not the fold start line)
+            if not fold_manager.is_line_visible(logical_line):
+                # Return None to signal this line should be skipped in rendering
+                return None
+
+            # Check if this line starts a closed fold
+            fold = fold_manager.get_fold_at_line(logical_line)
+            is_fold_start = fold and fold.start_line == logical_line and not fold.is_open
+
+            if is_fold_start:
+                # Show fold line with prefix and suffix
+                num_folded_lines = fold.end_line - fold.start_line
+
+                # Get the original line content
+                original_tokens = get_processed_line(logical_line).tokens
+
+                # Build the folded line display: "››››› [content] | N lines |"
+                tokens = [(Token.Folded.Prefix, '››››› ')]
+                tokens.extend(original_tokens)
+                tokens.append((Token.Folded.Suffix, ' | %d lines |' % num_folded_lines))
+            else:
+                tokens = get_processed_line(logical_line).tokens
 
             # Add a space at the end, because that is a possible cursor
             # position. (When inserting after the input.) We should do this on
@@ -650,11 +676,17 @@ class BufferControl(UIControl):
             tokens = tokens + [(self.default_char.token, ' ')]
             return tokens
 
+        # Calculate cursor position - if cursor is in a folded region, move it to the fold line
+        cursor_row = document.cursor_position_row
+        if not fold_manager.is_line_visible(cursor_row):
+            fold = fold_manager.get_fold_at_line(cursor_row)
+            if fold:
+                cursor_row = fold.start_line
+
         content = UIContent(
             get_line=get_line,
             line_count=document.line_count,
-            cursor_position=translate_rowcol(document.cursor_position_row,
-                                             document.cursor_position_col),
+            cursor_position=translate_rowcol(cursor_row, document.cursor_position_col),
             default_char=self.default_char)
 
         # If there is an auto completion going on, use that start point for a

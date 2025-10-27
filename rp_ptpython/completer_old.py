@@ -55,7 +55,7 @@ def get_apt_completions():
         
         try:
             # Get the list of all available packages
-            result = subprocess.run(['apt-cache', 'dumpavail'], stdout=subprocess.PIPE, text=True)
+            result = subprocess.run(['apt-cache', 'dumpavail'], stdout=subprocess.PIPE, universal_newlines=True)
             
             # Decode the byte string into a string, split by newline
             package_list = result.stdout.split('\n')

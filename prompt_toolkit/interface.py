@@ -858,11 +858,30 @@ class CommandLineInterface(object):
             if buffer.complete_state or not buffer.completer:
                 return
 
+
+            # Check if result is cached - only run sync if it's a cache hit
+            if hasattr(
+                  buffer.completer, "has_cached_completions"
+            ) and buffer.completer.has_cached_completions(document):
+                # Synchronous completion for auto-complete (cache hit - fast!)
+                completions = list(buffer.completer.get_completions(document, complete_event))
+
+                # When there is only one completion, which has nothing to add, ignore it.
+                if len(completions) == 1 and completion_does_nothing(document, completions[0]):
+                    return
+
+                # Set completions immediately
+                if completions and buffer.text == document.text and buffer.cursor_position == document.cursor_position:
+                    buffer.set_completions(completions=completions, go_to_first=False, go_to_last=False)
+                    self.invalidate()  # trigger redraw
+                return
+
+
             # Otherwise, get completions in other thread.
             complete_thread_running[0] = True
 
             def run():
-                from rp import ring_terminal_bell as ring_terminal_bell
+                # from rp import ring_terminal_bell as ring_terminal_bell
                 completions = list(buffer.completer.get_completions(document, complete_event))
                 # if completions:
                 # ring_terminal_bell()
@@ -882,9 +901,11 @@ class CommandLineInterface(object):
                         del completions[:]
 
                     # Set completions if the text was not yet changed.
+                    # For auto-complete, allow replacing existing completions with fresh results.
+                    # For Tab-complete, only set if no completions exist (original behavior).
                     if buffer.text == document.text and \
                             buffer.cursor_position == document.cursor_position and \
-                            not buffer.complete_state:
+                            (not buffer.complete_state or is_auto_complete):
 
                         set_completions = True
                         select_first_anyway = False
@@ -1191,3 +1212,4 @@ class _SubApplicationEventLoop(EventLoop):
 
     def remove_reader(self, fd):
         self.cli.eventloop.remove_reader(fd)
+

@@ -43,7 +43,7 @@ class KeyWrapper:
         return hash(self.key)
 
     def __repr__(self):
-        return f"KeyWrapper({self.key})"
+        return "KeyWrapper({})".format(self.key)
 
 
 # Create the registry once
@@ -174,7 +174,7 @@ def apply_keystroke(document, keystroke):
             except Exception as e:
                 # If binding fails, print exception and continue to next
                 import traceback
-                print(f"Exception in binding: {e}")
+                print("Exception in binding: {}".format(e))
                 traceback.print_exc()
                 pass
 

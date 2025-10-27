@@ -17,8 +17,9 @@ def get_apt_completions():
     """Get available apt packages for completion."""
     import subprocess
     try:
-        result = subprocess.run(['apt-cache', 'pkgnames'], 
-                              capture_output=True, text=True, timeout=2)
+        result = subprocess.run(['apt-cache', 'pkgnames'],
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              universal_newlines=True, timeout=2)
         return result.stdout.strip().split('\n')
     except:
         return []
