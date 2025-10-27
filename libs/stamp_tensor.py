@@ -19,6 +19,14 @@ def _parse_origin(origin):
             return [1.0, 1.0]
         elif origin == 'center':
             return [0.5, 0.5]
+        elif origin == 'top':
+            return [0.0, 0.5]
+        elif origin == 'bottom':
+            return [1.0, 0.5]
+        elif origin == 'left':
+            return [0.5, 0.0]
+        elif origin == 'right':
+            return [0.5, 1.0]
         else:
             raise ValueError("Unknown named origin: {0}".format(origin))
     else:
@@ -113,31 +121,95 @@ def _stamp_bilinear(canvas, sprite, adjusted_offset, mode):
     
     return result
 
-def _stamp_nearest(canvas, sprite, adjusted_offset, mode):
-    """Apply nearest neighbor stamping directly to canvas regions."""
+def _calculate_adjusted_offset(offset, sprite_shape, canvas_shape, sprite_origin=None, canvas_origin=None):
+    """
+    Calculate adjusted offset for stamping, accounting for origins.
+
+    This is the DRY function that both stamp_tensor and crop_tensor use.
+
+    Args:
+        offset: Base offset (can be shorter than ndim, will be padded)
+        sprite_shape: Shape of sprite/source tensor
+        canvas_shape: Shape of canvas/destination tensor
+        sprite_origin: Origin within sprite (string or proportions, can be shorter than ndim)
+        canvas_origin: Origin within canvas (string or proportions, can be shorter than ndim)
+
+    Returns:
+        list: Adjusted offset for each dimension
+    """
+    ndim = len(sprite_shape)
+
+    # Pad offset with 0s to match ndim
+    if offset is None:
+        offset = [0] * ndim
+    else:
+        if len(offset) > ndim:
+            raise ValueError("Offset length {0} cannot exceed dimensions {1}".format(len(offset), ndim))
+        offset = list(offset) + [0] * (ndim - len(offset))
+
+    # Parse and pad sprite_origin
+    if sprite_origin is not None:
+        sprite_origin = _parse_origin(sprite_origin)
+        if len(sprite_origin) > ndim:
+            raise ValueError("sprite_origin length {0} cannot exceed dimensions {1}".format(len(sprite_origin), ndim))
+        sprite_origin = list(sprite_origin) + [0.0] * (ndim - len(sprite_origin))
+
+    # Parse and pad canvas_origin
+    if canvas_origin is not None:
+        canvas_origin = _parse_origin(canvas_origin)
+        if len(canvas_origin) > ndim:
+            raise ValueError("canvas_origin length {0} cannot exceed dimensions {1}".format(len(canvas_origin), ndim))
+        canvas_origin = list(canvas_origin) + [0.0] * (ndim - len(canvas_origin))
+
+    # Calculate offsets from origins
+    sprite_offset = _get_proportional_offset(sprite_shape, sprite_origin)
+    canvas_offset = _get_proportional_offset(canvas_shape, canvas_origin)
+
+    # Combine into adjusted offset
+    adjusted_offset = [offset[i] + sprite_offset[i] - canvas_offset[i] for i in range(ndim)]
+
+    return adjusted_offset
+
+def _calculate_stamp_bounds(canvas_shape, sprite_shape, adjusted_offset):
+    """
+    Calculate slice bounds for stamping sprite onto canvas.
+
+    Returns:
+        tuple: (canvas_slices, sprite_slices) or None if no overlap
+    """
     int_offset = [int(x) for x in adjusted_offset]
     
     canvas_slices = []
     sprite_slices = []
-    
-    for dim in range(canvas.ndim):
+
+    for dim in range(len(canvas_shape)):
         start_canvas = max(0, int_offset[dim])
-        end_canvas = min(canvas.shape[dim], int_offset[dim] + sprite.shape[dim])
-        
+        end_canvas = min(canvas_shape[dim], int_offset[dim] + sprite_shape[dim])
+
         start_sprite = max(0, -int_offset[dim])
         end_sprite = start_sprite + (end_canvas - start_canvas)
         
         if start_canvas >= end_canvas or start_sprite >= end_sprite:
-            return canvas
+            return None
         
         canvas_slices.append(slice(start_canvas, end_canvas))
         sprite_slices.append(slice(start_sprite, end_sprite))
-    
-    canvas_region = canvas[tuple(canvas_slices)]
-    sprite_region = sprite[tuple(sprite_slices)]
-    
+
+    return tuple(canvas_slices), tuple(sprite_slices)
+
+def _stamp_nearest(canvas, sprite, adjusted_offset, mode):
+    """Apply nearest neighbor stamping directly to canvas regions."""
+    bounds = _calculate_stamp_bounds(canvas.shape, sprite.shape, adjusted_offset)
+
+    if bounds is None:
+        return canvas
+
+    canvas_slices, sprite_slices = bounds
+    canvas_region = canvas[canvas_slices]
+    sprite_region = sprite[sprite_slices]
+
     # Apply mode directly to the overlapping regions
-    canvas[tuple(canvas_slices)] = mode(canvas_region, sprite_region)
+    canvas[canvas_slices] = mode(canvas_region, sprite_region)
     
     return canvas
 
@@ -254,27 +326,8 @@ def stamp_tensor(canvas, sprite, offset=None, *, mutate=False, mode='add', sprit
     if not canvas.ndim == sprite.ndim:
         raise ValueError("Canvas and sprite must have same number of dimensions but canvas.shape=={0} and sprite.shape=={1}".format(canvas.shape, sprite.shape))
     
-    # Default offset to origin if None
-    if offset is None:
-        offset = [0] * canvas.ndim
-    else:
-        # Pad offset with 0s to match ndim
-        if len(offset) > canvas.ndim:
-            raise ValueError("Offset length {0} cannot exceed canvas dimensions {1}".format(len(offset), canvas.ndim))
-        offset = list(offset) + [0] * (canvas.ndim - len(offset))
-    
-    # Parse and pad origins with 0s to match ndim
-    if sprite_origin is not None:
-        sprite_origin = _parse_origin(sprite_origin)
-        if len(sprite_origin) > canvas.ndim:
-            raise ValueError("sprite_origin length {0} cannot exceed canvas dimensions {1}".format(len(sprite_origin), canvas.ndim))
-        sprite_origin = list(sprite_origin) + [0.0] * (canvas.ndim - len(sprite_origin))
-    
-    if canvas_origin is not None:
-        canvas_origin = _parse_origin(canvas_origin)
-        if len(canvas_origin) > canvas.ndim:
-            raise ValueError("canvas_origin length {0} cannot exceed canvas dimensions {1}".format(len(canvas_origin), canvas.ndim))
-        canvas_origin = list(canvas_origin) + [0.0] * (canvas.ndim - len(canvas_origin))
+    # Calculate adjusted offset using DRY function
+    adjusted_offset = _calculate_adjusted_offset(offset, sprite.shape, canvas.shape, sprite_origin, canvas_origin)
     
     # Parse wrap parameter
     if isinstance(wrap, bool):
@@ -286,10 +339,6 @@ def stamp_tensor(canvas, sprite, offset=None, *, mutate=False, mode='add', sprit
     
     if not mutate:
         canvas = canvas + 0
-    
-    sprite_offset = _get_proportional_offset(sprite.shape, sprite_origin)
-    canvas_offset = _get_proportional_offset(canvas.shape, canvas_origin)
-    adjusted_offset = [offset[i] + sprite_offset[i] - canvas_offset[i] for i in range(len(offset))]
     
     # Convert 'add', 'replace' etc to lambda function once
     if mode in stamp_modes:
@@ -670,7 +719,19 @@ def demo_stamp_tensor():
             )
         )
 
-def crop_tensor(tensor, crop_shape, origin=None, *, crop_offset=None, tensor_offset=None, tensor_origin=None, crop_origin=None, interp='nearest', wrap=False):
+def crop_tensor(
+    tensor,
+    crop_shape,
+    origin=None,
+    *,
+    crop_offset=None,
+    tensor_offset=None,
+    tensor_origin=None,
+    crop_origin=None,
+    interp="nearest",
+    wrap=False,
+    copy=True
+):
     """
     Crop a tensor to the specified shape using stamp_tensor's flexible origin system.
     
@@ -684,6 +745,7 @@ def crop_tensor(tensor, crop_shape, origin=None, *, crop_offset=None, tensor_off
         crop_origin: Origin point in the crop output ('top left', 'center', [0.5, 0.5], etc.)
         interp: Interpolation method ('nearest' or 'bilinear')
         wrap: Enable wrapping behavior (True/False or list of bools per dimension)
+        copy: If False, return a view when possible. If True, always return a copy.
         
     Returns:
         Cropped tensor of shape crop_shape
@@ -725,23 +787,32 @@ def crop_tensor(tensor, crop_shape, origin=None, *, crop_offset=None, tensor_off
         crop_origin = origin
 
     if len(crop_shape) < tensor.ndim:
-        #In future version of stamp_tensor with broadcasting, this might not be needed
         crop_shape = tuple(crop_shape) + tuple(tensor.shape[len(crop_shape):])
-    
-    # Create output tensor filled with zeros
-    output = rp.r._zeros_like(tensor, shape=crop_shape)
-    
-    # The key insight: we stamp the source tensor onto the crop-sized output
+
+    # Calculate combined offset from crop_offset and tensor_offset
     if crop_offset   is None: crop_offset   = []
     if tensor_offset is None: tensor_offset = []
     
-    # Pad both to same length as tensor.ndim before subtracting
     offset_len = max(map(len, [crop_offset, tensor_offset]))
-    crop_offset   = list(crop_offset  ) + [0] * (offset_len - len(crop_offset  ))
+    crop_offset = list(crop_offset) + [0] * (offset_len - len(crop_offset))
     tensor_offset = list(tensor_offset) + [0] * (offset_len - len(tensor_offset))
-    
+
     final_offset = [t - c for t, c in zip(tensor_offset, crop_offset)]
-    
+
+    # Calculate adjusted offset to check for optimization
+    adjusted_offset = _calculate_adjusted_offset(final_offset, tensor.shape, crop_shape, tensor_origin, crop_origin)
+
+    # Fast path: return view for simple crops with copy=False
+    if not copy and interp == 'nearest' and not wrap and all(x == int(x) for x in adjusted_offset):
+        bounds = _calculate_stamp_bounds(crop_shape, tensor.shape, adjusted_offset)
+        if bounds:
+            canvas_slices, sprite_slices = bounds
+            if all(s.start == 0 and s.stop == crop_shape[i] for i, s in enumerate(canvas_slices)):
+                return tensor[sprite_slices]  # Return view - no allocation!
+
+    # General case - use stamp_tensor
+    output = rp.r._zeros_like(tensor, shape=crop_shape)
+
     return stamp_tensor(
         output, 
         tensor, 

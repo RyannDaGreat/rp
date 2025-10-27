@@ -475,9 +475,9 @@ function! Fansi()
     "    colorscheme        default
     "elseif g:colors_name=='default'
         
-        colorscheme        wombat256mod
+        colorscheme        sublime256
     else
-        colorscheme        wombat256mod
+        colorscheme        sublime256
     
     endif
     

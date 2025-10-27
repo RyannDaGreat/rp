@@ -90,13 +90,24 @@ KEYBOARD SHORTCUTS:
 	⌥ [    insert [ at current position and ] at the end of the line without moving the cursor to the end of the line
 	⌥ )    insert ) at the end of the line without moving the cursor to the end of the line
 	⌥ ]    insert ] at the end of the line without moving the cursor to the end of the line
+	⌥ {    insert { at current position and } at the end of the line without moving the cursor to the end of the line
+	⌥ }    insert } at the end of the line without moving the cursor to the end of the line
 	⌃ t    loads previous buffer in history regardless of where cursor is (stands for top). Faster than spamming the up arrow key
 	⌃ b    loads next buffer in history regardless of where cursor is (stands for bottom). Faster than spamming the down arrow key
+	⌃ z    undo last action
+	⌃ y    redo last undone action
 	⌥ ⌃ e  Edit code with AI
+	F1     enable/disable mouse mode
+	F4     toggle between Vi and Emacs mode
+	F5     save F2 menu settings (when sidebar is visible)
+	F6     enable/disable paste mode
+	F7     enable/disable line wraps
+	F8     enable/disable microcompletions
 	LESS IMPORTANT AND MAYBE REMOVED IN FUTURE:
 		//While these keyboard shortcuts are kind of silly, I do find myself using them quite often
 		⌃ h    inserts 'HISTORY'
 		⌃ p    inserts 'PREV' (then 'NEXT', if pressed again)
+		⌃ u    inserts 'UNDO'
 		⌥ m    inserts 'MORE' (then 'MMORE', if pressed again)
 		⌥ s    inserts 'self'
 		⌥ ⌃ v  edit current text in vim (equivalent to the \vi microcompletion)
@@ -110,6 +121,7 @@ MICROCOMPLETIONS:
 			\wr   write file      (used like ‹`file.py\wr›. Saves the current buffer to 'file.py'. Not as safe as save file, because it will not create a backup file when overwriting.)
 			\lo   load file       (used like ‹`file.py\lo›. Loads 'file.py' into the current buffer)
 			\re   replace         (used like ‹`old`new\re›. It's a search-and-replace)
+			\rre  replace varname (like \re but specifically for replacing variable names with proper scoping)
 			\py   python          (used like ‹`repr\py›, ‹`str.upper\py›, or ‹`print_fix\py› etc. Replaces current buffer's text with function(currenttext))
 			\go   goto            (used like ‹`10\go›. Bring the cursor to that line number.)
 			\dtl  delete to line  (used like ‹`5\dtl›. Like d5G in vim.)
@@ -121,6 +133,8 @@ MICROCOMPLETIONS:
 			\db   debugger                (toggles the existence of 'debug()' on the top of your prompt without moving your cursor)
 			\pu   pudb (other debugger)   (similar to \db, pudb is an alternative debugger, and this command also toggles a line on the top of the buffer. Whether you use this or \db is a matter of prefernece.)
 			\vi   vim                     (opens up the current buffer in vim. Edit your code, then save the temp file and close vim. Your cursor's position will be shared between vim and rp.)
+			\mi   micro                   (opens up the current buffer in micro editor. Similar to \vi but uses the micro editor.)
+			\na   nano                    (opens up the current buffer in nano editor. Similar to \vi but uses the nano editor.)
 			\ed   editor                  (opens up the current buffer in some text editor; might be nano, might be vim. Depends on what you have. This command is an alternative to \vi)
 			\ac   align char              (inserts ‹→›, aka the alignment character. Used before \al. See https://asciinema.org/a/KjFS2lT0shRyv4r82RtFENzlo)
 			\al   align                   (aligns all alignment characters to the same column. Used after inserting \ac in multiple different places.)
@@ -147,13 +161,29 @@ MICROCOMPLETIONS:
 			\da   delete all              (deletes all text in the current buffer)
 			\sw   strip whitespace        (strips all trailing whitespace in the buffer)
 			\sc   strip comments          (removes all #comments in the buffer)
+			\sbl  strip blank lines       (removes all blank/empty lines from the buffer)
+			\stp  strip                   (strips leading/trailing whitespace from entire buffer text)
+			\spl  splitlines              (converts buffer to Python list format with one line per element)
+			\lj   line join               (joins Python list format back to lines)
+			\rcl  reverse columns         (reverses each line character-by-character)
 			\d0l  delete empty lines      (removes empty lines in the buffer. d0l means there can be 0 consecutive empty lines)
+			\d1l  delete empty lines (1)  (allows max 1 consecutive empty line)
+			\d2l  delete empty lines (2)  (allows max 2 consecutive empty lines)
+			\d3l  delete empty lines (3)  (allows max 3 consecutive empty lines)
+			\d4l  delete empty lines (4)  (allows max 4 consecutive empty lines)
+			\d5l  delete empty lines (5)  (allows max 5 consecutive empty lines)
+			\d6l  delete empty lines (6)  (allows max 6 consecutive empty lines)
+			\d7l  delete empty lines (7)  (allows max 7 consecutive empty lines)
+			\d8l  delete empty lines (8)  (allows max 8 consecutive empty lines)
+			\d9l  delete empty lines (9)  (allows max 9 consecutive empty lines)
 			\rl   reverse lines           (reversed the order of all lines of text in the buffer)
 			\sl   sort lines              (sorts all lines in the buffer in alphabetical order)
 			\ya   yapf autoformatter      (autoformats your current code buffer using google's yapf library)
 			\bla  black autoformatter     (autoformats your current code buffer using the 'black' library: pypi.org/project/black )
 			\sim  sort imports            (sorts and organizes all imports in the current buffer, using the 'isort' library)
+			\cim  clean imports           (removes unused imports using the 'unimport' library)
 			\rms  remove star             (turns all 'from x import *' into explicit 'from x import y,z,...' etc)
+			\rmfs remove f-strings        (converts f-strings to .format() calls)
 			\fn   function name           (writes the name of the current function)
 			\gg   go to top               (like gg in vim. bring cursor to the top of the buffer)
 			\GG   go to bottom            (like G in vim. bring cursor to the bottom of the buffer)
@@ -166,6 +196,7 @@ MICROCOMPLETIONS:
 			\fo   for-loopify             (envelops the whole buffer into a for loop. Useful for when you have a command but just want to run it over without DITTO, which pollutes HISTORY)
 			\wh   while-loopify           (envelops the whole buffer into a 'while True' loop. Useful for when you have a command but just want to loop it indefinitely)
 			\de   functionify             (envelops the whole buffer into a function body)
+			\inm  if name main            (inserts 'if __name__ == "__main__":' block)
 			\lss  LS SEL                  (lets you select a file or folder and inserts the absolute path as a string)
 			\lsr  (Relative) LS SEL       (lets you select a file or folder and inserts the relative path as a string)
 			\rpr  repr                    (is equivalent to `repr\py  It will turn your buffer into a string literal)
@@ -181,6 +212,19 @@ MICROCOMPLETIONS:
 			\min  minify                  (Minifies your code - making it as small as possible. Uses https://github.com/dflook/python-minifier)
 			\sdo  strip docstrings        (Removes all docstrings from your code)
 			\irp  inline rp stuff         (Works iteratively. Will inline anything in your code from rp, assuming it was coming from the implicit 'from rp import *'. Use it repeatedly, until you've gone deep enough.)
+			\qrp  qualify rp              (Makes rp imports explicit by qualifying them with the rp module prefix)
+			\ev   extract variable        (Extracts selected code into a separate variable assignment)
+			\und  unindent                (Decreases indentation of all lines in buffer)
+			\ind  indent                  (Increases indentation of all lines in buffer)
+			\wi   working index           (Inserts buffer working index comment)
+			\dipa diff paste              (Shows diff between buffer and pasted content)
+			\ditp diff tmux paste         (Shows diff between buffer and tmux clipboard)
+			\divp diff vim paste          (Shows diff between buffer and vim clipboard)
+			\diwp diff web paste          (Shows diff between buffer and web URL content)
+			\dian diff ans                (Shows diff between buffer and last answer value)
+			\dilp diff local paste        (Shows diff between buffer and local file)
+			\diph diff pt history         (Shows diff from prompt_toolkit history)
+			\qph  query pt history        (Queries prompt_toolkit history)
 
 	FOR LOOPS:
 		COMPREHENSION:
@@ -669,7 +713,7 @@ MICROCOMPLETIONS:
 					‹def f(88kwargs):› –––> ‹def f(**kwargs):¦›
 					‹def f(8args,88kwargs):› –––> ‹def f(*args,**kwargs):¦›
 					‹def f(8args,8kwargs):› –––> ‹def f(*args,**kwargs):¦›  //TODO: Because we know that we can only have one *args in a function definition, the next * must be for kwargs, letting us save one keystroke   
-					                                                        // (likewise, TODO: ‹def f(*args,*kwargs):› –––> ‹def f(*args,**kwargs):›)
+																			// (likewise, TODO: ‹def f(*args,*kwargs):› –––> ‹def f(*args,**kwargs):›)
 				FUNCTION CALLS:
 					‹print(8args)›           –––> ‹print(*args)¦›            //For function calls
 					‹print(88kwargs)›        –––> ‹print(**kwargs)¦›
@@ -710,62 +754,61 @@ MICROCOMPLETIONS:
 PSEUDO TERMINAL COMMANDS:
 	SUMMARY:
 		ALL COMMANDS:
-			<Input Modifier>        <Namespace History>    <Inspection>             <File System>
-			MOD ON                  UNDO                   ?                        RM
-			MOD OFF                 UNDO ON                ??                       RN
-			MOD SET                 UNDO OFF               ???                      MV
-			SMOD SET                UNDO CLEAR             ?.                       LS
-			                        UNDO ALL               ?v                       LST
-			<Stack Traces>                                 ?s                       CD
-			MORE                    <Prompt Toolkit>       ?t                       CDP
-			MMORE                   PT ON                  ?h (?/)                  CDA
-			DMORE                   PT OFF                 ?e                       CDB
-			AMORE                   PT                     ?p                       CDU
-			GMORE                                          ?c                       CDH
-			HMORE                   <RP Settings>          ?i                       CDZ
-			VIMORE                  PT SAVE                ?r                       CDQ
-			PIPMORE                 PT RESET                                        CAT
-			IMPMORE                 SET TITLE              <Others>                 NCAT
-			PREVMORE                SET STYLE              RETURN  (RET)            CCAT
-			NEXTMORE                                       SUSPEND (SUS)            ACAT
-			                        <Shell Commands>       WARN                     CATA
-			<Command History>       !                      GPU                      NCATA
-			HISTORY    (HIST)       !!                     TOP                      CCATA
-			GHISTORY   (GHIST)      SRUNA                  TAB                      ACATA
-			AHISTORY   (AHIST)      SSRUNA                 TABA                     RUN
-			CHISTORY   (CHIST)                             MONITOR                  RUNA
-			DHISTORY   (DHIST)      <Simple Timer>         UPDATE                   PWD
-			VHISTORY   (VHIST)      TICTOC                 ANS PRINT ON   (APON)    CPWD
-			ALLHISTORY (ALLHIST)    TICTOC ON              ANS PRINT OFF  (APOF)    APWD
-			                        TICTOC OFF             ANS PRINT FAST (APFA)    TAKE
-			<Clipboards>                                   SHELL (SH)               MKDIR
-			COPY                    <Profiler>             LEVEL                    OPEN
-			PASTE                   PROF                   DITTO                    OPENH
-			EPASTE                  PROF ON                EDIT                     OPENA
-			WCOPY                   PROF OFF               VARS                     DISK
-			WPASTE                                         RANT                     DISKH
-			TCOPY                   <Toggle Colors>        FORK                     TREE
-			TPASTE                  FANSI ON               WANS                     TREE ALL
-			LCOPY                   FANSI OFF              ARG                      TREE DIR
-			LPASTE                                         VIM                      TREE ALL DIR
-			VCOPY                   <Module Reloading>     VIMH                     FD
-			VPASTE                  RELOAD ON              VIMA                     FDA
-			FCOPY                   RELOAD OFF             AVIMA                    FDT
-			FPASTE                                         GC OFF                   FD SEL (FDS)
-			MLPASTE                 <Documentation>        GC ON                    LS SEL (LSS)
-			                        HELP                   GC                       LS REL (LSR)
-			<'ans' History>         HHELP                                           LS FZF (LSZ)
-			NEXT                    SHORTCUTS              <Unimportant>            LS QUE (LSQ)
-			PREV                                           NUM COM                  RANGER (RNG)
-			PREV ON                 <Startup Files>        PROF DEEP
-			PREV OFF                RPRC                   CDH CLEAN
-			PREV CLEAR              VIMRC                  ALS
-			PREV ALL                TMUXRC                 ALSD
-			                        XONSHRC                ALSF
-			                        RYAN RPRC
-			                        RYAN VIMRC
-			                        RYAN TMUXRC
-			                        RYAN XONSHRC
+			<Input Modifier>        <Namespace History>    <Documentation>    <Others>                 <File System>
+			MOD ON                  UNDO                   HELP               RETURN  (RET)            RM
+			MOD OFF                 UNDO ON                HHELP              SUSPEND (SUS)            RN
+			MOD SET                 UNDO OFF               SHORTCUTS          CLEAR                    MV
+			SMOD SET                UNDO CLEAR                                WARN                     LS
+			                        UNDO ALL               <Startup Files>    GPU                      LST
+			<Stack Traces>                                 RPRC               TOP                      LSD
+			MORE                    <Prompt Toolkit>       VIMRC              TAB                      LSN
+			MMORE                   PT ON                  TMUXRC             TABA                     CD
+			DMORE                   PT OFF                 XONSHRC            VDA                      CDP
+			AMORE                   PT                     RYAN RPRC          MONITOR                  CDA
+			GMORE                                          RYAN VIMRC         UPDATE                   CDB
+			HMORE                   <RP Settings>          RYAN TMUXRC        ANS PRINT ON   (APON)    CDU
+			RMORE                   PT SAVE                RYAN XONSHRC       ANS PRINT OFF  (APOF)    CDH
+			VIMORE                  PT RESET               RYAN RANGERRC      ANS PRINT FAST (APFA)    CDH FAST
+			PIPMORE                 SET TITLE                                 SHELL (SH)               CDH GIT
+			IMPMORE                 SET STYLE              <Inspection>       LEVEL                    CDM
+			PREVMORE                                       ?                  DITTO                    CDZ
+			NEXTMORE                <Shell Commands>       ??                 EDIT                     CDQ
+			                        !                      ??? ?r             VARS                     CAT
+			<Command History>       !!                     ?.                 RANT                     NCAT
+			HISTORY    (HIST)       SRUNA                  ?v                 FORK                     CCAT
+			GHISTORY   (GHIST)      SSRUNA                 ?s ?lj             WANS                     ACAT
+			AHISTORY   (AHIST)                             ?t ?j              WANS+                    CATA
+			CHISTORY   (CHIST)      <Python>               ?h (?/)            ARG                      NCATA
+			DHISTORY   (DHIST)      PY                     ?e                 VIM                      CCATA
+			VHISTORY   (VHIST)      PYM                    ?p                 VIMH                     ACATA
+			ALLHISTORY (ALLHIST)    APY                    ?c ?+c ?c+ ?cp     VIMA                     PWD
+			                        APYM                   ?i                 AVIMA                    CPWD
+			<Clipboards>            PU                     ?vd                GC OFF                   APWD
+			COPY                    PIP                                       GC ON                    TAKE
+			PASTE                   RUN                                       GC                       MKDIR
+			EPASTE                  RUNA                                                               OPEN
+			WCOPY                                                             <Unimportant>            OPENH
+			WPASTE                  <Simple Timer>                            NUM COM                  OPENA
+			TCOPY                   TICTOC                                    PROF DEEP                DISK
+			TPASTE                  TICTOC ON                                 CDH CLEAN                DISKH
+			LCOPY                   TICTOC OFF                                ALS                      TREE
+			LPASTE                                                            ALSD                     TREE ALL
+			VCOPY                   <Profiler>                                ALSF                     TREE DIR
+			VPASTE                  PROF                                                               TREE ALL DIR
+			FCOPY                   PROF ON                                                            FD
+			FPASTE                  PROF OFF                                                           AFD (FDA)
+			MLPASTE                 PROF FLAME                                                         FDT
+			                        PROF FLAME OPEN                                                    FDTA
+			<'ans' History>         PROF FLAME COPY                                                    FD SEL (FDS)
+			NEXT                    PROF FLAME PASTE                                                   LS SEL (LSS)
+			PREV                                                                                       LS REL (LSR)
+			PREV ON                 <Toggle Colors>                                                    LS FZF (LSZ)
+			PREV OFF                FANSI ON                                                           LS QUE (LSQ)
+			PREV CLEAR              FANSI OFF                                                          RANGER (RNG)
+			PREV ALL
+			                        <Module Reloading>
+			                        RELOAD ON
+			                        RELOAD OFF
 
 	// NOTE: When a command here is listed like:
 	//    SOME COMMAND (SMCMD)
