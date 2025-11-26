@@ -57414,7 +57414,8 @@ def _iterfzf_with_ls_preview(iterable, exact=False, **kwargs):
     # Use custom formatter that shows size, date, and filename in colored columns
     # No permission/owner noise - just the useful info
     formatter_path = get_module_path("rp.libs.ls_colored_columns")
-    preview_cmd = '{0} {1} {}'.format(shlex.quote(sys.executable), shlex.quote(formatter_path))
+    preview_cmd = '{0} {1} {{}}'.format(shlex.quote(sys.executable), shlex.quote(formatter_path))
+
 
     # Only set preview if not already specified
     if 'preview' not in kwargs:
