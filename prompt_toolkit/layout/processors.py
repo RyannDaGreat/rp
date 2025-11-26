@@ -21,8 +21,10 @@ from rp.prompt_toolkit.token import Token
 
 from .utils import token_list_len, explode_tokens
 
-import re
 import keyword
+
+# Only import when async analyzers are needed (avoid circular imports)
+# from rp.rp_ptpython.async_analyzer_base import AsyncAnalyzerBase, build_line_map_difflib
 
 __all__ = (
     'Processor',
@@ -44,6 +46,7 @@ __all__ = (
     'ShowWhitespaceProcessor',
     'HighlightWordOccurrencesProcessor',
     'HighlightInjectedLanguageProcessor',
+    'SyntaxErrorProcessor',
 )
 
 
@@ -965,4 +968,291 @@ class HighlightInjectedLanguageProcessor(Processor):
 
     def apply_transformation(self, cli, document, lineno, source_to_display, tokens):
         """No transformation needed - lexer handles it."""
+        return Transformation(tokens)
+
+from rp.rp_ptpython.async_analyzer_base import AsyncAnalyzerBase, build_line_map_difflib
+
+
+class AsyncRuffChecker(AsyncAnalyzerBase):
+    """
+    Background ruff checker using AsyncAnalyzerBase.
+    Runs ruff in background thread (debounced to 0.1s) to avoid blocking UI.
+    """
+    def __init__(self, redraw_callback=None):
+        super().__init__(debounce_interval=0.1, redraw_callback=redraw_callback)
+
+        # Import subprocess tools
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        self.json = json
+        self.subprocess = subprocess
+        self.tempfile = tempfile
+        self.Path = Path
+
+    def _empty_results(self):
+        return {}
+
+    def _translate_results(self, old_code, new_code, old_diags):
+        """Translate diagnostic line numbers using difflib."""
+        if not old_code or not old_diags:
+            return {}
+
+        line_map = build_line_map_difflib(old_code, new_code)
+
+        # Translate diagnostics to new line numbers
+        new_diags = {}
+        for old_line, issues in old_diags.items():
+            if old_line in line_map:
+                new_line, _ = line_map[old_line]
+                new_diags[new_line] = issues
+
+        return new_diags
+
+    def _analyze(self, text, known_names):
+        """Run ruff subprocess in background, filtering out F821 for known REPL variables."""
+        # Write to temp file (no injection needed!)
+        with self.tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            f.write(text)
+            temp_path = f.name
+
+        try:
+            # Use temp dir for cache - faster (local storage) and avoids littering .ruff_cache everywhere
+            import os
+            import rp.r as r
+            cache_dir = r._ruff_cache_dir
+            os.makedirs(cache_dir, exist_ok=True)
+
+            result = self.subprocess.run(
+                ['ruff', 'check', '--output-format=json', '--cache-dir', cache_dir, temp_path],
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+
+            diagnostics = self.json.loads(result.stdout) if result.stdout else []
+
+            lines_with_issues = {}
+            for diag in diagnostics:
+                line_num = diag['location']['row']
+
+                # Filter out F821 (undefined name) for variables we know are in REPL scope
+                if diag['code'] == 'F821' and known_names:
+                    # Extract variable name from message like "Undefined name `asdf`"
+                    import re
+                    match = re.search(r'Undefined name `([^`]+)`', diag['message'])
+                    if match and match.group(1) in known_names:
+                        continue  # Skip this warning - variable is defined in REPL
+
+                col = diag['location']['column']
+                end_col = diag.get('end_location', {}).get('column', col + 1)
+                # Only E9XX codes are syntax errors (red); E1XX-E8XX are style violations (yellow)
+                is_error = diag['code'] == 'invalid-syntax' or (diag['code'].startswith('E9') and len(diag['code']) >= 3)
+
+                if line_num not in lines_with_issues:
+                    lines_with_issues[line_num] = []
+
+                lines_with_issues[line_num].append({
+                    'col': col,
+                    'end_col': end_col,
+                    'message': diag['message'],
+                    'code': diag['code'],
+                    'is_error': is_error
+                })
+
+            return lines_with_issues
+        except:
+            return {}
+        finally:
+            try:
+                self.Path(temp_path).unlink()
+            except:
+                pass
+
+    def get_diagnostics(self, text, known_names=None):
+        """Get diagnostics, using cache with difflib translation."""
+        known_names = known_names or set()
+        return self.get_results(text, known_names)
+
+
+class AsyncShellcheckChecker(AsyncAnalyzerBase):
+    """
+    Background shellcheck checker using AsyncAnalyzerBase.
+    Runs shellcheck in background thread (debounced to 0.1s) to avoid blocking UI.
+    """
+    def __init__(self, redraw_callback=None):
+        super().__init__(debounce_interval=0.1, redraw_callback=redraw_callback)
+
+        # Import subprocess tools
+        import json
+        import subprocess
+        import tempfile
+        from pathlib import Path
+        self.json = json
+        self.subprocess = subprocess
+        self.tempfile = tempfile
+        self.Path = Path
+
+    def _empty_results(self):
+        return {}
+
+    def _translate_results(self, old_code, new_code, old_diags):
+        """Translate diagnostic line numbers using difflib."""
+        if not old_code or not old_diags:
+            return {}
+
+        line_map = build_line_map_difflib(old_code, new_code)
+
+        # Translate diagnostics to new line numbers
+        new_diags = {}
+        for old_line, issues in old_diags.items():
+            if old_line in line_map:
+                new_line, _ = line_map[old_line]
+                new_diags[new_line] = issues
+
+        return new_diags
+
+    def _analyze(self, text, known_names):
+        """Run shellcheck subprocess in background."""
+        # Strip first ! character if present
+        if text.startswith('!'):
+            bash_text = text[1:]
+            offset = 1
+        else:
+            bash_text = text
+            offset = 0
+
+        # Write to temp file
+        with self.tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
+            f.write(bash_text)
+            temp_path = f.name
+
+        try:
+            result = self.subprocess.run(
+                ['shellcheck', '--format=json', temp_path],
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+
+            diagnostics = self.json.loads(result.stdout) if result.stdout else []
+
+            lines_with_issues = {}
+            for diag in diagnostics:
+                line_num = diag['line']
+                col = diag['column']
+                end_col = diag.get('endColumn', col + 1)
+                level = diag['level']  # error, warning, info, style
+                is_error = level == 'error'
+
+                # Adjust column positions for first line to account for stripped !
+                if line_num == 1 and offset > 0:
+                    col += offset
+                    end_col += offset
+
+                if line_num not in lines_with_issues:
+                    lines_with_issues[line_num] = []
+
+                lines_with_issues[line_num].append({
+                    'col': col,
+                    'end_col': end_col,
+                    'message': diag['message'],
+                    'code':"SC{0}".format(diag['code']),
+                    'is_error': is_error
+                })
+
+            return lines_with_issues
+        except:
+            return {}
+        finally:
+            try:
+                self.Path(temp_path).unlink()
+            except:
+                pass
+
+    def get_diagnostics(self, text, known_names=None):
+        """Get diagnostics, using cache with difflib translation."""
+        return self.get_results(text, known_names or set())
+
+
+class SyntaxErrorProcessor(Processor):
+    """
+    Processor that highlights syntax errors and warnings using ruff or shellcheck.
+
+    Applies Token.SyntaxError (with red undercurl) to syntax errors and
+    Token.SyntaxWarning (with yellow undercurl) to warnings like unused imports.
+
+    Uses AsyncRuffChecker for Python code and AsyncShellcheckChecker for bash code (shell mode).
+    Shell mode is detected when text starts with '!'.
+    REPL-aware: injects known variables before linting to avoid false positives.
+    """
+
+    def __init__(self, python_input=None):
+        self.python_input = python_input
+        self._last_refresh_text = None
+
+    def apply_transformation(self, cli, document, lineno, source_to_display, tokens):
+        # Trigger refresh once per render pass (not per line)
+        if self.python_input and document.text != self._last_refresh_text:
+            self._last_refresh_text = document.text
+            self.python_input.refresh_analysis(document.text)
+
+        # Detect shell mode
+        is_shell_mode = document.text.startswith('!')
+
+        # Get the appropriate checker based on mode
+        if is_shell_mode:
+            checker = self.python_input._shellcheck_checker if self.python_input else None
+        else:
+            checker = self.python_input._ruff_checker if self.python_input else None
+
+        if not checker:
+            return Transformation(tokens)
+
+        # Set redraw callback once
+        if not checker.redraw_callback:
+            checker.redraw_callback = lambda: cli.request_redraw()
+
+        # Get current diagnostics
+        with checker.lock:
+            diagnostics = checker.cached_results
+
+        line_issues = diagnostics.get(lineno + 1, [])
+
+        if not line_issues:
+            # No issues on this line
+            return Transformation(tokens)
+
+        # Explode tokens into individual characters so we can apply styles per-character
+        tokens = explode_tokens(tokens)
+
+        # Apply error/warning undercurls to affected characters
+        for i, (token, char) in enumerate(tokens):
+            col = i + 1  # Column is 1-indexed
+
+            # Check if this character position has any issues
+            overlapping_issues = [
+                issue for issue in line_issues
+                if issue['col'] <= col < issue['end_col']
+            ]
+
+            if overlapping_issues:
+                # Determine the most severe issue (error > warning > unused variable/import)
+                is_error = any(issue['is_error'] for issue in overlapping_issues)
+                is_unused_var = any(issue['code'] == 'F841' for issue in overlapping_issues)
+                is_unused_import = any(issue['code'] == 'F401' for issue in overlapping_issues)
+
+                if is_error:
+                    error_token = Token.SyntaxError
+                elif is_unused_var:
+                    error_token = Token.SyntaxWarning.UnusedVariable
+                elif is_unused_import:
+                    error_token = Token.SyntaxWarning.UnusedImport
+                else:
+                    error_token = Token.SyntaxWarning
+
+                # Combine original token with error token using ':' separator to preserve both styles
+                tokens[i] = (token + (':', ) + error_token, char)
+
         return Transformation(tokens)

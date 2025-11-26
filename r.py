@@ -22452,6 +22452,8 @@ def _multi_line_python_input(prompt):
         return out+'\n'+_multi_line_python_input(' '*len(prompt))
     return out
 
+
+_treesitter_supported=tuple(sys.version_info) >= (3,10)
 _default_pyin_settings=dict(
     enable_mouse_support=False,
     enable_history_search=True,
@@ -22476,10 +22478,9 @@ _default_pyin_settings=dict(
     wrap_lines=True,
     complete_while_typing=True,
     allow_jedi_dynamic_imports=False,  # When False, prevent Jedi from importing unloaded modules (faster on NFS)
-    enable_semantic_highlighting=True,  # When True, use Jedi to add semantic highlighting (callables, modules)
-    gray_unreachable_code=True,  # When True, dim unreachable code (requires enable_semantic_highlighting)
-    enable_linting=True,  # DEPRECATED: Use linting_mode instead. When True, equivalent to linting_mode='on'
-    linting_mode='on',  # Linting mode: 'off' (no linting), 'on' (critical errors only), 'verbose' (all errors including style nazis)
+    enable_semantic_highlighting=True and _treesitter_supported,  # When True, use Jedi to add semantic highlighting (callables, modules)
+    gray_unreachable_code       =True and _treesitter_supported,  # When True, dim unreachable code (requires enable_semantic_highlighting)
+    enable_linting              =True and _treesitter_supported,  # Might set to false if I dont make this async...kinda slow right now...
     vi_mode=False,
     paste_mode=False  ,
     confirm_exit=True  ,

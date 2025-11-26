@@ -16,7 +16,8 @@ from rp.prompt_toolkit.layout.processors import (
     ConditionalProcessor, AppendAutoSuggestion, HighlightSearchProcessor,
     HighlightSelectionProcessor, HighlightMatchingBracketProcessor,
     Processor, Transformation, IndentGuideProcessor, ShowWhitespaceProcessor,
-    HighlightWordOccurrencesProcessor, HighlightInjectedLanguageProcessor
+    HighlightWordOccurrencesProcessor, HighlightInjectedLanguageProcessor,
+    SyntaxErrorProcessor
 )
 from rp.prompt_toolkit.layout.screen import Char
 from rp.prompt_toolkit.layout.toolbars import CompletionsToolbar, ArgToolbar, SearchToolbar, ValidationToolbar, SystemToolbar, TokenListToolbar
@@ -404,7 +405,13 @@ def status_bar(python_input):
                 append((TB, 'Micro:On  ', toggle_microcompletions))
             else:
                 append((TB.PasteModeOn, 'Micro:Off ', toggle_microcompletions))
-            
+
+            # Show linting error at cursor position
+            if python_input.enable_linting:
+                python_input.update_linting_error_at_cursor(cli.current_buffer.document)
+                if python_input.current_linting_error:
+                    append((TB, ' '))
+                    append((TB.PasteModeOn, python_input.current_linting_error))
 
             # if hasattr(python_input,'session_title') and python_input.session_title:
             #     # append((Token.Window.Title, python_input.session_title, toggle_microcompletions))
@@ -679,6 +686,11 @@ def create_layout(python_input,
                 index = b.document.translate_row_col_to_index(row - 1, col)
                 return index
 
+        # Create ruff checker and shellcheck checker and store on python_input
+        from rp.prompt_toolkit.layout.processors import AsyncRuffChecker, AsyncShellcheckChecker
+        python_input._ruff_checker = AsyncRuffChecker()
+        python_input._shellcheck_checker = AsyncShellcheckChecker()
+
         return Window(
             BufferControl(
                 buffer_name=DEFAULT_BUFFER,
@@ -687,6 +699,11 @@ def create_layout(python_input,
                     # Order matters here! We want to ensure brackets are highlighted properly
                     # First add background highlighting for injected languages
                     HighlightInjectedLanguageProcessor(),
+                    # Add syntax error highlighting with undercurls (with REPL globals awareness)
+                    ConditionalProcessor(
+                        processor=SyntaxErrorProcessor(python_input=python_input),
+                        filter=Condition(lambda cli: python_input.enable_linting),
+                    ),
                     # Then highlight selections
                     HighlightSelectionProcessor(),
                     DisplayMultipleCursors(DEFAULT_BUFFER),

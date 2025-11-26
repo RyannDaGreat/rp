@@ -251,7 +251,7 @@ class _EscapeCodeCache(dict):
         self.ansi_colors_only = to_simple_filter(ansi_colors_only)
 
     def __missing__(self, attrs):
-        fgcolor, bgcolor, bold, underline, italic, blink, reverse, color_alpha, bgcolor_alpha = attrs
+        fgcolor, bgcolor, bold, underline, italic, blink, reverse, color_alpha, bgcolor_alpha, undercurl, underline_color, faded, fastblink, hide, strike, overlined, underdouble, underdots, underdash = attrs
         # Note: color_alpha and bgcolor_alpha are already blended into fgcolor/bgcolor by merge_attrs()
         parts = []
 
@@ -259,14 +259,41 @@ class _EscapeCodeCache(dict):
 
         if bold:
             parts.append('1')
+        if faded:
+            parts.append('2')
         if italic:
             parts.append('3')
         if blink:
             parts.append('5')
-        if underline:
-            parts.append('4')
+        if fastblink:
+            parts.append('6')
         if reverse:
             parts.append('7')
+        if hide:
+            parts.append('8')
+        if strike:
+            parts.append('9')
+        if overlined:
+            parts.append('53')
+
+        # Handle underline styles (mutually exclusive with priority)
+        if undercurl:
+            parts.append('4:3')  # Undercurl style
+        elif underdouble:
+            parts.append('4:2')  # Double underline
+        elif underdots:
+            parts.append('4:4')  # Dotted underline
+        elif underdash:
+            parts.append('4:5')  # Dashed underline
+        elif underline:
+            parts.append('4')    # Regular underline
+
+        # Add underline color if specified (for any underline style)
+        if underline_color is not None and (underline or undercurl or underdouble or underdots or underdash):
+            # Convert underline_color to ANSI 256 color code or RGB
+            ucolor_codes = self._color_to_underline_code(underline_color)
+            if ucolor_codes:
+                parts.extend(ucolor_codes)
 
         if parts:
             result = '\x1b[0;' + ';'.join(parts) + 'm'
@@ -340,6 +367,41 @@ class _EscapeCodeCache(dict):
         result.extend(get(bg_color, True))
 
         return map(six.text_type, result)
+
+    def _color_to_underline_code(self, color):
+        """
+        Convert a color to ANSI underline color code (58;5;X or 58;2;R;G;B).
+
+        :param color: Color as hex string or ANSI color name
+        :return: List of ANSI code parts for underline color
+        """
+        if color is None:
+            return []
+
+        # Handle ANSI color names
+        ansi_underline_colors = {
+            'ansiblack': 0, 'ansired': 1, 'ansigreen': 2, 'ansiyellow': 3,
+            'ansiblue': 4, 'ansifuchsia': 5, 'ansiturquoise': 6, 'ansilightgray': 7,
+            'ansidarkgray': 8, 'ansidarkred': 9, 'ansidarkgreen': 10, 'ansibrown': 11,
+            'ansidarkblue': 12, 'ansipurple': 13, 'ansiteal': 14, 'ansiwhite': 15,
+        }
+
+        if color in ansi_underline_colors:
+            return ['58', '5', str(ansi_underline_colors[color])]
+
+        # Handle hex RGB colors
+        try:
+            rgb = self._color_name_to_rgb(color)
+            r, g, b = rgb
+
+            # True colors
+            if self.true_color:
+                return ['58', '2', str(r), str(g), str(b)]
+            # 256 colors
+            else:
+                return ['58', '5', str(_256_colors[rgb])]
+        except (ValueError, KeyError):
+            return []
 
 
 def _get_size(fileno):

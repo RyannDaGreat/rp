@@ -185,10 +185,18 @@ class PythonInput(object):
                 base_lexer,
                 self.get_globals,
                 self.get_locals,
-                get_enabled=lambda: self.enable_semantic_highlighting
+                get_enabled=lambda: self.enable_semantic_highlighting or self.enable_jedi_highlighting,
+                get_gray_unreachable=lambda: self.gray_unreachable_code,
+                get_treesitter_enabled=lambda: self.enable_semantic_highlighting,
+                get_jedi_enabled=lambda: self.enable_jedi_highlighting
             )
         else:
             self._lexer = _lexer
+
+        # Analysis components (set by layout)
+        self._ruff_checker = None
+        self._shellcheck_checker = None
+        self.current_linting_error = None  # Stores error message at cursor position
         self._extra_buffers=_extra_buffers
         self._accept_action=_accept_action
         self._on_exit=_on_exit
@@ -225,7 +233,10 @@ class PythonInput(object):
         self.enable_auto_suggest=False
         self.enable_mouse_support=False
         self.allow_jedi_dynamic_imports=False  # When False, prevent Jedi from importing unloaded modules (faster on NFS)
-        self.enable_semantic_highlighting=True  # When True, use Jedi to add semantic highlighting (callables, modules)
+        self.enable_semantic_highlighting=True  # When True, use tree-sitter for fast semantic highlighting (params, kwargs, globals, locals, nonlocals)
+        self.enable_jedi_highlighting=True  # When True, use Jedi for slow semantic highlighting (callables, modules, unused vars)
+        self.gray_unreachable_code=True  # When True, dim unreachable code (requires enable_semantic_highlighting)
+        self.enable_linting=True  # When True, use Ruff to show syntax errors and warnings with undercurls
         self.indent_guides_mode='Propagate'  # 'Off', 'Regular', or 'Propagate'
         self.show_whitespace='Off'  # 'Off', 'All', or 'Leading'
         self.highlight_cursor_line=False  # Highlight the background of the cursor line
@@ -359,6 +370,63 @@ class PythonInput(object):
                 flags|=value.compiler_flag
 
         return flags
+
+    def refresh_analysis(self, text):
+        """Trigger Jedi, Ruff, and Shellcheck analysis."""
+        if hasattr(self._lexer, 'async_highlighter'):
+            # Pass both flags to highlighter
+            self._lexer.async_highlighter.get_highlights(
+                text, self.get_globals(), self.get_locals(),
+                enable_treesitter=self.enable_semantic_highlighting,
+                enable_jedi=self.enable_jedi_highlighting
+            )
+
+        if self.enable_linting:
+            # Detect shell mode
+            is_shell_mode = text.startswith('!')
+
+            if is_shell_mode and self._shellcheck_checker:
+                # Use shellcheck for bash code
+                self._shellcheck_checker.get_diagnostics(text, set())
+            elif not is_shell_mode and self._ruff_checker:
+                # Use ruff for Python code
+                import builtins
+                known = set(self.get_globals().keys()) | set(self.get_locals().keys()) - set(dir(builtins))
+                self._ruff_checker.get_diagnostics(text, {n for n in known if not n.startswith('_')})
+
+    def update_linting_error_at_cursor(self, document):
+        """Update the current linting error based on cursor position."""
+        if not self.enable_linting:
+            self.current_linting_error = None
+            return
+
+        # Detect shell mode
+        is_shell_mode = document.text.startswith('!')
+        checker = self._shellcheck_checker if is_shell_mode else self._ruff_checker
+
+        if not checker:
+            self.current_linting_error = None
+            return
+
+        # Get diagnostics for current line
+        lineno = document.cursor_position_row + 1
+        col = document.cursor_position_col + 1  # Convert to 1-indexed for linter columns
+
+        with checker.lock:
+            diagnostics = checker.cached_results
+
+        line_issues = diagnostics.get(lineno, [])
+
+        # Find issue at cursor position
+        for issue in line_issues:
+            if issue['col'] <= col < issue['end_col']:
+                # Format the error message
+                code = issue.get('code', '')
+                message = issue.get('message', '')
+                self.current_linting_error = "{0}: {1}".format(code, message) if code else message
+                return
+
+        self.current_linting_error = None
 
     @property
     def add_key_binding(self):
@@ -834,10 +902,22 @@ class PythonInput(object):
                               description='Allow Jedi to import unloaded modules for completions. '
                                           'Disable for faster completions on NFS.',
                               field_name='allow_jedi_dynamic_imports'),
+                # simple_option(title='Semantic highlighting (tree-sitter)',
                 simple_option(title='Semantic highlighting',
-                              description='Use Jedi to highlight callables and modules with semantic colors. '
-                                          'Disable for slightly faster typing.',
+                              description='Use tree-sitter for fast syntax-based highlighting: parameters, kwargs, '
+                                          'globals, locals, nonlocals (fast, ~1ms). Disable if you only want Jedi.',
                               field_name='enable_semantic_highlighting'),
+                simple_option(title='Jedi highlighting',
+                              description='Use Jedi for type-based highlighting: callables, modules, unused variables '
+                                          '(slow, ~500ms). Disable for faster typing.',
+                              field_name='enable_jedi_highlighting'),
+                simple_option(title='Gray unreachable code',
+                              description='Dim unreachable code (after return, in if False blocks, etc).',
+                              field_name='gray_unreachable_code'),
+                simple_option(title='Linting',
+                              description='Use Ruff to show syntax errors and warnings with undercurls. '
+                                          'Disable for faster typing.',
+                              field_name='enable_linting'),
             ]),
             OptionCategory('Ryan Python',[
                 # Option(title='Sand Creature',
@@ -1245,11 +1325,16 @@ class PythonInput(object):
 
                 # Set docstring in docstring buffer.
                 if signatures:
-                    string=signatures[0].docstring()
-                    if not isinstance(string,six.text_type):
-                        string=string.decode('utf-8')
-                    cli.buffers['docstring'].reset(
-                        initial_document=Document(string,cursor_position=0))
+                    try:
+                        string=signatures[0].docstring()
+                        if not isinstance(string,six.text_type):
+                            string=string.decode('utf-8')
+                        cli.buffers['docstring'].reset(
+                            initial_document=Document(string,cursor_position=0))
+                    except (AssertionError, Exception):
+                        # Jedi bug: sometimes crashes getting docstrings
+                        # See: https://github.com/davidhalter/jedi/issues (klass.py:221 assertion)
+                        cli.buffers['docstring'].reset()
                 else:
                     cli.buffers['docstring'].reset()
 

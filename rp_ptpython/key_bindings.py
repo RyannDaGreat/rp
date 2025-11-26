@@ -1589,6 +1589,11 @@ def handle_character(buffer,char,event=None):
         if sync_comment_block_written_by_claude(buffer, char):
             return True
 
+    if char=='\n' and before=='!' and after:
+        # High priority: if buffer is just "!" with text after cursor, insert newline and don't execute
+        buffer.insert_text('\n')
+        return True
+
     if char=='\n' and after_line in ['"',"'"]:
         #Even if (especially if) we're in a string...
         #On \n:  ‹'|'›  -/->  ‹'\n|'›
@@ -2357,10 +2362,37 @@ def handle_character(buffer,char,event=None):
         if char in '{([])}' and meta_pressed(clear=False):
             #When holding alt, add a ) or ] or } to the end of the line, instead of autocompleting it where it is currently
             #TODO: Add example
+            end_char={'(':')','[':']','{':'}'}[char]
+
             if char in '{([':
                 buffer.insert_text(char)
-                char={'(':')','[':']','{':'}'}[char]
+                char=end_char
             meta_pressed(clear=True)
+
+
+            #Added functionality to make it possible to do better end-parenthesization
+            def add_last_possible_ending_parenthesis_to_code(code):
+                """ Warning: This is very inefficient but totally correct """ 
+                import rp
+                tokens=rp.split_python_tokens(code)
+                for index in reversed(range(len(tokens)+1)):
+                    new_tokens=tokens.copy()
+                    new_tokens.insert(index,char)
+                    new_code=''.join(new_tokens)
+                    if rp.is_valid_python_syntax(new_code):
+                        return new_code
+                return None
+            #Try to do it this way - though this requires valid syntax to be possible
+            new_code = add_last_possible_ending_parenthesis_to_code(buffer.document.text)
+            if new_code is not None:
+                replace_buffer_text(buffer, new_code)
+                return True
+
+
+
+            #OLD METHOD AS FALLBACK FOR BAD SYNTAX:
+
+
             # l=after_line.find(':')#In the event that we're in "for x in func(|thing:" we want "for x in func(|thing):" and not "for x in func(|thing:)"
             l=len(after_line)-1 if after_line.endswith(':') else len(after_line)
             buffer.cursor_right(l)
@@ -2611,7 +2643,7 @@ def handle_character(buffer,char,event=None):
             .replace(".", "") #"python3.13" is a command
             .isalnum()        #Numbers can be in commands too of course
         ):
-            autocaps = 'cdm cd py pym apy apym acat cat vim tab fd fda fdt rn run ccat ncat pip take mkdir cdu lss lsr'.split()
+            autocaps = 'cdm cd py pym apy apym acat cat vim tab fd fda fdt rn run ccat ncat pip take mkdir cdu lss lsr lg'.split()
 
             import rp
             shortcuts = {c:'!'+c for c in rp.r._get_cached_system_commands()}
@@ -6694,6 +6726,82 @@ def load_python_bindings(python_input):
         else:
             clear_terminal_screen()
             event.cli.renderer.clear()
+
+    # AST-based smart selection expansion/shrinking
+    # Import pure functional selection module
+    from rp.rp_ptpython.ast_selection import expand_selection, contract_selection
+
+    @handle(Keys.AltShiftUp, filter=~vi_mode_enabled)
+    def _(event):
+        """Alt+Shift+Up: Expand selection based on Python AST."""
+        buffer = event.cli.current_buffer
+        doc = buffer.document
+
+        # Get current selection bounds (or cursor position if no selection)
+        if doc.selection:
+            selection = doc.selection
+            cursor_pos = doc.cursor_position
+            if selection.original_cursor_position < cursor_pos:
+                start = selection.original_cursor_position
+                end = cursor_pos
+            else:
+                start = cursor_pos
+                end = selection.original_cursor_position
+        else:
+            # First time expanding - start from cursor
+            start = end = doc.cursor_position
+
+        # Get history (empty list if none)
+        history = getattr(buffer, '_ast_selection_history', [])
+
+        # Pure functional call
+        result = expand_selection(doc.text, start, end, history)
+        if result:
+            new_start, new_end, new_history = result
+
+            # Update buffer state with new values
+            buffer._ast_selection_history = new_history
+            buffer.cursor_position = new_start
+            buffer.start_selection()
+            buffer.cursor_position = new_end
+
+    @handle(Keys.AltShiftDown, filter=has_selection & ~vi_mode_enabled)
+    def _(event):
+        """Alt+Shift+Down: Shrink selection based on Python AST."""
+        buffer = event.cli.current_buffer
+        doc = buffer.document
+
+        if doc.selection:
+            # Get current selection bounds
+            selection = doc.selection
+            cursor_pos = doc.cursor_position
+            if selection.original_cursor_position < cursor_pos:
+                start = selection.original_cursor_position
+                end = cursor_pos
+            else:
+                start = cursor_pos
+                end = selection.original_cursor_position
+
+            # Get history
+            history = getattr(buffer, '_ast_selection_history', [])
+
+            # Pure functional call
+            result = contract_selection(doc.text, start, end, history)
+            if result:
+                new_start, new_end, new_history = result
+
+                # Update buffer state
+                buffer._ast_selection_history = new_history
+
+                if new_start == new_end:
+                    # Shrinking back to cursor position - clear selection
+                    buffer.exit_selection()
+                    buffer.cursor_position = new_start
+                else:
+                    # Set new selection
+                    buffer.cursor_position = new_start
+                    buffer.start_selection()
+                    buffer.cursor_position = new_end
 
     return registry
 

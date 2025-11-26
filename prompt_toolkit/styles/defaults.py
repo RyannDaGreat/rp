@@ -97,6 +97,12 @@ DEFAULT_STYLE_EXTENSIONS = {
     # Language injection regions (e.g., """#!bash ... """)
     Token.InjectedLanguage:                       'noinherit bg:#0d2b0d',
 
+    # Syntax errors and warnings (with undercurl)
+    Token.SyntaxError:                            'undercurl underline_color:#ff0000',
+    Token.SyntaxWarning:                          'undercurl underline_color:#ffff00',
+    Token.SyntaxWarning.UnusedVariable:           'faded undercurl underline_color:#ffff00',
+    Token.SyntaxWarning.UnusedImport:             'faded undercurl underline_color:#ffff00',
+
     # When Control-C has been pressed. Grayed.
     Token.Aborted:                                '#888888',
 

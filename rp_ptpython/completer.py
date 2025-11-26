@@ -73,7 +73,8 @@ def get_word_before_cursor_custom(document):
         else:
             break
     
-    return text[i + 1:]
+    output = text[i + 1:]
+    return output
 
 
 def get_last_name(s: str) -> str :
@@ -243,6 +244,8 @@ class PythonCompleter(Completer):
             - 'candidates': list of candidate strings
             - 'priorities': dict mapping candidate -> priority (optional)
         """
+        
+        #Common Variables
         before_line = document.current_line_before_cursor
         after_line = document.current_line_after_cursor
         text = document.text
@@ -252,31 +255,37 @@ class PythonCompleter(Completer):
         shell_mode = document.text.startswith('!')
         scope = rp.merged_dicts(self.get_globals(), self.get_locals(), precedence='last')
 
+        shell_extensions = '.sh', '.bash', '.zsh'
+        python_extensions = '.py', '.rpy'
+        if shell_mode: script_extensions = shell_extensions
+        elif text:     script_extensions = python_extensions
+        else:          script_extensions = shell_extensions + python_extensions
+
+        #Priority Functions
+        def script_priority(c):
+            if c.is_dir:
+                return 2  # Folders third
+            name_lower = c.name.lower()
+            if rp.ends_with_any(name_lower, script_extensions):
+                return 0  # Script files first
+            if c.is_text_file:
+                return 1  # Text files second
+            return 3  # Other files last
+
         # Shell mode - delegate to bash completer
         if shell_mode:
             return self._bash_completer.get_raw_candidates(document)
 
         #RP Commands
         if single_line:
-            if rp.starts_with_any(before_line, 'PYM ', 'APYM ', 'CDM ')                                                                   : return [Candidate(name=name) for name in get_all_importable_module_names()]
-            if rp.starts_with_any(before_line, 'CD ')                                                                                     : return self._path_completions(before_line, dirs_only=True)
-            if rp.starts_with_any(before_line, 'TAKE ', 'MKDIR ')                                                                         : return self._path_completions(before_line, priority_func=lambda c: 0 if c.is_dir else 1)
-            if rp.starts_with_any(before_line, 'VIM ', 'NVIM ')                                                                           : return self._path_completions(before_line, check_text_files=True, priority_func=lambda c: 0 if (c.is_dir or c.is_text_file) else 1)
-            if rp.starts_with_any(before_line, 'OPEN ', 'RM ', 'RN ', 'MV ', 'FD ', 'WANS ', 'PIP ')                                      : return self._path_completions(before_line)
-            if rp.starts_with_any(before_line, 'CAT ', 'NCAT ', 'CCAT ', 'ACAT ', 'TAB ', 'RUN ', 'PY ', 'APY ', 'LSS ', 'LSR ', 'FCOPY '): return self._path_completions(before_line, priority_func=lambda c: 0 if not c.is_dir else 1)
-            if rp.starts_with_any(before_line, 'RUN ') or re.search(r'`\w*$', before_line):
-                script_extensions = ('.sh', '.bash', '.zsh') if shell_mode else ('.py', '.rpy')
-                def priority_func(c):
-                    if c.is_dir:
-                        return 2  # Folders third
-                    name_lower = c.name.lower()
-                    if rp.ends_with_any(name_lower, *script_extensions):
-                        return 0  # Script files first
-                    if c.is_text_file:
-                        return 1  # Text files second
-                    return 3  # Other files last
-                return self._path_completions(before_line, check_text_files=True, priority_func=priority_func)
-            if rp.starts_with_any(before_line, 'CDH '):
+            if rp.starts_with_any(before, 'PYM ', 'APYM ', 'CDM ')                                                           : return [Candidate(name=name) for name in get_all_importable_module_names()]
+            if rp.starts_with_any(before, 'CD ')                                                                             : return self._path_completions(before, dirs_only=True)
+            if rp.starts_with_any(before, 'TAKE ', 'MKDIR ')                                                                 : return self._path_completions(before, priority_func=lambda c: 0 if c.is_dir else 1)
+            if rp.starts_with_any(before, 'VIM ', 'NVIM ')                                                                   : return self._path_completions(before, check_text_files=True, priority_func=lambda c: 0 if (c.is_dir or c.is_text_file) else 1)
+            if rp.starts_with_any(before, 'OPEN ', 'RM ', 'RN ', 'MV ', 'FD ', 'WANS ', 'PIP ')                              : return self._path_completions(before)
+            if rp.starts_with_any(before, 'RUN ')                                                                            : return self._path_completions(before, check_text_files=True, priority_func=script_priority)
+            if rp.starts_with_any(before, 'CAT ', 'NCAT ', 'CCAT ', 'ACAT ', 'TAB ', 'PY ', 'APY ', 'LSS ', 'LSR ', 'FCOPY '): return self._path_completions(before, priority_func=lambda c: 0 if not c.is_dir else 1)
+            if rp.starts_with_any(before, 'CDH '):
                 # Show full paths in hints
                 history = rp.r._get_cd_history()
                 names = rp.r._get_cdh_back_names()
@@ -287,7 +296,7 @@ class PythonCompleter(Completer):
                     if folder_name and folder_name not in name_to_path:
                         name_to_path[folder_name] = path
                 return [Candidate(name=name, display_meta='Path: ' + name_to_path.get(name, name)) for name in names]
-            if rp.starts_with_any(before_line, 'CDU '):
+            if rp.starts_with_any(before, 'CDU '):
                 pwd = rp.get_current_directory()
                 cwd = pwd
                 updirs = []
@@ -296,6 +305,12 @@ class PythonCompleter(Completer):
                     if rp.get_folder_name(cwd):
                         updirs.append(rp.get_folder_name(cwd))
                 return [Candidate(name=name) for name in updirs]
+
+        if '`' in before_line:
+            micro_command_arg = before_line.split('`')[-1]
+            if not rp.contains_any(micro_command_arg, '"', "'"): #Making sure we're not in a string. Ideally we'd have a better way to know this, like looking at syntax highlighting...
+                return self._path_completions(before, check_text_files=True, priority_func=script_priority)
+
         # Import statements
         if re.fullmatch(r'\s*(from|import)\s+\w*', before_line):
             python_candidates = [Candidate(name=name) for name in get_all_importable_module_names()]

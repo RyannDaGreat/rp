@@ -108,6 +108,16 @@ def merge_attrs(list_of_attrs):
             blink=attr.blink if attr.blink is not None else result.blink,
             reverse=attr.reverse if attr.reverse is not None else result.reverse,
             color_alpha=new_color_alpha,
-            bgcolor_alpha=new_bgcolor_alpha)
+            bgcolor_alpha=new_bgcolor_alpha,
+            undercurl=attr.undercurl if attr.undercurl is not None else result.undercurl,
+            underline_color=attr.underline_color if attr.underline_color is not None else result.underline_color,
+            faded=attr.faded if attr.faded is not None else result.faded,
+            fastblink=attr.fastblink if attr.fastblink is not None else result.fastblink,
+            hide=attr.hide if attr.hide is not None else result.hide,
+            strike=attr.strike if attr.strike is not None else result.strike,
+            overlined=attr.overlined if attr.overlined is not None else result.overlined,
+            underdouble=attr.underdouble if attr.underdouble is not None else result.underdouble,
+            underdots=attr.underdots if attr.underdots is not None else result.underdots,
+            underdash=attr.underdash if attr.underdash is not None else result.underdash)
 
     return result

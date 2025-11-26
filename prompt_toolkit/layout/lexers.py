@@ -244,7 +244,7 @@ class LazyBashLexer(LazyLexer):
         import re
         import rp
         Name = shell.Name
-        commands = rp.get_system_commands() + ['!']
+        commands = rp.get_system_commands(use_cache=True) + ['!']
         shell.BashLexer.tokens['basic'] += [(r'(^|!|\b)(' + '|'.join(re.escape(x) for x in commands) + r')(?=[\s)\`]|$)', Name.Function),]
 
 

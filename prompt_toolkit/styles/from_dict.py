@@ -120,6 +120,44 @@ def style_from_dict(style_dict, include_defaults=True):
                 attrs = attrs._replace(reverse=True)
             elif part == 'noreverse':
                 attrs = attrs._replace(reverse=False)
+            elif part == 'undercurl':
+                attrs = attrs._replace(undercurl=True)
+            elif part == 'noundercurl':
+                attrs = attrs._replace(undercurl=False)
+
+            # Additional fansi-compatible styles
+            elif part in ('faded', 'dim'):
+                attrs = attrs._replace(faded=True)
+            elif part in ('nofaded', 'nodim'):
+                attrs = attrs._replace(faded=False)
+            elif part == 'fastblink':
+                attrs = attrs._replace(fastblink=True)
+            elif part == 'nofastblink':
+                attrs = attrs._replace(fastblink=False)
+            elif part == 'hide':
+                attrs = attrs._replace(hide=True)
+            elif part == 'nohide':
+                attrs = attrs._replace(hide=False)
+            elif part == 'strike':
+                attrs = attrs._replace(strike=True)
+            elif part == 'nostrike':
+                attrs = attrs._replace(strike=False)
+            elif part == 'overlined':
+                attrs = attrs._replace(overlined=True)
+            elif part == 'nooverlined':
+                attrs = attrs._replace(overlined=False)
+            elif part == 'underdouble':
+                attrs = attrs._replace(underdouble=True)
+            elif part == 'nounderdouble':
+                attrs = attrs._replace(underdouble=False)
+            elif part == 'underdots':
+                attrs = attrs._replace(underdots=True)
+            elif part == 'nounderdots':
+                attrs = attrs._replace(underdots=False)
+            elif part == 'underdash':
+                attrs = attrs._replace(underdash=True)
+            elif part == 'nounderdash':
+                attrs = attrs._replace(underdash=False)
 
             # Pygments properties that we ignore.
             elif part in ('roman', 'sans', 'mono'):
@@ -135,6 +173,9 @@ def style_from_dict(style_dict, include_defaults=True):
             elif part.startswith('bg:'):
                 bgcolor, bgcolor_alpha = _colorformat(part[3:])
                 attrs = attrs._replace(bgcolor=bgcolor, bgcolor_alpha=bgcolor_alpha)
+            elif part.startswith('underline_color:'):
+                ucolor, _ = _colorformat(part[16:])
+                attrs = attrs._replace(underline_color=ucolor)
             else:
                 color, color_alpha = _colorformat(part)
                 attrs = attrs._replace(color=color, color_alpha=color_alpha)
