@@ -60,12 +60,15 @@ _rp_downloads_folder          = os.path.join(_rp_folder, "downloads")
 _rp_boot_cache                = os.path.join(_rp_folder, ".boot_cache")
 _rp_outputs_folder            = os.path.join(_rp_folder, "outputs")
 _old_gists_path               = os.path.join(_rp_folder, "old_gists.txt")
+_old_gists_cache              = os.path.join(_rp_downloads_folder, 'gist_cache')
 _claudecode_folder            = os.path.join(_rp_outputs_folder, "claudecode")
 _google_fonts_download_folder = os.path.join(_rp_downloads_folder, "google_fonts")
 _downloaded_font_dir          = os.path.join(_rp_downloads_folder, "fonts")
 _rp_gists_path                = os.path.join(_rp_git_dir, "gists")
 _cached_lexer_path            = os.path.join(_rp_boot_cache, "lexer.rpo")
 _cached_code_styles_path      = os.path.join(_rp_boot_cache, "code_styles.rpo")
+_cached_system_commands_path  = os.path.join(_rp_boot_cache, "system_commands.txt")
+_ruff_cache_dir               = os.path.join(tempfile.gettempdir(), 'rp_ruff_cache')
 
 #Add RP's libraries to system path
 sys.path.append(_rp_folder)
@@ -5111,8 +5114,15 @@ def boomerang_video(video):
     return new_video
     
 
+def _ensure_chmod_executable(path:str):
+    "Ensures a path has the executable permission bit turned on"
+    import os, stat, pathlib
+    p = pathlib.Path(path)
+    current_mode = p.stat().st_mode
+    if not (current_mode & stat.S_IXUSR):
+        p.chmod(current_mode | stat.S_IXUSR)
 
-def _get_executable(name, download_urls, executable_name):
+def _get_platform_executable(name, download_urls, executable_name):
     download_dir = make_directory(path_join(_rp_downloads_folder, name))
     url = (
         download_urls["macos"]
@@ -5128,8 +5138,11 @@ def _get_executable(name, download_urls, executable_name):
     assert folder_exists(folder)
     executable = path_join(folder, executable_name)
     assert file_exists(executable), executable
-    return executable
+    
+    if currently_running_linux() or currently_running_mac():
+        _ensure_chmod_executable(executable) #Fix permissions
 
+    return executable
 
 def _get_rife_executable():
     """Returns the path to the rife-ncnn-vulkan executable or if it doesn't exist in rp downloads it"""
@@ -5139,7 +5152,7 @@ def _get_rife_executable():
         linux="https://github.com/nihui/rife-ncnn-vulkan/releases/download/20221029/rife-ncnn-vulkan-20221029-ubuntu.zip",
         windows="https://github.com/nihui/rife-ncnn-vulkan/releases/download/20221029/rife-ncnn-vulkan-20221029-windows.zip",
     )
-    return _get_executable("rife", rife_download_urls, "rife-ncnn-vulkan")
+    return _get_platform_executable("rife", rife_download_urls, "rife-ncnn-vulkan")
 
 
 def _get_esrgan_executable():
@@ -5151,27 +5164,101 @@ def _get_esrgan_executable():
         linux="https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip",
         windows="https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-windows.zip",
     )
-    return _get_executable("esrgan", esrgan_download_urls, "realesrgan-ncnn-vulkan")
+    return _get_platform_executable("esrgan", esrgan_download_urls, "realesrgan-ncnn-vulkan")
 
-def slowmo_video_via_rife(video):
-    """ Doubles the framerate of a given video. Can be a list of images as defined by rp.is_image, or a numpy array etc. Anything compatible with save_image."""
+# def slowmo_video_via_rife(video):
+#     """ Doubles the framerate of a given video. Can be a list of images as defined by rp.is_image, or a numpy array etc. Anything compatible with save_image."""
+#     rife_executable = _get_rife_executable()
+#     input_dir = make_directory(temporary_file_path())
+#     output_dir = make_directory(temporary_file_path())
+#     try:
+#         save_images(video, input_dir, show_progress=True)
+#         command=shlex.quote(rife_executable) + " -i " + shlex.quote(input_dir) + " -o " + shlex.quote(output_dir)
+#         fansi_print(command, 'yellow')
+#         _run_sys_command(command)
+#         new_video = load_images(output_dir, show_progress=True)
+#         new_video = as_numpy_array(new_video)
+#     finally:
+#         if folder_exists(input_dir ): delete_folder(input_dir )
+#         if folder_exists(output_dir): delete_folder(output_dir)
+#
+#     #I found this created a duplicate last frame
+#     new_video=new_video[:-1]
+#
+#     return new_video
+
+def slowmo_video_via_rife(video, *, device=None, verbose=True):
+    """
+    Run RIFE frame interpolation on a given video
+
+    Args:
+        video: Input video (numpy array, list of images, video file path, or path with glob pattern)
+        device: Device selection:
+               - None: Use rp.select_torch_device(prefer_used=True) or auto-detect
+                       On Mac, will use internal GPU
+               - int: GPU index (0, 1, 2, etc.)
+               - 'cpu': Force CPU mode
+        verbose: Show progress
+
+    Returns:
+        Interpolated video with 2N-1 frames
+
+    TEXT MORPHING EXAMPLE:
+        
+        >>> t2i=partial(skia_text_to_image,background_color='blue')
+        ... video=[t2i('Hello 💁‍♀️'),t2i('Clara 🙋‍♀️'),t2i('and 🐶'),t2i('Emmy 🐶'),t2i('Hello 💁‍♀️')]
+        ... video=crop_images_to_max_size(video,origin='center')
+        ... for _ in range(4):
+        ...     video=slowmo_video_via_rife(video)
+        ... display_video(video,loop=True)
+
+    BASIC TEST EXAMPLE:
+
+        >>> test = np.random.rand(5, 64, 64, 3)
+        ... result = slowmo_video_via_rife(test, device="cpu", verbose=False)
+
+    """
     rife_executable = _get_rife_executable()
-    input_dir = make_directory(temporary_file_path())
-    output_dir = make_directory(temporary_file_path())
+    input_dir, output_dir = make_temporary_folders(2)
+
+    command = [rife_executable, "-i", input_dir, "-o", output_dir]
+
+    if not currently_running_mac():
+        # Add a GPU flag to RIFE
+
+        if currently_running_linux():
+            _ensure_libvulkan_installed()
+        
+        #Determine the flag from the args
+        if device is None:
+            device = select_torch_device(prefer_used=True)
+            assert _is_torch_device(device)
+        if _is_torch_device(device):
+            device = device.index
+            assert isinstance(device, int)
+        #
+        if device == "cpu":
+            gpu_flag = "-1"
+        elif isinstance(device, int):
+            gpu_flag = str(device)
+        else:
+            raise ValueError(
+                "Bad device argument: "
+                + repr(device if isinstance(device, (str, int)) else type(device))
+            )
+
+        command += ["-g", gpu_flag]
+
     try:
-        save_images(video, input_dir, show_progress=True)
-        command=shlex.quote(rife_executable) + " -i " + shlex.quote(input_dir) + " -o " + shlex.quote(output_dir)
-        fansi_print(command, 'yellow')
-        _run_sys_command(command)
-        new_video = load_images(output_dir, show_progress=True)
+        save_images(video, input_dir, show_progress=verbose)
+        _run_sys_command(*command)
+        new_video = load_images(output_dir, show_progress=verbose)
         new_video = as_numpy_array(new_video)
     finally:
-        if folder_exists(input_dir ): delete_folder(input_dir )
-        if folder_exists(output_dir): delete_folder(output_dir)
+        delete_folders(input_dir, output_dir, strict=False)
 
-    #I found this created a duplicate last frame
-    new_video=new_video[:-1]
-
+    # I found this created a duplicate last frame
+    new_video = new_video[:-1]
     return new_video
 
 
@@ -6007,6 +6094,12 @@ def is_torch_tensor(x):
     Tags: torch, tensor, type-check, pytorch, validation, isinstance
     """
     return _is_instance_of_module_class(x, 'torch', 'Tensor')
+
+def _is_torch_device(x):
+    """
+    Checks if an object is a PyTorch device without requiring torch to be imported.
+    """
+    return _is_instance_of_module_class(x, 'torch', 'device')
 
 def is_torch_image(image):
     """
@@ -6853,9 +6946,9 @@ def run_as_new_process(func,*args,**kwargs):
 
 # endregion
 def is_valid_url(url:str)->bool:
-    """ 
-    Return true iff the url string is syntactically valid 
-    
+    """
+    Return true iff the url string is syntactically valid
+
     Args:
         url (str): String to validate as a URL. Must be a string type.
         
@@ -6889,6 +6982,98 @@ def is_valid_url(url:str)->bool:
         return all([result.scheme, result.netloc])
     except Exception:
         return False
+
+def is_valid_data_uri(data_uri:str)->bool:
+    """
+    Return true iff the string is a syntactically valid data URI
+
+    Args:
+        data_uri (str): String to validate as a data URI. Must be a string type.
+
+    Returns:
+        bool: True if data URI is syntactically valid, False otherwise.
+              Returns False for non-string inputs.
+
+    Examples:
+        >>> rp.is_valid_data_uri("data:image/png;base64,iVBORw0KGgo...")
+        True
+        >>> rp.is_valid_data_uri("data:video/mp4;base64,AAAAIGZ...")
+        True
+        >>> rp.is_valid_data_uri("data:audio/wav;base64,UklGRiQA...")
+        True
+        >>> rp.is_valid_data_uri("https://example.com/image.png")
+        False
+        >>> rp.is_valid_data_uri("not-a-data-uri")
+        False
+        >>> rp.is_valid_data_uri(None)  # Non-string input
+        False
+
+    Note:
+        - Validates the data: scheme and basic structure
+        - Does not validate base64 encoding or data integrity
+        - Supports any mediatype (image, video, audio, text, application, etc.)
+
+    """
+    try:
+        _get_uri_mediatype(data_uri)
+        return True
+    except ValueError:
+        return False
+
+def _get_uri_mediatype(data_uri:str)->str:
+    """
+    Parse and return the mediatype prefix from a data URI.
+
+    Args:
+        data_uri (str): Data URI string to parse
+
+    Returns:
+        str: Mediatype prefix ('image', 'video', 'audio', 'text', 'application', etc.)
+
+    Raises:
+        ValueError if not a valid data URI or on parsing error
+
+    Common mediatype prefixes to check against:
+        - 'image'       : image/png, image/jpeg, image/gif, image/webp, image/svg+xml
+        - 'video'       : video/mp4, video/webm, video/ogg, video/quicktime
+        - 'audio'       : audio/mpeg, audio/wav, audio/ogg, audio/aac, audio/webm
+        - 'text'        : text/plain, text/html, text/css, text/javascript, text/csv
+        - 'application' : application/json, application/pdf, application/xml, application/zip
+        - 'font'        : font/woff, font/woff2, font/ttf, font/otf
+
+    Data URI format: data:[<mediatype>][;encoding],<data>
+    Examples:
+        - data:image/png;base64,iVBORw0KG... → 'image'
+        - data:video/mp4;base64,AAAAIGZ... → 'video'
+        - data:audio/wav;base64,UklGRiQA... → 'audio'
+        - data:text/plain;charset=utf-8,Hello → 'text'
+        - data:application/json;base64,eyJ... → 'application'
+
+    Usage:
+        >>> mediatype = _get_uri_mediatype(uri)
+        >>> if mediatype == 'image':
+        >>>     return load_image(uri)
+        >>> elif mediatype == 'video':
+        >>>     return load_video(uri)
+        >>> elif mediatype == 'audio':
+        >>>     return load_sound_file(uri)
+
+    See Also:
+        - _guess_mimetype(): Guess mediatype from file path extension
+        - is_valid_data_uri(): Check if string is a valid data URI
+    """
+    import re
+    if not isinstance(data_uri, str):
+        return None
+    try:
+        # Data URI format: data:[<mediatype>][;encoding],<data>
+        # Match: data:type/subtype[;encoding],data
+        match = re.match(r'^data:([a-zA-Z0-9]+)/[a-zA-Z0-9+.-]+[;,]', data_uri)
+        if match:
+            return match.group(1)  # Return the prefix (e.g., 'image', 'video', 'audio')
+        raise ValueError("Not a data URI")
+    except Exception:
+        raise ValueError("Not a data URI")
 
 
 def _erase_terminal_line():
@@ -7413,7 +7598,10 @@ def load_image(location,*,use_cache=False):
     assert isinstance(location,str),'load_image error: location should be a string representing a URL or file path. However, location is not a string. type(location)=='+repr(type(location))+' and location=='+repr(location)
 
     # Clean delegation to helpers (each handles its own caching)
-    if is_valid_url(location):
+    if is_valid_data_uri(location):
+        # Handle data URIs (e.g., data:image/png;base64,iVBORw0KG...)
+        output = _load_image_from_data_uri(location)
+    elif is_valid_url(location):
         output = _load_image_from_url(location, use_cache=use_cache)
     else:
         output = _load_image_from_file(location, use_cache=use_cache)
@@ -7673,6 +7861,24 @@ def _disable_insecure_request_warning():
         # Temporarily suppress InsecureRequestWarning
         warnings.simplefilter("ignore", InsecureRequestWarning)
         yield
+
+def _load_image_from_data_uri(data_uri: str):
+    """
+    Load an image from a data URI (e.g., data:image/png;base64,iVBORw0KG...)
+    Returns a numpy array
+
+    Example:
+        >>> # Load a tiny 16x16 Mario sprite
+        >>> mario_uri = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAA7ElEQVQ4EaXBsW2DQBiG4feTUrDGrcAK16RgAAYI7lx6CpfufBmAASjSsAIr3BoUkf6AhK1fpxNNnkf8k6gwMCoEoiAKBsYJgXBEwcA4IRCOKAwxGJvn/YF3uV3ZpTkLRzhDDMbmeX9Qc7ld2aU5i4NwbJmMjdoOWyY8tR22TOzUduIgCrZMxgm1nXBExRCDUZHmLAqiwsCoEIiCKBgYJwTCEaV+NQ6/Xz/sPr4/eRsb4QivX42XsRFevxovYyMO4qVfDW9shNevhjc2YiMOQwyGk+YsnCEGw0lzFhuxGWIwCmnOwhliMAppzvoD6bpMEei4FxAAAAAASUVORK5CYII='
+        >>> mario = _load_image_from_data_uri(mario_uri)
+        >>> mario.shape
+        (16, 16, 4)
+    """
+    import re
+    match = re.match(r'data:image/[^;]+;base64,(.+)', data_uri)
+    if not match:
+        raise ValueError("Invalid data URI format: {0}...".format(data_uri[:100]))
+    return decode_image_from_base64(match.group(1))
 
 def _load_image_from_url(url: str, *, use_cache=False):
     """
@@ -8229,7 +8435,7 @@ def save_images(images,paths:list=None,skip_overwrites=False,show_progress=False
     Save images to specified paths concurrently.
 
     Parameters:
-        - images (list): List of image objects to save.
+        - images (list): List of image objects to save, or a video file
         - paths (list, str, or None, optional): Determines the file paths for saving images.
           * If None, each image is saved with a random name followed by an index (such as 'Aos8Bs32_00001.png', 'Aos8Bs32_00002.png' ...)
           * If a string:
@@ -8246,6 +8452,9 @@ def save_images(images,paths:list=None,skip_overwrites=False,show_progress=False
         >>>  save_images(my_images, 'image_%03i.png', skip_overwrites=True, show_progress=True)
 
     """
+
+    if isinstance(images, str) and is_video_file(images):
+        images = load_video(images)
         
     if paths is None or isinstance(paths,str) and folder_exists(paths):
         new_paths=random_namespace_hash()+'_%05i.png'
@@ -9771,7 +9980,7 @@ def wav_to_mp3(wav_file_path: str, mp3_output_path: str = None, samplerate: int 
     subprocess.run(cmd, check=True)
     return mp3_output_path
 
-def convert_audio_file(input_file, output_file, *, skip_existing=False):
+def convert_audio_file(input_file, output_file, *, skip_existing=False, show_progress=False):
     """
     Convert an audio file to a different format using FFmpeg.
 
@@ -9780,6 +9989,8 @@ def convert_audio_file(input_file, output_file, *, skip_existing=False):
         output_file (str): Desired output format or path. If only extension is provided
                           (e.g., 'mp3', 'wav'), output will use input filename with new extension.
                           Supported formats: wav, mp3, ogg, mp4.
+        skip_existing (bool, optional): If True, won't overwrite existing files. Defaults to False.
+        show_progress (bool, optional): If True, shows FFmpeg progress output. Defaults to False.
 
     Returns:
         str: Path to the converted audio file.
@@ -9791,7 +10002,7 @@ def convert_audio_file(input_file, output_file, *, skip_existing=False):
     Notes:
         - Requires FFmpeg to be installed and available in PATH.
         - Automatically creates a unique filename if output path already exists.
-    
+
     EXAMPLE:
         >>> convert_audio_file('/Users/ryan/Downloads/Diffusion Illusions: SIGGRAPH 2024 Talk.mp4','wav')
         ans = /Users/ryan/Downloads/Diffusion Illusions: SIGGRAPH 2024 Talk_copy.wav
@@ -9801,7 +10012,7 @@ def convert_audio_file(input_file, output_file, *, skip_existing=False):
 
     if not os.path.exists(input_file):
         raise FileNotFoundError("Input file not found: "+input_file)
-        
+
     _ensure_ffmpeg_installed()
 
     supported_output_filetypes = "wav ogg mp3 mp4".split()
@@ -9820,15 +10031,18 @@ def convert_audio_file(input_file, output_file, *, skip_existing=False):
 
     make_parent_directory(output_file)
 
+    maybe_silent = ["-loglevel", "quiet"] if not show_progress else []
+
     try:
         subprocess.run(
-            ["ffmpeg", "-i", input_file, "-y", output_file],
+            ["ffmpeg"] + maybe_silent + ["-i", input_file, "-y", output_file],
             check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE if not show_progress else None,
+            stderr=subprocess.PIPE if not show_progress else None,
         )
     except subprocess.CalledProcessError as e:
-        raise RuntimeError("Error converting audio file: " + e.stderr.decode()) from e
+        error_msg = e.stderr.decode() if e.stderr else "Unknown error"
+        raise RuntimeError("Error converting audio file: " + error_msg) from e
     except FileNotFoundError:
         raise RuntimeError("FFmpeg not found. Please install FFmpeg to convert audio files.")
 
@@ -9907,6 +10121,115 @@ def convert_audio_files(
         parallel=parallel,
         show_progress=show_progress
     )
+
+class _TranscribedSegment:
+    """Text segment with timing information from speech recognition.
+
+    >>> seg = _TranscribedSegment("Hello world", 1.5, 3.2)
+    >>> seg.text
+    'Hello world'
+    >>> seg.time_start
+    1.5
+    >>> seg.time_end
+    3.2
+    >>> seg.duration
+    1.7
+    """
+    def __init__(self, text, time_start, time_end):
+        self.text = text
+        self.time_start = time_start
+        self.time_end = time_end
+
+    @property
+    def duration(self):
+        return self.time_end - self.time_start
+
+    def __repr__(self):
+        return "<{0} @ {1:.2f}s>".format(repr(self.text), self.time_start, self.duration)
+        # return "_TranscribedSegment('{0}', {1:.2f}s, {2:.2f}s)".format(self.text, self.time_start, self.duration)
+
+
+class _Transcription(list):
+    """
+    List of transcribed segments with convenience text concatenation.
+
+    Acts as a list of _TranscribedSegment objects, but provides a .text property
+    for easy access to the full concatenated text.
+
+    >>> seg1 = _TranscribedSegment("Hello", 0.0, 1.0)
+    >>> seg2 = _TranscribedSegment("world", 1.5, 2.5)
+    >>> trans = _Transcription([seg1, seg2])
+    >>> trans.text
+    'Hello world'
+    >>> len(trans)
+    2
+    >>> trans[0].text
+    'Hello'
+    """
+    @property
+    def text(self):
+        return ' '.join(seg.text for seg in self)
+
+
+def transcribe_audio_file_via_whisper(path, *, model="base",show_progress=True):
+    """
+    Transcribe audio file, returning text segments with timestamps
+
+    Audio transcription using whisper.cpp (with Apple Silicon Metal GPU support).
+    Automatically uses Metal GPU acceleration on M1/M2/M3 Macs.
+    Streams segments with accurate timestamps as transcription progresses.
+
+    Args:
+        path: Path to audio file (WAV, MP3, etc.)
+        model: Whisper model size:
+                    - "tiny": Fastest, lower accuracy
+                    - "base": Good balance (default)
+                    - "small": Better accuracy
+                    - "medium": Very good accuracy, slower
+                    - "large-v3": Best accuracy, slowest
+        show_progress: Show loading/processing progress (default: True)
+
+    Returns:
+        _Transcription: List-like object containing _TranscribedSegment objects.
+                        Has a .text property for full concatenated text.
+
+    EXAMPLE:
+        >>> result = transcribe_audio_file("audio.mp3")
+        >>> result.text  # Full transcription
+        'Hello world this is a test'
+        >>> for segment in result:  # Iterate over segments
+        ...     print(f"[{segment.time_start:.1f}s] {segment.text}")
+    """
+
+    pip_import('pywhispercpp')
+    from pywhispercpp.model import Model
+    import sys
+    
+    output = _Transcription()
+
+    if show_progress:
+        print("Loading {0} model...".format(model), flush=True)
+
+    # Create model (automatically uses Metal GPU on Apple Silicon)
+    # Suppress whisper.cpp debug logs
+    model = Model(model, n_threads=4, redirect_whispercpp_logs_to=None)
+
+    if show_progress:
+        print("Processing audio...", flush=True)
+
+    # Transcribe - use print_progress to show progress, print_realtime=False to suppress intermediate text
+    segments = model.transcribe(path, print_progress=show_progress, print_realtime=show_progress)
+
+    for segment in segments:
+        text = segment.text.strip()
+        if text:
+            # Timestamps are in centiseconds, convert to seconds
+            start_time = segment.t0 / 100.0
+            end_time = segment.t1 / 100.0
+            segment = _TranscribedSegment(text, start_time, end_time)
+            output.append(segment)
+
+    return output
 
 
 # endregionx
@@ -14385,7 +14708,7 @@ def get_current_timezone(*,form='human'):
     """
     if _default_timezone is not None:
         # If we manually set an override in rprc...
-        return _default_timezone
+        return _TimezoneFormTranslator.as_form(_default_timezone, form)
 
     date = get_current_date()
     target = format_date(date, "")
@@ -15662,6 +15985,7 @@ def string_to_text_file(file_path: str,string: str,) -> None:
     Tags: file-io, text-files, file-writing, path-handling
     """
     file_path=get_absolute_path(file_path)#Make sure it recognizes ~/.vimrc AKA with the ~ attached
+    make_parent_directory(file_path)
 
     try:
         file=open(file_path,"w")
@@ -16898,7 +17222,7 @@ def shell_command(command: str, *, stdin: str = None) -> str:
     return output
 
 
-def get_system_commands(*,use_cache=False):
+def get_system_commands(*,use_cache=False)->list:
     """
     Retrieve a list of executable commands available in the system's PATH.
     
@@ -16916,7 +17240,7 @@ def get_system_commands(*,use_cache=False):
     """
 
     if use_cache:
-        return _get_cached_system_commands()
+        return list(_get_cached_system_commands())
     
     import os
     import subprocess
@@ -16963,16 +17287,43 @@ def _get_cached_system_commands():
 
     import rp
 
+    def set_sys_commands(commands):
+        global _get_sys_commands_cache
+        _get_sys_commands_cache|=set(commands)
+        _get_sys_commands_cache&=set(commands)
+
     def update_sys_commands():
         #It doesn't delete anything - that should hopefully prevent any thread collision fuckyness
-        global _get_sys_commands_cache
-        _get_sys_commands_cache|=set(rp.get_system_commands())
+        commands = rp.get_system_commands(use_cache=False)
+        set_sys_commands(commands)
 
-    if not _get_sys_commands_cache:
-        #If it's empty populate it for the first time
+    def update_sys_commands_to_file():
         update_sys_commands()
-    else:
+        save_file_lines(_get_sys_commands_cache, _cached_system_commands_path)
+
+    def update_sys_commands_from_file():
+        try:
+            commands = load_file_lines(_cached_system_commands_path)
+            set_sys_commands(commands)
+        except Exception:
+            #This function is used by RP heavily enough it warrants this feedback
+            print_stack_trace()
+
+            #We still need them...do it synchronously
+            update_sys_commands()
+
+            #Maybe it was corrupted
+            try: delete_file(_cached_system_commands_path)
+            except Exception: print_stack_trace()
+        
+        run_as_new_thread(update_sys_commands_to_file)
+
+    if _get_sys_commands_cache:
         rp.run_as_new_thread(update_sys_commands)
+    elif file_exists(_cached_system_commands_path):
+        update_sys_commands_from_file()
+    else:
+        update_sys_commands_to_file()
 
     return _get_sys_commands_cache
 
@@ -17031,6 +17382,104 @@ def system_command_exists(command, *, use_cache=False):
         
     _system_command_exists_cache[command] = exists
     return exists
+
+def system_library_exists(name: str) -> bool:
+    """
+    Check if a system library can be loaded.
+
+    Uses ctypes.CDLL to check if a shared library (.so, .dylib, .dll) can be dynamically loaded.
+    This works across platforms and respects the system's library search paths.
+
+    Args:
+        name: The library name to check (e.g., 'libvulkan.so.1', 'libc.so.6')
+
+    Returns:
+        bool: True if the library can be loaded, False otherwise
+
+    Examples:
+        >>> system_library_exists('libc.so.6')  # Linux
+        True
+        >>> system_library_exists('libSystem.dylib')  # macOS
+        True
+        >>> system_library_exists('kernel32.dll')  # Windows
+        True
+        >>> system_library_exists('nonexistent.so.1')
+        False
+
+    Note:
+        This is the library equivalent of system_command_exists()
+    """
+    import ctypes
+    try:
+        ctypes.CDLL(name)
+        return True
+    except (OSError, TypeError):
+        return False
+
+#DISABLED BECAUSE ITS NOT COMPREHENSIVE ENOUGH ON MAC - NOT EXHAUSTIVE AT ALL
+# def get_system_libraries() -> list:
+#     """
+#     Retrieve a list of shared libraries available on the system.
+#
+#     Returns a list of library names that can be loaded with ctypes.CDLL().
+#     Works on Linux (via ldconfig), macOS (via standard paths), and Windows (via PATH).
+#
+#     Returns:
+#         list: A list of strings representing the library names
+#
+#     Examples:
+#         >>> libs = get_system_libraries()
+#         >>> 'libc.so.6' in libs  # Linux
+#         True
+#         >>> 'libSystem.dylib' in libs  # macOS
+#         True
+#         >>> 'kernel32.dll' in libs  # Windows
+#         True
+#
+#     Note:
+#         This is the library equivalent of get_system_commands()
+#     """
+#     libraries = []
+#
+#     if currently_running_linux():
+#         # Use ldconfig to list all cached libraries
+#         try:
+#             import subprocess
+#             result = subprocess.run(['ldconfig', '-p'], capture_output=True, text=True)
+#             if result.returncode == 0:
+#                 # Parse ldconfig output - skip first line (header)
+#                 for line in result.stdout.splitlines()[1:]:
+#                     # Format: "libname.so.X (arch) => /path/to/lib"
+#                     if '=>' in line:
+#                         lib_name = line.split()[0]
+#                         libraries.append(lib_name)
+#         except:
+#             pass
+#
+#     elif currently_running_mac():
+#         # On macOS, check common library paths
+#         import glob
+#         lib_paths = [
+#             '/usr/lib/*.dylib',
+#             '/usr/local/lib/*.dylib',
+#             '/System/Library/Frameworks/*/Versions/*/*.dylib'
+#         ]
+#         for pattern in lib_paths:
+#             for path in glob.glob(pattern):
+#                 libraries.append(os.path.basename(path))
+#
+#     elif currently_running_windows():
+#         # On Windows, look for DLLs in PATH and system directories
+#         import glob
+#         search_paths = os.environ.get('PATH', '').split(os.pathsep)
+#         search_paths.extend(['C:\\Windows\\System32', 'C:\\Windows\\SysWOW64'])
+#         for dir_path in search_paths:
+#             if os.path.exists(dir_path):
+#                 for dll in glob.glob(os.path.join(dir_path, '*.dll')):
+#                     libraries.append(os.path.basename(dll))
+#
+#     # Remove duplicates and sort
+#     return sorted(list(set(libraries)))
 
 def add_to_env_path(path):
     """
@@ -19053,6 +19502,75 @@ def get_arxiv_bibtex(paper: str) -> str:
     bibtex_file = download_to_cache("https://arxiv.org/bibtex/" + xid)
     return load_text_file(bibtex_file, use_cache=True)
 
+def latex_get_used_images(main_tex_file: str = 'main.tex') -> list:
+    """
+    Return list of image assets used when compiling a LaTeX file.
+
+    Used to clean up latex projects for Arxiv
+
+    Compiles the LaTeX file with -recorder flag to track file usage,
+    then extracts image files from the generated .fls file.
+
+    Parameters:
+        main_tex_file (str):Path to main .tex file (e.g., 'main.tex')
+
+    Returns:
+        list[str]
+            Sorted list of image file paths used in compilation.
+            Paths are normalized (no './' prefix).
+
+    EXAMPLE USAGE:
+        >>> # Cleaning up before an arxiv release...
+        >>> unused_images = set(rp_glob(path_join('*/','*.jpg *.png *.pdf'.split())))-set(latex_get_used_images())
+        >>> delete_all_files(unused_images)
+
+    EXAMPLE:
+        >>> assets = get_used_assets('main.tex')
+        >>> 'fig/teaserv2.png' in assets
+        True
+        >>> len(assets) > 0
+        True
+
+    Notes
+        - Runs pdflatex with -recorder and -interaction=nonstopmode
+        - Looks for common image extensions: .pdf, .png, .jpg, .jpeg, .eps, .svg
+        - .fls file is created alongside the .tex file
+
+    """
+    assert file_exists(main_tex_file), get_absolute_path(main_tex_file)
+
+    import subprocess
+    from pathlib import Path
+
+    tex_path = Path(main_tex_file)
+    fls_file = tex_path.with_suffix('.fls')
+
+    # Compile with recorder to generate .fls file
+    subprocess.run(
+        ['pdflatex', '-recorder', '-interaction=nonstopmode', str(tex_path)],
+        capture_output=True,
+        check=False
+    )
+
+    # Extract image files from .fls
+    result = subprocess.run(
+        ['grep', '-E', r'INPUT.*(\.pdf|\.png|\.jpg|\.jpeg|\.eps|\.svg)$', str(fls_file)],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+
+    # Parse and normalize paths
+    assets = []
+    for line in result.stdout.strip().split('\n'):
+        if line.startswith('INPUT '):
+            path = line[6:].strip().lstrip('./')
+            # Only keep local files (not system TeX files)
+            if not path.startswith('/'):
+                assets.append(path)
+
+    return sorted(set(assets))
+
 
 def random_namespace_hash(n:int=10,chars_to_choose_from:str="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"):
     """
@@ -19669,6 +20187,8 @@ def remove_background_via_apple(image):
 
     # Decode PNG bytes back to numpy RGBA image
     return decode_bytes_to_image(bytes(png_data))
+# matte_foreground_via_apple = remove_background_via_apple
+select_foreground_via_apple = remove_background_via_apple
 
 
 # noinspection PyTypeChecker
@@ -20993,20 +21513,83 @@ xrange=range  # To make it more compatiable when i copypaste py2 code
 
 term='pseudo_terminal(locals(),globals())'# For easy access: exec(term). Can use in the middle of other methods!
 
-def is_valid_python_syntax(code,mode='exec'):
+def is_valid_python_syntax(code,mode='exec',version=None,return_error=False):
     """
-    Returns True if the code is valid python syntax, False otherwise.
+    Returns True if the code is valid python syntax, False otherwise (when return_error=False).
+    If return_error=True, returns False for valid syntax or the error object for invalid syntax.
     The 'mode' specifies the type of python code - 'exec' is a superset of 'eval'.
+    The 'version' if specified (e.g., '3.5'), checks if code is valid for that Python version using ast.parse with feature_version.
+
+    EXAMPLE:
+        >>> is_valid_python_syntax('x = 5')
+        ans = True
+        >>> is_valid_python_syntax('x = ')
+        ans = False
+    EXAMPLE:
+        >>> is_valid_python_syntax('x = 5', return_error=True)
+        ans = False
+        >>> is_valid_python_syntax('x = ', return_error=True)
+        ans = SyntaxError('invalid syntax', ('<unknown>', 1, 5, 'x = \n', 1, 5))
+    EXAMPLE:
+        >>> is_valid_python_syntax('f"hello"', version='3.5')
+        ans = False
+        >>> is_valid_python_syntax('f"hello"', version='3.5', return_error=True)
+        ans = SyntaxError('Format strings are only supported in Python 3.6 and greater', ('<unknown>', 1, 9, 'f"hello"\n', 1, 9))
     """
     assert isinstance(code,str),'Code should be a string'
     import ast, traceback
-    valid = True
-    try:
-        ast.parse(code,mode=mode)
-    # except SyntaxError: #ValueError: source code string cannot contain null bytes
-    except Exception:
-        valid = False
-    return valid
+
+    if version is None:
+        try:
+            ast.parse(code,mode=mode)
+            out = False
+        # except SyntaxError: #ValueError: source code string cannot contain null bytes
+        except Exception as e:
+            out = e
+    else:
+        # Use pip-installable parso for version-specific parsing
+        parso = pip_import('parso')
+        import os
+
+        # Auto-download grammar files for older Python versions if needed
+        grammar_file = path_join(os.path.dirname(parso.__file__), 'python', 'grammar' + version.replace(".", "") + '.txt')
+        if not file_exists(grammar_file):
+            url = 'https://raw.githubusercontent.com/davidhalter/parso/v0.7.1/parso/python/grammar' + version.replace(".", "") + '.txt'
+            try:
+                download_url(url, grammar_file)
+            except:
+                pass
+
+        try:
+            grammar = parso.load_grammar(version=version)
+            module = grammar.parse(code)
+            errors = list(grammar.iter_errors(module))
+
+            if errors:
+                first_error = errors[0]
+                err = SyntaxError(first_error.message)
+                err.lineno = first_error.start_pos[0]
+                err.offset = first_error.start_pos[1]
+                lines = code.split('\n')
+                err.text = lines[err.lineno - 1] if err.lineno <= len(lines) else None
+                err.filename = '<string>'
+                out = err
+            else:
+                out = False
+        except (NotImplementedError, FileNotFoundError):
+            # Grammar not available, use ast.parse fallback
+            try:
+                feature_ver = tuple(map(int, version.split('.')))
+                ast.parse(code, mode=mode, feature_version=feature_ver)
+                out = False
+            except Exception as e:
+                out = e
+        except Exception as e:
+            out = e
+
+    if not return_error:
+        return not bool(out)
+    return out
 
 def _is_valid_exeval_python_syntax(code, mode='exec'):
     code, _ = _parse_exeval_code(code)
@@ -21894,6 +22477,9 @@ _default_pyin_settings=dict(
     complete_while_typing=True,
     allow_jedi_dynamic_imports=False,  # When False, prevent Jedi from importing unloaded modules (faster on NFS)
     enable_semantic_highlighting=True,  # When True, use Jedi to add semantic highlighting (callables, modules)
+    gray_unreachable_code=True,  # When True, dim unreachable code (requires enable_semantic_highlighting)
+    enable_linting=True,  # DEPRECATED: Use linting_mode instead. When True, equivalent to linting_mode='on'
+    linting_mode='on',  # Linting mode: 'off' (no linting), 'on' (critical errors only), 'verbose' (all errors including style nazis)
     vi_mode=False,
     paste_mode=False  ,
     confirm_exit=True  ,
@@ -24089,10 +24675,13 @@ def _download_rp_gists(max_filesize='10mb'):
     paths = download_urls_to_cache([g['raw_url'] for g in gists], show_progress=True)
     return list(zip([g['gist_url'] for g in gists], paths))
     #return load_text_files(raw_gist_paths, show_progress=True, use_cache=True)
+
 def _input_select_rp_gists(ans=None):
     return _input_select_multiple_paragraphs(
-        (("# " + url + "\n" + text_file_to_string(path))[:1000000] 
-         for url, path in _download_rp_gists()),
+        (
+            ("# " + url + "\n" + text_file_to_string(path))[:1000000]
+            for url, path in _download_rp_gists()
+        ),
         old_code=ans if isinstance(ans, str) else None,
     )
 
@@ -24167,6 +24756,23 @@ def _convert_powerpoint_file(path,message=None):
         fansi_print(message,'green','bold')
     from rp.libs.powerpoint_converter import process_powerpoint_file
     return process_powerpoint_file(path)
+
+def _upfp(autoyes=False):
+    file_bundle = web_paste(show_progress=True)
+    assert type(file_bundle)==_BundledPath, type(file_bundle)
+    assert get_file_name(file_bundle.path)=='r.py',file_bundle.path
+    assert isinstance(file_bundle.data, bytes), type(file_bundle.data)
+    assert file_bundle.data.startswith(b'""" Welcome to RP: Ryan Python """')
+    new_code=file_bundle.data.decode()
+    old_code=get_source_code(r)
+    dunk_string_diff(old_code, new_code)
+    if old_code==new_code:
+        fansi_print("RP Update: No change needed, old = new",'green bold')
+        return
+    if autoyes or input_yes_no("Update rp to this?"):
+        string_to_text_file(r.__file__, new_code)
+        fansi_print("Updated "+r.__file__, 'green bold italic underlined')
+
 
 def _get_gitignore_path():
     """Get the path to the .gitignore file in the current git repository."""
@@ -25259,7 +25865,8 @@ def pseudo_terminal(
 
         DI $display_image(ans) if $is_image(ans) else $display_video(ans)
         DAI $display_alpha_image(ans) if $is_image(ans) else $display_video(with_alpha_checkerboards(ans,lazy=True))
-        DV $display_video(ans)
+        DIS $display_image_slideshow(ans)
+        DV  $display_video(ans)
         DVL $display_video(ans,loop=True)
 
         A ACATA
@@ -25456,10 +26063,16 @@ def pseudo_terminal(
         PIMA $pip_install_multiple(ans, shotgun=False) #Pip Install Multiple Ans - works well with PIF
         PIRA $pip_install('-r '+ans)
         PIR PIP install -r requirements.txt
+        UVR $r._ensure_uv_installed() ; $r._run_sys_command($sys.executable + ' -m uv pip install -r requirements.txt')
         
         UP UPDATE
         UPWA if $input_yes_no(ans+"\\n\\n"+$fansi("Set r.py to this?",'red','bold')): $string_to_text_file($get_module_path($r), ans)
         UPYE PIP install rp --upgrade --no-cache 
+        UPFP $r._upfp()
+        UPFPY  $r._upfp(autoyes=True)
+        UPFPYE $r._upfp(autoyes=True)
+        FCRP $web_copy_path(r.__file__,show_progress=True)
+
 
         DK DISK
         DD DITTO
@@ -25539,8 +26152,10 @@ def pseudo_terminal(
         NCA  $r._nbca(ans)
 
         JL PYM jupyter lab
-
         IPYK $add_ipython_kernel()
+        HOSTLAB !$PY -m rp call pip_import jupyter --auto_yes True ; $PY -m jupyter lab --ip 0.0.0.0 --port 5678 --NotebookApp.password='' --NotebookApp.token='' --allow-root
+        HJL !$PY -m rp call pip_import jupyter --auto_yes True ; $PY -m jupyter lab --ip 0.0.0.0 --port 5678 --NotebookApp.password='' --NotebookApp.token='' --allow-root
+
 
         INS $input_select("Select:", $line_split(ans) if isinstance(ans,str) else ans)
         ISA $input_select("Select:", $line_split(ans) if isinstance(ans,str) else ans)
@@ -25576,7 +26191,7 @@ def pseudo_terminal(
 
         SG $save_gist(ans)
         SGCO ans=$save_gist(ans) ; $string_to_clipboard(ans)
-        LG $load_gist(input($fansi('URL:','blue','bold')))
+        LG Load gist from URL (can provide URL as argument: 'LG <url>')
         LGA $load_gist(ans)
         OG  $load_gist($input_select(options=$line_split($text_file_to_string($path_join($get_parent_folder($get_module_path($rp)),'old_gists.txt')))))
         OGM $r._input_select_rp_gists(ans=ans)
@@ -25653,8 +26268,9 @@ def pseudo_terminal(
         UPA $r._user_path_ans(ans)
 
         UZA $unzip_to_folder(ans,show_progress=True)
-        ZIH $make_zip_file_from_folder($get_absolute_path('.'))
-        ZIA $make_zip_file_from_folder(ans)
+        ZIH $make_zip_file_from_folder($get_absolute_path('.'),show_progress=True)
+        ZIA $make_zip_file_from_folder(ans,show_progress=True)
+        ZIAH $make_zip_file_from_folder(ans,$path_join($get_absolute_path('.'),$get_file_name(ans)+'.zip'),show_progress=True)
 
         RWC $web_copy($get_source_code($r))
 
@@ -25752,10 +26368,16 @@ def pseudo_terminal(
         GPSH  !git push
         GPUSH !git push
         GADA $r._git_add_ans(ans)
-        GADDA $r._git_add_ans(ans)
-        IGA  $append_line_to_file(str(ans),$r._get_gitignore_path())
-        IGNA $append_line_to_file(str(ans),$r._get_gitignore_path())
-        GIGA $append_line_to_file(str(ans),$r._get_gitignore_path())
+        GADDA $r._git_add_ans(ans()) 
+        IGA    $append_line_to_file($printed($line_join(['' +x for x in $get_relative_paths($enlist(ans),root=$get_parent_folder($get_git_repo_root()))])),$r._get_gitignore_path())
+        IGNA   $append_line_to_file($printed($line_join(['' +x for x in $get_relative_paths($enlist(ans),root=$get_parent_folder($get_git_repo_root()))])),$r._get_gitignore_path())
+        GIGA   $append_line_to_file($printed($line_join(['' +x for x in $get_relative_paths($enlist(ans),root=$get_parent_folder($get_git_repo_root()))])),$r._get_gitignore_path())
+        GIGNA  $append_line_to_file($printed($line_join(['' +x for x in $get_relative_paths($enlist(ans),root=$get_parent_folder($get_git_repo_root()))])),$r._get_gitignore_path())
+        UNGIGA $append_line_to_file($printed($line_join(['!'+x for x in $get_relative_paths($enlist(ans),root=$get_parent_folder($get_git_repo_root()))])),$r._get_gitignore_path())
+        UNGIGA $append_line_to_file($printed($line_join(['!'+x for x in $get_relative_paths($enlist(ans),root=$get_parent_folder($get_git_repo_root()))])),$r._get_gitignore_path())
+        NOGIGA $append_line_to_file($printed($line_join(['!'+x for x in $get_relative_paths($enlist(ans),root=$get_parent_folder($get_git_repo_root()))])),$r._get_gitignore_path())
+        NOGNA  $append_line_to_file($printed($line_join(['!'+x for x in $get_relative_paths($enlist(ans),root=$get_parent_folder($get_git_repo_root()))])),$r._get_gitignore_path())
+
         VIG $vim($r._get_gitignore_path())
 
         PPTA $r._convert_powerpoint_file(ans)
@@ -25787,8 +26409,6 @@ def pseudo_terminal(
         MDA $r._view_markdown_in_terminal(ans) # Displays markdown
 
         PIF PIP freeze
-
-        HOSTLAB !$PY -m rp call pip_import jupyter --auto_yes True ; $PY -m jupyter lab --ip 0.0.0.0 --port 5678 --NotebookApp.password='' --NotebookApp.token='' --allow-root
 
         '''
 
@@ -27129,6 +27749,18 @@ def pseudo_terminal(
                             append_line_to_file(sans,path)
                             set_ans(path)
 
+                    elif user_message=='LG' or user_message.startswith("LG ") and user_message.strip()!='LG':
+                        fansi_print("LG -> Load gist from URL","blue",'bold')
+                        if user_message.startswith('LG '):
+                            gist_url = user_message[len('LG '):]
+                        else:
+                            gist_url = input(fansi('URL: ','blue','bold'))
+                        if gist_url:
+                            result = load_gist(gist_url)
+                            set_ans(result)
+                            fansi_print("LG: Loaded gist content into ans",'blue','bold')
+                        else:
+                            fansi_print("LG cancelled",'red')
 
 
                     elif user_message=='UPDATE':
@@ -28162,7 +28794,7 @@ def pseudo_terminal(
                                     hist_options=get_paths_parents(hist_options)
                                     hist_options=list(unique(hist_options))
                                 if user_message=='CDHQ FAST':
-                                    new_dir = _iterfzf(hist_options, exact=True)
+                                    new_dir = _iterfzf_with_ls_preview(hist_options, exact=True)
                                 else:
                                     new_dir = input_select(
                                         "Please choose a directory",
@@ -28288,7 +28920,8 @@ def pseudo_terminal(
                                     if not get_subfolders('.'):
                                         fansi_print('Cannot use CDQ or CDZ because there are no folders in this directory to CD into','blue','bold')
                                         assert False
-                                    result=_iterfzf((line.replace('\n',' ').replace('\r',' ') for line in breadth_first_path_iterator('.') if is_a_folder(line)),exact=user_message=='CDQ')
+                                    # Use fast scandir-based iterator for O(1) directory detection via inodes
+                                    result=_iterfzf_with_ls_preview((line.replace('\n',' ').replace('\r',' ') for line in _recursively_iter_subdirs('.')),exact=user_message=='CDQ')
                                 except:
                                     result=None
                                 if not result:
@@ -28471,10 +29104,17 @@ def pseudo_terminal(
                             user_message='ans ' + user_message +' ' + current_var
                             fansi_print("Transformed command into " + repr(user_message),'magenta')
                         else:
+                            def maybe_inject_ans_into_environ():
+                                if rp.contains_any(user_message, '$ans', '${ans}'):
+                                    fansi_print("Injecting str(ans) --> $ans", 'blue italic')
+                                    import os
+                                    os.environ['ans']=str(get_ans())
                             if user_message.startswith("!!"):# For shell commands
+                                maybe_inject_ans_into_environ()
                                 user_message="ans=__import__('rp').shell_command("+repr(user_message[2:])+")"
                                 # fansi_print("Transformed command into " + repr(user_message),'magenta')
                             elif user_message.startswith("!"):# For shell commands
+                                maybe_inject_ans_into_environ()
                                 # user_message="from rp import shell_command;ans=shell_command("+repr(user_message[1:])+",True)"#Disabled because we no longer guarentee that rp is imported
                                 user_message="import os;os.system("+repr(user_message[1:])+")"
                                 # fansi_print("Transformed command into " + repr(user_message) ,'magenta')
@@ -33563,18 +34203,19 @@ def omni_load(path):
     
     Enhanced Documentation:
     Private function that automatically determines file type and routes to appropriate
-    loading function. Uses file extension matching and MIME type detection for
-    comprehensive file type recognition.
-    
+    loading function. Uses file extension matching, data URI parsing, and MIME type
+    detection for comprehensive file type recognition.
+
     Parameters:
-    - path (str): File path to load
-    
+    - path (str): File path or data URI to load
+
     Returns:
     - Any: Loaded object using the appropriate format-specific loader
     
     Dispatch logic:
+    - Data URIs → Dispatched by mediatype (image/video/audio)
     - .json → load_json()
-    - .yaml → load_yaml() 
+    - .yaml → load_yaml()
     - Image formats → load_image() or _omni_load_animated_image()
     - Video formats → load_video()
     - Audio formats → load_sound_file()
@@ -33594,10 +34235,19 @@ def omni_load(path):
     >>> data = _omni_load('config.json')  # Returns EasyDict
     >>> image = _omni_load('photo.jpg')   # Returns numpy array
     >>> model = _omni_load('weights.pkl') # Returns pickled object
+    >>> mario = _omni_load('data:image/png;base64,iVBORw0...')  # Returns numpy array from data URI
     """
+    # Check for data URIs first (before file-based checks)
+    if is_valid_data_uri(path):
+        mediatype = _get_uri_mediatype(path)
+        if   mediatype == 'image': return rp.load_image(path)
+        elif mediatype == 'video': return rp.load_video(path)
+        elif mediatype == 'audio': return rp.load_sound_file(path)
+
+    # File-based dispatching
     if ends_with_any(path, '.json'): return rp.load_json(path)
     if ends_with_any(path, '.yaml'): return rp.load_yaml(path)
-    if ends_with_any(path, '.png .webp .gif'.split()): return rp._omni_load_animated_image(path)
+    if ends_with_any(path, '.png .webp .gif'.split()): return _omni_load_animated_image(path)
     if ends_with_any(path, '.jpg .jpeg .jxl .exr .psd .tga .tiff .tif .jp2 .bmp'.split()): return rp.load_image(path)
     if ends_with_any(path, '.mp4 .avi .mkv .flv .mov .m4v .wmv .webm'.split()): return rp.load_video(path)
     if ends_with_any(path, '.wav .mp3 .ogg .aac .wma .aiff .m4a .flac'.split()): return rp.load_sound_file(path)
@@ -35680,7 +36330,20 @@ def skia_stamp_image(
     return canvas
 
 
-def skia_stamp_video(bot, top, *, alpha=1, mode: str = "blend", lazy=False, show_progress=False):
+def skia_stamp_video(
+    bot,
+    top,
+    *,
+    alpha=1,
+    mode: str = "blend",
+
+    sprite_origin = None,
+    canvas_origin = None,
+    offset = None,
+
+    lazy=False,
+    show_progress=False
+):
     """
     Similar to skia_stamp_image, but for video.
     Please see skia_stamp_image for details.
@@ -35692,7 +36355,7 @@ def skia_stamp_video(bot, top, *, alpha=1, mode: str = "blend", lazy=False, show
         bot = np.ascontiguousarray(as_rgba_images(as_byte_images(bot, copy=False), copy=False))
         top = np.ascontiguousarray(as_rgba_images(as_byte_images(top, copy=False), copy=False))
 
-    pairs = itertools.zip_longest(bot, top)
+    pairs = zip_repeat_last(bot, top)
 
     if show_progress:
         length = max(len(bot), len(top))
@@ -35700,7 +36363,15 @@ def skia_stamp_video(bot, top, *, alpha=1, mode: str = "blend", lazy=False, show
 
     def helper():
         for bot_frame, top_frame in pairs:
-            blended = skia_stamp_image(bot_frame, top_frame, alpha=alpha, mode=mode)
+            blended = skia_stamp_image(
+                bot_frame,
+                top_frame,
+                alpha=alpha,
+                mode=mode,
+                offset=offset,
+                sprite_origin=sprite_origin,
+                canvas_origin=canvas_origin,
+            )
             yield blended
 
     output = helper()
@@ -38021,11 +38692,20 @@ def horizontally_concatenated_images(*image_list,origin=None):
     This is different from np.column_stack because it handles images of different resolutions.
     It also can mix RGB, greyscale, and RGBA images.
 
+    If an int is given as one of the images, it will be treated as spacing
+
 
     TODO: Implement the origin argument for both this func and vertically_concatenated_images
     """
 
     image_list=detuple(image_list)
+
+    #For any ints, turn them into zero-height spacing images
+    #Use RGBA to ensure transparency but bool dtype to allow minimal datatype
+    image_list = [
+        image if not isinstance(image, int) else np.zeros((0, image, 4), bool)
+        for image in image_list
+    ]
 
     if origin is None:
         #Like top-left
@@ -38087,7 +38767,14 @@ def vertically_concatenated_images(*image_list,origin=None):
         assert isinstance(origin, str)
         return grid_concatenated_images([[x] for x in image_list], origin=origin)
 
-    return np.rot90(horizontally_concatenated_images([np.rot90(image,-1) for image in reversed(image_list)]))
+    return np.rot90(
+        horizontally_concatenated_images(
+            [
+                np.rot90(image, -1) if not isinstance(image, int) else image
+                for image in reversed(image_list)
+            ]
+        )
+    )
 
 def grid_concatenated_images(image_grid, *, origin=None):  
     """
@@ -39636,6 +40323,7 @@ def float_color_to_hex_color(float_color, hashtag=True):
     return byte_color_to_hex_color(float_color_to_byte_color(float_color),hashtag=hashtag)
 
 def float_color_to_byte_color(float_color):
+    if isinstance(float_color, str): float_color = as_rgba_float_color(float_color)
     return tuple(round(clamp(x*255,0,255)) for x in float_color)
 
 def float_colors_to_byte_colors(*float_colors):
@@ -40880,13 +41568,18 @@ def as_numpy_array(x):
     
     Tags: conversion, numpy, arrays, tensors, images, core
     """
-    try:return np.asarray(x)#For numpy arrays and python lists (and anything else that work with np.asarray)
-    except Exception:pass
-
     if isinstance(x, list):
         #as_numpy_array fixed for lists of torch tensors
         #Recrsively turn lists of torch tensors or numpy arrays etc into numpy-array compatible elements
-        return np.asarray([as_numpy_array(y) for y in x])
+        return np.stack([as_numpy_array(y) for y in x])  # Fails loudly on ragged sequences
+
+    try:
+        result = np.asarray(x)
+        if result.dtype == object:
+            raise ValueError("Ragged sequence detected - object dtype is inefficient and not allowed")
+        return result
+    except Exception:
+        pass
 
     if _is_taichi_field(x):
         return x.to_numpy()
@@ -42371,6 +43064,148 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
     return writer.path
 
 
+def save_video_webm(frames, path=None, framerate=60, *, video_quality='high', height=None, width=None, show_progress=True):
+    """
+    Save video frames to WebM format with alpha channel support using VP9 codec.
+
+    Uses imageio-ffmpeg with libvpx-vp9 codec and yuva420p pixel format to preserve
+    transparency in video frames. This is the recommended format for saving videos
+    with alpha channels.
+
+    Args:
+        frames: List of images as defined by rp.is_image(), or numpy array video
+                Supports RGBA images - alpha channel will be preserved
+                Can also be a generator for memory-efficient saving
+        path: Output file path (defaults to auto-generated 'video.webm')
+              Adds .webm extension if not present
+        framerate: Video framerate in fps (default: 60)
+        video_quality: Quality setting for VP9 codec (default: 'high')
+                      - 'low': CRF 40 (smaller files, lower quality)
+                      - 'medium': CRF 30 (balanced)
+                      - 'high': CRF 20 (larger files, higher quality)
+                      - 'max': CRF 10 (lossless-like quality)
+                      - Or integer 0-63 (lower = better quality, larger file)
+        height: Force specific height (default: auto from first frame)
+        width: Force specific width (default: auto from first frame)
+        show_progress: Whether to show encoding progress (default: True)
+
+    Returns:
+        str: Absolute path to the saved WebM file
+
+    EXAMPLE (with alpha channel):
+        >>> frames = [random_image(100, 100, mode='rgba') for _ in range(30)]
+        ... path = save_video_webm(frames, 'transparent.webm')
+        ... print(path)
+
+    EXAMPLE (quality comparison):
+        >>> video = [random_image(256, 256, mode='rgba') for _ in range(10)]
+        ... save_video_webm(video, 'low_quality.webm', video_quality='low')
+        ... save_video_webm(video, 'high_quality.webm', video_quality='high')
+
+    See Also:
+        - save_video_mp4: For videos without alpha (smaller files)
+        - save_animated_webp: For animated WebP with alpha
+        - save_video_gif: For animated GIFs
+    """
+    pip_import('imageio_ffmpeg', 'imageio-ffmpeg')
+    from imageio_ffmpeg import write_frames
+
+    _ensure_ffmpeg_installed()
+
+    if path is None:
+        path = _get_default_video_path('webm')
+
+    if not has_file_extension(path) or get_file_extension(path).lower() != 'webm':
+        path += '.webm'
+
+    make_parent_directory(path)
+    path = get_absolute_path(path)
+
+    # Convert quality parameter to CRF value (0-63, lower is better)
+    if video_quality in _named_video_qualities:
+        # Map our quality scale (0-100) to CRF scale (63-0)
+        quality_percent = _named_video_qualities[video_quality]
+        crf = int(63 - (quality_percent / 100) * 53)  # Maps 0-100 to 63-10
+    elif isinstance(video_quality, int):
+        crf = max(0, min(63, video_quality))
+    else:
+        crf = 20  # Default to high quality
+
+    # Determine dimensions from frames if not specified
+    if height is None or width is None:
+        if hasattr(frames, '__len__') and not isinstance(frames, str) and all(map(is_image, frames)):
+            max_height, max_width = get_max_image_dimensions(frames)
+            if height is None:
+                height = max_height
+            if width is None:
+                width = max_width
+        else:
+            # Will determine from first frame during iteration
+            first_frame = None
+            if hasattr(frames, '__iter__'):
+                frames_iter = iter(frames)
+                first_frame = next(frames_iter)
+                height = get_image_height(first_frame) if height is None else height
+                width = get_image_width(first_frame) if width is None else width
+                # Recreate frames with first frame prepended
+                import itertools
+                frames = itertools.chain([first_frame], frames_iter)
+
+    # Ensure dimensions are even (required by libvpx-vp9)
+    if height % 2:
+        height -= 1
+    if width % 2:
+        width -= 1
+
+    # Configure ffmpeg parameters for VP9 with alpha
+    output_params = [
+        '-crf', str(crf),
+        '-b:v', '0',  # Use CRF mode (constant quality)
+        '-auto-alt-ref', '0',  # Prevent transparency encoding errors
+    ]
+
+    if not show_progress:
+        output_params.extend(['-loglevel', 'quiet'])
+
+    # Create video writer with VP9 alpha support
+    writer = write_frames(
+        path,
+        (width, height),
+        pix_fmt_in='rgba',      # Input: RGBA frames
+        pix_fmt_out='yuva420p',  # Output: YUV with alpha channel
+        codec='libvpx-vp9',      # VP9 codec
+        fps=framerate,
+        output_params=output_params
+    )
+
+    writer.send(None)  # Seed the generator
+
+    try:
+        frame_iter = frames
+        if show_progress and hasattr(frames, '__len__'):
+            frame_iter = eta(frames, title='rp.r.save_video_webm')
+
+        for frame in frame_iter:
+            if isinstance(frame, str):
+                frame = load_image(frame)
+
+            # Convert to RGBA byte image
+            frame = crop_image(frame, height, width, copy=False)
+            frame = as_rgba_image(frame, copy=False)
+            frame = as_byte_image(frame, copy=False)
+
+            # Send frame bytes to writer
+            writer.send(frame.tobytes())
+
+    finally:
+        writer.close()
+
+    return path
+
+
+save_animated_webm = save_video_webm
+
+
 def save_video_gif_via_pil(video, path=None, *, framerate=30):
     """
     Save a video to a GIF with given path and framerate.
@@ -42578,16 +43413,18 @@ def save_video(images, path, *, framerate=60):
     #Save a series of images into a video.
     #Note that the file extension used in path decides the kind of video that will be exported.
     #For example, save_video(images,'video.mp4') saves an mp4 file whilst save_video(images,'video.avi') saves an avi file
+    #Use save_video(images,'video.webm') for videos with alpha channels (transparency)
     """
     assert not isinstance(images, str), 'The first argument should be the sequence of video frames, not the path!'
 
-    assert get_file_extension(path) in 'mp4 avi gif png webp'.split(), 'This function currently supports .mp4, .avi, .png, .webp and .gif files'
+    assert get_file_extension(path) in 'mp4 avi gif png webp webm'.split(), 'This function currently supports .mp4, .avi, .png, .webp, .webm and .gif files'
 
     if path.endswith('.mp4') : return save_video_mp4(images,path,framerate=framerate, show_progress=False)
     if path.endswith('.avi') : return save_video_avi(images,path,framerate=framerate)
     if path.endswith('.png') : return save_video_png(images,path,framerate=framerate)
     if path.endswith('.gif') : return save_video_gif(images,path,framerate=framerate)
     if path.endswith('.webp'): return save_video_webp(images,path,framerate=framerate)
+    if path.endswith('.webm'): return save_video_webm(images,path,framerate=framerate)
 
 
     assert False, 'Below this line mightn not work. Until further notice, please specify .avi or .mp4 in the path argument'
@@ -43207,36 +44044,48 @@ def delete_path(path,*,permanent=True):
     else:
         assert False, "This should be impossible...it appears that path %s exists but is neither a file nor a folder."%path
 
-def _delete_paths_helper(*paths,permanent=True,delete_function=delete_path,strict,show_progress):
+def _delete_paths_helper(*paths,permanent=True,delete_function=delete_path,strict,show_progress,num_threads=0):
     """
+    Warning: Multithreaded doesn't always work. Sometimes it does, but for robustness the default is num_threads=0
     EXAMPLE:  delete_paths( 'a.jpg','b.jpg' )
     EXAMPLE:  delete_paths(['a.jpg','b.jpg'])
     EXAMPLE:  delete_paths(('a.jpg','b.jpg'))
     """
-    output = []
     paths=detuple(paths)
 
     if isinstance(paths,str):
         paths=[paths] #if we gave a single path as an argument, turn it into a list so we can iterate over it...
                 
     def delfunc(path):
-        delete_function(path,permanent=permanent)
+        return delete_function(path,permanent=permanent)
 
     show_progress=show_progress and 'eta:Deleting Paths'
 
-    return load_files(delfunc, paths, strict=strict,show_progress=show_progress)
+    if num_threads == 0:
+        output = []
+        for path in paths:
+            if isinstance(path,str):
+                try:
+                    output.append(path)
+                except Exception:
+                    if strict:
+                        raise
+                    else:
+                        if strict is None:
+                            output.append(None)
 
-    # for path in paths:
-    #     if isinstance(path,str):
-    #         try:
-    #             output.append(path)
-    #         except Exception:
-    #             if strict:
-    #                 raise
-    #             else:
-    #                 if strict is None:
-    #                     output.append(None)
-    # return output
+    else:
+        output = load_files(
+            delfunc,
+            paths,
+            strict=strict,
+            show_progress=show_progress,
+            num_threads=num_threads,
+            # num_threads=0,#Debugging - it deadlocked idk why
+        )
+
+    return output
+
 
 def delete_paths(*paths,permanent=True,strict=True,show_progress=False):
     """Delete multiple file/folder paths. See delete_path for details.
@@ -43894,22 +44743,30 @@ def make_directories(*paths):
     Related functions: make_directory, make_folders (alias), delete_paths
     Tags: directory, filesystem, batch, mkdir, folders
     """
+
+    #Normalize to list of paths
     paths=detuple(paths)
     if isinstance(paths, str):
         paths=[paths]
+    else:
+        paths=list(paths)
+
     for path in paths:
         make_directory(path)
+
+    return paths
 make_folders=make_directories
 
 def delete_all_paths_in_directory(directory,*,permanent=True,include_files=True,include_folders=True,recursive=False):
+    """ Deletes all paths under a directory """
     assert directory_exists(directory)
-    delete_paths(get_all_paths(directory,include_folders=include_folders,include_files=include_files),permanent=permanent)
+    return delete_paths(get_all_paths(directory,include_folders=include_folders,include_files=include_files),permanent=permanent)
 delete_all_paths_in_folder=delete_all_paths_in_directory
 
 def delete_all_files_in_directory(directory,*,recursive=False,permanent=True):
-    #Ignores all folders, just deletes files
+    """ Ignores all folders, just deletes files """
     assert directory_exists(directory),'No such directory exists: '+repr(directory)
-    delete_all_paths_in_directory(directory,permanent=permanent,recursive=recursive,include_folders=False,include_files=True)
+    return delete_all_paths_in_directory(directory,permanent=permanent,recursive=recursive,include_folders=False,include_files=True)
 delete_all_files_in_folder=delete_all_files_in_directory
 
 def path_join(*paths,show_progress=False,lazy=False):
@@ -44671,7 +45528,7 @@ def crop_videos_to_max_size(videos, origin='top left', *, show_progress=False, l
     height, width = get_max_video_dimensions(videos)
     return gather_args_call(crop_videos)
 
-def crop_image_zeros(image,*,output='image'):
+def crop_image_zeros(image, *, output="image", mask=None):
     """
     Given some big image that is surrounded by black, or 0-alpha transparency, crop out that excess region
     Crops out black or fully transparent (0-alpha) regions from the borders of an image.
@@ -44684,6 +45541,10 @@ def crop_image_zeros(image,*,output='image'):
         output : str, optional
             Specifies the type of output to return. If 'image' (default), returns the cropped image.
             If 'bounds', returns a tuple of bounding box coordinates (top, bottom, left, right).
+        mask : image, optional
+            Syntactic sugar - less verbose than getting bounds via output='bounds' then applying crop to another image
+            If not None, use this image to determine the crop bounds instead of the other image
+            Useful for if you want to pass a mask etc
 
     Returns:
         cropped_image : ndarray
@@ -44706,25 +45567,188 @@ def crop_image_zeros(image,*,output='image'):
         >>> print(bounds)
         (1, 3, 1, 3)  # Top, Bottom, Left, Right
     """
+    
+    if mask is None: mask = image
+
     assert output in 'image bounds'.split(),'output is a string indicating what the output type is - it can be either image or bounds but you gave type '+str(type(output))+' '+str(output)
-    assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
-    if is_grayscale_image(image):
-        points=np.argwhere(image)#Crop out the black regions
-    elif is_rgb_image(image):
-        points=np.argwhere(np.any(image,axis=2))#Crop out the black regions
-    elif is_rgba_image(image):
-        points=np.argwhere(image[:,:,3])#Crop to where there's alpha
-    else:
-        assert False,'crop_image_zeros cannot handle this image type and this function needs to be updated'
-    if not len(points):
-        points=[[0,0],[0,0]]
-    top,left=np.min(points,axis=0)
-    bottom,right=np.max(points,axis=0)+1
+    assert is_image(image),'Error: input image is not an image as defined by rp.is_image()'
+    assert is_image(mask),'Error: input mask is not an image as defined by rp.is_image()'
+
+    if   is_grayscale_image(mask): points=np.argwhere(mask)                # Crop out the black regions
+    elif is_rgb_image      (mask): points=np.argwhere(np.any(mask,axis=2)) # Crop out the black regions
+    elif is_rgba_image     (mask): points=np.argwhere(mask[:,:,3])         # Crop to where there's alpha
+    else: assert False,'crop_image_zeros cannot handle this image type and this function needs to be updated'
+
+    if not len(points): points=[[0,0],[0,0]]
+
+    top,left     = np.min(points,axis=0)
+    bottom,right = np.max(points,axis=0)+1
+
     if output=='image':
         cropped=image[top:bottom,left:right]
         return cropped
-    if output=='bounds':
+    elif output=='bounds':
         return top,bottom,left,right
+    else:
+        assert False, 'Unreachable'
+
+def crop_tensor_zeros(tensor, *, output="tensor", mask=None):
+    """
+    Crops out zero-valued regions from the borders of a tensor.
+
+    This function removes excess zero-valued borders from a tensor, reducing it to only
+    the non-zero content. It works with tensors of any number of dimensions (1D, 2D, 3D, etc.)
+    and supports both numpy arrays and torch tensors. It can return either the cropped tensor
+    or the bounding coordinates of the cropped region.
+
+    Parameters:
+        tensor : ndarray or torch.Tensor
+            The input tensor to crop. Can be any shape and any number of dimensions.
+        output : str, optional
+            Specifies the type of output to return. If 'tensor' (default), returns the cropped tensor.
+            If 'bounds', returns a tuple of bounding box coordinates as slice objects.
+        mask : tensor, optional
+            Syntactic sugar - less verbose than getting bounds via output='bounds' then applying crop to another tensor.
+            If not None, use this tensor to determine the crop bounds instead of the input tensor.
+            Useful for if you want to pass a mask etc.
+
+    Returns:
+        cropped_tensor : ndarray or torch.Tensor
+            The cropped tensor, returned if output is 'tensor'.
+        bounds : tuple of slice
+            A tuple of slice objects defining the bounding box, returned if output is 'bounds'.
+            Can be used directly for indexing: tensor[bounds]
+
+    Examples:
+        >>> import numpy as np
+        >>> tensor = np.array([[0, 0, 0, 0],
+        ...                    [0, 5, 3, 0],
+        ...                    [0, 2, 7, 0],
+        ...                    [0, 0, 0, 0]])
+        >>> cropped = crop_tensor_zeros(tensor, output='tensor')
+        >>> print(cropped)
+        [[5 3]
+         [2 7]]
+
+        >>> bounds = crop_tensor_zeros(tensor, output='bounds')
+        >>> print(bounds)
+        (slice(1, 3, None), slice(1, 3, None))
+        >>> print(tensor[bounds])
+        [[5 3]
+         [2 7]]
+
+        >>> tensor_3d = np.zeros((5, 5, 5))
+        >>> tensor_3d[1:3, 1:3, 1:3] = 1
+        >>> cropped_3d = crop_tensor_zeros(tensor_3d)
+        >>> print(cropped_3d.shape)
+        (2, 2, 2)
+    """
+
+    if mask is None: mask = tensor
+
+    assert output in 'tensor bounds'.split(),'output is a string indicating what the output type is - it can be either tensor or bounds but you gave type '+str(type(output))+' '+str(output)
+
+    # Find all non-zero indices
+    if is_numpy_array(mask):
+        points = np.argwhere(mask)
+    elif is_torch_tensor(mask):
+        points = mask.nonzero()
+        if hasattr(points, 'cpu'):
+            points = points.cpu().numpy()
+        else:
+            points = np.array(points)
+    else:
+        assert False,'Error: input tensor must be a numpy array or torch tensor but got type '+str(type(mask))
+
+    # Handle empty tensor (all zeros)
+    if not len(points):
+        # Return minimal slice at origin
+        bounds = tuple(slice(0, 1) for _ in range(tensor.ndim))
+    else:
+        # Compute bounding box across all dimensions
+        mins = np.min(points, axis=0)
+        maxs = np.max(points, axis=0) + 1
+        bounds = tuple(slice(int(mins[i]), int(maxs[i])) for i in range(len(mins)))
+
+    if output == 'tensor':
+        cropped = tensor[bounds]
+        return cropped
+    elif output == 'bounds':
+        return bounds
+    else:
+        assert False, 'Unreachable'
+
+# def crop_images_zeros(*images, output="image", mask=None):
+#     if len(images)==1:
+#         only = images[0]
+#         if is_image(only):
+#             images = [only]
+#         else:
+#             images = [*only]
+
+def crop_image_white(image,*,output='image'):
+    """
+    Crops out white or fully opaque white regions from the borders of an image.
+
+    Enhanced Documentation:
+    This function removes excess white borders from an image, reducing it to only the non-white content.
+    It can handle grayscale, RGB, and RGBA images, and works with both byte (uint8) and float images.
+    For byte images, white is defined as 255 for all channels. For float images, white is defined as 1.0.
+
+    This function returns either the cropped image or the bounding coordinates of the non-white area,
+    depending on the output parameter. It complements crop_image_zeros for use cases with white
+    backgrounds instead of black backgrounds.
+
+    Internally, this function creates a mask where white pixels become zero, then delegates to
+    crop_image_zeros to find the bounding box, avoiding code duplication.
+
+    Parameters:
+        image : ndarray
+            The input image to crop, which can be grayscale, RGB, or RGBA.
+        output : str, optional
+            Specifies the type of output to return. If 'image' (default), returns the cropped image.
+            If 'bounds', returns a tuple of bounding box coordinates (top, bottom, left, right).
+
+    Returns:
+        cropped_image : ndarray
+            The cropped image, returned if output is 'image'.
+        bounds : tuple of int
+            A tuple (top, bottom, left, right) defining the bounding box coordinates, returned if output is 'bounds'.
+
+    Examples:
+        >>> import numpy as np
+        >>> # Create image with white borders
+        >>> image = np.array([[255, 255, 255, 255],
+        ...                   [255,  50,  50, 255],
+        ...                   [255,  50,  50, 255],
+        ...                   [255, 255, 255, 255]], dtype=np.uint8)
+        >>> cropped = crop_image_white(image, output='image')
+        >>> print(cropped)
+        [[50 50]
+         [50 50]]
+
+        >>> # Get bounds instead of image
+        >>> bounds = crop_image_white(image, output='bounds')
+        >>> print(bounds)
+        (1, 3, 1, 3)
+
+        >>> # Works with RGB images
+        >>> rgb_img = np.ones((10, 10, 3), dtype=np.uint8) * 255
+        >>> rgb_img[2:8, 2:8] = [100, 100, 100]
+        >>> cropped = crop_image_white(rgb_img)
+        >>> cropped.shape
+        (6, 6, 3)
+
+    Related: crop_image_zeros, crop_image, as_byte_image, is_image
+
+    Note: This function complements crop_image_zeros for use cases with white backgrounds instead of black.
+
+    Tags: image, crop, white, borders, trim, processing
+    """
+    assert output in 'image bounds'.split(),'output is a string indicating what the output type is - it can be either image or bounds but you gave type '+str(type(output))+' '+str(output)
+    assert is_image(image),'Error: input is not an image as defined by rp.is_image()'
+
+    return crop_image_zeros(image, mask=inverted_image(image), output=output)
 
 def cv_contour_to_segment(contour):
     """
@@ -48216,6 +49240,11 @@ def temporary_file_path(file_extension:str=''):
         temp += file_extension
     return temp
 
+def make_temporary_folders(n:int=1)->list:
+    """ Create N temp folders and return a list of str, which are the paths """
+    return make_folders(temporary_file_path() for _ in range(n))
+make_temporary_directories=make_temporary_folders
+
 @memoized
 def python_2_to_3(code:str)->str:
     """
@@ -49119,7 +50148,7 @@ def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, unix=Non
     if mac   is None: mac   = unix
     if linux is None: linux = unix
 
-    if not force and system_command_exists(name):
+    if not force and (system_command_exists(name) or system_library_exists(name)):
         #Don't reinstall what we've already installed
         return False
 
@@ -49446,6 +50475,14 @@ def _ensure_shfmt_installed():
         windows='winget install --id=mvdan.shfmt',
     )
  
+def _ensure_pdftocairo_installed():
+    _ensure_installed(
+        'pdftocairo',
+        mac    = 'brew install poppler',
+        linux  = 'apt install poppler-utils',
+    )
+ 
+
 
 def _install_ollama(force=False):
     _ensure_installed(
@@ -49456,6 +50493,12 @@ def _install_ollama(force=False):
         force=force,
     )
     pip_import('ollama',auto_yes=True)
+
+def _ensure_libvulkan_installed():
+    _ensure_installed(
+        "libvulkan.so.1",
+        linux="apt install libvulkan1 mesa-vulkan-drivers",
+    )
 
 def _ensure_ollama_server_running():
     serve_processes = search_processes(" ollama serve ")
@@ -51773,10 +52816,18 @@ def inverted_images(images, invert_alpha=False):
     return [gather_args_call(inverted_image, image) for image in images]
 invert_images = inverted_images
 
-def make_zip_file_from_folder(src_folder:str=None, dst_zip_file:str=None)->str:
+def make_zip_file_from_folder(src_folder:str=None, dst_zip_file:str=None, *, show_progress=False)->str:
     """
     Creates a .zip file on your hard drive.
     Zip the contents of some src_folder and return the output zip file's path
+
+    Parameters:
+        - src_folder (str, optional): The folder to zip. If not provided, prompts user to select.
+        - dst_zip_file (str, optional): Destination path for the zip file. If not provided, creates next to source folder.
+        - show_progress (bool, optional): If True, shows compression progress. Default is False.
+
+    Returns:
+        str: Path to the created zip file
     """
     if src_folder is None:
         print("Please select a folder whose contents you'd like to zip:")
@@ -51787,8 +52838,27 @@ def make_zip_file_from_folder(src_folder:str=None, dst_zip_file:str=None)->str:
     tmp_path=temporary_file_path()
 
     try:
-        import shutil
-        shutil.make_archive(tmp_path, 'zip', src_folder)
+        if show_progress:
+            # Match shutil.make_archive behavior exactly: follow symlinks, dereference them
+            import zipfile
+            import os
+
+            # Collect all files (following symlinks like shutil.make_archive does)
+            file_list = []
+            for root, dirs, files in os.walk(src_folder):
+                for file in files:
+                    file_list.append(os.path.join(root, file))
+
+            # Create zip with progress
+            with zipfile.ZipFile(tmp_path+'.zip', 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for file_path in eta(file_list, title="rp.make_zip_file_from_folder"):
+                    arcname = os.path.relpath(file_path, src_folder)
+                    # Write normally - this dereferences symlinks like shutil.make_archive
+                    zipf.write(file_path, arcname)
+        else:
+            # Golden standard behavior
+            import shutil
+            shutil.make_archive(tmp_path, 'zip', src_folder)
     except KeyboardInterrupt:
         delete_file(tmp_path+'.zip') #It will be corrupted. Don't waste space
         raise
@@ -56239,9 +57309,87 @@ def resize_videos_to_max_size(*videos,interp='auto'):
     max_width  = max(get_video_widths (videos))
     return resize_videos(videos, size=(max_height, max_width),interp=interp)
 
-def _iterfzf(iterable, *args,**kwargs):
+def _iterfzf_raw(
+    # CHECK: When the signature changes, __init__.pyi file should also change.
+    iterable,
+    # Search mode:
+    extended=True, exact=False, case_sensitive=None,
+    # Interface:
+    multi=False, mouse=True, print_query=False,
+    # Layout:
+    prompt='> ', preview=None,
+    # Misc:
+    query='', encoding=None
+):
+    '''
+    A modification of the original iterfzf.iterfzf function
+    This one has --ansi and can potentially add more args
+    '''
     pip_import('iterfzf')
-    from iterfzf import iterfzf
+
+    import errno, subprocess, sys, iterfzf
+    executable=iterfzf.BUNDLED_EXECUTABLE or iterfzf.EXECUTABLE_NAME
+
+    cmd = [
+        executable,
+        '--ansi', #<--- MY ONLY ACTUAL CHANGE
+        "--no-sort",
+        "--prompt=" + prompt,
+    ]
+    if not extended:               cmd.append('--no-extended')
+    if case_sensitive is not None: cmd.append('+i' if case_sensitive else '-i')
+    if exact:                      cmd.append('--exact')
+    if multi:                      cmd.append('--multi')
+    if not mouse:                  cmd.append('--no-mouse')
+    if print_query:                cmd.append('--print-query')
+    if query:                      cmd.append('--query=' + query)
+    if preview:                    cmd.append('--preview=' + preview)
+    encoding = encoding or sys.getdefaultencoding()
+    proc = stdin = byte =None
+    lf, cr = u'\n\r'
+    for line in iterable:
+        if byte is None:
+            byte = isinstance(line, bytes)
+            if byte: lf,cr = b'\n\r'
+        elif isinstance(line, bytes) is not byte: raise ValueError( 'element values must be all byte strings or all ' 'unicode strings, not mixed of them: ' + repr(line))
+        if lf in line or cr in line: raise ValueError(r"element values must not contain CR({1!r})/" r"LF({2!r}): {0!r}".format(line, cr, lf))
+        if proc is None:
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=None
+            )
+            stdin = proc.stdin
+        if not byte: line = line.encode(encoding)
+        try: stdin.write(line + b'\n'); stdin.flush()
+        except IOError as e:
+            if e.errno != errno.EPIPE and errno.EPIPE != 32: raise
+            break
+    if proc is None or proc.wait() not in [0, 1]:
+        if print_query: return None, None
+        else: return None
+    try: stdin.close()
+    except IOError as e:
+        if e.errno != errno.EPIPE and errno.EPIPE != 32:
+            raise
+    stdout = proc.stdout
+    decode = (lambda b: b) if byte else (lambda t: t.decode(encoding))
+    output = [decode(l.strip(b'\r\n\0')) for l in iter(stdout.readline, b'')]
+    if print_query:
+        try:
+            if multi: return output[0], output[1:]
+            else: return output[0], output[1]
+        except IndexError: return output[0], None
+    else:
+        if multi: return output
+        else:
+            try: return output[0]
+            except IndexError: return None
+
+def _iterfzf(iterable, *args,**kwargs):
+    # pip_import('iterfzf')
+    # from iterfzf import iterfzf
 
     def sanitize_string(string):
         #TODO: This might modify the outputs they expect...add some converter here to make sure it outputs the string they think it will
@@ -56249,7 +57397,74 @@ def _iterfzf(iterable, *args,**kwargs):
 
     iterable=map(sanitize_string,iterable)
 
-    return iterfzf(iterable, *args,**kwargs)
+    return _iterfzf_raw(iterable, *args,**kwargs)
+
+def _iterfzf_with_ls_preview(iterable, exact=False, **kwargs):
+    """
+    Wrapper for _iterfzf that adds a colored ls preview for directory listings.
+    Similar to other rp command helpers like _cpah.
+
+    Shows a colored ls output in the preview pane when selecting directories.
+    Format: [size] [date] filename with each column in different colors.
+    Works with CDH, CDQ, CDHF, and DQ commands.
+    """
+    import sys
+    import shlex
+
+    # Use custom formatter that shows size, date, and filename in colored columns
+    # No permission/owner noise - just the useful info
+    formatter_path = get_module_path("rp.libs.ls_colored_columns")
+    preview_cmd = '{0} {1} {}'.format(shlex.quote(sys.executable), shlex.quote(formatter_path))
+
+    # Only set preview if not already specified
+    if 'preview' not in kwargs:
+        kwargs['preview'] = preview_cmd
+
+    # iterable = map(fansi_highlight_path, iterable)
+
+    output = _iterfzf(iterable, exact=exact, **kwargs)
+    # output = strip_ansi_escapes(output)
+    return output
+
+def _recursively_iter_subdirs(root_path='.'):
+    """
+    Fast recursive directory iterator using scandir - optimal for Unix filesystems.
+
+    Uses os.scandir() which leverages the d_type field from directory entries.
+    The getdents() syscall returns entry type for free, so entry.is_dir() requires
+    no additional syscall (vs. os.path.isdir which calls stat() per entry).
+
+    This is the fastest possible way to recursively find directories on Unix.
+    Benchmark shows ~5.5x speedup vs listdir()+isdir() approach.
+
+    Yields directories in breadth-first order, similar to breadth_first_path_iterator
+    but filtered to directories only.
+
+    >>> # Usage in CDQ/CDZ commands
+    >>> list(_recursively_iter_subdirs('.'))[:3]  # doctest: +SKIP
+    ['./subdir1', './subdir2', './dir/nested']
+    """
+    import os
+    from collections import deque
+
+    queue = deque([root_path])
+
+    while queue:
+        current_dir = queue.popleft()
+
+        try:
+            with os.scandir(current_dir) as entries:
+                for entry in entries:
+                    # entry.is_dir() reads d_type field from directory entry
+                    # Already in memory from getdents() - no stat() syscall needed
+                    if entry.is_dir(follow_symlinks=False):
+                        # Yield the path
+                        yield entry.path
+                        # Add to queue for recursive traversal
+                        queue.append(entry.path)
+        except (PermissionError, OSError):
+            # Skip directories we can't read
+            pass
 
 def cv_inpaint_image(image, mask=None, radius=3, *, algorithm: str = "TELEA", invert_mask=False):
     """
@@ -57078,11 +58293,20 @@ def with_alpha_channel(image, alpha, copy=True):
     Assigns an alpha channel to an image
     The alpha can either be given as a number between 0 and 1,
     or a grayscale image whose brigtness will be used as alpha
+
+    If alpha is given as an array, you can specify image by color
     
     Will output an RGBA float image
 
     TODO: Mutate image if copy=False
     """
+
+    if not is_image(image):
+        # If alpha is given as an array, you can specify image by color
+        assert is_image(alpha),'Either alpha or image must be an image...'
+        h, w = get_image_dimensions(alpha)
+        image = uniform_float_color_image(h, w, color=image)
+
     if is_number(alpha):
         # Assume alpha is a float between 0 and 1
         alpha = uniform_float_color_image(*get_image_dimensions(image), alpha)
@@ -57687,7 +58911,7 @@ def vim_copy(string:str):
 
     string_to_text_file('~/.viminfo',new_line+'\n'+viminfo)
 
-def zip_folder_to_bytes(folder_path:str):
+def zip_folder_to_bytes(folder_path:str, *, show_progress=False):
     """
     Similar to file_to_bytes
     Takes a folder_path, zips it into a .zip file, then returns the bytes of that zip file
@@ -57696,7 +58920,7 @@ def zip_folder_to_bytes(folder_path:str):
     assert is_a_folder(folder_path),'zip_folder_to_bytes error: Path exists but is not a folder: '+str(folder_path)
     temp_zip=temporary_file_path('.zip')
     try:
-        make_zip_file_from_folder(folder_path,temp_zip)
+        make_zip_file_from_folder(folder_path,temp_zip,show_progress=show_progress)
         data=file_to_bytes(temp_zip)
     finally:
         if file_exists(temp_zip):
@@ -57784,16 +59008,17 @@ def _paste_path_from_bundle(data,path=None, *,ask_to_replace=True):
 
 def web_copy_path(path=None, *, show_progress=False):
     """ FC (file copy) """
-    web_copy(_copy_paths_to_bundle(path), show_progress=show_progress)
+    web_copy(_copy_paths_to_bundle(path, show_progress=show_progress), show_progress=show_progress)
     return path
 
-def _copy_paths_to_bundle(paths=None):
+def _copy_paths_to_bundle(paths=None, *, show_progress=False):
     """
     Handle copying single path or multiple paths to a bundle.
 
     Args:
         paths: Can be a single path (str) or multiple paths (list/tuple).
                If None, prompts for path selection.
+        show_progress: If True, shows progress when zipping folders.
 
     Returns:
         _BundledPath for single path, _BundledPaths for multiple paths.
@@ -57814,7 +59039,7 @@ def _copy_paths_to_bundle(paths=None):
         if is_a_module(path):
             path = get_module_path(path)
         assert path_exists(path), 'Path does not exist: {0}'.format(path)
-        data = file_to_bytes(path) if is_a_file(path) else zip_folder_to_bytes(path)
+        data = file_to_bytes(path) if is_a_file(path) else zip_folder_to_bytes(path, show_progress=show_progress)
         paths_data.append((is_a_file(path), data, path))
 
     if len(paths_data) == 1:
@@ -60520,6 +61745,42 @@ def select_git_commit():
     return None
 
 
+
+def git_untracked_files():
+    """ Returns a list of untracked file paths """
+    import subprocess
+    result = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files"],
+        capture_output=True, text=True, check=True
+    )
+
+    # Lines that start with "??" are untracked files
+    untracked = [
+        line[3:] for line in result.stdout.splitlines() if line.startswith("?? ")
+    ]
+    return untracked
+
+
+def git_existing_ignored_files():
+    """ Returns a list of file paths that exist but are ignored by git (via .gitignore)
+
+    >>> # Example (assuming you have some ignored files):
+    >>> ignored = git_existing_ignored_files()
+    >>> isinstance(ignored, list)
+    True
+    """
+    import subprocess
+    result = subprocess.run(
+        ["git", "ls-files", "--others", "--ignored", "--exclude-standard"],
+        capture_output=True, text=True, check=True
+    )
+
+    # Each line is an ignored file path
+    ignored = [line for line in result.stdout.splitlines() if line.strip()]
+    return ignored
+
+
+
 def _autoformat_python_code_via_black(code:str):
     """Formats Python code using the Black code formatter.
     
@@ -62198,10 +63459,62 @@ class BoolSet(MutableSet):
         return self.__class__.__name__+'('+repr(self._data)+')'
 
 
-if __name__ == "__main__":
-    print(end='\r')
-    _pterm()
+def repeat_last(it):
+    """
+    Yield items from iterable and then repeat its last item forever.
 
+    EXAMPLE:
+        >>> list(zip([1,2,3], repeat_last(['a','b'])))
+        [(1, 'a'), (2, 'b'), (3, 'b')]
+
+    EXAMPLE:
+        >>> for x in repeat_last([1, 2, 3, 4, 5]):
+        >>>     print(end=str(x))
+        1234555555555555555555555555555555555555555555555...
+
+    """
+    from itertools import repeat
+    
+    for x in it:
+        yield x
+
+    if 'x' in locals():
+        yield from repeat(x)
+
+def zip_repeat_last(*iters):
+    """
+    Zip iterables, repeating each last item until all are exhausted.
+
+    parameters:
+        iters: non-empty iterables.
+
+    returns:
+        finite generator of tuples.
+
+    EXAMPLE:
+        >>> list(zip_repeat_last([1, 2, 3, 4], ['a', 'b']))
+        [(1, 'a'), (2, 'b'), (3, 'b'), (4, 'b')]
+    """
+    iters = [iter(it) for it in iters]
+
+    lasts = []
+    for it in iters:
+        try:
+            lasts.append(next(it))
+        except StopIteration:
+            raise ValueError("empty iterable passed to zip_repeat_last")
+
+    while True:
+        yield tuple(lasts)
+        advanced = False
+        for i, it in enumerate(iters):
+            try:
+                lasts[i] = next(it)
+                advanced = True
+            except StopIteration:
+                pass
+        if not advanced:
+            break
 
 def resize_list(array:list, length: int):
     """
@@ -62439,6 +63752,45 @@ def list_transpose(list_of_lists:list):
 
     assert len(set(map(len,list_of_lists)))==1, 'Right now list_transpose only handles rectangular list_of_lists. This functionality may be added in the future.'
     return list(map(list,zip(*list_of_lists)))
+
+def dict_zip(*dicts):
+    """
+    Given multiple dicts, return a list of tuples:
+    [
+        (key1, (dict1[key1], dict2[key1], ...)),
+        (key2, (dict1[key2], dict2[key2], ...)),
+        ...
+    ]
+    Only keys present in all dicts are included.
+
+    EXAMPLE USAGE:
+        
+        >>> @memoized
+        ... def load_model(model_path):
+        ...     cached_model_path = get_cache_file_path(model_path)
+        ...     copy_file(model_path, cached_model_path, show_progress=True, resume=True)
+        ...     return load_safetensors(cached_model_path)
+        ... 
+        ... 
+        ... model_a_path = "/root/CleanCode/Github/DiffSynth-Studio/models/train/Wan2.2-I2V-A14B_high_noise_lora_GWTF_Dev_Deepspeed_<T=81>/step-250.safetensors"
+        ... model_b_path = "/root/CleanCode/Github/DiffSynth-Studio/models/train/Wan2.2-I2V-A14B_high_noise_lora_GWTF_Dev_Deepspeed_<T=81>/step-40000.safetensors"
+        ... model_a = load_model(model_a_path)
+        ... model_b = load_model(model_b_path)
+        ... keys = assert_equality(set(model_a), set(model_b))
+        ... alpha = 0.5
+        ... model_z = {
+        ...     key: blend(val_a, val_b, alpha)
+        ...     for key, (val_a, val_b) in eta(dict_zip(model_a, model_b), "Blending LoRAs")
+        ... }
+        ... 
+        ... save_safetensors(model_z,f'merge_models_test/alpha={alpha}.safetensors')
+        
+    """
+    dicts = detuple(dicts)
+    keys = set.intersection(*map(set, dicts))
+    output = ([key,[d[key] for d in dicts]] for key in keys)
+    output = IteratorWithLen(output, len(keys))
+    return output
 
 def dict_transpose(dic):
     """
@@ -64206,6 +65558,8 @@ known_pypi_module_package_names={
     'clinical_trials/api/xml2dict': 'clinical-trials',
     'colors': 'ansicolors',
     'compose': 'docker-compose',
+    'tree_sitter': 'tree-sitter',
+    'tree_sitter_python': 'tree-sitter-python',
     # 'cv2': 'opencv-python',
     # 'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? (Update: so far, so good!)
     'cv2': 'opencv-python opencv-contrib-python', #But that didn't work for get_edge_drawing...https://github.com/Comfy-Org/ComfyUI-Manager/discussions/708
@@ -64844,6 +66198,18 @@ def get_only_value(dictionary):
     if len(dictionary) != 1: raise ValueError("Expected dictionary with 1 key but got "+str(len(dictionary)))
     return next(iter(dictionary.values()))
 
+def _check_rpy_35_syntax():
+    """
+    Used to prepare r.py for release
+    IN CLAUDECODE:
+        Run rp call _check_rpy_35_syntax then fix any syntax errors that make it incompatiable with python 3.5 then run again then repeat until no more errors 
+    """
+    out = is_valid_python_syntax(get_source_code(r), version="3.5", return_error=True)
+    if out:
+        print(out)
+    else:
+        print("No syntax errors! r.py is compatiable with python 3.5")
+
 
 del re #re is random element
 
@@ -64889,9 +66255,6 @@ del re #re is random element
 #     assert callable(f)
 #     default_args=f.
 #     args=[args]
-
-
-
 
 # Version Oct24 2021
 
