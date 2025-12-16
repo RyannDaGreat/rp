@@ -4,7 +4,7 @@ Creation of the `Layout` instance for the Python input/REPL.
 from __future__ import unicode_literals
 
 from rp.prompt_toolkit.enums import DEFAULT_BUFFER, SEARCH_BUFFER
-from rp.prompt_toolkit.filters import IsDone, HasCompletions, RendererHeightIsKnown, HasFocus, Condition
+from rp.prompt_toolkit.filters import IsDone, HasCompletions, RendererHeightIsKnown, HasFocus, Condition, HasSelection
 from rp.prompt_toolkit.key_binding.vi_state import InputMode
 from rp.prompt_toolkit.layout.containers import Window, HSplit, VSplit, FloatContainer, Float, ConditionalContainer, ScrollOffsets
 from rp.prompt_toolkit.layout.controls import BufferControl, TokenListControl, FillControl, UIContent
@@ -36,6 +36,245 @@ from pygments.token import Token
 
 import platform
 import sys
+
+def get_empty_component():
+    return ConditionalContainer(
+        content=Window(TokenListControl(lambda: []), height=LayoutDimension.exact(0)),
+        filter=Condition(lambda cli: False),
+    )
+
+
+def extract_variable_toolbar():
+    """Create toolbar for extract variable refactoring input."""
+    import rp
+    if not rp.r._treesitter_supported: return get_empty_component()
+    from . import refactor_extract as refactor
+    def get_tokens(cli):
+        st = refactor.state
+        if not st.active:
+            return []
+
+        tokens = []
+        T = Token.Toolbar.Search
+
+        if st.error:
+            tokens.append((Token.Toolbar.Validation, " Error: " + st.error + " "))
+            st.reset()  # Clear after displaying - keys pass through
+        else:
+            tokens.append((T, " Name: "))
+            # Show cursor position with inverted/underlined char
+            before = st.name[:st.name_cursor]
+            after = st.name[st.name_cursor:]
+            tokens.append((T.Text, before))
+            cursor_char = after[0] if after else " "
+            tokens.append((Token.SearchMatch.Current, cursor_char))
+            tokens.append((T.Text, after[1:] if after else ""))
+
+            if st.duplicate_count > 0:
+                total = st.duplicate_count + 1
+                if st.replace_all:
+                    tokens.append((Token.Toolbar.Arg, " [Tab: replace ALL " + str(total) + "]"))
+                else:
+                    tokens.append((T, " [Tab: replace 1/" + str(total) + "]"))
+
+        return tokens
+
+    return ConditionalContainer(
+        content=Window(
+            TokenListControl(get_tokens),
+            height=LayoutDimension.exact(1)),
+        filter=Condition(lambda cli: refactor.state.active)
+    )
+
+
+def status_message_toolbar():
+    """Create toolbar for transient status messages (errors, etc.)."""
+    import rp
+    if not rp.r._treesitter_supported: return get_empty_component()
+    from . import refactor_extract as refactor
+    def get_tokens(cli):
+        msg = refactor.get_status()
+        if not msg:
+            return []
+        return [(Token.Toolbar.Validation, " {0} ".format(msg))]
+
+    return ConditionalContainer(
+        content=Window(
+            TokenListControl(get_tokens),
+            height=LayoutDimension.exact(1)),
+        filter=Condition(lambda cli: refactor.get_status() is not None)
+    )
+
+
+def rename_variable_toolbar():
+    """Create toolbar for rename variable refactoring input."""
+    import rp
+    if not rp.r._treesitter_supported: return get_empty_component()
+    from . import refactor_rename as rn
+
+    def get_tokens(cli):
+        st = rn.state
+        if not st.active:
+            return []
+
+        tokens = []
+        T = Token.Toolbar.Search
+
+        if st.error:
+            tokens.append((Token.Toolbar.Validation, " Error: " + st.error + " "))
+            st.reset()  # Clear after displaying - keys pass through
+        else:
+            tokens.append((T, " Rename '" + st.old_name + "' to: "))
+            # Show cursor position with inverted/underlined char
+            before = st.name[:st.name_cursor]
+            after = st.name[st.name_cursor:]
+            tokens.append((T.Text, before))
+            cursor_char = after[0] if after else " "
+            tokens.append((Token.SearchMatch.Current, cursor_char))
+            tokens.append((T.Text, after[1:] if after else ""))
+            count = st.get_count()
+            mode = "all" if st.everywhere else "scope"
+            if st.is_import:
+                mode = "import"
+            tokens.append((T, " (" + str(count) + " " + mode + ")"))
+            if not st.is_import and st.occurrence_count != st.scope_count:
+                tokens.append((Token.Toolbar.Validation, " [Tab: toggle]"))
+
+        return tokens
+
+    return ConditionalContainer(
+        content=Window(
+            TokenListControl(get_tokens),
+            height=LayoutDimension.exact(1)),
+        filter=Condition(lambda cli: rn.state.active)
+    )
+
+
+def bash_extract_variable_toolbar():
+    """Create toolbar for bash extract variable refactoring input."""
+    import rp
+    if not rp.r._treesitter_supported: return get_empty_component()
+    from . import bash_extract as bash_ref
+
+    def get_tokens(cli):
+        st = bash_ref.state
+        if not st.active:
+            return []
+
+        tokens = []
+        T = Token.Toolbar.Search
+
+        if st.error:
+            tokens.append((Token.Toolbar.Validation, " Error: " + st.error + " "))
+            st.reset()
+        else:
+            tokens.append((T, " Bash Extract - Name: "))
+            before = st.name[:st.name_cursor]
+            after = st.name[st.name_cursor:]
+            tokens.append((T.Text, before))
+            cursor_char = after[0] if after else " "
+            tokens.append((Token.SearchMatch.Current, cursor_char))
+            tokens.append((T.Text, after[1:] if after else ""))
+
+            if st.duplicate_count > 0:
+                total = st.duplicate_count + 1
+                if st.replace_all:
+                    tokens.append((Token.Toolbar.Arg, " [Tab: replace ALL " + str(total) + "]"))
+                else:
+                    tokens.append((T, " [Tab: replace 1/" + str(total) + "]"))
+
+        return tokens
+
+    return ConditionalContainer(
+        content=Window(
+            TokenListControl(get_tokens),
+            height=LayoutDimension.exact(1)),
+        filter=Condition(lambda cli: bash_ref.state.active)
+    )
+
+
+def bash_rename_variable_toolbar():
+    """Create toolbar for bash rename variable refactoring input."""
+    import rp
+    if not rp.r._treesitter_supported: return get_empty_component()
+    from . import bash_rename as bash_rn
+
+    def get_tokens(cli):
+        st = bash_rn.state
+        if not st.active:
+            return []
+
+        tokens = []
+        T = Token.Toolbar.Search
+
+        if st.error:
+            tokens.append((Token.Toolbar.Validation, " Error: " + st.error + " "))
+            st.reset()
+        else:
+            tokens.append((T, " Bash Rename '" + st.old_name + "' to: "))
+            before = st.name[:st.name_cursor]
+            after = st.name[st.name_cursor:]
+            tokens.append((T.Text, before))
+            cursor_char = after[0] if after else " "
+            tokens.append((Token.SearchMatch.Current, cursor_char))
+            tokens.append((T.Text, after[1:] if after else ""))
+            tokens.append((T, " (" + str(st.occurrence_count) + " occurrences)"))
+
+        return tokens
+
+    return ConditionalContainer(
+        content=Window(
+            TokenListControl(get_tokens),
+            height=LayoutDimension.exact(1)),
+        filter=Condition(lambda cli: bash_rn.state.active)
+    )
+
+
+def backslash_command_toolbar():
+    """Create toolbar for backslash command mode (select text, press \\, type command)."""
+    import rp
+    if not rp.r._treesitter_supported: return get_empty_component()
+    from . import backslash_commands as bslash
+
+    def get_tokens(cli):
+        st = bslash.state
+        if not st.active:
+            return []
+
+        tokens = []
+        T = Token.Toolbar.Search
+
+        # Show command being typed with cursor
+        tokens.append((T, " \\"))
+        before = st.command[:st.cursor]
+        after = st.command[st.cursor:]
+        tokens.append((T.Text, before))
+        cursor_char = after[0] if after else " "
+        tokens.append((Token.SearchMatch.Current, cursor_char))
+        tokens.append((T.Text, after[1:] if after else ""))
+
+        # Show hint/matches
+        matches = st.get_matching_commands()
+        if not st.command:
+            hint = " [type command, Enter to apply, Esc to cancel]"
+        elif len(matches) == 0:
+            hint = " [no match]"
+        elif len(matches) == 1 and matches[0] == st.command:
+            name, desc, _ = bslash.COMMANDS[st.command]
+            hint = " [{0}: {1}]".format(name, desc)
+        else:
+            hint = " [" + ", ".join(matches) + "]"
+        tokens.append((Token.Toolbar.Validation, hint))
+
+        return tokens
+
+    return ConditionalContainer(
+        content=Window(
+            TokenListControl(get_tokens),
+            height=LayoutDimension.exact(1)),
+        filter=Condition(lambda cli: bslash.state.active)
+    )
+
 
 __all__ = (
     'create_layout',
@@ -659,6 +898,14 @@ def meta_enter_message(python_input):
         filter=visible)
 
 
+def _get_signature_ycursor_offset(cli, python_input):
+    """When on line 2 of a func call, move signature up so it doesn't block cursor."""
+    if python_input.signatures:
+        cursor_row = cli.buffers[DEFAULT_BUFFER].document.cursor_position_row
+        bracket_row = python_input.signatures[0].bracket_start[0] - 1
+        if cursor_row == bracket_row + 1:
+            return 0
+    return 1
 
 
 
@@ -713,9 +960,10 @@ def create_layout(python_input,
                         filter=HasFocus(SEARCH_BUFFER),
                     ),
                     # Then highlight matching brackets - this is critical
+                    # Disable when there's a selection to reduce visual noise
                     ConditionalProcessor(
                         processor=HighlightMatchingBracketProcessor(chars='[](){}'),
-                        filter=HasFocus(DEFAULT_BUFFER) & ~IsDone() &
+                        filter=HasFocus(DEFAULT_BUFFER) & ~IsDone() & ~HasSelection() &
                             Condition(lambda cli: python_input.highlight_matching_parenthesis)),
                     # Other processors can come after
                     ConditionalProcessor(
@@ -807,6 +1055,7 @@ def create_layout(python_input,
                                   extra_filter=show_multi_column_completions_menu(python_input))),
                         Float(xcursor=True,
                               ycursor=True,
+                              ycursor_offset=lambda cli: _get_signature_ycursor_offset(cli, python_input),
                               content=signature_toolbar(python_input)),
                         Float(left=2,
                               bottom=1,
@@ -818,6 +1067,12 @@ def create_layout(python_input,
                     ]),
                 ArgToolbar(),
                 SearchToolbar(),
+                extract_variable_toolbar(),
+                rename_variable_toolbar(),
+                bash_extract_variable_toolbar(),
+                bash_rename_variable_toolbar(),
+                backslash_command_toolbar(),
+                status_message_toolbar(),
                 SystemToolbar(),
                 ValidationToolbar(),
                 CompletionsToolbar(extra_filter=show_completions_toolbar(python_input)),

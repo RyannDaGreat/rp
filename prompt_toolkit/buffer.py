@@ -684,15 +684,16 @@ class Buffer(object):
 
     def save_to_undo_stack(self, clear_redo_stack=False):
         """
-        Safe current state (input text and cursor position), so that we can
+        Safe current state (input text, cursor position, selection), so that we can
         restore it by calling undo.
         """
         # Safe if the text is different from the text at the top of the stack
-        # is different. If the text is the same, just update the cursor position.
+        # is different. If the text is the same, just update the cursor position and selection.
+        selection = self.selection_state  # Use selection_state, not document.selection
         if self._undo_stack and self._undo_stack[-1][0] == self.text:
-            self._undo_stack[-1] = (self._undo_stack[-1][0], self.cursor_position)
+            self._undo_stack[-1] = (self._undo_stack[-1][0], self.cursor_position, selection)
         else:
-            self._undo_stack.append((self.text, self.cursor_position))
+            self._undo_stack.append((self.text, self.cursor_position, selection))
 
         # Saving anything to the undo stack, clears the redo stack.
         if clear_redo_stack:
@@ -1346,15 +1347,20 @@ class Buffer(object):
         # cause that the top of the undo stack is usually the same as the
         # current text, so in that case we have to pop twice.)
         while self._undo_stack:
-            text, pos = self._undo_stack.pop()
+            item = self._undo_stack.pop()
+            # Handle both old (text, pos) and new (text, pos, selection) formats
+            text, pos = item[0], item[1]
+            selection = item[2] if len(item) > 2 else None
 
             if text != self.text:
                 # Push current text to redo stack.
                 # ring_terminal_bell()
-                self._redo_stack.append((self.text, self.cursor_position))
+                self._redo_stack.append((self.text, self.cursor_position, self.selection_state))
                 # print(self._redo_stack)
-                # Set new text/cursor_position.
+                # Set new text/cursor_position, then restore selection_state
+                # (document setter triggers _text_changed which clears selection_state)
                 self.document = Document(text, cursor_position=pos)
+                self.selection_state = selection
                 break
 
     def redo(self):
@@ -1365,8 +1371,14 @@ class Buffer(object):
             self.save_to_undo_stack(clear_redo_stack=False)
 
             # Pop state from redo stack.
-            text, pos = self._redo_stack.pop()
+            item = self._redo_stack.pop()
+            # Handle both old (text, pos) and new (text, pos, selection) formats
+            text, pos = item[0], item[1]
+            selection = item[2] if len(item) > 2 else None
+            # Set text/cursor first, then restore selection_state
+            # (document setter triggers _text_changed which clears selection_state)
             self.document = Document(text, cursor_position=pos)
+            self.selection_state = selection
         # else:
         #     text_to_speech("FAILED")
 

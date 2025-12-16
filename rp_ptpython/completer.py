@@ -313,9 +313,7 @@ class PythonCompleter(Completer):
 
         # Import statements
         if re.fullmatch(r'\s*(from|import)\s+\w*', before_line):
-            python_candidates = [Candidate(name=name) for name in get_all_importable_module_names()]
-            bash_candidates = [Candidate(name='!'+name) for name in rp.r._get_sys_commands_cache]
-            return python_candidates + bash_candidates
+            return [Candidate(name=name) for name in get_all_importable_module_names()]
 
         # First Word Completions - should be super fast, much faster than Jedi
         if not text:

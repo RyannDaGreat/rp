@@ -237,6 +237,7 @@ class PythonInput(object):
         self.enable_jedi_highlighting=True  # When True, use Jedi for slow semantic highlighting (callables, modules, unused vars)
         self.gray_unreachable_code=True  # When True, dim unreachable code (requires enable_semantic_highlighting)
         self.enable_linting=True  # When True, use Ruff to show syntax errors and warnings with undercurls
+        self.selection_expansion_backend='Treesitter'  # 'Treesitter' (handles broken syntax) or 'AST' (fallback)
         self.indent_guides_mode='Propagate'  # 'Off', 'Regular', or 'Propagate'
         self.show_whitespace='Off'  # 'Off', 'All', or 'Leading'
         self.highlight_cursor_line=False  # Highlight the background of the cursor line
@@ -918,6 +919,14 @@ class PythonInput(object):
                               description='Use Ruff to show syntax errors and warnings with undercurls. '
                                           'Disable for faster typing.',
                               field_name='enable_linting'),
+                Option(title='Selection expansion',
+                       description='Backend for Alt+Shift+Up/Down expand/contract selection. '
+                                   'Treesitter handles broken syntax, AST is fallback.',
+                       get_current_value=lambda: self.selection_expansion_backend,
+                       get_values=lambda: {
+                           'Treesitter': lambda: setattr(self, 'selection_expansion_backend', 'Treesitter'),
+                           'AST': lambda: setattr(self, 'selection_expansion_backend', 'AST'),
+                       }),
             ]),
             OptionCategory('Ryan Python',[
                 # Option(title='Sand Creature',

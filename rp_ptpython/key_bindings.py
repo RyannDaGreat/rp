@@ -36,6 +36,11 @@ import rp.rp_ptpython.r_iterm_comm as ric
 import rp.rp_ptpython.r_iterm_comm as r_iterm_comm
 
 from rp import *
+
+# Check if tree-sitter refactoring is supported (Python 3.10+)
+import sys
+_treesitter_refactor_supported = tuple(sys.version_info) >= (3, 10)
+
 __all__ = (
     'load_python_bindings',
     'load_sidebar_bindings',
@@ -79,13 +84,22 @@ def run_arbitrary_code_without_destroying_buffer(code,event,put_in_history=True)
     buffer.document=original_document#Put the old text/cursor pos/etc back. Dont mutate the buffer
 
 def replace_buffer_text(buffer, new_text):
-    #OLD CODE:
-    # buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
-    document=buffer.document
-    old_text = document.text
-    old_cursor_pos = document.cursor_position
-    new_cursor_pos = calculate_new_cursor_pos(old_cursor_pos, old_text, new_text)
-    buffer.document = Document(new_text, new_cursor_pos)
+    """Replace buffer text, preserving cursor and selection via diff-based position mapping."""
+    from rp.prompt_toolkit.selection import SelectionState
+    doc = buffer.document
+    old_text = doc.text
+    new_cursor = calculate_new_cursor_pos(doc.cursor_position, old_text, new_text)
+
+    if doc.selection:
+        new_anchor = calculate_new_cursor_pos(doc.selection.original_cursor_position, old_text, new_text)
+        buffer.document = Document(new_text, new_cursor, None)
+        buffer.selection_state = SelectionState(
+            original_cursor_position=new_anchor,
+            type=doc.selection.type
+        )
+    else:
+        buffer.document = Document(new_text, new_cursor)
+
 
 def handle_run_cell(event):
     #Happens when we press control+w or alt+w
@@ -1081,6 +1095,65 @@ def calculate_new_cursor_pos(old_cursor_pos: int, old_code_string: str, new_code
     
     return new_pos
 
+def toggle_comments(text):
+    """Toggle # comments on lines. Returns transformed text.
+
+    If all non-empty lines start with #, removes the first # from each.
+    Otherwise, adds # at the minimum indentation level.
+    """
+    lines = text.split('\n')
+    all_commented = all(
+        line.lstrip().startswith('#') or not line.strip()
+        for line in lines
+    )
+    if all_commented:
+        # Uncomment: remove first # from each commented line
+        new_lines = []
+        for line in lines:
+            if not line.strip():
+                new_lines.append(line)
+            else:
+                idx = line.find('#')
+                if idx != -1:
+                    new_lines.append(line[:idx] + line[idx+1:])
+                else:
+                    new_lines.append(line)
+        return '\n'.join(new_lines)
+    else:
+        # Comment: insert # at minimum indent
+        min_indent = float('inf')
+        for line in lines:
+            if line.strip():
+                min_indent = min(min_indent, len(line) - len(line.lstrip()))
+        if min_indent == float('inf'):
+            min_indent = 0
+        new_lines = []
+        for line in lines:
+            if not line.strip():
+                new_lines.append(line)
+            else:
+                new_lines.append(line[:min_indent] + '#' + line[min_indent:])
+        return '\n'.join(new_lines)
+
+def indent_lines(text, spaces=4):
+    """Add indentation to all non-empty lines."""
+    indent = ' ' * spaces
+    lines = text.split('\n')
+    return '\n'.join(indent + line if line.strip() else line for line in lines)
+
+def dedent_lines(text, spaces=4):
+    """Remove up to `spaces` leading spaces from each line."""
+    lines = text.split('\n')
+    new_lines = []
+    for line in lines:
+        if not line.strip():
+            new_lines.append(line)
+        else:
+            # Remove up to `spaces` leading spaces
+            remove = min(spaces, len(line) - len(line.lstrip(' ')))
+            new_lines.append(line[remove:])
+    return '\n'.join(new_lines)
+
 
 
 
@@ -1561,6 +1634,15 @@ def handle_character(buffer,char,event=None):
     import rp.rp_ptpython.r_iterm_comm as ric
     import tokenize
 
+    # Dismiss status message on any key (only if tree-sitter supported)
+    if _treesitter_refactor_supported:
+        from . import refactor_extract as refactor
+        refactor.clear_status()
+
+        # Block all character input when in extract variable mode
+        if refactor.handle_char(char):
+            return True
+
     if False:#No microcompletions
         buffer.insert_text(char)
         return True
@@ -1722,6 +1804,9 @@ def handle_character(buffer,char,event=None):
 
     in_string_or_comment=get_if_in_string_or_comment(before_line,after_line,buffer)
     if char not in '\n\'\"' and in_string_or_comment:
+        # Allow < and > through when there's a selection (for move refactoring)
+        if char in '<>' and buffer.document.selection:
+            return False  # Let the < and > handlers deal with it
         buffer.insert_text(char)#Don't do anything but write the damn character lol
         return True
 
@@ -2961,7 +3046,7 @@ def load_python_bindings(python_input):
 #endregion
     for char in r'''`~!@#$%^&*()-_=+[{]}\|;:'",<.>/?']''' + '\n':
         def go(c):
-            @handle(c,filter=~vi_mode_enabled&microcompletions_enabled)
+            @handle(c, filter=~vi_mode_enabled & ~has_selection & microcompletions_enabled)
             def _(event):
                 buffer=event.cli.current_buffer
                 if handle_character(buffer,c,event):return
@@ -4299,13 +4384,8 @@ def load_python_bindings(python_input):
             #····|blah   --->   |····blah
             buffer.cursor_left(1000000)
         elif buffer.cursor_position:
-            after=buffer.document.text_after_cursor
-            if after.count('\n'):
-                buffer.cursor_up()
-                move_line_down(buffer)
-                buffer.cursor_up()
-            else:
-                move_line_down(buffer)
+            # At start of line (not first line) - move line up
+            move_line_down(buffer, up=True)
             buffer.cursor_left(1000000)
 
 #     @handle(Keys.ControlBackslash)
@@ -4325,43 +4405,101 @@ def load_python_bindings(python_input):
             #|····blah   --->   ····|blah
             buffer.cursor_right(len(after_line)-len(after_line.lstrip()))
         else:
-            after=buffer.document.text_after_cursor
-            if after.count('\n')==0:
-                return#We're on the bottom
-            elif after.count('\n')==1:
-                buffer.cursor_down()
-                move_line_down(buffer)
-                buffer.cursor_down()
-            else:
-                move_line_down(buffer)
-    def move_line_down(buffer,up=False):
-        document=buffer.document
-        current_line=document.current_line
-        before_line=document.current_line_before_cursor
-        after_line=document.current_line_after_cursor
-        buffer.cursor_left(1000000)
-        if not buffer.cursor_position:
-            buffer.delete(2)
-        buffer.cursor_right(1000000)
-        # print("Ima doing/ it!")
-        delete_current_line(buffer)
-        buffer.cursor_right(10000)
-        buffer.cursor_down(1)
-        buffer.cursor_left(10000)
-        #region Adaptive indentation: Currently not implemented. Sticking to simplicity.
-        if False:
-            buffer.insert_line_above(copy_margin=not up)
-            buffer.insert_text(current_line.lstrip() if not up else current_line)
-            text=buffer.document.text
-            lstrip=text.lstrip()
-        else:
-            buffer.insert_line_above(copy_margin=False)
-            buffer.insert_text(current_line)
-            lstrip=text=buffer.document.text
+            # At end of line - move line down (if not already at bottom)
+            move_line_down(buffer)
+    def swap_continuation(top_line, bot_line):
+        """
+        Adjust bash \\ continuation markers when swapping line positions.
 
-        # buffer.cursor_down(1)
-        # buffer.cursor_right(1000000)
-        buffer.document=Document(lstrip,buffer.document.cursor_position+(len(lstrip)-len(text)),buffer.document.selection)
+        The \\ stays at the same LINE POSITION - content moves, \\ doesn't.
+        This preserves the continuation structure when reordering arguments.
+
+        Args:
+            top_line: Content moving TO the top position
+            bot_line: Content moving TO the bottom position
+
+        Example - swapping lines in a continuation block:
+            !echo \\             !echo \\
+                --arg1 \\    ->      --arg2 \\    <- \\ stays at position 1
+                --arg2               --arg1       <- no \\ at last position
+
+        The \\ markers stay at their positions, only content swaps.
+
+        Returns (new_top_line, new_bot_line)
+        """
+        # Check what \\ markers the ORIGINAL positions had (before content swap)
+        # top_line is what WAS at bottom, bot_line is what WAS at top
+        old_top_has = bot_line.rstrip().endswith('\\')  # bot_line came FROM top
+        old_bot_has = top_line.rstrip().endswith('\\')  # top_line came FROM bottom
+
+        # Strip existing \\ from both
+        top_content = top_line.rstrip().rstrip('\\').rstrip()
+        bot_content = bot_line.rstrip().rstrip('\\').rstrip()
+
+        # Apply \\ based on ORIGINAL positions
+        if old_top_has:
+            top_content = top_content + ' \\'
+        if old_bot_has:
+            bot_content = bot_content + ' \\'
+
+        return top_content, bot_content
+
+    def move_line_down(buffer, up=False):
+        """
+        Move current line up or down, preserving bash \\ continuation structure.
+
+        Shift+Left at line start: move line UP
+        Shift+Right at line end: move line DOWN
+
+        Example - reordering arguments in a bash continuation:
+            !echo \\             !echo \\
+                --arg1 \\    ->      --arg2 \\    (moved --arg2 up)
+                --arg2               --arg1
+
+        The \\ stays at the same line positions, only content moves.
+        """
+        text = buffer.document.text
+        cursor = buffer.document.cursor_position
+
+        # Find current line bounds
+        line_start = text.rfind('\n', 0, cursor) + 1
+        line_end = text.find('\n', cursor)
+        if line_end == -1:
+            line_end = len(text)
+        current_line = text[line_start:line_end]
+
+        if up:
+            # Move up: swap with line above
+            if line_start == 0:
+                return  # Already at top
+            adj_end = line_start - 1
+            adj_start = text.rfind('\n', 0, adj_end) + 1
+            adj_line = text[adj_start:adj_end]
+            # After swap: current_line on top, adj_line on bottom
+            current_line, adj_line = swap_continuation(current_line, adj_line)
+            new_text = text[:adj_start] + current_line + '\n' + adj_line + text[line_end:]
+            # Cursor moves up by length of adj_line + 1 (newline)
+            new_cursor = cursor - (adj_end - adj_start + 1)
+        else:
+            # Move down: swap with line below
+            if line_end >= len(text):
+                return  # Already at bottom
+            adj_start = line_end + 1
+            adj_end = text.find('\n', adj_start)
+            if adj_end == -1:
+                adj_end = len(text)
+            adj_line = text[adj_start:adj_end]
+            # After swap: adj_line on top, current_line on bottom
+            adj_line, current_line = swap_continuation(adj_line, current_line)
+            new_text = text[:line_start] + adj_line + '\n' + current_line + text[adj_end:]
+            # Cursor moves down by length of adj_line + 1 (newline)
+            new_cursor = cursor + (adj_end - adj_start + 1)
+
+        # Strip leading whitespace from entire buffer (preserve original behavior)
+        lstrip = new_text.lstrip()
+        new_cursor += len(lstrip) - len(new_text)
+
+        buffer.document = Document(lstrip, new_cursor, buffer.document.selection)
 
     #These keys don't respond on the mac terminal
     # @handle(Keys.ShiftUp)
@@ -4499,7 +4637,19 @@ def load_python_bindings(python_input):
 
     @handle(Keys.ControlDelete)# Delete current line
     def _(event):
-        buffer=event.cli.current_buffer
+        """Delete line. In bash mode, removes \\ from line above if deleting last line of continuation."""
+        buffer = event.cli.current_buffer
+        above = line_above(buffer)
+        current = buffer.document.current_line
+
+        # Bash: deleting last line of \\ block (above has \\, current doesn't) -> remove \\ from above
+        if (is_bash_mode(buffer.document.text) and above and
+            above.rstrip().endswith('\\') and not current.rstrip().endswith('\\')):
+            buffer.cursor_up()
+            buffer.cursor_right(len(above))
+            buffer.delete_before_cursor(len(above) - len(above.rstrip('\\').rstrip()))  # delete " \"
+            buffer.cursor_down()
+
         delete_current_line(buffer)
 
     #region Bracket Match Writers
@@ -5597,17 +5747,7 @@ def load_python_bindings(python_input):
         def _(event):
             buffer=event.cli.current_buffer
             buffer.insert_text('UNDO')
-        @handle(Keys.ControlP,filter=~vi_mode_enabled&microcompletions_enabled)
-        def _(event):
-            buffer=event.cli.current_buffer
-            before_line=buffer.document.current_line_before_cursor
-            after_line=buffer.document.current_line_after_cursor
-            if before_line=='PREV' and not after_line:
-                buffer.delete_before_cursor(4)
-                buffer.insert_text('NEXT')
-            elif before_line in ['','NEXT'] and not after_line:
-                buffer.delete_before_cursor(4)
-                buffer.insert_text('PREV')
+        # Ctrl+P now used for inline variable refactoring (see below)
 
     def move_arg(buffer,delta_positions:int):
         assert delta_positions in {1,-1}
@@ -5666,30 +5806,49 @@ def load_python_bindings(python_input):
 
 
 
+    def handle_move_selection(buffer, document, direction):
+        """Handle < or > with selection - move elements in syntax tree (Python or bash)."""
+        from rp.prompt_toolkit.selection import SelectionState
+        start, end = get_selection_bounds(document)
+        if is_bash_mode(document.text):
+            from . import refactor_move_bash as mover
+        elif _treesitter_refactor_supported:
+            from . import refactor_move as mover
+        else:
+            return False
+        result = mover.move(document.text, start, end, document.cursor_position, document.selection.original_cursor_position, direction)
+        if result:
+            new_code, new_cursor, new_anchor, _ = result
+            replace_buffer_text(buffer, new_code)
+            buffer.cursor_position = new_cursor
+            buffer.selection_state = SelectionState(new_anchor, document.selection.type)
+        return result is not None
+
     @handle('<',filter=~vi_mode_enabled&microcompletions_enabled)
     def _(event):
         buffer=event.cli.current_buffer
         if handle_character(buffer,'<',event):return
         document=buffer.document
+        if document.selection:
+            handle_move_selection(buffer, document, -1)
+            return
         before_line=document.current_line_before_cursor
-        after_line=document.current_line_after_cursor
         if before_line.endswith(','):
-            #Swap arguments around parenthesis! (Warning: Doesn't handle parenthesis inside strings as an edge case)
-            #(apple,f(x),|['bananna'])   --->   (apple,|['bananna'],f(x))
             try:move_arg(buffer,-1)
             except:print("JAM")
             return
         buffer.insert_text('<')
+
     @handle('>',filter=~vi_mode_enabled&microcompletions_enabled)
     def _(event):
         buffer=event.cli.current_buffer
         if handle_character(buffer,'>',event):return
         document=buffer.document
+        if document.selection:
+            handle_move_selection(buffer, document, +1)
+            return
         before_line=document.current_line_before_cursor
-        after_line=document.current_line_after_cursor
         if before_line.endswith(','):
-            #Swap arguments around parenthesis! (Warning: Doesn't handle parenthesis inside strings as an edge case)
-            #(apple,|f(x),['bananna'])   --->   (apple,['bananna'],f(x))
             try:move_arg(buffer,1)
             except:print("JAM")
             return
@@ -5801,6 +5960,12 @@ def load_python_bindings(python_input):
 
     @handle(Keys.Backspace,eager=True)
     def _(event):
+        # Handle extract variable mode (only if tree-sitter supported)
+        if _treesitter_refactor_supported:
+            from . import refactor_extract as refactor
+            if refactor.handle_backspace():
+                return
+
         buffer = event.cli.current_buffer
         # Check for decorative comment block sync first
         if sync_comment_block_written_by_claude(buffer, '\b'):
@@ -6142,7 +6307,10 @@ def load_python_bindings(python_input):
         selection_tuples=list(document.selection_ranges())
         for range in selection_tuples:
             buffer.document=Document(text=text[:range[0]]+begin+text[range[0]:range[1]+1]+end +text[range[1]+1:],cursor_position=range[0]+1,selection=None)
-            buffer.document._selection=SelectionState(original_cursor_position=range[1]+1,type=document.selection.type)
+            buffer.selection_state = SelectionState(
+                original_cursor_position=range[1] + 1,
+                type=document.selection.type
+            )
         # exec(mini_terminal)
         # from rp.rp_ptpython.utils import get_jedi_script_from_document
         # script=get_jedi_script_from_document(document,r_iterm_comm.globa,r_iterm_comm.globa)
@@ -6275,8 +6443,8 @@ def load_python_bindings(python_input):
             return
         buffer.delete()
 
-    @handle(Keys.ControlSpace)# For commenting
-    def _(event):  # Parenthesis completion
+    @handle(Keys.ControlSpace, filter=~has_selection)# For commenting single line
+    def _(event):
         # def toggle_comment_on_line(x):
         #     y=x.lstrip()
         #     if y.startswith("#"):# Line is commented out
@@ -6403,7 +6571,7 @@ def load_python_bindings(python_input):
             buffer.cursor_left(4)
     #region  Ryan Burgert Method
 
-    @handle(Keys.BackTab,filter=IsMultiline())
+    @handle(Keys.BackTab, filter=IsMultiline() & ~has_selection)
     def _(event):
         """
         Smart shift+tab: go backwards in completions if we're actively selecting one,
@@ -6727,81 +6895,632 @@ def load_python_bindings(python_input):
             clear_terminal_screen()
             event.cli.renderer.clear()
 
-    # AST-based smart selection expansion/shrinking
-    # Import pure functional selection module
-    from rp.rp_ptpython.ast_selection import expand_selection, contract_selection
+    # Smart selection - backend controlled by python_input.selection_expansion_backend
+    from rp.rp_ptpython.ast_selection import expand_selection as ast_expand, contract_selection as ast_contract
+    try:
+        from rp.rp_ptpython.treesitter_selection import expand_selection as ts_expand, contract_selection as ts_contract
+    except ImportError:
+        ts_expand = ts_contract = None
+
+    # Bash selection support
+    try:
+        from rp.rp_ptpython.bash_selection import expand_selection as bash_expand, contract_selection as bash_contract
+    except ImportError:
+        bash_expand = bash_contract = None
+
+    # ============================================================
+    # BASH MODE HELPERS
+    # ============================================================
+    def is_bash_mode(text):
+        """Check if buffer is in bash/shell mode (starts with !)."""
+        return text.startswith('!')
+
+    def bash_adj(text, start, end=None):
+        """
+        Adjust text and positions for bash mode (strip ! prefix).
+        Returns (bash_code, adj_start, adj_end) or (bash_code, adj_pos) if end is None.
+        """
+        bash_code = text[1:] if text.startswith('!') else text
+        adj_start = max(0, start - 1)
+        if end is None:
+            return bash_code, adj_start
+        return bash_code, adj_start, max(0, end - 1)
+
+    def bash_restore(bash_code, pos=None):
+        """Restore ! prefix. Returns (full_text, adj_pos) or just full_text."""
+        full = '!' + bash_code
+        return (full, pos + 1) if pos is not None else full
+
+    def bash_format(bash_code):
+        """
+        Format bash code: beautysh for blocks, split/join for long lines.
+
+        Only joins \\ continuations if beautysh wouldn't change anything.
+
+        Example - Join to Split (single line -> split):
+            !echo --adsoi --asdoifj --eoij
+                            ↓ (select all, press l)
+            !echo \\
+                --adsoi \\
+                --asdoifj \\
+                --eoij
+
+        Example - Split to Join (only if beautysh has no effect):
+            !echo \\
+                --adsoi \\
+                --eoij
+                            ↓ (select all, press l)
+            !echo --adsoi --eoij
+        """
+        import rp
+
+        # Try beautysh first
+        result = rp.autoformat_bash_via_beautysh(bash_code).rstrip('\n')
+
+        # If beautysh changed it, use that
+        if result != bash_code.rstrip('\n'):
+            return result
+
+        # Beautysh had no effect - try split/join
+        lines = bash_code.split('\n')
+
+        # If continuation lines, join them
+        if len(lines) > 1 and all(l.rstrip().endswith('\\') for l in lines[:-1]):
+            return ' '.join(l.rstrip().rstrip('\\').strip() for l in lines)
+
+        # If single line, try splitting
+        if '\n' not in bash_code:
+            formatted = rp.format_long_bash_line(bash_code)
+            if formatted != bash_code:
+                return formatted
+
+        return result
+
+    # Compat alias
+    get_bash_code = lambda text: text[1:] if text.startswith('!') else text
+
+    def expand_selection(code, start, end, history):
+        if is_bash_mode(code) and bash_expand:
+            bc, s, e = bash_adj(code, start, end)
+            result = bash_expand(bc, s, e, history)
+            if result:
+                return (result[0] + 1, result[1] + 1, result[2])
+            return None
+        if ts_expand and python_input.selection_expansion_backend == 'Treesitter':
+            return ts_expand(code, start, end, history)
+        return ast_expand(code, start, end, history)
+
+    def contract_selection(code, start, end, history):
+        if is_bash_mode(code) and bash_contract:
+            bc, s, e = bash_adj(code, start, end)
+            result = bash_contract(bc, s, e, history)
+            if result:
+                return (result[0] + 1, result[1] + 1, result[2])
+            return None
+        # Python mode
+        if ts_contract and python_input.selection_expansion_backend == 'Treesitter':
+            return ts_contract(code, start, end, history)
+        return ast_contract(code, start, end, history)
+
+    def get_selection_bounds(doc):
+        """Get (start, end) of current selection, or (cursor, cursor) if none."""
+        if not doc.selection:
+            return doc.cursor_position, doc.cursor_position
+        a, b = doc.selection.original_cursor_position, doc.cursor_position
+        return (a, b) if a < b else (b, a)
+
+    def expand_to_full_lines(text, start, end):
+        """Expand (start, end) to cover complete lines."""
+        while start > 0 and text[start - 1] != '\n':
+            start -= 1
+        while end < len(text) and text[end] != '\n':
+            end += 1
+        return start, end
+
+    def transform_selected_lines(buffer, transform_fn):
+        """Apply transform_fn to selected lines, using replace_buffer_text for selection."""
+        text = buffer.document.text
+        sel_start, sel_end = get_selection_bounds(buffer.document)
+        line_start, line_end = expand_to_full_lines(text, sel_start, sel_end)
+        selected_text = text[line_start:line_end]
+        new_selected = transform_fn(selected_text)
+        new_text = text[:line_start] + new_selected + text[line_end:]
+        replace_buffer_text(buffer, new_text)
+
+    def set_selection(buffer, start, end):
+        """Set buffer selection from start to end."""
+        buffer.cursor_position = start
+        buffer.start_selection()
+        buffer.cursor_position = end
 
     @handle(Keys.AltShiftUp, filter=~vi_mode_enabled)
     def _(event):
-        """Alt+Shift+Up: Expand selection based on Python AST."""
+        """Alt+Shift+Up: Expand selection to next larger AST node."""
         buffer = event.cli.current_buffer
-        doc = buffer.document
-
-        # Get current selection bounds (or cursor position if no selection)
-        if doc.selection:
-            selection = doc.selection
-            cursor_pos = doc.cursor_position
-            if selection.original_cursor_position < cursor_pos:
-                start = selection.original_cursor_position
-                end = cursor_pos
-            else:
-                start = cursor_pos
-                end = selection.original_cursor_position
-        else:
-            # First time expanding - start from cursor
-            start = end = doc.cursor_position
-
-        # Get history (empty list if none)
+        start, end = get_selection_bounds(buffer.document)
         history = getattr(buffer, '_ast_selection_history', [])
 
-        # Pure functional call
-        result = expand_selection(doc.text, start, end, history)
+        result = expand_selection(buffer.document.text, start, end, history)
         if result:
             new_start, new_end, new_history = result
-
-            # Update buffer state with new values
             buffer._ast_selection_history = new_history
-            buffer.cursor_position = new_start
-            buffer.start_selection()
-            buffer.cursor_position = new_end
+            set_selection(buffer, new_start, new_end)
 
-    @handle(Keys.AltShiftDown, filter=has_selection & ~vi_mode_enabled)
+    @handle(Keys.AltShiftDown, filter=~vi_mode_enabled)
     def _(event):
-        """Alt+Shift+Down: Shrink selection based on Python AST."""
+        """Alt+Shift+Down: Contract selection to previous AST node."""
+        buffer = event.cli.current_buffer
+        if not buffer.document.selection:
+            return
+
+        start, end = get_selection_bounds(buffer.document)
+        history = getattr(buffer, '_ast_selection_history', [])
+
+        result = contract_selection(buffer.document.text, start, end, history)
+        if result:
+            new_start, new_end, new_history = result
+            buffer._ast_selection_history = new_history
+            if new_start == new_end:
+                buffer.exit_selection()
+                buffer.cursor_position = new_start
+            else:
+                set_selection(buffer, new_start, new_end)
+
+    def move_lines(buffer, direction):
+        """
+        Move selected lines up or down, preserving bash \\ continuation structure.
+
+        Shift+Left with selection: move selection UP
+        Shift+Right with selection: move selection DOWN
+
+        The \\ stays at the same line positions, only content moves.
+        """
+        text = buffer.document.text
+        sel_start, sel_end = get_selection_bounds(buffer.document)
+        line_start, line_end = expand_to_full_lines(text, sel_start, sel_end)
+
+        if direction == -1:  # Move up
+            if line_start == 0:
+                return
+            adj_end = line_start - 1
+            adj_start = text.rfind('\n', 0, adj_end) + 1
+            adj_line = text[adj_start:adj_end]
+            selected = text[line_start:line_end]
+            selected, adj_line = swap_continuation(selected, adj_line)
+            new_text = text[:adj_start] + selected + '\n' + adj_line + text[line_end:]
+            offset = -(adj_end - adj_start + 1)
+        else:  # Move down
+            if line_end >= len(text):
+                return
+            adj_start = line_end + 1
+            adj_end = text.find('\n', adj_start)
+            adj_end = adj_end if adj_end != -1 else len(text)
+            adj_line = text[adj_start:adj_end]
+            selected = text[line_start:line_end]
+            adj_line, selected = swap_continuation(adj_line, selected)
+            new_text = text[:line_start] + adj_line + '\n' + selected + text[adj_end:]
+            offset = adj_end - adj_start + 1
+
+        buffer.text = new_text
+        set_selection(buffer, sel_start + offset, sel_end + offset)
+
+    @handle(Keys.ShiftLeft, filter=has_selection & ~vi_mode_enabled)
+    def _(event):
+        """Shift+Left: Move selected lines up."""
+        move_lines(event.cli.current_buffer, -1)
+
+    @handle(Keys.ShiftRight, filter=has_selection & ~vi_mode_enabled)
+    def _(event):
+        """Shift+Right: Move selected lines down."""
+        move_lines(event.cli.current_buffer, 1)
+
+    @handle('o', filter=has_selection & ~vi_mode_enabled)
+    def _(event):
+        """o: Swap cursor to other end of selection (like vim)."""
+        from rp.prompt_toolkit.selection import SelectionState
         buffer = event.cli.current_buffer
         doc = buffer.document
+        if not doc.selection:
+            return
+        # Swap cursor and anchor
+        old_cursor = doc.cursor_position
+        old_anchor = doc.selection.original_cursor_position
+        buffer.cursor_position = old_anchor
+        buffer.selection_state = SelectionState(
+            original_cursor_position=old_cursor,
+            type=doc.selection.type
+        )
 
-        if doc.selection:
-            # Get current selection bounds
-            selection = doc.selection
-            cursor_pos = doc.cursor_position
-            if selection.original_cursor_position < cursor_pos:
-                start = selection.original_cursor_position
-                end = cursor_pos
+    @handle('l', filter=has_selection & ~vi_mode_enabled)
+    def _(event):
+        """
+        l: Format selection. Python uses black, bash toggles line continuations.
+
+        In bash mode (lines starting with !), toggles between:
+            !echo --arg1 --arg2 --arg3
+        and:
+            !echo \\
+                --arg1 \\
+                --arg2 \\
+                --arg3
+
+        Select all (ctrl+a) then press 'l' to toggle. Press 'l' again to toggle back.
+        Also runs beautysh for general bash formatting on multi-line scripts.
+        """
+        from rp.prompt_toolkit.selection import SelectionState
+        buffer = event.cli.current_buffer
+        doc = buffer.document
+        if not doc.selection:
+            return
+        start, end = get_selection_bounds(doc)
+        text = doc.text
+
+        try:
+            if is_bash_mode(text):
+                bc, s, e = bash_adj(text, start, end)
+                formatted = bash_format(bc[s:e])
+                new_text = bash_restore(bc[:s] + formatted + bc[e:])
             else:
-                start = cursor_pos
-                end = selection.original_cursor_position
+                import black
+                formatted = black.format_str(text[start:end], mode=black.Mode()).rstrip('\n')
+                new_text = text[:start] + formatted + text[end:]
+        except Exception as ex:
+            if _treesitter_refactor_supported:
+                from . import refactor_extract as refactor
+                refactor.set_status(("Beautysh: " if is_bash_mode(text) else "Black: ") + str(ex).split('\n')[0])
+            return
 
-            # Get history
-            history = getattr(buffer, '_ast_selection_history', [])
+        new_end = start + len(formatted)
+        buffer.document = Document(new_text, new_end, None)
+        buffer.selection_state = SelectionState(original_cursor_position=start, type=doc.selection.type)
 
-            # Pure functional call
-            result = contract_selection(doc.text, start, end, history)
-            if result:
-                new_start, new_end, new_history = result
+    @handle(Keys.ControlSpace, filter=has_selection & ~vi_mode_enabled)
+    def _(event):
+        """Control+Space: Toggle block comment with aligned # marks."""
+        transform_selected_lines(event.cli.current_buffer, toggle_comments)
 
-                # Update buffer state
-                buffer._ast_selection_history = new_history
+    @handle(Keys.Tab, filter=has_selection & ~vi_mode_enabled)
+    def _(event):
+        """Tab: Indent selected lines."""
+        transform_selected_lines(event.cli.current_buffer, indent_lines)
 
-                if new_start == new_end:
-                    # Shrinking back to cursor position - clear selection
-                    buffer.exit_selection()
-                    buffer.cursor_position = new_start
+    @handle(Keys.BackTab, filter=has_selection & ~vi_mode_enabled)
+    def _(event):
+        """Shift+Tab: Dedent selected lines."""
+        transform_selected_lines(event.cli.current_buffer, dedent_lines)
+
+    # ============================================================
+    # BASH QUOTE WRAPPING (with proper escaping)
+    # ============================================================
+    def escape_for_single_quote(s):
+        """Escape a string for use inside single quotes in bash.
+
+        In single quotes, the only way to include a single quote is to end
+        the single-quoted string, add an escaped single quote, and start
+        a new single-quoted string: 'it'\''s' -> it's
+        """
+        return s.replace("'", "'\\''")
+
+    def escape_for_double_quote(s):
+        """Escape a string for use inside double quotes in bash.
+
+        In double quotes, we need to escape: $ ` \ " and !
+        """
+        result = []
+        for c in s:
+            if c in '$`\\"!':
+                result.append('\\')
+            result.append(c)
+        return ''.join(result)
+
+    def wrap_selection_with_quotes(buffer, quote_char):
+        """Wrap the current selection with quotes, escaping as needed."""
+        doc = buffer.document
+        if not doc.selection:
+            return False
+
+        start, end = get_selection_bounds(doc)
+        selected = doc.text[start:end]
+
+        # Escape the content based on quote type
+        if quote_char == "'":
+            escaped = escape_for_single_quote(selected)
+        else:  # double quote
+            escaped = escape_for_double_quote(selected)
+
+        # Build the quoted string
+        quoted = quote_char + escaped + quote_char
+
+        # Replace selection with quoted version
+        new_text = doc.text[:start] + quoted + doc.text[end:]
+        new_cursor = start + len(quoted)
+
+        buffer.document = Document(new_text, new_cursor, None)
+        return True
+
+    # Create a filter for bash mode with selection
+    bash_mode_with_selection = Condition(
+        lambda cli: (cli.current_buffer.document.text.startswith('!') and
+                     cli.current_buffer.document.selection is not None)
+    )
+
+    @handle("'", filter=bash_mode_with_selection & ~vi_mode_enabled)
+    def _(event):
+        """Single quote: Wrap selection with single quotes (bash mode)."""
+        if not wrap_selection_with_quotes(event.cli.current_buffer, "'"):
+            # Fallback to normal behavior
+            event.cli.current_buffer.cut_selection()
+            event.cli.current_buffer.insert_text("'")
+
+    @handle('"', filter=bash_mode_with_selection & ~vi_mode_enabled)
+    def _(event):
+        """Double quote: Wrap selection with double quotes (bash mode)."""
+        if not wrap_selection_with_quotes(event.cli.current_buffer, '"'):
+            # Fallback to normal behavior
+            event.cli.current_buffer.cut_selection()
+            event.cli.current_buffer.insert_text('"')
+
+    # ============================================================
+    # TREE-SITTER REFACTORING (Python 3.10+ only)
+    # ============================================================
+    if _treesitter_refactor_supported:
+        # ============================================================
+        # REFACTORING: Extract (Ctrl+R) and Rename (Ctrl+N)
+        # ============================================================
+        from . import refactor_extract as refactor
+        from . import refactor_rename as rn
+        from . import backslash_commands as bslash
+
+        # Bash refactoring modules
+        try:
+            from . import bash_extract as bash_refactor
+            from . import bash_rename as bash_rn
+        except ImportError:
+            bash_refactor = bash_rn = None
+
+        def get_refactor_state():
+            # Check bash states first
+            if bash_rn and bash_rn.state.active and not bash_rn.state.error: return bash_rn.state
+            if bash_refactor and bash_refactor.state.active and not bash_refactor.state.error: return bash_refactor.state
+            # Then Python states
+            if rn.state.active and not rn.state.error: return rn.state
+            if refactor.state.active and not refactor.state.error: return refactor.state
+            return None
+
+        refactor_mode = Condition(lambda cli: get_refactor_state() is not None)
+        def update_preview(buffer):
+            """Update buffer with live preview (no undo stack modification)."""
+            st = get_refactor_state()
+            if not st: return
+            preview = st.get_preview()
+            if preview:
+                replace_buffer_text(buffer, preview[0])
+            elif st.original_code and buffer.text != st.original_code:
+                replace_buffer_text(buffer, st.original_code)
+
+        @handle(Keys.Escape, filter=refactor_mode, eager=True)
+        @handle(Keys.ControlC, filter=refactor_mode, eager=True)
+        def _(event):
+            buffer = event.cli.current_buffer
+            st = get_refactor_state()
+            # Restore original text (no undo stack entry for cancelled operation)
+            if st and st.original_code:
+                replace_buffer_text(buffer, st.original_code)
+            # Reset state - Python
+            rn.state.reset()
+            refactor.state.reset()
+            # Reset state - Bash
+            if bash_rn: bash_rn.state.reset()
+            if bash_refactor: bash_refactor.state.reset()
+
+        @handle(Keys.ControlJ, filter=refactor_mode, eager=True)
+        def _(event):
+            # Confirm: the preview is already applied, and the "before" state
+            # was saved to undo stack when refactoring started. Just reset state.
+            if refactor.state.active or (bash_refactor and bash_refactor.state.active):
+                event.cli.current_buffer.selection_state = None
+            # Reset Python state
+            rn.state.reset()
+            refactor.state.reset()
+            # Reset Bash state
+            if bash_rn: bash_rn.state.reset()
+            if bash_refactor: bash_refactor.state.reset()
+
+        @handle(Keys.Backspace, filter=refactor_mode, eager=True)
+        def _(event):
+            st = get_refactor_state()
+            if st: st.delete_char()
+            update_preview(event.cli.current_buffer)
+
+        @handle(Keys.Tab, filter=refactor_mode, eager=True)
+        def _(event):
+            st = get_refactor_state()
+            if st: st.toggle_mode()
+            update_preview(event.cli.current_buffer)
+
+        @handle(Keys.Left, filter=refactor_mode, eager=True)
+        def _(event):
+            st = get_refactor_state()
+            if st: st.cursor_left()
+
+        @handle(Keys.Right, filter=refactor_mode, eager=True)
+        def _(event):
+            st = get_refactor_state()
+            if st: st.cursor_right()
+
+        @handle(Keys.Delete, filter=refactor_mode, eager=True)
+        def _(event):
+            st = get_refactor_state()
+            if st: st.delete_forward()
+            update_preview(event.cli.current_buffer)
+
+        # Allowed chars: alphanumeric, underscore always; comma/space only for extract (tuple unpacking)
+        for c in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_, ':
+            filt = refactor_mode if c not in ', ' else Condition(lambda cli: refactor.state.active)
+            def make_handler(ch, f):
+                @handle(ch, filter=f, eager=True)
+                def _(event):
+                    st = get_refactor_state()
+                    if st: st.add_char(ch)
+                    update_preview(event.cli.current_buffer)
+            make_handler(c, filt)
+
+        @handle(Keys.Any, filter=refactor_mode, eager=True)
+        def _(event): pass
+
+        @handle(Keys.ControlR, filter=has_selection & ~vi_mode_enabled & ~refactor_mode)
+        def _(event):
+            from rp.prompt_toolkit.selection import SelectionState
+            buffer = event.cli.current_buffer
+            doc = buffer.document
+            start, end = get_selection_bounds(doc)
+
+            # Route to bash or python handler based on mode
+            if is_bash_mode(doc.text) and bash_refactor:
+                # Pass full text but adjust positions for the !
+                expanded = bash_refactor.handle_start(doc.text, start, end, shell_prefix=True)
+            else:
+                expanded = refactor.handle_start(doc.text, start, end)
+
+            if expanded:
+                buffer.save_to_undo_stack()  # Save "before" state for undo
+                buffer.cursor_position = expanded[1]
+                buffer.selection_state = SelectionState(expanded[0], doc.selection.type if doc.selection else None)
+
+        @handle(Keys.ControlN, filter=~vi_mode_enabled & ~refactor_mode)
+        def _(event):
+            buffer = event.cli.current_buffer
+            doc = buffer.document
+
+            # Route to bash or python handler based on mode
+            if is_bash_mode(doc.text) and bash_rn:
+                # Pass full text with shell_prefix flag
+                started = bash_rn.handle_start(doc.text, doc.cursor_position, shell_prefix=True)
+            else:
+                started = rn.handle_start(doc.text, doc.cursor_position)
+
+            if started:
+                buffer.save_to_undo_stack()  # Save "before" state for undo
+
+        # ============================================================
+        # INLINE VARIABLE REFACTORING (Ctrl+P)
+        # ============================================================
+        from . import refactor_inline as ri
+
+        # Bash inline module
+        try:
+            from . import bash_inline as bash_ri
+        except ImportError:
+            bash_ri = None
+
+        @handle(Keys.ControlP, filter=~vi_mode_enabled & ~refactor_mode)
+        def _(event):
+            """Ctrl+P: Inline variable at cursor."""
+            buffer = event.cli.current_buffer
+            doc = buffer.document
+
+            if is_bash_mode(doc.text) and bash_ri:
+                bc, pos = bash_adj(doc.text, doc.cursor_position)
+                can, error, info = bash_ri.check_inline(bc, pos)
+                if can:
+                    result = bash_ri.inline_variable(bc, pos, delete_if_unused=True)
+                    if result:
+                        replace_buffer_text(buffer, bash_restore(result[0]))
+                    else:
+                        refactor.set_status("Bash Inline: Failed")
+                elif error:
+                    refactor.set_status("Bash Inline: " + error)
+            else:
+                can, error, info = ri.check_inline(doc.text, doc.cursor_position)
+                in_conditional = info.get('in_conditional', False) if info else False
+
+                result = ri.inline_variable(doc.text, doc.cursor_position, delete_if_unused=True)
+                if result:
+                    new_code, new_cursor, should_prompt = result
+                    replace_buffer_text(buffer, new_code)
+                    if in_conditional:
+                        refactor.set_status("Inline: Warning - assignment was in conditional branch")
                 else:
-                    # Set new selection
-                    buffer.cursor_position = new_start
-                    buffer.start_selection()
-                    buffer.cursor_position = new_end
+                    if error:
+                        refactor.set_status("Inline: " + error)
+
+        # ============================================================
+        # BACKSLASH COMMAND MODE (\ with selection)
+        # ============================================================
+        # Select text, press \, type command, Enter to apply
+        #   Select "c\nb\na", type \rl, Enter -> "a\nb\nc"
+
+        bslash_mode = Condition(lambda cli: bslash.state.active)
+
+        def update_bslash_preview(buffer):
+            """Update buffer with live preview."""
+            if not bslash.state.active:
+                return
+            preview = bslash.state.get_preview()
+            if preview:
+                replace_buffer_text(buffer, preview[0])
+            elif bslash.state.original_code and buffer.text != bslash.state.original_code:
+                replace_buffer_text(buffer, bslash.state.original_code)
+
+        @handle('\\', filter=has_selection & ~vi_mode_enabled & ~refactor_mode & ~bslash_mode, eager=True)
+        def _(event):
+            """Start backslash command mode when \ pressed with selection."""
+            buffer = event.cli.current_buffer
+            doc = buffer.document
+            start, end = get_selection_bounds(doc)
+            buffer.save_to_undo_stack()
+            bslash.state.start(doc.text, start, end)
+
+        @handle(Keys.Escape, filter=bslash_mode, eager=True)
+        @handle(Keys.ControlC, filter=bslash_mode, eager=True)
+        def _(event):
+            """Cancel backslash command mode."""
+            buffer = event.cli.current_buffer
+            if bslash.state.original_code:
+                replace_buffer_text(buffer, bslash.state.original_code)
+            bslash.state.reset()
+
+        @handle(Keys.ControlJ, filter=bslash_mode, eager=True)
+        def _(event):
+            """Execute backslash command."""
+            buffer = event.cli.current_buffer
+            result = bslash.state.execute()
+            if result:
+                replace_buffer_text(buffer, result[0])
+                buffer.cursor_position = result[1]
+            bslash.state.reset()
+            buffer.selection_state = None
+
+        @handle(Keys.Backspace, filter=bslash_mode, eager=True)
+        def _(event):
+            bslash.state.delete_char()
+            update_bslash_preview(event.cli.current_buffer)
+
+        @handle(Keys.Left, filter=bslash_mode, eager=True)
+        def _(event):
+            bslash.state.cursor_left()
+
+        @handle(Keys.Right, filter=bslash_mode, eager=True)
+        def _(event):
+            bslash.state.cursor_right()
+
+        @handle(Keys.Delete, filter=bslash_mode, eager=True)
+        def _(event):
+            bslash.state.delete_forward()
+            update_bslash_preview(event.cli.current_buffer)
+
+        # Handle typing in backslash command mode
+        for c in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_':
+            def make_bslash_handler(ch):
+                @handle(ch, filter=bslash_mode, eager=True)
+                def _(event):
+                    bslash.state.add_char(ch)
+                    update_bslash_preview(event.cli.current_buffer)
+            make_bslash_handler(c)
+
+        @handle(Keys.Any, filter=bslash_mode, eager=True)
+        def _(event):
+            pass  # Ignore other keys in backslash mode
 
     return registry
 
@@ -6892,31 +7611,85 @@ diddly=0
 def auto_newline(buffer):
     r"""
     Insert \n at the cursor position. Also add necessary padding.
+    In bash mode (!), continues \\ blocks and removes \\ on double-enter.
     """
     insert_text = buffer.insert_text
+    is_bash = buffer.document.text.startswith('!')
+    before = buffer.document.current_line_before_cursor
+    after = buffer.document.current_line_after_cursor
+    above = line_above(buffer)
+    # Get line below (first line after cursor that isn't current line's remainder)
+    text_after = buffer.document.text_after_cursor
+    below = text_after.split('\n')[1] if '\n' in text_after else None
 
-    if buffer.document.current_line_after_cursor:
-        # When we are in the middle of a line. Always insert a newline.
-        insert_text('\n')
-    else:
-        # Go to new line, but also add indentation.
-        current_line = buffer.document.current_line_before_cursor.rstrip()
-        insert_text('\n')
-
-        # Unident if the last line ends with 'pass', remove four spaces.
-        unindent = current_line.rstrip().endswith(' pass') or current_line.lstrip().startswith('return ') or current_line.lstrip().startswith('raise ')  or current_line.strip()==('break') or  current_line.strip()==('continue') or  current_line.strip()==('raise') or  current_line.strip()==('pass')or  current_line.strip()==('return')
-
-        # Copy whitespace from current line
-        current_line2 = current_line[4:] if unindent else current_line
-
-        for c in current_line2:
-            if c.isspace():
-                insert_text(c)
-            else:
+    # Bash: empty line with just " \" after cursor -> cancel continuation, unindent to block start
+    #   echo \                      echo
+    #       --arg1 \        ->      |
+    #       |_\                 (cursor at indent of 'echo', continuation ended)
+    after_line = before + after
+    if is_bash and after_line.rstrip().endswith('\\') and not before.strip():
+        # Find indent from first line that doesn't end with \ (start of block)
+        all_lines = buffer.document.text.split('\n')
+        cur_idx = buffer.document.text[:buffer.document.cursor_position].count('\n')
+        indent_src = ''
+        for i in range(cur_idx - 1, -1, -1):
+            if not all_lines[i].rstrip().endswith('\\'):
+                indent_src = all_lines[i]
                 break
+        # Delete current line and " \" from line above
+        buffer.cursor_left(len(before))
+        buffer.delete(len(before) + len(after))
+        buffer.delete_before_cursor(1)  # newline
+        if above and above.rstrip().endswith('\\'):
+            buffer.delete_before_cursor(len(above) - len(above.rstrip('\\').rstrip()))
+        insert_text('\n')
+        for c in indent_src:
+            if c.isspace(): insert_text(c)
+            else: break
+        return
 
-        # If the last line ends with a colon, add four extra spaces.
-        if current_line[-1:] == ':':
-            for x in range(4):
-                insert_text(' ')
+    if after:
+        insert_text('\n')
+        return
+
+    # Bash: empty line under \\ -> remove \\ from above, collapse empty line
+    #   echo \                      echo
+    #       --arg1 \        ->      |
+    #       |                   (empty line removed, \ removed from --arg1)
+    if is_bash and above and above.rstrip().endswith('\\') and not before.strip():
+        buffer.delete_before_cursor(len(before) + 1)  # delete indent + \n
+        buffer.delete_before_cursor(len(above) - len(above.rstrip('\\').rstrip()))  # delete " \"
+        insert_text('\n')
+        for c in above:
+            if c.isspace(): insert_text(c)
+            else: break
+        return
+
+    # Bash: at end of \\ line with \\ line below -> insert new continuation line
+    #   echo \                      echo \
+    #       --arg1 \        ->          | \
+    #       --arg2                      --arg1 \
+    #                                   --arg2
+    if is_bash and not after and before.rstrip().endswith('\\') and below and below.rstrip().endswith('\\'):
+        insert_text('\n')
+        for c in below:
+            if c.isspace(): insert_text(c)
+            else: break
+        insert_text(' \\')
+        buffer.cursor_left(2)  # put cursor before " \"
+        return
+
+
+    insert_text('\n')
+
+    # Copy indentation (with unindent for pass/return/etc)
+    line = before.rstrip()
+    unindent = line.endswith(' pass') or line.lstrip().startswith(('return ','raise ')) or line.strip() in ('break','continue','raise','pass','return')
+    src = line[4:] if unindent else line
+    for c in src:
+        if c.isspace(): insert_text(c)
+        else: break
+
+    if line.endswith(':') and not is_bash:
+        insert_text('    ')
 
