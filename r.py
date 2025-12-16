@@ -69,6 +69,7 @@ _cached_lexer_path            = os.path.join(_rp_boot_cache, "lexer.rpo")
 _cached_code_styles_path      = os.path.join(_rp_boot_cache, "code_styles.rpo")
 _cached_system_commands_path  = os.path.join(_rp_boot_cache, "system_commands.txt")
 _ruff_cache_dir               = os.path.join(tempfile.gettempdir(), 'rp_ruff_cache')
+_claude_bash_script           = os.path.join(_rp_folder, 'misc', 'claude_bash.sh')
 
 #Add RP's libraries to system path
 sys.path.append(_rp_folder)
@@ -7595,20 +7596,13 @@ def load_image(location,*,use_cache=False):
         ... display_image(image)
     
     """
-    assert isinstance(location,str),'load_image error: location should be a string representing a URL or file path. However, location is not a string. type(location)=='+repr(type(location))+' and location=='+repr(location)
+    assert isinstance(location, str), 'load_image: location must be str, got ' + repr(type(location))
 
-    # Clean delegation to helpers (each handles its own caching)
-    if is_valid_data_uri(location):
-        # Handle data URIs (e.g., data:image/png;base64,iVBORw0KG...)
-        output = _load_image_from_data_uri(location)
-    elif is_valid_url(location):
-        output = _load_image_from_url(location, use_cache=use_cache)
-    else:
-        output = _load_image_from_file(location, use_cache=use_cache)
+    if   is_valid_data_uri(location): image = _load_image_from_data_uri(location)
+    elif is_valid_url     (location): image = _load_image_from_url(location, use_cache=use_cache)
+    else                            : image = _load_image_from_file(location, use_cache=use_cache)
 
-    output = _as_rgba_image_if_2_channels(output)
-
-    return output
+    return _as_rgba_image_if_2_channels(image)
 
 def load_rgb_image(location,*,use_cache=False):
     """
@@ -10002,7 +9996,7 @@ def convert_audio_file(input_file, output_file, *, skip_existing=False, show_pro
     Notes:
         - Requires FFmpeg to be installed and available in PATH.
         - Automatically creates a unique filename if output path already exists.
-
+    
     EXAMPLE:
         >>> convert_audio_file('/Users/ryan/Downloads/Diffusion Illusions: SIGGRAPH 2024 Talk.mp4','wav')
         ans = /Users/ryan/Downloads/Diffusion Illusions: SIGGRAPH 2024 Talk_copy.wav
@@ -10012,7 +10006,7 @@ def convert_audio_file(input_file, output_file, *, skip_existing=False, show_pro
 
     if not os.path.exists(input_file):
         raise FileNotFoundError("Input file not found: "+input_file)
-
+        
     _ensure_ffmpeg_installed()
 
     supported_output_filetypes = "wav ogg mp3 mp4".split()
@@ -17481,7 +17475,7 @@ def system_library_exists(name: str) -> bool:
 #     # Remove duplicates and sort
 #     return sorted(list(set(libraries)))
 
-def add_to_env_path(path):
+def add_to_env_path(path,*,prepend=False):
     """
     Adds a directory to the system's PATH environment variable.
 
@@ -17509,7 +17503,10 @@ def add_to_env_path(path):
     if path not in current_path.split(os.pathsep):
 
         if current_path:
-            os.environ["PATH"] += os.pathsep + path
+            if prepend:
+                os.environ["PATH"] = path + os.pathsep + os.environ["PATH"]
+            else:
+                os.environ["PATH"] += os.pathsep + path
         else:
             os.environ["PATH"] = path
 
@@ -21535,6 +21532,10 @@ def is_valid_python_syntax(code,mode='exec',version=None,return_error=False):
         ans = False
         >>> is_valid_python_syntax('f"hello"', version='3.5', return_error=True)
         ans = SyntaxError('Format strings are only supported in Python 3.6 and greater', ('<unknown>', 1, 9, 'f"hello"\n', 1, 9))
+
+    NOTE: Checking syntax for python3.5 is not fullproof! This section was written by Claude. It's NOT PERFECT - it does NOT pick up on all errors!
+          I think the best way to do this properly is to have an _ensure_installed_* chain that ensures conda or something is installed, installs different python versions,
+          and uses those to validate syntax via its interpereter. That, or fix the grammar...
     """
     assert isinstance(code,str),'Code should be a string'
     import ast, traceback
@@ -21712,6 +21713,44 @@ def format_bash_to_oneliner(code: str) -> str:
     # Return a runnable one-liner
     return "eval " + payload    #Does not work in sh, only bash and zsh etc
     return "bash -c " + payload #Safer - but starts as subprocess
+
+def format_long_bash_line(input_command):
+    """
+    EXAMPLE:
+        >>> input_command="CUDA_VISIBLE_DEVICES=0 python testing/inference.py --prompt 'your prompt' --model_path THUDM/CogVideoX-5b-I2V --tracking_path outputs/tracking_video.mp4 --image_or_video_
+path example_inputs/firegirl1.mp4 --generate_type i2v"
+        >>> print(format_long_bash_line(input_command))
+        CUDA_VISIBLE_DEVICES=0 python testing/inference.py \
+        --prompt your prompt \
+        --model_path THUDM/CogVideoX-5b-I2V \
+        --tracking_path outputs/tracking_video.mp4 \
+        --image_or_video_path example_inputs/firegirl1.mp4 \
+        --generate_type i2v
+    """
+    lines=[[]]
+    indent='    '
+    comment=False
+    
+    for token in shlex.split(input_command):
+        
+        if token.startswith('#'):
+            comment=True
+        elif token.startswith('\n'):
+            lines.append([token[1:]])
+            comment=False
+            continue
+            
+        line=lines[-1]
+    
+        if not comment and token.startswith('--'):
+            lines[-1].append('\\')
+            lines.append([indent+token])
+        else:
+            lines[-1].append(token)
+    
+    return '\n'.join(map(" ".join, lines))
+
+
 
 
 
@@ -22481,6 +22520,7 @@ _default_pyin_settings=dict(
     enable_semantic_highlighting=True and _treesitter_supported,  # When True, use Jedi to add semantic highlighting (callables, modules)
     gray_unreachable_code       =True and _treesitter_supported,  # When True, dim unreachable code (requires enable_semantic_highlighting)
     enable_linting              =True and _treesitter_supported,  # Might set to false if I dont make this async...kinda slow right now...
+    selection_expansion_backend ='Treesitter' if _treesitter_supported else 'AST',  # 'Treesitter' or 'AST'. Also add to python_input.py (attribute + TUI Option) when changing.
     vi_mode=False,
     paste_mode=False  ,
     confirm_exit=True  ,
@@ -25430,6 +25470,7 @@ def pseudo_terminal(
         RMORE
         VIMORE
         PIPMORE
+        SIMORE
         IMPMORE
         PREVMORE
         NEXTMORE
@@ -25693,6 +25734,7 @@ def pseudo_terminal(
         AM AMORE
         VM VIMORE
         PM PIPMORE
+        SM SIMORE
         IM IMPMORE
         UM PREVMORE
         NM NEXTMORE
@@ -25952,6 +25994,7 @@ def pseudo_terminal(
         EA     RUNA
 
         CPR !$PY -m rp call check_pip_requirements
+        CPRA $check_pip_requirements(ans)
 
         CPPR $r._common_path_prefix_refactoring(ans)
 
@@ -26057,7 +26100,7 @@ def pseudo_terminal(
         OA OPENA
 
         LVL LEVEL
-        LV LEVEL
+        # LV LEVEL
         L LEVEL
 
         SHOGA $pip_install_multiple(ans, shotgun=True) #Shotgun Ans - works well with PIF
@@ -26089,6 +26132,8 @@ def pseudo_terminal(
 
         WA WANS
         WAP WANS+
+        LI $load_image(ans)
+        LV $load_video(ans)
 
         VSS $repr_vars(*$r._iterfzf($r._user_created_var_names,multi=True)) #VS Select
         VSM $repr_vars(*$r._iterfzf($r._user_created_var_names,multi=True)) #VS Select
@@ -26181,6 +26226,7 @@ def pseudo_terminal(
         LSAFG $get_all_files  (relative=False,sort_by='name') #LSA Files Global
         LSADG $get_all_folders(relative=False,sort_by='name') #LSA Directories Global
         LSM   $r._iterfzf($get_all_paths('.',relative=False,sort_by='name'),multi=True,exact=True)
+        LSRM  $r._iterfzf($get_all_paths('.',relative=True ,sort_by='name'),multi=True,exact=True)
         LSAI  $get_all_image_files()
 
         IASM $import_all_submodules(ans,verbose=True);
@@ -26232,6 +26278,7 @@ def pseudo_terminal(
         HL   $make_hardlink(ans,$get_file_name(ans))
 
         TMDA $os.system('tmux list-sessions -F "#{session_name}" | xargs -I % tmux detach -s %') #Detach all users from all tmux sessions
+        TMKS !tmux kill-server
     
         RF    $random_element([x for x in $os.scandir() if not x.is_dir(follow_symlinks=False)]).name
         RD    $random_element([x for x in $os.scandir() if x.is_dir(follow_symlinks=False)]).name
@@ -26281,6 +26328,7 @@ def pseudo_terminal(
         CHD  $r._run_claude_code('.',fullperm=True)
         GEM  $r._run_gemini_cli('.')
         GEMA $r._run_gemini_cli(ans).code
+        CCB  $r._setup_claude_bash()
 
         RST __import__('os').system('reset')
         RS  __import__('os').system('reset')
@@ -28246,8 +28294,9 @@ def pseudo_terminal(
 
                                     #__import__('rp').r._set_default_session_title() # now handled in _load_pyin_settings_file
                                     #__import__('rp').r._default_timezone=rp.get_current_timezone() #Or 'PST', 'EST', etc
-                                    __import__('rp').r._pip_import_autoyes=True
+                                    __import__('rp').r._pip_import_autoyes=True  # Auto-install missing python packages
                                     __import__('rp').r._pip_install_needs_sudo=False
+                                    __import__('rp').r._auto_simore=True  # Auto-install missing shell commands
 
                                     ## Custom pterm commands
                                     #__import__('rp').r._add_pterm_command_shortcuts("""
@@ -28365,6 +28414,21 @@ def pseudo_terminal(
                                     raise
                             user_message=''
 
+                        elif user_message=='SIMORE':
+                            fansi_print("SIMORE --> 'shell_install MORE' --> Will try to install a missing shell command",'red','bold')
+                            #Used when you run !cargo and cargo is not installed
+                            import rp.r
+                            missing_cmd = rp.r._last_missing_shell_command
+                            if missing_cmd is None:
+                                fansi_print("    (Warning: SIMORE cannot be used yet because no installable command was detected as missing)","red","bold")
+                            elif missing_cmd not in rp.r._ensure_installed_registry:
+                                fansi_print("    (Warning: '%s' is not in the installable registry)" % missing_cmd,"red","bold")
+                            else:
+                                installer_func = rp.r._ensure_installed_registry[missing_cmd]
+                                fansi_print("    Running: %s()" % installer_func.__name__, "green", "bold")
+                                installer_func()
+                                rp.r._last_missing_shell_command = None
+                            user_message=''
 
                         elif user_message == 'EPASTE':
                             fansi_print("EPASTE --> Exec/Eval PASTE --> Running code from your clipboard (printed below):",'blue','underlined')
@@ -29117,7 +29181,7 @@ def pseudo_terminal(
                             elif user_message.startswith("!"):# For shell commands
                                 maybe_inject_ans_into_environ()
                                 # user_message="from rp import shell_command;ans=shell_command("+repr(user_message[1:])+",True)"#Disabled because we no longer guarentee that rp is imported
-                                user_message="import os;os.system("+repr(user_message[1:])+")"
+                                user_message="__import__('rp').r._pterm_run_shell_command("+repr(user_message[1:])+")"
                                 # fansi_print("Transformed command into " + repr(user_message) ,'magenta')
                             if True and len(user_message.split("\n")) == 1 and not enable_ptpython:  # If we only have 1 line: no pasting BUT ONLY USE THIS IF WE DONT HAVE ptpython because sometimes this code is a bit glitchy and its unnessecary if we have ptpython
                                 _thing=space_split(user_message)
@@ -45593,92 +45657,6 @@ def crop_image_zeros(image, *, output="image", mask=None):
     else:
         assert False, 'Unreachable'
 
-def crop_tensor_zeros(tensor, *, output="tensor", mask=None):
-    """
-    Crops out zero-valued regions from the borders of a tensor.
-
-    This function removes excess zero-valued borders from a tensor, reducing it to only
-    the non-zero content. It works with tensors of any number of dimensions (1D, 2D, 3D, etc.)
-    and supports both numpy arrays and torch tensors. It can return either the cropped tensor
-    or the bounding coordinates of the cropped region.
-
-    Parameters:
-        tensor : ndarray or torch.Tensor
-            The input tensor to crop. Can be any shape and any number of dimensions.
-        output : str, optional
-            Specifies the type of output to return. If 'tensor' (default), returns the cropped tensor.
-            If 'bounds', returns a tuple of bounding box coordinates as slice objects.
-        mask : tensor, optional
-            Syntactic sugar - less verbose than getting bounds via output='bounds' then applying crop to another tensor.
-            If not None, use this tensor to determine the crop bounds instead of the input tensor.
-            Useful for if you want to pass a mask etc.
-
-    Returns:
-        cropped_tensor : ndarray or torch.Tensor
-            The cropped tensor, returned if output is 'tensor'.
-        bounds : tuple of slice
-            A tuple of slice objects defining the bounding box, returned if output is 'bounds'.
-            Can be used directly for indexing: tensor[bounds]
-
-    Examples:
-        >>> import numpy as np
-        >>> tensor = np.array([[0, 0, 0, 0],
-        ...                    [0, 5, 3, 0],
-        ...                    [0, 2, 7, 0],
-        ...                    [0, 0, 0, 0]])
-        >>> cropped = crop_tensor_zeros(tensor, output='tensor')
-        >>> print(cropped)
-        [[5 3]
-         [2 7]]
-
-        >>> bounds = crop_tensor_zeros(tensor, output='bounds')
-        >>> print(bounds)
-        (slice(1, 3, None), slice(1, 3, None))
-        >>> print(tensor[bounds])
-        [[5 3]
-         [2 7]]
-
-        >>> tensor_3d = np.zeros((5, 5, 5))
-        >>> tensor_3d[1:3, 1:3, 1:3] = 1
-        >>> cropped_3d = crop_tensor_zeros(tensor_3d)
-        >>> print(cropped_3d.shape)
-        (2, 2, 2)
-    """
-
-    if mask is None: mask = tensor
-
-    assert output in 'tensor bounds'.split(),'output is a string indicating what the output type is - it can be either tensor or bounds but you gave type '+str(type(output))+' '+str(output)
-
-    # Find all non-zero indices
-    if is_numpy_array(mask):
-        points = np.argwhere(mask)
-    elif is_torch_tensor(mask):
-        points = mask.nonzero()
-        if hasattr(points, 'cpu'):
-            points = points.cpu().numpy()
-        else:
-            points = np.array(points)
-    else:
-        assert False,'Error: input tensor must be a numpy array or torch tensor but got type '+str(type(mask))
-
-    # Handle empty tensor (all zeros)
-    if not len(points):
-        # Return minimal slice at origin
-        bounds = tuple(slice(0, 1) for _ in range(tensor.ndim))
-    else:
-        # Compute bounding box across all dimensions
-        mins = np.min(points, axis=0)
-        maxs = np.max(points, axis=0) + 1
-        bounds = tuple(slice(int(mins[i]), int(maxs[i])) for i in range(len(mins)))
-
-    if output == 'tensor':
-        cropped = tensor[bounds]
-        return cropped
-    elif output == 'bounds':
-        return bounds
-    else:
-        assert False, 'Unreachable'
-
 # def crop_images_zeros(*images, output="image", mask=None):
 #     if len(images)==1:
 #         only = images[0]
@@ -49631,9 +49609,10 @@ _default_rprc="""## %s
 ## For example, if we run 'rp' in a directory with 'thing.py', let us run 'import thing.py' by enabling the belowline
 __import__("sys").path.append(__import__("os").getcwd())
 
-#Should we automatically download any pip_imports?
-#__import__("rp").r._pip_import_autoyes=True
+#Auto-install missing packages/commands?
+#__import__("rp").r._pip_import_autoyes=True  # python packages
 #__import__("rp").r._pip_install_needs_sudo=False
+#__import__("rp").r._auto_simore=True  # shell commands (cargo, ffmpeg, etc)
 
 ## Set the terminal's cursor to the shape of a line, instead of a block. I personally prefer this, but I've commented out because I don't know if you'd like it.
 #__import__('rp').set_cursor_to_bar()
@@ -50153,9 +50132,9 @@ def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, unix=Non
         #Don't reinstall what we've already installed
         return False
 
-    if   currently_running_linux()   and linux   is None: raise RuntimeError('r._ensure_installed('+repr(name)+'): Linux not supported!')
-    elif currently_running_mac()     and mac     is None: raise RuntimeError('r._ensure_installed('+repr(name)+'): MacOS not supported!')
-    elif currently_running_windows() and windows is None: raise RuntimeError('r._ensure_installed('+repr(name)+'): Windows not supported!')
+    if   currently_running_linux()   and linux   is None: raise NotImplementedError("'%s' not supported on Linux"   % name)
+    elif currently_running_mac()     and mac     is None: raise NotImplementedError("'%s' not supported on MacOS"   % name)
+    elif currently_running_windows() and windows is None: raise NotImplementedError("'%s' not supported on Windows" % name)
 
     if   currently_running_linux()  : command = linux
     elif currently_running_mac()    : command = mac
@@ -50180,12 +50159,95 @@ def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, unix=Non
 
     return True #We installed something
 
+_ensure_installed_registry={}
+def _register_ensure_installed_func(command_or_func=None):
+    """Register an installer func. Command inferred from _ensure_X_installed -> X, or pass explicit name."""
+    def wrapper(func):
+        # Infer command from func name: _ensure_FOO_installed -> FOO
+        cmd = command_or_func if isinstance(command_or_func, str) else None
+        if cmd is None:
+            name = func.__name__
+            if name.startswith('_ensure_') and name.endswith('_installed'):
+                cmd = name[8:-10]  # strip _ensure_ and _installed
+        assert cmd, "Could not infer command name from " + func.__name__
+        _ensure_installed_registry[cmd] = func
+        return func
+    if callable(command_or_func):
+        return wrapper(command_or_func)
+    return wrapper
+
+_last_missing_shell_command = None  # Tracks last command not found for SIMORE
+_auto_simore = False  # If True, automatically install missing shell commands
+
+def _pterm_run_shell_command(command):
+    """
+    Run a shell command via PTY for proper interactive support.
+    Captures last 4KB of output to detect 'command not found' errors.
+    Returns exit code. Sets _last_missing_shell_command if installable command missing.
+    """
+    global _last_missing_shell_command
+    import os
+
+    _last_missing_shell_command = None
+
+    # Windows fallback - no PTY support
+    if os.name == 'nt':
+        return os.system(command)
+
+    import pty
+    import re
+
+    def parse_command_not_found(output):
+        # Parses: bash: cargo: command not found
+        #         zsh: command not found: cargo
+        #         sh: cargo: not found
+        #         sh: 1: cargo: not found
+        if isinstance(output, bytes):
+            output = output.decode('utf-8', errors='replace')
+        m = re.search(r'(?:bash|sh)(?::\s*\d+)?: (\w+): (?:command )?not found', output)
+        if m:
+            return m.group(1)
+        m = re.search(r'zsh: command not found: (\w+)', output)
+        if m:
+            return m.group(1)
+        return None
+
+    tail = b''  # Last 4KB of output
+
+    def master_read(fd):
+        nonlocal tail
+        data = os.read(fd, 1024)
+        tail = (tail + data)[-4096:]
+        return data
+
+    status = pty.spawn(['bash', '-c', command], master_read)
+    exit_code = os.waitstatus_to_exitcode(status) if hasattr(os, 'waitstatus_to_exitcode') else status >> 8
+
+    if exit_code == 127:
+        missing_cmd = parse_command_not_found(tail)
+        if missing_cmd and missing_cmd in _ensure_installed_registry:
+            if _auto_simore:
+                try:
+                    fansi_print("AUTO-SIMORE: Running _ensure_%s_installed()" % missing_cmd, 'yellow', 'bold')
+                    _ensure_installed_registry[missing_cmd]()
+                    fansi_print("AUTO-SIMORE: Retrying command...", 'yellow', 'bold')
+                    return _pterm_run_shell_command(command)
+                except NotImplementedError as e:
+                    fansi_print("AUTO-SIMORE: " + str(e), 'yellow')
+            else:
+                _last_missing_shell_command = missing_cmd
+                fansi_print("HINT: Enter SIMORE to run _ensure_%s_installed()" % missing_cmd, 'yellow')
+
+    return exit_code
+
 def _brew_install(x):
     _ensure_brew_installed()
     command = 'brew install '+shlex.quote(x)
     _run_sys_command(command)
 
+@_register_ensure_installed_func
 def _ensure_go_installed():
+    """go: Statically-typed compiled language by Google with strong concurrency support"""
     _ensure_installed(
         'go',
         mac    = 'brew install golang-go',
@@ -50193,7 +50255,9 @@ def _ensure_go_installed():
         windows='winget install --id=GoLang.Go', # https://winstall.app/apps/GoLang.Go
     )
 
+@_register_ensure_installed_func
 def _ensure_cargo_installed():
+    """cargo: Rust's package manager and build system"""
     _ensure_installed(
         'cargo',
         unix   = 'curl https://sh.rustup.rs -sSf | sh -s -- -y', #https://doc.rust-lang.org/cargo/getting-started/installation.html
@@ -50201,14 +50265,18 @@ def _ensure_cargo_installed():
     )
     _ensure_shell_has_path(unix="~/.cargo/bin")
 
+@_register_ensure_installed_func
 def _ensure_brew_installed():
+    """brew: Package manager for macOS and Linux"""
     assert not currently_running_windows(), 'r._ensure_brew_installed: brew isnt supported on Windows. Try WSL? See https://docs.brew.sh/Installation'
     if not system_command_exists('brew'):
         _run_sys_command('''sudo -v && NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"''')
     _ensure_shell_has_path(linux="/home/linuxbrew/.linuxbrew/bin")
     assert system_command_exists('brew'), 'r._ensure_brew_installed: Failed to automatically install homebrew. Please see https://brew.sh'
 
+@_register_ensure_installed_func
 def _ensure_wget_installed():
+    """wget: Command-line utility for downloading files via HTTP/HTTPS/FTP"""
     _ensure_installed(
         'wget',
         mac='brew install wget',
@@ -50216,7 +50284,9 @@ def _ensure_wget_installed():
         windows='winget install --id=JernejSimoncic.Wget', #https://winstall.app/apps/JernejSimoncic.Wget
     )
 
+@_register_ensure_installed_func
 def _ensure_curl_installed():
+    """curl: Command-line tool for transferring data with URLs"""
     _ensure_installed(
         'curl',
         mac='brew install curl',
@@ -50224,7 +50294,9 @@ def _ensure_curl_installed():
         windows='winget install --id=cURL.cURL', #https://winstall.app/apps/cURL.cURL
     )
 
+@_register_ensure_installed_func
 def _ensure_rclone_installed():
+    """rclone: Sync files to and from cloud storage providers"""
     _ensure_installed(
         'rclone',
         mac='brew install rclone',
@@ -50232,7 +50304,9 @@ def _ensure_rclone_installed():
         windows='winget install --id=Rclone.Rclone', #https://rclone.org/install/
     )
 
+@_register_ensure_installed_func
 def _ensure_rsync_installed():
+    """rsync: Fast incremental file transfer utility"""
     _ensure_installed(
         'rsync',
         mac='brew install rsync',
@@ -50240,7 +50314,9 @@ def _ensure_rsync_installed():
         windows='winget install --id=cwRsync.cwRsync',  # https://winstall.app/apps/cwRsync.cwRsync
     )
 
+@_register_ensure_installed_func
 def _ensure_ffmpeg_installed():
+    """ffmpeg: Complete solution for recording, converting, and streaming audio/video"""
     _ensure_installed(
         'ffmpeg',
         mac='brew install ffmpeg',
@@ -50253,7 +50329,9 @@ def _ensure_ffmpeg_installed():
         elif currently_running_mac    (): assert False, "Please install ffmpeg! >>> brew install ffmpeg #get brew at https://brew.sh"
         else:                             assert False, "Please install ffmpeg!"
 
+@_register_ensure_installed_func('claude')
 def _ensure_claudecode_installed():
+    """claude: Anthropic's agentic CLI for AI-assisted coding"""
     _ensure_node_installed(min_version=18)
     _ensure_installed(
         'claude',
@@ -50262,7 +50340,9 @@ def _ensure_claudecode_installed():
         windows='npm install -g @anthropic-ai/claude-code',
     )
 
+@_register_ensure_installed_func('gemini')
 def _ensure_gemini_cli_installed():
+    """gemini: Google's open-source CLI agent for AI-assisted coding"""
     _ensure_node_installed(min_version=18)
     _ensure_installed(
         'gemini',
@@ -50271,7 +50351,9 @@ def _ensure_gemini_cli_installed():
         windows='npm install -g @google/gemini-cli',
     )
 
+@_register_ensure_installed_func
 def _ensure_opencode_installed():
+    """opencode: AI-powered coding agent for terminal supporting multiple AI providers"""
     _ensure_installed(
         'opencode',
         # https://github.com/sst/opencode
@@ -50279,7 +50361,9 @@ def _ensure_opencode_installed():
         windows=None,
     )
 
+@_register_ensure_installed_func
 def _ensure_snap_installed():
+    """snap: Universal Linux package manager by Canonical"""
     _ensure_installed(
         'snap',
         mac=None,
@@ -50287,9 +50371,10 @@ def _ensure_snap_installed():
         windows=None,
     )
 
+@_register_ensure_installed_func('code')
 def _ensure_vscode_installed():
     """
-    Ensure VS Code CLI is available for launching VS Code Server.
+    code: Microsoft's open-source code editor with extensions and debugging.
     The CLI provides the `code serve-web` command needed to run the local web server.
     """
     _ensure_installed(
@@ -50299,7 +50384,9 @@ def _ensure_vscode_installed():
         windows='winget install --id=Microsoft.VisualStudioCode',
     )
 
+@_register_ensure_installed_func
 def _ensure_nvtop_installed():
+    """nvtop: Interactive GPU process monitor for NVIDIA/AMD/Intel"""
     _ensure_installed(
         'nvtop',
         mac=None,
@@ -50307,7 +50394,9 @@ def _ensure_nvtop_installed():
         windows=None,
     )
 
+@_register_ensure_installed_func
 def _ensure_zsh_installed():
+    """zsh: Unix shell with advanced autocompletion and plugin support"""
     _ensure_installed(
         'zsh',
         mac='brew install zsh',
@@ -50321,8 +50410,9 @@ def _install_oh_my_zsh():
     _ensure_curl_installed()
     _run_sys_command('sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"')
 
+@_register_ensure_installed_func
 def _ensure_viddy_installed():
-    """ https://github.com/sachaos/viddy """
+    """viddy: Modern watch command with time machine and diff highlighting"""
     _ensure_installed(
         'viddy',
         mac='brew install viddy',
@@ -50330,7 +50420,9 @@ def _ensure_viddy_installed():
         windows=None, #Please see https://github.com/sachaos/viddy
     )
 
+@_register_ensure_installed_func
 def _ensure_tmux_installed():
+    """tmux: Terminal multiplexer for persistent sessions and panes"""
     _ensure_installed(
         'tmux',
         mac='brew install tmux',
@@ -50338,7 +50430,9 @@ def _ensure_tmux_installed():
         windows=None,
     )
 
+@_register_ensure_installed_func
 def _ensure_npm_installed():
+    """npm: Node.js package manager"""
     _ensure_installed(
         'npm',
         mac='brew install npm',
@@ -50347,16 +50441,18 @@ def _ensure_npm_installed():
     )
     _ensure_node_installed() #https://github.com/anthropics/claude-code/issues/113 - taupirho's response
 
+@_register_ensure_installed_func
 def _ensure_zellij_installed():
+    """zellij: Terminal workspace and multiplexer written in Rust"""
     _ensure_installed(
         'zellij',
         unix='cargo install --locked zellij',
         windows=None,
     )
 
+@_register_ensure_installed_func
 def _ensure_nvm_installed():
-    """Install nvm if missing and make sure it's sourced in future shells."""
-
+    """nvm: Node.js version manager for switching between versions"""
     if file_exists(get_absolute_path('~/.nvm/nvm.sh')):
         #It's likely not in the path because of the way nvm works
         return
@@ -50371,12 +50467,39 @@ def _ensure_nvm_installed():
         exports = r'export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
         append_line_to_files(exports, _all_shell_rc_paths)
 
+@_register_ensure_installed_func
 def _ensure_gcloud_installed():
+    """gcloud: Google Cloud Platform command-line interface"""
     _ensure_installed(
         'gcloud',
         unix='curl -sSL https://sdk.cloud.google.com | bash',
         windows='winget install Google.CloudSDK',
     )
+
+@_register_ensure_installed_func
+def _ensure_s5cmd_installed():
+    """s5cmd: High-performance parallel S3 and local filesystem tool"""
+    _ensure_installed(
+        's5cmd',
+        linux=unindent('''
+            curl -s https://api.github.com/repos/peak/s5cmd/releases/latest \
+            | grep "browser_download_url.*linux_amd64.deb" \
+            | cut -d : -f 2,3 \
+            | tr -d \" \
+            | wget -qi - -O s5cmd.deb && sudo dpkg -i s5cmd.deb && rm s5cmd.deb'''),
+        mac='brew install s5cmd',
+    )
+
+
+@_register_ensure_installed_func
+def _ensure_fzf_installed():
+    """fzf: the fuzzy finder"""
+    _ensure_installed(
+        'fzf',
+        mac='brew install fzf',
+        linux='brew install fzf', #Latest version via linuxbrew
+    )
+
 
 
 
@@ -50432,7 +50555,9 @@ def _nvm_install_latest_node_version():
     return _run_sys_command(_nvm_command_string("install node"))
 
 
+@_register_ensure_installed_func
 def _ensure_node_installed(*,min_version:int=None):
+    """node: JavaScript runtime built on Chrome's V8 engine"""
     _ensure_nvm_installed()
     _ensure_installed(
         'node',
@@ -50452,7 +50577,9 @@ def _ensure_node_installed(*,min_version:int=None):
         _nvm_install_latest_node_version()
         rp.fansi_print("r._ensure_node_installed: Updated node version! PLEASE NOTE: You may have to restart rp from a new shell to install things with it", 'yellow yellow italic bold on dark red')
 
+@_register_ensure_installed_func
 def _ensure_git_installed():
+    """git: Distributed version control system"""
     _ensure_installed(
         'git',
         mac='brew install git',
@@ -50461,14 +50588,18 @@ def _ensure_git_installed():
     )
     pip_import('git',auto_yes=True)
 
+@_register_ensure_installed_func
 def _ensure_btop_installed():
+    """btop: Resource monitor for CPU, memory, disk, network, and processes"""
     _ensure_installed(
         'btop',
         unix  ='brew install btop',
         windows=None,
     )
 
+@_register_ensure_installed_func
 def _ensure_shfmt_installed():
+    """shfmt: Shell script formatter supporting POSIX, Bash, and mksh"""
     _ensure_installed(
         'shfmt',
         mac    = 'brew install shfmt',
@@ -50476,7 +50607,9 @@ def _ensure_shfmt_installed():
         windows='winget install --id=mvdan.shfmt',
     )
  
+@_register_ensure_installed_func
 def _ensure_pdftocairo_installed():
+    """pdftocairo: PDF to PNG/SVG/PS converter from Poppler"""
     _ensure_installed(
         'pdftocairo',
         mac    = 'brew install poppler',
@@ -50495,7 +50628,9 @@ def _install_ollama(force=False):
     )
     pip_import('ollama',auto_yes=True)
 
+@_register_ensure_installed_func('libvulkan.so.1')
 def _ensure_libvulkan_installed():
+    """libvulkan: Vulkan graphics API loader library"""
     _ensure_installed(
         "libvulkan.so.1",
         linux="apt install libvulkan1 mesa-vulkan-drivers",
@@ -50649,9 +50784,9 @@ def _install_lazygit(force=False):
             #Untested
             _run_sys_command("""winget install -e --id=JesseDuffield.lazygit""")
         
+@_register_ensure_installed_func
 def _ensure_filebrowser_installed():
-    """https://filebrowser.org/installation"""
-
+    """filebrowser: Self-hosted web file manager for upload/download/preview"""
     system_commands = get_system_commands()
 
     if "filebrowser" in system_commands:
@@ -50668,11 +50803,9 @@ def _ensure_filebrowser_installed():
 
     _run_sys_command(command)
 
+@_register_ensure_installed_func
 def _ensure_cog_installed():
-    """ 
-    Cog is an open source tool that makes it easy to put a machine learning model in a Docker container.
-    https://replicate.com/docs/guides/push-a-model
-    """
+    """cog: Replicate's tool for containerizing ML models with auto-generated APIs"""
     if not 'cog' in get_system_commands():
         _run_sys_command("""
             sudo curl -o /usr/local/bin/cog -L https://github.com/replicate/cog/releases/latest/download/cog_`uname -s`_`uname -m`
@@ -50843,9 +50976,20 @@ def _run_ai_coder_cli(code, command=None):
         else:
             return gather_vars("workdir")
 
+def _setup_claude_bash():
+    """
+    Configure claude_bash for use in all subprocesses
+    """
+    _ensure_fzf_installed()
+    _ensure_tmux_installed()
+    _run_sys_command(shlex.join(["chmod", "+x", _claude_bash_script + "/claude_bash"]))
+    os.environ['SHELL']=_claude_bash_script + "/claude_bash"#TODO: Dont modify it this way...
+
 def _run_claude_code(code,*,fullperm=False):
     """ See rp.r._run_ai_coder_cli.__doc__ """
     _ensure_claudecode_installed()
+    _setup_claude_bash()
+
     command = 'claude --dangerously-skip-permissions' if fullperm else 'claude'
     return _run_ai_coder_cli(code,command)
 
@@ -51488,38 +51632,36 @@ def get_process_tty(pid: int = None) -> str:
     return tty
 
 
-def tmux_get_process_pane_index(pid: int= None) -> int:
-    """
-    Return the tmux pane index (#{pane_index}) for the given PID.
-
-    Args:
-        pid (int | None): Target process ID. If None, uses get_process_id().
-
-    Returns:
-        int: The tmux pane index.
-
-    Raises:
-        ValueError: If no matching tmux pane is found.
-        subprocess.CalledProcessError: If tmux command fails.
-    """
+def _tmux_get_process_attr(tmux_var, pid=None):
+    """Helper to get a tmux attribute for a process by TTY matching."""
     import subprocess
     if pid is None:
         pid = get_process_id()
-
     tty = get_process_tty(pid)
-
     panes = subprocess.check_output(
-        ["tmux", "list-panes", "-a", "-F", "#{pane_tty} #{pane_index}"],
+        ["tmux", "list-panes", "-a", "-F", "#{pane_tty} #{%s}" % tmux_var],
         text=True
     )
-
     for line in panes.splitlines():
-        pane_tty, pane_index = line.split()
+        pane_tty, value = line.split(None, 1)
         if pane_tty == tty:
-            return int(pane_index)
+            return value
+    raise ValueError("No tmux %s found for TTY %s (PID %s)" % (tmux_var, tty, pid))
 
-    raise ValueError("No tmux pane index found for TTY %s (PID %s)" % (tty, pid))
 
+def tmux_get_process_pane_index(pid: int = None) -> int:
+    """Return the tmux pane index for the given PID (default: current process)."""
+    return int(_tmux_get_process_attr("pane_index", pid))
+
+
+def tmux_get_process_window_name(pid: int = None) -> str:
+    """Return the tmux window name for the given PID (default: current process)."""
+    return _tmux_get_process_attr("window_name", pid)
+
+
+def tmux_get_process_session_name(pid: int = None) -> str:
+    """Return the tmux session name for the given PID (default: current process)."""
+    return _tmux_get_process_attr("session_name", pid)
 
 
 def _get_all_tmux_windows():
@@ -51738,9 +51880,84 @@ def tmux_type_in_all_panes(keystrokes: str, *, session: str = None, window: str 
         subprocess.run(command, check=True)
 
 
-def tmux_get_scrollback(with_ansi=True) -> str:
+def tmux_send_keys(keys: str, target=None, literal=False):
     """
-    Gets the scrollback buffer of the current tmux pane.
+    Send keys to a tmux pane.
+
+    Args:
+        keys: Keys to send. Special keys like 'Enter', 'C-c', 'Escape' are interpreted.
+        target: Tmux target pane. None for current pane.
+        literal: If True, send keys literally (-l flag), ignoring special key syntax.
+
+    Target syntax:
+        Special tokens:
+            {marked}    - marked pane (mark with prefix+m)
+            {last}      - last active pane
+            {next}      - next pane in order
+            {previous}  - previous pane in order
+            {top}, {bottom}, {left}, {right} - positional
+            {up-of}, {down-of}, {left-of}, {right-of} - relative
+
+        By ID:
+            %5  - pane ID (find with: tmux list-panes -a -F '#{pane_id}')
+            @3  - window ID
+            $2  - session ID
+
+        Relative:
+            :.+1  - next pane in current window
+            :.-1  - previous pane
+            :0    - first pane in current window
+
+        Full path:
+            mysession:2.1   - session, window 2, pane 1
+            :mywindow.0     - named window, pane 0
+
+    Special keys (when literal=False):
+        Enter, Space, Tab, Escape, Backspace, Delete
+        Up, Down, Left, Right
+        C-c, C-v, C-a, ... (Control + key)
+        M-x (Meta/Alt + key)
+    """
+    import subprocess
+    cmd = ["tmux", "send-keys"]
+    if target:
+        cmd += ["-t", target]
+    if literal:
+        cmd += ["-l"]
+    cmd += [keys]
+    subprocess.run(cmd, check=True)
+
+
+def tmux_get_scrollback(with_ansi=True, target=None) -> str:
+    """
+    Gets the scrollback buffer of a tmux pane.
+
+    Args:
+        with_ansi: Include ANSI escape codes in output.
+        target: Tmux target pane. None for current pane.
+
+    Target syntax:
+        Special tokens:
+            {marked}    - marked pane (mark with prefix+m)
+            {last}      - last active pane
+            {next}      - next pane in order
+            {previous}  - previous pane in order
+            {top}, {bottom}, {left}, {right} - positional
+            {up-of}, {down-of}, {left-of}, {right-of} - relative
+
+        By ID:
+            %5  - pane ID (find with: tmux list-panes -a -F '#{pane_id}')
+            @3  - window ID
+            $2  - session ID
+
+        Relative:
+            :.+1  - next pane in current window
+            :.-1  - previous pane
+            :0    - first pane in current window
+
+        Full path:
+            mysession:2.1   - session, window 2, pane 1
+            :mywindow.0     - named window, pane 0
 
     Returns:
         str: The scrollback buffer content.
@@ -51753,6 +51970,7 @@ def tmux_get_scrollback(with_ansi=True) -> str:
             [
                 "tmux",
                 "capture-pane",
+                *(["-t", target] if target else []),
                 *["-e"] * bool(with_ansi),
                 "-p",
                 "-S",
@@ -57318,7 +57536,7 @@ def _iterfzf_raw(
     # Interface:
     multi=False, mouse=True, print_query=False,
     # Layout:
-    prompt='> ', preview=None,
+    prompt='> ', preview=None, preview_window=None,
     # Misc:
     query='', encoding=None
 ):
@@ -57345,6 +57563,7 @@ def _iterfzf_raw(
     if print_query:                cmd.append('--print-query')
     if query:                      cmd.append('--query=' + query)
     if preview:                    cmd.append('--preview=' + preview)
+    if preview_window:             cmd.append('--preview-window=' + preview_window)
     encoding = encoding or sys.getdefaultencoding()
     proc = stdin = byte =None
     lf, cr = u'\n\r'
@@ -57421,6 +57640,10 @@ def _iterfzf_with_ls_preview(iterable, exact=False, **kwargs):
     # Only set preview if not already specified
     if 'preview' not in kwargs:
         kwargs['preview'] = preview_cmd
+
+    # Use 25% width preview (half of fzf's default 50%)
+    if 'preview_window' not in kwargs:
+        kwargs['preview_window'] = 'right:25%'
 
     # iterable = map(fansi_highlight_path, iterable)
 
@@ -62647,55 +62870,62 @@ def select_torch_device(n=0, *, silent=False, prefer_used=False, reserve=False):
     return output
 
 
-def _torch_device_to_index(device):
+# TODO: decide on public name for this function - for now access via rp.r._resolve_torch_device
+def _resolve_torch_device(device=None, *, fallback_mps_to_cpu=False, quiet=False):
     """
-    Convert a given device specifier into its corresponding index.
-    
-    The function handles multiple formats for specifying devices, 
-    such as "cuda:3", torch.device(3), or int(3).
-    
+    Resolve a device specification to a torch.device object.
+
+    Handles multiple input formats and auto-selects a device if None is passed.
+    Use this instead of writing custom device resolution logic in each module.
+
     Args:
-        device (str, int, torch.device): Device specifier.
-    
+        device: Device specification, can be:
+            - None: Auto-select best available device via select_torch_device(prefer_used=True)
+            - int: GPU index (e.g., 0, 1, 2) - converted to 'cuda:N'
+            - str: Device string (e.g., 'cuda:0', 'cuda', 'mps', 'cpu')
+            - torch.device: Passed through unchanged
+        fallback_mps_to_cpu: If True, return 'cpu' instead of 'mps'.
+            Use for models that don't support MPS (e.g., due to conv2d channel limits).
+        quiet: If True, suppress the MPS fallback message.
+
     Returns:
-        int: Device index.
-    
-    Raises:
-        TypeError: If the device format is not understood.
-        ValueError: If the device format is understood but is not valid (e.g., 'cpu').
+        torch.device: The resolved device object
+
+    Examples:
+        >>> _resolve_torch_device(None)        # Auto-select best GPU
+        device(type='cuda', index=0)
+        >>> _resolve_torch_device(1)           # GPU index
+        device(type='cuda', index=1)
+        >>> _resolve_torch_device('cuda:2')    # String
+        device(type='cuda', index=2)
+        >>> _resolve_torch_device('mps', fallback_mps_to_cpu=True)  # MPS fallback
+        device(type='cpu')
+
+    See also: select_torch_device, _is_torch_device
+
+    Tags: torch, device, gpu, cuda, mps, resolution
     """
-    
-    # If device is already an integer.
-    if isinstance(device, int):
-        return device
+    import torch
 
-    # If device is a string in format "cuda:x".
-    elif isinstance(device, str) and ":" in device:
-        try:
-            _, index_str = device.split(":")
-            return int(index_str)
-        except (ValueError, AttributeError):
-            # Failed to split or convert to int, so fall back to the PyTorch logic.
-            pass
-
-    # If device has a valid index attribute.
-    elif hasattr(device, "index") and device.index is not None:
-        return device.index
-
-    # Fall back to torch-specific logic.
-    try:
-        pip_import('torch')
-        import torch
-        index = torch.device(device).index
-        if index is not None:
-            return index
+    if device is None:
+        device = select_torch_device(prefer_used=True, reserve=True, silent=True)
+    elif isinstance(device, int):
+        if torch.cuda.is_available():
+            device = torch.device("cuda:%i" % device)
         else:
-            # If the result is None, then it's possibly an invalid device format.
-            raise ValueError("The device '%s' is not valid. For example, 'cpu' is not a valid GPU device."%device)
-    except (ImportError, ValueError):
-        raise TypeError(
-            "_torch_device_to_index: Can't make sense of the input, which is of type "+str(type(device))
-        )
+            device = torch.device("cpu")
+    elif isinstance(device, str):
+        device = torch.device(device)
+    elif not _is_torch_device(device):
+        raise TypeError("device must be None, int, str, or torch.device, got %s" % type(device))
+
+    if fallback_mps_to_cpu and device.type == 'mps':
+        if not quiet:
+            print("MPS not supported for this model, falling back to CPU")
+        device = torch.device('cpu')
+
+    return device
+
 
 def _waste_gpu(gpu_id):
     import torch
@@ -62778,6 +63008,59 @@ def set_cuda_visible_devices(*devices):
         >>> set_cuda_visible_devices(('cuda:0', 3))
         [0, 1]  # example output
     """
+
+    def _torch_device_to_index(device):
+        """
+        RIGHT NOW THIS FUNCTION IS ONLY USED HERE AND CAN BE CONFUSED WITH _resolve_torch_device SO I MADE IT AN INNER FUNCTION
+        Convert a given device specifier into its corresponding index.
+        
+        The function handles multiple formats for specifying devices, 
+        such as "cuda:3", torch.device(3), or int(3).
+        
+        Args:
+            device (str, int, torch.device): Device specifier.
+        
+        Returns:
+            int: Device index.
+        
+        Raises:
+            TypeError: If the device format is not understood.
+            ValueError: If the device format is understood but is not valid (e.g., 'cpu').
+        """
+        
+        # If device is already an integer.
+        if isinstance(device, int):
+            return device
+
+        # If device is a string in format "cuda:x".
+        elif isinstance(device, str) and ":" in device:
+            try:
+                _, index_str = device.split(":")
+                return int(index_str)
+            except (ValueError, AttributeError):
+                # Failed to split or convert to int, so fall back to the PyTorch logic.
+                pass
+
+        # If device has a valid index attribute.
+        elif hasattr(device, "index") and device.index is not None:
+            return device.index
+
+        # Fall back to torch-specific logic.
+        try:
+            pip_import('torch')
+            import torch
+            index = torch.device(device).index
+            if index is not None:
+                return index
+            else:
+                # If the result is None, then it's possibly an invalid device format.
+                raise ValueError("The device '%s' is not valid. For example, 'cpu' is not a valid GPU device."%device)
+        except (ImportError, ValueError):
+            raise TypeError(
+                "_torch_device_to_index: Can't make sense of the input, which is of type "+str(type(device))
+            )
+
+
     
     devices = detuple(devices)
     if not is_iterable(devices):
@@ -62801,7 +63084,6 @@ def set_cuda_visible_devices(*devices):
         prev_visible_devices = list(map(int, prev_visible_devices.split(',')))
 
     return prev_visible_devices
-
 
 def get_cuda_visible_devices():
     """ Returns a list of ints """
@@ -65370,8 +65652,9 @@ def get_free_disk_space(path='/'):
     total, used, free = shutil.disk_usage(path)
     return free
 
+@_register_ensure_installed_func
 def _ensure_uv_installed():
-    """ Clone of pip that's much faster """
+    """uv: Extremely fast Python package manager written in Rust"""
     try:
         import uv
     except ImportError:
@@ -65983,7 +66266,9 @@ def check_pip_requirements(file='requirements.txt', silent=False):
     Test availability of required packages from given requirements file.
     
     Args:
-        file (str, optional): Path to the requirements file. Defaults to 'requirements.txt'.
+        file (str, list, optional): Path to the requirements file. Defaults to 'requirements.txt'.
+              Can also be a list of requirement strings like ['torch>=2.0', 'numpy', 'einops'].
+              If a list is given, writes to a temp file and checks that.
         silent (bool, optional): If True, does not print the output to the console but instead returns it as a string. Defaults to False.
     
     Returns:
@@ -66016,8 +66301,17 @@ def check_pip_requirements(file='requirements.txt', silent=False):
          ... #   │ 6    │ hf_transfer>=0.1.8    │ Missing          │                   │
          ... #   └──────┴───────────────────────┴──────────────────┴───────────────────┘
 
+         >>> check_pip_requirements(['torch>=2.0', 'numpy', 'nonexistent_pkg'])
+         ... # Same output format, using a temp file internally
+
     """
     pip_import('rich')
+
+    # Handle list of requirements by writing to temp file
+    if isinstance(file, (list, tuple)):
+        temp_path = temporary_file_path('txt')
+        save_file_lines(file, temp_path)
+        return check_pip_requirements(temp_path, silent=silent)
 
     assert file_exists(file), 'check_pip_requirements: requirements file not found: '+str(file)
 
@@ -66216,6 +66510,17 @@ def _check_rpy_35_syntax():
 del re #re is random element
 
 
+#WIP
+for _env_var_name in sorted(os.environ):
+    _rp_env_var_prefix = 'RP_SET_EVAL_'
+    if _env_var_name.startswith(_rp_env_var_prefix):
+        _var_name = _env_var_name[len(_rp_env_var_prefix):]
+        _var_string = os.environ[_env_var_name]
+        _var_value = eval(_var_string)
+        globals()[_var_name]=_var_value
+        fansi_print('RP ENVIRON: rp.r.'+_var_name+' SET TO '+str(_var_value)[:100], 'green bold')
+
+
 #TODO: Fix this. It can help extract function defs among other useful thins
 #    def semantic_lines(python_code:str)->list:
 #   #Gets every semantic python line.
@@ -66259,4 +66564,3 @@ del re #re is random element
 #     args=[args]
 
 # Version Oct24 2021
-
