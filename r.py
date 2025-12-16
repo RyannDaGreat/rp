@@ -50950,10 +50950,10 @@ def _setup_claude_bash():
     """
     _ensure_fzf_installed()
     _ensure_tmux_installed()
-    _run_sys_command(shlex.join(["chmod", "+x", _claude_bash_script]))
     if os.environ["SHELL"]!=_claude_bash_script:
+        _run_sys_command(shlex.join(["chmod", "+x", _claude_bash_script]))
         os.environ["SHELL"] = _claude_bash_script  # TODO: Dont modify it this way...
-        rp.fansi_print("Setting $SHELL="+shelx.quote(os.environ['SHELL']),'green')
+        rp.fansi_print("Setting $SHELL="+shlex.quote(os.environ['SHELL']),'green bold')
 
 def _run_claude_code(code,*,fullperm=False):
     """ See rp.r._run_ai_coder_cli.__doc__ """
