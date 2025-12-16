@@ -29181,7 +29181,7 @@ def pseudo_terminal(
                             elif user_message.startswith("!"):# For shell commands
                                 maybe_inject_ans_into_environ()
                                 # user_message="from rp import shell_command;ans=shell_command("+repr(user_message[1:])+",True)"#Disabled because we no longer guarentee that rp is imported
-                                user_message="__import__('rp').r._pterm_run_shell_command("+repr(user_message[1:])+")"
+                                user_message="__import__('rp').r._pterm_run_shell_command("+repr(user_message[1:])+");"
                                 # fansi_print("Transformed command into " + repr(user_message) ,'magenta')
                             if True and len(user_message.split("\n")) == 1 and not enable_ptpython:  # If we only have 1 line: no pasting BUT ONLY USE THIS IF WE DONT HAVE ptpython because sometimes this code is a bit glitchy and its unnessecary if we have ptpython
                                 _thing=space_split(user_message)
@@ -50185,47 +50185,14 @@ def _pterm_run_shell_command(command):
     Captures last 4KB of output to detect 'command not found' errors.
     Returns exit code. Sets _last_missing_shell_command if installable command missing.
     """
-    global _last_missing_shell_command
-    import os
+    exit_code = os.system(command)
 
-    _last_missing_shell_command = None
-
-    # Windows fallback - no PTY support
-    if os.name == 'nt':
-        return os.system(command)
-
-    import pty
-    import re
-
-    def parse_command_not_found(output):
-        # Parses: bash: cargo: command not found
-        #         zsh: command not found: cargo
-        #         sh: cargo: not found
-        #         sh: 1: cargo: not found
-        if isinstance(output, bytes):
-            output = output.decode('utf-8', errors='replace')
-        m = re.search(r'(?:bash|sh)(?::\s*\d+)?: (\w+): (?:command )?not found', output)
-        if m:
-            return m.group(1)
-        m = re.search(r'zsh: command not found: (\w+)', output)
-        if m:
-            return m.group(1)
-        return None
-
-    tail = b''  # Last 4KB of output
-
-    def master_read(fd):
-        nonlocal tail
-        data = os.read(fd, 1024)
-        tail = (tail + data)[-4096:]
-        return data
-
-    status = pty.spawn(['bash', '-c', command], master_read)
-    exit_code = os.waitstatus_to_exitcode(status) if hasattr(os, 'waitstatus_to_exitcode') else status >> 8
-
-    if exit_code == 127:
-        missing_cmd = parse_command_not_found(tail)
-        if missing_cmd and missing_cmd in _ensure_installed_registry:
+    if exit_code:
+        #SIMORE Logic
+        sh_tokens=shlex.split(command+' ')
+        first_token=[*sh_tokens,''][0]
+        if first_token in _ensure_installed_registry and not system_command_exists(first_token):
+            missing_cmd = first_token
             if _auto_simore:
                 try:
                     fansi_print("AUTO-SIMORE: Running _ensure_%s_installed()" % missing_cmd, 'yellow', 'bold')
@@ -50233,12 +50200,13 @@ def _pterm_run_shell_command(command):
                     fansi_print("AUTO-SIMORE: Retrying command...", 'yellow', 'bold')
                     return _pterm_run_shell_command(command)
                 except NotImplementedError as e:
-                    fansi_print("AUTO-SIMORE: " + str(e), 'yellow')
+                    fansi_print("AUTO-SIMORE FAILED TO INSTALL %s: " %first_token + str(e), 'yellow')
             else:
                 _last_missing_shell_command = missing_cmd
                 fansi_print("HINT: Enter SIMORE to run _ensure_%s_installed()" % missing_cmd, 'yellow')
 
     return exit_code
+
 
 def _brew_install(x):
     _ensure_brew_installed()
@@ -50982,8 +50950,8 @@ def _setup_claude_bash():
     """
     _ensure_fzf_installed()
     _ensure_tmux_installed()
-    _run_sys_command(shlex.join(["chmod", "+x", _claude_bash_script + "/claude_bash"]))
-    os.environ['SHELL']=_claude_bash_script + "/claude_bash"#TODO: Dont modify it this way...
+    _run_sys_command(shlex.join(["chmod", "+x", _claude_bash_script]))
+    os.environ["SHELL"] = _claude_bash_script  # TODO: Dont modify it this way...
 
 def _run_claude_code(code,*,fullperm=False):
     """ See rp.r._run_ai_coder_cli.__doc__ """
