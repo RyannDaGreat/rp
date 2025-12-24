@@ -130,6 +130,7 @@ _fast_pterm_history_size = 1024 * 1024
 os.environ['RP_SYS_EXECUTABLE']        = sys.executable
 os.environ['RP_PUDB_SYS_VERSION_INFO'] = repr(list(sys.version_info)) # For PUDB editing in vim
 os.environ['RP_SITE_PACKAGES']         = _site_packages               # For PUDB editing in vim
+os.environ['RP_PID']                   = str(os.getpid())             # For claude_bash.sh
 
 _original_pwd = os.getcwd()
 
@@ -13018,7 +13019,7 @@ def replace_if_none(value):
         target = ast.unparse(assign_node.targets[0])
 
         # Evaluate the assignment target in the caller's frame
-        target_value = eval(target, frame.f_locals)
+        target_value = eval(target, dict(frame.f_locals))
 
         # Return value if the target value is None, otherwise return the target value
         return value if target_value is None else target_value
@@ -24191,6 +24192,21 @@ def _ISM(ans,*,preview:str=None):
     TODO make it for things other than lists of strings, like lists of ints. To do this make it into a line-numbered string dict -> values then use those values to look up keys ->  get answer. Better yet create a fzf wrapper for this task - to select non-string things!
     """
 
+    if _is_pandas_dataframe(ans):
+        # Stream rows lazily for large DataFrames
+        def row_generator():
+            for i in range(len(ans)):
+                row_str = '\t'.join(str(v) for v in ans.iloc[i].values)
+                yield "%s\t|\t%s" % (i, row_str)
+
+        selected = _iterfzf(row_generator(), multi=True, exact=True, preview=preview)
+        if selected is None or not selected:
+            return ans.iloc[[]]  # Return empty DataFrame
+
+        # Parse indices from selected lines (format: "idx\t|\tval1\tval2...")
+        indices = [int(line.split('\t')[0]) for line in selected]
+        return ans.iloc[indices]
+
     try:
         ans=dict(ans)
     except Exception:
@@ -30223,6 +30239,10 @@ def repr_vars(*vars, sort=True, frames_back=0):
 def has_len(x):
     """ Returns True if you can safely call len(x) """
     return hasattr(x,'__len__')
+
+def _get_len_else_none(x):
+    """ Returns len(x) if x has a length, otherwise None """
+    return len(x) if has_len(x) else None
 
 def as_example_comment(code,*,indent=' '*8):
     '''
@@ -42835,24 +42855,41 @@ class VideoWriterMP4:
     A class for writing MP4 videos frame by frame using ffmpeg.
     
     Creates MP4 videos by writing individual frames sequentially. Handles automatic
-    dimension adjustment to ensure compatibility with libx264 codec requirements.
-    
+    dimension adjustment to ensure compatibility with codec requirements.
+
     Args:
         path: Output file path (defaults to auto-generated, adds .mp4 if needed)
-        framerate: Video framerate in fps (default: 60)  
+        framerate: Video framerate in fps (default: 60)
         video_bitrate: Quality setting - 'low'/'medium'/'high' or int (default: 'medium')
         height/width: Force specific dimensions (default: auto from first frame)
         show_progress: Show ffmpeg progress output (default: True)
-        
+        codec: Video codec - 'h264', 'h265'/'hevc', 'vp9', 'av1', or 'mp4v' (default: 'h264')
+        crf: Constant Rate Factor for quality. Lower = better quality, larger file.
+             None uses codec default. mp4v doesn't support CRF (uses bitrate instead).
+             - h264/h265: 0-51, default ~23, good quality ~18-23
+             - vp9: 0-63, default ~31, good quality ~30-35
+             - av1: 0-63, default ~30, good quality ~23-30
+
     Example:
         >>> writer = VideoWriterMP4('output.mp4', framerate=30)
         >>> writer.write_frame(image1)
-        >>> writer.write_frame(image2) 
+        >>> writer.write_frame(image2)
         >>> writer.finish()
     """
     #Todo: If this ever gets fucky, try https://github.com/imageio/imageio-ffmpeg - it looks pretty good!
 
-    def __init__(self, path=None, framerate=60, video_bitrate='medium', height=None, width=None, show_progress=True):
+    _CODEC_MAP = {
+        'h264'  : 'libx264',
+        'x264'  : 'libx264',
+        'h265'  : 'libx265',
+        'x265'  : 'libx265',
+        'hevc'  : 'libx265',
+        'vp9'   : 'libvpx-vp9',
+        'av1'   : 'libaom-av1',
+        'mp4v'  : 'mpeg4',
+    }
+
+    def __init__(self, path=None, framerate=60, video_bitrate='medium', height=None, width=None, show_progress=True, codec='h264', crf=None):
         # Originally from: https://github.com/kkroening/ffmpeg-python/issues/246
 
         _ensure_ffmpeg_installed()
@@ -42869,12 +42906,16 @@ class VideoWriterMP4:
         assert path.endswith('.mp4')
         assert isinstance(video_bitrate,int)
 
-        vcodec='libx264' #This used to be an argument, but I don't know if I'll ever change it
+        # Resolve codec name to ffmpeg codec
+        codec_lower = codec.lower()
+        assert codec_lower in self._CODEC_MAP, "Unknown codec %r. Choose from: %s" % (codec, list(self._CODEC_MAP.keys()))
+        vcodec = self._CODEC_MAP[codec_lower]
 
         self.path          = get_absolute_path(path)
         self.vcodec        = vcodec
         self.framerate     = framerate
         self.video_bitrate = video_bitrate
+        self.crf           = crf
 
         self.started  = False
         self.finished = False
@@ -42908,6 +42949,17 @@ class VideoWriterMP4:
             if width%2:
                 width-=1
 
+            # Build output kwargs - use CRF if specified, otherwise bitrate
+            # Note: mpeg4 (mp4v) doesn't support CRF
+            output_kwargs = dict(
+                pix_fmt="yuv420p",
+                vcodec=self.vcodec,
+            )
+            if self.crf is not None and self.vcodec != 'mpeg4':
+                output_kwargs['crf'] = self.crf
+            else:
+                output_kwargs['video_bitrate'] = self.video_bitrate
+
             self.process = (
                 ffmpeg.input(
                     "pipe:",
@@ -42917,13 +42969,7 @@ class VideoWriterMP4:
                     r=self.framerate,
                     **(dict(loglevel="quiet") if not self.show_progress else dict())
                 )
-                .output(
-                    self.path,
-                    pix_fmt="yuv420p",
-                    vcodec=self.vcodec,
-                    video_bitrate=self.video_bitrate,
-                    # Interstingly, this is not where the framerate should go, based on my experiments...
-                )
+                .output(self.path, **output_kwargs)
                 .overwrite_output()
                 .run_async(pipe_stdin=True)
             )
@@ -43038,7 +43084,7 @@ def set_save_video_mp4_default_backend(backend):
     global _save_video_mp4_default_backend
     _save_video_mp4_default_backend = backend
 
-def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', height=None, width=None, show_progress=True, backend=None):
+def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', height=None, width=None, show_progress=True, backend=None, codec='h264', crf=None):
     """
     frames: a list of images as defined by rp.is_image(). Saves an .mp4 file at the path
         - frames can also contain strings, if those strings are image file paths
@@ -43051,7 +43097,20 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
     video_bitrate: controls the quality of the output. If your backend is opencv, this parameter has no effect!
     height, width: If frames have various sizes, and are given as a generator, use this to set the height and width or else it will use the first frame's height and width
     show_progress: Whether to show the saving progress
-    backend: Defaults to 'ffmpeg'. Can also be 'cv2' if you can't install 'ffmpeg' for some reason
+    backend: Defaults to 'ffmpeg'. Can also be 'cv2' if you can't install 'ffmpeg' for some reason.
+        Note: cv2 backend uses mp4v codec and ignores codec/crf options.
+    codec: Video codec - 'h264', 'h265'/'hevc', 'vp9', 'av1', or 'mp4v' (default: 'h264')
+        - h264: Most compatible, good quality, fast encoding
+        - h265/hevc: Better compression than h264, slower encoding
+        - vp9: Good for web, royalty-free, slower encoding
+        - av1: Best compression, royalty-free, slowest encoding
+        - mp4v: Legacy MPEG-4 Part 2, lower quality, no CRF support
+    crf: Constant Rate Factor for quality. Lower = better quality, larger file.
+        None uses codec default. mp4v doesn't support CRF (uses bitrate instead).
+        If specified, overrides video_bitrate - which is the more modern way of specifying video quality.
+        - h264/h265: 0-51, default ~23, good quality ~18-23
+        - vp9: 0-63, default ~31, good quality ~30-35
+        - av1: 0-63, default ~30, good quality ~23-30
 
     If you can't install ffmpeg, please set the backend to 'cv2'
     If you need this to be the default, call rp.r.set_save_video_mp4_default_backend('cv2') instead of 'ffmpeg', the default
@@ -43102,7 +43161,7 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
     #     frames = as_byte_images(frames, copy=False)
     #     frames = as_rgb_images(frames, copy=False)
 
-    writer = VideoWriterMP4(path, framerate, video_bitrate=video_bitrate, height=height, width=width, show_progress=show_progress)
+    writer = VideoWriterMP4(path, framerate, video_bitrate=video_bitrate, height=height, width=width, show_progress=show_progress, codec=codec, crf=crf)
 
     #Make frames speficiable as a glob, folder path, list of images, or list of image paths
     def load_frame(frame):
@@ -45264,7 +45323,7 @@ def remove_duplicate_frames(video, *, lazy=False, show_progress=False, as_indice
                 pass
 
     if show_progress:
-        video=eta(video, title='rp.remove_duplicate_frames')
+        video = eta(video, title='rp.remove_duplicate_frames', length=_get_len_else_none(video))
 
     output = helper()
     if not lazy:
@@ -47288,7 +47347,7 @@ def get_scope(frames_back=0):
 
         frame=frame.f_back
 
-    return {'locals':frame.f_locals, 'globals':frame.f_globals}[scope]
+    return {'locals':dict(frame.f_locals), 'globals':frame.f_globals}[scope]
 
 
 def _get_visible_scope(frames_back=0):
@@ -51237,7 +51296,7 @@ def get_pids_using_ports(ports, *, strict=True, show_progress=False):
 
     """
     if show_progress:
-        ports = eta(ports, title=get_current_function_name())
+        ports = eta(ports, title=get_current_function_name(), length=_get_len_else_none(ports))
     return [gather_args_call(get_process_using_port, port) for port in ports]
 
 def compress_bytes(data: bytes) -> bytes:
@@ -55090,11 +55149,12 @@ def cv_resize_images(
     images=detuple(images)
 
     as_numpy = is_numpy_array(images)
+    length = _get_len_else_none(images)
 
     images=(cv_resize_image(image, size, interp, copy=copy) for image in images)
 
     if show_progress:
-        images = eta(images, title="rp.cv_resize_images")
+        images = eta(images, title="rp.cv_resize_images", length=length)
 
     if not lazy: 
         #Process them all
@@ -55158,8 +55218,8 @@ def resize_videos(
         )
         for video in videos
     )
-    
-    if show_progress: videos = eta(videos, title='resize_videos')
+
+    if show_progress: output = eta(output, title='resize_videos', length=_get_len_else_none(videos))
     if not lazy: 
         output=list(output)
         if as_numpy:
@@ -57305,7 +57365,7 @@ def resize_images_to_hold(
     )
 
     if show_progress:
-        output = eta(output, title=get_current_function_name())
+        output = eta(output, title=get_current_function_name(), length=_get_len_else_none(images))
 
     if not lazy:
         output = list(output)
@@ -57338,7 +57398,7 @@ def resize_images_to_fit(
     )
 
     if show_progress:
-        output = eta(output, title=get_current_function_name())
+        output = eta(output, title=get_current_function_name(), length=_get_len_else_none(images))
 
     if not lazy:
         output = list(output)
@@ -57486,17 +57546,17 @@ def resize_images_to_min_size(*images, interp="bilinear", alpha_weighted=False):
     """
     return resize_images(*images, size=get_min_image_dimensions(*images), interp=interp, alpha_weighted=alpha_weighted)
 
-def resize_videos_to_min_size(*videos,interp='auto'):
+def resize_videos_to_min_size(*videos, interp='auto', show_progress=False):
     videos = detuple(videos)
     min_height = min(get_video_heights(videos))
     min_width  = min(get_video_widths (videos))
-    return resize_videos(videos, size=(min_height, min_width),interp=interp)
+    return resize_videos(videos, size=(min_height, min_width), interp=interp, show_progress=show_progress)
 
-def resize_videos_to_max_size(*videos,interp='auto'):
+def resize_videos_to_max_size(*videos, interp='auto', show_progress=False):
     videos = detuple(videos)
     max_height = max(get_video_heights(videos))
     max_width  = max(get_video_widths (videos))
-    return resize_videos(videos, size=(max_height, max_width),interp=interp)
+    return resize_videos(videos, size=(max_height, max_width), interp=interp, show_progress=show_progress)
 
 def _iterfzf_raw(
     # CHECK: When the signature changes, __init__.pyi file should also change.
@@ -66534,3 +66594,4 @@ for _env_var_name in sorted(os.environ):
 #     args=[args]
 
 # Version Oct24 2021
+

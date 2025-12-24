@@ -20,13 +20,8 @@ export PATH="$(dirname "$BASH_BIN"):$PATH"
 
 pid_emoji() { echo "${EMOJIS:$(($1 % ${#EMOJIS})):1}"; }
 
-# Find parent claude process if it exists, else just take the parent PID
-PID=$PPID
-TRACER=$PID
-while [ "$PID" != "1" ]; do
-    [[ "$(ps -o comm= -p "$PID")" == *claude* ]] && { PID=$TRACER; break; }
-    PID=$(ps -o ppid= -p "$PID" | tr -d ' ')
-done
+# Use RP_PID if set (parent rp process), else fall back to PPID
+PID=${RP_PID:-$PPID}
 
 
 EMOJI=$(pid_emoji $PID)
