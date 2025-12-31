@@ -53228,7 +53228,7 @@ def _extract_archive_via_pyunpack(archive_path, folder_path):
     pip_import('patoolib')
 
     filetype=get_file_extension(archive_path)
-    supported_filetypes='zip jar rar tar gz 7z deb ace alz a arc arj bz2 cab Z cpio dms lrz lha lzh lz lzma lzo rpm rz xz zoo'.lower().split()
+    supported_filetypes='zip jar rar tar gz 7z deb ace alz a arc arj bz2 cab Z cpio dms lrz lha lzh lz lzma lzo rpm rz xz zoo pptx'.lower().split()
     assert filetype.lower() in supported_filetypes, 'Sorry, but I dont know how to unpack/extract/unzip etc the given filetype .'+filetype+'\n\tSupported filetypes: '+' '.join(sorted(set(supported_filetypes)))
     
     from pyunpack import Archive

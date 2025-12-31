@@ -11,7 +11,10 @@
 IS_MACOS=$([[ "$(uname)" == "Darwin" ]] && echo 1)
 SESSION="ClaudeSh"
 ARCHIVE_WINDOW="ARCHIVE"
+PANEL_WINDOW="PANEL"
 ARCHIVE_DIR="/tmp/claude_bash_archive"
+PANEL_SCRIPT="$(dirname "$0")/claude_panel.py"
+PYTHON_BIN="/opt/homebrew/opt/python@3.10/bin/python3.10"
 EMOJIS="🔴🟠🟡🟢🔵🟣🟤⚫⚪🩶🩷🩵❤️🧡💛💚💙💜🖤🤍🤎💗💖💝💘🍎🍊🍋🍏🫐🍇🍓🍒🍑🥭🍍🥝🌶️🥕🌽🥦🍆🫑🔥🌊🌿🌸🌺🌻🌼🌷💐🌈☀️⭐🌙💫✨⚡💎🔮🎈🎀🧊❄️🎯🎨🎭🎪🎠🎡🎢🏀🏈⚽🎾🎱🧩🪁🛸🚀💊🧬🦠🔬🧪🎵🎶🔔💡🔦🏮🪔🎃👾🤖👽🦋🐝🐞🌵🍄🌴🥀🪷🪻"
 BASH_BIN="/bin/bash"
 
@@ -55,17 +58,38 @@ archive_viewer() {
 
 # --- Tmux setup ---
 ARCHIVE_CMD="SESSION=$SESSION; ARCHIVE_DIR=$ARCHIVE_DIR; $(declare -f archive_viewer); archive_viewer"
+PANEL_CMD="while true; do $PYTHON_BIN $PANEL_SCRIPT; done"
+
+ensure_panel_window() {
+    if ! tmux list-windows -t "$SESSION" -F "#{window_name}" | grep -q "^${PANEL_WINDOW}$"; then
+        # Move all windows from index 1+ up by one to make room
+        for i in $(tmux list-windows -t "$SESSION" -F "#{window_index}" | sort -rn); do
+            [[ "$i" -ge 1 ]] && tmux move-window -s "$SESSION:$i" -t "$SESSION:$((i+1))"
+        done
+        tmux new-window -d -t "$SESSION:1" -n "$PANEL_WINDOW" "$PANEL_CMD"
+    else
+        # Check if panel process died and respawn if needed
+        local panel_pane=$(tmux list-windows -t "$SESSION" -F "#{window_name} #{pane_id}" | grep "^${PANEL_WINDOW} " | awk '{print $2}')
+        if [[ -n "$panel_pane" ]] && ! tmux display -t "$panel_pane" -p "#{pane_pid}" >/dev/null 2>&1; then
+            tmux respawn-window -t "$SESSION:$PANEL_WINDOW" -k "$PANEL_CMD"
+        fi
+    fi
+}
 
 if ! tmux has-session -t "$SESSION" 2>/dev/null; then
     tmux new-session -d -s "$SESSION" -n "$ARCHIVE_WINDOW" "$ARCHIVE_CMD"
+    tmux new-window -d -t "$SESSION:1" -n "$PANEL_WINDOW" "$PANEL_CMD"
 elif ! tmux list-windows -t "$SESSION" -F "#{window_name}" | grep -q "^${ARCHIVE_WINDOW}$"; then
     # Respawn ARCHIVE at index 0
     tmux move-window -t "$SESSION" -r
     for i in $(tmux list-windows -t "$SESSION" -F "#{window_index}" | sort -rn); do
-        # Move all other windows 1 index up to make room
-        tmux move-window -s "$SESSION:$i" -t "$SESSION:$((i+1))"
+        # Move all other windows 2 indices up to make room for ARCHIVE and PANEL
+        tmux move-window -s "$SESSION:$i" -t "$SESSION:$((i+2))"
     done
     tmux new-window -d -t "$SESSION:0" -n "$ARCHIVE_WINDOW" "$ARCHIVE_CMD"
+    tmux new-window -d -t "$SESSION:1" -n "$PANEL_WINDOW" "$PANEL_CMD"
+else
+    ensure_panel_window
 fi
 
 PANE=$(tmux new-window -d -t "$SESSION" -n "$WINDOW_NAME" -P -F "#{pane_id}" "cat")
