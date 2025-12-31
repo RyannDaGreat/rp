@@ -50865,6 +50865,27 @@ def _run_bashtop():
     #Run it!
     os.system('bashtop')
 
+
+def _run_voicething():
+    '''A voice to text program see https://github.com/RyannDaGreat/voicething'''
+    git_import('voicething')
+
+    import rp.git.voicething.voice_thing as voice_thing_module
+    voice_thing_file=voice_thing_module.__file__
+    requirements_file=with_file_name(voice_thing_file,'requirements.txt',keep_extension=False)
+    check_pip_requirements(requirements_file)
+    
+    command = shlex.join(
+        [
+            sys.executable,
+            get_absolute_path(voice_thing_file),
+        ]
+    )
+    
+    tmux_kill_session("VoiceThing", strict=False)
+    yaml = tmuxp_create_session_yaml({"VoiceThing": command}, session_name="VoiceThing")
+    tmuxp_launch_session_from_yaml(yaml,attach=True)
+
 def _disable_terminal_mouse_reporting():
     """
     Disables terminal mouse reporting/tracking modes that can cause
