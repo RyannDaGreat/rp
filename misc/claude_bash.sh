@@ -14,7 +14,7 @@ ARCHIVE_WINDOW="ARCHIVE"
 PANEL_WINDOW="PANEL"
 ARCHIVE_DIR="/tmp/claude_bash_archive"
 PANEL_SCRIPT="$(dirname "$0")/claude_panel.py"
-PYTHON_BIN="/opt/homebrew/opt/python@3.10/bin/python3.10"
+PYTHON_BIN="$RP_SYS_EXECUTABLE"
 EMOJIS="🔴🟠🟡🟢🔵🟣🟤⚫⚪🩶🩷🩵❤️🧡💛💚💙💜🖤🤍🤎💗💖💝💘🍎🍊🍋🍏🫐🍇🍓🍒🍑🥭🍍🥝🌶️🥕🌽🥦🍆🫑🔥🌊🌿🌸🌺🌻🌼🌷💐🌈☀️⭐🌙💫✨⚡💎🔮🎈🎀🧊❄️🎯🎨🎭🎪🎠🎡🎢🏀🏈⚽🎾🎱🧩🪁🛸🚀💊🧬🦠🔬🧪🎵🎶🔔💡🔦🏮🪔🎃👾🤖👽🦋🐝🐞🌵🍄🌴🥀🪷🪻"
 BASH_BIN="/bin/bash"
 
