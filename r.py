@@ -28,6 +28,7 @@ from functools import lru_cache, partial
 from contextlib import contextmanager
 from math import factorial
 import datetime
+import io
 from collections.abc import MutableSet
 from collections import Counter
 
@@ -1115,6 +1116,334 @@ class PrintBeforeAfter:
         )
 
         
+#region Hashing functions
+
+class HandyHashable:
+    """ A wrapper for any data that makes it hashable """
+    def __init__(self,value):
+        self.value=value
+        self._hash=handy_hash(value)
+    def __hash__(self):
+        return self._hash
+    def __eq__(self,x):
+        if not isinstance(x,HandyHashable):
+            return False
+        try:
+            return self.value==x.value
+        except ValueError:#ValueError: The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()
+            handy_hash(self.value)==handy_hash(x.value)
+    def __repr__(self):
+        return "HandyHashable("+repr(self.value)+")"
+
+class HandyDict(dict):
+    """
+    A dict that can use more than just normal keys by using handyhash
+    This class might get more methods over time.
+    """
+    def __init__(self,*args,**kwargs):
+        return dict.__init__(self,*args,**kwargs)
+    def __setitem__(self, key, value):
+        return dict.__setitem__(self,HandyHashable(key),value)
+    def __delitem__(self, key):
+        return dict.__delitem__(self,HandyHashable(key))
+    def __getitem__(self, key):
+        return dict.__getitem__(self,HandyHashable(key))
+    def __iter__(self):
+        return (key.value for key in dict.__iter__(self))
+    def __contains__(self,x):
+        return dict.__contains__(self,HandyHashable(x))
+
+#TODO: HandySet
+
+def _torch_tensor_to_bytes_for_hashing(tensor):
+    #https://stackoverflow.com/questions/63880081/how-to-convert-a-torch-tensor-into-a-byte-string - not using numpy
+    #This includes the device!
+    import torch 
+    import io
+    buff = io.BytesIO()
+    torch.save(tensor, buff)
+    buff.seek(0)  # <--  this is what you were missing
+    return buff.read()
+
+
+def handy_hash(value):
+    """
+    This function is really handy!
+    Meant for hashing things that can't normally be hashed, like lists and dicts and numpy arrays. It pretends they're immutable.
+    This function can hash all sorts of values. Anything mutable should be frozen, we're not just returning an ID.
+    For example, lists are turned into tuples, and dicts like {"A":"B","C":"D"} are turned into ((""))
+    If it can't hash something, it will just use fallback to hash it. By default, though, fallback is
+    """
+
+    def fallback(value):
+        # fansi_print('Warning: fallback_hash was called on value where repr(value)=='+repr(value),'yellow') #This is annoying
+        return id(value)
+
+    try:return hash(value)
+    except Exception:pass#This is probably going to happen a lot in this function lol (that's kinda the whole point)
+
+    bytes_hasher = get_sha256_hash
+
+    if is_torch_tensor(value): return hash(('TORCH SHA256', bytes_hasher(_torch_tensor_to_bytes_for_hashing(value.detach().cpu()))))
+    if is_numpy_array (value): return hash(('NUMPY SHA256', bytes_hasher(value.tobytes())))
+
+    value_type=type(value)
+
+    try:return hash(('DILL HASH', bytes_hasher(_dill_dumps(value))))#The dill library is capable of hashing a great many things...including numpy arrays! This was added after my original implementation of handy_hash, as dill is able to handle a huuuggggeee amount of different types
+    except Exception:pass
+
+    hasher=__hashers[value_type] if value_type in __hashers else fallback
+    return hasher(value)
+
+#region Type-specific hashers
+__secret_number=71852436691752251090#Used for hashing things. Don't use this value anywhere! It's not generated dynamically (aka it doesnt use randint) because we want consistent hash values across python processes.
+__hashers={}#Used by handy_hash
+
+
+def _set_hash(x):
+    assert isinstance(x,set)
+    return hash((__secret_number,frozenset(x)))
+__hashers[set]=_set_hash
+
+def _dict_hash(x,value_hasher=handy_hash):
+    assert isinstance(x,dict)
+    set_to_hash=set()
+    for key,value in x.items():
+        set_to_hash.add(hash((__secret_number,'dict_hash_pair',key,value_hasher(value))))
+    return hash((__secret_number,frozenset(set_to_hash)))
+__hashers[dict]=_dict_hash
+
+def _list_hash(x,value_hasher=handy_hash):
+    assert isinstance(x,list)
+    return hash((__secret_number,'_list_hash',tuple(map(value_hasher,x))))
+__hashers[list]=_list_hash
+
+def _tuple_hash(x,value_hasher=handy_hash):
+    assert isinstance(x,tuple)
+    return hash((__secret_number,'_tuple_hash',tuple(map(value_hasher,x))))
+__hashers[tuple]=_tuple_hash
+
+def _slice_hash(x,value_hasher=handy_hash):
+    assert isinstance(x,slice)
+    return hash((__secret_number,'_slice_hash',(value_hasher(x.start),value_hasher(x.step),value_hasher(x.stop))))
+__hashers[slice]=_slice_hash
+
+#endregion
+
+
+def args_hash(function,*args,**kwargs):
+    """
+    Return the hashed input that would be passed to 'function', using handy_hash. This function is used for memoizers. function must be provided for context so that arguments passed that can be passed as either kwargs or args both return the same hash.
+    
+    Enhanced Documentation:
+    
+    Creates a deterministic hash of function arguments for memoization purposes. 
+    This function intelligently normalizes arguments by converting positional args
+    to keyword args when possible, ensuring the same hash for equivalent calls.
+    
+    Args:
+        function (callable): The function whose arguments are being hashed.
+                            Must be callable to determine argument names.
+        *args: Positional arguments to hash
+        **kwargs: Keyword arguments to hash
+    
+    Returns:
+        int: A deterministic hash value representing the argument signature.
+             Same arguments in different forms (args vs kwargs) produce same hash.
+    
+    Examples:
+        >>> def test_func(a, b, c=3):
+        ...     return a + b + c
+        >>> hash1 = args_hash(test_func, 1, 2, c=3)
+        >>> hash2 = args_hash(test_func, 1, b=2, c=3) 
+        >>> hash1 == hash2  # Same hash for equivalent calls
+        True
+        >>> isinstance(hash1, int)
+        True
+    
+    Related Functions:
+        - memoized(): Uses args_hash for function memoization
+        - handy_hash(): Used internally for hashing individual arguments
+    
+    Usage Patterns:
+        - Primary use is in memoization decorators and cached functions
+        - Handles unhashable arguments by converting them with handy_hash
+        - Normalizes argument representation for consistent caching
+    
+    Tags: hashing, memoization, caching, function-arguments, utilities
+    """
+    assert callable(function),'Cant hash the inputs of function because function isnt callable and therefore doesnt receive arguments. repr(function)=='+repr(function)
+    args=list(args)
+    try:
+        #Whenever we can, we take things from args and put them in kwargs instead...
+        from inspect import getfullargspec
+        arg_names=list(getfullargspec(function).args)#This often doesn't work, particularly for built-in functions. TODO this is possible to fix, given that rp can complete argument names of even opencv functions. But for the most part, memoization is used in loops where the function is called with the same signature over and over again, so I'm going to push off improving this till later.
+    except Exception:
+        #...but it's not a necessity, I GUESS...(if the function is always called the same way)
+        arg_names=[]
+        pass
+    while arg_names and args:
+        #Take things from args and put them in kwargs instead, for as many args as we know the names of...
+        kwargs[arg_names.pop(0)]=args.pop(0)
+    hashes=set()
+    for index,arg in enumerate(args):
+        hashes.add(hash(('arg',index,handy_hash(arg))))
+    for kw   ,arg in kwargs.items() :
+        hashes.add(hash(('kwarg',kw ,handy_hash(arg))))
+    return hash(frozenset(hashes))
+
+
+#def memoized(function):
+#    #TODO: when trying to @memoize fibbonacci, and calling fibbonacci(4000), python crashes with SIGABRT. I have no idea why. This function really doesn't use any non-vanilla python code.
+#    #Uses args_hash to hash function inputs...
+#    #This is meant to be a permanent cache (as opposed to a LRU aka 'Least Recently Used' cache, which deletes cached values if they haven't been used in a while)
+#    #If you wish to temporarily memoize a function (let's call if F), you can create a new function cached(F), and put it in a scope that will run out eventually so that there are no memory leaks.
+#    #Some things can't be hashed by default, I.E. lists etc. But all lists can be converted to tuples, which CAN be hashed. This is where hashers come in. Hashers are meant to help you memoize functions that might have non-hashable arguments, such as numpy arrays.
+#    cache=dict()
+#    assert callable(function),'You can\'t memoize something that isn\'t a function (you tried to memoize '+repr(function)+', which isn\'t callable)'
+#    def memoized_function(*args,**kwargs):
+#        key=args_hash(function,*args,**kwargs)
+#        if not key in cache:
+#            cache[key]=function(*args,**kwargs)
+#        return cache[key]
+#    memoized_function.__name__+=function.__name__
+#    memoized_function.original_function=function #So we can inspect it in rp
+#    memoized_function.cache=cache #So we can inspect it, or even clear it
+#    return memoized_function
+
+def memoized(function):
+    """
+    TODO: Make this function smarter - use the same arg techniques as in gather_args, so even when we give overrides to default args it still caches properly. Same for cachedinstances
+    TODO: when trying to @memoize fibbonacci, and calling fibbonacci(4000), python crashes with SIGABRT. I have no idea why. This function really doesn't use any non-vanilla python code.
+    Uses args_hash to hash function inputs...
+    This is meant to be a permanent cache (as opposed to a LRU aka 'Least Recently Used' cache, which deletes cached values if they haven't been used in a while)
+    If you wish to temporarily memoize a function (let's call if F), you can create a new function cached(F), and put it in a scope that will run out eventually so that there are no memory leaks.
+    Some things can't be hashed by default, I.E. lists etc. But all lists can be converted to tuples, which CAN be hashed. This is where hashers come in. Hashers are meant to help you memoize functions that might have non-hashable arguments, such as numpy arrays.
+    """
+    import functools
+    cache = dict()
+    assert callable(function), 'You can\'t memoize something that isn\'t a function (you tried to memoize '+repr(function)+', which isn\'t callable)'
+
+    @functools.wraps(function)
+    def memoized_function(*args, **kwargs):
+        key = args_hash(function, *args, **kwargs)
+        if key not in cache:
+            cache[key] = function(*args, **kwargs)
+        return cache[key]
+
+    memoized_function.original_function = function
+    memoized_function.cache = cache
+    return memoized_function
+
+def memoized_lru(function_or_maxsize=None, *, maxsize=128):
+    """
+    LRU (Least Recently Used) version of memoized. Evicts least recently used items when cache reaches maxsize.
+    Uses args_hash to handle complex arguments like the original memoized function so it can handle nearly any python object, unlike functools.lru_cache
+    
+    Example:
+        >>> @memoized_lru(2)  # or @memoized_lru(maxsize=2)
+        ... def expensive_func(x):
+        ...     return x ** 2
+        >>> expensive_func(1); print(expensive_func.cache)
+        OrderedDict({...})
+        >>> expensive_func(2); print(expensive_func.cache)  
+        OrderedDict({...: 1, ...: 4})
+        >>> expensive_func(3); print(expensive_func.cache)  # evicts 1
+        OrderedDict({...: 4, ...: 9})
+        >>> expensive_func.maxsize
+        2
+        >>> expensive_func.maxsize = 10  # Can be changed dynamically
+        >>> expensive_func.maxsize
+        10
+
+    Example:
+        >>> @memoized_lru(maxsize=3)
+        ... def expensive_func(x):
+        ...     return x**2
+        ... 
+        ... for arg in [
+        ...     1,2,3,                     #Fill the cache
+        ...     as_numpy_array([1, 2, 3]), #It can hash most python objects
+        ...     as_numpy_array([1, 2, 3]), #No cache change
+        ...     3,                         #Bring 3**2 to the front
+        ...     4,                         #4th element: starts deleting items (replaces 2**2)
+        ... ]:
+        ...     expensive_func(arg)
+        ...     print(arg, '\t', expensive_func.cache.values())
+        ... 
+        1       odict_values([1])                      
+        2       odict_values([1, 4])                   
+        3       odict_values([1, 4, 9])                
+        [1 2 3] odict_values([4, 9, array([1, 4, 9])]) 
+        [1 2 3] odict_values([4, 9, array([1, 4, 9])]) 
+        3       odict_values([4, array([1, 4, 9]), 9]) 
+        4       odict_values([array([1, 4, 9]), 9, 16])
+    """
+    # Handle @memoized_lru(123) as shorthand for maxsize=123
+    if isinstance(function_or_maxsize, int):
+        maxsize = function_or_maxsize
+        function_or_maxsize = None
+    
+    def decorator(func):
+        import functools
+        from collections import OrderedDict
+        assert callable(func), "You can't memoize something that isn't a function (you tried to memoize "+repr(func)+", which isn't callable)"
+        
+        cache = OrderedDict()
+        
+        @functools.wraps(func)
+        def memoized_function(*args, **kwargs):
+            key = args_hash(func, *args, **kwargs)
+            if key in cache:
+                cache.move_to_end(key)
+                return cache[key]
+            result = func(*args, **kwargs)
+            cache[key] = result
+            if len(cache) > memoized_function.maxsize:
+                cache.popitem(last=False)
+            return result
+        
+        memoized_function.original_function = func
+        memoized_function.cache = cache
+        memoized_function.maxsize = maxsize
+        return memoized_function
+    
+    if function_or_maxsize is None:
+        return decorator
+    else:
+        return decorator(function_or_maxsize)
+
+def memoized_property(method):
+    """
+    This method is meant to be used as a substitute for @property
+    Often, when using @property you'll see a method like this:
+    
+       @property
+       def thing(self):
+           try:
+               return self._thing
+           except Exception:
+               self.thing=fancy_calculations()
+    
+               return self._thing
+    This function takes the hassle of creating a private variable away, and automatically creates the self._thing
+    The completely equivalent function, using @memoized_property, is shown below
+        
+       @memoized_property
+       def thing(self):
+           return fancy_calculations()
+    
+    """
+    assert callable(method)
+    property_name='_'+method.__name__
+    def memoized_property(self):
+        if not hasattr(self,property_name):
+            setattr(self,property_name,method(self))
+        return getattr(self,property_name)
+    memoized_property.__name__+=method.__name__
+    memoized_property=property(memoized_property)
+    return memoized_property
+
 #THIS IS DEPRECATED IN FAVOR OF get_all_paths
 
 
@@ -10165,6 +10494,12 @@ class _Transcription(list):
     def text(self):
         return ' '.join(seg.text for seg in self)
 
+@memoized
+def _get_pywhispercpp_model(model_name):
+    pip_import('pywhispercpp')
+    from pywhispercpp.model import Model
+    model = Model(model_name, n_threads=4, redirect_whispercpp_logs_to=None)
+    return model
 
 def transcribe_audio_file_via_whisper(path, *, model="base",show_progress=True):
     """
@@ -10181,7 +10516,7 @@ def transcribe_audio_file_via_whisper(path, *, model="base",show_progress=True):
                     - "base": Good balance (default)
                     - "small": Better accuracy
                     - "medium": Very good accuracy, slower
-                    - "large-v3": Best accuracy, slowest
+                    - "large-v3": Best accuracy, slowest. Not listing "large" becuase "large-v3" is objectively better.
         show_progress: Show loading/processing progress (default: True)
 
     Returns:
@@ -10195,9 +10530,6 @@ def transcribe_audio_file_via_whisper(path, *, model="base",show_progress=True):
         >>> for segment in result:  # Iterate over segments
         ...     print(f"[{segment.time_start:.1f}s] {segment.text}")
     """
-
-    pip_import('pywhispercpp')
-    from pywhispercpp.model import Model
     import sys
     
     output = _Transcription()
@@ -10207,7 +10539,7 @@ def transcribe_audio_file_via_whisper(path, *, model="base",show_progress=True):
 
     # Create model (automatically uses Metal GPU on Apple Silicon)
     # Suppress whisper.cpp debug logs
-    model = Model(model, n_threads=4, redirect_whispercpp_logs_to=None)
+    model = _get_pywhispercpp_model(model)
 
     if show_progress:
         print("Processing audio...", flush=True)
@@ -33927,334 +34259,6 @@ def complex_linear_coeffs_to_euclidean_affine(m,b):
 
 
 
-#region Hashing functions
-
-class HandyHashable:
-    """ A wrapper for any data that makes it hashable """
-    def __init__(self,value):
-        self.value=value
-        self._hash=handy_hash(value)
-    def __hash__(self):
-        return self._hash
-    def __eq__(self,x):
-        if not isinstance(x,HandyHashable):
-            return False
-        try:
-            return self.value==x.value
-        except ValueError:#ValueError: The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()
-            handy_hash(self.value)==handy_hash(x.value)
-    def __repr__(self):
-        return "HandyHashable("+repr(self.value)+")"
-
-class HandyDict(dict):
-    """
-    A dict that can use more than just normal keys by using handyhash
-    This class might get more methods over time.
-    """
-    def __init__(self,*args,**kwargs):
-        return dict.__init__(self,*args,**kwargs)
-    def __setitem__(self, key, value):
-        return dict.__setitem__(self,HandyHashable(key),value)
-    def __delitem__(self, key):
-        return dict.__delitem__(self,HandyHashable(key))
-    def __getitem__(self, key):
-        return dict.__getitem__(self,HandyHashable(key))
-    def __iter__(self):
-        return (key.value for key in dict.__iter__(self))
-    def __contains__(self,x):
-        return dict.__contains__(self,HandyHashable(x))
-
-#TODO: HandySet
-
-def _torch_tensor_to_bytes_for_hashing(tensor):
-    #https://stackoverflow.com/questions/63880081/how-to-convert-a-torch-tensor-into-a-byte-string - not using numpy
-    #This includes the device!
-    import torch 
-    import io
-    buff = io.BytesIO()
-    torch.save(tensor, buff)
-    buff.seek(0)  # <--  this is what you were missing
-    return buff.read()
-
-
-def handy_hash(value):
-    """
-    This function is really handy!
-    Meant for hashing things that can't normally be hashed, like lists and dicts and numpy arrays. It pretends they're immutable.
-    This function can hash all sorts of values. Anything mutable should be frozen, we're not just returning an ID.
-    For example, lists are turned into tuples, and dicts like {"A":"B","C":"D"} are turned into ((""))
-    If it can't hash something, it will just use fallback to hash it. By default, though, fallback is
-    """
-
-    def fallback(value):
-        # fansi_print('Warning: fallback_hash was called on value where repr(value)=='+repr(value),'yellow') #This is annoying
-        return id(value)
-
-    try:return hash(value)
-    except Exception:pass#This is probably going to happen a lot in this function lol (that's kinda the whole point)
-
-    bytes_hasher = get_sha256_hash
-
-    if is_torch_tensor(value): return hash(('TORCH SHA256', bytes_hasher(_torch_tensor_to_bytes_for_hashing(value.detach().cpu()))))
-    if is_numpy_array (value): return hash(('NUMPY SHA256', bytes_hasher(value.tobytes())))
-
-    value_type=type(value)
-
-    try:return hash(('DILL HASH', bytes_hasher(_dill_dumps(value))))#The dill library is capable of hashing a great many things...including numpy arrays! This was added after my original implementation of handy_hash, as dill is able to handle a huuuggggeee amount of different types
-    except Exception:pass
-
-    hasher=__hashers[value_type] if value_type in __hashers else fallback
-    return hasher(value)
-
-#region Type-specific hashers
-__secret_number=71852436691752251090#Used for hashing things. Don't use this value anywhere! It's not generated dynamically (aka it doesnt use randint) because we want consistent hash values across python processes.
-__hashers={}#Used by handy_hash
-
-
-def _set_hash(x):
-    assert isinstance(x,set)
-    return hash((__secret_number,frozenset(x)))
-__hashers[set]=_set_hash
-
-def _dict_hash(x,value_hasher=handy_hash):
-    assert isinstance(x,dict)
-    set_to_hash=set()
-    for key,value in x.items():
-        set_to_hash.add(hash((__secret_number,'dict_hash_pair',key,value_hasher(value))))
-    return hash((__secret_number,frozenset(set_to_hash)))
-__hashers[dict]=_dict_hash
-
-def _list_hash(x,value_hasher=handy_hash):
-    assert isinstance(x,list)
-    return hash((__secret_number,'_list_hash',tuple(map(value_hasher,x))))
-__hashers[list]=_list_hash
-
-def _tuple_hash(x,value_hasher=handy_hash):
-    assert isinstance(x,tuple)
-    return hash((__secret_number,'_tuple_hash',tuple(map(value_hasher,x))))
-__hashers[tuple]=_tuple_hash
-
-def _slice_hash(x,value_hasher=handy_hash):
-    assert isinstance(x,slice)
-    return hash((__secret_number,'_slice_hash',(value_hasher(x.start),value_hasher(x.step),value_hasher(x.stop))))
-__hashers[slice]=_slice_hash
-
-#endregion
-
-
-def args_hash(function,*args,**kwargs):
-    """
-    Return the hashed input that would be passed to 'function', using handy_hash. This function is used for memoizers. function must be provided for context so that arguments passed that can be passed as either kwargs or args both return the same hash.
-    
-    Enhanced Documentation:
-    
-    Creates a deterministic hash of function arguments for memoization purposes. 
-    This function intelligently normalizes arguments by converting positional args
-    to keyword args when possible, ensuring the same hash for equivalent calls.
-    
-    Args:
-        function (callable): The function whose arguments are being hashed.
-                            Must be callable to determine argument names.
-        *args: Positional arguments to hash
-        **kwargs: Keyword arguments to hash
-    
-    Returns:
-        int: A deterministic hash value representing the argument signature.
-             Same arguments in different forms (args vs kwargs) produce same hash.
-    
-    Examples:
-        >>> def test_func(a, b, c=3):
-        ...     return a + b + c
-        >>> hash1 = args_hash(test_func, 1, 2, c=3)
-        >>> hash2 = args_hash(test_func, 1, b=2, c=3) 
-        >>> hash1 == hash2  # Same hash for equivalent calls
-        True
-        >>> isinstance(hash1, int)
-        True
-    
-    Related Functions:
-        - memoized(): Uses args_hash for function memoization
-        - handy_hash(): Used internally for hashing individual arguments
-    
-    Usage Patterns:
-        - Primary use is in memoization decorators and cached functions
-        - Handles unhashable arguments by converting them with handy_hash
-        - Normalizes argument representation for consistent caching
-    
-    Tags: hashing, memoization, caching, function-arguments, utilities
-    """
-    assert callable(function),'Cant hash the inputs of function because function isnt callable and therefore doesnt receive arguments. repr(function)=='+repr(function)
-    args=list(args)
-    try:
-        #Whenever we can, we take things from args and put them in kwargs instead...
-        from inspect import getfullargspec
-        arg_names=list(getfullargspec(function).args)#This often doesn't work, particularly for built-in functions. TODO this is possible to fix, given that rp can complete argument names of even opencv functions. But for the most part, memoization is used in loops where the function is called with the same signature over and over again, so I'm going to push off improving this till later.
-    except Exception:
-        #...but it's not a necessity, I GUESS...(if the function is always called the same way)
-        arg_names=[]
-        pass
-    while arg_names and args:
-        #Take things from args and put them in kwargs instead, for as many args as we know the names of...
-        kwargs[arg_names.pop(0)]=args.pop(0)
-    hashes=set()
-    for index,arg in enumerate(args):
-        hashes.add(hash(('arg',index,handy_hash(arg))))
-    for kw   ,arg in kwargs.items() :
-        hashes.add(hash(('kwarg',kw ,handy_hash(arg))))
-    return hash(frozenset(hashes))
-
-
-#def memoized(function):
-#    #TODO: when trying to @memoize fibbonacci, and calling fibbonacci(4000), python crashes with SIGABRT. I have no idea why. This function really doesn't use any non-vanilla python code.
-#    #Uses args_hash to hash function inputs...
-#    #This is meant to be a permanent cache (as opposed to a LRU aka 'Least Recently Used' cache, which deletes cached values if they haven't been used in a while)
-#    #If you wish to temporarily memoize a function (let's call if F), you can create a new function cached(F), and put it in a scope that will run out eventually so that there are no memory leaks.
-#    #Some things can't be hashed by default, I.E. lists etc. But all lists can be converted to tuples, which CAN be hashed. This is where hashers come in. Hashers are meant to help you memoize functions that might have non-hashable arguments, such as numpy arrays.
-#    cache=dict()
-#    assert callable(function),'You can\'t memoize something that isn\'t a function (you tried to memoize '+repr(function)+', which isn\'t callable)'
-#    def memoized_function(*args,**kwargs):
-#        key=args_hash(function,*args,**kwargs)
-#        if not key in cache:
-#            cache[key]=function(*args,**kwargs)
-#        return cache[key]
-#    memoized_function.__name__+=function.__name__
-#    memoized_function.original_function=function #So we can inspect it in rp
-#    memoized_function.cache=cache #So we can inspect it, or even clear it
-#    return memoized_function
-
-def memoized(function):
-    """
-    TODO: Make this function smarter - use the same arg techniques as in gather_args, so even when we give overrides to default args it still caches properly. Same for cachedinstances
-    TODO: when trying to @memoize fibbonacci, and calling fibbonacci(4000), python crashes with SIGABRT. I have no idea why. This function really doesn't use any non-vanilla python code.
-    Uses args_hash to hash function inputs...
-    This is meant to be a permanent cache (as opposed to a LRU aka 'Least Recently Used' cache, which deletes cached values if they haven't been used in a while)
-    If you wish to temporarily memoize a function (let's call if F), you can create a new function cached(F), and put it in a scope that will run out eventually so that there are no memory leaks.
-    Some things can't be hashed by default, I.E. lists etc. But all lists can be converted to tuples, which CAN be hashed. This is where hashers come in. Hashers are meant to help you memoize functions that might have non-hashable arguments, such as numpy arrays.
-    """
-    import functools
-    cache = dict()
-    assert callable(function), 'You can\'t memoize something that isn\'t a function (you tried to memoize '+repr(function)+', which isn\'t callable)'
-
-    @functools.wraps(function)
-    def memoized_function(*args, **kwargs):
-        key = args_hash(function, *args, **kwargs)
-        if key not in cache:
-            cache[key] = function(*args, **kwargs)
-        return cache[key]
-
-    memoized_function.original_function = function
-    memoized_function.cache = cache
-    return memoized_function
-
-def memoized_lru(function_or_maxsize=None, *, maxsize=128):
-    """
-    LRU (Least Recently Used) version of memoized. Evicts least recently used items when cache reaches maxsize.
-    Uses args_hash to handle complex arguments like the original memoized function so it can handle nearly any python object, unlike functools.lru_cache
-    
-    Example:
-        >>> @memoized_lru(2)  # or @memoized_lru(maxsize=2)
-        ... def expensive_func(x):
-        ...     return x ** 2
-        >>> expensive_func(1); print(expensive_func.cache)
-        OrderedDict({...})
-        >>> expensive_func(2); print(expensive_func.cache)  
-        OrderedDict({...: 1, ...: 4})
-        >>> expensive_func(3); print(expensive_func.cache)  # evicts 1
-        OrderedDict({...: 4, ...: 9})
-        >>> expensive_func.maxsize
-        2
-        >>> expensive_func.maxsize = 10  # Can be changed dynamically
-        >>> expensive_func.maxsize
-        10
-
-    Example:
-        >>> @memoized_lru(maxsize=3)
-        ... def expensive_func(x):
-        ...     return x**2
-        ... 
-        ... for arg in [
-        ...     1,2,3,                     #Fill the cache
-        ...     as_numpy_array([1, 2, 3]), #It can hash most python objects
-        ...     as_numpy_array([1, 2, 3]), #No cache change
-        ...     3,                         #Bring 3**2 to the front
-        ...     4,                         #4th element: starts deleting items (replaces 2**2)
-        ... ]:
-        ...     expensive_func(arg)
-        ...     print(arg, '\t', expensive_func.cache.values())
-        ... 
-        1       odict_values([1])                      
-        2       odict_values([1, 4])                   
-        3       odict_values([1, 4, 9])                
-        [1 2 3] odict_values([4, 9, array([1, 4, 9])]) 
-        [1 2 3] odict_values([4, 9, array([1, 4, 9])]) 
-        3       odict_values([4, array([1, 4, 9]), 9]) 
-        4       odict_values([array([1, 4, 9]), 9, 16])
-    """
-    # Handle @memoized_lru(123) as shorthand for maxsize=123
-    if isinstance(function_or_maxsize, int):
-        maxsize = function_or_maxsize
-        function_or_maxsize = None
-    
-    def decorator(func):
-        import functools
-        from collections import OrderedDict
-        assert callable(func), "You can't memoize something that isn't a function (you tried to memoize "+repr(func)+", which isn't callable)"
-        
-        cache = OrderedDict()
-        
-        @functools.wraps(func)
-        def memoized_function(*args, **kwargs):
-            key = args_hash(func, *args, **kwargs)
-            if key in cache:
-                cache.move_to_end(key)
-                return cache[key]
-            result = func(*args, **kwargs)
-            cache[key] = result
-            if len(cache) > memoized_function.maxsize:
-                cache.popitem(last=False)
-            return result
-        
-        memoized_function.original_function = func
-        memoized_function.cache = cache
-        memoized_function.maxsize = maxsize
-        return memoized_function
-    
-    if function_or_maxsize is None:
-        return decorator
-    else:
-        return decorator(function_or_maxsize)
-
-def memoized_property(method):
-    """
-    This method is meant to be used as a substitute for @property
-    Often, when using @property you'll see a method like this:
-    
-       @property
-       def thing(self):
-           try:
-               return self._thing
-           except Exception:
-               self.thing=fancy_calculations()
-    
-               return self._thing
-    This function takes the hassle of creating a private variable away, and automatically creates the self._thing
-    The completely equivalent function, using @memoized_property, is shown below
-        
-       @memoized_property
-       def thing(self):
-           return fancy_calculations()
-    
-    """
-    assert callable(method)
-    property_name='_'+method.__name__
-    def memoized_property(self):
-        if not hasattr(self,property_name):
-            setattr(self,property_name,method(self))
-        return getattr(self,property_name)
-    memoized_property.__name__+=method.__name__
-    memoized_property=property(memoized_property)
-    return memoized_property
-
 def _omni_load_animated_image(path):
     """ gif and webp and png can be either a video or image depending on context... """
     video = load_video(path, show_progress=False) #A non-animated gif will return a video with a single frame
@@ -35739,11 +35743,13 @@ def as_rgb_float_colors(colors,clamp=True):
 _ryan_fonts = {
     "R:Futura"      : "https://github.com/Eyeline-Research/Go-with-the-Flow/raw/refs/heads/website/fonts/Futura.ttc",
     ###
-    "R:Helvetica"   : "https://github.com/RyannDaGreat/Images/blob/master/fonts/Helvetica.ttc", 
-    "R:Monaco"      : "https://github.com/RyannDaGreat/Images/blob/master/fonts/Monaco.ttf", 
-    "R:Menlo"       : "https://github.com/RyannDaGreat/Images/blob/master/fonts/Menlo.ttc", 
-    "R:Optima"      : "https://github.com/RyannDaGreat/Images/blob/master/fonts/Optima.ttc", 
-    "R:Palatino"    : "https://github.com/RyannDaGreat/Images/blob/master/fonts/Palatino.ttc", 
+    "R:Helvetica"    : "https://raw.githubusercontent.com/RyannDaGreat/Images/master/fonts/Helvetica.ttc",
+    "R:Monaco"       : "https://raw.githubusercontent.com/RyannDaGreat/Images/master/fonts/Monaco.ttf",
+    "R:Menlo"        : "https://raw.githubusercontent.com/RyannDaGreat/Images/master/fonts/Menlo.ttc",
+    "R:Optima"       : "https://raw.githubusercontent.com/RyannDaGreat/Images/master/fonts/Optima.ttc",
+    "R:Palatino"     : "https://raw.githubusercontent.com/RyannDaGreat/Images/master/fonts/Palatino.ttc",
+    "R:SevenSegment" : "https://raw.githubusercontent.com/RyannDaGreat/Images/master/fonts/SevenSegment.ttf",
+    "R:DSEG7"        : "https://raw.githubusercontent.com/RyannDaGreat/Images/master/fonts/DSEG/DSEG7Classic-Regular.ttf",
 }
 
 @memoized
@@ -53219,7 +53225,7 @@ def _extract_archive_via_pyunpack(archive_path, folder_path):
     """
 
     pip_import('pyunpack')
-    pip_import('patool')
+    pip_import('patoolib')
 
     filetype=get_file_extension(archive_path)
     supported_filetypes='zip jar rar tar gz 7z deb ace alz a arc arj bz2 cab Z cpio dms lrz lha lzh lz lzma lzo rpm rz xz zoo'.lower().split()
@@ -58227,15 +58233,111 @@ def _run_openai_llm(message,model,api_key=None):
     
     return chat_completion.choices[0].message.content
 
-def run_llm_api(message,model='gpt-4o-mini',api_key=None):
-    """ Allows you to query different LLM api's """
-    assert isinstance(message,str),type(message)
-    assert isinstance(model,str),type(model)
-    
-    if model in ['gpt-4o','gpt-4','gpt-4o-mini','gpt-4-turbo']:
-        return _run_openai_llm(message,model,api_key)
+def _run_ollama_llm(message, model):
+    """
+    Run a query against a local Ollama model.
+
+    Handles server startup, readiness wait, and model pulling automatically.
+
+    Args:
+        message: The prompt to send to the model
+        model: Ollama model name (e.g., 'qwen2.5:7b', 'mistral:7b')
+
+    Returns:
+        str: The model's response text
+
+    Raises:
+        RuntimeError: If Ollama server fails to start within 30 seconds
+    """
+    _ensure_ollama_server_running()
+
+    import ollama
+
+    # Wait for server to be ready (up to 30 seconds)
+    for _ in range(30):
+        try:
+            ollama.list()
+            break
+        except ollama.RequestError:
+            sleep(1)
     else:
-        raise ValueError('Model not supported: '+str(model))
+        raise RuntimeError("Ollama server failed to start after 30 seconds")
+
+    # Pull model if not available
+    try:
+        ollama.show(model)
+    except ollama.ResponseError:
+        fansi_print(" >> PULLING OLLAMA MODEL: %s << " % repr(model), "italic bold black on yellow")
+        current_digest = None
+        display_progress = None
+        for progress in ollama.pull(model, stream=True):
+            status = progress.get('status', '')
+            total = progress.get('total', 0)
+            completed = progress.get('completed', 0)
+            digest = progress.get('digest', '')
+
+            # Each layer has its own digest - reset progress tracker for each new layer
+            if digest != current_digest:
+                current_digest = digest
+                if total:
+                    display_progress = _eta_bytes(total, title="    " + status, min_interval=1/30, completion_verb="Pulled")
+                else:
+                    display_progress = None
+                    print("    " + status)
+
+            if display_progress and total:
+                display_progress(completed)
+
+    response = ollama.chat(
+        model=model,
+        messages=[{'role': 'user', 'content': message}],
+    )
+    return response['message']['content']
+
+def run_llm_api(message, model='gpt-4o-mini', api_key=None):
+    """
+    Query different LLM APIs.
+
+    Supports OpenAI models and local Ollama models.
+    For Ollama, prefix the model name with 'OLLAMA:' (e.g., 'OLLAMA:qwen2.5:7b').
+    Ollama server will be started automatically if not running.
+
+    Args:
+        message: The prompt string to send to the model
+        model: Model identifier. OpenAI models: 'gpt-4o', 'gpt-4', 'gpt-4o-mini',
+               'gpt-4-turbo'. For Ollama: 'OLLAMA:<model_name>'
+        api_key: OpenAI API key (optional, uses env var if not provided)
+
+    Returns:
+        str: The model's response text
+
+    Raises:
+        ValueError: If model is not supported
+        RuntimeError: If Ollama server fails to start
+
+    Recommended Ollama models for macOS (7B class, efficient):
+        - qwen2.5:7b      Best overall at 7B size, great for coding/math
+        - mistral:7b      Fast general-purpose workhorse
+        - llama3.1:8b     Strong general performance, 128K context
+        - gemma:7b        Good for conversation, Flash Attention enabled
+        - codellama:7b    Specialized for coding tasks
+
+    Examples:
+        >>> run_llm_api("What is 2+2?", model="OLLAMA:qwen2.5:7b")  # doctest: +SKIP
+        '2 + 2 equals 4.'
+        >>> run_llm_api("Hello", model="gpt-4o-mini")  # doctest: +SKIP
+        'Hello! How can I assist you today?'
+    """
+    assert isinstance(message, str), type(message)
+    assert isinstance(model, str), type(model)
+
+    if model.upper().startswith('OLLAMA:'):
+        ollama_model = model[7:]  # Strip 'OLLAMA:' prefix
+        return _run_ollama_llm(message, ollama_model)
+    elif model in ['gpt-4o', 'gpt-4', 'gpt-4o-mini', 'gpt-4-turbo']:
+        return _run_openai_llm(message, model, api_key)
+    else:
+        raise ValueError('Model not supported: ' + str(model) + '. For Ollama models, use OLLAMA:<model_name> prefix.')
 
 
 def minify_python_code(code:str):
@@ -65874,6 +65976,7 @@ known_pypi_module_package_names={
     'colors': 'ansicolors',
     'compose': 'docker-compose',
     'tree_sitter': 'tree-sitter',
+    'patoolib' : 'patool',
     'tree_sitter_python': 'tree-sitter-python',
     # 'cv2': 'opencv-python',
     # 'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? (Update: so far, so good!)
@@ -66071,6 +66174,7 @@ class _rp_persistent_set:
 _pip_import_blacklist=_rp_persistent_set()
 _pip_import_lock = threading.Lock()
 _pip_import_autoyes=False #This will always be a private variable, but it might be exposed via a function
+_pip_import_loud=False
 def pip_import(module_name,package_name=None,*,auto_yes=False):
     """
     TODO: Make this function only request sudo if we need it. Otherwise it's a nuisance.
@@ -66122,6 +66226,9 @@ def pip_import(module_name,package_name=None,*,auto_yes=False):
 
     Tags: imports, dependencies, auto-install, lazy-loading, core-utility, package-management
     """
+
+    if _pip_import_loud:
+        fansi_print("pip_import("+repr(module_name)+','+repr(package_name)+")",'cyan')
 
     assert isinstance(module_name,str),'pip_import: error: module_name must be a string, but got type '+repr(type(module_name))#Probably better done with raise typerror but meh whatever
 
