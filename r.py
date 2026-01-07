@@ -10186,7 +10186,8 @@ def play_sound_file(path):
             play_sound_from_samples(samples,samplerate)
 
         elif currently_running_mac():
-            play_sound_file_via_afplay(path)
+            play_sound_file_via_pygame(path)
+            # play_sound_file_via_afplay(path)
             
         elif currently_running_windows():
             pip_import('playsound')
@@ -54818,6 +54819,61 @@ def ntfy_send(message:str, topic='rp'):
     if not response.status_code==200:
         raise IOError(response.status_code)
 
+MACOS_NOTIFICATION_SOUNDS = (
+    'Basso', 'Blow', 'Bottle', 'Frog', 'Funk', 'Glass',
+    'Hero', 'Morse', 'Ping', 'Pop', 'Purr', 'Sosumi', 'Submarine', 'Tink',
+)
+
+def macos_notify(message, title='RP', sound='Glass'):
+    """
+    Display a macOS notification with optional sound.
+
+    Uses osascript to trigger native macOS notifications.
+    Requires macOS - will raise AssertionError on other platforms.
+
+    Parameters:
+        message: The notification body text
+        title: The notification title (default: 'RP')
+        sound: The sound to play (default: 'Glass'). Can be a name from
+               MACOS_NOTIFICATION_SOUNDS (Basso, Blow, Bottle, Frog, Funk,
+               Glass, Hero, Morse, Ping, Pop, Purr, Sosumi, Submarine, Tink),
+               a path to a custom .aiff sound file, or None/'' for silent.
+
+    Examples:
+        >>> macos_notify('Build complete!')
+        >>> macos_notify('Tests passed', title='pytest', sound='Hero')
+        >>> macos_notify('Silent alert', sound='')
+        >>> macos_notify('Custom sound', sound='/System/Library/Sounds/Blow.aiff')
+    """
+    from rp import currently_running_mac
+    assert currently_running_mac(), 'macos_notify only works on macOS'
+
+    assert sound is None or sound == "" or isinstance(sound, str), (
+        "rp.macos_notify: sound argument must be a string, None, or empty string - usually choose from "
+        + str(MACOS_NOTIFICATION_SOUNDS)
+        + " -- but we got sound="
+        + repr(sound)[:100]
+    )
+
+    # Escape quotes in message and title for AppleScript
+    message = message.replace('"', '\\"')
+    title = title.replace('"', '\\"')
+
+    if sound:
+        sound = sound.replace('"', '\\"')
+        script = 'display notification "' + message + '" with title "' + title + '" sound name "' + sound + '"'
+    else:
+        script = 'display notification "' + message + '" with title "' + title + '"'
+
+    import subprocess
+    command = ['osascript', '-e', script]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            "rp.macos_notify: osascript failed on command %s: " % repr(shlex.join(command))
+            + result.stderr
+        )
+
 
 def get_computer_name():
     """
@@ -58279,7 +58335,7 @@ def _run_ollama_llm(message, model):
         try:
             ollama.list()
             break
-        except ollama.RequestError:
+        except (ConnectionError, ollama.RequestError):
             sleep(1)
     else:
         raise RuntimeError("Ollama server failed to start after 30 seconds")
