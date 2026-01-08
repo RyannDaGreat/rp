@@ -11,27 +11,35 @@ import rp
 
 from .convert_pptx_videos_to_gifs import convert_pptx_videos_to_gifs
 from .google_slides_upload import upload_and_merge_pptx
+from .convert_tmux import convert_tmux
+from .media_to_slides import cli as media_to_slides_cli
 
 
 def print_main_help():
     print("""PowerPoint tools for video-to-GIF conversion and Google Slides upload.
 
 Commands:
-    convert   Convert PowerPoint videos to GIFs
-    upload    Upload PPTX files to Google Slides and merge
+    convert          Convert PowerPoint videos to GIFs
+    convert_tmux     Parallel convert using tmux (faster for multi-part)
+    upload           Upload PPTX files to Google Slides and merge
+    media_to_slides  Upload media (videos/images) to Google Slides
 
 Examples:
     rp run ppt convert input.pptx
     rp run ppt convert input.pptx --part-size 50MB
     rp run ppt convert input.pptx --num-parts 3 --upload
+    rp run ppt convert_tmux input.pptx --num-parts 3
     rp run ppt upload output_folder/
     rp run ppt upload part1.pptx part2.pptx part3.pptx
+    rp run ppt media_to_slides video.mp4 image.png
+    rp run ppt media_to_slides folder/ --captions --title "My Gallery"
 
 Run 'rp run ppt <command>' for command-specific help.""")
 
 
 from .convert_pptx_videos_to_gifs import HELP as CONVERT_HELP
 from .google_slides_upload import HELP as UPLOAD_HELP
+from .convert_tmux import HELP as CONVERT_TMUX_HELP
 
 
 def cmd_convert(
@@ -121,6 +129,48 @@ def main():
             i += 1
         cmd_convert(**kwargs)
 
+    elif cmd == 'convert_tmux':
+        if not rest or rest[0] in ('-h', '--help'):
+            print(CONVERT_TMUX_HELP)
+            return
+        # Parse args for convert-tmux
+        kwargs = {
+            'num_parts': 3,
+            'target_size': '100MB',
+            'fps': 10,
+            'dpi_iters': 5,
+            'dither': True,
+            'output_folder': None,
+        }
+        input_pptx = None
+        i = 0
+        while i < len(rest):
+            arg = rest[i]
+            if arg.startswith('--'):
+                key = arg[2:].replace('-', '_')
+                if key == 'no_dither':
+                    kwargs['dither'] = False
+                elif key == 'dither':
+                    kwargs['dither'] = True
+                elif i + 1 < len(rest):
+                    val = rest[i + 1]
+                    if key == 'part_size':
+                        key = 'target_size'
+                    if key in ('fps', 'dpi_iters', 'num_parts'):
+                        kwargs[key] = int(val)
+                    elif key == 'output':
+                        kwargs['output_folder'] = val
+                    else:
+                        kwargs[key] = val
+                    i += 1
+            elif input_pptx is None:
+                input_pptx = arg
+            i += 1
+        if input_pptx is None:
+            print(CONVERT_TMUX_HELP)
+            return
+        convert_tmux(input_pptx, **kwargs)
+
     elif cmd == 'upload':
         if not rest or rest[0] in ('-h', '--help'):
             print(UPLOAD_HELP)
@@ -142,6 +192,13 @@ def main():
                 paths.append(arg)
             i += 1
         cmd_upload(*paths, folder_name=folder_name, merged_name=merged_name)
+
+    elif cmd == 'media_to_slides':
+        # Use fire - it handles all the arg parsing
+        rp.pip_import('fire')
+        import fire
+        sys.argv = ['media_to_slides'] + rest
+        fire.Fire(media_to_slides_cli)
 
     else:
         print(f"Unknown command: {cmd}")

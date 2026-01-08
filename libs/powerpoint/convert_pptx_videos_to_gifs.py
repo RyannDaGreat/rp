@@ -331,11 +331,12 @@ def convert_pptx_videos_to_gifs(
                 folder_name = rp.get_file_name(output_folder)
                 merged_name = rp.get_file_name(input_pptx, include_file_extension=False)
                 import sys
+                import shlex
                 cmd = '%s -m rp.libs.powerpoint upload %s --folder-name %s --merged-name %s' % (
-                    rp.shlex_quote(sys.executable),
-                    rp.shlex_quote(output_folder),
-                    rp.shlex_quote(folder_name),
-                    rp.shlex_quote(merged_name),
+                    shlex.quote(sys.executable),
+                    shlex.quote(output_folder),
+                    shlex.quote(folder_name),
+                    shlex.quote(merged_name),
                 )
                 rp.fansi_print("Running: " + cmd, 'cyan')
                 rp.r._run_sys_command(cmd)
