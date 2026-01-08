@@ -187,10 +187,12 @@ def run_orchestrator(
     from googleapiclient.discovery import build
     drive_service = build('drive', 'v3', credentials=creds)
 
-    # Create folder
-    folder_id = gsu.create_folder(drive_service, folder_name)
+    # Create folder under rp/generated_slides/
+    parent_id = gsu.get_rp_slides_folder(drive_service)
+    folder_id = gsu.create_folder(drive_service, folder_name, parent_id)
     folder_url = f"https://drive.google.com/drive/folders/{folder_id}"
-    rp.fansi_print(f"  Folder: {folder_url}", 'white')
+    rp.fansi_print(f"  Folder: rp/generated_slides/{folder_name}", 'white')
+    rp.fansi_print(f"  {folder_url}", 'white')
 
     # Move parts to folder
     for r in results:

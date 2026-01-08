@@ -89,6 +89,22 @@ def get_credentials(token_path: str = None) -> Credentials:
     return creds
 
 
+def get_or_create_folder(service, folder_name: str, parent_id: str = None) -> str:
+    """Get existing folder by name or create it. Returns folder ID."""
+    query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+    if parent_id:
+        query += f" and '{parent_id}' in parents"
+    else:
+        query += " and 'root' in parents"
+
+    results = service.files().list(q=query, fields='files(id)').execute()
+    files = results.get('files', [])
+    if files:
+        return files[0]['id']
+
+    return create_folder(service, folder_name, parent_id)
+
+
 def create_folder(service, folder_name: str, parent_id: str = None) -> str:
     """Create a folder on Google Drive. Returns folder ID."""
     metadata = {
@@ -100,6 +116,12 @@ def create_folder(service, folder_name: str, parent_id: str = None) -> str:
 
     folder = service.files().create(body=metadata, fields='id').execute()
     return folder.get('id')
+
+
+def get_rp_slides_folder(service) -> str:
+    """Get or create the rp/generated_slides folder hierarchy. Returns folder ID."""
+    rp_folder = get_or_create_folder(service, 'rp')
+    return get_or_create_folder(service, 'generated_slides', rp_folder)
 
 
 def make_public(service, file_id: str) -> str:
@@ -332,8 +354,10 @@ def upload_and_merge_pptx(
     creds = get_credentials()
     drive_service = build('drive', 'v3', credentials=creds)
 
-    # Create folder
-    rp.fansi_print(f"\nCreating folder: {folder_name}", 'cyan')
+    # Create folder under rp/generated_slides/
+    if parent_folder_id is None:
+        parent_folder_id = get_rp_slides_folder(drive_service)
+    rp.fansi_print(f"\nCreating folder: rp/generated_slides/{folder_name}", 'cyan')
     folder_id = create_folder(drive_service, folder_name, parent_folder_id)
     folder_url = f"https://drive.google.com/drive/folders/{folder_id}"
     rp.fansi_print(f"  {folder_url}", 'white')

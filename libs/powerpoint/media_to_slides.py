@@ -36,6 +36,7 @@ try:
         get_credentials,
         create_folder,
         make_public,
+        get_rp_slides_folder,
     )
 except ImportError:
     from google_slides_upload import (
@@ -45,6 +46,7 @@ except ImportError:
         get_credentials,
         create_folder,
         make_public,
+        get_rp_slides_folder,
     )
 
 
@@ -704,8 +706,9 @@ def media_to_slides(
     drive_service = build("drive", "v3", credentials=creds)
     slides_service = build("slides", "v1", credentials=creds)
 
-    rp.fansi_print(f"\nCreating folder: {folder_name}", "cyan")
-    folder_id = create_folder(drive_service, folder_name)
+    rp.fansi_print(f"\nCreating folder: rp/generated_slides/{folder_name}", "cyan")
+    parent_id = get_rp_slides_folder(drive_service)
+    folder_id = create_folder(drive_service, folder_name, parent_id)
     folder_url = FOLDER_URL.format(folder_id)
     rp.fansi_print(f"  {folder_url}", "white")
 
