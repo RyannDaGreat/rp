@@ -26669,6 +26669,8 @@ def pseudo_terminal(
         CJ   ans.split(",") if isinstance(ans,str) else ",".join(map(str,ans)) 
         SJ   ans.split(" ") if isinstance(ans,str) else " ".join(map(str,ans)) 
         SPAJ ans.split(" ") if isinstance(ans,str) else " ".join(map(str,ans)) 
+        ZJ   $shlex.join(map(str,ans)) if not isinstance(ans,str) else $shlex.split(ans)
+        BJ   $shlex.join(map(str,ans)) if not isinstance(ans,str) else $shlex.split(ans)
 
         SGC $select_git_commit()
         DUNKA $pip_import('dunk');$os.system(f"git diff {ans} | dunk")
