@@ -63,7 +63,12 @@ def get_credentials(token_path: str = None) -> Credentials:
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(CLIENT_JSON_FILE, SCOPES)
-            creds = flow.run_local_server(port=0)
+            # Try local server first (browser), fall back to console (headless)
+            try:
+                creds = flow.run_local_server(port=0)
+            except Exception:
+                # Headless: prints URL, user pastes auth code
+                creds = flow.run_console()
 
         with open(token_path, 'w') as token:
             token.write(creds.to_json())
