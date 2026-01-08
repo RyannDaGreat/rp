@@ -97,7 +97,14 @@ except ImportError:
     except Exception as e: print("r.py import error: ",e)
 
 try: from rp.libs.pw_crypt import encrypt_bytes_with_password, decrypt_bytes_with_password
-except Exception as e: print("r.py import error: ",e)
+except Exception as e: 
+    def encrypt_bytes_with_password(*args, **kwargs):
+        pip_import('msgpack')
+        return encrypt_bytes_with_password(*args, **kwargs)
+    def decrypt_bytes_with_password(*args, **kwargs):
+        pip_import('msgpack')
+        return decrypt_bytes_with_password(*args, **kwargs)
+
 
 #SETTINGS
 _fast_pterm_history_size = 1024 * 1024
@@ -38843,6 +38850,265 @@ def r_transform_inverse(path):
     path=np.exp(path)
     path=circ_diff_inverse(path)
     return path
+
+def get_closest_subset_sum_indices(values, target):
+    """
+    Finds indices of the subset summing closest to 'target'.
+    Returns: Set of indices.
+
+    FUTURE TODO: Replace this with a more efficient implementation, this is O(2^n) time/space (it can be better but will always be np-complete)
+    """
+    # Key: reachable_sum
+    # Value: (parent_sum, index_of_item_added)
+    # Base case: Sum 0 reached via no item
+    reachable = {0: (None, None)}
+
+    for i, val in enumerate(values):
+        # Snapshot current keys to iterate safely
+        current_sums = list(reachable.keys())
+
+        for s in current_sums:
+            new_sum = s + val
+            if new_sum not in reachable:
+                #This is a necessary check for correctness for some reason...idk why...
+                reachable[new_sum] = (s, i)
+
+    # 1. Find best sum
+    best_sum = min(reachable.keys(), key=lambda x: abs(x - target))
+
+    # 2. Backtrack to recover indices
+    indices = set()
+    curr = best_sum
+
+    while curr != 0:
+        parent, idx = reachable[curr]
+        if idx is None:  # Safety check for base case
+            break
+        indices.add(idx)
+        curr = parent
+
+    return indices
+
+
+def get_partitions_with_closest_product_ratio(values, ratio):
+    """
+    Splits numbers into two lists with product ratio ~ R.
+    Returns two lists of indices P1 and P2, such that
+
+        product(gather(values,P1))
+        ────────────────────────── ≈ ratio
+        product(gather(values,P2))
+
+    The closeness is measured in log-space
+    """
+    if not values:
+        return [], []
+
+    if ratio <= 0: raise ValueError("get_partitions_with_closest_product_ratio: " "ratio must be > 0, got ratio=" + str(ratio))
+
+    bad_values = [v for v in values if v <= 0]
+    if bad_values: raise ValueError("rp.get_partitions_with_closest_product_ratio: " "all values must be > 0, got invalid values=" + str(bad_values) + ", values=" + str(values))
+
+    # 1. Convert to logs (Product -> Sum)
+    logs = [math.log(n) for n in values]
+
+    # 2. Calculate target sum
+    total_log_sum = sum(logs)
+    target_log = (total_log_sum + math.log(ratio)) / 2
+
+    # 3. Solve (Delegated to the efficient solver)
+    partition_1_indices = get_closest_subset_sum_indices(logs, target_log)
+    partition_2_indices = set(range(len(values))) - partition_1_indices
+
+    return partition_1_indices, partition_2_indices
+
+@memoized
+def get_best_tiling_dimensions(
+    num_elements: int,
+    target_aspect_ratio: float = 1.0,
+    aspect_tolerance: float = 0.5,
+) -> (int, int):
+    """
+    Choose a grid height and width for laying out `num_elements` items.
+
+    Aspect ratio definition:
+        aspect_ratio = height / width
+
+    This function always returns values in the order:
+        (height, width)
+
+    Parameters
+    ----------
+    num_elements:
+        Number of items to place. Must be an integer >= 1.
+
+    target_aspect_ratio:
+        Desired grid aspect ratio defined as height / width.
+
+        Interpretation:
+        - 1.0 means a square grid (height approximately equals width).
+        - < 1.0 means a wide grid (shorter height, larger width).
+          Example: 0.5 means the height is half the width.
+        - > 1.0 means a tall grid (larger height, smaller width).
+          Example: 2.0 means the height is twice the width.
+
+    aspect_tolerance:
+        A value between 0 and 1 controlling snapping to perfect tilings.
+
+        Meaning:
+        - 1.0 means always snap to the best perfect tiling
+          (height * width == num_elements), even if the aspect match is poor.
+        - 0.0 means never snap; always choose the grid whose aspect ratio
+          best matches the target, even if it has empty cells.
+        - Higher aspect_tolerance means more snapping to perfect tilings,
+          because we can toleate larger deviations from our desired aspect ratio
+
+    Returns
+    -------
+    (height, width):
+        Integers representing the chosen grid dimensions, in the order
+        height first, then width.
+
+    Notes
+    -----
+    - A "perfect tiling" means height * width == num_elements.
+    - A "remainder grid" allows height * width > num_elements, producing
+      empty cells in the last row.
+    - Aspect closeness is measured in log-space using:
+        abs(log((height / width) / target_aspect_ratio))
+      which treats wide and tall distortions symmetrically.
+
+
+      EXAMPLE: Printing results of different tolerances for a target aspect ratio of 1
+
+    >>> for n in range(50):
+    ...     tolerances=[0,.1,.2,.3,.4,.5,.6,.7,.8,.9,1]
+    ...     ratios=[]
+    ...     for tolerance in tolerances:
+    ...         h,w = get_best_tiling_dimensions(n,aspect_tolerance=tolerance)
+    ...         h=str(h).rjust(2)
+    ...         w=str(w).ljust(2)
+    ...         ratio=h+'×'+w
+    ...         ratios.append(ratio)
+    ...         
+    ...     string=f'{n}  \t {"      ".join(ratios)}'
+    ...     print(string)
+    ...  
+    ... #NUM  TOL= 1         .9         .8         .7         .6         .5         .4         .3         .2         .1         .0
+    ... ##    ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+    ... #0    │  0×0        0×0        0×0        0×0        0×0        0×0        0×0        0×0        0×0        0×0        0×0
+    ... #1    │  1×1        1×1        1×1        1×1        1×1        1×1        1×1        1×1        1×1        1×1        1×1
+    ... #2    │  1×2        1×2        1×2        1×2        1×2        1×2        1×2        1×2        1×2        1×2        1×2
+    ... #3    │  1×3        2×2        2×2        2×2        2×2        2×2        2×2        2×2        2×2        2×2        2×2
+    ... #4    │  2×2        2×2        2×2        2×2        2×2        2×2        2×2        2×2        2×2        2×2        2×2
+    ... #5    │  1×5        3×2        3×2        3×2        3×2        3×2        3×2        3×2        3×2        3×2        3×2
+    ... #6    │  3×2        3×2        3×2        3×2        3×2        3×2        3×2        3×2        3×2        3×2        3×2
+    ... #7    │  7×1        3×3        3×3        3×3        3×3        3×3        3×3        3×3        3×3        3×3        3×3
+    ... #8    │  2×4        2×4        2×4        2×4        2×4        2×4        2×4 ⭐︎     3×3        3×3        3×3        3×3
+    ... #9    │  3×3        3×3        3×3        3×3        3×3        3×3        3×3        3×3        3×3        3×3        3×3
+    ... #10   │  2×5        2×5        2×5        2×5        2×5        2×5        2×5 ⭐︎     4×3        4×3        4×3        4×3
+    ... #11   │  1×11       4×3        4×3        4×3        4×3        4×3        4×3        4×3        4×3        4×3        4×3
+    ... #12   │  4×3        4×3        4×3        4×3        4×3        4×3        4×3        4×3        4×3        4×3        4×3
+    ... #13   │  1×13       4×4        4×4        4×4        4×4        4×4        4×4        4×4        4×4        4×4        4×4
+    ... #14   │  2×7        2×7        2×7        2×7        2×7        2×7        4×4        4×4        4×4        4×4        4×4
+    ... #15   │  3×5        3×5        3×5        3×5        3×5        3×5        3×5        3×5        3×5        4×4        4×4
+    ... #16   │  4×4        4×4        4×4        4×4        4×4        4×4        4×4        4×4        4×4        4×4        4×4
+    ... #17   │  1×17       4×5        4×5        4×5        4×5        4×5        4×5        4×5        4×5        4×5        4×5
+    ... #18   │  3×6        3×6        3×6        3×6        3×6        3×6        3×6        3×6        3×6        4×5        4×5
+    ... #19   │ 19×1        4×5        4×5        4×5        4×5        4×5        4×5        4×5        4×5        4×5        4×5
+    ... #20   │  4×5        4×5        4×5        4×5        4×5        4×5        4×5        4×5        4×5        4×5        4×5
+    ... #21   │  3×7        3×7        3×7        3×7        3×7        3×7        3×7        3×7        5×5        5×5        5×5
+    ... #22   │  2×11       2×11       2×11       2×11       2×11       5×5        5×5        5×5        5×5        5×5        5×5
+    ... #23   │  1×23       5×5        5×5        5×5        5×5        5×5        5×5        5×5        5×5        5×5        5×5
+    ... #24   │  6×4        6×4        6×4        6×4        6×4        6×4        6×4        6×4        6×4        5×5        5×5
+    ... #25   │  5×5        5×5        5×5        5×5        5×5        5×5        5×5        5×5        5×5        5×5        5×5
+    ... #26   │  2×13       2×13       2×13       2×13       2×13       5×6        5×6        5×6        5×6        5×6        5×6
+    ... #27   │  3×9        3×9        3×9        3×9        3×9        3×9        3×9        3×9        5×6        5×6        5×6
+    ... #28   │  7×4        7×4        7×4        7×4        7×4        7×4        7×4        7×4        7×4        5×6        5×6
+    ... #29   │  1×29       5×6        5×6        5×6        5×6        5×6        5×6        5×6        5×6        5×6        5×6
+    ... #30   │  5×6        5×6        5×6        5×6        5×6        5×6        5×6        5×6        5×6        5×6        5×6
+    ... #31   │  1×31       6×6        6×6        6×6        6×6        6×6        6×6        6×6        6×6        6×6        6×6
+    ... #32   │  4×8        4×8        4×8        4×8        4×8        4×8        4×8        4×8        6×6        6×6        6×6
+    ... #33   │  3×11       3×11       3×11       3×11       3×11       3×11       3×11       6×6        6×6        6×6        6×6
+    ... #34   │  2×17       2×17       2×17       2×17       6×6        6×6        6×6        6×6        6×6        6×6        6×6
+    ... #35   │  5×7        5×7        5×7        5×7        5×7        5×7        5×7        5×7        5×7        5×7        6×6
+    ... #36   │  6×6        6×6        6×6        6×6        6×6        6×6        6×6        6×6        6×6        6×6        6×6
+    ... #37   │  1×37       6×7        6×7        6×7        6×7        6×7        6×7        6×7        6×7        6×7        6×7
+    ... #38   │  2×19       2×19       2×19       2×19       6×7        6×7        6×7        6×7        6×7        6×7        6×7
+    ... #39   │  3×13       3×13       3×13       3×13       3×13       3×13       3×13       6×7        6×7        6×7        6×7
+    ... #40   │  5×8        5×8        5×8        5×8        5×8        5×8        5×8        5×8        5×8        5×8        6×7
+    ... #41   │  1×41       6×7        6×7        6×7        6×7        6×7        6×7        6×7        6×7        6×7        6×7
+    ... #42   │  6×7        6×7        6×7        6×7        6×7        6×7        6×7        6×7        6×7        6×7        6×7
+    ... #43   │  1×43       7×7        7×7        7×7        7×7        7×7        7×7        7×7        7×7        7×7        7×7
+    ... #44   │  4×11       4×11       4×11       4×11       4×11       4×11       4×11       4×11       7×7        7×7        7×7
+    ... #45   │  5×9        5×9        5×9        5×9        5×9        5×9        5×9        5×9        5×9        7×7        7×7
+    ... #46   │  2×23       2×23       2×23       2×23       7×7        7×7        7×7        7×7        7×7        7×7        7×7
+    ... #47   │  1×47       7×7        7×7        7×7        7×7        7×7        7×7        7×7        7×7        7×7        7×7
+    ... #48   │  8×6        8×6        8×6        8×6        8×6        8×6        8×6        8×6        8×6        8×6        7×7
+    ... #49   │  7×7        7×7        7×7        7×7        7×7        7×7        7×7        7×7        7×7        7×7        7×7
+
+    """
+
+    #Edge case
+    if num_elements==0: return 0,0
+
+    if not isinstance(num_elements, int):            raise TypeError(get_current_function_name() + ": num_elements must be int, got type=" + type(num_elements).__name__ + ", num_elements=" + str(num_elements))
+    if not is_number(target_aspect_ratio):           raise TypeError(get_current_function_name() + ": target_aspect_ratio must be float, got type=" + type(target_aspect_ratio).__name__ + ", target_aspect_ratio=" + str(target_aspect_ratio))
+    if not is_number(aspect_tolerance):              raise TypeError(get_current_function_name() + ": aspect_tolerance must be float, got type=" + type(aspect_tolerance).__name__ + ", aspect_tolerance=" + str(aspect_tolerance))
+    if num_elements < 1:                             raise ValueError(get_current_function_name() + ": num_elements must be >= 1, got num_elements=" + str(num_elements))
+    if target_aspect_ratio <= 0:                     raise ValueError(get_current_function_name() + ": target_aspect_ratio must be > 0, got target_aspect_ratio=" + str(target_aspect_ratio))
+    if aspect_tolerance < 0 or aspect_tolerance > 1: raise ValueError(get_current_function_name() + ": aspect_tolerance must be between 0 and 1, got aspect_tolerance=" + str(aspect_tolerance))
+
+    n = num_elements
+    R = float(target_aspect_ratio)
+    tol = float(aspect_tolerance)
+
+    # ---------- Best grid allowing remainder ----------
+    best_any = None  # (err, area, h, w)
+    for h in range(1, n + 1):
+        w = (n + h - 1) // h
+        aspect = h / w
+        err = abs(math.log(aspect / R))
+        area = h * w
+        cand = (err, area, h, w)
+        if best_any is None or cand < best_any:
+            best_any = cand
+
+    err_any, _, h_any, w_any = best_any
+
+    # ---------- Best perfect tiling ----------
+    best_perf = None  # (err, h, w)
+    r = int(math.isqrt(n))
+    for h in range(1, r + 1):
+        if n % h != 0:
+            continue
+        w = n // h
+        for hh, ww in ((h, w), (w, h)):
+            aspect = hh / ww
+            err = abs(math.log(aspect / R))
+            cand = (err, hh, ww)
+            if best_perf is None or cand < best_perf:
+                best_perf = cand
+
+    err_perf, h_perf, w_perf = best_perf
+
+    # ---------- Tolerance-based snap ----------
+    worst_perf_err = abs(math.log(n / R))
+    denom = worst_perf_err - err_any
+
+    if denom <= 0:
+        snap = True
+    else:
+        gap = (err_perf - err_any) / denom
+        if gap < 0:
+            gap = 0.0
+        elif gap > 1:
+            gap = 1.0
+        snap = gap <= 1.0 - tol
+
+    if snap:
+        return h_perf, w_perf
+    return h_any, w_any
 
 
 def horizontally_concatenated_images(*image_list,origin=None):
