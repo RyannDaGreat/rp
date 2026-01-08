@@ -49,6 +49,20 @@ rp.save_text_file(_creds_json, CLIENT_JSON_FILE)
 TOKEN_PATH = rp.with_file_name(__file__, 'token.json', keep_extension=False)
 
 
+def _headless_browser_flow(client_json_file: str, scopes: list[str]) -> Credentials:
+    """OAuth2 for headless servers. User pastes redirect URL containing auth code."""
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # Allow http://localhost
+    flow = InstalledAppFlow.from_client_secrets_file(
+        client_json_file, scopes, redirect_uri='http://localhost:1'
+    )
+    auth_url, _ = flow.authorization_url(prompt='consent')
+    print(f"\nOpen this URL in a browser:\n\n{auth_url}\n")
+    print("After authorizing, paste the URL you were redirected to (will fail to load):\n")
+    redirect_url = input().strip()
+    flow.fetch_token(authorization_response=redirect_url)
+    return flow.credentials
+
+
 def get_credentials(token_path: str = None) -> Credentials:
     """Get or refresh Google API credentials."""
     if token_path is None:
@@ -62,13 +76,12 @@ def get_credentials(token_path: str = None) -> Credentials:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(CLIENT_JSON_FILE, SCOPES)
-            # Try local server first (browser), fall back to console (headless)
+            # Try browser flow, fall back to device flow (headless)
             try:
+                flow = InstalledAppFlow.from_client_secrets_file(CLIENT_JSON_FILE, SCOPES)
                 creds = flow.run_local_server(port=0)
             except Exception:
-                # Headless: prints URL, user pastes auth code
-                creds = flow.run_console()
+                creds = _headless_browser_flow(CLIENT_JSON_FILE, SCOPES)
 
         with open(token_path, 'w') as token:
             token.write(creds.to_json())
