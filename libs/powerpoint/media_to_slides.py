@@ -275,6 +275,26 @@ def make_file_public(service, file_id: str) -> str:
     return DRIVE_FILE_URL.format(file_id)
 
 
+def _format_eta(done: int, total: int, elapsed: float) -> str:
+    """Format ETA string based on progress and elapsed time."""
+    if done <= 0 or elapsed <= 0:
+        return ""
+    rate = done / elapsed
+    remaining = total - done
+    eta_seconds = remaining / rate
+    return f", ETA: {int(eta_seconds // 60)}m{int(eta_seconds % 60):02d}s"
+
+
+def _format_progress(index: int, total: int, done: int, total_size: int, elapsed: float, use_bytes: bool = True) -> str:
+    """Format overall progress string."""
+    eta = _format_eta(done, total_size, elapsed)
+    if use_bytes:
+        done_str = rp.human_readable_file_size(done)
+        total_str = rp.human_readable_file_size(total_size)
+        return f"[{index}/{total}] {done_str} / {total_str}{eta}"
+    return f"[{index}/{total}]{eta}"
+
+
 def upload_media_sequential(
     service,
     file_paths: list[str],
@@ -282,14 +302,22 @@ def upload_media_sequential(
 ) -> list[dict]:
     """Upload multiple media files sequentially with progress bars."""
     results = []
+    total_bytes = sum(rp.get_file_size(fp) for fp in file_paths)
+    uploaded_bytes = 0
+    start_time = time.time()
 
-    for fp in file_paths:
+    for i, fp in enumerate(file_paths):
         size = rp.get_file_size(fp)
+        elapsed = time.time() - start_time
+        progress_str = _format_progress(i + 1, len(file_paths), uploaded_bytes, total_bytes, elapsed)
+        rp.fansi_print(f"  {progress_str}", "cyan")
+
         pbar = tqdm(
             total=size,
             desc=rp.get_file_name(fp),
             unit="B",
             unit_scale=True,
+            leave=False,
         )
         last_progress = [0]
 
@@ -299,7 +327,9 @@ def upload_media_sequential(
             last_progress[0] = current
 
         result = upload_media(service, fp, folder_id, progress_cb)
+        pbar.update(size - last_progress[0])  # Ensure 100%
         pbar.close()
+        uploaded_bytes += size
         rp.fansi_print(f"  Uploaded: {result['webViewLink']}", "green")
         results.append(result)
 
@@ -720,9 +750,12 @@ def media_to_slides(
     path_to_media = dict(zip(all_paths, media))
 
     rp.fansi_print("\nMaking files publicly accessible...", "cyan")
-    for m in media:
+    start_time = time.time()
+    for i, m in enumerate(media):
+        elapsed = time.time() - start_time
+        progress_str = _format_progress(i + 1, len(media), i, len(media), elapsed, use_bytes=False)
+        rp.fansi_print(f"  {progress_str} {m['name']}", "cyan")
         make_file_public(drive_service, m["id"])
-        rp.fansi_print(f"  {m['name']}: public", "green")
 
     # Build slides_data for create_slides_with_media_grid
     slides_data = []

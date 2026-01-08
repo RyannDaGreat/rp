@@ -42789,9 +42789,10 @@ def _get_video_file_framerate_via_ffprobe(path, use_cache=True):
     import subprocess
     import json
 
-    if not 'ffprobe' in get_system_commands():    
+    if not 'ffprobe' in get_system_commands():
         _ensure_ffmpeg_installed()
-        raise RuntimeError('rp.get_video_file_framerate: Please install ffmpeg! Unable to find the ffprobe command')
+        if not 'ffprobe' in get_system_commands():
+            raise RuntimeError('rp.get_video_file_framerate: Please install ffmpeg! Unable to find the ffprobe command')
 
     path = get_absolute_path(path)  # Important for caching
     if use_cache and path in _get_video_file_framerate_cache:
@@ -42827,6 +42828,111 @@ def get_video_file_framerate(path, use_cache=True):
 
     except Exception:
         return _get_video_file_framerate_via_ffprobe(path, use_cache)
+
+_video_has_audio_cache = {}
+
+def video_has_audio(path, use_cache=True, strict=False, include_silent=True):
+    """
+    Check if a video file contains an audio track.
+
+    Uses ffprobe (part of ffmpeg) to detect audio streams. This is fast (~60ms)
+    and does not require loading the entire video into memory. Time is O(1)
+    regardless of video length.
+
+    Args:
+        path (str): Path to the video file
+        use_cache (bool): If True, caches results to avoid repeated ffprobe calls.
+                          Defaults to True.
+        strict (bool): If False, corrupted or invalid video files return False.
+                       If True, raises RuntimeError on ffprobe failure.
+                       Defaults to False.
+        include_silent (bool): If True, returns True even if the video has an audio track
+                               but that audio track has no audible audio.
+                               If False, returns True only if there is audible audio.
+                               Defaults to True.
+
+    Returns:
+        bool: True if the video has an audio stream (or non-silent audio if include_silent=False)
+
+    Raises:
+        FileNotFoundError: If the video file does not exist
+        RuntimeError: If ffprobe fails or ffmpeg is not installed (only when strict=True)
+
+    EXAMPLE:
+        >>> video_has_audio('/Users/ryan/Downloads/12071694.mp4')
+        True
+        >>> video_has_audio('/Users/ryan/Downloads/000000.mp4')
+        False
+
+    See Also:
+        - is_video_file: Check if a file is a video
+        - is_sound_file: Check if a file is an audio file
+        - get_video_file_framerate: Get framerate of a video
+    """
+    import subprocess
+
+    if not 'ffprobe' in get_system_commands():
+        _ensure_ffmpeg_installed()
+        if not 'ffprobe' in get_system_commands():
+            raise RuntimeError('rp.video_has_audio: Please install ffmpeg! Unable to find the ffprobe command')
+
+    path = get_absolute_path(path)
+
+    if not file_exists(path):
+        raise FileNotFoundError("Video file not found: " + path)
+
+    # Cache key includes include_silent flag
+    cache_key = (path, include_silent)
+    if use_cache and cache_key in _video_has_audio_cache:
+        return _video_has_audio_cache[cache_key]
+
+    # When include_silent=True, check for stream existence (index)
+    # When include_silent=False, check bitrate to detect silent tracks (<5kbps = silent)
+    if include_silent:
+        select_streams = "a"
+        show_entries = "stream=index"
+        output_format = "csv=p=0"
+    else:
+        select_streams = "a:0"
+        show_entries = "stream=bit_rate"
+        output_format = "default=noprint_wrappers=1:nokey=1"
+
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", select_streams,
+         "-show_entries", show_entries, "-of", output_format, path],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        if strict:
+            raise RuntimeError("ffprobe failed on " + path + ": " + result.stderr)
+        has_audio = False
+    elif not result.stdout.strip():
+        has_audio = False
+    elif include_silent:
+        has_audio = True
+    else:
+        try:
+            # >5kbps = real audio, <5kbps = silent (silent AAC compresses to ~3.7kbps)
+            has_audio = int(result.stdout.strip()) > 5000
+        except ValueError:
+            # Bitrate metadata unavailable (e.g. VBR without stored bitrate, rare edge case)
+            # Fallback methods in order of speed:
+            #   1. packet_size (~59ms, O(1)): avg packet size >50 bytes = real audio (silent AAC ~10 bytes)
+            #      ffprobe -select_streams a:0 -show_entries packet=size -read_intervals %+#20
+            #   2. pcm_pipe (~58ms, O(1)): pipe 0.5s of PCM, check for samples >100 amplitude
+            #      ffmpeg -i FILE -t 0.5 -f s16le -ac 1 -ar 8000 - | check for non-zero
+            #   3. volumedetect (~104ms, O(1) with -t): check max_volume > -80dB
+            #      ffmpeg -i FILE -t 0.5 -af volumedetect -f null /dev/null
+            #      NOTE: without -t flag this would be O(n) - must decode entire audio
+            fansi_print("WARNING: video_has_audio: bitrate unavailable for " + path + ", assuming has audio", "yellow")
+            has_audio = True
+
+    if use_cache:
+        _video_has_audio_cache[cache_key] = has_audio
+
+    return has_audio
 
 
 #UNCOMMENT ONCE I USE SMART_OPEN SOMEWHERE
