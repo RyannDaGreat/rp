@@ -327,24 +327,24 @@ def convert_tmux(
 HELP = """Parallel PowerPoint converter using tmux.
 
 Usage:
-    rp run ppt convert-tmux <input_pptx> [options]
+    rp run ppt convert_tmux <input_pptx> [options]
 
 Spawns multiple tmux panes to convert slide ranges in parallel,
 uploads each part, then merges them into one presentation.
 
 Options:
-    --num-parts     Number of parallel workers (default: 3)
-    --part-size     Target file size per part (default: 100MB)
+    --num_parts     Number of parallel workers (default: 3)
+    --part_size     Target file size per part (default: 100MB)
     --fps           Max GIF frames per second (default: 10)
-    --dpi-iters     Binary search iterations for size (default: 5)
+    --dpi_iters     Binary search iterations for size (default: 5)
     --dither        Enable dithering (default: True)
-    --no-dither     Disable dithering
+    --no_dither     Disable dithering
     --output        Output folder name
 
 Examples:
-    rp run ppt convert-tmux presentation.pptx
-    rp run ppt convert-tmux presentation.pptx --num-parts 5
-    rp run ppt convert-tmux presentation.pptx --part-size 50MB --fps 8
+    rp run ppt convert_tmux presentation.pptx
+    rp run ppt convert_tmux presentation.pptx --num_parts 5
+    rp run ppt convert_tmux presentation.pptx --part_size 50MB --fps 8
 """
 
 

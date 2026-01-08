@@ -163,12 +163,6 @@ def normalize_slides_input(layout) -> list[dict]:
                 result.append(
                     {"paths": [content], "title": title, "labels": None}
                 )
-            elif isinstance(content, list):
-                paths = [p for p in content if is_media_path(p)]
-                if paths:
-                    result.append(
-                        {"paths": paths, "title": title, "labels": None}
-                    )
             elif isinstance(content, dict):
                 # {'label1': 'path1', 'label2': 'path2'}
                 labels = []
@@ -180,6 +174,12 @@ def normalize_slides_input(layout) -> list[dict]:
                 if paths:
                     result.append(
                         {"paths": paths, "title": title, "labels": labels}
+                    )
+            elif rp.is_non_str_iterable(content):
+                paths = [p for p in content if is_media_path(p)]
+                if paths:
+                    result.append(
+                        {"paths": paths, "title": title, "labels": None}
                     )
         return result
 
@@ -196,7 +196,7 @@ def normalize_slides_input(layout) -> list[dict]:
                     paths.append(path)
             if paths:
                 result.append({"paths": paths, "title": None, "labels": labels})
-        elif isinstance(item, list):
+        elif rp.is_non_str_iterable(item):
             paths = [p for p in item if is_media_path(p)]
             if paths:
                 result.append({"paths": paths, "title": None, "labels": None})
@@ -822,6 +822,7 @@ def cli(
     title_size: int = DEFAULT_TITLE_SIZE,
     label_size: int = DEFAULT_LABEL_SIZE,
     sort_by: str = "name",
+    per_slide: int = None,
 ):
     """Upload media to Google Drive and create a Google Slides presentation.
 
@@ -830,16 +831,17 @@ def cli(
 
     Options:
         --name NAME             Presentation name (default: auto-generated timestamp)
-        --folder-name NAME      Google Drive folder name (default: auto-generated timestamp)
+        --folder_name NAME      Google Drive folder name (default: auto-generated timestamp)
         --title TITLE           Slide title (applies to all slides)
         --captions              Use filenames as captions for each media item
-        --label-position POS    Label position: 'top' (default) or 'bottom'
-        --bg-color COLOR        Background color: name ('black'), hex ('#FFAABB'), default: white
-        --font-color COLOR      Text color: name ('white'), hex ('#FFAABB'), default: black
+        --label_position POS    Label position: 'top' (default) or 'bottom'
+        --bg_color COLOR        Background color: name ('black'), hex ('#FFAABB'), default: white
+        --font_color COLOR      Text color: name ('white'), hex ('#FFAABB'), default: black
         --font FONT             Font family (default: Lexend)
-        --title-size SIZE       Title font size in pt (default: 24)
-        --label-size SIZE       Label font size in pt (default: 12)
-        --sort-by METHOD        Sort files by: 'name' (default), 'date', 'size', 'number'
+        --title_size SIZE       Title font size in pt (default: 24)
+        --label_size SIZE       Label font size in pt (default: 12)
+        --sort_by METHOD        Sort files by: 'name' (default), 'date', 'size', 'number'
+        --per_slide N           Items per slide (optional, default: 1)
 
     Supported formats:
         Videos: .mp4, .mov, .avi, .mkv, .webm
@@ -849,8 +851,8 @@ def cli(
         rp run ppt media_to_slides video1.mp4 image.png                      # 2 files -> 2 slides
         rp run ppt media_to_slides media_folder/                             # folder -> one slide per file
         rp run ppt media_to_slides "*.png" --name "My Images" --captions     # glob with captions
-        rp run ppt media_to_slides folder/ --title "Demo" --bg-color black --font-color white  # dark theme
-        rp run ppt media_to_slides frames/ --sort-by number --captions --label-position bottom
+        rp run ppt media_to_slides folder/ --title "Demo" --bg_color black --font_color white  # dark theme
+        rp run ppt media_to_slides frames/ --sort_by number --captions --label_position bottom
 
     Note: First run opens browser for Google OAuth authentication.
     """
@@ -865,13 +867,21 @@ def cli(
     if not media_paths:
         raise ValueError("No media files found")
 
+    # Split into grids if requested
+    if per_slide is not None:
+        media_paths = rp.split_into_sublists(media_paths, per_slide)
+
     # Build layout
     if captions:
-        labeled = {
-            rp.get_file_name(p, include_file_extension=False): p
+        # Each item gets its filename as a label, one per slide (or per grid if per_slide used)
+        layout = [
+            {rp.get_file_name(p, include_file_extension=False): p}
+            if isinstance(p, str) else
+            {rp.get_file_name(x, include_file_extension=False): x for x in p}
             for p in media_paths
-        }
-        layout = {title: labeled} if title else [labeled]
+        ]
+        if title:
+            layout = {title: layout[0]} if len(layout) == 1 else layout
     elif title:
         layout = {title: media_paths}
     else:

@@ -397,15 +397,15 @@ Arguments:
     folder          A folder containing PPTX files
 
 Options:
-    --folder-name   Name for Google Drive folder (default: auto from first filename)
-    --merged-name   Name for merged presentation (default: same as folder-name)
+    --folder_name   Name for Google Drive folder (default: auto from first filename)
+    --merged_name   Name for merged presentation (default: same as folder_name)
 
 Examples:
     python google_slides_upload.py output_folder/
     python google_slides_upload.py part1.pptx part2.pptx part3.pptx
-    python google_slides_upload.py output_folder/ --folder-name "My Presentation"
-    python google_slides_upload.py output_folder/ --merged-name "Final Presentation"
-    python google_slides_upload.py *.pptx --folder-name "Project X" --merged-name "Project X Final"
+    python google_slides_upload.py output_folder/ --folder_name "My Presentation"
+    python google_slides_upload.py output_folder/ --merged_name "Final Presentation"
+    python google_slides_upload.py *.pptx --folder_name "Project X" --merged_name "Project X Final"
 
 Creates on Google Drive:
     MyDrive/<folder_name>/

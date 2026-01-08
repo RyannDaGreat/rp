@@ -26,9 +26,9 @@ Commands:
 
 Examples:
     rp run ppt convert input.pptx
-    rp run ppt convert input.pptx --part-size 50MB
-    rp run ppt convert input.pptx --num-parts 3 --upload
-    rp run ppt convert_tmux input.pptx --num-parts 3
+    rp run ppt convert input.pptx --part_size 50MB
+    rp run ppt convert input.pptx --num_parts 3 --upload
+    rp run ppt convert_tmux input.pptx --num_parts 3
     rp run ppt upload output_folder/
     rp run ppt upload part1.pptx part2.pptx part3.pptx
     rp run ppt media_to_slides video.mp4 image.png
@@ -106,7 +106,7 @@ def main():
         while i < len(rest):
             arg = rest[i]
             if arg.startswith('--'):
-                key = arg[2:].replace('-', '_')
+                key = arg[2:]
                 if key == 'upload':
                     kwargs['upload'] = True
                 elif key == 'no_dither':
@@ -147,7 +147,7 @@ def main():
         while i < len(rest):
             arg = rest[i]
             if arg.startswith('--'):
-                key = arg[2:].replace('-', '_')
+                key = arg[2:]
                 if key == 'no_dither':
                     kwargs['dither'] = False
                 elif key == 'dither':
@@ -182,10 +182,10 @@ def main():
         i = 0
         while i < len(rest):
             arg = rest[i]
-            if arg == '--folder-name' and i + 1 < len(rest):
+            if arg == '--folder_name' and i + 1 < len(rest):
                 folder_name = rest[i + 1]
                 i += 1
-            elif arg == '--merged-name' and i + 1 < len(rest):
+            elif arg == '--merged_name' and i + 1 < len(rest):
                 merged_name = rest[i + 1]
                 i += 1
             elif not arg.startswith('--'):
@@ -194,7 +194,9 @@ def main():
         cmd_upload(*paths, folder_name=folder_name, merged_name=merged_name)
 
     elif cmd == 'media_to_slides':
-        # Use fire - it handles all the arg parsing
+        if not rest or rest[0] in ('-h', '--help'):
+            print(media_to_slides_cli.__doc__)
+            return
         rp.pip_import('fire')
         import fire
         sys.argv = ['media_to_slides'] + rest

@@ -17273,6 +17273,9 @@ def is_iterable(x):
     except:
         return False
 
+def is_non_str_iterable(x):
+    return not isinstance(x,str) and is_iterable(x) 
+
 # region Network Utilities: ［get_my_local_ip_address，get_my_ip，get_my_mac_address，get_my_public_ip_address］  
 def get_my_local_ip_address() -> str:
     import socket

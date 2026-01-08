@@ -734,28 +734,28 @@ Arguments:
     output_pptx     Output path (optional, default: <input>_gifs_<size>.pptx)
 
 Options:
-    --part-size     Target file size per part (default: 100MB)
-    --num-parts     Split output into N parts (default: 1)
+    --part_size     Target file size per part (default: 100MB)
+    --num_parts     Split output into N parts (default: 1)
     --fps           Max GIF frames per second (default: 10)
-    --dpi-iters     Binary search iterations to match part-size (default: 5)
+    --dpi_iters     Binary search iterations to match part_size (default: 5)
     --dither        Enable GIF dithering (default: True)
-    --no-dither     Disable dithering (smaller files, may have color banding)
+    --no_dither     Disable dithering (smaller files, may have color banding)
     --slides        Slide range to process (default: all)
     --upload        Upload to Google Slides after conversion (default: False)
 
 Examples:
     python convert_pptx_videos_to_gifs.py input.pptx
     python convert_pptx_videos_to_gifs.py input.pptx output.pptx
-    python convert_pptx_videos_to_gifs.py input.pptx --part-size 50MB
-    python convert_pptx_videos_to_gifs.py input.pptx --part-size 50MB --num-parts 3
-    python convert_pptx_videos_to_gifs.py input.pptx --num-parts 3 --upload
+    python convert_pptx_videos_to_gifs.py input.pptx --part_size 50MB
+    python convert_pptx_videos_to_gifs.py input.pptx --part_size 50MB --num_parts 3
+    python convert_pptx_videos_to_gifs.py input.pptx --num_parts 3 --upload
     python convert_pptx_videos_to_gifs.py input.pptx --fps 5
     python convert_pptx_videos_to_gifs.py input.pptx --fps 10000              # keep original fps
-    python convert_pptx_videos_to_gifs.py input.pptx --dpi-iters 10
-    python convert_pptx_videos_to_gifs.py input.pptx --no-dither
+    python convert_pptx_videos_to_gifs.py input.pptx --dpi_iters 10
+    python convert_pptx_videos_to_gifs.py input.pptx --no_dither
     python convert_pptx_videos_to_gifs.py input.pptx --slides 1-10
     python convert_pptx_videos_to_gifs.py input.pptx --slides 1,3,5,10-15
-    python convert_pptx_videos_to_gifs.py input.pptx --part-size 50MB --fps 8 --num-parts 5 --upload"""
+    python convert_pptx_videos_to_gifs.py input.pptx --part_size 50MB --fps 8 --num_parts 5 --upload"""
 
 
 if __name__ == '__main__':
@@ -784,7 +784,7 @@ if __name__ == '__main__':
     while i < len(args):
         arg = args[i]
         if arg.startswith('--'):
-            key = arg[2:].replace('-', '_')
+            key = arg[2:]
             if key == 'upload':
                 kwargs['upload'] = True
             elif key == 'no_dither':
