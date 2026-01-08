@@ -94,6 +94,8 @@ fi
 
 PANE=$(tmux new-window -d -t "$SESSION" -n "$WINDOW_NAME" -P -F "#{pane_id}" "cat")
 tmux set-option -t "$PANE" @archive_name "$ARCHIVE_NAME"
+# Store the spawner pane ID so the panel can navigate back to the Claude session
+[[ -n "$TMUX_PANE" ]] && tmux set-option -t "$PANE" @spawner_pane "$TMUX_PANE"
 TTY=$(tmux display -p -t "$PANE" "#{pane_tty}")
 
 # --- Run command, mirror to tmux ---

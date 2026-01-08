@@ -80,6 +80,22 @@ def goto_window(window_id: str):
     run_cmd(["tmux", "select-window", "-t", window_id])
 
 
+def get_spawner_pane(window_id: str) -> str | None:
+    """Get the spawner pane ID stored in the tmux window option."""
+    return run_cmd(["tmux", "show-option", "-t", window_id, "-qv", "@spawner_pane"]) or None
+
+
+def get_pane_path(pane_id: str) -> str:
+    """Convert pane ID to session:window.pane format."""
+    out = run_cmd(["tmux", "display", "-t", pane_id, "-p", "#{session_name}:#{window_name}.#{pane_index}"])
+    return out or pane_id
+
+
+def goto_pane(pane_id: str):
+    """Switch to a tmux pane (potentially in a different session)."""
+    run_cmd(["tmux", "switch-client", "-t", pane_id])
+
+
 @dataclass
 class ProcessInfo:
     pid: int
@@ -90,6 +106,8 @@ class ProcessInfo:
     cpu_history: deque = field(default_factory=lambda: deque(maxlen=CPU_HISTORY_LEN))
     cpu_pct: float = 0.0
     memory_mb: float = 0.0
+    spawner_pane: str | None = None
+    spawner_path: str = ""
 
 
 class CpuGraph(Static):
@@ -150,6 +168,7 @@ class ProcessRow(Static):
     ProcessRow Button { min-width: 10; height: 3; }
     ProcessRow .kill-btn { margin-left: 2; }
     ProcessRow .goto-btn { margin-left: 1; }
+    ProcessRow .spawner-btn { margin-left: 1; }
     """
 
     can_focus = True
@@ -164,6 +183,8 @@ class ProcessRow(Static):
             yield Static(f"⏱ {self.proc.elapsed}", classes="elapsed", id=f"elapsed-{self.proc.pid}")
             yield Button("✕ Kill", id=f"kill-{self.proc.pid}", classes="kill-btn", variant="error")
             yield Button("→ Go", id=f"goto-{self.proc.pid}", classes="goto-btn", variant="primary")
+            if self.proc.spawner_pane:
+                yield Button(f"⬅ {self.proc.spawner_path}", id=f"spawner-{self.proc.pid}", classes="spawner-btn", variant="success")
 
         yield Static(f"  {self.proc.command[:150] or '(no command)'}", classes="command-display")
 
@@ -180,6 +201,8 @@ class ProcessRow(Static):
             self.app.refresh_processes()
         elif btn_id.startswith("goto-"):
             goto_window(self.proc.window_id)
+        elif btn_id.startswith("spawner-") and self.proc.spawner_pane:
+            goto_pane(self.proc.spawner_pane)
 
 
 class ClaudePanel(App):
@@ -202,6 +225,7 @@ class ClaudePanel(App):
         Binding("x", "kill_focused", "Kill"),
         Binding("g", "goto_focused", "Go To"),
         Binding("enter", "goto_focused", "Go To", show=False),
+        Binding("s", "spawner_focused", "Spawner"),
     ]
 
     def __init__(self):
@@ -237,9 +261,12 @@ class ClaudePanel(App):
                 if pid not in self.processes:
                     emoji = name[0] if name else "?"
                     cmd, cpu, mem, elapsed = get_process_stats(pid)
+                    spawner = get_spawner_pane(wid)
+                    spawner_path = get_pane_path(spawner) if spawner else ""
                     self.processes[pid] = ProcessInfo(
                         pid=pid, window_id=wid, emoji=emoji,
                         command=cmd, elapsed=elapsed, cpu_pct=cpu, memory_mb=mem,
+                        spawner_pane=spawner, spawner_path=spawner_path,
                     )
 
             for pid in current_pids - new_pids:
@@ -304,6 +331,10 @@ class ClaudePanel(App):
     def action_goto_focused(self) -> None:
         if isinstance(self.focused, ProcessRow):
             goto_window(self.focused.proc.window_id)
+
+    def action_spawner_focused(self) -> None:
+        if isinstance(self.focused, ProcessRow) and self.focused.proc.spawner_pane:
+            goto_pane(self.focused.proc.spawner_pane)
 
 
 def main():
