@@ -58,6 +58,11 @@ def pop_args():
         args.insert(0, value)
     return args
 
+RUN_MODULES = {
+    "ppt": "rp.libs.powerpoint",
+    "timg": "rp.libs.timg",
+}
+
 help_text = """
 
 HELP:
@@ -69,8 +74,10 @@ HELP:
               Format: rp call <funcname> arg1 arg2 arg3 --kwarg1 value1 --kwarg2 value2
       exec    Execute Python code with optional variable assignments
               Format: rp exec <code> --variable1 value1 --variable2 value2
-      
-    Note: All kwargs whose keys start with -- are evaluated as python code, 
+      run     Run a submodule
+              Format: rp run <submodule> [args...]
+
+    Note: All kwargs whose keys start with -- are evaluated as python code,
           and all that start with --- are treated as string literals
           Positional args are treated as string literals if --- precedes them
           For example, `rp call list 123` is an error, but `rp call list --- 123` --> ['1', '2', '3']
@@ -119,8 +126,17 @@ def main():
 
             ans = rp.exeval(code, scope=scope)
 
+        elif sys.argv[1] == "run":
+            import runpy
+            if len(sys.argv) < 3 or sys.argv[2] not in RUN_MODULES:
+                print("Usage: rp run <" + "|".join(RUN_MODULES) + "> [args...]")
+                return
+            sys.argv = [RUN_MODULES[sys.argv[2]]] + sys.argv[3:]
+            runpy.run_module(sys.argv[0], run_name='__main__', alter_sys=True)
+            return
+
         else:
-            raise RuntimeError(help_text+"\nERROR: Supported rp commands: [exec, call] not "+sys.argv[1])
+            raise RuntimeError(help_text+"\nERROR: Supported rp commands: [exec, call, run] not "+sys.argv[1])
 
         #It's often useful to pipe the ans by printing it
         if ans is not None:

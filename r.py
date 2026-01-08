@@ -96,6 +96,9 @@ except ImportError:
     try: import web_evaluator as we
     except Exception as e: print("r.py import error: ",e)
 
+try: from rp.libs.pw_crypt import encrypt_bytes_with_password, decrypt_bytes_with_password
+except Exception as e: print("r.py import error: ",e)
+
 #SETTINGS
 _fast_pterm_history_size = 1024 * 1024
 
@@ -10502,7 +10505,7 @@ def _get_pywhispercpp_model(model_name):
     model = Model(model_name, n_threads=4, redirect_whispercpp_logs_to=None)
     return model
 
-def transcribe_audio_file_via_whisper(path, *, model="base",show_progress=True):
+def transcribe_audio_file_via_whisper(path, *, model="base", show_progress=True, initial_prompt=None, carry_initial_prompt=False):
     """
     Transcribe audio file, returning text segments with timestamps
 
@@ -10519,6 +10522,11 @@ def transcribe_audio_file_via_whisper(path, *, model="base",show_progress=True):
                     - "medium": Very good accuracy, slower
                     - "large-v3": Best accuracy, slowest. Not listing "large" becuase "large-v3" is objectively better.
         show_progress: Show loading/processing progress (default: True)
+        initial_prompt (str): Prefix tokens for the decoder. Biases output toward
+                        words already in context. Use for names, jargon, or unusual
+                        spellings Whisper wouldn't know. Example: "Sqwagqlduu, PyTorch"
+        carry_initial_prompt (bool): If True, prepend initial_prompt to every 30s
+                        segment instead of just the first. Default False.
 
     Returns:
         _Transcription: List-like object containing _TranscribedSegment objects.
@@ -10546,7 +10554,11 @@ def transcribe_audio_file_via_whisper(path, *, model="base",show_progress=True):
         print("Processing audio...", flush=True)
 
     # Transcribe - use print_progress to show progress, print_realtime=False to suppress intermediate text
-    segments = model.transcribe(path, print_progress=show_progress, print_realtime=show_progress)
+    transcribe_kwargs = dict(print_progress=show_progress, print_realtime=show_progress)
+    if initial_prompt:
+        transcribe_kwargs['initial_prompt'] = initial_prompt
+        transcribe_kwargs['carry_initial_prompt'] = carry_initial_prompt
+    segments = model.transcribe(path, **transcribe_kwargs)
 
     for segment in segments:
         text = segment.text.strip()
@@ -25195,6 +25207,12 @@ def _write_default_gitignore():
     types_to_ignore='pyc bak swh swi swj swk swl swm swn swo swp un~ gstmp ipynb_checkpoints DS_Store'.split()
     types_to_ignore=['*.'+x for x in types_to_ignore]
 
+    types_to_ignore += [
+        #Other temporary files
+        "~$*.pptx",
+        "*.blend1",
+    ]
+
     new_lines = (
         ["#<RP Default Gitignore Start>"]
         + types_to_ignore
@@ -30017,9 +30035,15 @@ def total_disc_bytes(path):
     else:
         assert False,'r.get_disc_space ERROR: '+path+' is neither a folder nor a file!'
 
-def human_readable_file_size(file_size:int,):
+def human_readable_file_size(file_size:int, *, mib: bool = True):
     """
     Given a file size in bytes, return a string that represents how large it is in megabytes, gigabytes etc - whatever's easiest to interperet
+
+    Parameters:
+        file_size (int): Size in bytes.
+        mib (bool): If True (default), use 1024-based units (KiB/MiB style, labeled as KB/MB).
+                   If False, use 1000-based decimal/metric units to match Finder/Google.
+
     EXAMPLES:
          >>> human_readable_file_size(0)
         ans = 0B
@@ -30039,27 +30063,35 @@ def human_readable_file_size(file_size:int,):
         ans = 953.7MB
          >>> human_readable_file_size(10000000000)
         ans = 9.3GB
+         >>> human_readable_file_size(1000000, mib=False)
+        ans = 1.0MB
+         >>> human_readable_file_size(1000000000, mib=False)
+        ans = 1.0GB
     """
-    
+    divisor = 1024.0 if mib else 1000.0
+
     for count in 'B KB MB GB TB PB EB ZB YB BB GB'.split():
         #Bytes Kilobytes Megabytes Gigabytes Terrabytes Petabytes Exobytes Zettabytes Yottabytes Brontobytes Geopbytes
-        if file_size > -1024.0 and file_size < 1024.0:
-            if int(file_size)==file_size:   
+        if file_size > -divisor and file_size < divisor:
+            if int(file_size)==file_size:
                 return "%i%s" % (file_size, count)
             else:
                 return "%3.1f%s" % (file_size, count)
-        file_size /= 1024.0
+        file_size /= divisor
 
-def string_to_file_size(size_str: str) -> int:
+def string_to_file_size(size_str: str, *, always_mib: bool = True) -> int:
     """
     Converts a human-readable file size string back to the number of bytes,
     handling various units and their common abbreviations (case-insensitive).
     This function also handles numeric words like 'one', 'two', etc.
-    
+
     Inverse of rp.human_readable_file_size
 
     Parameters:
         size_str (str): The human-readable file size string (e.g., "9.3GB", "one megabyte").
+        always_mib (bool): If True (default), treat MB/GB/etc as MiB/GiB (1024-based).
+                          If False, use decimal/metric units (1000-based) for KB/MB/GB/etc,
+                          while KiB/MiB/GiB remain 1024-based. Use False to match Finder/Google.
 
     Returns:
         int: The equivalent file size in bytes as an integer.
@@ -30096,6 +30128,8 @@ def string_to_file_size(size_str: str) -> int:
         >>> string_to_file_size("three zettabytes")   -->   3298534883328000000
         >>> string_to_file_size("1kb 500b")           -->   ValueError: Invalid size format
         >>> string_to_file_size("1024 mbsss")         -->   ValueError: Unknown or invalid unit: 'mbsss'
+        >>> string_to_file_size("1 MB", always_mib=False)  -->   1000000
+        >>> string_to_file_size("1 MiB", always_mib=False) -->   1048576
 
     https://chat.openai.com/share/4b7dc44a-26eb-4520-9ed6-3a7f6f9aaece
     """
@@ -30111,17 +30145,38 @@ def string_to_file_size(size_str: str) -> int:
 
     import re
 
-    _condensed_filesize_units = {
-        'b                      byte': 1024**0,
-        'k kb kib kilobyte  kibibyte': 1024**1,
-        'm mb mib megabyte  mebibyte': 1024**2,
-        'g gb gib gigabyte  gibibyte': 1024**3,
-        't tb tib terabyte  tebibyte': 1024**4,
-        'p pb pib petabyte  pebibyte': 1024**5,
-        'e eb eib exabyte   exbibyte': 1024**6,
-        'z zb zib zettabyte zebibyte': 1024**7,
-        'y yb yib yottabyte yobibyte': 1024**8,
-    }
+    if always_mib:
+        _condensed_filesize_units = {
+            'b                      byte': 1024**0,
+            'k kb kib kilobyte  kibibyte': 1024**1,
+            'm mb mib megabyte  mebibyte': 1024**2,
+            'g gb gib gigabyte  gibibyte': 1024**3,
+            't tb tib terabyte  tebibyte': 1024**4,
+            'p pb pib petabyte  pebibyte': 1024**5,
+            'e eb eib exabyte   exbibyte': 1024**6,
+            'z zb zib zettabyte zebibyte': 1024**7,
+            'y yb yib yottabyte yobibyte': 1024**8,
+        }
+    else:
+        _condensed_filesize_units = {
+            'b            byte': 1,
+            'k kb kilobyte'    : 1000**1,
+            'kib kibibyte'     : 1024**1,
+            'm mb megabyte'    : 1000**2,
+            'mib mebibyte'     : 1024**2,
+            'g gb gigabyte'    : 1000**3,
+            'gib gibibyte'     : 1024**3,
+            't tb terabyte'    : 1000**4,
+            'tib tebibyte'     : 1024**4,
+            'p pb petabyte'    : 1000**5,
+            'pib pebibyte'     : 1024**5,
+            'e eb exabyte'     : 1000**6,
+            'eib exbibyte'     : 1024**6,
+            'z zb zettabyte'   : 1000**7,
+            'zib zebibyte'     : 1024**7,
+            'y yb yottabyte'   : 1000**8,
+            'yib yobibyte'     : 1024**8,
+        }
 
     def postprocess(units_dict):
         """ Expands the condensed dictionary of file size units. """
@@ -38132,6 +38187,19 @@ def get_all_audio_files(*args,**kwargs):
         }
     )
     return list(filter(is_sound_file,file_paths))
+
+def get_all_video_files(*args,**kwargs):
+    """ Like get_all_files, but only returns video files. This function is just sugar.  """
+    file_paths = get_all_paths(
+        *args,
+        **{
+            "include_folders": False,
+            "include_files": True,
+            "sort_by" : "number",
+            **kwargs,
+        }
+    )
+    return list(filter(is_video_file,file_paths))
 
 def get_all_runnable_python_files(
     folder=".",
@@ -66094,6 +66162,7 @@ known_pypi_module_package_names={
     'github': 'PyGithub',
     'glances': 'Glances',
     'google': 'protobuf',
+    'google.auth': 'google-auth',
     'google_auth_oauthlib': 'google-auth-oauthlib',
     'googleapiclient': 'google-api-python-client',
     'google_auth_httplib2': 'google-auth-httplib2',
