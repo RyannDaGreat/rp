@@ -140,6 +140,39 @@ def is_media_path(x) -> bool:
     return ext in IMAGE_EXTENSIONS or ext in VIDEO_EXTENSIONS
 
 
+def _parse_labeled_dict(d: dict) -> tuple[list, list]:
+    """Parse {label: path} dict. Returns (paths, labels) or raises if backwards."""
+    labels = []
+    paths = []
+    for label, path in d.items():
+        if is_media_path(path):
+            labels.append(label)
+            paths.append(path)
+    if not paths and d:
+        first_key = next(iter(d.keys()))
+        if is_media_path(first_key):
+            raise ValueError(
+                f"Dict has paths as keys, but expected {{label: path}}. "
+                f"Got {{{repr(first_key)}: ...}}. Flip your dict."
+            )
+    return paths, labels
+
+
+def _parse_content(content, title=None) -> dict | None:
+    """Parse content into a slide dict, or None if no valid paths."""
+    if is_media_path(content):
+        return {"paths": [content], "title": title, "labels": None}
+    if isinstance(content, dict):
+        paths, labels = _parse_labeled_dict(content)
+        if paths:
+            return {"paths": paths, "title": title, "labels": labels}
+    elif rp.is_non_str_iterable(content):
+        paths = [p for p in content if is_media_path(p)]
+        if paths:
+            return {"paths": paths, "title": title, "labels": None}
+    return None
+
+
 def normalize_slides_input(layout) -> list[dict]:
     """
     Normalize flexible input formats into list of slide dicts.
@@ -153,58 +186,22 @@ def normalize_slides_input(layout) -> list[dict]:
         - Dict with nested labels: {'Slide 1': {'vid': 'a.mp4', 'img': 'b.png'}}
         - Single path: 'a.mp4'
     """
-    # Single path
     if is_media_path(layout):
         return [{"paths": [layout], "title": None, "labels": None}]
 
-    # Dict with slide titles
     if isinstance(layout, dict):
         result = []
         for title, content in layout.items():
-            if is_media_path(content):
-                result.append(
-                    {"paths": [content], "title": title, "labels": None}
-                )
-            elif isinstance(content, dict):
-                # {'label1': 'path1', 'label2': 'path2'}
-                labels = []
-                paths = []
-                for label, path in content.items():
-                    if is_media_path(path):
-                        labels.append(label)
-                        paths.append(path)
-                if paths:
-                    result.append(
-                        {"paths": paths, "title": title, "labels": labels}
-                    )
-            elif rp.is_non_str_iterable(content):
-                paths = [p for p in content if is_media_path(p)]
-                if paths:
-                    result.append(
-                        {"paths": paths, "title": title, "labels": None}
-                    )
+            slide = _parse_content(content, title)
+            if slide:
+                result.append(slide)
         return result
 
-    # List input
     result = []
     for item in layout:
-        if isinstance(item, dict):
-            # Dict slide: {'label': 'path', ...}
-            labels = []
-            paths = []
-            for label, path in item.items():
-                if is_media_path(path):
-                    labels.append(label)
-                    paths.append(path)
-            if paths:
-                result.append({"paths": paths, "title": None, "labels": labels})
-        elif rp.is_non_str_iterable(item):
-            paths = [p for p in item if is_media_path(p)]
-            if paths:
-                result.append({"paths": paths, "title": None, "labels": None})
-        elif is_media_path(item):
-            result.append({"paths": [item], "title": None, "labels": None})
-
+        slide = _parse_content(item)
+        if slide:
+            result.append(slide)
     return result
 
 
@@ -687,7 +684,12 @@ def media_to_slides(
                 all_paths.append(path)
 
     if not all_paths:
-        raise ValueError("No media files provided")
+        raise ValueError(
+            f"No media files found in layout. "
+            f"Got {len(slides)} slides but no valid paths. "
+            f"Layout type: {type(layout).__name__}, "
+            f"Input: {repr(layout)[:500]}"
+        )
 
     if folder_name is None:
         folder_name = f"Media_{time.strftime('%Y%m%d_%H%M%S')}"
@@ -868,7 +870,10 @@ def cli(
             media_paths.append(p)
 
     if not media_paths:
-        raise ValueError("No media files found")
+        raise ValueError(
+            f"No media files found. Searched {len(paths)} paths. "
+            f"Supported formats: {', '.join(MEDIA_EXTENSIONS)}"
+        )
 
     # Split into grids if requested
     if per_slide is not None:

@@ -13748,7 +13748,7 @@ def invert_dict(d: dict, bijection=True, precedence='last') -> dict:
         items = list(d.items())
         if precedence=='first':
             items = items[::-1]
-        return {v:k for v,k in items}
+        return {v:k for k,v in items}
     else:
         # {0: 'a', 1: 'a', 2: 'b'} ⟶ {'a': (0,1), 'b': (2,)}
         out={}
