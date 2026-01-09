@@ -104,6 +104,7 @@ FOLDER_URL = "https://drive.google.com/drive/folders/{}"
 # Media types
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
+MEDIA_EXTENSIONS = VIDEO_EXTENSIONS | IMAGE_EXTENSIONS
 MIME_TYPES = {
     ".mp4": "video/mp4",
     ".mov": "video/quicktime",
@@ -868,8 +869,8 @@ def cli(
         paths           Media files, folders, or glob patterns (e.g., "*.png")
 
     Options:
-        --name NAME             Presentation name (default: auto-generated timestamp)
-        --folder_name NAME      Google Drive folder name (default: auto-generated timestamp)
+        --name NAME             Presentation name (default: same as --title, or auto-generated timestamp)
+        --folder_name NAME      Google Drive folder name (default: same as --name)
         --title TITLE           Slide title (applies to all slides)
         --captions              Use filenames as captions for each media item
         --label_position POS    Label position: 'top' (default) or 'bottom'
@@ -907,6 +908,12 @@ def cli(
             f"No media files found. Searched {len(paths)} paths. "
             f"Supported formats: {', '.join(MEDIA_EXTENSIONS)}"
         )
+
+    # Default name to title, and folder_name to name
+    if name is None and title is not None:
+        name = title
+    if folder_name is None and name is not None:
+        folder_name = name
 
     # Split into grids if requested
     if per_slide is not None:
