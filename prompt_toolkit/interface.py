@@ -970,6 +970,10 @@ class CommandLineInterface(object):
             if buffer.suggestion or not buffer.auto_suggest:
                 return
 
+            # Skip suggestion for multi-line input (avoid thread spawn overhead)
+            if '\n' in document.text:
+                return
+
             # Otherwise, get completions in other thread.
             suggest_thread_running[0] = True
 

@@ -159,7 +159,7 @@ class ProcessRow(Static):
     ProcessRow .row-header { height: 3; width: 100%; }
     ProcessRow .pid-label { width: 20; }
     ProcessRow .elapsed { width: 15; color: $accent; }
-    ProcessRow .command-display { height: 1; padding-left: 2; color: $text-muted; }
+    ProcessRow .command-display { height: auto; padding-left: 2; color: $text-muted; }
     ProcessRow .stats-row { height: 1; width: 100%; margin-top: 1; }
     ProcessRow .cpu-label { width: 5; color: $success; }
     ProcessRow .cpu-graph { width: 28; color: $success; }
@@ -186,7 +186,7 @@ class ProcessRow(Static):
             if self.proc.spawner_pane:
                 yield Button(f"⬅ {self.proc.spawner_path}", id=f"spawner-{self.proc.pid}", classes="spawner-btn", variant="success")
 
-        yield Static(f"  {self.proc.command[:150] or '(no command)'}", classes="command-display")
+        yield Static(f"  {self.proc.command or '(no command)'}", classes="command-display")
 
         with Horizontal(classes="stats-row"):
             yield Static("CPU:", classes="cpu-label")
@@ -211,7 +211,7 @@ class ClaudePanel(App):
     TITLE = "ClaudeSH Panel"
     CSS = """
     Screen { background: $surface; }
-    #container { height: 100%; }
+    #container { height: auto; max-height: 100%; }
     #no-processes { text-align: center; padding: 5; color: $text-muted; }
     """
 

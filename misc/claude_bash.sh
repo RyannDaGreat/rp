@@ -41,7 +41,8 @@ archive_viewer() {
             pid="${name##*[^0-9]}"
             [[ -z "$pid" ]] || kill -0 "$pid" 2>/dev/null && continue
             arch=$(tmux show-option -t "$id" -qv @archive_name)
-            tmux capture-pane -e -t "$id" -p -S - > "$ARCHIVE_DIR/$(date +%Y-%m-%d_%H:%M:%S)__${arch}.log" 2>/dev/null
+            logfile="$ARCHIVE_DIR/$(date +%Y-%m-%d_%H:%M:%S)__${arch}.log"
+            tmux capture-pane -e -t "$id" -p -S - > "$logfile" 2>/dev/null
             tmux kill-window -t "$id" 2>/dev/null
         done
     done &
@@ -94,11 +95,16 @@ fi
 
 PANE=$(tmux new-window -d -t "$SESSION" -n "$WINDOW_NAME" -P -F "#{pane_id}" "cat")
 tmux set-option -t "$PANE" @archive_name "$ARCHIVE_NAME"
+# Store the command for display at top of archives/previews
+FULL_CMD="$BASH_BIN $*"
+tmux set-option -t "$PANE" @run_command "$FULL_CMD"
 # Store the spawner pane ID so the panel can navigate back to the Claude session
 [[ -n "$TMUX_PANE" ]] && tmux set-option -t "$PANE" @spawner_pane "$TMUX_PANE"
 TTY=$(tmux display -p -t "$PANE" "#{pane_tty}")
 
 # --- Run command, mirror to tmux ---
+# Show the command at the top of the live pane with inverted formatting
+printf '\033[7m$ %s\033[0m\n\n' "$FULL_CMD" > "$TTY"
 if [ -t 0 ]; then
     if [ "$IS_MACOS" ]; then
         script -q "$TTY" "$BASH_BIN" "$@"

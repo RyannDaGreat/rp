@@ -5,6 +5,16 @@ Usage:
     rp run ppt media_to_slides video1.mp4 video2.mp4 image.png
     rp run ppt media_to_slides folder_with_media/
     rp run ppt media_to_slides *.mp4 *.png --name "My Presentation"
+
+Glossary:
+    content     Any string input. If it's a path to an existing file, use the file.
+                Otherwise treat it as literal text to display in a text box.
+    media       An image or video file (uploaded to Google Drive).
+    text        Literal string or contents of a non-media file, shown as a text box.
+    title       Large text at the top of a slide (--title_size, default 24pt).
+    text_size   Font size for text boxes (--text_size, default 12pt).
+    label       Small text near each grid item (--label_size, default: same as text_size).
+                In the CLI, --captions creates labels from filenames.
 """
 
 import os
@@ -12,6 +22,8 @@ import time
 import tempfile
 
 import rp
+
+__all__ = ["cli", "media_to_slides"]
 
 rp.pip_import("google.auth")
 rp.pip_import("google_auth_oauthlib")
@@ -94,12 +106,66 @@ TITLE_PADDING, LABEL_PADDING = 16, 8
 
 # Default styling
 DEFAULT_FONT = "Lexend"
-DEFAULT_TITLE_SIZE, DEFAULT_LABEL_SIZE = 24, 12
+DEFAULT_TITLE_SIZE, DEFAULT_TEXT_SIZE = 24, 12
 
 # URL templates
 DRIVE_FILE_URL = "https://drive.google.com/uc?id={}"
 SLIDES_URL = "https://docs.google.com/presentation/d/{}/edit"
 FOLDER_URL = "https://drive.google.com/drive/folders/{}"
+
+# Upload cache path (same folder as token.json)
+UPLOAD_CACHE_PATH = rp.with_file_name(TOKEN_PATH, "upload_cache.json", keep_extension=False)
+
+
+def _load_upload_cache() -> dict:
+    """Load the upload cache from disk. Returns empty dict if not found."""
+    if rp.file_exists(UPLOAD_CACHE_PATH):
+        return rp.load_json(UPLOAD_CACHE_PATH)
+    return {}
+
+
+def _save_upload_cache(cache: dict) -> None:
+    """Save the upload cache to disk."""
+    rp.save_json(cache, UPLOAD_CACHE_PATH)
+
+
+def copy_drive_file(
+    service,
+    file_id: str,
+    folder_id: str,
+    new_name: str = None,
+) -> dict:
+    """
+    Copy a file on Google Drive to a folder (server-side, fast).
+
+    This creates a new file object in the target folder - like a hard link,
+    deleting one copy doesn't affect the other.
+
+    Args:
+        service: Google Drive API service instance
+        file_id: ID of the file to copy
+        folder_id: ID of the destination folder
+        new_name: Optional new name for the copy
+
+    Returns:
+        Dict with 'id', 'name', 'webViewLink', 'webContentLink' of the new copy
+    """
+    metadata = {"parents": [folder_id]}
+    if new_name:
+        metadata["name"] = new_name
+
+    result = service.files().copy(
+        fileId=file_id,
+        body=metadata,
+        fields="id,name,webViewLink,webContentLink",
+    ).execute()
+
+    return {
+        "id": result.get("id"),
+        "name": result.get("name"),
+        "webViewLink": result.get("webViewLink"),
+        "webContentLink": result.get("webContentLink"),
+    }
 
 # Media types
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"}
@@ -133,44 +199,57 @@ def is_video(path: str) -> bool:
     return _get_ext(path) in VIDEO_EXTENSIONS
 
 
-def is_media_path(x) -> bool:
-    """Check if x looks like a media file path (by extension)."""
-    if not isinstance(x, str):
-        return False
-    ext = _get_ext(x)
-    return ext in IMAGE_EXTENSIONS or ext in VIDEO_EXTENSIONS
+def is_media_file(path: str) -> bool:
+    """Check if path is an existing media file (image or video)."""
+    return rp.file_exists(path) and _get_ext(path) in MEDIA_EXTENSIONS
+
+
+def content_to_slide_item(content: str, path_to_media: dict) -> dict:
+    """Convert a content string to a slide item dict.
+
+    Args:
+        content: File path or literal text
+        path_to_media: Dict mapping media file paths to their uploaded Drive info
+
+    Returns:
+        Dict with either Drive info (for media) or {'is_text': True, 'text': str}
+    """
+    if is_media_file(content):
+        return path_to_media[content]
+    elif rp.file_exists(content):
+        return {"is_text": True, "text": rp.text_file_to_string(content)}
+    else:
+        return {"is_text": True, "text": content}
 
 
 def _parse_labeled_dict(d: dict) -> tuple[list, list]:
-    """Parse {label: path} dict. Returns (paths, labels) or raises if backwards."""
+    """Parse {label: content} dict. Returns (contents, labels)."""
     labels = []
-    paths = []
-    for label, path in d.items():
-        if is_media_path(path):
+    contents = []
+    for label, content in d.items():
+        if isinstance(content, str):
             labels.append(label)
-            paths.append(path)
-    if not paths and d:
-        first_key = next(iter(d.keys()))
-        if is_media_path(first_key):
-            raise ValueError(
-                f"Dict has paths as keys, but expected {{label: path}}. "
-                f"Got {{{repr(first_key)}: ...}}. Flip your dict."
-            )
-    return paths, labels
+            contents.append(content)
+    return contents, labels
 
 
 def _parse_content(content, title=None) -> dict | None:
-    """Parse content into a slide dict, or None if no valid paths."""
-    if is_media_path(content):
-        return {"paths": [content], "title": title, "labels": None}
+    """Parse content into a slide dict.
+
+    Content can be:
+    - A file path (if file exists, use it as image/video/text file)
+    - Literal text (if file doesn't exist, render as text box)
+    """
+    if isinstance(content, str):
+        return {"contents": [content], "title": title, "labels": None}
     if isinstance(content, dict):
-        paths, labels = _parse_labeled_dict(content)
-        if paths:
-            return {"paths": paths, "title": title, "labels": labels}
+        contents, labels = _parse_labeled_dict(content)
+        if contents:
+            return {"contents": contents, "title": title, "labels": labels}
     elif rp.is_non_str_iterable(content):
-        paths = [p for p in content if is_media_path(p)]
-        if paths:
-            return {"paths": paths, "title": title, "labels": None}
+        contents = [c for c in content if isinstance(c, str)]
+        if contents:
+            return {"contents": contents, "title": title, "labels": None}
     return None
 
 
@@ -178,17 +257,21 @@ def normalize_slides_input(layout) -> list[dict]:
     """
     Normalize flexible input formats into list of slide dicts.
 
-    Returns list of {'paths': [...], 'title': str or None, 'labels': [...] or None}
+    Returns list of {'contents': [...], 'title': str or None, 'labels': [...] or None}
+
+    Each content item is either:
+    - A path to an existing file (image, video, or text file to read)
+    - Literal text (rendered as a text box)
 
     Accepts:
-        - List of paths: ['a.mp4', 'b.png'] -> one per slide, no titles
+        - Single string: 'a.mp4' or 'Hello world'
+        - List: ['a.mp4', 'b.png', 'Some text here']
         - Nested lists: [['a.mp4', 'b.png'], 'c.mp4'] -> grid on first slide
-        - Dict with slide titles: {'Slide 1': ['a.mp4'], 'Slide 2': 'b.png'}
-        - Dict with nested labels: {'Slide 1': {'vid': 'a.mp4', 'img': 'b.png'}}
-        - Single path: 'a.mp4'
+        - Dict with titles: {'Slide 1': ['a.mp4'], 'Notes': 'Some notes here'}
+        - Dict with labels: {'Gallery': {'cat': 'cat.png', 'desc': 'A cute cat'}}
     """
-    if is_media_path(layout):
-        return [{"paths": [layout], "title": None, "labels": None}]
+    if isinstance(layout, str):
+        return [{"contents": [layout], "title": None, "labels": None}]
 
     if isinstance(layout, dict):
         result = []
@@ -300,12 +383,27 @@ def upload_media_sequential(
     service,
     file_paths: list[str],
     folder_id: str = None,
+    use_cache: bool = True,
 ) -> list[dict]:
-    """Upload multiple media files sequentially with progress bars."""
+    """Upload multiple media files sequentially with progress bars.
+
+    Args:
+        service: Google Drive API service instance
+        file_paths: List of file paths to upload
+        folder_id: Destination folder ID on Google Drive
+        use_cache: If True, check cache for previously uploaded files and copy instead of re-uploading
+
+    Returns:
+        List of dicts with 'id', 'name', 'webViewLink', 'webContentLink', 'is_image'
+    """
     results = []
     total_bytes = sum(rp.get_file_size(fp) for fp in file_paths)
     uploaded_bytes = 0
     start_time = time.time()
+
+    # Load cache if using it
+    cache = _load_upload_cache() if use_cache else {}
+    cache_modified = False
 
     for i, fp in enumerate(file_paths):
         size = rp.get_file_size(fp)
@@ -313,26 +411,67 @@ def upload_media_sequential(
         progress_str = _format_progress(i + 1, len(file_paths), uploaded_bytes, total_bytes, elapsed)
         rp.fansi_print(f"  {progress_str}", "cyan")
 
-        pbar = tqdm(
-            total=size,
-            desc=rp.get_file_name(fp),
-            unit="B",
-            unit_scale=True,
-            leave=False,
-        )
-        last_progress = [0]
+        file_name = rp.get_file_name(fp)
+        file_hash = rp.get_sha256_hash(fp) if use_cache else None
 
-        def progress_cb(progress, total):
-            current = int(progress * total)
-            pbar.update(current - last_progress[0])
-            last_progress[0] = current
+        # Check cache for this file
+        if use_cache and file_hash in cache:
+            cached = cache[file_hash]
+            rp.fansi_print(f"  {file_name}: cache hit, copying...", "yellow")
 
-        result = upload_media(service, fp, folder_id, progress_cb)
-        pbar.update(size - last_progress[0])  # Ensure 100%
-        pbar.close()
+            # Copy the cached file to the new folder
+            copy_result = copy_drive_file(
+                service,
+                cached["id"],
+                folder_id,
+                new_name=file_name,
+            )
+            result = {
+                "id": copy_result["id"],
+                "name": copy_result["name"],
+                "webViewLink": copy_result["webViewLink"],
+                "webContentLink": copy_result["webContentLink"],
+                "is_image": cached["is_image"],
+            }
+            rp.fansi_print(f"  Copied: {result['webViewLink']}", "green")
+        else:
+            # Upload normally
+            pbar = tqdm(
+                total=size,
+                desc=file_name,
+                unit="B",
+                unit_scale=True,
+                leave=False,
+            )
+            last_progress = [0]
+
+            def progress_cb(progress, total):
+                current = int(progress * total)
+                pbar.update(current - last_progress[0])
+                last_progress[0] = current
+
+            result = upload_media(service, fp, folder_id, progress_cb)
+            pbar.update(size - last_progress[0])  # Ensure 100%
+            pbar.close()
+            rp.fansi_print(f"  Uploaded: {result['webViewLink']}", "green")
+
+            # Add to cache
+            if use_cache and file_hash:
+                cache[file_hash] = {
+                    "id": result["id"],
+                    "name": result["name"],
+                    "webViewLink": result["webViewLink"],
+                    "webContentLink": result["webContentLink"],
+                    "is_image": result["is_image"],
+                }
+                cache_modified = True
+
         uploaded_bytes += size
-        rp.fansi_print(f"  Uploaded: {result['webViewLink']}", "green")
         results.append(result)
+
+    # Save cache if modified
+    if cache_modified:
+        _save_upload_cache(cache)
 
     return results
 
@@ -447,6 +586,128 @@ def parse_color(color) -> tuple:
     return (rgb[0] / 255, rgb[1] / 255, rgb[2] / 255)
 
 
+# Navbar constants
+NAVBAR_BUTTON_SIZE = 36
+NAVBAR_PADDING = 12
+NAVBAR_BUTTON_GAP = 8
+
+
+def _get_nav_button_paths() -> tuple[str, str]:
+    """Get paths to nav button PNGs, generating them if needed.
+
+    Saves to same folder as token.json (user's config dir) so they persist
+    and don't need to be regenerated or shipped with the package.
+    """
+    token_dir = rp.get_parent_folder(TOKEN_PATH)
+    prev_path = rp.path_join(token_dir, "nav_prev.png")
+    next_path = rp.path_join(token_dir, "nav_next.png")
+
+    # Generate if either is missing
+    if not rp.file_exists(prev_path) or not rp.file_exists(next_path):
+        _generate_nav_button_pngs(prev_path, next_path)
+
+    return prev_path, next_path
+
+
+def _generate_nav_button_pngs(prev_path: str, next_path: str):
+    """Generate nav button PNGs: white circle (50% alpha) with black triangle."""
+    import cv2
+    import numpy as np
+    import math
+
+    size = 144  # pixels (crisp when scaled down)
+    center = size // 2
+    radius = size // 2 - 4
+    tri_radius = radius * 0.45 * 1.3  # triangle 1.3x larger
+
+    white_bg = (255, 255, 255)
+    black = (0, 0, 0)
+
+    for direction, path in [("left", prev_path), ("right", next_path)]:
+        img = np.zeros((size, size, 4), dtype=np.uint8)
+        cv2.circle(img, (center, center), radius, (*white_bg, 128), -1, cv2.LINE_AA)
+
+        # Equilateral triangle vertices
+        angles = [180, 300, 60] if direction == "left" else [0, 120, 240]
+        pts = np.array([
+            [center + int(tri_radius * math.cos(math.radians(a))),
+             center + int(tri_radius * math.sin(math.radians(a)))]
+            for a in angles
+        ], dtype=np.int32)
+
+        cv2.fillPoly(img, [pts], (*black, 255), cv2.LINE_AA)
+        cv2.imwrite(path, img)
+
+
+def _upload_nav_buttons(drive_service, folder_id: str) -> dict:
+    """Upload nav button PNGs to Drive, return {name: file_id}."""
+    prev_path, next_path = _get_nav_button_paths()
+    result = {}
+    for name, path in [("prev", prev_path), ("next", next_path)]:
+        uploaded = upload_media(drive_service, path, folder_id)
+        make_file_public(drive_service, uploaded["id"])
+        result[name] = uploaded["id"]
+    return result
+
+
+def _navbar_button_requests(
+    obj_id: str,
+    page_id: str,
+    center_x: float,
+    center_y: float,
+    size: float,
+    image_url: str,
+    target_slide_id: str,
+) -> list:
+    """Create requests for a nav button image with transparent linked shape overlay."""
+    half = size / 2
+    x, y = center_x - half, center_y - half
+    overlay_id = obj_id + "_link"
+
+    return [
+        # Create image
+        {
+            "createImage": {
+                "objectId": obj_id,
+                "url": image_url,
+                "elementProperties": _element_props(page_id, x, y, size, size),
+            }
+        },
+        # Create transparent shape overlay for the link
+        {
+            "createShape": {
+                "objectId": overlay_id,
+                "shapeType": "ELLIPSE",
+                "elementProperties": _element_props(page_id, x, y, size, size),
+            }
+        },
+        # Make shape fully transparent
+        {
+            "updateShapeProperties": {
+                "objectId": overlay_id,
+                "shapeProperties": {
+                    "shapeBackgroundFill": {"propertyState": "NOT_RENDERED"},
+                    "outline": {"propertyState": "NOT_RENDERED"},
+                },
+                "fields": "shapeBackgroundFill,outline",
+            }
+        },
+        # Insert invisible text to hold the link (single space)
+        {"insertText": {"objectId": overlay_id, "text": " "}},
+        # Add link to the text
+        {
+            "updateTextStyle": {
+                "objectId": overlay_id,
+                "style": {
+                    "link": {"pageObjectId": target_slide_id},
+                    "fontSize": _pt(size),  # Make clickable area large
+                },
+                "fields": "link,fontSize",
+            }
+        },
+    ]
+
+
 def compute_grid_layout(
     n_items: int,
     slide_width: float,
@@ -506,22 +767,57 @@ def create_slides_with_media_grid(
     font_color=None,
     font: str = DEFAULT_FONT,
     title_size: int = DEFAULT_TITLE_SIZE,
-    label_size: int = DEFAULT_LABEL_SIZE,
+    title_font: str = None,
+    title_color=None,
+    text_size: int = None,
+    text_font: str = None,
+    text_color=None,
+    label_size: int = None,
+    label_font: str = None,
+    label_color=None,
+    autoplay: bool = True,
+    navbar: bool = False,
+    nav_button_urls: dict = None,
 ) -> dict:
     """
-    Create a Google Slides presentation with media in grids.
+    Create a Google Slides presentation with content in grids.
 
     Args:
         slides_data: List of {'media': [...], 'title': str|None, 'labels': [...]|None}
-        label_position: 'top' or 'bottom' - where labels appear relative to media
+            Each item in 'media' can be:
+            - Image/video: dict with 'id', 'is_image' (from Drive upload)
+            - Text: dict with 'is_text': True, 'text': str (content to display)
+        label_position: 'top' or 'bottom' - where labels appear relative to content
         bg_color: Background color (name like 'black', hex like '#FFAABB', or RGB tuple)
-        font_color: Text color (same format as bg_color)
-        font: Font family name (default: 'Lexend')
+        font_color: Default text color (same format as bg_color)
+        font: Default font family name (default: 'Lexend')
         title_size: Title font size in pt (default: 24)
-        label_size: Label font size in pt (default: 12)
+        title_font: Title font family (default: same as font)
+        title_color: Title color (default: same as font_color)
+        text_size: Text box font size in pt (default: 12)
+        text_font: Text box font family (default: same as font)
+        text_color: Text box color (default: same as font_color)
+        label_size: Label font size in pt (default: same as text_size)
+        label_font: Label font family (default: same as text_font)
+        label_color: Label color (default: same as text_color)
+        autoplay: Whether videos autoplay when the slide is shown. Default: True.
+        navbar: Whether to add prev/next navigation buttons. Default: False.
+        nav_button_urls: Dict with 'prev' and 'next' Drive URLs for nav buttons (required if navbar=True).
     """
+    # Apply defaults: text inherits from font/font_color, label inherits from text
+    if text_size   is None: text_size   = DEFAULT_TEXT_SIZE
+    if text_font   is None: text_font   = font
+    if text_color  is None: text_color  = font_color
+    if label_size  is None: label_size  = text_size
+    if label_font  is None: label_font  = text_font
+    if label_color is None: label_color = text_color
+    if title_font  is None: title_font  = font
+    if title_color is None: title_color = font_color
+
     bg_rgb = parse_color(bg_color)
-    font_rgb = parse_color(font_color)
+    title_rgb = parse_color(title_color)
+    label_rgb = parse_color(label_color)
+    text_rgb = parse_color(text_color)
     presentation = (
         slides_service.presentations()
         .create(body={"title": presentation_name})
@@ -534,11 +830,9 @@ def create_slides_with_media_grid(
 
     for slide_idx, slide in enumerate(slides_data):
         slide_id = f"slide_{slide_idx}"
-        slide_media, title, labels = (
-            slide["media"],
-            slide.get("title"),
-            slide.get("labels"),
-        )
+        title = slide.get("title")
+        slide_media = slide["media"]
+        labels = slide.get("labels")
 
         requests.append(
             {
@@ -568,7 +862,8 @@ def create_slides_with_media_grid(
             )
 
         title_h = (title_size + TITLE_PADDING) if title else 0
-        grid_top, grid_h = title_h, SLIDE_HEIGHT_PT - title_h
+        navbar_h = (NAVBAR_BUTTON_SIZE + NAVBAR_PADDING) if navbar else 0
+        grid_top, grid_h = title_h, SLIDE_HEIGHT_PT - title_h - navbar_h
 
         if title:
             requests.extend(
@@ -580,9 +875,9 @@ def create_slides_with_media_grid(
                     SLIDE_WIDTH_PT,
                     title_h,
                     title,
-                    font,
+                    title_font,
                     title_size,
-                    font_rgb,
+                    title_rgb,
                     bold=True,
                 )
             )
@@ -599,7 +894,30 @@ def create_slides_with_media_grid(
                 slide_id, pos["x"], media_y, pos["width"], pos["height"]
             )
 
-            if media.get("is_image"):
+            if media.get("is_text"):
+                # Text content renders as a text box in the grid cell
+                text_content = media["text"]
+                requests.append(
+                    {
+                        "createShape": {
+                            "objectId": obj_id,
+                            "shapeType": "TEXT_BOX",
+                            "elementProperties": elem_props,
+                        }
+                    }
+                )
+                requests.append({"insertText": {"objectId": obj_id, "text": text_content}})
+                style = {"fontSize": _pt(text_size), "fontFamily": text_font}
+                if text_rgb:
+                    style["foregroundColor"] = _fg_color(text_rgb)
+                fields = "fontSize,fontFamily" + (",foregroundColor" if text_rgb else "")
+                requests.append(
+                    {"updateTextStyle": {"objectId": obj_id, "style": style, "fields": fields}}
+                )
+                requests.append(
+                    {"updateParagraphStyle": {"objectId": obj_id, "style": {"alignment": "START"}, "fields": "alignment"}}
+                )
+            elif media.get("is_image"):
                 requests.append(
                     {
                         "createImage": {
@@ -620,15 +938,20 @@ def create_slides_with_media_grid(
                         }
                     }
                 )
-                autoplay_requests.append(
-                    {
-                        "updateVideoProperties": {
-                            "objectId": obj_id,
-                            "videoProperties": {"autoPlay": True},
-                            "fields": "autoPlay",
+                if autoplay:
+                    # Note (January 9, 2026): Google Slides API has a bug where setting autoPlay=True
+                    # adds a SECOND animation entry instead of replacing the default "Play (on click)".
+                    # This results in duplicate animations in the UI but autoplay still works.
+                    # See: https://issuetracker.google.com/issues/283097101
+                    autoplay_requests.append(
+                        {
+                            "updateVideoProperties": {
+                                "objectId": obj_id,
+                                "videoProperties": {"autoPlay": True},
+                                "fields": "autoPlay",
+                            }
                         }
-                    }
-                )
+                    )
 
             if labels and media_idx < len(labels):
                 requests.extend(
@@ -640,13 +963,47 @@ def create_slides_with_media_grid(
                         pos["label_width"],
                         label_h,
                         labels[media_idx],
-                        font,
+                        label_font,
                         label_size,
-                        font_rgb,
+                        label_rgb,
                     )
                 )
 
             media_counter += 1
+
+        # Add navbar buttons (PNG images with transparent link overlay)
+        if navbar and nav_button_urls:
+            btn_size = NAVBAR_BUTTON_SIZE
+            btn_center_y = SLIDE_HEIGHT_PT - NAVBAR_PADDING - btn_size / 2
+            n_slides = len(slides_data)
+            # Prev button (links to previous slide, wraps to last)
+            prev_slide_idx = (slide_idx - 1) % n_slides
+            prev_center_x = NAVBAR_PADDING + btn_size / 2
+            requests.extend(
+                _navbar_button_requests(
+                    f"nav_prev_{slide_idx}",
+                    slide_id,
+                    prev_center_x,
+                    btn_center_y,
+                    btn_size,
+                    nav_button_urls["prev"],
+                    f"slide_{prev_slide_idx}",
+                )
+            )
+            # Next button (links to next slide, wraps to first)
+            next_slide_idx = (slide_idx + 1) % n_slides
+            next_center_x = prev_center_x + btn_size + NAVBAR_BUTTON_GAP
+            requests.extend(
+                _navbar_button_requests(
+                    f"nav_next_{slide_idx}",
+                    slide_id,
+                    next_center_x,
+                    btn_center_y,
+                    btn_size,
+                    nav_button_urls["next"],
+                    f"slide_{next_slide_idx}",
+                )
+            )
 
     requests.append({"deleteObject": {"objectId": default_slide_id}})
     slides_service.presentations().batchUpdate(
@@ -669,113 +1026,143 @@ def media_to_slides(
     font_color=None,
     font: str = DEFAULT_FONT,
     title_size: int = DEFAULT_TITLE_SIZE,
-    label_size: int = DEFAULT_LABEL_SIZE,
+    title_font: str = None,
+    title_color=None,
+    text_size: int = DEFAULT_TEXT_SIZE,
+    text_font: str = None,
+    text_color=None,
+    label_size: int = None,
+    label_font: str = None,
+    label_color=None,
+    autoplay: bool = True,
+    navbar: bool = False,
+    use_cache: bool = True,
 ) -> dict:
     """
     Upload media files (videos/images) and create a Google Slides presentation.
 
     Args:
-        layout: Media to include. Accepts flexible formats:
-            - str: Single file path ('a.mp4')
-            - list[str]: One file per slide (['a.mp4', 'b.png'])
+        layout: Content to include. Accepts flexible formats:
+            - str: Single file path ('a.mp4', 'notes.txt', 'readme.md')
+            - list[str]: One file per slide (['a.mp4', 'b.png', 'notes.txt'])
             - list[list[str]]: Grid layouts ([['a.mp4', 'b.png'], 'c.mp4'])
-            - dict[str, str|list]: Slides with titles ({'Intro': 'a.mp4', 'Demo': ['b.mp4', 'c.png']})
-            - dict[str, dict[str, str]]: Slides with titles and labels ({'Intro': {'cat': 'a.mp4', 'dog': 'b.png'}})
+            - dict[str, str|list]: Slides with titles ({'Intro': 'a.mp4', 'Notes': 'notes.txt'})
+            - dict[str, dict[str, str]]: Slides with titles and labels
         presentation_name (str): Name for the presentation. Default: auto-generated from timestamp.
         folder_name (str): Name for Google Drive folder. Default: auto-generated from timestamp.
         label_position (str): Where labels appear relative to media. Default: 'top'.
-            - 'top': Labels above media
-            - 'bottom': Labels below media
         bg_color: Background color for slides. Default: None (white).
-            Accepts: color name ('black', 'white', 'blue'), hex ('#FFAABB'), or RGB tuple ((255, 170, 187)).
-        font_color: Text color for titles and labels. Default: None (black).
-            Accepts: same formats as bg_color.
-        font (str): Font family name. Default: 'Lexend'.
+        font_color: Default text color. Default: None (black).
+        font (str): Default font family. Default: 'Lexend'.
         title_size (int): Title font size in points. Default: 24.
-        label_size (int): Label font size in points. Default: 12.
+        title_font (str): Title font family. Default: same as font.
+        title_color: Title color. Default: same as font_color.
+        text_size (int): Text box font size in points. Default: 12.
+        text_font (str): Text box font family. Default: same as font.
+        text_color: Text box color. Default: same as font_color.
+        label_size (int): Label font size in points. Default: same as text_size.
+        label_font (str): Label font family. Default: same as text_font.
+        label_color: Label color. Default: same as text_color.
+        autoplay (bool): Whether videos autoplay when the slide is shown. Default: True.
+        navbar (bool): Whether to add prev/next navigation buttons. Default: False.
+        use_cache (bool): If True, reuse previously uploaded files via copy instead of re-uploading. Default: True.
 
     Returns:
         dict: {'folder_id', 'folder_url', 'media', 'presentation': {'id', 'url', 'public_url', 'name'}}
 
     Examples:
         >>> media_to_slides(['a.mp4', 'b.png'])  # 2 slides, 1 item each
-        >>> media_to_slides([['a.mp4', 'b.png'], 'c.mp4'])  # slide 1: 2-item grid, slide 2: single
-        >>> media_to_slides({'Intro': 'a.mp4', 'Demo': ['b.mp4', 'c.png']})  # 2 titled slides
-        >>> media_to_slides({'Gallery': {'cat': 'a.png', 'dog': 'b.png'}})  # 1 slide, titled, labeled grid
+        >>> media_to_slides({'Intro': 'a.mp4', 'Notes': 'Hello world!'})  # media + text
+        >>> media_to_slides(['Just some text'])  # text-only presentation
         >>> media_to_slides(files, bg_color='black', font_color='white')  # dark theme
-        >>> media_to_slides(files, label_position='bottom', label_size=10)  # labels below, smaller
     """
     slides = normalize_slides_input(layout)
 
-    # Flatten to get unique paths
-    all_paths = []
+    # Collect unique media file paths (only existing image/video files need upload)
+    media_paths = []
     for slide in slides:
-        for path in slide["paths"]:
-            if path not in all_paths:
-                all_paths.append(path)
+        for content in slide["contents"]:
+            if is_media_file(content) and content not in media_paths:
+                media_paths.append(content)
 
-    if not all_paths:
+    if not slides:
         raise ValueError(
-            f"No media files found in layout. "
-            f"Got {len(slides)} slides but no valid paths. "
+            f"No content found in layout. "
             f"Layout type: {type(layout).__name__}, "
             f"Input: {repr(layout)[:500]}"
         )
 
-    if folder_name is None:
-        folder_name = f"Media_{time.strftime('%Y%m%d_%H%M%S')}"
-    if presentation_name is None:
+    # Cascade defaults: presentation_name -> folder_name -> auto-generated timestamp
+    if presentation_name is None and folder_name is None:
+        folder_name = f"Slides_{time.strftime('%Y%m%d_%H%M%S')}"
         presentation_name = folder_name
-
-    rp.fansi_print(
-        f"Uploading {len(all_paths)} media files to Google Drive...",
-        "cyan",
-        "bold",
-    )
-    for p in all_paths:
-        rp.fansi_print(f"  {rp.get_file_name(p)}", "white")
+    elif presentation_name is None:
+        presentation_name = folder_name
+    elif folder_name is None:
+        folder_name = presentation_name
 
     creds = get_credentials()
     drive_service = build("drive", "v3", credentials=creds)
     slides_service = build("slides", "v1", credentials=creds)
 
-    rp.fansi_print(f"\nCreating folder: rp/generated_slides/{folder_name}", "cyan")
-    parent_id = get_rp_slides_folder(drive_service)
-    folder_id = create_folder(drive_service, folder_name, parent_id)
-    folder_url = FOLDER_URL.format(folder_id)
-    rp.fansi_print(f"  {folder_url}", "white")
+    folder_id = None
+    folder_url = None
+    media = []
+    path_to_media = {}
 
-    rp.fansi_print("\nUploading media...", "cyan")
-    media = upload_media_sequential(drive_service, all_paths, folder_id)
+    # Create folder if we have media files OR navbar (need to upload nav button images)
+    if media_paths or navbar:
+        rp.fansi_print(f"\nCreating folder: rp/generated_slides/{folder_name}", "cyan")
+        parent_id = get_rp_slides_folder(drive_service)
+        folder_id = create_folder(drive_service, folder_name, parent_id)
+        folder_url = FOLDER_URL.format(folder_id)
+        rp.fansi_print(f"  {folder_url}", "white")
 
-    path_to_media = dict(zip(all_paths, media))
+    # Upload media files if any
+    if media_paths:
+        rp.fansi_print(
+            f"\nUploading {len(media_paths)} media files to Google Drive...",
+            "cyan",
+            "bold",
+        )
+        for p in media_paths:
+            rp.fansi_print(f"  {rp.get_file_name(p)}", "white")
 
-    rp.fansi_print("\nMaking files publicly accessible...", "cyan")
-    start_time = time.time()
-    for i, m in enumerate(media):
-        elapsed = time.time() - start_time
-        progress_str = _format_progress(i + 1, len(media), i, len(media), elapsed, use_bytes=False)
-        rp.fansi_print(f"  {progress_str} {m['name']}", "cyan")
-        make_file_public(drive_service, m["id"])
+        rp.fansi_print("\nUploading media...", "cyan")
+        media = upload_media_sequential(drive_service, media_paths, folder_id, use_cache=use_cache)
 
-    # Build slides_data for create_slides_with_media_grid
+        path_to_media = dict(zip(media_paths, media))
+
+        rp.fansi_print("\nMaking files publicly accessible...", "cyan")
+        start_time = time.time()
+        for i, m in enumerate(media):
+            elapsed = time.time() - start_time
+            progress_str = _format_progress(i + 1, len(media), i, len(media), elapsed, use_bytes=False)
+            rp.fansi_print(f"  {progress_str} {m['name']}", "cyan")
+            make_file_public(drive_service, m["id"])
+
+    # Build slides_data - each content item becomes either media or text box
     slides_data = []
     for slide in slides:
-        slides_data.append(
-            {
-                "media": [path_to_media[p] for p in slide["paths"]],
-                "title": slide.get("title"),
-                "labels": slide.get("labels"),
-            }
-        )
+        slide_items = [content_to_slide_item(c, path_to_media) for c in slide["contents"]]
+        slides_data.append({
+            "media": slide_items,
+            "title": slide.get("title"),
+            "labels": slide.get("labels"),
+        })
+
+    # Upload nav button images if navbar enabled
+    nav_button_urls = None
+    if navbar:
+        rp.fansi_print("\nUploading nav buttons...", "cyan")
+        nav_ids = _upload_nav_buttons(drive_service, folder_id)
+        nav_button_urls = {
+            "prev": DRIVE_FILE_URL.format(nav_ids["prev"]),
+            "next": DRIVE_FILE_URL.format(nav_ids["next"]),
+        }
 
     rp.fansi_print(f"\nCreating presentation: {presentation_name}", "cyan")
-    rp.fansi_print(f"  {len(slides)} slides", "white")
-    for i, slide in enumerate(slides):
-        title_str = f" - {slide['title']}" if slide.get("title") else ""
-        rp.fansi_print(
-            f"    Slide {i+1}: {len(slide['paths'])} items{title_str}", "white"
-        )
+    rp.fansi_print(f"  {len(slides_data)} slides", "white")
 
     presentation = create_slides_with_media_grid(
         slides_service,
@@ -787,22 +1174,36 @@ def media_to_slides(
         font_color=font_color,
         font=font,
         title_size=title_size,
+        title_font=title_font,
+        title_color=title_color,
         label_size=label_size,
+        label_font=label_font,
+        label_color=label_color,
+        text_size=text_size,
+        text_font=text_font,
+        text_color=text_color,
+        autoplay=autoplay,
+        navbar=navbar,
+        nav_button_urls=nav_button_urls,
     )
 
-    drive_service.files().update(
-        fileId=presentation["id"],
-        addParents=folder_id,
-        fields="id",
-    ).execute()
+    # Move presentation to folder if we created one
+    if folder_id:
+        drive_service.files().update(
+            fileId=presentation["id"],
+            addParents=folder_id,
+            fields="id",
+        ).execute()
 
     rp.fansi_print("\nSetting sharing permissions...", "cyan")
     public_url = make_public(drive_service, presentation["id"])
 
     rp.fansi_print("\nSuccess!", "green", "bold")
-    rp.fansi_print(f"  Media: {len(media)}", "green")
-    rp.fansi_print(f"  Slides: {len(slides)}", "green")
-    rp.fansi_print(f"  Folder: {folder_url}", "green")
+    if media:
+        rp.fansi_print(f"  Media: {len(media)}", "green")
+    rp.fansi_print(f"  Slides: {len(slides_data)}", "green")
+    if folder_url:
+        rp.fansi_print(f"  Folder: {folder_url}", "green")
     if public_url:
         rp.fansi_print(
             f"  Presentation (public): {public_url}", "green", "bold"
@@ -831,14 +1232,12 @@ SORT_METHODS = {"name", "date", "size", "number"}
 def get_media_files(path_or_glob: str, sort_by: str = "name") -> list[str]:
     """Get media files from a folder or glob pattern, sorted."""
     if rp.folder_exists(path_or_glob):
-        exts = " ".join(
-            ext.lstrip(".") for ext in VIDEO_EXTENSIONS | IMAGE_EXTENSIONS
-        )
+        exts = " ".join(ext.lstrip(".") for ext in MEDIA_EXTENSIONS)
         return rp.get_all_files(
             path_or_glob, file_extension_filter=exts, sort_by=sort_by
         )
     else:
-        files = [f for f in rp.glob(path_or_glob) if is_media_path(f)]
+        files = [f for f in rp.glob(path_or_glob) if is_media_file(f)]
         if sort_by == "number":
             return rp.sorted_by_number(files)
         elif sort_by == "date":
@@ -859,9 +1258,19 @@ def cli(
     font_color: str = None,
     font: str = DEFAULT_FONT,
     title_size: int = DEFAULT_TITLE_SIZE,
-    label_size: int = DEFAULT_LABEL_SIZE,
+    title_font: str = None,
+    title_color: str = None,
+    text_size: int = DEFAULT_TEXT_SIZE,
+    text_font: str = None,
+    text_color: str = None,
+    label_size: int = None,
+    label_font: str = None,
+    label_color: str = None,
     sort_by: str = "name",
     per_slide: int = None,
+    autoplay: bool = True,
+    navbar: bool = False,
+    use_cache: bool = True,
 ):
     """Upload media to Google Drive and create a Google Slides presentation.
 
@@ -875,65 +1284,80 @@ def cli(
         --captions              Use filenames as captions for each media item
         --label_position POS    Label position: 'top' (default) or 'bottom'
         --bg_color COLOR        Background color: name ('black'), hex ('#FFAABB'), default: white
-        --font_color COLOR      Text color: name ('white'), hex ('#FFAABB'), default: black
-        --font FONT             Font family (default: Lexend)
+        --font_color COLOR      Default text color (default: black)
+        --font FONT             Default font family (default: Lexend)
         --title_size SIZE       Title font size in pt (default: 24)
-        --label_size SIZE       Label font size in pt (default: 12)
+        --title_font FONT       Title font family (default: same as --font)
+        --title_color COLOR     Title color (default: same as --font_color)
+        --text_size SIZE        Text box font size in pt (default: 12)
+        --text_font FONT        Text box font family (default: same as --font)
+        --text_color COLOR      Text box color (default: same as --font_color)
+        --label_size SIZE       Label font size in pt (default: same as --text_size)
+        --label_font FONT       Label font family (default: same as --text_font)
+        --label_color COLOR     Label color (default: same as --text_color)
         --sort_by METHOD        Sort files by: 'name' (default), 'date', 'size', 'number'
         --per_slide N           Items per slide (optional, default: 1)
+        --autoplay              Enable video autoplay (default: True). Use --noautoplay to disable.
+        --navbar                Add prev/next navigation buttons (default: False)
+        --use_cache             Reuse previously uploaded files (default: True). Use --nouse_cache to force re-upload.
 
     Supported formats:
         Videos: .mp4, .mov, .avi, .mkv, .webm
         Images: .png, .jpg, .jpeg, .gif, .bmp, .webp
+        Text:   Any string that's not a file path, or any non-media file
 
     Examples:
         rp run ppt media_to_slides video1.mp4 image.png                      # 2 files -> 2 slides
         rp run ppt media_to_slides media_folder/                             # folder -> one slide per file
         rp run ppt media_to_slides "*.png" --name "My Images" --captions     # glob with captions
         rp run ppt media_to_slides folder/ --title "Demo" --bg_color black --font_color white  # dark theme
-        rp run ppt media_to_slides frames/ --sort_by number --captions --label_position bottom
+        rp run ppt media_to_slides "Hello World" image.png                   # text + image
+        rp run ppt media_to_slides "Big text" --text_size 36                 # larger text
+        rp run ppt media_to_slides videos/ --noautoplay                      # disable video autoplay
+        rp run ppt media_to_slides videos/ --navbar                          # add prev/next buttons
+        rp run ppt media_to_slides videos/ --nouse_cache                     # force re-upload all files
 
     Note: First run opens browser for Google OAuth authentication.
     """
-    # Collect media files
-    media_paths = []
+    # Collect content - files or literal text
+    content = []
     for p in paths:
         if rp.folder_exists(p) or "*" in p or "?" in p:
-            media_paths.extend(get_media_files(p, sort_by))
-        elif rp.file_exists(p) and is_media_path(p):
-            media_paths.append(p)
+            content.extend(get_media_files(p, sort_by))
+        else:
+            # Either a file path or literal text - both are valid
+            content.append(p)
 
-    if not media_paths:
-        raise ValueError(
-            f"No media files found. Searched {len(paths)} paths. "
-            f"Supported formats: {', '.join(MEDIA_EXTENSIONS)}"
-        )
+    if not content:
+        raise ValueError(f"No content provided. Got {len(paths)} paths.")
 
-    # Default name to title, and folder_name to name
+    # Default name to title (folder_name cascading handled in media_to_slides)
     if name is None and title is not None:
         name = title
-    if folder_name is None and name is not None:
-        folder_name = name
 
     # Split into grids if requested
     if per_slide is not None:
-        media_paths = rp.split_into_sublists(media_paths, per_slide)
+        content = rp.split_into_sublists(content, per_slide)
 
     # Build layout
     if captions:
-        # Each item gets its filename as a label, one per slide (or per grid if per_slide used)
+        # Files get filename as label, literal text gets no label
+        def get_label(item):
+            if rp.file_exists(item):
+                return rp.get_file_name(item, include_file_extension=False)
+            return ""
+
         layout = [
-            {rp.get_file_name(p, include_file_extension=False): p}
-            if isinstance(p, str) else
-            {rp.get_file_name(x, include_file_extension=False): x for x in p}
-            for p in media_paths
+            {get_label(p): p} if isinstance(p, str) else
+            {get_label(x): x for x in p}
+            for p in content
         ]
         if title:
             layout = {title: layout[0]} if len(layout) == 1 else layout
     elif title:
-        layout = {title: media_paths}
+        layout = {title: content}
     else:
-        layout = media_paths
+        layout = content
 
     result = media_to_slides(
         layout,
@@ -944,7 +1368,17 @@ def cli(
         font_color=font_color,
         font=font,
         title_size=title_size,
+        title_font=title_font,
+        title_color=title_color,
         label_size=label_size,
+        label_font=label_font,
+        label_color=label_color,
+        text_size=text_size,
+        text_font=text_font,
+        text_color=text_color,
+        autoplay=autoplay,
+        navbar=navbar,
+        use_cache=use_cache,
     )
     print(f"\nPresentation URL: {result['presentation']['url']}")
     return result

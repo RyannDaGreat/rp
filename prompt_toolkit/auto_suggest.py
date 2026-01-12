@@ -65,7 +65,7 @@ class AutoSuggestFromHistory(AutoSuggest):
         text = document.text.rsplit('\n', 1)[-1]
 
         # Only create a suggestion when this is not an empty line.
-        if text.strip():
+        if text.strip() and '\n' not in document.text:
             # Find first matching line in history.
             for string in reversed(list(history)):
                 for line in reversed(string.splitlines()):

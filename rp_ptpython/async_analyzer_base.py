@@ -39,7 +39,6 @@ class AsyncAnalyzerBase:
         self.redraw_callback = redraw_callback
 
         # Cache
-        self.cached_code = ""
         self.cached_results = self._empty_results()
 
         # Background thread state
@@ -67,18 +66,14 @@ class AsyncAnalyzerBase:
         Returns:
             Analysis results (type depends on subclass)
         """
-        # Translate cached positions to new code (instant feedback)
-        translated = self._translate_results(self.cached_code, code, self.cached_results)
-
-        # Update cache with translated immediately
+        # Return cached results immediately (no blocking difflib)
         with self.lock:
-            self.cached_results = translated
-            self.cached_code = code
+            results = self.cached_results
 
-        # ALWAYS schedule background analysis (debouncing prevents spam)
+        # Schedule background analysis (debouncing prevents spam)
         self._schedule_background_analysis(code, args)
 
-        return translated
+        return results
 
     def _translate_results(self, old_code, new_code, old_results):
         """
@@ -148,7 +143,6 @@ class AsyncAnalyzerBase:
             with self.lock:
                 if self.pending_request is None:
                     # No pending request, this is latest - update cache
-                    self.cached_code = code
                     self.cached_results = results
                     self.last_run = time.time()
                     should_redraw = True

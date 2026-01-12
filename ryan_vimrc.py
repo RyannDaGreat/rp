@@ -253,6 +253,10 @@ set statusline=%<%t\ %h%m%r%=\ %{taghelper#curtag()}\ %=%-14.(%l,%c%V%)\ %P
 "If we're selecting multiple lines, shows the number of lines
 :set showcmd
 
+" Nerd font icons in NERDTree (must be loaded last)
+Plugin 'ryanoasis/vim-devicons'
+set encoding=utf8
+
 " All of your Plugins must be added before the following line
 call vundle#end()            " required
 filetype plugin indent on    " required

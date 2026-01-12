@@ -349,6 +349,16 @@ class PythonCompleter(Completer):
                 allow_dynamic_imports=self.allow_jedi_dynamic_imports()
             )
             jedi_completions = jedi_info.interpreter.complete(jedi_info.line, jedi_info.column)
+
+            # Prioritize __all__ members for "from x import |"
+            all_members = set()
+            m = re.match(r'\s*from\s+([\w.]+)\s+import\s*', before_line)
+            if m:
+                try:
+                    mod = sys.modules.get(m[1]) or __import__(m[1], fromlist=[''])
+                    if hasattr(mod, '__all__'): all_members = set(mod.__all__)
+                except Exception: pass
+
             def make_display(jc):
                 if jc.type in ('function', 'class'):
                     return jc.name + '()'
@@ -356,7 +366,19 @@ class PythonCompleter(Completer):
                     return jc.name + '.'
                 else:
                     return jc.name
-            candidates = [Candidate(name=jc.name, display=make_display(jc), display_meta=get_jedi_display_meta(jc, self.get_globals(), self.get_locals())) for jc in jedi_completions]
+
+            candidates = [
+                Candidate(
+                    name=jc.name,
+                    display=make_display(jc),
+                    display_meta=get_jedi_display_meta(
+                        jc, self.get_globals(), self.get_locals()
+                    ),
+                    priority=0 if jc.name in all_members else 1,
+                )
+                for jc in jedi_completions
+            ]
+                
             # Return both candidates AND interpreter for signature reuse
             return {'candidates': candidates, 'interpreter': jedi_info.interpreter, 'line': jedi_info.line, 'column': jedi_info.column}
         except Exception:

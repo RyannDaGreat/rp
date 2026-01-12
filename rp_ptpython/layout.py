@@ -945,7 +945,8 @@ def create_layout(python_input,
                 input_processors=[
                     # Order matters here! We want to ensure brackets are highlighted properly
                     # First add background highlighting for injected languages
-                    HighlightInjectedLanguageProcessor(),
+                    # Also triggers refresh_analysis for semantic highlighting
+                    HighlightInjectedLanguageProcessor(python_input=python_input),
                     # Add syntax error highlighting with undercurls (with REPL globals awareness)
                     ConditionalProcessor(
                         processor=SyntaxErrorProcessor(python_input=python_input),

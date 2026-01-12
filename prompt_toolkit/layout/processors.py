@@ -964,10 +964,19 @@ class HighlightInjectedLanguageProcessor(Processor):
 
     The lexer now handles adding :Token.InjectedLanguage directly,
     so this processor just passes tokens through unchanged.
+
+    Also triggers refresh_analysis for semantic highlighting (treesitter/jedi).
     """
 
+    def __init__(self, python_input=None):
+        self.python_input = python_input
+        self._last_refresh_text = None
+
     def apply_transformation(self, cli, document, lineno, source_to_display, tokens):
-        """No transformation needed - lexer handles it."""
+        # Trigger refresh once per render pass (not per line)
+        if self.python_input and document.text != self._last_refresh_text:
+            self._last_refresh_text = document.text
+            self.python_input.refresh_analysis(document.text)
         return Transformation(tokens)
 
 from rp.rp_ptpython.async_analyzer_base import AsyncAnalyzerBase, build_line_map_difflib
@@ -979,7 +988,7 @@ class AsyncRuffChecker(AsyncAnalyzerBase):
     Runs ruff in background thread (debounced to 0.1s) to avoid blocking UI.
     """
     def __init__(self, redraw_callback=None):
-        super().__init__(debounce_interval=0.1, redraw_callback=redraw_callback)
+        super().__init__(debounce_interval=1.0, redraw_callback=redraw_callback)
 
         # Import subprocess tools
         import json
@@ -1082,7 +1091,7 @@ class AsyncShellcheckChecker(AsyncAnalyzerBase):
     Runs shellcheck in background thread (debounced to 0.1s) to avoid blocking UI.
     """
     def __init__(self, redraw_callback=None):
-        super().__init__(debounce_interval=0.1, redraw_callback=redraw_callback)
+        super().__init__(debounce_interval=1.0, redraw_callback=redraw_callback)
 
         # Import subprocess tools
         import json
@@ -1190,14 +1199,8 @@ class SyntaxErrorProcessor(Processor):
 
     def __init__(self, python_input=None):
         self.python_input = python_input
-        self._last_refresh_text = None
 
     def apply_transformation(self, cli, document, lineno, source_to_display, tokens):
-        # Trigger refresh once per render pass (not per line)
-        if self.python_input and document.text != self._last_refresh_text:
-            self._last_refresh_text = document.text
-            self.python_input.refresh_analysis(document.text)
-
         # Detect shell mode
         is_shell_mode = document.text.startswith('!')
 
