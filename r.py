@@ -1,5 +1,8 @@
 """ Welcome to RP: Ryan Python """
 
+# NOTE: No f-strings! Must be syntax-compatible with Python 3.5
+# (not necessarily runtime compatible, but syntax compatible)
+
 from __future__ import unicode_literals
 import sys
 import threading
@@ -5530,19 +5533,21 @@ def _get_esrgan_executable():
 
 def slowmo_video_via_rife(video, *, device=None, verbose=True):
     """
-    Run RIFE frame interpolation on a given video
+    Run RIFE frame interpolation on a given video.
+
+    Doubles the framerate by synthesizing intermediate frames using optical flow.
+    Uses rife-ncnn-vulkan binary on both Mac and Linux.
 
     Args:
         video: Input video (numpy array, list of images, video file path, or path with glob pattern)
         device: Device selection:
-               - None: Use rp.select_torch_device(prefer_used=True) or auto-detect
-                       On Mac, will use internal GPU
+               - None: Auto-select best available GPU
                - int: GPU index (0, 1, 2, etc.)
                - 'cpu': Force CPU mode
         verbose: Show progress
 
     Returns:
-        Interpolated video with 2N-1 frames
+        Interpolated video with 2N-1 frames (N input frames -> 2N-1 output frames)
 
     TEXT MORPHING EXAMPLE:
         
@@ -5569,6 +5574,11 @@ def slowmo_video_via_rife(video, *, device=None, verbose=True):
 
         if currently_running_linux():
             _ensure_libvulkan_installed()
+            # Fix for Vulkan GPU detection on multi-driver systems (NVIDIA + Mesa)
+            # This tells Vulkan to only use the NVIDIA ICD, bypassing Mesa conflicts
+            nvidia_icd = "/usr/share/vulkan/icd.d/nvidia_icd.json"
+            if folder_exists("/usr/share/vulkan/icd.d") and file_exists(nvidia_icd):
+                os.environ["VK_ICD_FILENAMES"] = nvidia_icd
         
         #Determine the flag from the args
         if device is None:
@@ -29304,13 +29314,19 @@ def pseudo_terminal(
                                     module_path = get_module_path_from_name(module_name)
 
                                 except Exception:
+                                    module_path = None
+
+                                # Try fuzzy matching if module not found
+                                if module_path is None:
                                     fuzzy_module_name = _ric_current_candidate_fuzzy_matches(module_name)
                                     if fuzzy_module_name is not None:
                                         fansi_print('CDM: Completed module to '+repr(fuzzy_module_name),'blue')
                                         module_name = fuzzy_module_name
+                                        module_path = get_module_path_from_name(module_name)
 
-                                    module_path = get_module_path_from_name(module_name)
-                                
+                                if module_path is None:
+                                    raise ModuleNotFoundError("CDM: No module named " + repr(module_name))
+
                                 if is_a_file(module_path):
                                     module_path = get_parent_folder(module_path)
                                 user_message = 'CD '+module_path
@@ -30325,6 +30341,37 @@ def get_file_size(path:str, human_readable:bool=False):
     return human_readable_file_size(size)
 
 get_path_size=get_folder_size=get_directory_size=get_file_size
+
+
+def get_file_sizes(*paths, human_readable:bool=False, show_progress=False, strict=True, num_threads=0, lazy=False):
+    """
+    Plural of get_file_size. Gets the file sizes of the given paths.
+
+    Parameters:
+        *paths: Paths to files or directories. Supports glob patterns via rp_iglob.
+        human_readable (bool, default=False): If True, returns formatted strings (e.g., "1.2 MB");
+                                              if False, returns sizes in bytes as integers
+        show_progress: Whether to show progress bar. True/'eta' for eta, 'tqdm' for tqdm. Defaults to False.
+        strict: True throws error on failure, False skips failures, None yields None. Defaults to True.
+        num_threads: Number of threads. 0 for main thread only, None for default (32). Defaults to 0.
+        lazy: If True, returns a generator instead of a list. Defaults to False.
+
+    Returns:
+        list or generator: Sizes in bytes (if human_readable=False) or formatted strings (if human_readable=True)
+
+    Examples:
+        >>> get_file_sizes('file1.txt', 'file2.txt')
+        [1024, 2048]
+        >>> get_file_sizes('*.py', human_readable=True)
+        ['1.5 KB', '3.2 KB', '512 B']
+    """
+    paths = rp_iglob(paths)
+    if show_progress in ['eta', True]: show_progress = 'eta:Getting file sizes'
+    load_file = lambda path: get_file_size(path, human_readable=human_readable)
+    return load_files(load_file, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
+
+
+get_path_sizes = get_folder_sizes = get_directory_sizes = get_file_sizes
     
 #def inherit_def(parent,child=None):
 #    # Needs examples for documentation.
