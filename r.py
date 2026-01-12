@@ -25221,6 +25221,7 @@ def _write_default_gitignore():
         #Other temporary files
         "~$*.pptx",
         "*.blend1",
+        ".frenzy", #Folders created by claude according to my Claude config
     ]
 
     new_lines = (
@@ -26157,6 +26158,7 @@ def pseudo_terminal(
         TPA TPASTE
         FP FPASTE
         FPA FPASTE
+        FPR $web_paste_path(show_progress=True,recursive=True)
         FC FCOPY
         MLP MLPASTE
 
@@ -26376,7 +26378,7 @@ def pseudo_terminal(
         CPPR $r._common_path_prefix_refactoring(ans)
 
         BAA  $os.system('bash '+str(ans))
-        ZSHA $os.system('bash '+str(ans)O
+        ZSHA $os.system('bash '+str(ans))
 
         #PYA and PUA are similar to EA except they run in separate process
         PYA $os.system($sys.executable+' '+$shlex.quote(ans));
@@ -26650,9 +26652,14 @@ def pseudo_terminal(
         GU   $r._pterm_cd($get_path_parent($get_git_repo_root($get_absolute_path('.'))))
         WGA if $os.system('wget\\x20'+ans)==0: ans=$get_file_name(ans)
 
-        LNAH $os.symlink(ans,$get_file_name(ans));ans=$get_file_name(ans)#Created_Symlink
-        LN   $os.symlink(ans,$get_file_name(ans));ans=$get_file_name(ans)#Created_Symlink
-        HL   $make_hardlink(ans,$get_file_name(ans))
+        LNAH $r._cpah(ans,method=$make_symlink)#SymLink Ans Here
+        LN   $r._cpah(ans,method=$make_symlink)#SymLink Ans Here
+        LNPH $r._cpah($string_from_clipboard(),method=$make_symlink)#SymLink Paste Here
+        LNP  $r._cpah($string_from_clipboard(),method=$make_symlink)#SymLink Paste Here
+
+        HL   $r._cpah(ans,method=$partial($make_hardlink,recursive=True))#HardLink here (alias for HLAH)
+        HLPH $r._cpah($string_from_clipboard(),method=$partial($make_hardlink,recursive=True))#HardLink Paste Here
+        HLP  $r._cpah($string_from_clipboard(),method=$partial($make_hardlink,recursive=True))#HardLink Paste Here
 
         TMDA $os.system('tmux list-sessions -F "#{session_name}" | xargs -I % tmux detach -s %') #Detach all users from all tmux sessions
         TMKS !tmux kill-server
@@ -26688,6 +26695,7 @@ def pseudo_terminal(
         
         FCA $web_copy_path(ans,show_progress=True)
         FCH print("FCH->FileCopyHere");$web_copy_path($get_absolute_path('.'),show_progress=True)
+        FCAF print("FCAF->FileCopyAllFiles");$web_copy_path($printed($get_all_files(relative=True)),show_progress=True)
         RMA $r._rma(ans)
         RNA $rename_file(ans,$input_default($fansi('NewPathName:','blue'),$get_file_name(ans)))
         APA $r._absolute_path_ans(ans)
@@ -26760,11 +26768,20 @@ def pseudo_terminal(
         GP  $print_gpu_summary()
         VGP $r._ensure_viddy_installed() ; $r._run_sys_command('viddy '+sys.executable+' call print_gpu_summary')
         NGP $print_notebook_gpu_summary()
+        GP1  while True:print();print($format_current_date());$print_gpu_summary();$sleep(1)  #GPU Summary every 1 second
+        GP5  while True:print();print($format_current_date());$print_gpu_summary();$sleep(5)  #GPU Summary every 5 seconds
+        GP10 while True:print();print($format_current_date());$print_gpu_summary();$sleep(10) #GPU Summary every 10 seconds
+        GP20 while True:print();print($format_current_date());$print_gpu_summary();$sleep(10) #GPU Summary every 20 seconds
+        GP30 while True:print();print($format_current_date());$print_gpu_summary();$sleep(30) #GPU Summary every 30 seconds
+        GP60 while True:print();print($format_current_date());$print_gpu_summary();$sleep(30) #GPU Summary every 60 seconds
         
         LEA  [eval(str(x)) for x in ans]
         ELA  [eval(str(x)) for x in ans]
         EVLA [eval(str(x)) for x in ans]
         ELJA [eval(str(x)) for x in ans.splitlines()]
+
+        RPEA [repr(x) for x in ans]
+        SQEA [$shlex.quote(x) for x in (ans.splitlines() if isinstance(ans, str) else ans)]
 
         PAF ans=$string_from_clipboard(); ans=ans.splitlines() if '\\n' in ans else ans[1:-1].split("' '") if ans.startswith("'") and ans.endswith("'") else ans #Paste Files (for MacOS when you copy multiple files)
 
@@ -42761,11 +42778,47 @@ def _get_video_file_duration_via_moviepy(path)->float:
 _get_video_file_duration_cache={}
 def get_video_file_duration(path,use_cache=True):
     """ Returns a float, representing the total video length in seconds """
-    path=get_absolute_path(path) #This is important for caching. 
+    path=get_absolute_path(path) #This is important for caching.
     if use_cache and path in _get_video_file_duration_cache:
         return _get_video_file_duration_cache[path]
     out=_get_video_file_duration_via_moviepy(path)
     _get_video_file_duration_cache[path]=out
+    return out
+
+_get_audio_file_duration_cache={}
+def get_audio_file_duration(path,use_cache=True):
+    """
+    Returns the duration of an audio file in seconds.
+
+    Works with various audio formats including wav, mp3, ogg, flac, etc.
+    Uses pydub for parsing audio file metadata.
+
+    Arguments:
+        path: Path to the audio file
+        use_cache: If True, cache results to avoid re-reading files
+
+    Returns:
+        A float representing the audio length in seconds
+
+    Example:
+        >>> import rp
+        >>> duration = rp.get_audio_file_duration('song.mp3')
+        >>> print('Duration: %s seconds' % duration)
+
+    See Also:
+        - get_video_file_duration
+        - load_wav_file
+        - load_mp3_file
+        - is_audio_file
+    """
+    path=get_absolute_path(path) #Important for caching
+    if use_cache and path in _get_audio_file_duration_cache:
+        return _get_audio_file_duration_cache[path]
+    pip_import('pydub')
+    from pydub import AudioSegment
+    audio=AudioSegment.from_file(path)
+    out=len(audio)/1000.0 #pydub returns duration in milliseconds
+    _get_audio_file_duration_cache[path]=out
     return out
 
 _get_video_file_framerate_cache={}
@@ -42831,7 +42884,7 @@ def get_video_file_framerate(path, use_cache=True):
 
 _video_has_audio_cache = {}
 
-def video_has_audio(path, use_cache=True, strict=False, include_silent=True):
+def video_has_audio(path, *, use_cache=True, strict=False, include_silent=True):
     """
     Check if a video file contains an audio track.
 
@@ -54074,6 +54127,41 @@ def get_video_file_width(path, use_cache=True):
     shape = get_video_file_shape(path, use_cache)
     return shape[2]
 
+def get_video_file_durations(*paths, show_progress=False, strict=True, num_threads=0, lazy=False):
+    """ Plural of get_video_file_duration. Returns list of durations in seconds. """
+    paths=rp_iglob(paths)
+    if show_progress in ['eta',True]: show_progress='eta:Getting video durations'
+    return load_files(get_video_file_duration, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
+
+def get_audio_file_durations(*paths, show_progress=False, strict=True, num_threads=0, lazy=False):
+    """ Plural of get_audio_file_duration. Returns list of durations in seconds. """
+    paths=rp_iglob(paths)
+    if show_progress in ['eta',True]: show_progress='eta:Getting audio durations'
+    return load_files(get_audio_file_duration, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
+
+def get_video_file_framerates(*paths, show_progress=False, strict=True, num_threads=0, lazy=False):
+    """ Plural of get_video_file_framerate. Returns list of framerates. """
+    paths=rp_iglob(paths)
+    if show_progress in ['eta',True]: show_progress='eta:Getting video framerates'
+    return load_files(get_video_file_framerate, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
+
+def get_video_file_shapes(*paths, show_progress=False, strict=True, num_threads=0, lazy=False):
+    """ Plural of get_video_file_shape. Returns list of (num_frames, height, width, num_channels) tuples. """
+    paths=rp_iglob(paths)
+    if show_progress in ['eta',True]: show_progress='eta:Getting video shapes'
+    return load_files(get_video_file_shape, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
+
+def get_video_file_heights(*paths, show_progress=False, strict=True, num_threads=0, lazy=False):
+    """ Plural of get_video_file_height. Returns list of heights. """
+    paths=rp_iglob(paths)
+    if show_progress in ['eta',True]: show_progress='eta:Getting video heights'
+    return load_files(get_video_file_height, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
+
+def get_video_file_widths(*paths, show_progress=False, strict=True, num_threads=0, lazy=False):
+    """ Plural of get_video_file_width. Returns list of widths. """
+    paths=rp_iglob(paths)
+    if show_progress in ['eta',True]: show_progress='eta:Getting video widths'
+    return load_files(get_video_file_width, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
 
 _hsv_to_rgb_cache = None
 
@@ -59828,10 +59916,110 @@ class _BundledPaths:
         total_size = sum(len(data) for _, data, _ in self.paths_data)
         return '<_BundledPaths: {0} items, {1}>'.format(len(self.paths_data), human_readable_file_size(total_size))
 
-def web_paste_path(path=None,*,ask_to_replace=True, show_progress=False):
-    """ FP (file paste) """
+def _unzip_bytes_to_folder(data, path):
+    """Unzip bytes data to a folder path. Used by web_paste_path functions."""
+    temp_zip = temporary_file_path('.zip')
+    try:
+        bytes_to_file(data, temp_zip)
+        unzip_to_folder(temp_zip, path)
+    finally:
+        if file_exists(temp_zip):
+            delete_file(temp_zip)
+
+def web_paste_path(path=None, *, ask_to_replace=True, show_progress=False, recursive=False):
+    """
+    FP (file paste) / FPR (file paste recursive)
+
+    When recursive=False (default): pastes files flat (just filenames).
+    When recursive=True: preserves relative paths from when files were copied,
+        shows a preview, warns about overwrites, errors if file/folder conflict.
+    """
     data = web_paste(show_progress=show_progress)
-    return gather_args_call(_paste_path_from_bundle, data,path=path)
+    if recursive:
+        return _paste_paths_recursive(data)
+    return gather_args_call(_paste_path_from_bundle, data, path=path)
+
+def _paste_paths_recursive(data):
+    """Paste bundled paths preserving directory structure."""
+    # Handle single path
+    if isinstance(data, _BundledPath):
+        data = _BundledPaths([(data.is_file, data.data, data.path)])
+
+    if not isinstance(data, _BundledPaths):
+        raise Exception('web_paste_path_recursive error: data was not created via web_copy_path')
+
+    # Collect all paths and check for conflicts
+    paths_to_create = []  # [(relative_path, is_file, data), ...]
+    overwrites = []
+    conflicts = []
+
+    for is_file, file_data, file_path in data.paths_data:
+        # Use the stored path (which should be relative)
+        rel_path = file_path
+
+        paths_to_create.append((rel_path, is_file, file_data))
+
+        # Check for conflicts at exact path
+        if path_exists(rel_path):
+            existing_is_file = is_a_file(rel_path)
+            if is_file and existing_is_file:
+                overwrites.append(rel_path)
+            elif is_file and not existing_is_file:
+                conflicts.append('Cannot replace folder with file: ' + rel_path)
+            elif not is_file and existing_is_file:
+                conflicts.append('Cannot replace file with folder: ' + rel_path)
+            # folder replacing folder is ok (merges)
+
+        # Check if any parent path is a file (would block directory creation)
+        parts = path_split(rel_path)
+        for i in range(1, len(parts)):
+            parent = path_join(parts[:i])
+            if parent and is_a_file(parent):
+                conflicts.append('Cannot create ' + rel_path + ': ' + parent + ' exists as a file')
+
+    # Show preview
+    fansi_print('FPR Preview - files to paste:', 'cyan', 'bold')
+    for rel_path, is_file, file_data in paths_to_create:
+        size_str = human_readable_file_size(len(file_data))
+        type_str = 'file' if is_file else 'folder'
+        marker = ''
+        if rel_path in overwrites:
+            marker = fansi(' [OVERWRITE]', 'yellow', 'bold')
+        fansi_print('  ' + rel_path + ' (' + type_str + ', ' + size_str + ')' + marker, 'white')
+
+    # Error on conflicts
+    if conflicts:
+        fansi_print('ERRORS - cannot proceed:', 'red', 'bold')
+        for conflict in conflicts:
+            fansi_print('  ' + conflict, 'red')
+        raise Exception('FPR aborted due to conflicts:\n' + '\n'.join(conflicts))
+
+    # Warn about overwrites
+    if overwrites:
+        fansi_print('WARNING: The following files will be overwritten:', 'yellow', 'bold')
+        for path in overwrites:
+            fansi_print('  ' + path, 'yellow')
+        if not input_yes_no(fansi('Proceed with ' + str(len(overwrites)) + ' overwrite(s)?', 'yellow', 'bold')):
+            fansi_print('FPR aborted by user', 'red')
+            return None
+
+    # Do the paste
+    created_paths = []
+    for rel_path, is_file, file_data in paths_to_create:
+        # Create parent directories if needed
+        parent = get_path_parent(rel_path)
+        if parent and not folder_exists(parent):
+            make_directory(parent)
+
+        if is_file:
+            bytes_to_file(file_data, rel_path)
+        else:
+            _unzip_bytes_to_folder(file_data, rel_path)
+
+        created_paths.append(rel_path)
+
+    fansi_print('FPR complete: ' + str(len(created_paths)) + ' item(s) pasted', 'green', 'bold')
+    return created_paths
 
 def _paste_path_from_bundle(data,path=None, *,ask_to_replace=True):
     # Handle multiple paths
@@ -59875,14 +60063,8 @@ def _paste_path_from_bundle(data,path=None, *,ask_to_replace=True):
             if ask_to_replace and file_exists(path) and not request_replace(path): return
             bytes_to_file(data.data,path)
         elif data.is_folder:
-            temp_zip=temporary_file_path('.zip')
-            try:
-                bytes_to_file(data.data,temp_zip)
-                assert not is_a_file(path),'Path already exists as a file; cannot extract a zip file into it: '+path
-                unzip_to_folder(temp_zip,path)
-            finally:
-                if file_exists(temp_zip):
-                    delete_file(temp_zip)
+            assert not is_a_file(path), 'Path already exists as a file; cannot extract a zip file into it: ' + path
+            _unzip_bytes_to_folder(data.data, path)
     return path
 
 def web_copy_path(path=None, *, show_progress=False):
@@ -62364,6 +62546,28 @@ def get_git_repo_root(path='.', use_cache=False):
     return output
 
 
+def get_git_toplevel(path='.'):
+    """
+    Returns the toplevel directory of the git working tree.
+
+    Usually this is the parent of the .git folder, but not always
+    (e.g. worktrees have a .git file pointing elsewhere).
+
+    path can be a file or directory within the repo.
+    """
+    import subprocess
+    import os
+    if os.path.isfile(path):
+        path = os.path.dirname(path) or '.'
+    return subprocess.run(
+        ["git", "-C", path, "rev-parse", "--show-toplevel"],
+        capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+get_git_working_dir = get_git_toplevel
+# Alias: "working dir" is common parlance, "toplevel" matches git --show-toplevel
+
+
 def _distill_github_url(url):
     """
     Distills a GitHub URL to its base repository URL.
@@ -62625,39 +62829,101 @@ def select_git_commit():
 
 
 
-def git_untracked_files():
-    """ Returns a list of untracked file paths """
+def _git_status_files(match):
+    """
+    Helper: returns absolute paths from git status --porcelain matching a predicate.
+    match(status, path) -> bool, where status is the 2-char status code.
+    """
     import subprocess
+    root = get_git_toplevel()
     result = subprocess.run(
-        ["git", "status", "--porcelain", "--untracked-files"],
+        ["git", "status", "--porcelain", "-uall"],
         capture_output=True, text=True, check=True
     )
+    return [path_join(root, line[3:]) for line in result.stdout.splitlines() if len(line) >= 3 and match(line[:2], line[3:])]
 
-    # Lines that start with "??" are untracked files
-    untracked = [
-        line[3:] for line in result.stdout.splitlines() if line.startswith("?? ")
-    ]
-    return untracked
+
+def git_untracked_files():
+    """
+    Returns a list of untracked file paths
+
+    >>> untracked = git_untracked_files()
+    >>> isinstance(untracked, list)
+    True
+    """
+    return _git_status_files(lambda s, p: s == "??")
+
+
+def git_staged_files():
+    """
+    Returns a list of staged (added to index) file paths
+
+    >>> staged = git_staged_files()
+    >>> isinstance(staged, list)
+    True
+    """
+    return _git_status_files(lambda s, p: s[0] in "MADRC")
+
+
+def git_unstaged_files():
+    """
+    Returns a list of modified but unstaged file paths (tracked files with changes not yet added)
+
+    >>> unstaged = git_unstaged_files()
+    >>> isinstance(unstaged, list)
+    True
+    """
+    return _git_status_files(lambda s, p: s[1] in "MD")
+
+
+def git_modified_files():
+    """
+    Returns a list of all modified file paths (both staged and unstaged)
+
+    >>> modified = git_modified_files()
+    >>> isinstance(modified, list)
+    True
+    """
+    return _git_status_files(lambda s, p: 'M' in s)
+
+
+def git_deleted_files():
+    """
+    Returns a list of deleted file paths (both staged and unstaged deletions)
+
+    >>> deleted = git_deleted_files()
+    >>> isinstance(deleted, list)
+    True
+    """
+    return _git_status_files(lambda s, p: 'D' in s)
+
+
+def git_added_files():
+    """
+    Returns a list of newly added file paths (staged new files, not yet committed)
+
+    >>> added = git_added_files()
+    >>> isinstance(added, list)
+    True
+    """
+    return _git_status_files(lambda s, p: s[0] == 'A')
 
 
 def git_existing_ignored_files():
-    """ Returns a list of file paths that exist but are ignored by git (via .gitignore)
+    """
+    Returns a list of absolute file paths that exist but are ignored by git (via .gitignore)
 
-    >>> # Example (assuming you have some ignored files):
     >>> ignored = git_existing_ignored_files()
     >>> isinstance(ignored, list)
     True
     """
     import subprocess
+    root = get_git_toplevel()
     result = subprocess.run(
         ["git", "ls-files", "--others", "--ignored", "--exclude-standard"],
         capture_output=True, text=True, check=True
     )
-
-    # Each line is an ignored file path
-    ignored = [line for line in result.stdout.splitlines() if line.strip()]
-    return ignored
-
+    return [path_join(root, line) for line in result.stdout.splitlines() if line.strip()]
 
 
 def _autoformat_python_code_via_black(code:str):
