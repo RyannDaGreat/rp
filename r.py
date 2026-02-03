@@ -53205,7 +53205,7 @@ def tmux_get_all_session_names():
     """
     pip_import('libtmux')
     import libtmux
-    
+
     server = libtmux.Server()
     return [session.name for session in _libtmux_get_sessions(server)]
 
@@ -53258,13 +53258,13 @@ def tmux_kill_session(session_name, strict=False):
     Raises:
         AssertionError: If the name is not a string.
         ValueError: If no session with the specified name exists and strict==True
-        
+
     Example:
         >>> squelch_call(tmux_kill_session,'0') # Tries to kill session 0 if it exists
     """
     pip_import('libtmux')
     import libtmux
-    
+
     assert isinstance(session_name, str), "Session name must be a string."
 
     server = libtmux.Server()
@@ -59816,8 +59816,8 @@ def _run_ollama_llm(message, model):
         display_progress = None
         for progress in ollama.pull(model, stream=True):
             status = progress.get('status', '')
-            total = progress.get('total', 0)
-            completed = progress.get('completed', 0)
+            total = progress.get('total') or 0
+            completed = progress.get('completed') or 0
             digest = progress.get('digest', '')
 
             # Each layer has its own digest - reset progress tracker for each new layer
