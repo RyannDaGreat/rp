@@ -10001,6 +10001,169 @@ def text_to_speech(text: str,voice: str = None,run_as_thread=True):
             text_to_speech_via_apple(**kwargs)
         else:
             text_to_speech_via_google(**kwargs)
+
+text_to_speech_voices_for_kitten = ['expr-voice-2-m', 'expr-voice-2-f', 'expr-voice-3-m', 'expr-voice-3-f', 'expr-voice-4-m', 'expr-voice-4-f', 'expr-voice-5-m', 'expr-voice-5-f']
+
+_kitten_tts_audio_stream = None
+
+def _kitten_tts_get_stream():
+    """Get or create persistent audio stream to avoid pops/crackles."""
+    global _kitten_tts_audio_stream
+    pip_import('sounddevice')
+    import sounddevice as sd
+    import numpy as np
+
+    if _kitten_tts_audio_stream is None or not _kitten_tts_audio_stream.active:
+        _kitten_tts_audio_stream = sd.OutputStream(samplerate=24000, channels=1, dtype='int16')
+        _kitten_tts_audio_stream.start()
+    return _kitten_tts_audio_stream
+
+def text_to_speech_via_kitten(text, voice='expr-voice-3-f', speed=1.0, port=32462, block=True, output_file=None):
+    """
+    Text-to-speech using KittenTTS (25MB model, ~6x faster than realtime on CPU).
+    Automatically starts server in tmux session 'KittenTTS' if not running.
+    """
+    if voice not in text_to_speech_voices_for_kitten:
+        raise ValueError('Invalid voice: ' + repr(voice) + '. Choose from: ' + ', '.join(text_to_speech_voices_for_kitten))
+
+    from rp.libs.kitten_tts_server import ensure_server
+    import urllib.parse
+
+    port = ensure_server(port)
+
+    pip_import('websockets')
+    pip_import('sounddevice')
+    import asyncio, websockets, wave
+    import numpy as np
+
+    async def _synth():
+        # Add trailing period to prevent KittenTTS from clipping end of utterance
+        padded_text = str(text).rstrip('.') + '.'
+        uri = 'ws://localhost:' + str(port) + '/stream?text=' + urllib.parse.quote(padded_text) + '&voice=' + voice + '&speed=' + str(speed)
+        stream = _kitten_tts_get_stream()
+        chunks = []
+        async with websockets.connect(uri) as ws:
+            async for msg in ws:
+                if isinstance(msg, bytes):
+                    audio = np.frombuffer(msg, dtype=np.int16)
+                    stream.write(audio)
+                    if output_file:
+                        chunks.append(msg)
+        if output_file and chunks:
+            with wave.open(output_file, 'wb') as wav:
+                wav.setnchannels(1)
+                wav.setsampwidth(2)
+                wav.setframerate(24000)
+                wav.writeframes(b''.join(chunks))
+
+    if block:
+        asyncio.run(_synth())
+    else:
+        run_as_new_thread(asyncio.run, _synth())
+
+text_to_speech_voices_for_supertonic = ['F1', 'F2', 'F3', 'F4', 'F5', 'M1', 'M2', 'M3', 'M4', 'M5']
+
+def _text_to_speech_via_supertonic_set_defaults(voice=None, speed=None, volume=None, steps=None, port=7123):
+    """Set default voice, speed, volume, and steps on the SuperTonic TTS server.
+
+    Defaults are stored on the server so all clients share them.
+
+    >>> _text_to_speech_via_supertonic_set_defaults(voice='M1', speed=2.0, volume=1.0, steps=5)
+    >>> _text_to_speech_via_supertonic_get_defaults()
+    {'voice': 'M1', 'speed': 2.0, 'volume': 1.0, 'steps': 5}
+    """
+    if voice is not None and voice not in text_to_speech_voices_for_supertonic:
+        raise ValueError('Invalid voice: ' + repr(voice) + '. Choose from: ' + ', '.join(text_to_speech_voices_for_supertonic))
+    if speed is not None and not 0.7 <= speed <= 2.0:
+        raise ValueError('Speed must be between 0.7 and 2.0, got ' + str(speed))
+    if volume is not None and not 0.0 <= volume <= 2.0:
+        raise ValueError('Volume must be between 0.0 and 2.0, got ' + str(volume))
+    if steps is not None and not 1 <= steps <= 10:
+        raise ValueError('Steps must be between 1 and 10, got ' + str(steps))
+
+    from rp.libs.supertonic_tts_server import ensure_server
+    import urllib.request
+    import urllib.parse
+
+    port = ensure_server(port)
+    params = []
+    if voice is not None:
+        params.append('voice=' + voice)
+    if speed is not None:
+        params.append('speed=' + str(speed))
+    if volume is not None:
+        params.append('volume=' + str(volume))
+    if steps is not None:
+        params.append('steps=' + str(steps))
+    url = 'http://localhost:' + str(port) + '/set_defaults?' + '&'.join(params)
+    urllib.request.urlopen(url, timeout=10)
+
+def _text_to_speech_via_supertonic_get_defaults(port=7123):
+    """Get current default settings from the SuperTonic TTS server."""
+    from rp.libs.supertonic_tts_server import ensure_server
+    import urllib.request
+    import json
+
+    port = ensure_server(port)
+    url = 'http://localhost:' + str(port) + '/defaults'
+    with urllib.request.urlopen(url, timeout=10) as resp:
+        return json.loads(resp.read().decode())
+
+def text_to_speech_via_supertonic(text, voice=None, speed=None, volume=None, steps=None, port=7123, block=True):
+    """
+    Text-to-speech using SuperTonic (66M params, 167x realtime on M4 Pro).
+    Automatically starts server in tmux session 'SuperTonicTTS' if not running.
+
+    Args:
+        text: Text to speak
+        voice: Voice name (F1-F5 female, M1-M5 male). None uses server default.
+        speed: Speech speed 0.7-2.0. None uses server default.
+        volume: Volume 0.0-2.0 (1.0 = normal). None uses server default.
+        steps: Quality steps 1-10 (higher = better but slower). None uses server default.
+        port: Server port (default 7123)
+        block: If True, wait for speech to complete
+
+    >>> text_to_speech_via_supertonic('Hello world')
+    >>> text_to_speech_via_supertonic('Fast speech', speed=2.0)
+    >>> text_to_speech_via_supertonic('Male voice', voice='M1')
+    >>> text_to_speech_via_supertonic('Quiet', volume=0.5)
+    >>> text_to_speech_via_supertonic('High quality', steps=10)
+    """
+    if voice is not None and voice not in text_to_speech_voices_for_supertonic:
+        raise ValueError('Invalid voice: ' + repr(voice) + '. Choose from: ' + ', '.join(text_to_speech_voices_for_supertonic))
+    if speed is not None and not 0.7 <= speed <= 2.0:
+        raise ValueError('Speed must be between 0.7 and 2.0, got ' + str(speed))
+    if volume is not None and not 0.0 <= volume <= 2.0:
+        raise ValueError('Volume must be between 0.0 and 2.0, got ' + str(volume))
+    if steps is not None and not 1 <= steps <= 10:
+        raise ValueError('Steps must be between 1 and 10, got ' + str(steps))
+
+    from rp.libs.supertonic_tts_server import ensure_server
+    import urllib.request
+    import urllib.parse
+
+    port = ensure_server(port)
+
+    # Build URL - omit params that are None to use server defaults
+    params = ['text=' + urllib.parse.quote(str(text))]
+    if voice is not None:
+        params.append('voice=' + voice)
+    if speed is not None:
+        params.append('speed=' + str(speed))
+    if volume is not None:
+        params.append('volume=' + str(volume))
+    if steps is not None:
+        params.append('steps=' + str(steps))
+    url = 'http://localhost:' + str(port) + '/speak?' + '&'.join(params)
+
+    def _speak():
+        urllib.request.urlopen(url, timeout=60)
+
+    if block:
+        _speak()
+    else:
+        run_as_new_thread(_speak)
+
 # endregion
 # region Audio/Sound Functions: ［load_sound_file，play_sound_from_samples，play_sound_file，play_sound_file_via_afplay，play_sound_file_via_pygame，stop_sound，mp3_to_wav］
 
@@ -10522,7 +10685,7 @@ def _get_pywhispercpp_model(model_name):
     model = Model(model_name, n_threads=4, redirect_whispercpp_logs_to=None)
     return model
 
-def transcribe_audio_file_via_whisper(path, *, model="base", show_progress=True, initial_prompt=None, carry_initial_prompt=False):
+def transcribe_audio_file_via_whisper(path, *, model="base", show_progress=True, initial_prompt=None):
     """
     Transcribe audio file, returning text segments with timestamps
 
@@ -10542,8 +10705,10 @@ def transcribe_audio_file_via_whisper(path, *, model="base", show_progress=True,
         initial_prompt (str): Prefix tokens for the decoder. Biases output toward
                         words already in context. Use for names, jargon, or unusual
                         spellings Whisper wouldn't know. Example: "Sqwagqlduu, PyTorch"
-        carry_initial_prompt (bool): If True, prepend initial_prompt to every 30s
-                        segment instead of just the first. Default False.
+
+    Note:
+        carry_initial_prompt is not yet exposed from pywhispercpp C bindings.
+        When available, it would prepend initial_prompt to every 30s segment.
 
     Returns:
         _Transcription: List-like object containing _TranscribedSegment objects.
@@ -10574,7 +10739,6 @@ def transcribe_audio_file_via_whisper(path, *, model="base", show_progress=True,
     transcribe_kwargs = dict(print_progress=show_progress, print_realtime=show_progress)
     if initial_prompt:
         transcribe_kwargs['initial_prompt'] = initial_prompt
-        transcribe_kwargs['carry_initial_prompt'] = carry_initial_prompt
     segments = model.transcribe(path, **transcribe_kwargs)
 
     for segment in segments:
@@ -23603,19 +23767,34 @@ def symlink_is_broken(path:str):
 # def symlink_works(path:str):
 #     return not symlink_is_broken(path)
 
-def make_hardlink(original_path, hardlink_path, *, recursive=False):
-    """ Creates a hardlink to original_path at hardlink_path. If recursive, creates a nested folder structure of hardlinks - equivalent to 'cp -al' """
+def make_hardlink(original_path, hardlink_path, *, recursive=False, replace=False, strict=True):
+    """
+    Creates a hardlink to original_path at hardlink_path.
+
+    Args:
+        original_path: Path to the original file.
+        hardlink_path: Path for the hardlink. If a folder, hardlink is created inside it.
+        recursive: If True, creates a nested folder structure of hardlinks - equivalent to 'cp -al'.
+        replace: Replace existing file if True (default: False, error if exists).
+        strict: If True, raises an error if original_path does not exist (default: True).
+
+    Returns:
+        Path to the created hardlink.
+    """
     import os
 
     if path_exists(hardlink_path) and not path_exists(original_path):
         # If the caller of this function gets the arguments backwards, fix it automatically
         hardlink_path, original_path = original_path, hardlink_path
-        
+
     if is_a_folder(hardlink_path):
         hardlink_path = path_join(hardlink_path, get_file_name(original_path))
 
-    assert path_exists(original_path), "Can't create hardlink to %s because that path does not exist!" % original_path
-    assert not path_exists(hardlink_path), "Can't create hardlink at %s because a file already exists there!" % hardlink_path
+    assert not strict or path_exists(original_path), "Can't create hardlink to %s because that path does not exist!" % original_path
+    assert replace or not path_exists(hardlink_path), "Can't create hardlink at %s because a file already exists there!" % hardlink_path
+
+    if replace and path_exists(hardlink_path):
+        delete_path(hardlink_path)
 
     original_is_folder = is_a_folder(original_path)
     make_parent_folder(hardlink_path)
@@ -23631,6 +23810,53 @@ def make_hardlink(original_path, hardlink_path, *, recursive=False):
         os.link(original_path, hardlink_path)
         
     return hardlink_path
+
+
+def make_hardlinks(
+    original_paths,
+    hardlink_paths,
+    *,
+    recursive=False,
+    replace=False,
+    strict=True,
+    num_threads=None,
+    show_progress=False,
+    lazy=False
+):
+    """
+    Plural of rp.make_hardlink. Creates multiple hardlinks.
+
+    Args:
+        original_paths: Iterable of paths to original files.
+        hardlink_paths: Iterable of paths for hardlinks (must be same length as original_paths).
+        recursive: If True, creates nested folder structures of hardlinks (cp -al).
+        replace: If True, replaces existing files at hardlink_paths.
+        strict: If True, raises error if any operation fails. If False, skips failures. If None, yields None for failures.
+        num_threads: Number of threads for concurrent creation (default: 32).
+        show_progress: Show progress bar (True, False, 'eta', or 'tqdm').
+        lazy: If True, returns a generator instead of a list.
+
+    Returns:
+        List of paths to the created hardlinks.
+    """
+    original_paths = list(original_paths)
+    hardlink_paths = list(hardlink_paths)
+    assert len(original_paths) == len(hardlink_paths), "make_hardlinks: original_paths and hardlink_paths must have equal length, but got %d and %d" % (len(original_paths), len(hardlink_paths))
+
+    if show_progress == True:
+        show_progress = "eta:" + get_current_function_name()
+
+    def make(i):
+        return make_hardlink(
+            original_paths[i],
+            hardlink_paths[i],
+            recursive=recursive,
+            replace=replace,
+            strict=strict,
+        )
+
+    return gather_args_call(load_files, make, range(len(original_paths)))
+
 
 def replace_symlink_with_hardlink(symlink_path):
     """Replaces a symlink with a hardlink"""
@@ -23697,6 +23923,53 @@ def make_symlink(original_path, symlink_path=".", *, relative=False, replace=Fal
     os.symlink(original_path,symlink_path)
     
     return symlink_path
+
+
+def make_symlinks(
+    original_paths,
+    symlink_paths,
+    *,
+    relative=False,
+    replace=False,
+    strict=True,
+    num_threads=None,
+    show_progress=False,
+    lazy=False
+):
+    """
+    Plural of rp.make_symlink. Creates multiple symlinks.
+
+    Args:
+        original_paths: Iterable of paths to original files/directories.
+        symlink_paths: Iterable of paths for symlinks (must be same length as original_paths).
+        relative: If True, creates relative symlinks instead of absolute.
+        replace: If True, replaces existing symlinks at symlink_paths.
+        strict: If True, raises error if any operation fails. If False, skips failures. If None, yields None for failures.
+        num_threads: Number of threads for concurrent creation (default: 32).
+        show_progress: Show progress bar (True, False, 'eta', or 'tqdm').
+        lazy: If True, returns a generator instead of a list.
+
+    Returns:
+        List of paths to the created symlinks.
+    """
+    original_paths = list(original_paths)
+    symlink_paths = list(symlink_paths)
+    assert len(original_paths) == len(symlink_paths), "make_symlinks: original_paths and symlink_paths must have equal length, but got %d and %d" % (len(original_paths), len(symlink_paths))
+
+    if show_progress == True:
+        show_progress = "eta:" + get_current_function_name()
+
+    def make(i):
+        return make_symlink(
+            original_paths[i],
+            symlink_paths[i],
+            relative=relative,
+            replace=replace,
+            strict=strict,
+        )
+
+    return gather_args_call(load_files, make, range(len(original_paths)))
+
 
 def is_symbolic_link(path:str):
     """
@@ -24194,6 +24467,53 @@ def _rma(ans):
         else:
             print('Deletion cancelled.'+ans)
 
+def _xsva(ans, sep=',', ext='.csv'):
+    """XSV ANS: string->DataFrame, DataFrame->XSV string."""
+    pip_import('pandas')
+    import pandas as pd, io
+    if isinstance(ans, str):
+        if not '\n' in ans and ans.endswith(ext) and file_exists(ans):
+            return pd.read_csv(ans, sep=sep)
+        return pd.read_csv(io.StringIO(ans), sep=sep)
+    return ans.to_csv(sep=sep, index=False)
+
+def _foj(paths,sep='_'):
+    paths=[get_path_parent(x)+sep+get_file_name(x) for x in paths]
+    return paths
+
+def _jof(paths):
+    return [path_join(path_split(x)[1:]) for x in paths]
+
+def _cpah_pathsmod(paths, sep='>>'):
+    """
+    Generate unique short names from a list of paths.
+
+    If all paths have the same filename, prepends parent folder names
+    (joined by sep) until each resulting name is unique.
+
+    Args:
+        paths: List of file paths
+        sep: Separator between folder and filename (default '>>')
+
+    Returns:
+        List of shortened unique path identifiers
+
+    Example:
+        >>> _cpah_pathsmod([
+        ...     "/a/[Seed 5176] Judge/counter_video.mp4",
+        ...     "/a/[Seed 1514] Baloons/counter_video.mp4",
+        ... ])
+        ['[Seed 5176] Judge>>counter_video.mp4', '[Seed 1514] Baloons>>counter_video.mp4']
+    """
+    outs = get_file_names(paths)
+    # If paths all have the same filename, we should keep appending parent folder names until they are unique...
+    while len(set(outs)) < len(set(paths)):
+        paths = get_paths_parents(paths)
+        outs = [sep.join([get_folder_name(x), y]) for x, y in zip(paths, outs)]
+
+    return outs
+
+
 def _cpah(paths,method=None):
     if method is None:
         method=copy_path
@@ -24202,6 +24522,11 @@ def _cpah(paths,method=None):
     if isinstance(paths,str):
         paths=[paths]
 
+    paths=list(paths)
+    out_paths = _cpah_pathsmod(paths)
+    def get_out_path(path):
+        return out_paths[paths.index(path)]
+
     # Show progress if we're copying files (not just symlinks or moves)
     show_progress = method == copy_path or method == copy_file or method == copy_directory
 
@@ -24209,27 +24534,52 @@ def _cpah(paths,method=None):
         if len(paths) == 1:
             # Single file/directory - show progress for the copy operation if it's a file
             path = paths[0]
+            out_path = out_paths[0]
             if file_exists(path):
                 # It's a file, use copy_file with show_progress
-                output = [copy_file(path, '.', show_progress=True)]
+                output = [copy_file(path, out_path, show_progress=True)]
             else:
                 # It's a directory or doesn't exist, use the regular method
-                output = [method(path, '.')]
+                output = [method(path, out_path)]
         else:
             # Multiple files - use eta to show overall progress
             output = []
-            for path in eta(paths, title='Copying %s paths' % len(paths)):
-                output.append(method(path, '.'))
+            for path,out_path in eta(zip(paths,out_paths), length=len(paths), title='Copying %s paths' % len(paths)):
+                output.append(method(path,out_path))
     else:
         # Not copying files, just do it without progress
-        output = [method(path, '.') for path in paths]
+        output = [method(path, out_path) for path,out_path in zip(paths,out_paths)]
 
     if len(output)==1:
         return get_only(output)
     return output
 
-def _common_path_prefix_refactoring(list_of_str):
+def _pterm_pluralize(func, items, *args, **kwargs):
+    """Make any function work on single item or list of items. Used by SHORTCUTS."""
+    if isinstance(items, str) and '\n' in items:
+        items = line_split(items)
+    if not isinstance(items, (list, tuple)):
+        return func(items, *args, **kwargs)
+    out = [func(item, *args, **kwargs) for item in eta(items, title=str(items)+' items')]
+    return out
+
+def _common_path_prefix_refactoring(list_of_str, suffix=False, dir_only=False):
     """
+    If suffix=True, also extracts the common suffix.
+    If dir_only=True, prefix is restricted to directory boundaries via path_split.
+
+    EXAMPLE (suffix=True):
+         >>> _common_path_prefix_refactoring(['/foo/file1.png', '/foo/file2.png'], suffix=True)
+        ["/foo/file" + x + ".png" for x in ["1", "2"]]
+
+    EXAMPLE (dir_only=True):
+         >>> _common_path_prefix_refactoring(['/foo/file1.png', '/foo/file2.png'], dir_only=True)
+        ["/foo/" + x for x in ["file1.png", "file2.png"]]
+
+    EXAMPLE (dir_only=True, suffix=True):
+         >>> _common_path_prefix_refactoring(['a.mp4', 'b.mp4'], suffix=True, dir_only=True)
+        [x + ".mp4" for x in ["a", "b"]]
+
     EXAMPLE (non-string):
          >>> [[1,2,3],[1,2,2]]
         ans = [[1, 2, 3], [1, 2, 2]]
@@ -24261,14 +24611,28 @@ def _common_path_prefix_refactoring(list_of_str):
         ]
     """
     ans = list_of_str
-    if isinstance(ans,str):
-        ans=ans.splitlines()
-    prefix = longest_common_prefix(ans)
-    if prefix:
-        suffixes = [x[len(prefix) :] for x in ans]
-        ans = "["+repr(prefix)+"+x for x in "+repr(suffixes)+"]"
+    if isinstance(ans, str):
+        ans = ans.splitlines()
+    if dir_only:
+        split_paths = [path_split(x) for x in ans]
+        common_parts = longest_common_prefix(split_paths)
+        prefix = path_join(common_parts) + '/' if common_parts else ""
     else:
-        ans=repr(ans)
+        prefix = longest_common_prefix(ans)
+    middles = [x[len(prefix):] for x in ans] if prefix else ans
+    common_suffix = ""
+    if suffix:
+        common_suffix = longest_common_suffix(middles)
+        if common_suffix:
+            middles = [x[:-len(common_suffix)] for x in middles]
+    if prefix and common_suffix:
+        ans = "["+repr(prefix)+"+x+"+repr(common_suffix)+" for x in "+repr(middles)+"]"
+    elif prefix:
+        ans = "["+repr(prefix)+"+x for x in "+repr(middles)+"]"
+    elif common_suffix:
+        ans = "[x+"+repr(common_suffix)+" for x in "+repr(middles)+"]"
+    else:
+        ans = repr(ans)
     ans = autoformat_python_via_black(ans)
     return ans
 
@@ -26385,7 +26749,14 @@ def pseudo_terminal(
         CPR !$PY -m rp call check_pip_requirements
         CPRA $check_pip_requirements(ans)
 
-        CPPR $r._common_path_prefix_refactoring(ans)
+        CPPR  $r._common_path_prefix_refactoring(ans)
+        CPSR  $r._common_path_prefix_refactoring(ans, suffix=True)
+        CPPS  $r._common_path_prefix_refactoring(ans, suffix=True)
+        CPPRD $r._common_path_prefix_refactoring(ans, dir_only=True)
+        CPRD  $r._common_path_prefix_refactoring(ans, dir_only=True)
+        CPSRD $r._common_path_prefix_refactoring(ans, suffix=True, dir_only=True)
+        CPPSD $r._common_path_prefix_refactoring(ans, suffix=True, dir_only=True)
+        CPSD  $r._common_path_prefix_refactoring(ans, suffix=True, dir_only=True)
 
         BAA  $os.system('bash '+str(ans))
         ZSHA $os.system('bash '+str(ans))
@@ -26561,6 +26932,7 @@ def pseudo_terminal(
         ZSH $r._ensure_zsh_installed();$os.system("zsh");
         BOP TOP
         BTOP $r._ensure_btop_installed();$r._run_sys_command('btop')
+        VT $r._run_voicething()
 
         bashtop $r._run_bashtop() #Good where BOP doesn't work and MON is too basic
 
@@ -26642,6 +27014,9 @@ def pseudo_terminal(
         CPPH $r._cpah($string_from_clipboard())
         CPH  $r._cpah($string_from_clipboard())
 
+        FOJ $r._foj(ans) #Combine folder name with file names to copy easily when many different folders have same filepath like a/i.png, b/i.png, c/i.png etc
+        JOF $r._jof(ans) #Clip the top of the path away
+
         # MAH  $move_path(ans,'.')
         # MVAH $move_path(ans,'.')
         # MVPH $move_path($string_from_clipboard(),'.')
@@ -26653,8 +27028,8 @@ def pseudo_terminal(
 
         GCLP  $git_clone($string_from_clipboard())
         GCLPS $git_clone($string_from_clipboard(),depth=1)
-        GCLA  $git_clone(ans,show_progress=True)
-        GCLAS $git_clone(ans,show_progress=True,depth=1) #Git-Clone ans Shallow
+        GCLA  $r._pterm_pluralize($git_clone, ans, show_progress=True)
+        GCLAS $r._pterm_pluralize($git_clone, ans, show_progress=True, depth=1) #Git-Clone ans Shallow
         GURL $get_git_remote_url()
         SURL $shorten_url(ans)
         REPO $get_path_parent($get_git_repo_root($get_absolute_path('.')))
@@ -26680,17 +27055,28 @@ def pseudo_terminal(
 
         RDA   $r._pterm_cd($random_element([x for x in $os.scandir() if x.is_dir(follow_symlinks=False)]))   # RD then DA
         CDR   $r._pterm_cd($random_element([x for x in $os.scandir() if x.is_dir(follow_symlinks=False)]))
+        RNH   $r._rnh()  # Rename Here - rename current directory
 
         LJ LINE JOIN ANS
         AJ  JSON ANS
         JA  JSON ANS
         JEA JSON ANS
+        CSVA $r._xsva(ans, sep=',', ext='.csv')
+        ACSV $r._xsva(ans, sep=',', ext='.csv')
+        TSVA $r._xsva(ans, sep='\t', ext='.tsv')
+        ATSV $r._xsva(ans, sep='\t', ext='.tsv')
         LJEA [$line_join(x) for x in ans] #Line Join Each Ans
         CJ   ans.split(",") if isinstance(ans,str) else ",".join(map(str,ans)) 
         SJ   ans.split(" ") if isinstance(ans,str) else " ".join(map(str,ans)) 
         SPAJ ans.split(" ") if isinstance(ans,str) else " ".join(map(str,ans)) 
         ZJ   $shlex.join(map(str,ans)) if not isinstance(ans,str) else $shlex.split(ans)
         BJ   $shlex.join(map(str,ans)) if not isinstance(ans,str) else $shlex.split(ans)
+        BQ   $shlex.quote(ans)
+
+         TMI   $tmux_get_process_pane_index()
+         TPI   $tmux_get_process_pane_index()
+        ITMI i=$tmux_get_process_pane_index() ; print(i)
+        ITPI i=$tmux_get_process_pane_index() ; print(i)
 
         SGC $select_git_commit()
         DUNKA $pip_import('dunk');$os.system(f"git diff {ans} | dunk")
@@ -26699,7 +27085,7 @@ def pseudo_terminal(
 
         FN $r._get_function_names(ans)
 
-        SHA $get_sha256_hash(ans,show_progress=True)
+        SHA $r._pterm_pluralize($get_sha256_hash, ans, show_progress=True)
 
         DCI $display_image_in_terminal_color(ans)
         
@@ -26712,9 +27098,9 @@ def pseudo_terminal(
         RPA $r._relative_path_ans(ans)
         UPA $r._user_path_ans(ans)
 
-        UZA $unzip_to_folder(ans,show_progress=True)
+        UZA $r._pterm_pluralize($unzip_to_folder, ans, show_progress=True)
         ZIH $make_zip_file_from_folder($get_absolute_path('.'),show_progress=True)
-        ZIA $make_zip_file_from_folder(ans,show_progress=True)
+        ZIA $r._pterm_pluralize($make_zip_file_from_folder, ans, show_progress=True)
         ZIAH $make_zip_file_from_folder(ans,$path_join($get_absolute_path('.'),$get_file_name(ans)+'.zip'),show_progress=True)
 
         RWC $web_copy($get_source_code($r))
@@ -26730,7 +27116,8 @@ def pseudo_terminal(
         RST __import__('os').system('reset')
         RS  __import__('os').system('reset')
 
-        BLA $r._autoformat_python_code_via_black(str(ans))
+        BLA  $r._autoformat_python_code_via_black(str(ans))
+        BLAL $r._autoformat_python_code_via_black(str(ans),line_length=100)
         FLY $refactor_flynt(str(ans))
         ATC $add_trailing_commas(str(ans))
         23P $python_2_to_3(str(ans))
@@ -26756,6 +27143,8 @@ def pseudo_terminal(
         UL  $line_join(unique(str(ans).splitlines()))
         RL  $line_join(reversed(str(ans).splitlines()))
         RCL $line_join(x[::-1] for x in str(ans).splitlines())
+        PRC $string_to_clipboard($printed(repr($string_from_clipboard())))
+
 
         DAPI __import__('rp.pypi_inspection').pypi_inspection.display_all_pypi_info()
 
@@ -26771,9 +27160,9 @@ def pseudo_terminal(
         ST   settitle
         STIT settitle
 
-        UR   $unshorten_url(ans)
-        UUR  $unshorten_url(ans)
-        UURL $unshorten_url(ans)
+        UR   $r._pterm_pluralize($unshorten_url, ans)
+        UUR  $r._pterm_pluralize($unshorten_url, ans)
+        UURL $r._pterm_pluralize($unshorten_url, ans)
 
         GP  $print_gpu_summary()
         VGP $r._ensure_viddy_installed() ; $r._run_sys_command('viddy '+sys.executable+' call print_gpu_summary')
@@ -26781,9 +27170,9 @@ def pseudo_terminal(
         GP1  while True:print();print($format_current_date());$print_gpu_summary();$sleep(1)  #GPU Summary every 1 second
         GP5  while True:print();print($format_current_date());$print_gpu_summary();$sleep(5)  #GPU Summary every 5 seconds
         GP10 while True:print();print($format_current_date());$print_gpu_summary();$sleep(10) #GPU Summary every 10 seconds
-        GP20 while True:print();print($format_current_date());$print_gpu_summary();$sleep(10) #GPU Summary every 20 seconds
+        GP20 while True:print();print($format_current_date());$print_gpu_summary();$sleep(20) #GPU Summary every 20 seconds
         GP30 while True:print();print($format_current_date());$print_gpu_summary();$sleep(30) #GPU Summary every 30 seconds
-        GP60 while True:print();print($format_current_date());$print_gpu_summary();$sleep(30) #GPU Summary every 60 seconds
+        GP60 while True:print();print($format_current_date());$print_gpu_summary();$sleep(60) #GPU Summary every 60 seconds
         
         LEA  [eval(str(x)) for x in ans]
         ELA  [eval(str(x)) for x in ans]
@@ -26822,6 +27211,8 @@ def pseudo_terminal(
         GPULL !git pull
         GPSH  !git push
         GPUSH !git push
+        GINIT !git init
+        GIN   !git init
         GADA $r._git_add_ans(ans)
         GADDA $r._git_add_ans(ans()) 
         IGA    $append_line_to_file($printed($line_join(['' +x for x in $get_relative_paths($enlist(ans),root=$get_parent_folder($get_git_repo_root()))])),$r._get_gitignore_path())
@@ -28702,7 +29093,7 @@ def pseudo_terminal(
                                     #__import__('rp').r._default_timezone=rp.get_current_timezone() #Or 'PST', 'EST', etc
                                     __import__('rp').r._pip_import_autoyes=True  # Auto-install missing python packages
                                     __import__('rp').r._pip_install_needs_sudo=False
-                                    __import__('rp').r._auto_simore=True  # Auto-install missing shell commands
+                                    __import__('rp').r._auto_simore=False  # Make true to auto-install missing shell commands
 
                                     ## Custom pterm commands
                                     #__import__('rp').r._add_pterm_command_shortcuts("""
@@ -29101,7 +29492,7 @@ def pseudo_terminal(
                             print('Renaming %s'%fansi(get_file_name(path),'green','bold'))
                             print('Please input the new name of the %s'%('file' if is_a_file(path) else 'folder'))
                             new_name=input_default(fansi(' > ','blue','bold'),get_file_name(path))
-                                
+
                             user_message='__import__("rp").rename_path('+repr(path)+','+repr(new_name)+')# '+path
 
                             fansi_print("Renaming %s %s to %s: "%(('folder' if is_a_folder(path) else 'file'),path,new_name),'blue','bold')
@@ -34972,6 +35363,46 @@ def get_sha256_hash(source, format='hex', *, show_progress: bool = False):
     """
     return _get_hash(source, 'sha256', 'get_sha256_hash', show_progress=show_progress, format=format)
 
+def get_sha256_hashes(*sources, format='hex', show_progress=False, num_threads=None, strict=True):
+    """
+    Plural form of get_sha256_hash. Computes SHA-256 hashes for multiple sources.
+    Uses multithreading for faster batch processing of files.
+
+    Args:
+        sources: File paths or bytes objects to hash. Can be:
+           - Varargs: get_sha256_hashes('file1.png', 'file2.png')
+           - List:    get_sha256_hashes(['file1.png', 'file2.png'])
+        format: Output format: 'hex', 'int', 'bytes', 'base64'
+        show_progress: Show progress bar (True, False, 'eta', 'tqdm')
+        num_threads: Number of threads for concurrent hashing (default 32)
+        strict: Error handling:
+           - True: Raise error if any hash fails
+           - False: Skip failed hashes
+           - None: Replace failed hashes with None
+
+    EXAMPLES:
+        >>> get_sha256_hashes('file1.png', 'file2.png')
+        ['abc123...', 'def456...']
+        >>> get_sha256_hashes('/path/to/folder', show_progress=True)
+        ['hash1', 'hash2', 'hash3', ...]
+
+    See also: get_sha256_hash, load_files
+    """
+    sources = detuple(sources)
+    if isinstance(sources, str):
+        sources = [sources]
+
+    if show_progress in ['eta', True]:
+        show_progress = 'eta:Hashing files'
+
+    return load_files(
+        partial(get_sha256_hash, format=format),
+        sources,
+        show_progress=show_progress,
+        strict=strict,
+        num_threads=num_threads,
+    )
+
 
 def _labeled_image_text_to_image(text,
                                  align,
@@ -37354,7 +37785,7 @@ def download_font(url, *, skip_existing=True):
     elif url.startswith('G:'):
         return download_google_font(url)
 
-    assert connected_to_internet()
+    # assert connected_to_internet() #Breaks appps when we dont have internet, even if the font was already downloaded...
 
     make_directory(_downloaded_font_dir)
     return download_url(url, _downloaded_font_dir, skip_existing=skip_existing)
@@ -37675,21 +38106,25 @@ def with_file_extension(path:str,extension:str,*,replace=False):
 
 def with_file_extensions(*paths,extension:str=None,replace=False):
     """Generate multiple file paths with extensions. See with_file_extension for details.
-    
+    If extension not given as kwarg, last arg is used.
+
     Args:
         *paths: Multiple file paths to process
         extension: File extension to add/replace
         replace: Whether to replace existing extensions
-        
+
+    EXAMPLE:
+        >>> with_file_extensions('hello','world','png')
+        ans = ['hello.png', 'world.png']
+
     Returns:
         list: List of paths with extensions applied
     """
     if extension is None:
-        if len(paths)==2 and isinstance(paths[1],str):
-            extension=paths[1] # Enable with_file_extensions(['a','b'],'png')
-            paths=paths[:1]
-        else:
-            assert False, 'Please specify a file extension'
+        if not paths:
+            raise TypeError("with_file_extensions() missing required argument: 'extension'")
+        extension = paths[-1]
+        paths = paths[:-1]
 
     paths=detuple(paths)
 
@@ -42868,6 +43303,47 @@ def get_audio_file_duration(path,use_cache=True):
     _get_audio_file_duration_cache[path]=out
     return out
 
+def get_audio_file_bitrate(file_path):
+    """
+    Get the bitrate of the first audio stream in a file using ffprobe.
+
+    Compatible formats (via FFmpeg/ffprobe):
+        .mp3, .wav, .flac, .aac, .m4a, .ogg, .opus, .wma, .aiff, .aif,
+        .ape, .alac, .ac3, .dts, .mka, .webm, .mp4, .mkv, .avi, .mov
+        (and most other audio/video formats FFmpeg supports)
+
+    Note: For lossless formats like WAV and FLAC, the reported bitrate
+    reflects the uncompressed data rate, not a compression bitrate.
+
+    Args:
+        file_path: Path to the audio file.
+
+    Returns:
+        Bitrate in bits per second (int).
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        ValueError: If bitrate is unavailable for the file.
+        RuntimeError: If ffprobe fails to read the file.
+    """
+    _ensure_ffmpeg_installed()
+    import subprocess
+    import os
+    cmd = [
+        'ffprobe', '-v', 'error', '-select_streams', 'a:0',
+        '-show_entries', 'stream=bit_rate',
+        '-of', 'default=noprint_wrappers=1:nokey=1', file_path
+    ]
+    try:
+        output = subprocess.check_output(cmd).decode().strip()
+        if not output or output == "N/A":
+            raise ValueError("get_audio_file_bitrate: bitrate unavailable for " + file_path)
+        return int(output)
+    except subprocess.CalledProcessError as e:
+        if not os.path.exists(file_path):
+            raise FileNotFoundError("get_audio_file_bitrate: " + file_path)
+        raise RuntimeError("get_audio_file_bitrate: ffprobe failed on " + file_path + ": " + str(e))
+
 _get_video_file_framerate_cache={}
 def _get_video_file_framerate_via_moviepy(path, use_cache=True):
     """ Given a (str) path to a video file, returns a number (framerate) """
@@ -44509,6 +44985,58 @@ rename_file=rename_path#Synonyms that might make more sense to read in their con
 rename_folder=rename_path
 rename_directory=rename_path
 
+def rename_current_directory(new_name: str) -> str:
+    """
+    Rename the current working directory to a new name, staying inside it.
+
+    Safely renames by: cd to parent, rename, cd into renamed dir.
+    On error, cd back to original (if it still exists) then raise.
+
+    Arguments:
+        new_name: The new name for the directory (not a full path, just the name).
+
+    Returns:
+        The absolute path of the renamed directory.
+
+    Example:
+        >>> pwd
+        PWD: /Users/ryan/CleanCode/Sandbox/RP_Dumps/Thu Jan 29, 2026 at 7:56:19AM EST
+        >>> rename_current_directory('new_dir_name')
+        ans = /Users/ryan/CleanCode/Sandbox/RP_Dumps/new_dir_name
+        >>> pwd
+        PWD: /Users/ryan/CleanCode/Sandbox/RP_Dumps/new_dir_name
+    """
+    old_path = get_current_directory()
+    parent = get_path_parent(old_path)
+    old_name = get_file_name(old_path)
+    new_path = path_join(parent, new_name)
+
+    set_current_directory(parent)
+    try:
+        os.rename(old_path, new_path)
+        set_current_directory(new_path)
+    except Exception as e:
+        if is_a_directory(old_path):
+            set_current_directory(old_path)
+        raise RuntimeError("Failed to rename '%s' to '%s': %s" % (old_name, new_name, e))
+
+    return new_path
+
+
+def _rnh(new_name=None):
+    """
+    Interactive shortcut to rename the current directory.
+
+    Prompts for new name if not provided, then calls rename_current_directory.
+    """
+    if new_name is None:
+        old_name = get_file_name(get_current_directory())
+        new_name = input_default(fansi(' New name > ', 'blue', 'bold'), old_name)
+
+    new_path = rename_current_directory(new_name)
+    fansi_print("Renamed to: " + new_path, 'green', 'bold')
+    return new_path
+
 def move_path(from_path,to_path):
     """
     Like the 'mv' command
@@ -44742,6 +45270,7 @@ def _delete_paths_helper(*paths,permanent=True,delete_function=delete_path,stric
         for path in paths:
             if isinstance(path,str):
                 try:
+                    delfunc(path)
                     output.append(path)
                 except Exception:
                     if strict:
@@ -44929,6 +45458,34 @@ def get_home_directory():
 
     return _home_directory
 
+
+_macos_screenshots_folder = None
+def get_macos_screenshots_folder():
+    """
+    Returns the folder where macOS saves screenshots.
+    Uses 'defaults read com.apple.screencapture location' to get the configured location.
+    Falls back to ~/Desktop if not configured.
+    Only works on macOS.
+    """
+    assert currently_running_mac(), 'get_macos_screenshots_folder only works on macOS'
+
+    global _macos_screenshots_folder
+
+    if _macos_screenshots_folder is None:
+        import subprocess
+        import os
+        result = subprocess.run(
+            ['defaults', 'read', 'com.apple.screencapture', 'location'],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            location = result.stdout.strip()
+            _macos_screenshots_folder = os.path.expanduser(location)
+        else:
+            _macos_screenshots_folder = os.path.join(get_home_directory(), 'Desktop')
+
+    return _macos_screenshots_folder
 
 
 # def copy_file(from_path,to_path):
@@ -45445,11 +46002,51 @@ def delete_all_files_in_directory(directory,*,recursive=False,permanent=True):
     return delete_all_paths_in_directory(directory,permanent=permanent,recursive=recursive,include_folders=False,include_files=True)
 delete_all_files_in_folder=delete_all_files_in_directory
 
+def _path_join_impl(paths,mode,show_progress,lazy,func_name):
+    """Internal helper for path_join, path_join_broadcast, path_join_product."""
+    import os
+
+    def is_non_str_iterable(x):
+        return is_iterable(x) and not isinstance(x,str)
+
+    if len(paths)==1 and is_non_str_iterable(paths[0]):
+        paths=tuple(paths[0])
+
+    factors=[list(p) if is_non_str_iterable(p) else None for p in paths]
+    iterable_count=sum(f is not None for f in factors)
+
+    if iterable_count==0:
+        return os.path.join(*paths)
+
+    if mode=='broadcast':
+        lens=[len(f) for f in factors if f is not None]
+        if len(set(lens))!=1:
+            raise ValueError("Length mismatch among iterable arguments: "+repr(lens))
+        n=lens[0]
+        expanded=[f if f is not None else [p]*n for f,p in zip(factors,paths)]
+        combiner=zip(*expanded)
+        length=n
+    else:  #product
+        expanded=[f if f is not None else [p] for f,p in zip(factors,paths)]
+        combiner=itertools.product(*expanded)
+        length=math.prod(len(e) for e in expanded)
+
+    output=(os.path.join(*parts) for parts in combiner)
+    output=IteratorWithLen(output,length)
+
+    if show_progress:
+        output=eta(output,'rp.'+func_name)
+
+    if not lazy:
+        output=list(output)
+
+    return output
+
 def path_join(*paths,show_progress=False,lazy=False):
     """
     Joins given paths, which can be a combination of strings and non-string iterables (like lists, tuples).
     An extension of os.path.join (wherever os.path.join works, so will this)
-    
+
     Arguments:
     *paths -- A combination of string(s) and/or iterable(s) representing paths
 
@@ -45497,40 +46094,55 @@ def path_join(*paths,show_progress=False,lazy=False):
         paths=paths[0]
         paths=tuple(paths)
 
-    assert sum(is_non_str_iterable(x) for x in paths)<=1, 'rp.path_join: TODO: Decide how this function handles multiple iterables. Cartesian product or broadcasting?'
+    assert sum(is_non_str_iterable(x) for x in paths)<=1, 'rp.path_join: Use path_join_broadcast or path_join_product for multiple iterables'
 
-    if any(is_non_str_iterable(p) for p in paths):
-        iterables = [p for p in paths if is_non_str_iterable(p)]
-        iterables = [list(i) for i in iterables] #Make sure they have len
-        if len(set(map(len, iterables))) != 1:
-            raise ValueError("Length mismatch among iterable arguments")
-        for iterable in iterables:
-            assert all(isinstance(x,str) for x in iterable), 'Received a list that isn\'t all strings, please see r.path_join\'s docstring. Bad list: '+str(iterable)
-
-
-        path_factors = [p if is_non_str_iterable(p) else [p] for p in paths]
-        path_product = itertools.product(*path_factors)
-
-        if show_progress:
-            #Add length if we can
-            if all(map(has_len,path_factors)):
-                total_length = math.prod(map(len,path_factors))
-                path_product = eta(path_product, 'rp.path_join', length = total_length)
-            else:
-                print("rp.path_join: show_progress disabled because not all path factors have lengths and eta needs a length right now (Jun 10 2025)...")
-
-        output = (os.path.join(*path_tuple) for path_tuple in path_product)
-    
-        if not lazy:
-            output = list(output)
-
-        return output
-
-    else:
-        #The simple case: we just join strings
-        return os.path.join(*paths)
+    return _path_join_impl(paths,'broadcast',show_progress,lazy,'path_join')
 
 joined_paths=path_join#Synonyms for whatever comes into my head at the moment when using the rp terminal
+
+def path_join_broadcast(*paths,show_progress=False,lazy=False):
+    """
+    Like path_join, but zips iterables together element-wise (broadcast semantics).
+    All non-string iterables must have the same length.
+    Strings are repeated to match the iterable length.
+
+    Arguments:
+        *paths        -- Strings and/or iterables of strings
+        show_progress -- Show eta progress bar
+        lazy          -- Return IteratorWithLen instead of list
+
+    Examples:
+        path_join_broadcast('folder', ['a.txt', 'b.txt'])
+            returns ['folder/a.txt', 'folder/b.txt']
+        path_join_broadcast(['f1', 'f2'], ['a.txt', 'b.txt'])
+            returns ['f1/a.txt', 'f2/b.txt']
+        path_join_broadcast(['f1', 'f2'], 'sub', ['a.txt', 'b.txt'])
+            returns ['f1/sub/a.txt', 'f2/sub/b.txt']
+        path_join_broadcast(['f1', 'f2'], ['a.txt'])
+            raises ValueError (length mismatch)
+    """
+    return _path_join_impl(paths,'broadcast',show_progress,lazy,'path_join_broadcast')
+
+def path_join_product(*paths,show_progress=False,lazy=False):
+    """
+    Like path_join, but takes the cartesian product of all iterables.
+    Iterables do NOT need to have the same length.
+    Output length is the product of all iterable lengths.
+
+    Arguments:
+        *paths        -- Strings and/or iterables of strings
+        show_progress -- Show eta progress bar
+        lazy          -- Return IteratorWithLen instead of list
+
+    Examples:
+        path_join_product('folder', ['a.txt', 'b.txt'])
+            returns ['folder/a.txt', 'folder/b.txt']
+        path_join_product(['f1', 'f2'], ['a.txt', 'b.txt'])
+            returns ['f1/a.txt', 'f1/b.txt', 'f2/a.txt', 'f2/b.txt']
+        path_join_product(['f1', 'f2'], ['a.txt', 'b.txt', 'c.txt'])
+            returns ['f1/a.txt', 'f1/b.txt', 'f1/c.txt', 'f2/a.txt', 'f2/b.txt', 'f2/c.txt']
+    """
+    return _path_join_impl(paths,'product',show_progress,lazy,'path_join_product')
 
 
 def path_split(path):
@@ -46667,16 +47279,20 @@ def simple_boxed_string(string,align='center',chars='│─┐┌└┘'):
 
 try:
     _strip_ansi_escapes=re.compile(r'(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]')
+    _strip_osc_escapes=re.compile(r'\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)?')  # OSC sequences like OSC 52 clipboard
 except Exception:pass
 def strip_ansi_escapes(string):
     """
     Undoes anything fansi might do to a string
+    Also strips OSC sequences (e.g. OSC 52 clipboard: \\x1b]52;...\\x07)
     Code from https://www.tutorialspoint.com/How-can-I-remove-the-ANSI-escape-sequences-from-a-string-in-python#targetText=You%20can%20use%20regexes%20to,%5B%40-~%5D'.
     EXAMPLE:
         assert strip_ansi_escapes(fansi("A",'red'))=='A'
     """
     try:
-        return _strip_ansi_escapes.sub('',string)
+        string = _strip_ansi_escapes.sub('',string)
+        string = _strip_osc_escapes.sub('',string)
+        return string
     except NameError:
         assert False,"Failed to import re upon booting rp"
 
@@ -48431,6 +49047,37 @@ def is_google_drive_url(url):
         if re.match(pattern, url):
             return True
     return False
+
+def load_text_from_google_doc(url):
+    """
+    Extract plain text from a Google Docs URL.
+
+    Uses the export URL trick to download document as plain text.
+    Works for publicly shared documents (anyone with link can view).
+
+    >>> url = 'https://docs.google.com/document/d/1KH5G7EM8HTXx5FnT4BlIPH1TRkgZjTF04aKox2x-leg/edit'
+    >>> text = load_text_from_google_doc(url)
+    >>> len(text) > 0
+    True
+    """
+    import re
+    from urllib.request import urlopen
+    from urllib.error import HTTPError, URLError
+
+    match = re.search(r'/document/d/([a-zA-Z0-9-_]+)', url)
+    if not match:
+        raise ValueError("Could not extract document ID from URL: %s" % url)
+
+    doc_id = match.group(1)
+    export_url = "https://docs.google.com/document/d/%s/export?format=txt" % doc_id
+
+    try:
+        response = urlopen(export_url)
+        return response.read().decode('utf-8')
+    except HTTPError as e:
+        raise RuntimeError("Failed to fetch document (status %s): %s" % (e.code, str(e)))
+    except URLError as e:
+        raise RuntimeError("Network error: %s" % str(e))
 
 #COMMENTED NOT BECAUSE IT DOESNT WORK (IT DOES), BUT BECAUSE WE NO LONGER NEED IT
 # def get_google_drive_file_id(url):
@@ -50389,7 +51036,6 @@ def _set_ryan_vimrc(confirm=False):
 
         elif confirm == 'HARD LINK':
             # Create hard link from ~/.vimrc to ryan_vimrc.py
-            import os
             if file_exists(vimrc_path):
                 os.remove(vimrc_path)
             os.link(ryan_vimrc_path, vimrc_path)
@@ -50397,7 +51043,6 @@ def _set_ryan_vimrc(confirm=False):
 
         elif confirm == 'SOFT LINK':
             # Create symbolic link from ~/.vimrc to ryan_vimrc.py
-            import os
             if file_exists(vimrc_path):
                 os.remove(vimrc_path)
             os.symlink(ryan_vimrc_path, vimrc_path)
@@ -50739,7 +51384,7 @@ def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, unix=Non
     if mac   is None: mac   = unix
     if linux is None: linux = unix
 
-    if not force and (system_command_exists(name) or system_library_exists(name)):
+    if not force and (system_command_exists(name) or system_library_exists(name) or path_exists(name)):
         #Don't reinstall what we've already installed
         return False
 
@@ -50796,6 +51441,7 @@ def _pterm_run_shell_command(command):
     Captures last 4KB of output to detect 'command not found' errors.
     Returns exit code. Sets _last_missing_shell_command if installable command missing.
     """
+    global _last_missing_shell_command
     exit_code = os.system(command)
 
     if exit_code:
@@ -50846,7 +51492,76 @@ def _ensure_cargo_installed():
 
 @_register_ensure_installed_func
 def _ensure_brew_installed():
-    """brew: Package manager for macOS and Linux"""
+    """
+    brew: Package manager for macOS and Linux
+
+    Some recommended apps installable via brew:
+    ┌─────────────────────┬──────┬──────────┬─────┬─────┬───────┐
+    │ Cask                │ Brew │ Free     │ CLI │ Mac │ Linux │
+    ├─────────────────────┼──────┼──────────┼─────┼─────┼───────┤
+    │ daisydisk           │ Alt  │ Paid     │ No  │ Yes │ No    │
+    │ little-snitch       │ Alt  │ Paid     │ No  │ Yes │ No    │
+    │ microsoft-excel     │ Alt  │ Paid     │ No  │ Yes │ No    │
+    │ microsoft-word      │ Alt  │ Paid     │ No  │ Yes │ No    │
+    │ nordvpn             │ Alt  │ Paid     │ No  │ Yes │ Yes   │
+    │ onedrive            │ Alt  │ Freemium │ No  │ Yes │ Yes   │
+    │ spotify             │ Alt  │ Freemium │ No  │ Yes │ Yes   │
+    │ clion               │ Alt  │ Paid     │ Yes │ Yes │ Yes   │
+    │ discord             │ Alt  │ Free     │ No  │ Yes │ Yes   │
+    │ musescore           │ Alt  │ Free     │ No  │ Yes │ Yes   │
+    │ onyx                │ Alt  │ Free     │ No  │ Yes │ No    │
+    │ tunnelblick         │ Alt  │ Free     │ No  │ Yes │ No    │
+    │ balenaetcher        │ Alt  │ Free     │ No  │ Yes │ Yes   │
+    │ unity-hub           │ Alt  │ Freemium │ Yes │ Yes │ Yes   │
+    │ anydesk             │ Alt  │ Freemium │ Yes │ Yes │ Yes   │
+    │ cursor              │ Alt  │ Freemium │ Yes │ Yes │ Yes   │
+    │ fontforge           │ Alt  │ Free     │ Yes │ Yes │ Yes   │
+    │ gimp                │ Alt  │ Free     │ Yes │ Yes │ Yes   │
+    │ inkscape            │ Alt  │ Free     │ Yes │ Yes │ Yes   │
+    │ jetbrains-toolbox   │ Alt  │ Free     │ Yes │ Yes │ Yes   │
+    │ raspberry-pi-imager │ Alt  │ Free     │ Yes │ Yes │ Yes   │
+    │ monodraw            │ Yes  │ Paid     │ No  │ Yes │ No    │
+    │ moom                │ Yes  │ Paid     │ No  │ Yes │ No    │
+    │ sublime-text        │ Yes  │ Paid     │ No  │ Yes │ Yes   │
+    │ swish               │ Yes  │ Paid     │ No  │ Yes │ No    │
+    │ betterzip           │ Yes  │ Paid     │ Yes │ Yes │ No    │
+    │ coconutbattery      │ Yes  │ Freemium │ No  │ Yes │ No    │
+    │ shottr              │ Yes  │ Freemium │ No  │ Yes │ No    │
+    │ zerotier-one        │ Yes  │ Freemium │ No  │ Yes │ Yes   │
+    │ zoom                │ Yes  │ Freemium │ No  │ Yes │ Yes   │
+    │ lunar               │ Yes  │ Freemium │ Yes │ Yes │ No    │
+    │ slack               │ Yes  │ Freemium │ Yes │ Yes │ Yes   │
+    │ warp                │ Yes  │ Freemium │ Yes │ Yes │ Yes   │
+    │ amethyst            │ Yes  │ Free     │ No  │ Yes │ No    │
+    │ cool-retro-term     │ Yes  │ Free     │ No  │ Yes │ Yes   │
+    │ krita               │ Yes  │ Free     │ No  │ Yes │ Yes   │
+    │ obsidian            │ Yes  │ Free     │ No  │ Yes │ Yes   │
+    │ shutter-encoder     │ Yes  │ Free     │ No  │ Yes │ Yes   │
+    │ signal              │ Yes  │ Free     │ No  │ Yes │ Yes   │
+    │ virtualbox          │ Yes  │ Free     │ No  │ Yes │ Yes   │
+    │ whatsapp            │ Yes  │ Free     │ No  │ Yes │ No    │
+    │ wireshark-app       │ Yes  │ Free     │ No  │ Yes │ Yes   │
+    │ zulip               │ Yes  │ Free     │ No  │ Yes │ Yes   │
+    │ arduino-ide         │ Yes  │ Free     │ Yes │ Yes │ Yes   │
+    │ freecad             │ Yes  │ Free     │ Yes │ Yes │ Yes   │
+    │ imageoptim          │ Yes  │ Free     │ Yes │ Yes │ Yes   │
+    │ firefox             │ Yes  │ Free     │ No  │ Yes │ Yes   │
+    │ grandperspective    │ Yes  │ Free     │ No  │ Yes │ No    │
+    │ linearmouse         │ Yes  │ Free     │ No  │ Yes │ No    │
+    │ skim                │ Yes  │ Free     │ No  │ Yes │ No    │
+    │ wezterm             │ Yes  │ Free     │ No  │ Yes │ Yes   │
+    │ google-chrome       │ Yes  │ Free     │ No  │ Yes │ Yes   │
+    │ vivaldi             │ Yes  │ Free     │ No  │ Yes │ Yes   │
+    │ audacity            │ Yes  │ Free     │ Yes │ Yes │ Yes   │
+    │ blender             │ Yes  │ Free     │ Yes │ Yes │ Yes   │
+    │ docker-desktop      │ Yes  │ Free     │ Yes │ Yes │ Yes   │
+    │ ghostty             │ Yes  │ Free     │ Yes │ Yes │ Yes   │
+    │ hyper               │ Yes  │ Free     │ Yes │ Yes │ Yes   │
+    │ iina                │ Yes  │ Free     │ Yes │ Yes │ No    │
+    │ kitty               │ Yes  │ Free     │ Yes │ Yes │ Yes   │
+    │ pycharm-ce          │ Yes  │ Free     │ Yes │ Yes │ Yes   │
+    └─────────────────────┴──────┴──────────┴─────┴─────┴───────┘
+    """
     assert not currently_running_windows(), 'r._ensure_brew_installed: brew isnt supported on Windows. Try WSL? See https://docs.brew.sh/Installation'
     if not system_command_exists('brew'):
         _run_sys_command('''sudo -v && NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"''')
@@ -50891,6 +51606,19 @@ def _ensure_rsync_installed():
         mac='brew install rsync',
         linux='apt install rsync --yes',
         windows='winget install --id=cwRsync.cwRsync',  # https://winstall.app/apps/cwRsync.cwRsync
+    )
+
+@_register_ensure_installed_func
+def _ensure_aria2c_installed():
+    """
+    aria2c: Lightweight multi-protocol & multi-source command-line download utility
+    NOTE: Package name is 'aria2' but the command-line tool is 'aria2c'
+    """
+    _ensure_installed(
+        'aria2c',
+        mac='brew install aria2',  # https://formulae.brew.sh/formula/aria2
+        linux='apt install aria2 --yes',  # https://packages.debian.org/bookworm/aria2
+        windows='winget install --id=aria2.aria2',  # https://winstall.app/apps/aria2.aria2
     )
 
 @_register_ensure_installed_func
@@ -51064,7 +51792,7 @@ def _ensure_s5cmd_installed():
             curl -s https://api.github.com/repos/peak/s5cmd/releases/latest \
             | grep "browser_download_url.*linux_amd64.deb" \
             | cut -d : -f 2,3 \
-            | tr -d \" \
+            | tr -d '"' \
             | wget -qi - -O s5cmd.deb && sudo dpkg -i s5cmd.deb && rm s5cmd.deb'''),
         mac='brew install s5cmd',
     )
@@ -51194,7 +51922,80 @@ def _ensure_pdftocairo_installed():
         mac    = 'brew install poppler',
         linux  = 'apt install poppler-utils',
     )
- 
+
+@_register_ensure_installed_func
+def _ensure_fluor_installed():
+    """fluor: macOS app to switch fn key behavior per-app"""
+    _ensure_installed('/Applications/Fluor.app', mac='brew install --cask fluor') #https://formulae.brew.sh/cask/fluor
+
+@_register_ensure_installed_func
+def _ensure_alacritty_installed():
+    """alacritty: GPU-accelerated terminal emulator"""
+    _ensure_installed(
+        'alacritty' if currently_running_linux() else '/Applications/Alacritty.app',
+        mac    ='brew install --cask alacritty', #https://formulae.brew.sh/cask/alacritty
+        linux  ='sudo add-apt-repository ppa:mmstick76/alacritty -y && sudo apt install alacritty -y', #https://launchpad.net/~mmstick76/+archive/ubuntu/alacritty
+        windows='winget install --id=Alacritty.Alacritty', #https://winstall.app/apps/Alacritty.Alacritty
+    )
+
+@_register_ensure_installed_func
+def _ensure_iterm2_installed():
+    """iterm2: macOS terminal replacement with tmux integration"""
+    _ensure_installed('/Applications/iTerm.app', mac='brew install --cask iterm2') #https://formulae.brew.sh/cask/iterm2
+
+@_register_ensure_installed_func
+def _ensure_raycast_installed():
+    """raycast: macOS/Windows launcher and productivity tool"""
+    _ensure_installed(
+        'raycast' if currently_running_windows() else '/Applications/Raycast.app',
+        mac    ='brew install --cask raycast', #https://formulae.brew.sh/cask/raycast
+        windows='winget install --id=Raycast.Raycast', #https://winstall.app/apps/Raycast.Raycast
+    )
+
+@_register_ensure_installed_func
+def _ensure_vivaldi_installed():
+    """vivaldi: Feature-rich Chromium-based browser"""
+    _ensure_installed(
+        'vivaldi' if not currently_running_mac() else '/Applications/Vivaldi.app',
+        mac    ='brew install --cask vivaldi', #https://formulae.brew.sh/cask/vivaldi
+        linux  ='sudo apt install vivaldi-stable -y', #https://vivaldi.com/download/
+        windows='winget install --id=Vivaldi.Vivaldi', #https://winstall.app/apps/Vivaldi.Vivaldi
+    )
+
+@_register_ensure_installed_func
+def _ensure_linearmouse_installed():
+    """linearmouse: macOS mouse/trackpad customization utility"""
+    _ensure_installed('/Applications/LinearMouse.app', mac='brew install --cask linearmouse') #https://formulae.brew.sh/cask/linearmouse
+
+@_register_ensure_installed_func
+def _ensure_audacity_installed():
+    """audacity: Free audio editor and recorder"""
+    _ensure_installed(
+        'audacity' if not currently_running_mac() else '/Applications/Audacity.app',
+        mac    ='brew install --cask audacity', #https://formulae.brew.sh/cask/audacity
+        linux  ='sudo apt install audacity -y', #https://www.audacityteam.org/download/linux/
+        windows='winget install --id=Audacity.Audacity', #https://winstall.app/apps/Audacity.Audacity
+    )
+
+@_register_ensure_installed_func
+def _ensure_blender_installed():
+    """blender: 3D creation suite for modeling, animation, and rendering"""
+    _ensure_installed(
+        'blender' if not currently_running_mac() else '/Applications/Blender.app',
+        mac    ='brew install --cask blender', #https://formulae.brew.sh/cask/blender
+        linux  ='sudo snap install blender --classic', #https://snapcraft.io/blender
+        windows='winget install --id=BlenderFoundation.Blender', #https://winstall.app/apps/BlenderFoundation.Blender
+    )
+
+@_register_ensure_installed_func
+def _ensure_lunar_installed():
+    """lunar: macOS display brightness and contrast control"""
+    _ensure_installed('/Applications/Lunar.app', mac='brew install --cask lunar') #https://formulae.brew.sh/cask/lunar
+
+@_register_ensure_installed_func
+def _ensure_swish_installed():
+    """swish: macOS window manager with trackpad gestures"""
+    _ensure_installed('/Applications/Swish.app', mac='brew install --cask swish') #https://formulae.brew.sh/cask/swish
 
 
 def _install_ollama(force=False):
@@ -52171,7 +52972,7 @@ def _run_tmux_command(command):
 # NOT WELL DEFINED. By pid or by active?
 def tmux_get_active_pane_index() -> int:
     """Returns the index of the current tmux pane."""
-    return int(_run_tmux_command("tmux display -p -t '{down-of}' '#{pane_index}'".split()))
+    return int(_run_tmux_command(["tmux", "display-message", "-p", "#{pane_index}"]))
 
 def tmux_get_active_window_index() -> int:
     """Returns the index of the current tmux window."""
@@ -52181,9 +52982,10 @@ def tmux_get_active_window_name() -> str:
     """Returns the name of the current tmux window."""
     return _run_tmux_command(["tmux", "display-message", "-p", "#{window_name}"])
 
-def tmux_get_active_session_index() -> int:
-    """Returns the index of the current tmux session."""
-    return int(_run_tmux_command(["tmux", "display-message", "-p", "#{session_index}"]))
+def tmux_get_active_session_id() -> int:
+    """Returns the numeric ID of the current tmux session (e.g. 11 from $11)."""
+    session_id = _run_tmux_command(["tmux", "display-message", "-p", "#{session_id}"])
+    return int(session_id.lstrip("$"))
 
 def tmux_get_active_session_name() -> str:
     """
@@ -52226,7 +53028,7 @@ def get_process_tty(pid: int = None) -> str:
         ["ps", "-o", "tty=", "-p", str(pid)], text=True
     ).strip()
 
-    if not tty or tty == "?":
+    if not tty or tty in ("?", "??"):
         raise ValueError("PID %s has no controlling TTY" % pid)
 
     if not tty.startswith("/"):
@@ -52401,8 +53203,11 @@ def tmux_kill_session(session_name, strict=False):
     assert isinstance(session_name, str), "Session name must be a string."
 
     server = libtmux.Server()
-    session = server.find_where({"session_name": session_name})
-    
+    if hasattr(server, 'find_where'):
+        session = server.find_where({"session_name": session_name})
+    else:
+        session = server.sessions.get(session_name=session_name, default=None)
+
     if session:
         session.kill_session()
         print("rp.tmux_kill_session: Session %s killed successfully."%repr(session_name))
@@ -54186,6 +54991,12 @@ def get_audio_file_durations(*paths, show_progress=False, strict=True, num_threa
     if show_progress in ['eta',True]: show_progress='eta:Getting audio durations'
     return load_files(get_audio_file_duration, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
 
+def get_audio_file_bitrates(*paths, show_progress=False, strict=True, num_threads=0, lazy=False):
+    """ Plural of get_audio_file_bitrate. Returns list of durations in seconds. """
+    paths=rp_iglob(paths)
+    if show_progress in ['eta',True]: show_progress='eta:Getting audio durations'
+    return load_files(get_audio_file_bitrate, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
+
 def get_video_file_framerates(*paths, show_progress=False, strict=True, num_threads=0, lazy=False):
     """ Plural of get_video_file_framerate. Returns list of framerates. """
     paths=rp_iglob(paths)
@@ -55404,7 +56215,7 @@ MACOS_NOTIFICATION_SOUNDS = (
     'Hero', 'Morse', 'Ping', 'Pop', 'Purr', 'Sosumi', 'Submarine', 'Tink',
 )
 
-def macos_notify(message, title='RP', sound='Glass'):
+def macos_notify(message='', title='RP', sound='Glass'):
     """
     Display a macOS notification with optional sound.
 
@@ -55424,6 +56235,10 @@ def macos_notify(message, title='RP', sound='Glass'):
         >>> macos_notify('Tests passed', title='pytest', sound='Hero')
         >>> macos_notify('Silent alert', sound='')
         >>> macos_notify('Custom sound', sound='/System/Library/Sounds/Blow.aiff')
+
+    Example (hear all sounds):
+        >>> for sound in rp.MACOS_NOTIFICATION_SOUNDS: rp.macos_notify(sound,sound=sound) ; sleep(1)
+
     """
     from rp import currently_running_mac
     assert currently_running_mac(), 'macos_notify only works on macOS'
@@ -55800,7 +56615,7 @@ def _size_to_height_width(size, in_height, in_width):
 
 def cv_resize_images(
     *images,
-    size,
+    size=None,
     interp="auto",
     alpha_weighted=False,
     show_progress=False,
@@ -55808,7 +56623,12 @@ def cv_resize_images(
     lazy=False
 ):
     """Batch resize images using OpenCV. Faster than resize_image for multiple images.
-    See cv_resize_image for single images."""
+    See cv_resize_image for single images. If size not given as kwarg, last arg is used."""
+    if size is None:
+        if not images:
+            raise TypeError("cv_resize_images() missing required argument: 'size'")
+        size = images[-1]
+        images = images[:-1]
     images=detuple(images)
 
     as_numpy = is_numpy_array(images)
@@ -55835,7 +56655,7 @@ resize_images = cv_resize_images  # For now, they will be the same thing
 
 def resize_videos(
     *videos,
-    size,
+    size=None,
     interp="auto",
     alpha_weighted=False,
     show_progress=False,
@@ -55850,7 +56670,7 @@ def resize_videos(
 
     Parameters:
         *videos: Video arrays to resize
-        size (tuple): Target (height, width) 
+        size (tuple): Target (height, width)
         interp (str): Interpolation method ('auto', 'bilinear', etc.)
         show_progress (bool): Display progress bar
         lazy (bool): Return generator instead of computing immediately
@@ -55865,6 +56685,11 @@ def resize_videos(
 
     Tags: video-processing, resize, batch, plural
     """
+    if size is None:
+        if not videos:
+            raise TypeError("resize_videos() missing required argument: 'size'")
+        size = videos[-1]
+        videos = videos[:-1]
 
     videos=detuple(videos)
 
@@ -58951,19 +59776,43 @@ def _run_ollama_llm(message, model):
     )
     return response['message']['content']
 
+# Suggested models for run_llm_api - maps friendly names to prefixed versions.
+# These are suggestions only - any OPENAI:* or OLLAMA:* model works regardless of this dict.
+LLM_API_MODELS = {
+    # OpenAI models (requires OPENAI_API_KEY env var)
+    'gpt-4o': 'OPENAI:gpt-4o',
+    'gpt-4o-mini': 'OPENAI:gpt-4o-mini',
+    'gpt-4': 'OPENAI:gpt-4',
+    'gpt-4-turbo': 'OPENAI:gpt-4-turbo',
+    'gpt-5': 'OPENAI:gpt-5',
+    'gpt-5-mini': 'OPENAI:gpt-5-mini',
+    'gpt-5.2': 'OPENAI:gpt-5.2',
+    'gpt-5.2-pro': 'OPENAI:gpt-5.2-pro',
+    'gpt-5.2-codex': 'OPENAI:gpt-5.2-codex',
+    # Ollama models (local, free) - recommended for macOS
+    'qwen2.5:7b': 'OLLAMA:qwen2.5:7b',      # Best overall at 7B, great for coding/math
+    'qwen2.5:14b': 'OLLAMA:qwen2.5:14b',    # Stronger but slower
+    'mistral:7b': 'OLLAMA:mistral:7b',      # Fast general-purpose
+    'llama3.1:8b': 'OLLAMA:llama3.1:8b',    # Strong general, 128K context
+    'gemma:7b': 'OLLAMA:gemma:7b',          # Good for conversation
+    'codellama:7b': 'OLLAMA:codellama:7b',  # Specialized for coding
+}
+
 def run_llm_api(message, model='gpt-4o-mini', api_key=None):
     """
     Query different LLM APIs.
 
-    Supports OpenAI models and local Ollama models.
-    For Ollama, prefix the model name with 'OLLAMA:' (e.g., 'OLLAMA:qwen2.5:7b').
-    Ollama server will be started automatically if not running.
+    Supports OpenAI and Ollama models. Use prefixes for explicit routing:
+        - OPENAI:<model>  → OpenAI API (requires OPENAI_API_KEY)
+        - OLLAMA:<model>  → Local Ollama server (auto-started if needed)
+
+    Unprefixed model names are looked up in LLM_API_MODELS dict.
+    Any prefixed model works regardless of whether it's in the dict.
 
     Args:
         message: The prompt string to send to the model
-        model: Model identifier. OpenAI models: 'gpt-4o', 'gpt-4', 'gpt-4o-mini',
-               'gpt-4-turbo'. For Ollama: 'OLLAMA:<model_name>'
-        api_key: OpenAI API key (optional, uses env var if not provided)
+        model: Model identifier. Examples: 'gpt-4o-mini', 'OPENAI:gpt-5', 'OLLAMA:qwen2.5:7b'
+        api_key: OpenAI API key (optional, uses OPENAI_API_KEY env var if not provided)
 
     Returns:
         str: The model's response text
@@ -58984,17 +59833,24 @@ def run_llm_api(message, model='gpt-4o-mini', api_key=None):
         '2 + 2 equals 4.'
         >>> run_llm_api("Hello", model="gpt-4o-mini")  # doctest: +SKIP
         'Hello! How can I assist you today?'
+        >>> run_llm_api("Hi", model="OPENAI:gpt-5")  # doctest: +SKIP
+        'Hello! How can I help you?'
     """
     assert isinstance(message, str), type(message)
     assert isinstance(model, str), type(model)
 
+    # Resolve model name - check for prefix or look up in dict
     if model.upper().startswith('OLLAMA:'):
         ollama_model = model[7:]  # Strip 'OLLAMA:' prefix
         return _run_ollama_llm(message, ollama_model)
-    elif model in ['gpt-4o', 'gpt-4', 'gpt-4o-mini', 'gpt-4-turbo']:
-        return _run_openai_llm(message, model, api_key)
+    elif model.upper().startswith('OPENAI:'):
+        openai_model = model[7:]  # Strip 'OPENAI:' prefix
+        return _run_openai_llm(message, openai_model, api_key)
+    elif model in LLM_API_MODELS:
+        # Look up friendly name and recurse with prefixed version
+        return run_llm_api(message, LLM_API_MODELS[model], api_key)
     else:
-        raise ValueError('Model not supported: ' + str(model) + '. For Ollama models, use OLLAMA:<model_name> prefix.')
+        raise ValueError("Model not supported: {model}. Use OPENAI:<model> or OLLAMA:<model> prefix, or one of: "+', '.join(LLM_API_MODELS.keys()))
 
 
 def minify_python_code(code:str):
@@ -62973,7 +63829,7 @@ def git_existing_ignored_files():
     return [path_join(root, line) for line in result.stdout.splitlines() if line.strip()]
 
 
-def _autoformat_python_code_via_black(code:str):
+def _autoformat_python_code_via_black(code:str,line_length=1000):
     """Formats Python code using the Black code formatter.
     
     Uses Black's automatic code formatting to apply consistent style according to PEP 8.
@@ -63033,7 +63889,7 @@ def _autoformat_python_code_via_black(code:str):
     """
     pip_import('black')
     import black
-    return black.format_str(code,mode=black.Mode(line_length=1000))
+    return black.format_str(code,mode=black.Mode(line_length=line_length))
 
 # Public alias for _autoformat_python_code_via_black with legacy compatibility
 autoformat_python_via_black = _autoformat_python_code_via_black
@@ -66649,7 +67505,7 @@ def pip_install(pip_args:str,*,backend=None):
 
     pip_cmd = dict(pip="pip", uv="uv pip")[backend]
 
-    command = shlex.quote(sys.executable) + " -m " + pip_cmd + " install " + pip_args
+    command = shlex.quote(sys.executable) + " -m " + pip_cmd + " install --break-system-packages " + pip_args
 
     _run_sys_command(command)
     _refresh_autocomplete_module_list()
@@ -66811,11 +67667,13 @@ known_pypi_module_package_names={
     'colors': 'ansicolors',
     'compose': 'docker-compose',
     'tree_sitter': 'tree-sitter',
+    'rclone_python':'rclone-python',
     'patoolib' : 'patool',
     'tree_sitter_python': 'tree-sitter-python',
     # 'cv2': 'opencv-python',
     # 'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? (Update: so far, so good!)
     'cv2': 'opencv-python opencv-contrib-python', #But that didn't work for get_edge_drawing...https://github.com/Comfy-Org/ComfyUI-Manager/discussions/708
+    'handy_kws':'handy-kws',
     'AppKit':         'pyobjc-framework-Cocoa',
     'Cocoa':          'pyobjc-framework-Cocoa',
     'CoreFoundation': 'pyobjc-framework-Cocoa',

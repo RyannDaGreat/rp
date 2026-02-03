@@ -24,8 +24,8 @@ class UnreachableCodeDetector:
         """Initialize with Python code string."""
         self.code = code
         self.lines = code.splitlines()
-        self.unreachable_lines: Set[int] = set()
-        self.unreachable_ranges: List[tuple] = []  # [(start_line, end_line), ...]
+        self.unreachable_lines = set()
+        self.unreachable_ranges = []  # [(start_line, end_line), ...]
 
         try:
             self.tree = ast.parse(code)

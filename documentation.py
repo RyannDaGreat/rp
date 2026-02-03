@@ -97,6 +97,14 @@ KEYBOARD SHORTCUTS:
 	⌃ z    undo last action
 	⌃ y    redo last undone action
 	⌥ ⌃ e  Edit code with AI
+	REFACTORING:
+		⌃ r    extract variable (requires selection: select expression, press ⌃r, type name, Enter)
+		⌃ n    rename variable at cursor (place cursor on variable name, press ⌃n, type new name, Enter)
+		⌃ p    inline variable at cursor (place cursor on assignment or usage, press ⌃p to inline)
+		<      move element left in syntax tree (requires selection: select arg/element, press <)
+		>      move element right in syntax tree (requires selection: select arg/element, press >)
+		⌥ ⇧ ↑  expand selection to larger AST node (select text, press to expand to parent node)
+		⌥ ⇧ ↓  contract selection to smaller AST node (select text, press to shrink to child node)
 	F1     enable/disable mouse mode
 	F4     toggle between Vi and Emacs mode
 	F5     save F2 menu settings (when sidebar is visible)
@@ -106,7 +114,6 @@ KEYBOARD SHORTCUTS:
 	LESS IMPORTANT AND MAYBE REMOVED IN FUTURE:
 		//While these keyboard shortcuts are kind of silly, I do find myself using them quite often
 		⌃ h    inserts 'HISTORY'
-		⌃ p    inserts 'PREV' (then 'NEXT', if pressed again)
 		⌃ u    inserts 'UNDO'
 		⌥ m    inserts 'MORE' (then 'MMORE', if pressed again)
 		⌥ s    inserts 'self'

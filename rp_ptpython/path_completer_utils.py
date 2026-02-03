@@ -89,7 +89,52 @@ __all__ = [
     'format_completion_text',
     'format_display_text',
     'is_text_file_fast',
+    'get_dir_entries',
 ]
+
+# LRU cache for directory listings
+from functools import lru_cache
+
+# DirEntry info: (name, is_dir) - mtime fetched separately only when needed
+DirEntryInfo = namedtuple('DirEntryInfo', ['name', 'is_dir'])
+
+@lru_cache(maxsize=64)
+def _scandir_cached(directory, cache_buster):
+    """Cached scandir - only name and is_dir, no stat() call."""
+    result = []
+    try:
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                try:
+                    is_dir = entry.is_dir()  # fast, no stat needed on most systems
+                except OSError:
+                    continue
+                result.append(DirEntryInfo(entry.name, is_dir))
+    except (OSError, PermissionError):
+        pass
+    return tuple(result)
+
+def get_dir_entries(directory='.'):
+    """Get directory entries with caching. Returns list of DirEntryInfo(name, is_dir)."""
+    import time
+    cache_buster = int(time.time())  # invalidate cache every second
+    return list(_scandir_cached(os.path.abspath(directory), cache_buster))
+
+def get_dir_entries_with_mtime(directory='.'):
+    """Get directory entries with mtime. Slower - only use when sorting by mtime."""
+    result = []
+    try:
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                try:
+                    is_dir = entry.is_dir()
+                    mtime = entry.stat().st_mtime
+                except OSError:
+                    continue
+                result.append((entry.name, is_dir, mtime))
+    except (OSError, PermissionError):
+        pass
+    return result
 
 # Runtime caches for discovered extensions
 _cached_text_extensions = {'.py', '.txt', '.md', '.js', '.ts', '.jsx', '.tsx', '.html', '.css',
@@ -233,7 +278,8 @@ def list_path_candidates(
     files_only=False,
     dirs_only=False,
     show_hidden=None,
-    check_text_files=False
+    check_text_files=False,
+    sort_by_mtime=False
 ):
     """
     List filesystem entries matching the given prefix.
@@ -247,9 +293,10 @@ def list_path_candidates(
                     If None, auto-detect from prefix (show if prefix starts with .)
         check_text_files: Whether to check if files are text files (for VIM prioritization)
                          Default False to avoid unnecessary I/O
+        sort_by_mtime: Sort by modification time (newest first) instead of name
 
     Returns:
-        List of PathCandidate objects, sorted by name
+        List of PathCandidate objects, sorted by name (or mtime if sort_by_mtime=True)
 
     Examples:
         >>> list_path_candidates('/usr', 'loc')
@@ -264,56 +311,53 @@ def list_path_candidates(
 
     candidates = []
 
-    try:
-        # Use os.scandir for efficiency (like the old code did)
-        with os.scandir(directory) as entries:
-            for entry in entries:
-                name = entry.name
+    # Use mtime version only when needed (slower due to stat calls)
+    if sort_by_mtime:
+        entries = get_dir_entries_with_mtime(directory)  # [(name, is_dir, mtime), ...]
+    else:
+        entries = [(e.name, e.is_dir, None) for e in get_dir_entries(directory)]  # cached, no stat
 
-                # Skip hidden files unless explicitly requested
-                if not show_hidden and name.startswith('.'):
-                    continue
+    for name, is_dir, mtime in entries:
+        # Skip hidden files unless explicitly requested
+        if not show_hidden and name.startswith('.'):
+            continue
 
-                # Check prefix match (case-sensitive, like bash)
-                if not name.startswith(prefix):
-                    continue
+        # Check prefix match (case-sensitive, like bash)
+        if not name.startswith(prefix):
+            continue
 
-                # Check file/dir filtering
-                try:
-                    is_dir = entry.is_dir()
-                except OSError:
-                    # Broken symlink or permission issue
-                    continue
+        # Check file/dir filtering
+        if files_only and is_dir:
+            continue
+        if dirs_only and not is_dir:
+            continue
 
-                if files_only and is_dir:
-                    continue
-                if dirs_only and not is_dir:
-                    continue
+        # Build full path for the candidate
+        full_path = os.path.join(directory, name)
 
-                # Build full path for the candidate
-                full_path = os.path.join(directory, name)
+        # Optionally check if it's a text file
+        is_text = None
+        if check_text_files and not is_dir:
+            is_text = is_text_file_fast(full_path)
 
-                # Optionally check if it's a text file
-                is_text = None
-                if check_text_files and not is_dir:
-                    is_text = is_text_file_fast(full_path)
+        candidate = PathCandidate(
+            name=name,
+            full_path=full_path,
+            is_dir=is_dir,
+            is_text_file=is_text
+        )
 
-                candidates.append(PathCandidate(
-                    name=name,
-                    full_path=full_path,
-                    is_dir=is_dir,
-                    is_text_file=is_text
-                ))
+        if sort_by_mtime:
+            candidates.append((candidate, mtime))
+        else:
+            candidates.append(candidate)
 
-    except (OSError, PermissionError, FileNotFoundError, NotADirectoryError, ValueError):
-        # Directory doesn't exist, no permission, or invalid path
-        # Return empty list (don't crash completion)
-        return []
-
-    # Sort by name (case-sensitive, like bash)
-    candidates.sort(key=lambda c: c.name)
-
-    return candidates
+    if sort_by_mtime:
+        candidates.sort(key=lambda x: x[1], reverse=True)  # [(foo,3pm),(bar,1pm)] -> [foo,bar]
+        return [c for c, _ in candidates]
+    else:
+        candidates.sort(key=lambda c: c.name)
+        return candidates
 
 
 def format_completion_text(candidate, prefix, include_slash=False):

@@ -116,6 +116,9 @@ FOLDER_URL = "https://drive.google.com/drive/folders/{}"
 # Upload cache path (same folder as token.json)
 UPLOAD_CACHE_PATH = rp.with_file_name(TOKEN_PATH, "upload_cache.json", keep_extension=False)
 
+# Cache modes: "off" (no cache), "copy" (server-side copy), "reuse" (direct URL reuse)
+CACHE_MODES = {"off", "copy", "reuse"}
+
 
 def _load_upload_cache() -> dict:
     """Load the upload cache from disk. Returns empty dict if not found."""
@@ -383,7 +386,7 @@ def upload_media_sequential(
     service,
     file_paths: list[str],
     folder_id: str = None,
-    use_cache: bool = True,
+    cache_mode: str = "copy",
 ) -> list[dict]:
     """Upload multiple media files sequentially with progress bars.
 
@@ -391,19 +394,29 @@ def upload_media_sequential(
         service: Google Drive API service instance
         file_paths: List of file paths to upload
         folder_id: Destination folder ID on Google Drive
-        use_cache: If True, check cache for previously uploaded files and copy instead of re-uploading
+        cache_mode: Cache behavior - "off", "copy", or "reuse" (bool also accepted)
 
     Returns:
         List of dicts with 'id', 'name', 'webViewLink', 'webContentLink', 'is_image'
     """
+    if cache_mode is True:  cache_mode = "copy"
+    if cache_mode is False: cache_mode = "off"
+    if cache_mode not in CACHE_MODES:
+        raise ValueError(f"cache_mode must be one of {CACHE_MODES}, got {cache_mode!r}")
+
     results = []
     total_bytes = sum(rp.get_file_size(fp) for fp in file_paths)
     uploaded_bytes = 0
     start_time = time.time()
 
+    use_cache = cache_mode in ("copy", "reuse")
+
     # Load cache if using it
     cache = _load_upload_cache() if use_cache else {}
     cache_modified = False
+
+    if cache_mode == "reuse":
+        rp.fansi_print("  [reuse mode] Using cached URLs directly (no copy)", "yellow", "bold")
 
     for i, fp in enumerate(file_paths):
         size = rp.get_file_size(fp)
@@ -417,23 +430,29 @@ def upload_media_sequential(
         # Check cache for this file
         if use_cache and file_hash in cache:
             cached = cache[file_hash]
-            rp.fansi_print(f"  {file_name}: cache hit, copying...", "yellow")
-
-            # Copy the cached file to the new folder
-            copy_result = copy_drive_file(
-                service,
-                cached["id"],
-                folder_id,
-                new_name=file_name,
-            )
+            if cache_mode == "reuse":
+                # Reuse cached entry directly - no copy, no API call
+                rp.fansi_print(f"  {file_name}: reusing cached URL", "yellow")
+                cache_result = cached
+                rp.fansi_print(f"  Reused: {result['webViewLink']}", "green")
+            else:
+                # Copy mode - server-side copy to new folder
+                rp.fansi_print(f"  {file_name}: cache hit, copying...", "yellow")
+                copy_result = copy_drive_file(
+                    service,
+                    cached["id"],
+                    folder_id,
+                    new_name=file_name,
+                )
+                cache_result=copy_result
+                rp.fansi_print(f"  Copied: {result['webViewLink']}", "green")
             result = {
-                "id": copy_result["id"],
-                "name": copy_result["name"],
-                "webViewLink": copy_result["webViewLink"],
-                "webContentLink": copy_result["webContentLink"],
+                "id": cache_result["id"],
+                "name": cache_result["name"],
+                "webViewLink": cache_result["webViewLink"],
+                "webContentLink": cache_result["webContentLink"],
                 "is_image": cached["is_image"],
             }
-            rp.fansi_print(f"  Copied: {result['webViewLink']}", "green")
         else:
             # Upload normally
             pbar = tqdm(
@@ -455,8 +474,8 @@ def upload_media_sequential(
             pbar.close()
             rp.fansi_print(f"  Uploaded: {result['webViewLink']}", "green")
 
-            # Add to cache
-            if use_cache and file_hash:
+            # Add to cache (only for copy/reuse modes, not off)
+            if cache_mode != "off" and file_hash:
                 cache[file_hash] = {
                     "id": result["id"],
                     "name": result["name"],
@@ -953,7 +972,7 @@ def create_slides_with_media_grid(
                         }
                     )
 
-            if labels and media_idx < len(labels):
+            if labels and media_idx < len(labels) and labels[media_idx]:
                 requests.extend(
                     _text_element_requests(
                         f"label_{media_counter}",
@@ -1036,7 +1055,8 @@ def media_to_slides(
     label_color=None,
     autoplay: bool = True,
     navbar: bool = False,
-    use_cache: bool = True,
+    cache_mode: str = "copy",
+    show_folder_size: bool = True,
 ) -> dict:
     """
     Upload media files (videos/images) and create a Google Slides presentation.
@@ -1065,7 +1085,12 @@ def media_to_slides(
         label_color: Label color. Default: same as text_color.
         autoplay (bool): Whether videos autoplay when the slide is shown. Default: True.
         navbar (bool): Whether to add prev/next navigation buttons. Default: False.
-        use_cache (bool): If True, reuse previously uploaded files via copy instead of re-uploading. Default: True.
+        cache_mode (str): How to handle previously uploaded files. Default: "copy".
+            - "off": Always upload fresh (no caching)
+            - "copy": Server-side copy of cached files to new folder (safe, isolated)
+            - "reuse": Directly reuse cached URLs (fastest, but shared references)
+        show_folder_size (bool): If True (default), append total file size to folder name.
+            Useful because Google Drive doesn't show folder sizes. Default: True.
 
     Returns:
         dict: {'folder_id', 'folder_url', 'media', 'presentation': {'id', 'url', 'public_url', 'name'}}
@@ -1112,9 +1137,22 @@ def media_to_slides(
 
     # Create folder if we have media files OR navbar (need to upload nav button images)
     if media_paths or navbar:
-        rp.fansi_print(f"\nCreating folder: rp/generated_slides/{folder_name}", "cyan")
+        # Append total file size to folder name (Google Drive doesn't show folder sizes)
+        # In reuse mode, only count files that will actually be uploaded (cache misses)
+        display_folder_name = folder_name
+        if show_folder_size and media_paths:
+            if cache_mode == "reuse":
+                cache = _load_upload_cache()
+                sizes = [rp.get_file_size(p) for p in media_paths if rp.get_sha256_hash(p) not in cache]
+            else:
+                sizes = rp.get_file_sizes(*media_paths)
+            if sizes:
+                total_size = sum(sizes)
+                size_str = rp.human_readable_file_size(total_size, mib=False)
+                display_folder_name = f"{folder_name} ({size_str})"
+        rp.fansi_print(f"\nCreating folder: rp/generated_slides/{display_folder_name}", "cyan")
         parent_id = get_rp_slides_folder(drive_service)
-        folder_id = create_folder(drive_service, folder_name, parent_id)
+        folder_id = create_folder(drive_service, display_folder_name, parent_id)
         folder_url = FOLDER_URL.format(folder_id)
         rp.fansi_print(f"  {folder_url}", "white")
 
@@ -1129,17 +1167,19 @@ def media_to_slides(
             rp.fansi_print(f"  {rp.get_file_name(p)}", "white")
 
         rp.fansi_print("\nUploading media...", "cyan")
-        media = upload_media_sequential(drive_service, media_paths, folder_id, use_cache=use_cache)
+        media = upload_media_sequential(drive_service, media_paths, folder_id, cache_mode=cache_mode)
 
         path_to_media = dict(zip(media_paths, media))
 
-        rp.fansi_print("\nMaking files publicly accessible...", "cyan")
-        start_time = time.time()
-        for i, m in enumerate(media):
-            elapsed = time.time() - start_time
-            progress_str = _format_progress(i + 1, len(media), i, len(media), elapsed, use_bytes=False)
-            rp.fansi_print(f"  {progress_str} {m['name']}", "cyan")
-            make_file_public(drive_service, m["id"])
+        # Skip permissions for reuse mode - cached files are already public
+        if cache_mode != "reuse":
+            rp.fansi_print("\nMaking files publicly accessible...", "cyan")
+            start_time = time.time()
+            for i, m in enumerate(media):
+                elapsed = time.time() - start_time
+                progress_str = _format_progress(i + 1, len(media), i, len(media), elapsed, use_bytes=False)
+                rp.fansi_print(f"  {progress_str} {m['name']}", "cyan")
+                make_file_public(drive_service, m["id"])
 
     # Build slides_data - each content item becomes either media or text box
     slides_data = []
@@ -1270,7 +1310,8 @@ def cli(
     per_slide: int = None,
     autoplay: bool = True,
     navbar: bool = False,
-    use_cache: bool = True,
+    cache_mode: str = "copy",
+    show_folder_size: bool = True,
 ):
     """Upload media to Google Drive and create a Google Slides presentation.
 
@@ -1295,11 +1336,24 @@ def cli(
         --label_size SIZE       Label font size in pt (default: same as --text_size)
         --label_font FONT       Label font family (default: same as --text_font)
         --label_color COLOR     Label color (default: same as --text_color)
-        --sort_by METHOD        Sort files by: 'name' (default), 'date', 'size', 'number'
+        --sort_by METHOD        Sort files by: 'name' (default), 'date', 'size', 'number'.
+                                Only applies to folders and glob patterns; individual files
+                                keep the order you specify them.
         --per_slide N           Items per slide (optional, default: 1)
         --autoplay              Enable video autoplay (default: True). Use --noautoplay to disable.
         --navbar                Add prev/next navigation buttons (default: False)
-        --use_cache             Reuse previously uploaded files (default: True). Use --nouse_cache to force re-upload.
+        --cache_mode MODE       How to handle previously uploaded files (default: 'copy'):
+                                  'off'   - No caching, always upload fresh
+                                  'copy'  - Copy cached files to new folder (safe, each presentation isolated)
+                                  'reuse' - Reuse cached URLs directly (fastest, saves Drive storage)
+                                Benefits of 'reuse': Faster uploads, reduced Google Drive storage usage.
+                                Risks of 'reuse': If the cached file's source folder is deleted, this
+                                presentation's media will break. Only use for temporary presentations
+                                or when you're sure the source media won't be deleted.
+        --show_folder_size      Append total file size to folder name (default: True).
+                                Google Drive doesn't show folder sizes, so this helps track storage.
+                                In 'reuse' mode, only counts cache misses (files actually uploaded).
+                                Use --noshow_folder_size to disable.
 
     Supported formats:
         Videos: .mp4, .mov, .avi, .mkv, .webm
@@ -1315,7 +1369,8 @@ def cli(
         rp run ppt media_to_slides "Big text" --text_size 36                 # larger text
         rp run ppt media_to_slides videos/ --noautoplay                      # disable video autoplay
         rp run ppt media_to_slides videos/ --navbar                          # add prev/next buttons
-        rp run ppt media_to_slides videos/ --nouse_cache                     # force re-upload all files
+        rp run ppt media_to_slides videos/ --cache_mode off                  # force re-upload all files
+        rp run ppt media_to_slides videos/ --cache_mode reuse                # fastest, reuse cached URLs
 
     Note: First run opens browser for Google OAuth authentication.
     """
@@ -1378,7 +1433,8 @@ def cli(
         text_color=text_color,
         autoplay=autoplay,
         navbar=navbar,
-        use_cache=use_cache,
+        cache_mode=cache_mode,
+        show_folder_size=show_folder_size,
     )
     print(f"\nPresentation URL: {result['presentation']['url']}")
     return result

@@ -58,14 +58,30 @@ class BashCompleter:
         
         # Try schema-based completion first (for flags, subcommands, etc.)
         try:
-            from rp.rp_ptpython.completion_schema import get_completions_for_command
+            from rp.rp_ptpython.completion_schema import (
+                get_completions_for_command,
+                complete_paths,
+                tokenize_bash_command,
+                find_cursor_token,
+            )
 
             bash_text = document.text.lstrip()[1:]
             bash_cursor_pos = document.cursor_position - (
                 len(document.text) - len(document.text.lstrip())
             ) - 1
 
+            # Get tokens for path completion
+            tokens = tokenize_bash_command(bash_text)
+            cursor_token_idx, is_after = find_cursor_token(tokens, bash_cursor_pos)
+
+            # Check if we're completing a command name (position 0)
+            is_completing_command = cursor_token_idx == 0 and not is_after
+
             schema_completions = get_completions_for_command(bash_text, bash_cursor_pos)
+
+            candidates = []
+
+            # Add schema completions with priority=0 (highest)
             if schema_completions:
                 has_descriptions = isinstance(schema_completions, dict)
                 completion_list = (
@@ -74,7 +90,6 @@ class BashCompleter:
                     else schema_completions
                 )
 
-                candidates = []
                 for text in completion_list:
                     if has_descriptions:
                         value = schema_completions.get(text, '')
@@ -90,8 +105,25 @@ class BashCompleter:
                     candidates.append(Candidate(
                         name=text,
                         display=display,
-                        display_meta=description
+                        display_meta=description,
+                        priority=0
                     ))
+
+            # Add path completions with priority=1 (lower) unless completing command name
+            if not is_completing_command and not after_line:
+                path_completions = complete_paths(tokens, cursor_token_idx, is_after)
+                if path_completions:
+                    for path_text, desc in path_completions.items():
+                        # Skip if already in schema completions
+                        if schema_completions and path_text in (schema_completions if isinstance(schema_completions, dict) else schema_completions):
+                            continue
+                        candidates.append(Candidate(
+                            name=path_text,
+                            display_meta=desc,
+                            priority=1
+                        ))
+
+            if candidates:
                 return candidates
         except Exception:
             pass
@@ -144,11 +176,5 @@ class BashCompleter:
                 for cmd in system_commands
             ]
         
-        # File path completion for shell commands
-        if not after_line:
-            try:
-                return [Candidate(name=item) for item in os.listdir('.')]
-            except OSError:
-                pass
 
         return []

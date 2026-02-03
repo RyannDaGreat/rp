@@ -26,6 +26,9 @@ __all__ = (
     'clear_cache',
     'PROGRAM_DESCRIPTIONS',
     'get_bash_origin',
+    'complete_paths',
+    'tokenize_bash_command',
+    'find_cursor_token',
 )
 
 
@@ -54,7 +57,7 @@ Completion functions should return dictionaries with descriptions:
 
 ## Path Completions
 
-The `_complete_paths()` helper function provides filesystem path completions with proper
+The `complete_paths()` helper function provides filesystem path completions with proper
 shell escaping. It can be used as a fallback when no flag completions are appropriate.
 
 **Usage Pattern**:
@@ -63,7 +66,7 @@ shell escaping. It can be used as a fallback when no flag completions are approp
 def command_completions(tokens, cursor_token_idx, is_after):
     if _is_flag_context(tokens, cursor_token_idx, is_after):
         return {...}  # Return flag completions
-    return _complete_paths(tokens, cursor_token_idx, is_after)  # Fallback to path completions
+    return complete_paths(tokens, cursor_token_idx, is_after)  # Fallback to path completions
 ```
 
 **Features**:
@@ -113,7 +116,7 @@ def ls_completions(tokens, cursor_token_idx, is_after=False):
             '--human-readable': '--human-readable/-h: sizes in K, M, G',
         }
     # Fallback to path completions (returns dict with descriptions)
-    return _complete_paths(tokens, cursor_token_idx, is_after)
+    return complete_paths(tokens, cursor_token_idx, is_after)
 ```
 
 ## Program Name Descriptions
@@ -189,13 +192,13 @@ else:
 
 ## Path Completion
 
-Completion functions should call `_complete_paths()` as a fallback when not in
+Completion functions should call `complete_paths()` as a fallback when not in
 flag context. This provides filesystem-aware completions with automatic handling
 of escaping and styling.
 
 ### Automatic Escaping
 
-Paths returned by `_complete_paths()` are automatically quoted using `shlex.quote()`
+Paths returned by `complete_paths()` are automatically quoted using `shlex.quote()`
 for shell safety. This ensures paths with spaces, special characters, or other
 shell metacharacters are properly escaped when inserted into the command line.
 
@@ -255,7 +258,7 @@ def _mycommand_completions(tokens, cursor_token_idx, is_after):
             '-f': '-f/--flag: description of flag',
             '--flag': '--flag/-f: description of flag',
         }
-    return _complete_paths(tokens, cursor_token_idx, is_after)
+    return complete_paths(tokens, cursor_token_idx, is_after)
 ```
 
 ### Step 2: Add Program Description (if top-level command)
@@ -331,7 +334,7 @@ def _mycommand_completions(tokens, cursor_token_idx, is_after):
         }
 
     # Otherwise, complete file paths
-    return _complete_paths(tokens, cursor_token_idx, is_after)
+    return complete_paths(tokens, cursor_token_idx, is_after)
 ```
 
 ### Step 5: Test Your Completion
@@ -352,7 +355,7 @@ Add your command to the appropriate section in:
 
 - `_is_flag_context(tokens, cursor_token_idx, is_after)` - Returns True if cursor is on a flag
 - `_complete_at_position_zero(tokens, cursor_token_idx)` - Returns True if completing first argument
-- `_complete_paths(tokens, cursor_token_idx, is_after)` - Returns path completions with descriptions
+- `complete_paths(tokens, cursor_token_idx, is_after)` - Returns path completions with descriptions
 - `_get_current_token_text(tokens, cursor_token_idx)` - Gets the text being completed
 - `get_cached_result(key, compute_fn, ttl)` - Caches expensive computations
 
@@ -373,7 +376,7 @@ def _simple_completions(tokens, cursor_token_idx, is_after):
 def _filecommand_completions(tokens, cursor_token_idx, is_after):
     if _is_flag_context(tokens, cursor_token_idx, is_after):
         return {'-f': 'force operation'}
-    return _complete_paths(tokens, cursor_token_idx, is_after)
+    return complete_paths(tokens, cursor_token_idx, is_after)
 ```
 
 **Pattern 3: Command with dynamic completions**
@@ -404,7 +407,7 @@ def _dynamic_completions(tokens, cursor_token_idx, is_after):
 - [ ] Descriptions mention both forms: `-a/--all: description`
 - [ ] NO duplicate keys in any dictionary
 - [ ] All common_flags are dictionaries (not lists)
-- [ ] Falls back to `_complete_paths()` when appropriate
+- [ ] Falls back to `complete_paths()` when appropriate
 - [ ] Program added to `PROGRAM_DESCRIPTIONS` if top-level
 - [ ] Tests pass: `pytest test_completion_schema.py -v`
 - [ ] Docstring explains what the command does
@@ -2356,6 +2359,273 @@ def _python3_completions(tokens, cursor_token_idx, is_after):
     return _python_completions(tokens, cursor_token_idx, is_after)
 
 
+@cached_completion('pip_installed_packages', ttl=300)
+def _get_pip_installed_packages():
+    """Get list of installed pip packages (cached for 5 minutes)."""
+    try:
+        from importlib.metadata import distributions
+        return {dist.name: dist.version for dist in distributions()}
+    except ImportError:
+        try:
+            import pkg_resources
+            return {pkg.key: pkg.version for pkg in pkg_resources.working_set}
+        except Exception:
+            return {}
+
+
+@register_completion_schema('pip')
+def _pip_completions(tokens, cursor_token_idx, is_after):
+    """Completion schema for pip commands."""
+    # Check for flags
+    if _is_flag_context(tokens, cursor_token_idx, is_after):
+        subcommand = tokens[1].text if len(tokens) > 1 else ''
+        common_flags = {
+            '--help': 'show help message',
+            '-h': '-h/--help: show help message',
+            '--version': 'show pip version',
+            '-V': '-V/--version: show pip version',
+            '-v': '-v/--verbose: verbose output',
+            '--verbose': '--verbose/-v: verbose output',
+            '-q': '-q/--quiet: quiet output',
+            '--quiet': '--quiet/-q: quiet output',
+        }
+
+        if subcommand == 'install':
+            return {
+                '-r': '-r/--requirement: install from requirements file',
+                '--requirement': '--requirement/-r: install from requirements file',
+                '-e': '-e/--editable: install in editable mode',
+                '--editable': '--editable/-e: install in editable mode',
+                '-U': '-U/--upgrade: upgrade packages',
+                '--upgrade': '--upgrade/-U: upgrade packages',
+                '--upgrade-strategy': 'upgrade strategy (eager or only-if-needed)',
+                '--force-reinstall': 'reinstall even if up-to-date',
+                '--no-deps': 'do not install dependencies',
+                '--pre': 'include pre-release versions',
+                '-t': '-t/--target: install to target directory',
+                '--target': '--target/-t: install to target directory',
+                '--user': 'install to user site-packages',
+                '--root': 'install to alternate root directory',
+                '--prefix': 'install to prefix path',
+                '-i': '-i/--index-url: base URL of package index',
+                '--index-url': '--index-url/-i: base URL of package index',
+                '--extra-index-url': 'extra URLs of package indexes',
+                '--no-index': 'ignore package index',
+                '-f': '-f/--find-links: look for archives at URL/path',
+                '--find-links': '--find-links/-f: look for archives at URL/path',
+                '--no-binary': 'do not use binary packages',
+                '--only-binary': 'do not use source packages',
+                '--prefer-binary': 'prefer binary over source packages',
+                '--no-build-isolation': 'disable build isolation',
+                '--use-pep517': 'use PEP 517 build system',
+                '--check-build-dependencies': 'check build dependencies',
+                '-c': '-c/--constraint: constraint file',
+                '--constraint': '--constraint/-c: constraint file',
+                '--dry-run': 'do not actually install',
+                '--ignore-installed': 'ignore installed packages',
+                '--compile': 'compile Python source files',
+                '--no-compile': 'do not compile Python source files',
+                '--no-warn-script-location': 'do not warn about script location',
+                '--no-warn-conflicts': 'do not warn about conflicts',
+                '--progress-bar': 'progress bar style (on, off, ascii)',
+                '--break-system-packages': 'allow install to system packages',
+                **common_flags
+            }
+        elif subcommand == 'uninstall':
+            return {
+                '-y': '-y/--yes: do not ask for confirmation',
+                '--yes': '--yes/-y: do not ask for confirmation',
+                '-r': '-r/--requirement: uninstall from requirements file',
+                '--requirement': '--requirement/-r: uninstall from requirements file',
+                '--break-system-packages': 'allow uninstall from system packages',
+                **common_flags
+            }
+        elif subcommand == 'list':
+            return {
+                '-o': '-o/--outdated: list outdated packages',
+                '--outdated': '--outdated/-o: list outdated packages',
+                '-u': '-u/--uptodate: list up-to-date packages',
+                '--uptodate': '--uptodate/-u: list up-to-date packages',
+                '-e': '-e/--editable: list editable packages',
+                '--editable': '--editable/-e: list editable packages',
+                '-l': '-l/--local: only list local packages',
+                '--local': '--local/-l: only list local packages',
+                '--user': 'only list user-installed packages',
+                '--path': 'restrict to specified path',
+                '--pre': 'include pre-release versions',
+                '--format': 'output format (columns, freeze, json)',
+                '--not-required': 'list packages not dependencies',
+                '--exclude-editable': 'exclude editable packages',
+                '--include-editable': 'include editable packages',
+                '--exclude': 'exclude specified packages',
+                **common_flags
+            }
+        elif subcommand == 'show':
+            return {
+                '-f': '-f/--files: show full list of installed files',
+                '--files': '--files/-f: show full list of installed files',
+                **common_flags
+            }
+        elif subcommand == 'freeze':
+            return {
+                '-r': '-r/--requirement: use order from requirements file',
+                '--requirement': '--requirement/-r: use order from requirements file',
+                '-l': '-l/--local: only output local packages',
+                '--local': '--local/-l: only output local packages',
+                '--user': 'only output user-installed packages',
+                '--path': 'restrict to specified path',
+                '--all': 'include all packages',
+                '--exclude-editable': 'exclude editable packages',
+                '--exclude': 'exclude specified packages',
+                **common_flags
+            }
+        elif subcommand == 'search':
+            return {
+                '-i': '-i/--index: base URL of package index',
+                '--index': '--index/-i: base URL of package index',
+                **common_flags
+            }
+        elif subcommand == 'download':
+            return {
+                '-d': '-d/--dest: download to directory',
+                '--dest': '--dest/-d: download to directory',
+                '-r': '-r/--requirement: download from requirements file',
+                '--requirement': '--requirement/-r: download from requirements file',
+                '--no-deps': 'do not download dependencies',
+                '--pre': 'include pre-release versions',
+                '-i': '-i/--index-url: base URL of package index',
+                '--index-url': '--index-url/-i: base URL of package index',
+                '--extra-index-url': 'extra URLs of package indexes',
+                '--no-index': 'ignore package index',
+                '-f': '-f/--find-links: look for archives at URL/path',
+                '--find-links': '--find-links/-f: look for archives at URL/path',
+                '--no-binary': 'do not use binary packages',
+                '--only-binary': 'do not use source packages',
+                '--prefer-binary': 'prefer binary over source packages',
+                '--platform': 'platform to download for',
+                '--python-version': 'Python version to download for',
+                '--implementation': 'Python implementation to download for',
+                '--abi': 'ABI to download for',
+                **common_flags
+            }
+        elif subcommand == 'wheel':
+            return {
+                '-w': '-w/--wheel-dir: build wheels to directory',
+                '--wheel-dir': '--wheel-dir/-w: build wheels to directory',
+                '-r': '-r/--requirement: build from requirements file',
+                '--requirement': '--requirement/-r: build from requirements file',
+                '--no-deps': 'do not build dependencies',
+                '--pre': 'include pre-release versions',
+                '--no-build-isolation': 'disable build isolation',
+                '--use-pep517': 'use PEP 517 build system',
+                '-c': '-c/--constraint: constraint file',
+                '--constraint': '--constraint/-c: constraint file',
+                '--no-binary': 'do not use binary packages',
+                '--only-binary': 'do not use source packages',
+                '--prefer-binary': 'prefer binary over source packages',
+                **common_flags
+            }
+        elif subcommand == 'hash':
+            return {
+                '-a': '-a/--algorithm: hash algorithm (sha256, sha384, sha512)',
+                '--algorithm': '--algorithm/-a: hash algorithm',
+                **common_flags
+            }
+        elif subcommand == 'check':
+            return common_flags
+        elif subcommand == 'config':
+            return {
+                '--editor': 'editor to use',
+                '--global': 'use global configuration file',
+                '--user': 'use user configuration file',
+                '--site': 'use site configuration file',
+                **common_flags
+            }
+        elif subcommand == 'cache':
+            return {
+                '--format': 'output format for list command',
+                **common_flags
+            }
+        elif subcommand == 'debug':
+            return {
+                '--platform': 'platform to debug',
+                '--python-version': 'Python version to debug',
+                '--implementation': 'Python implementation to debug',
+                '--abi': 'ABI to debug',
+                **common_flags
+            }
+        elif subcommand == 'inspect':
+            return {
+                '--local': 'only inspect local packages',
+                '--user': 'only inspect user packages',
+                '--path': 'path to inspect',
+                **common_flags
+            }
+        else:
+            return common_flags
+
+    # Subcommand completions (position 0, after pip)
+    if cursor_token_idx == 0 and is_after:
+        return {
+            'install': 'install packages',
+            'uninstall': 'uninstall packages',
+            'list': 'list installed packages',
+            'show': 'show package information',
+            'freeze': 'output installed packages in requirements format',
+            'search': 'search PyPI for packages',
+            'download': 'download packages',
+            'wheel': 'build wheels from requirements',
+            'hash': 'compute hashes of package archives',
+            'check': 'verify installed packages have compatible dependencies',
+            'config': 'manage pip configuration',
+            'cache': 'inspect and manage pip cache',
+            'index': 'inspect package index',
+            'debug': 'show debugging information',
+            'inspect': 'inspect Python environment',
+            'help': 'show help for commands',
+        }
+
+    # Package completions for uninstall/show - show installed packages
+    if cursor_token_idx >= 1:
+        subcommand = tokens[1].text if len(tokens) > 1 else ''
+        if subcommand in ('uninstall', 'show'):
+            installed = _get_pip_installed_packages()
+            return {name: 'v' + version for name, version in installed.items()}
+
+    # Cache subcommand completions
+    if cursor_token_idx == 1:
+        subcommand = tokens[1].text if len(tokens) > 1 else ''
+        if subcommand == 'cache':
+            return {
+                'dir': 'show cache directory',
+                'info': 'show cache information',
+                'list': 'list cached files',
+                'remove': 'remove files from cache',
+                'purge': 'remove all cached files',
+            }
+        elif subcommand == 'config':
+            return {
+                'list': 'list configuration values',
+                'edit': 'edit configuration file',
+                'get': 'get a configuration value',
+                'set': 'set a configuration value',
+                'unset': 'unset a configuration value',
+                'debug': 'show configuration debug info',
+            }
+        elif subcommand == 'index':
+            return {
+                'versions': 'list available versions of a package',
+            }
+
+    return None
+
+
+@register_completion_schema('pip3')
+def _pip3_completions(tokens, cursor_token_idx, is_after):
+    """Completion schema for pip3 command (same as pip)."""
+    return _pip_completions(tokens, cursor_token_idx, is_after)
+
+
 @register_completion_schema('rp')
 def _rp_completions(tokens, cursor_token_idx, is_after):
     """Completion schema for rp command."""
@@ -2451,25 +2721,21 @@ def _is_flag_context(tokens, cursor_token_idx, is_after):
     return False
 
 
-def _complete_paths(tokens, cursor_token_idx, is_after):
+def complete_paths(tokens, cursor_token_idx, is_after):
     """Return ALL path completions with shell-safe quoting"""
     import os
     import shlex
+    from rp.rp_ptpython.path_completer_utils import get_dir_entries
 
     # Determine directory - ignore prefix, return ALL items
     current = tokens[cursor_token_idx].text if cursor_token_idx < len(tokens) else ''
     dir_path = os.path.dirname(current) or '.' if '/' in current else '.'
 
     completions = {}
-    try:
-        for item in os.listdir(dir_path):
-            full_path = os.path.join(dir_path, item) if dir_path != '.' else item
-            desc = 'Folder' if os.path.isdir(full_path) else 'File'
-            # Use shlex.quote for shell-safe names
-            quoted_item = shlex.quote(item)
-            completions[quoted_item] = desc
-    except (OSError, PermissionError):
-        pass
+    for entry in get_dir_entries(dir_path):  # cached scandir
+        desc = 'Folder' if entry.is_dir else 'File'
+        quoted_item = shlex.quote(entry.name)  # "my file.txt" -> "'my file.txt'"
+        completions[quoted_item] = desc
 
     return completions if completions else None
 
@@ -4877,7 +5143,7 @@ def _tar_completions(tokens, cursor_token_idx, is_after):
             '--version': 'display version information',
             '--usage': 'display brief usage message',
         }
-    return _complete_paths(tokens, cursor_token_idx, is_after)
+    return complete_paths(tokens, cursor_token_idx, is_after)
 
 
 @register_completion_schema('find')
@@ -5447,7 +5713,7 @@ def _cp_completions(tokens, cursor_token_idx, is_after):
             '--help': 'display help message',
             '--version': 'output version information',
         }
-    return _complete_paths(tokens, cursor_token_idx, is_after)
+    return complete_paths(tokens, cursor_token_idx, is_after)
 
 
 @register_completion_schema('mv')
@@ -5479,7 +5745,7 @@ def _mv_completions(tokens, cursor_token_idx, is_after):
             '--help': 'display help message',
             '--version': 'output version information',
         }
-    return _complete_paths(tokens, cursor_token_idx, is_after)
+    return complete_paths(tokens, cursor_token_idx, is_after)
 
 
 @register_completion_schema('rm')
@@ -5506,7 +5772,7 @@ def _rm_completions(tokens, cursor_token_idx, is_after):
             '--help': 'display help message',
             '--version': 'output version information',
         }
-    return _complete_paths(tokens, cursor_token_idx, is_after)
+    return complete_paths(tokens, cursor_token_idx, is_after)
 
 
 @register_completion_schema('touch')
@@ -5672,7 +5938,7 @@ def _ls_completions(tokens, cursor_token_idx, is_after):
             '--help': 'display this help and exit',
             '--version': 'output version information and exit'
         }
-    return _complete_paths(tokens, cursor_token_idx, is_after)
+    return complete_paths(tokens, cursor_token_idx, is_after)
 
 
 @register_completion_schema('echo')

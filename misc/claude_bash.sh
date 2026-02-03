@@ -14,7 +14,8 @@ ARCHIVE_WINDOW="ARCHIVE"
 PANEL_WINDOW="PANEL"
 ARCHIVE_DIR="/tmp/claude_bash_archive"
 PANEL_SCRIPT="$(dirname "$0")/claude_panel.py"
-PYTHON_BIN="$RP_SYS_EXECUTABLE"
+# Use RP_SYS_EXECUTABLE if set, else try python3 from PATH
+PYTHON_BIN="${RP_SYS_EXECUTABLE:-$(command -v python3)}"
 EMOJIS="🔴🟠🟡🟢🔵🟣🟤⚫⚪🩶🩷🩵❤️🧡💛💚💙💜🖤🤍🤎💗💖💝💘🍎🍊🍋🍏🫐🍇🍓🍒🍑🥭🍍🥝🌶️🥕🌽🥦🍆🫑🔥🌊🌿🌸🌺🌻🌼🌷💐🌈☀️⭐🌙💫✨⚡💎🔮🎈🎀🧊❄️🎯🎨🎭🎪🎠🎡🎢🏀🏈⚽🎾🎱🧩🪁🛸🚀💊🧬🦠🔬🧪🎵🎶🔔💡🔦🏮🪔🎃👾🤖👽🦋🐝🐞🌵🍄🌴🥀🪷🪻"
 BASH_BIN="/bin/bash"
 
@@ -58,7 +59,7 @@ archive_viewer() {
 }
 
 # --- Tmux setup ---
-ARCHIVE_CMD="SESSION=$SESSION; ARCHIVE_DIR=$ARCHIVE_DIR; $(declare -f archive_viewer); archive_viewer"
+ARCHIVE_CMD="export SESSION=$SESSION ARCHIVE_DIR=$ARCHIVE_DIR; $(declare -f archive_viewer); archive_viewer"
 PANEL_CMD="while true; do $PYTHON_BIN $PANEL_SCRIPT; done"
 
 ensure_panel_window() {

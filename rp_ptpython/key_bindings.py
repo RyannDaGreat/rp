@@ -3505,6 +3505,12 @@ def load_python_bindings(python_input):
                                          '\\irp':'inline_rp',
                                          '\\qrp':'qualify_rp',
                                          '\\inm':'if_name_main',
+                                         '\frx':'frx', '\\fx':'frx',
+                                         '\\fry':'fry', '\\fy':'fry',
+                                         '\\frz':'frz', '\\fz':'frz',
+                                         '\\fra':'fra', '\\fa':'fra',
+                                         '\\frb':'frb', '\\fb':'frb',
+                                         '\\frc':'frc', '\\fc':'frc',
                                          }
                         # header_commands.update(header_jump_commands)
                         header_commands.update(header_arg_commands)
@@ -3586,6 +3592,8 @@ def load_python_bindings(python_input):
                                             text=buffer.document.text
                                             try:
                                                 new_text=text_file_to_string(arg)
+                                                if arg.endswith(('.sh', '.bash', '.zsh')) and not new_text.startswith('!'):
+                                                    new_text = '!' + new_text  # load "foo.sh" -> "!<contents>" so it runs as shell
                                                 buffer.document=Document(new_text,buffer.document.cursor_position,buffer.document.selection)
                                             except BaseException as E:
                                                 buffer.insert_text("\nERROR: "+str(E)+"\n(Undo to make me go away)\n")
@@ -3998,6 +4006,13 @@ def load_python_bindings(python_input):
                                         replace_buffer_text(buffer, text)
                                     except BaseException as e:
                                         buffer.insert_text('#min (aka python-minifier): Error: '+str(e).replace('\n',' ; '))
+                                if header in ['fr'+x for x in 'xyzabc']:
+                                    import rp
+                                    varname=header[-1]
+                                    text=buffer.document.text
+                                    text=text.replace('ans',varname)
+                                    text='['+text+' for '+varname+' in ans]'
+                                    replace_buffer_text(buffer, text)
                                 if header=='source_code':
                                     #Sets ans=rp.get_source_code(current buffer)
                                     indent=''

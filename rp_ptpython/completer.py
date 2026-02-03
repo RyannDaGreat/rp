@@ -210,7 +210,7 @@ class PythonCompleter(Completer):
         backspaced_doc = create_backspaced_document(document, backspace_num)
         return CacheInfo(cache_text=backspaced_doc.text, cache_pos=backspaced_doc.cursor_position, origin=origin, name_origin=name_origin)
 
-    def _path_completions(self, before_line, dirs_only=False, files_only=False, check_text_files=False, priority_func=None):
+    def _path_completions(self, before_line, dirs_only=False, files_only=False, check_text_files=False, priority_func=None, cmd_prefix=None, sort_by_mtime=False):
         """
         Helper for path-based completions (CD, VIM, CAT, etc).
 
@@ -220,14 +220,17 @@ class PythonCompleter(Completer):
             files_only: Only show files
             check_text_files: Check if files are text (for VIM)
             priority_func: Function taking PathCandidate, returns priority int (or None for no priority)
+            cmd_prefix: Command prefix to strip (default: first word + space)
+            sort_by_mtime: Sort by modification time (newest first) instead of name
 
         Returns:
             List of Candidate objects
         """
         from rp.rp_ptpython.path_completer_utils import extract_path_components, list_path_candidates
-        cmd_prefix = before_line.split()[0] + ' '
+        if cmd_prefix is None:
+            cmd_prefix = before_line.split()[0] + ' '
         directory, prefix = extract_path_components(before_line, cmd_prefix)
-        path_objs = list_path_candidates(directory, prefix, dirs_only=dirs_only, files_only=files_only, check_text_files=check_text_files)
+        path_objs = list_path_candidates(directory, prefix, dirs_only=dirs_only, files_only=files_only, check_text_files=check_text_files, sort_by_mtime=sort_by_mtime)
 
         def make_candidate(c):
             priority = priority_func(c) if priority_func else 0
@@ -272,6 +275,30 @@ class PythonCompleter(Completer):
                 return 1  # Text files second
             return 3  # Other files last
 
+        # Backtick path completions (must come before shell_mode delegation)
+        # Examples: "`myfile\lo" (load), "`script\sa" (save), "`\lo" (load with no prefix)
+        if '`' in before_line:
+            micro_command_arg = before_line.split('`')[-1]  # "`foo\lo" -> "foo\lo"
+            if not rp.contains_any(micro_command_arg, '"', "'"):
+                backtick_prefix = before_line.rsplit('`', 1)[0] + '`'  # "`myfile\lo" -> "`"
+                path_part = micro_command_arg.split('\\')[0]  # "foo\lo" -> "foo", "\lo" -> ""
+                text_before_backtick = text.split('`')[0]  # "!echo hello`script" -> "!echo hello"
+                backtick_shell_mode = text_before_backtick.lstrip().startswith('!')  # "!foo" -> True, "foo" -> False
+                backtick_empty = not text_before_backtick.strip().lstrip('!')  # "" -> True, "!" -> True, "code" -> False
+
+                if backtick_shell_mode:   backtick_exts = shell_extensions               # .sh .bash .zsh
+                elif backtick_empty:      backtick_exts = shell_extensions + python_extensions  # both
+                else:                     backtick_exts = python_extensions              # .py .rpy
+
+                def backtick_priority(c):
+                    if c.is_dir: return 2
+                    if rp.ends_with_any(c.name.lower(), backtick_exts): return 0  # script files first
+                    if c.is_text_file: return 1
+                    return 3
+
+                sort_by_mtime = not path_part  # "`\lo" -> sort by mtime, "`foo\lo" -> sort by name
+                return self._path_completions(before_line, check_text_files=True, priority_func=backtick_priority, cmd_prefix=backtick_prefix, sort_by_mtime=sort_by_mtime)
+
         # Shell mode - delegate to bash completer
         if shell_mode:
             return self._bash_completer.get_raw_candidates(document)
@@ -305,11 +332,6 @@ class PythonCompleter(Completer):
                     if rp.get_folder_name(cwd):
                         updirs.append(rp.get_folder_name(cwd))
                 return [Candidate(name=name) for name in updirs]
-
-        if '`' in before_line:
-            micro_command_arg = before_line.split('`')[-1]
-            if not rp.contains_any(micro_command_arg, '"', "'"): #Making sure we're not in a string. Ideally we'd have a better way to know this, like looking at syntax highlighting...
-                return self._path_completions(before, check_text_files=True, priority_func=script_priority)
 
         # Import statements
         if re.fullmatch(r'\s*(from|import)\s+\w*', before_line):
