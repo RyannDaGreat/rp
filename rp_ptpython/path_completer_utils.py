@@ -306,8 +306,9 @@ def list_path_candidates(
         [PathCandidate(name='src', ...), PathCandidate(name='tests', ...)]
     """
     # Auto-detect hidden file preference from prefix
+    # BUT: always show hidden directories when listing dirs_only
     if show_hidden is None:
-        show_hidden = prefix.startswith('.')
+        show_hidden = prefix.startswith('.') or dirs_only
 
     candidates = []
 

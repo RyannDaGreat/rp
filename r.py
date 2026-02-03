@@ -21825,7 +21825,14 @@ def merged_dicts(*dicts, precedence='last', mutate=False):
     first_dict = dicts[0] if len(dicts) else {}
 
     # If mutate is True, the first dictionary is updated directly.
-    result = first_dict if mutate else type(first_dict)()
+    if mutate:
+        result = first_dict
+    else:
+        try:
+            result = type(first_dict)()
+        except TypeError:
+            # Fallback for types like FrameLocalsProxy (Python 3.13+) that can't be instantiated without arguments
+            result = dict()
 
     # Merge the dicts into result
     for d in dicts:
@@ -51372,6 +51379,26 @@ def _ensure_shell_has_path(*, mac=None, linux=None, windows=None, unix=None):
     elif windows and currently_running_windows():
         raise NotImplementedError
 
+def _ensure_shell_has_line(line: str):
+    """
+    Append a line to shell rc files if not already present.
+
+    Args:
+        line: The line to add (e.g., 'export FOO="bar"').
+
+    Notes:
+        - Appends to ~/.zshrc and ~/.bashrc (see _all_shell_rc_paths).
+        - Skips if the exact line is already in the file.
+    """
+    for rc_path in _all_shell_rc_paths:
+        rc_path = os.path.expanduser(rc_path)
+        if file_exists(rc_path):
+            contents = text_file_to_string(rc_path)
+            if line in contents:
+                continue
+        append_line_to_file(line, rc_path)
+    fansi_print('r._ensure_shell_has_line: Wrote ' + repr(line) + ' to files: ' + repr(_all_shell_rc_paths), 'green bold')
+
 def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, unix=None, force=False) -> bool:
     """ Attempts to install a program on various operating systems. Returns True if we install something. """
 
@@ -51475,7 +51502,7 @@ def _ensure_go_installed():
     """go: Statically-typed compiled language by Google with strong concurrency support"""
     _ensure_installed(
         'go',
-        mac    = 'brew install golang-go',
+        mac    = 'brew install go',
         linux  = 'apt install golang-go --yes',
         windows='winget install --id=GoLang.Go', # https://winstall.app/apps/GoLang.Go
     )
@@ -51961,6 +51988,24 @@ def _ensure_vivaldi_installed():
         linux  ='sudo apt install vivaldi-stable -y', #https://vivaldi.com/download/
         windows='winget install --id=Vivaldi.Vivaldi', #https://winstall.app/apps/Vivaldi.Vivaldi
     )
+
+@_register_ensure_installed_func
+def _ensure_fluidsynth_installed():
+    """fluidsynth: Real-time software synthesizer based on SoundFont 2"""
+    _ensure_installed(
+        'fluidsynth',
+        mac    ='brew install fluid-synth',                          #https://formulae.brew.sh/formula/fluid-synth
+        linux  ='sudo apt install fluidsynth libfluidsynth-dev -y',  #https://packages.ubuntu.com/fluidsynth
+        windows='winget install --id=FluidSynth.FluidSynth',         #https://winstall.app/apps/FluidSynth.FluidSynth
+    )
+    if currently_running_mac():
+        # libfluidsynth needs to be findable by pyfluidsynth
+        lib_path = '/opt/homebrew/lib'
+        current = os.environ.get('DYLD_LIBRARY_PATH', '')
+        if lib_path not in current:
+            os.environ['DYLD_LIBRARY_PATH'] = lib_path + ':' + current if current else lib_path
+        _ensure_shell_has_line('export DYLD_LIBRARY_PATH="/opt/homebrew/lib:$DYLD_LIBRARY_PATH"  # Added by RP for fluidsynth')
+    pip_import('fluidsynth')
 
 @_register_ensure_installed_func
 def _ensure_linearmouse_installed():
@@ -53131,6 +53176,26 @@ def _get_all_tmux_clients(session):
     clients = _run_tmux_command(['tmux', 'list-clients', '-t', session, '-F', '#{client_tty}']).split()
     return list(clients)
 
+# libtmux compatibility helpers (supports both old and new APIs)
+def _libtmux_get_sessions(server):
+    """Get sessions from server. New API: server.sessions, Old API: server.list_sessions()"""
+    if hasattr(server, 'sessions') and hasattr(server.sessions, '__iter__'):
+        return server.sessions
+    return server.list_sessions()
+
+def _libtmux_find_session(server, session_name):
+    """Find session by name. New API: server.sessions.get(), Old API: server.find_where()"""
+    if hasattr(server, 'sessions') and hasattr(server.sessions, 'get'):
+        return server.sessions.get(session_name=session_name, default=None)
+    return server.find_where({"session_name": session_name})
+
+def _libtmux_kill_session(session):
+    """Kill a session. New API: session.kill(), Old API: session.kill_session()"""
+    if hasattr(session, 'kill') and callable(session.kill):
+        session.kill()
+    else:
+        session.kill_session()
+
 def tmux_get_all_session_names():
     """
     Retrieve the names of all active tmux sessions.
@@ -53142,7 +53207,7 @@ def tmux_get_all_session_names():
     import libtmux
     
     server = libtmux.Server()
-    return [session.name for session in server.list_sessions()]
+    return [session.name for session in _libtmux_get_sessions(server)]
 
 tmux_list_sessions = tmux_get_all_session_names
 
@@ -53203,13 +53268,10 @@ def tmux_kill_session(session_name, strict=False):
     assert isinstance(session_name, str), "Session name must be a string."
 
     server = libtmux.Server()
-    if hasattr(server, 'find_where'):
-        session = server.find_where({"session_name": session_name})
-    else:
-        session = server.sessions.get(session_name=session_name, default=None)
+    session = _libtmux_find_session(server, session_name)
 
     if session:
-        session.kill_session()
+        _libtmux_kill_session(session)
         print("rp.tmux_kill_session: Session %s killed successfully."%repr(session_name))
     else:
         if strict:
@@ -67673,6 +67735,7 @@ known_pypi_module_package_names={
     # 'cv2': 'opencv-python',
     # 'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? (Update: so far, so good!)
     'cv2': 'opencv-python opencv-contrib-python', #But that didn't work for get_edge_drawing...https://github.com/Comfy-Org/ComfyUI-Manager/discussions/708
+    'fluidsynth' : 'pyfluidsynth',
     'handy_kws':'handy-kws',
     'AppKit':         'pyobjc-framework-Cocoa',
     'Cocoa':          'pyobjc-framework-Cocoa',
