@@ -52042,6 +52042,26 @@ def _ensure_swish_installed():
     """swish: macOS window manager with trackpad gestures"""
     _ensure_installed('/Applications/Swish.app', mac='brew install --cask swish') #https://formulae.brew.sh/cask/swish
 
+@_register_ensure_installed_func
+def _ensure_ncdu_installed():
+    """ncdu: NCurses Disk Usage analyzer with interactive TUI and save/load"""
+    _ensure_installed(
+        'ncdu',
+        mac='brew install ncdu',  # https://formulae.brew.sh/formula/ncdu
+        linux='apt install ncdu --yes',  # https://packages.debian.org/bookworm/ncdu
+        windows=None,  # Not available on Windows - see https://dev.yorhel.nl/ncdu
+    )
+
+@_register_ensure_installed_func
+def _ensure_bfs_installed():
+    """bfs: Breadth-first version of UNIX find - faster on NFS, streams with inodes"""
+    _ensure_installed(
+        'bfs',
+        mac='brew install bfs',  # https://formulae.brew.sh/formula/bfs
+        linux='apt install bfs --yes',  # https://packages.debian.org/bookworm/bfs
+        windows=None,  # Unix-only - see https://github.com/tavianator/bfs
+    )
+
 
 def _install_ollama(force=False):
     _ensure_installed(
@@ -63828,6 +63848,23 @@ def git_staged_files():
     True
     """
     return _git_status_files(lambda s, p: s[0] in "MADRC")
+
+
+def git_tracked_files():
+    """
+    Returns a list of all tracked file paths in the repository
+
+    >>> tracked = git_tracked_files()
+    >>> isinstance(tracked, list)
+    True
+    """
+    import subprocess
+    root = get_git_toplevel()
+    result = subprocess.run(
+        ["git", "ls-files"],
+        capture_output=True, text=True, check=True
+    )
+    return [path_join(root, line) for line in result.stdout.splitlines() if line]
 
 
 def git_unstaged_files():
