@@ -234,7 +234,7 @@ class PythonCompleter(Completer):
 
         def make_candidate(c):
             priority = priority_func(c) if priority_func else 0
-            return Candidate(name=c.name, priority=priority, is_dir=c.is_dir, is_text_file=c.is_text_file, display_style='path')
+            return Candidate(name=c.name, priority=priority, is_dir=c.is_dir, is_text_file=c.is_text_file, display_style='path', replace_origin=prefix)
 
         return [make_candidate(c) for c in path_objs]
 
@@ -485,9 +485,22 @@ class PythonCompleter(Completer):
                     # VIM completions with text file info
                     display_meta = 'Text file' if cand.is_text_file else 'Binary file'
 
+            # Path completion start_position fix for hidden files (dotfiles).
+            # Edge cases fixed:
+            #   - "CD .cla" -> "CD .claude" (not "CD ..claude")
+            #   - "CD .clau" -> "CD .claude"
+            #   - "CD Doc" -> "CD Documents" (normal case still works)
+            # Bug: get_last_name('.cla') returns 'cla' (valid Python identifier), so
+            # the backspaced doc is "CD ." and replace_origin='.'. Without this fix,
+            # start_position=-1 replaces only '.', but completion text is '.claude',
+            # resulting in "CD ..claude". Fix: add name_origin length back.
+            if cand.replace_origin is not None:
+                replace_len = len(cand.replace_origin) + len(cache_info.name_origin)
+            else:
+                replace_len = len(cache_info.name_origin)
             yield Completion(
                 text=name,
-                start_position=-len(cache_info.name_origin),
+                start_position=-replace_len,
                 display=display,
                 display_meta=display_meta
             )

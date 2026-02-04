@@ -15,11 +15,17 @@ class Candidate:
     Handles smart defaults:
     - display defaults to name
     - match_text defaults to name
+
+    Attributes:
+        replace_origin: For path completions, the prefix from the backspaced document
+            that this completion should replace. Used to fix hidden file completion:
+            "CD .cla" should complete to "CD .claude", not "CD ..claude".
+            See completer.py get_completions() for the full explanation.
     """
-    __slots__ = ('name', 'priority', 'is_dir', 'is_text_file', '_display', 'display_meta', 'display_style', '_match_text')
+    __slots__ = ('name', 'priority', 'is_dir', 'is_text_file', '_display', 'display_meta', 'display_style', '_match_text', 'replace_origin')
 
     def __init__(self, name, priority=0, is_dir=None, is_text_file=None,
-                 display=None, display_meta=None, display_style=None, match_text=None):
+                 display=None, display_meta=None, display_style=None, match_text=None, replace_origin=None):
         self.name = name
         self.priority = priority
         self.is_dir = is_dir
@@ -28,6 +34,7 @@ class Candidate:
         self.display_meta = display_meta
         self.display_style = display_style
         self._match_text = match_text
+        self.replace_origin = replace_origin
 
     @property
     def display(self):

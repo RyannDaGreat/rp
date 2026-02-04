@@ -285,6 +285,7 @@ filetype plugin indent on    " required
 
 set undofile "Persistent undo
 set mouse=a
+set ttymouse=sgr " Fix for some terminals
 set nu
 set paste
 set cursorline
