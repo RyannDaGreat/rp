@@ -8,6 +8,7 @@ from __future__ import unicode_literals
 
 import os
 import re
+import shlex
 from rp.rp_ptpython.completion_types import Candidate
 
 __all__ = ('BashCompleter',)
@@ -113,14 +114,41 @@ class BashCompleter:
             if not is_completing_command and not after_line:
                 path_completions = complete_paths(tokens, cursor_token_idx, is_after)
                 if path_completions:
+                    # Compute replace_origin for dotfile fix (see completer.py lines 488-506).
+                    # When completing a path token (e.g., "!cd ." from backspaced "!cd .g"),
+                    # the basename of the token is the prefix that needs replacing along with
+                    # name_origin. Without this, ".git" replaces only "g" → "!cd ..git".
+                    # Use basename so "sub/.g" → "." not "sub/." (directory part stays).
+                    # Note: complete_paths always uses tokens[cursor_token_idx].text, and
+                    # is_after can be True even when cursor is right at token end (no gap),
+                    # so we check if there's actually a gap (space) after the token.
+                    if cursor_token_idx < len(tokens):
+                        tok = tokens[cursor_token_idx]
+                        tok_end = tok.position + len(tok.text)
+                        cursor_at_or_in_token = bash_cursor_pos <= tok_end
+                        if cursor_at_or_in_token:
+                            path_replace_origin = os.path.basename(tok.text)
+                        else:
+                            path_replace_origin = ''
+                    else:
+                        path_replace_origin = ''
+                    # If user typed a dot prefix, prioritize hidden files
+                    hidden_prefix = path_replace_origin.startswith('.')
                     for path_text, desc in path_completions.items():
                         # Skip if already in schema completions
                         if schema_completions and path_text in (schema_completions if isinstance(schema_completions, dict) else schema_completions):
                             continue
+                        is_dir = desc == 'Folder'
+                        priority = 1
+                        if hidden_prefix and shlex.split(path_text)[0].startswith('.'):
+                            priority = 0
                         candidates.append(Candidate(
                             name=path_text,
                             display_meta=desc,
-                            priority=1
+                            priority=priority,
+                            replace_origin=path_replace_origin,
+                            is_dir=is_dir,
+                            display_style='path',
                         ))
 
             if candidates:

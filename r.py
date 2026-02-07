@@ -16914,6 +16914,100 @@ def save_json(data, path=None, *, pretty=False, default=None):
 
     return string_to_text_file(path,text)
 
+
+_load_msgpack_cache={}
+def load_msgpack(path, *, use_cache=False):
+    """
+    Load MessagePack file and convert dicts to EasyDict for convenient attribute access.
+
+    MessagePack is a binary serialization format that's faster and more compact than JSON.
+
+    Parameters:
+        path (str): File path to MessagePack file (.msgpack, .mp, .msg)
+        use_cache (bool): Enable caching for faster repeated loads. Default False.
+
+    Returns:
+        EasyDict or original type: For dict objects, returns EasyDict with dot notation access.
+        For other types (list, str, int, etc.), returns the original type.
+
+    See Also:
+        load_msgpacks(): Plural version for batch loading
+        save_msgpack(): Save objects as MessagePack
+        load_json(): JSON alternative (human-readable but slower)
+
+    Examples:
+        >>> data = {"name": "test", "config": {"debug": True, "port": 8080}}
+        >>> mp_path = temporary_file_path('.msgpack')
+        >>> save_msgpack(data, mp_path)
+        >>>
+        >>> result = load_msgpack(mp_path)
+        >>> result.name
+        'test'
+        >>> result.config.debug
+        True
+        >>> result.config.port
+        8080
+        >>> delete_file(mp_path)
+    """
+    pip_import('msgpack')
+    import msgpack
+
+    if use_cache and path in _load_msgpack_cache:
+        output = _load_msgpack_cache[path]
+        if use_cache != 'nocopy':
+            from copy import deepcopy
+            output = deepcopy(output)
+        return as_easydict(output)
+
+    with open(path, 'rb') as f:
+        out = msgpack.unpack(f, raw=False, strict_map_key=False)
+
+    if use_cache or path in _load_msgpack_cache:
+        _load_msgpack_cache[path] = out
+
+    if not isinstance(out, dict):
+        return out
+    return as_easydict(out)
+
+def save_msgpack(data, path=None, *, default=None):
+    """
+    Save Python data structures as MessagePack files.
+
+    MessagePack is a binary serialization format that's faster and more compact than JSON.
+
+    Args:
+        data: Python object to serialize (dict, list, etc.)
+        path (str): Output file path - will be created/overwritten.
+                    If None, defaults to "data.msgpack", "data_copy.msgpack", etc.
+        default (callable, optional): Function to serialize non-standard types.
+
+    Returns:
+        str: Path to saved file
+
+    Examples:
+        >>> data = {'name': 'test', 'values': [1, 2, 3], 'config': {'enabled': True}}
+        >>> mp_path = save_msgpack(data)
+        >>> loaded = load_msgpack(mp_path)
+        >>> loaded.name
+        'test'
+        >>> loaded.values
+        [1, 2, 3]
+        >>> delete_file(mp_path)
+
+    See Also:
+        load_msgpack(): Read MessagePack files back to Python objects
+        save_json(): JSON alternative (human-readable but slower)
+    """
+    pip_import('msgpack')
+    import msgpack
+
+    if path is None:
+        path = get_unique_copy_path('data.msgpack')
+
+    packed = msgpack.packb(data, default=default, strict_types=False)
+    return bytes_to_file(packed, path)
+
+
 _load_tsv_cache={}
 _load_tsv_cache={}
 def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False, sep="\t", mode='normal', max_rows=None):
@@ -52459,6 +52553,7 @@ def _run_claude_code(code,*,fullperm=False):
     _setup_claude_bash()
 
     command = 'claude --dangerously-skip-permissions' if fullperm else 'claude'
+    command = 'export IS_SANDBOX=1 && '+command
     return _run_ai_coder_cli(code,command)
 
 def _run_gemini_cli(code):

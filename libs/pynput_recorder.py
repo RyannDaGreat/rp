@@ -882,7 +882,7 @@ def pynput_casette_to_tmux(casette, *, strict):
 # P L A Y B A C K
 ##############################################################################
 
-def playback_actions(actions):
+def playback_actions(actions, *, silent=False):
     """
     Replays each Action in sequence by simply calling it.
     Press escape to interrupt playback!
@@ -897,26 +897,34 @@ def playback_actions(actions):
             abort=True
             safekey_listener.stop()
     safekey_listener = keyboard.Listener(on_press=on_press)
+
     safekey_listener.start()
+    try:
 
-    rp.fansi_print(f"Playing back {len(actions)} actions...press {abort_key} to abort!",'white white bold')
-    for i, action in enumerate(actions, start=1):
-        if abort:
-            rp.fansi_print('Aborting playback!','red orange','bold')
-            raise KeyboardInterrupt
-        action()
-        style = None
-        if isinstance(action, DelayAction): style = 'dark gray italic'
-        if isinstance(action, MouseMoveAction): style = 'dark light gray'
-        elif isinstance(action, MouseAction): style = 'gray green yellow bold'
-        if isinstance(action, KeyboardReleaseAction): style = 'white blue red blue magenta bold'
-        if isinstance(action, KeyboardPressAction): style = 'white blue green blue cyan bold'
-        if isinstance(action, TmuxSendkeyAction): style = 'light orange gray orange bold'
-        action_str = rp.fansi(action, style)
-        num_str = rp.fansi(f"[{i}/{len(actions)}]", "yellow gray")
-        print(f"{num_str} {action_str}")
+        if not silent: rp.fansi_print(f"Playing back {len(actions)} actions...press {abort_key} to abort!",'white white bold')
+        for i, action in enumerate(actions, start=1):
+            if abort:
+                rp.fansi_print('Aborting playback!','red orange','bold') #Print even if silent==True
+                raise KeyboardInterrupt
+            action()
 
-    rp.fansi_print("Playback finished.",'white white bold')
+            if not silent:
+                style = None
+                if isinstance(action, DelayAction): style = 'dark gray italic'
+                if isinstance(action, MouseMoveAction): style = 'dark light gray'
+                elif isinstance(action, MouseAction): style = 'gray green yellow bold'
+                if isinstance(action, KeyboardReleaseAction): style = 'white blue red blue magenta bold'
+                if isinstance(action, KeyboardPressAction): style = 'white blue green blue cyan bold'
+                if isinstance(action, TmuxSendkeyAction): style = 'light orange gray orange bold'
+                action_str = rp.fansi(action, style)
+                num_str = rp.fansi(f"[{i}/{len(actions)}]", "yellow gray")
+                print(f"{num_str} {action_str}")
+
+        if not silent: rp.fansi_print("Playback finished.",'white white bold')
+
+    finally:
+        safekey_listener.stop()
+
 
 
 ##############################################################################
@@ -1029,9 +1037,9 @@ class PynputCasette(list):
     def duration(self):
         return sum(x.seconds for x in self if isinstance(x, DelayAction))
 
-    def play(self, loop=False):
+    def play(self, loop=False, silent=False):
         for _ in range(1 + 999**999 * loop):
-            playback_actions(self)
+            playback_actions(self, silent=silent)
 
     def repr(self):
         return f"{type(self).__name__}({repr(self.actions)}"
