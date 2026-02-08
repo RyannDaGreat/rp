@@ -45124,6 +45124,90 @@ def rename_current_directory(new_name: str) -> str:
     return new_path
 
 
+def burst_folder(src, dst=None):
+    """
+    Moves all contents from 'src' into 'dst' (or parent dir) atomically.
+    Raises an error if any filename collisions exist before moving.
+    Returns a list of the new file paths.
+
+    Args:
+        src(str): The src we try to burst
+        dst(str, optional): Where we dump src's contents. Defaults to 'src's parent
+    
+    Safe against:
+        - Namespace collisions (e.g., src folder 'data' containing a file named 'data')
+        - Overwriting existing files (raises error before moving anything)
+
+    Example Scenario (Namespace Collision):
+
+        >>> burst_folder('data') # Bursts into '.'
+        
+        Before:                                 After:
+        ./                                      ./
+        ├── data/ (Folder)             --->     ├── data      (File moved up)
+        │   ├── data      (File)                └── image.jpg (File moved up)
+        │   └── image.jpg (File)
+
+    Example:
+
+        >>> burst_folder('data/main/temp') # Bursts into 'data/main'
+
+        [Before]              [After]
+        data/                 data/
+        ├── main/             ├── main/
+        │   ├── file1.txt     │   ├── file1.txt
+        │   └── temp/         │   ├── extra.csv
+        │       ├── extra.csv │   └── log.txt
+        │       └── log.txt   └── (temp/ is removed)
+
+    """
+    import os
+    import shutil
+
+    # 1. Setup paths
+    src_path = get_absolute_path(src)
+
+    if dst is None:
+        dst_path = get_parent_folder(src_path)
+    else:
+        dst_path = get_absolute_path(dst)
+
+    src_contents = set(os.listdir(src_path))
+    dst_contents = set(os.listdir(dst_path))
+    
+    if dst_path==get_parent_folder(src_path):
+        # We're bursting a folder to it's parent
+        dst_contents -= {get_folder_name(src)}
+
+    collisions = src_contents & dst_contents
+    if collisions:
+        # Atomic guarantee: Stop BEFORE moving anything
+        raise FileExistsError(
+            "Operation aborted . src=%s and dst=%sDestination contains conflicting files: %s"
+            % (repr(src), repr(dst), collisions)
+        )
+
+    new_paths = []
+    
+    #Move it to a temp location
+    tmp_src_path = with_folder_name(src_path,get_folder_name(src_path)+random_namespace_hash())
+    shutil.move(src_path,tmp_src_path)
+    src_path=tmp_src_path
+
+    # 4. Safe to move (Iterate through the pre-verified set)
+    for item in src_contents:
+        src_item = path_join(src_path, item)
+        dst_item = path_join(dst_path, item)
+        
+        shutil.move(src_item, dst_item)
+        new_paths.append(dst_item)
+
+    # 5. Cleanup
+    os.rmdir(src_path)
+
+    return new_paths
+
+
 def _rnh(new_name=None):
     """
     Interactive shortcut to rename the current directory.
