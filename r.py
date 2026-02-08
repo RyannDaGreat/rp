@@ -2170,7 +2170,7 @@ def _old_fansi_syntax_highlighting(code: str,namespace=(),style_overrides={}):
     }
     default_ansi.update(style_overrides)
     try:
-        import keyword,tokenize,cgi,re,functools
+        import keyword,tokenize,re,functools
         try:
             import builtins
         except ImportError:
@@ -2283,7 +2283,7 @@ def fansi_syntax_highlighting(code: str,
     }
     default_ansi.update(style_overrides)
     try:
-        import keyword,tokenize,cgi,re,functools
+        import keyword,tokenize,re,functools
         try:
             import builtins
         except ImportError:
@@ -15314,6 +15314,13 @@ def rinsp(
     # This method is really uglily written (by Cthulu Himself, would ya believe!) because I made no attempt to refactor it. But it works and its really useful.
     # search_or_show_documentation: If this is a string, it won't show documentation UNLESS show_source_code ⋁ show_summary. BUT it will limit dir⋃dict to entries that contain search_or_show_documentation. Used for looking up that function name you forgot.
 
+    def _dig_deeper(obj):
+        """Unwrap wrapper types to inspect the underlying object instead"""
+        if isinstance(obj, partial):
+            obj = obj.func
+        return obj
+
+    object = _dig_deeper(object)
 
     printed_lines=[]
     def print(*x,end='\n',flush=False):
