@@ -21999,6 +21999,11 @@ def get_source_code(object):
          return inspect.getsource(object)
     """
     import inspect
+
+    if isinstance(object,partial):
+        #Can't get source code of a partial
+        object=object.func
+
     try:
         return inspect.getsource(object)
     except TypeError:
@@ -49504,15 +49509,61 @@ def download_urls(
 ):
     """
     Plural of download_url
-    Tune the num_threads and buffer_limit for optimal downloads to avoid too many concurrent downloads
+
+    Tune num_threads and buffer_limit to avoid too many concurrent downloads.
+
+    Args:
+        url_to_path: How to determine download paths.
+            callable: Takes a url, returns a path.
+            list: One path per url (must match length of urls).
+        skip_existing: Skip downloading if the path already exists.
+        strict: If True, raise on failure. If False, return None for failed downloads.
+        num_threads: Max concurrent downloads.
+        show_progress: False, True, or 'eta' to show a progress bar.
+        buffer_limit: Max number of buffered results.
+        lazy: If True, return a lazy iterator instead of a list.
+        timeout: Timeout in seconds per download.
+
+    Returns:
+        List of downloaded file paths (or None for failures if strict=False).
+        If lazy=True, returns a lazy iterator instead.
     """
     urls=detuple(urls)
-    load_file = lambda url: download_url(
-        url = url,
-        path = url_to_path(url),
-        skip_existing = skip_existing,
-        timeout=timeout,
-    )
+
+    if not callable(url_to_path):
+        paths = url_to_path
+
+        assert has_len(paths)
+        
+        len_paths = len(paths)
+        len_urls = len(urls)
+        len_set_paths = len(set(paths))
+
+        if len_set_paths != len_paths:
+            raise ValueError(
+                "rp.download_urls: url_to_path was given as " + str(type(url_to_path))
+                + " but has " + str(len_paths - len_set_paths) + "duplicate destinations"
+            )
+
+        if len_paths != len_urls:
+            raise ValueError(
+                "rp.download_urls: url_to_path has " + str(len_paths) + " paths but got " + str(len_urls) + " urls"
+            )
+
+        url_to_path_dict = dict(zip(urls, paths))
+
+        url_to_path = url_to_path_dict.__getitem__
+
+    assert callable(url_to_path), 'Internal logical assertion'
+
+    def load_file(url):
+        return download_url(
+            url = url,
+            path = url_to_path(url),
+            skip_existing = skip_existing,
+            timeout=timeout,
+        )
+
     if show_progress in ['eta',True]: show_progress='eta:Downloading URLs'
 
     return load_files(
