@@ -10775,13 +10775,14 @@ def _display_image_in_notebook_via_ipython(image):
     import IPython
     return IPython.display.display_png(encode_image_to_bytes(image,'png'),raw=True)
 
-def add_ipython_kernel(kernel_name: str = None, display_name: str = None):
+def add_ipython_kernel(kernel_name: str = None, display_name: str = None, auto_yes: bool = False):
     """
     Add the current Python interpreter as a Jupyter IPython kernel.
 
     Parameters:
     - kernel_name: The name for the kernel, as it would appear in the command to start it. For example, "python3.9".
     - display_name: The name as it appears in the Jupyter UI. Defaults to kernel_name. Example: "Python 3.9.5".
+    - auto_yes: If True, skip the prompt and use the default kernel name.
 
     Usage:
     add_current_python_as_kernel("python39", "Python 3.9.5")
@@ -10789,14 +10790,18 @@ def add_ipython_kernel(kernel_name: str = None, display_name: str = None):
     pip_import('ipykernel')    
 
     if kernel_name is None:
-        print("Please enter the title of the new iPython kernel:")
         default = _get_session_title()
 
         # Kernel names can't have whitespace
         default = default.strip() 
         default = '-'.join(default.split())
 
-        kernel_name = input_default(' > ', default)
+        if auto_yes:
+            kernel_name = default
+            print("Using kernel name: " + kernel_name)
+        else:
+            print("Please enter the title of the new iPython kernel:")
+            kernel_name = input_default(' > ', default)
 
     import sys
     import subprocess
@@ -15617,7 +15622,7 @@ def rinsp(
             print(tab+tab+col("(symlink is broken)"))
 
     def is_dictlike(x):
-        return issubclass(type(x),dict)
+        return issubclass(type(x),dict) or _is_pandas_dataframe(x)
     if is_dictlike(object) and all((isinstance(x, str) and not " " in x) for x in object):
         print(col(tab + 'KEYS (%i): '%len(object)) + ' '.join(object))
         
@@ -27062,17 +27067,20 @@ def pseudo_terminal(
 
         EMA $explore_torch_module(ans)
 
-        NB  $extract_code_from_ipynb()
+        NB   $extract_code_from_ipynb()
         NBA  $extract_code_from_ipynb(ans)
         NBC  $r.clear_jupyter_notebook_outputs()
         NBCA $r._nbca(ans) # Clear a notebook
+        NCA  $r._nbca(ans)
         NBCH $r._nbca($get_all_files(file_extension_filter='ipynb')) #Clear all notebooks in the current directory
         NBCHY $r._nbca($get_all_files(file_extension_filter='ipynb',sort_by='size')[::-1], auto_yes=True) #Clear all notebooks in the current directory without confirmation
         NBCHYF $r._nbca($get_all_files(file_extension_filter='ipynb',sort_by='size')[::-1], auto_yes=True,parallel=True) #Clear all notebooks in the current directory without confirmation
-        NCA  $r._nbca(ans)
+        NBCG  $r._clear_all_git_notebooks()
+        NBCGY $r._clear_all_git_notebooks()
 
         JL PYM jupyter lab
-        IPYK $add_ipython_kernel()
+        IPYK  $add_ipython_kernel()
+        IPYKY $add_ipython_kernel(auto_yes=True)
         HOSTLAB !$PY -m rp call pip_import jupyter --auto_yes True ; $PY -m jupyter lab --ip 0.0.0.0 --port 5678 --NotebookApp.password='' --NotebookApp.token='' --allow-root
         HJL !$PY -m rp call pip_import jupyter --auto_yes True ; $PY -m jupyter lab --ip 0.0.0.0 --port 5678 --NotebookApp.password='' --NotebookApp.token='' --allow-root
 
@@ -49497,8 +49505,9 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
         raise ValueError("Invalid URL: "+str(url)[:1000])
 
 def download_urls(
-    *urls,
-    url_to_path=lambda url:get_file_name(url),
+    urls,
+    *,
+    dst='.',
     skip_existing=False,
     strict=True,
     num_threads=None,
@@ -49508,30 +49517,58 @@ def download_urls(
     timeout=None
 ):
     """
-    Plural of download_url
-
-    Tune num_threads and buffer_limit to avoid too many concurrent downloads.
+    Plural of download_url. Downloads many URLs in parallel.
 
     Args:
-        url_to_path: How to determine download paths.
-            callable: Takes a url, returns a path.
-            list: One path per url (must match length of urls).
-        skip_existing: Skip downloading if the path already exists.
-        strict: If True, raise on failure. If False, return None for failed downloads.
-        num_threads: Max concurrent downloads.
-        show_progress: False, True, or 'eta' to show a progress bar.
-        buffer_limit: Max number of buffered results.
-        lazy: If True, return a lazy iterator instead of a list.
-        timeout: Timeout in seconds per download.
+        urls: URL strings. Pass a list of urls. Not varargs, because I mistook using dst as the second arg. Might change later.
+        dst: Where to save downloaded files. Default '.'.
+            - str: A folder path. Saves each file using its URL filename.
+            - list: One destination path per URL (must match length).
+            - callable: A function mapping url -> destination path.
+        skip_existing (bool): Skip if destination exists. Default False.
+        strict (bool): Raise on failure; if False return None. Default True.
+        num_threads (int|None): Max concurrent downloads. Default None.
+        show_progress (bool|str): False, True, or 'eta'. Default False.
+        buffer_limit (int|None): Max buffered results. Default None.
+        lazy (bool): Return lazy iterator instead of list. Default False.
+        timeout (int|float|None): Per-download timeout in seconds. Default None.
 
     Returns:
         List of downloaded file paths (or None for failures if strict=False).
         If lazy=True, returns a lazy iterator instead.
+
+    Examples:
+        >>> # Download to current directory using URL filenames
+        >>> download_urls('https://httpbin.org/uuid', 'https://httpbin.org/ip')
+        ['./uuid', './ip']
+
+        >>> # Same thing, passing a list instead of varargs
+        >>> download_urls(['https://httpbin.org/uuid', 'https://httpbin.org/ip'])
+        ['./uuid', './ip']
+
+        >>> # Download to a specific folder
+        >>> download_urls(['https://httpbin.org/uuid'], dst='/tmp/downloads')
+        ['/tmp/downloads/uuid']
+
+        >>> # Download with explicit destination paths
+        >>> download_urls(['https://httpbin.org/uuid'], dst=['/tmp/my_file.json'])
+        ['/tmp/my_file.json']
+
+        >>> # Download with a path-mapping function
+        >>> download_urls(['https://httpbin.org/uuid'], dst=lambda u: '/tmp/' + get_file_name(u))
+        ['/tmp/uuid']
     """
     urls=detuple(urls)
 
-    if not callable(url_to_path):
-        paths = url_to_path
+    if callable(dst):
+        url_to_path = dst
+
+    elif isinstance(dst, str):
+        def url_to_path(url):
+            return path_join(dst, get_file_name(url))
+
+    else:
+        paths = dst
 
         assert has_len(paths)
         
@@ -49541,18 +49578,18 @@ def download_urls(
 
         if len_set_paths != len_paths:
             raise ValueError(
-                "rp.download_urls: url_to_path was given as " + str(type(url_to_path))
-                + " but has " + str(len_paths - len_set_paths) + "duplicate destinations"
+                "rp.download_urls: dst was given as " + str(type(dst))
+                + " but has " + str(len_paths - len_set_paths) + " duplicate destinations"
             )
 
         if len_paths != len_urls:
             raise ValueError(
-                "rp.download_urls: url_to_path has " + str(len_paths) + " paths but got " + str(len_urls) + " urls"
+                "rp.download_urls: dst has " + str(len_paths) + " paths but got " + str(len_urls) + " urls"
             )
 
-        url_to_path_dict = dict(zip(urls, paths))
+        dst_dict = dict(zip(urls, paths))
 
-        url_to_path = url_to_path_dict.__getitem__
+        url_to_path = dst_dict.__getitem__
 
     assert callable(url_to_path), 'Internal logical assertion'
 
@@ -58239,6 +58276,26 @@ def _sign(x):
     if is_torch_tensor(x):return __import__('torch').sign(x)
     return -1 if x < 0 else (1 if x > 0 else 0)
 
+def _argmin(x, dim=None):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.argmin(x, axis=dim)
+    if is_torch_tensor(x):return __import__('torch').argmin(x, dim=dim)
+    if dim is not None: raise ValueError("dim not supported for plain lists")
+    return min(range(len(x)), key=x.__getitem__)
+
+def _argmax(x, dim=None):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.argmax(x, axis=dim)
+    if is_torch_tensor(x):return __import__('torch').argmax(x, dim=dim)
+    if dim is not None: raise ValueError("dim not supported for plain lists")
+    return max(range(len(x)), key=x.__getitem__)
+
+def _argsort(x, dim=-1):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.argsort(x, axis=dim)
+    if is_torch_tensor(x):return __import__('torch').argsort(x, dim=dim)
+    return sorted(range(len(x)), key=x.__getitem__)
+
 #Nah don't need this, just multiply by 360/rp.tau - more explicit that way
 # def _degrees(x):
 #     """ works across libraries - such as numpy, torch, pure python """
@@ -58362,6 +58419,48 @@ def _copy_tensor(x):
 #         return statistics.stdev(x) if hasattr(x, '__iter__') and len(x) > 1 else 0
 #     raise ValueError("dim parameter not supported for Python scalars")
 
+
+
+def quantize_to_nearest_values(tensor, values):
+    """
+    Given a tensor, quantize its values to the nearest in a 1D set.
+
+    Uses rp.r functions to stay agnostic to numpy/torch.
+
+    Examples:
+
+        #It works with numpy
+        >>> import numpy as np
+        >>> t = np.array([[0.1, 0.6], [0.9, 0.4]])
+        >>> v = np.array([0.0, 0.5, 1.0])
+        >>> quantize_to_nearest_values(t, v).tolist()
+        [[0.0, 0.5], [1.0, 0.5]]
+
+        #It works with torch
+        >>> import torch
+        >>> t = torch.tensor([[0.1, 0.6], [0.9, 0.4]])
+        >>> v = torch.tensor([0.0, 0.5, 1.0])
+        >>> quantize_to_nearest_values(t, v).tolist()
+        [[0.0, 0.5], [1.0, 0.5]]
+
+        #It works with lists - it converts to numpy
+        >>> quantize_to_nearest_values([0,2,4,6,8,10],[0,10])
+        [ 0  0  0 10 10 10]
+
+    """
+    if not has_len(values): raise TypeError('quantize_to_nearest_values: values should be a vector of scalars, but got '+str(type(values)))
+    if not len(values): raise ValueError('quantize_to_nearest_values: values cant be empty but len(values)==0')
+    if not is_number(values[0]): raise ValueError("quantize_to_nearest_values: values must be a vector of scalars, but values[0]=="+repr(values[0]))
+
+    #Allow the use of lists
+    if not is_torch_tensor(values): values=as_numpy_array(values)
+    if not is_torch_tensor(tensor): tensor=as_numpy_array(tensor)
+
+    shape = tensor.shape
+    flat = tensor.reshape(-1)
+    diffs = rp.r._abs(flat.reshape(-1, 1) - values.reshape(1, -1))
+    indices = rp.r._argmin(diffs, dim=1)
+    return values[indices].reshape(shape)
 
 
 
@@ -63374,6 +63473,13 @@ def _nbca(paths,auto_yes=False,parallel=False):
             do_path(x)
     else:
         par_map(do_path,paths)
+
+def _clear_all_git_notebooks():
+    """ Clears contents of all notebooks tracked by git : NBCG"""
+    unstaged_files = git_unstaged_files() + git_untracked_files()
+    notebook_files = [x for x in unstaged_files if x.endswith(".ipynb")]
+    clear_func = partial(clear_jupyter_notebook_outputs, auto_yes=True)
+    return load_files(clear_func, notebook_files, show_progress='eta:Clearing Notebooks')
 
 def clear_jupyter_notebook_outputs(path:str=None, auto_yes=False):
     """
