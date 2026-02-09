@@ -63477,7 +63477,7 @@ def _nbca(paths,auto_yes=False,parallel=False):
 def _clear_all_git_notebooks():
     """ Clears contents of all notebooks tracked by git : NBCG"""
     unstaged_files = git_unstaged_files() + git_untracked_files()
-    notebook_files = [x for x in unstaged_files if x.endswith(".ipynb")]
+    notebook_files = [x for x in unstaged_files if x.endswith(".ipynb") and file_exists(x)]
     clear_func = partial(clear_jupyter_notebook_outputs, auto_yes=True)
     return load_files(clear_func, notebook_files, show_progress='eta:Clearing Notebooks')
 
