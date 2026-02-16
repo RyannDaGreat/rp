@@ -68,6 +68,7 @@ _old_gists_cache              = os.path.join(_rp_downloads_folder, 'gist_cache')
 _claudecode_folder            = os.path.join(_rp_outputs_folder, "claudecode")
 _google_fonts_download_folder = os.path.join(_rp_downloads_folder, "google_fonts")
 _downloaded_font_dir          = os.path.join(_rp_downloads_folder, "fonts")
+_filebrowser_quantum_binary   = os.path.join(_rp_downloads_folder, "filebrowser-quantum")
 _rp_gists_path                = os.path.join(_rp_git_dir, "gists")
 _cached_lexer_path            = os.path.join(_rp_boot_cache, "lexer.rpo")
 _cached_code_styles_path      = os.path.join(_rp_boot_cache, "code_styles.rpo")
@@ -22075,25 +22076,36 @@ def _get_object_lineno(obj):
 
     return lineno
 
-def vim(file_or_object=None,line_number=None):
+# Vim config path (set to override default ~/.vimrc)
+_default_vimrc                = None
+
+def vim(file_or_object=None, line_number=None, vimrc=None):
     """
     Opens files or objects in Vim. Jumps to source location for Python objects.
-    
+
     Args:
         file_or_object: File path, list of paths, Python object, or None for empty Vim
         line_number: Line to jump to (auto-detected for objects)
-        
+        vimrc: Path to vimrc file. Default: _default_vimrc or ~/.vimrc
+
     Examples:
         >>> vim("script.py")  # Open file
         >>> vim("script.py", 42)  # Open at line 42
         >>> vim(["a.py", "b.py"])  # Open multiple files
         >>> vim(resize_image)  # Open function's source file at definition
         >>> vim()  # Empty Vim session
-        
+
     Note: Requires terminal (not Jupyter) and Vim installed.
     """
     import subprocess
+
+    if vimrc is None: vimrc = _default_vimrc
+
+    #Expand ~ because subprocess.call passes args directly without shell ~ expansion
+    if vimrc: vimrc = get_absolute_path(vimrc, physical=False)
+
     args=['vim']
+    if vimrc: args+=['-u',vimrc]
 
     assert currently_in_a_tty(),'Cannot start Vim because we are not running in a terminal' #In Jupyter Notebook, launching Vim might force you to restart the kernel...very annoying
 
@@ -25683,7 +25695,7 @@ def _get_gitignore_path():
     git_repo = get_parent_folder(get_git_repo_root())
     return path_join(git_repo, '.gitignore')
 
-def _git_add_ans(paths):
+def _git_add_ans(paths,force=False):
     """Helper to git add paths from ans, handling both single paths and lists."""
     import os
     import shlex
@@ -25703,7 +25715,7 @@ def _git_add_ans(paths):
 
     # Git add each path
     for path in paths:
-        os.system('git add --verbose ' + shlex.quote(str(path)))
+        os.system("git add --verbose " + " -f " * force + shlex.quote(str(path)))
 
 def _write_default_gitignore():
     types_to_ignore='pyc bak swh swi swj swk swl swm swn swo swp un~ gstmp ipynb_checkpoints DS_Store'.split()
@@ -26783,6 +26795,11 @@ def pseudo_terminal(
         DV  $display_video(ans)
         DVL $display_video(ans,loop=True)
 
+        LVS $load_videos(ans)
+        VCV $vertically_concatenated_videos(ans)
+        HCV $horizontally_concatenated_videos(ans)
+        SMP4 $save_video_mp4(ans)
+
         A ACATA
         AA ACATA
         ACA ACATA
@@ -27199,7 +27216,7 @@ def pseudo_terminal(
         ITMI i=$tmux_get_process_pane_index() ; print(i)
         ITPI i=$tmux_get_process_pane_index() ; print(i)
 
-        SGC $select_git_commit()
+        SGC $input_select_git_commit()
         DUNKA $pip_import('dunk');$os.system(f"git diff {ans} | dunk")
         DUNKP $dunk_string_diff(ans,$string_from_clipboard())
         PDUNK $dunk_string_diff($string_from_clipboard(),ans)
@@ -27334,8 +27351,8 @@ def pseudo_terminal(
         GPUSH !git push
         GINIT !git init
         GIN   !git init
-        GADA $r._git_add_ans(ans)
-        GADDA $r._git_add_ans(ans()) 
+        GADA $r._git_add_ans(ans,force=True)
+        GADDA $r._git_add_ans(ans,force=True) 
         IGA    $append_line_to_file($printed($line_join(['' +x for x in $get_relative_paths($enlist(ans),root=$get_parent_folder($get_git_repo_root()))])),$r._get_gitignore_path())
         IGNA   $append_line_to_file($printed($line_join(['' +x for x in $get_relative_paths($enlist(ans),root=$get_parent_folder($get_git_repo_root()))])),$r._get_gitignore_path())
         GIGA   $append_line_to_file($printed($line_join(['' +x for x in $get_relative_paths($enlist(ans),root=$get_parent_folder($get_git_repo_root()))])),$r._get_gitignore_path())
@@ -27356,6 +27373,7 @@ def pseudo_terminal(
         TMUX !tmux
 
         FB $r._run_filebrowser()
+        FBQ $r._run_filebrowser_quantum()
 
         NL $fansi_print('Number of lines in ans: %i'%$number_of_lines(ans), 'yellow')
 
@@ -29414,7 +29432,7 @@ def pseudo_terminal(
                                 if command_name=='LSR':
                                     user_message = repr(lss_name)
                                 elif command_name=='LSS':
-                                    user_message=repr(path_join(get_current_directory(),lss_name))
+                                    user_message=repr(get_absolute_path(lss_name,physical=False))
 
 
                                 # user_message=repr(get_absolute_path(user_message[len("LSS "):]))
@@ -51152,6 +51170,9 @@ __import__("sys").path.append(__import__("os").getcwd())
 #__import__("rp").r._pip_install_needs_sudo=False
 #__import__("rp").r._auto_simore=True  # shell commands (cargo, ffmpeg, etc)
 
+#Vim config path for when Vim is launched from rp (useful when ~ is on network storage and vim boots slowly)
+#__import__("rp").r._default_vimrc = "~/.vimrc"
+
 ## Set the terminal's cursor to the shape of a line, instead of a block. I personally prefer this, but I've commented out because I don't know if you'd like it.
 #__import__('rp').set_cursor_to_bar()
 
@@ -51426,6 +51447,9 @@ _ryan_tmux_conf=r'''
     #When use :rename, let us use names as long as we want...
     set -g status-left-length 10000
 
+    #Optional: Set the default shell
+    set-option -g default-shell /bin/zsh
+
 
 #CAPABILITIES
 
@@ -51647,7 +51671,7 @@ def _ensure_shell_has_path(*, mac=None, linux=None, windows=None, unix=None):
         # For new shell sessions
         new_line = "export PATH=" + shlex.quote(path) + ":$PATH  # Added by RP"
         append_line_to_files(new_line, _all_shell_rc_paths)
-        fansi_print('r._ensure_shell_has_path: Wrote '+repr(new_line)+" to files: "+repr(rc_paths), 'green bold')
+        fansi_print('r._ensure_shell_has_path: Wrote '+repr(new_line)+" to files: "+repr(_all_shell_rc_paths), 'green bold')
             
     elif windows and currently_running_windows():
         raise NotImplementedError
@@ -52084,6 +52108,16 @@ def _ensure_gcloud_installed():
     )
 
 @_register_ensure_installed_func
+def _ensure_aws_installed():
+    """aws: Amazon Web Services command-line interface"""
+    _ensure_installed(
+        'aws',
+        linux='curl -s https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip && unzip -q awscliv2.zip && sudo ./aws/install && rm -rf awscliv2.zip aws',  # https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
+        mac='curl -s https://awscli.amazonaws.com/AWSCLIV2.pkg -o AWSCLIV2.pkg && sudo installer -pkg AWSCLIV2.pkg -target / && rm AWSCLIV2.pkg',  # https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
+        windows='msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi /qn',  # https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
+    )
+
+@_register_ensure_installed_func
 def _ensure_s5cmd_installed():
     """s5cmd: High-performance parallel S3 and local filesystem tool"""
     _ensure_installed(
@@ -52097,6 +52131,22 @@ def _ensure_s5cmd_installed():
         mac='brew install s5cmd',
     )
 
+@_register_ensure_installed_func
+def _ensure_stu_installed():
+    """stu: TUI explorer for AWS S3 with previews, syntax highlighting, and version history"""
+    _ensure_installed(
+        'stu',
+        mac='brew install lusingander/tap/stu',  # https://github.com/lusingander/homebrew-tap
+        linux=unindent('''
+            curl -sL https://api.github.com/repos/lusingander/stu/releases/latest \
+            | grep "browser_download_url.*x86_64-unknown-linux-musl.tar.gz" \
+            | cut -d '"' -f 4 \
+            | xargs curl -sL -o /tmp/stu.tar.gz \
+            && tar -xzf /tmp/stu.tar.gz -C /tmp \
+            && sudo mv /tmp/stu /usr/local/bin/stu \
+            && rm /tmp/stu.tar.gz'''),            # https://github.com/lusingander/stu/releases
+        windows='cargo install --locked stu',     # https://crates.io/crates/stu
+    )
 
 @_register_ensure_installed_func
 def _ensure_fzf_installed():
@@ -52335,6 +52385,16 @@ def _ensure_bfs_installed():
         windows=None,  # Unix-only - see https://github.com/tavianator/bfs
     )
 
+
+@_register_ensure_installed_func
+def _ensure_ntfy_installed():
+    """ntfy: Push notifications via HTTP, no signup or API key needed"""
+    _ensure_installed(
+        'ntfy',
+        mac    ='brew install ntfy',                    #https://formulae.brew.sh/formula/ntfy
+        linux  ='apt install ntfy --yes',               #https://docs.ntfy.sh/install/#linux-binaries
+        windows='scoop install ntfy',                   #https://docs.ntfy.sh/install/#windows
+    )
 
 def _install_ollama(force=False):
     _ensure_installed(
@@ -52754,6 +52814,86 @@ def _run_filebrowser(port=8080, root='.'):
     print('r._run_filebrowser: Running '+repr(command))
 
     os.system(command)
+
+@_register_ensure_installed_func('filebrowser-quantum')
+def _ensure_filebrowser_quantum_installed():
+    """filebrowser-quantum: Modern web file manager (fork of filebrowser) with real-time search, OIDC, multi-source. Supports macOS, Linux, and Windows."""
+    if system_command_exists('filebrowser-quantum'):
+        print("r._ensure_filebrowser_quantum_installed: filebrowser-quantum found on PATH")
+        return
+
+    binary_path = _filebrowser_quantum_binary
+
+    if path_exists(binary_path):
+        return
+
+    import platform
+    system  = platform.system().lower()   # 'darwin', 'linux', 'windows'
+    machine = platform.machine().lower()  # 'x86_64', 'amd64', 'arm64', 'aarch64', etc.
+
+    if system == 'windows':
+        asset_name = 'filebrowser.exe'
+    else:
+        os_name  = {'darwin': 'darwin', 'linux': 'linux'}[system]
+        arch_map = {'x86_64': 'amd64', 'amd64': 'amd64', 'arm64': 'arm64', 'aarch64': 'arm64'}
+        asset_name = os_name + '-' + arch_map[machine] + '-filebrowser'
+
+    url = 'https://github.com/gtsteffaniak/filebrowser/releases/latest/download/' + asset_name
+
+    make_parent_directory(binary_path)
+
+    print("r._ensure_filebrowser_quantum_installed: Downloading from " + url)
+    _run_sys_command('curl -fSL ' + shlex.quote(url) + ' -o ' + shlex.quote(binary_path))
+
+    if not currently_running_windows():
+        _run_sys_command('chmod +x ' + shlex.quote(binary_path))
+
+    # macOS Gatekeeper quarantine removal
+    if currently_running_mac():
+        _run_sys_command('xattr -d com.apple.quarantine ' + shlex.quote(binary_path))
+
+    print("r._ensure_filebrowser_quantum_installed: Installed to " + binary_path)
+
+def _run_filebrowser_quantum(port=3080, root='.'):
+    """
+    Run FileBrowser Quantum with zero config — noauth, bound to 0.0.0.0.
+
+    Downloads the binary automatically if not installed.
+    Writes a temporary config.yaml and launches the server.
+    """
+    _ensure_filebrowser_quantum_installed()
+
+    pip_import('yaml')
+
+    import tempfile, yaml
+
+    binary_path = _filebrowser_quantum_binary
+    root = get_absolute_path(root)
+    port = get_next_free_port(port)
+
+    config = {
+        'server': {
+            'port': port,
+            'listen': '0.0.0.0',
+            'sources': [{'path': root, 'config': {'defaultEnabled': True}}],
+        },
+        'auth': {
+            'methods': {'noauth': True},
+            'adminUsername': 'admin',
+            'adminPassword': 'admin',
+        },
+    }
+
+    config_dir = tempfile.mkdtemp(prefix='filebrowser_quantum_')
+    config_path = os.path.join(config_dir, 'config.yaml')
+    with open(config_path, 'w') as f:
+        yaml.dump(config, f)
+
+    command = shlex.quote(binary_path) + ' -c ' + shlex.quote(config_path)
+    print('r._run_filebrowser_quantum: Serving ' + repr(root) + ' on port ' + str(port))
+    print('r._run_filebrowser_quantum: Running ' + repr(command))
+
+    _run_sys_command(command)
 
 def get_port_is_taken(port: int) -> bool:
     """
@@ -56565,6 +56705,46 @@ def ntfy_send(message:str, topic='rp'):
     
     if not response.status_code==200:
         raise IOError(response.status_code)
+
+def ntfy_receive(*topics):
+    """
+    Infinite generator that yields messages from ntfy topics as EasyDicts.
+
+    Subscribes to one or more ntfy.sh topics via streaming JSON.
+
+    >>> for msg in ntfy_receive('mychannel'):  # doctest: +SKIP
+    ...     print(msg.topic, msg.message)
+
+    Args:
+        *topics: One or more topic name strings (e.g. 'rp', 'alerts')
+
+    Yields:
+        EasyDict with fields: id, time, topic, message,
+        and optionally title, tags, priority.
+    """
+    import json
+    pip_import('requests')
+    import requests
+
+    topics = detuple(topics)
+    if isinstance(topics, str):
+        topics = (topics,)
+    assert topics, "Must provide at least one topic"
+    assert connected_to_internet()
+
+    # ntfy supports comma-separated topics in a single stream
+    url = "https://ntfy.sh/" + ",".join(topics) + "/json"
+    response = requests.get(url, stream=True)
+    if response.status_code != 200:
+        raise IOError(response.status_code)
+
+    for line in response.iter_lines(decode_unicode=True):
+        if not line:
+            continue
+        data = json.loads(line)
+        if data.get("event") != "message":
+            continue
+        yield as_easydict(data)
 
 MACOS_NOTIFICATION_SOUNDS = (
     'Basso', 'Blow', 'Bottle', 'Frog', 'Funk', 'Glass',
@@ -64080,7 +64260,46 @@ def get_git_date_modified(file_path):
     except ValueError as e:
         raise ValueError("Date parsing error: {}. Git command output: {}".format(e, result.stdout.strip()))
 
-def select_git_commit():
+def git_files_changed_in_last_n_commits(n: int, repo=".") -> list:
+    """
+    Returns the list of file paths changed in the last N git commits.
+
+    Most recently changed files appear earlier in the output list.
+
+    Args:
+        n (int): Number of recent commits to check.
+
+    Returns:
+        list[str]: File paths that were changed.
+
+    Examples:
+        >>> type(git_files_changed_in_last_n_commits(1))
+        <class 'list'>
+    """
+
+    if n < 0:
+        raise ValueError("git_files_changed_in_last_n_commits: n must be non-negative, got " + str(n))
+
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            ["git", "log", "--name-only", "--pretty=format:", f"-{n}"],
+            capture_output=True, text=True, check=True, cwd=repo,
+        )
+        output = unique([l for l in result.stdout.splitlines() if l.strip()])
+
+        if repo != ".":
+            output = path_join(repo, output)
+
+    except subprocess.CalledProcessError:
+        assert is_a_git_repo(repo), repo
+        raise
+
+    return output
+
+
+def input_select_git_commit():
     """
     Let user select a git commit using input_select
 
@@ -68070,217 +68289,6 @@ def pip_install_multiple(packages, shotgun=True, quiet=False):
 
 
 
-known_pypi_module_package_names={
-    # To update this list, copy-paste the output of rp.pypi_inspection.get_pypi_module_package_names()
-    # A list of some non-obvious pypi package names given their module names, used by pip_import
-    # Let's make this dict as big as we can! More the merrier...
-    'Crypto': 'pycrypto',
-    'IPython': 'ipython',
-    'OpenGL': 'PyOpenGL',
-    'PIL': 'Pillow',
-    'PyQt5': 'PyQt5-sip',
-    'Xlib': 'python-xlib',
-    '_ast27': 'typed-ast',
-    '_ast3': 'typed-ast',
-    '_bimpy': 'bimpy',
-    '_black_version': 'black',
-    '_dlib_pybind11': 'dlib',
-    '_plotly_future_': 'plotly',
-    '_plotly_utils': 'plotly',
-    '_sentencepiece': 'sentencepiece',
-    '_sounddevice': 'sounddevice',
-    'absl': 'absl-py',
-    'add_trailing_comma' : 'add-trailing-comma',
-    'ahocorasick': 'pyahocorasick',
-    'async_timeout': 'async-timeout',
-    'atari_py': 'atari-py',
-    'babel': 'Babel',
-    'backports': 'configparser',
-    'black_primer': 'black',
-    'blackd': 'black',
-    'blib2to3': 'black',
-    'bs4': 'beautifulsoup4',
-    'cached_property': 'cached-property',
-    'caffe2': 'torch',
-    'chart_studio': 'chart-studio',
-    'clinical_trials': 'clinical-trials',
-    'clinical_trials/api': 'clinical-trials',
-    'clinical_trials/api/xml2dict': 'clinical-trials',
-    'colors': 'ansicolors',
-    'compose': 'docker-compose',
-    'tree_sitter': 'tree-sitter',
-    'rclone_python':'rclone-python',
-    'patoolib' : 'patool',
-    'tree_sitter_python': 'tree-sitter-python',
-    # 'cv2': 'opencv-python',
-    # 'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? (Update: so far, so good!)
-    'cv2': 'opencv-python opencv-contrib-python', #But that didn't work for get_edge_drawing...https://github.com/Comfy-Org/ComfyUI-Manager/discussions/708
-    'fluidsynth' : 'pyfluidsynth',
-    'handy_kws':'handy-kws',
-    'AppKit':         'pyobjc-framework-Cocoa',
-    'Cocoa':          'pyobjc-framework-Cocoa',
-    'CoreFoundation': 'pyobjc-framework-Cocoa',
-    'Foundation':     'pyobjc-framework-Cocoa',
-    'PyObjCTools': 'pyobjc-core',
-    'objc':        'pyobjc-core',
-    'Vision':      'pyobjc-framework-Vision',
-    'Quartz':      'pyobjc-framework-Quartz',
-    'pi_heif':'pi-heif',
-    'cython': 'Cython',
-    'pdfminer':'pdfminer.six',
-    'textual' : 'textual[syntax]',
-    'lazy_loader': 'lazy-loader',
-    'deprecate': 'pyDeprecate',
-    'diff_match_patch': 'diff-match-patch',
-    'dns': 'dnspython',
-    'docx': 'python-docx',
-    'dockerpycreds': 'docker-pycreds',
-    'dot_parser': 'pydotz',
-    'dotenv': 'python-dotenv',
-    'dt_authentication': 'dt-authentication-daffy',
-    'dt_data_api': 'dt-data-api-daffy',
-    'dt_shell': 'duckietown-shell',
-    'duckietown_docker_utils': 'duckietown-docker-utils-daffy',
-    'easyprocess': 'EasyProcess',
-    'editor': 'python-editor',
-    'eglRenderer': 'pybullet',
-    'examples': 'test-tube',
-    'faiss': 'faiss-gpu',
-    'ffmpeg': 'ffmpeg-python',
-    'fontTools': 'fonttools',
-    'getmac': 'get-mac',
-    'git': 'GitPython',
-    'github': 'PyGithub',
-    'glances': 'Glances',
-    'google': 'protobuf',
-    'google.auth': 'google-auth',
-    'google_auth_oauthlib': 'google-auth-oauthlib',
-    'googleapiclient': 'google-api-python-client',
-    'google_auth_httplib2': 'google-auth-httplib2',
-    'gpt_2_simple': 'gpt-2-simple',
-    'greptile': 'Greptile',
-    'grpc': 'grpcio',
-    'gtts_token': 'gTTS-token',
-    'httpcore/_async': 'httpcore',
-    'httpcore/_backends': 'httpcore',
-    'httpcore/_sync': 'httpcore',
-    'httpx/_transports': 'httpx',
-    'integrations': 'torchmetrics',
-    'ioc': 'python-ioc',
-    'is_even_aast': 'iseven-aast',
-    'jinja2_time': 'jinja2-time',
-    'js2py': 'Js2Py',
-    'jupyter_lsp': 'jupyter-lsp',
-    'jupyterlab_git': 'jupyterlab-git',
-    'jupyterlab_server': 'jupyterlab-server',
-    'keras': 'keras-nightly',
-    'keras_gym': 'keras-gym',
-    'keras_preprocessing': 'Keras-Preprocessing',
-    'lazy_object_proxy': 'lazy-object-proxy',
-    'lib2to3': '2to3',
-    'libarchive': 'libarchive-c',
-    'libfuturize': 'future',
-    'libpasteurize': 'future',
-    'lpips_tf': 'lpips-tf',
-    'mac_vendor_lookup': 'mac-vendor-lookup',
-    'markdown': 'Markdown',
-    'markdown_it': 'markdown-it-py',
-    'matplotlib_inline': 'matplotlib-inline',
-    'mpl_toolkits': 'matplotlib',
-    'more_itertols':'more-itertools',
-    'mplcairo': 'git+https://github.com/matplotlib/mplcairo',#Some features only available on master branch: https://stackoverflow.com/questions/26702176/is-it-possible-to-do-additive-blending-with-matplotlib
-    'mypy_extensions': 'mypy-extensions',
-    'neural_style': 'neural-style',
-    'nmap3': 'python3-nmap',
-    'notebook_as_pdf': 'notebook-as-pdf',
-    'nvidia_smi': 'nvidia-ml-py3',
-    'oembed': 'python-oembed',
-    'ometa': 'Parsley',
-    'opt_einsum': 'opt-einsum',
-    'ot': 'POT',
-    'paho': 'paho-mqtt',
-    'pandocattributes': 'pandoc-attributes',
-    'parsley': 'Parsley',
-    'past': 'future',
-    'pasta': 'google-pasta',
-    'piglet': 'piglet-templates',
-    'pillow_heif': 'pillow-heif',
-    'pl_bolts': 'pytorch-lightning-bolts',
-    'pl_examples': 'pytorch-lightning',
-    'plotlywidget': 'plotly',
-    'prompt_toolkit': 'prompt-toolkit',
-    'pyasn1_modules': 'pyasn1-modules',
-    'pybullet_data': 'pybullet',
-    'pybullet_envs': 'pybullet',
-    'pybullet_robots': 'pybullet',
-    'pybullet_utils': 'pybullet',
-    'pydot': 'pydotz',
-    'pyfx' : 'python-fx',
-    'pyinstrument_cext': 'pyinstrument-cext',
-    'pylab': 'matplotlib',
-    'pyls': 'python-language-server',
-    'pyls_black': 'pyls-black',
-    'pyls_jsonrpc': 'python-jsonrpc-server',
-    'pyls_spyder': 'pyls-spyder',
-    'pynvml': 'nvidia-ml-py3',
-    'pytorch_lightning': 'pytorch-lightning',
-    'pyvirtualdisplay': 'PyVirtualDisplay',
-    'pywt': 'PyWavelets',
-    'pyximport': 'Cython',
-    'qdarkstyle': 'QDarkStyle',
-    'qtawesome': 'QtAwesome',
-    'ranger': 'ranger-fm',
-    'requests_oauthlib': 'requests-oauthlib',
-    'requests_toolbelt': 'requests-toolbelt',
-    'requirements': 'requirements-parser',
-    'rich_traceback': 'rich-traceback',
-    'rtmidi': 'python-rtmidi',
-    'rtree': 'Rtree',
-    'sentry_sdk': 'sentry-sdk',
-    'serial': 'pyserial',#WARNING: there is a 'pip install serial' which ALSO creates a 'serial' module. This module is the WRONG SERIAL MODULE.
-    'skimage': 'scikit-image',
-    'sklearn': 'scikit-learn',
-    'skvideo': 'sk-video',
-    'skvideo.io': 'sk-video',
-    'slugify': 'python-slugify',
-    'smart_open': 'smart-open',
-    'spacy_legacy': 'spacy-legacy',
-    'speech_recognition': 'SpeechRecognition', #Needs pyaudio, and needs portaudio. I'm not sure if pyaudio needs portaudio?
-    'fontTools':'fonttools',
-    'sphinx': 'Sphinx',
-    'skia': 'skia-python',
-    'sphinx_rtd_theme': 'sphinx-rtd-theme',
-    'sphinxcontrib': 'sphinxcontrib-htmlhelp',
-    'spyder_kernels': 'spyder-kernels',
-    'tensorboard_data_server': 'tensorboard-data-server',
-    'tensorboard_plugin_wit': 'tensorboard-plugin-wit',
-    'tensorflow': 'tensorflow-gpu',
-    'tensorflow_estimator': 'tensorflow-estimator',
-    'terml': 'Parsley',
-    'tesseract_ocr': 'tesseract-ocr',
-    'test': 'pyinstrument',
-    'test_tube': 'test-tube',
-    'tests': 'torchmetrics',
-    'text_unidecode': 'text-unidecode',
-    'three_merge': 'three-merge',
-    'timg/methods': 'timg',
-    'typed_ast': 'typed-ast',
-    'typing_extensions': 'typing-extensions',
-    'websocket': 'websocket-client',
-    'speech_recognition' : 'SpeechRecognition',
-    'websockets/extensions': 'websockets',
-    'werkzeug': 'Werkzeug',
-    'wheel-platform-tag-is-broken-on-empty-wheels-see-issue-141': 'sklearn',
-    'whisper': 'openai-whisper',
-    'xontrib': 'xonsh',
-    'yapftests': 'yapf',
-    'yaml':'PyYAML',
-    'zalgo_text': 'zalgo-text',
-    'hitherdither' : "git+https://www.github.com/hbldh/hitherdither",
-    'decord' : "eva-decord" if currently_running_mac() else "decord", #https://www.piwheels.org/project/eva-decord/ - decord doesn't pip install on mac
-}
-
-
 #class _rp_persistent_dict:
 #    def __init__(self,name):
 #        #TODO: Make this a persistent file that's opened by rp upon booting and saved when things change
@@ -68768,6 +68776,217 @@ def get_only_value(dictionary):
     if len(dictionary) != 1: raise ValueError("Expected dictionary with 1 key but got "+str(len(dictionary)))
     return next(iter(dictionary.values()))
 
+known_pypi_module_package_names={
+    # To update this list, copy-paste the output of rp.pypi_inspection.get_pypi_module_package_names()
+    # A list of some non-obvious pypi package names given their module names, used by pip_import
+    # Let's make this dict as big as we can! More the merrier...
+    'Crypto': 'pycrypto',
+    'IPython': 'ipython',
+    'OpenGL': 'PyOpenGL',
+    'PIL': 'Pillow',
+    'PyQt5': 'PyQt5-sip',
+    'Xlib': 'python-xlib',
+    '_ast27': 'typed-ast',
+    '_ast3': 'typed-ast',
+    '_bimpy': 'bimpy',
+    '_black_version': 'black',
+    '_dlib_pybind11': 'dlib',
+    '_plotly_future_': 'plotly',
+    '_plotly_utils': 'plotly',
+    '_sentencepiece': 'sentencepiece',
+    '_sounddevice': 'sounddevice',
+    'absl': 'absl-py',
+    'add_trailing_comma' : 'add-trailing-comma',
+    'ahocorasick': 'pyahocorasick',
+    'async_timeout': 'async-timeout',
+    'atari_py': 'atari-py',
+    'babel': 'Babel',
+    'backports': 'configparser',
+    'black_primer': 'black',
+    'blackd': 'black',
+    'blib2to3': 'black',
+    'bs4': 'beautifulsoup4',
+    'cached_property': 'cached-property',
+    'caffe2': 'torch',
+    'chart_studio': 'chart-studio',
+    'clinical_trials': 'clinical-trials',
+    'clinical_trials/api': 'clinical-trials',
+    'clinical_trials/api/xml2dict': 'clinical-trials',
+    'colors': 'ansicolors',
+    'compose': 'docker-compose',
+    'tree_sitter': 'tree-sitter',
+    'rclone_python':'rclone-python',
+    'patoolib' : 'patool',
+    'tree_sitter_python': 'tree-sitter-python',
+    # 'cv2': 'opencv-python',
+    # 'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? (Update: so far, so good!)
+    'cv2': 'opencv-python opencv-contrib-python', #But that didn't work for get_edge_drawing...https://github.com/Comfy-Org/ComfyUI-Manager/discussions/708
+    'fluidsynth' : 'pyfluidsynth',
+    'handy_kws':'handy-kws',
+    'AppKit':         'pyobjc-framework-Cocoa',
+    'Cocoa':          'pyobjc-framework-Cocoa',
+    'CoreFoundation': 'pyobjc-framework-Cocoa',
+    'Foundation':     'pyobjc-framework-Cocoa',
+    'PyObjCTools': 'pyobjc-core',
+    'objc':        'pyobjc-core',
+    'Vision':      'pyobjc-framework-Vision',
+    'Quartz':      'pyobjc-framework-Quartz',
+    'pi_heif':'pi-heif',
+    'cython': 'Cython',
+    'pdfminer':'pdfminer.six',
+    'textual' : 'textual[syntax]',
+    'lazy_loader': 'lazy-loader',
+    'deprecate': 'pyDeprecate',
+    'diff_match_patch': 'diff-match-patch',
+    'dns': 'dnspython',
+    'docx': 'python-docx',
+    'dockerpycreds': 'docker-pycreds',
+    'dot_parser': 'pydotz',
+    'dotenv': 'python-dotenv',
+    'dt_authentication': 'dt-authentication-daffy',
+    'dt_data_api': 'dt-data-api-daffy',
+    'dt_shell': 'duckietown-shell',
+    'duckietown_docker_utils': 'duckietown-docker-utils-daffy',
+    'easyprocess': 'EasyProcess',
+    'editor': 'python-editor',
+    'eglRenderer': 'pybullet',
+    'examples': 'test-tube',
+    'faiss': 'faiss-gpu',
+    'ffmpeg': 'ffmpeg-python',
+    'fontTools': 'fonttools',
+    'getmac': 'get-mac',
+    'git': 'GitPython',
+    'github': 'PyGithub',
+    'glances': 'Glances',
+    'google': 'protobuf',
+    'google.auth': 'google-auth',
+    'google_auth_oauthlib': 'google-auth-oauthlib',
+    'googleapiclient': 'google-api-python-client',
+    'google_auth_httplib2': 'google-auth-httplib2',
+    'gpt_2_simple': 'gpt-2-simple',
+    'greptile': 'Greptile',
+    'grpc': 'grpcio',
+    'gtts_token': 'gTTS-token',
+    'httpcore/_async': 'httpcore',
+    'httpcore/_backends': 'httpcore',
+    'httpcore/_sync': 'httpcore',
+    'httpx/_transports': 'httpx',
+    'integrations': 'torchmetrics',
+    'ioc': 'python-ioc',
+    'is_even_aast': 'iseven-aast',
+    'jinja2_time': 'jinja2-time',
+    'js2py': 'Js2Py',
+    'jupyter_lsp': 'jupyter-lsp',
+    'jupyterlab_git': 'jupyterlab-git',
+    'jupyterlab_server': 'jupyterlab-server',
+    'keras': 'keras-nightly',
+    'keras_gym': 'keras-gym',
+    'keras_preprocessing': 'Keras-Preprocessing',
+    'lazy_object_proxy': 'lazy-object-proxy',
+    'lib2to3': '2to3',
+    'libarchive': 'libarchive-c',
+    'libfuturize': 'future',
+    'libpasteurize': 'future',
+    'lpips_tf': 'lpips-tf',
+    'mac_vendor_lookup': 'mac-vendor-lookup',
+    'markdown': 'Markdown',
+    'markdown_it': 'markdown-it-py',
+    'matplotlib_inline': 'matplotlib-inline',
+    'mpl_toolkits': 'matplotlib',
+    'more_itertols':'more-itertools',
+    'mplcairo': 'git+https://github.com/matplotlib/mplcairo',#Some features only available on master branch: https://stackoverflow.com/questions/26702176/is-it-possible-to-do-additive-blending-with-matplotlib
+    'mypy_extensions': 'mypy-extensions',
+    'neural_style': 'neural-style',
+    'nmap3': 'python3-nmap',
+    'notebook_as_pdf': 'notebook-as-pdf',
+    'nvidia_smi': 'nvidia-ml-py3',
+    'oembed': 'python-oembed',
+    'ometa': 'Parsley',
+    'opt_einsum': 'opt-einsum',
+    'ot': 'POT',
+    'paho': 'paho-mqtt',
+    'pandocattributes': 'pandoc-attributes',
+    'parsley': 'Parsley',
+    'past': 'future',
+    'pasta': 'google-pasta',
+    'piglet': 'piglet-templates',
+    'pillow_heif': 'pillow-heif',
+    'pl_bolts': 'pytorch-lightning-bolts',
+    'pl_examples': 'pytorch-lightning',
+    'plotlywidget': 'plotly',
+    'prompt_toolkit': 'prompt-toolkit',
+    'pyasn1_modules': 'pyasn1-modules',
+    'pybullet_data': 'pybullet',
+    'pybullet_envs': 'pybullet',
+    'pybullet_robots': 'pybullet',
+    'pybullet_utils': 'pybullet',
+    'pydot': 'pydotz',
+    'pyfx' : 'python-fx',
+    'pyinstrument_cext': 'pyinstrument-cext',
+    'pylab': 'matplotlib',
+    'pyls': 'python-language-server',
+    'pyls_black': 'pyls-black',
+    'pyls_jsonrpc': 'python-jsonrpc-server',
+    'pyls_spyder': 'pyls-spyder',
+    'pynvml': 'nvidia-ml-py3',
+    'pytorch_lightning': 'pytorch-lightning',
+    'pyvirtualdisplay': 'PyVirtualDisplay',
+    'pywt': 'PyWavelets',
+    'pyximport': 'Cython',
+    'qdarkstyle': 'QDarkStyle',
+    'qtawesome': 'QtAwesome',
+    'ranger': 'ranger-fm',
+    'requests_oauthlib': 'requests-oauthlib',
+    'requests_toolbelt': 'requests-toolbelt',
+    'requirements': 'requirements-parser',
+    'rich_traceback': 'rich-traceback',
+    'rtmidi': 'python-rtmidi',
+    'rtree': 'Rtree',
+    'sentry_sdk': 'sentry-sdk',
+    'serial': 'pyserial',#WARNING: there is a 'pip install serial' which ALSO creates a 'serial' module. This module is the WRONG SERIAL MODULE.
+    'skimage': 'scikit-image',
+    'sklearn': 'scikit-learn',
+    'skvideo': 'sk-video',
+    'skvideo.io': 'sk-video',
+    'slugify': 'python-slugify',
+    'smart_open': 'smart-open',
+    'spacy_legacy': 'spacy-legacy',
+    'speech_recognition': 'SpeechRecognition', #Needs pyaudio, and needs portaudio. I'm not sure if pyaudio needs portaudio?
+    'fontTools':'fonttools',
+    'sphinx': 'Sphinx',
+    'skia': 'skia-python',
+    'sphinx_rtd_theme': 'sphinx-rtd-theme',
+    'sphinxcontrib': 'sphinxcontrib-htmlhelp',
+    'spyder_kernels': 'spyder-kernels',
+    'tensorboard_data_server': 'tensorboard-data-server',
+    'tensorboard_plugin_wit': 'tensorboard-plugin-wit',
+    'tensorflow': 'tensorflow-gpu',
+    'tensorflow_estimator': 'tensorflow-estimator',
+    'terml': 'Parsley',
+    'tesseract_ocr': 'tesseract-ocr',
+    'test': 'pyinstrument',
+    'test_tube': 'test-tube',
+    'tests': 'torchmetrics',
+    'text_unidecode': 'text-unidecode',
+    'three_merge': 'three-merge',
+    'timg/methods': 'timg',
+    'typed_ast': 'typed-ast',
+    'typing_extensions': 'typing-extensions',
+    'websocket': 'websocket-client',
+    'speech_recognition' : 'SpeechRecognition',
+    'websockets/extensions': 'websockets',
+    'werkzeug': 'Werkzeug',
+    'wheel-platform-tag-is-broken-on-empty-wheels-see-issue-141': 'sklearn',
+    'whisper': 'openai-whisper',
+    'xontrib': 'xonsh',
+    'yapftests': 'yapf',
+    'yaml':'PyYAML',
+    'zalgo_text': 'zalgo-text',
+    'hitherdither' : "git+https://www.github.com/hbldh/hitherdither",
+    'decord' : "decord2", # 'decord' : "eva-decord" if currently_running_mac() else "decord", #https://www.piwheels.org/project/eva-decord/ - decord doesn't pip install on mac
+}
+
+
 def _check_rpy_35_syntax():
     """
     Used to prepare r.py for release
@@ -68785,14 +69004,27 @@ del re #re is random element
 
 
 #WIP
-for _env_var_name in sorted(os.environ):
-    _rp_env_var_prefix = 'RP_SET_EVAL_'
-    if _env_var_name.startswith(_rp_env_var_prefix):
-        _var_name = _env_var_name[len(_rp_env_var_prefix):]
-        _var_string = os.environ[_env_var_name]
-        _var_value = eval(_var_string)
-        globals()[_var_name]=_var_value
-        fansi_print('RP ENVIRON: rp.r.'+_var_name+' SET TO '+str(_var_value)[:100], 'green bold')
+def _rp_set_env_vars(prefix, parse=lambda x:x):
+    """
+    Sets rp.r globals from environment variables with given prefix.
+
+    Args:
+        prefix (str): Env var prefix to match (e.g. 'RP_SET_STR_')
+        parse (callable): Transform env var string to value, default=identity
+
+    Examples:
+        >>> # RP_SET_STR_foo=bar   → rp.r.foo = 'bar'
+        >>> # RP_SET_EVAL_x=[1,2]  → rp.r.x  = [1, 2]
+    """
+    for name in sorted(os.environ):
+        if name.startswith(prefix):
+            var_name  = name[len(prefix):]
+            var_value = parse(os.environ[name])
+            globals()[var_name]=var_value
+            fansi_print('RP ENVIRON: rp.r.'+var_name+' SET TO '+str(var_value)[:100], 'green bold')
+
+_rp_set_env_vars('RP_SET_STR_')
+_rp_set_env_vars('RP_SET_EVAL_', parse=eval)
 
 
 #TODO: Fix this. It can help extract function defs among other useful thins
