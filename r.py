@@ -64284,7 +64284,7 @@ def git_files_changed_in_last_n_commits(n: int, repo=".") -> list:
         import subprocess
 
         result = subprocess.run(
-            ["git", "log", "--name-only", "--pretty=format:", f"-{n}"],
+            ["git", "log", "--name-only", "--pretty=format:", "-"+str(n)],
             capture_output=True, text=True, check=True, cwd=repo,
         )
         output = unique([l for l in result.stdout.splitlines() if l.strip()])
@@ -67692,7 +67692,7 @@ def print_gpu_summary(
             temperature_text if include_temperature else "",
             utilization if include_utilization else "",
             process_column_text,
-        )
+       )
 
     console = Console()
     with console.capture() as capture:
