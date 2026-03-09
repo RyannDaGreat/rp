@@ -11,7 +11,6 @@ Usage:
 import os
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import rp
 
@@ -224,7 +223,18 @@ def upload_pptx_files_sequential(
             pbar.update(current - last_progress[0])
             last_progress[0] = current
 
-        result = upload_pptx_as_slides(service, fp, folder_id, progress_cb)
+        try:
+            result = upload_pptx_as_slides(service, fp, folder_id, progress_cb)
+        except HttpError as e:
+            pbar.close()
+            if e.resp.status == 413:
+                size_str = rp.human_readable_file_size(size, mib=False)
+                rp.fansi_print(
+                    f"  SKIPPED: {rp.get_file_name(fp)} ({size_str}) exceeds "
+                    f"Google Slides upload limit (HTTP 413)", 'red', 'bold',
+                )
+                continue
+            raise
         pbar.close()
         rp.fansi_print("  Uploaded: " + result['url'], 'green')
         results.append(result)
@@ -271,6 +281,7 @@ def merge_presentations_via_webapp(
     presentation_ids: list[str],
     merged_name: str = 'Merged Presentation',
     auto_share: bool = True,
+    max_retries: int = 3,
 ) -> dict:
     """
     Merge multiple Google Slides presentations into one using a deployed Apps Script web app.
@@ -278,36 +289,124 @@ def merge_presentations_via_webapp(
     This works around the REST API limitation that doesn't support cross-presentation
     slide copying. The web app uses Apps Script's appendSlide() method.
 
-    Returns dict with 'presentationId', 'url', 'slideCount'.
+    Args:
+        presentation_ids: IDs of presentations to merge.
+        merged_name: Name for the merged presentation.
+        auto_share: Share presentations before merging (required for web app access).
+        max_retries: Retries on transient failures (default: 3).
+
+    Returns:
+        dict with 'presentationId', 'url', 'slideCount'.
+
+    Examples:
+        >>> # merge_presentations_via_webapp(['id1', 'id2'], 'My Pres')
     """
 
     if auto_share:
         share_presentations_for_merge(presentation_ids)
 
-    response = requests.post(
-        MERGE_WEBAPP_URL,
-        json={'presentationIds': presentation_ids, 'mergedName': merged_name},
-        headers={'Content-Type': 'application/json'}
-    )
-
-    if response.status_code == 401 or (response.status_code == 200 and 'accounts.google.com' in response.text):
-        raise RuntimeError(
-            f"Merge web app authentication error (status {response.status_code}).\n"
-            "The web app requires redeployment with public access:\n"
-            "  1. Go to https://script.google.com/home and open your project\n"
-            "  2. Deploy > Manage deployments > Edit (pencil icon)\n"
-            "  3. Change 'Who has access' to 'Anyone' (not 'Anyone with Google account')\n"
-            "  4. Click Deploy\n"
-            "  5. If URL changed, update MERGE_WEBAPP_URL in google_slides_upload.py"
+    for attempt in range(max_retries):
+        response = requests.post(
+            MERGE_WEBAPP_URL,
+            json={'presentationIds': presentation_ids, 'mergedName': merged_name},
+            headers={'Content-Type': 'application/json'}
         )
-    if response.status_code != 200:
-        raise RuntimeError(f"Merge web app error: {response.status_code} {response.text}")
 
-    result = response.json()
-    if not result.get('success'):
-        raise RuntimeError(f"Merge failed: {result.get('error', 'Unknown error')}")
+        if response.status_code == 401 or (response.status_code == 200 and 'accounts.google.com' in response.text):
+            raise RuntimeError(
+                f"Merge web app authentication error (status {response.status_code}).\n"
+                "The web app requires redeployment with public access:\n"
+                "  1. Go to https://script.google.com/home and open your project\n"
+                "  2. Deploy > Manage deployments > Edit (pencil icon)\n"
+                "  3. Change 'Who has access' to 'Anyone' (not 'Anyone with Google account')\n"
+                "  4. Click Deploy\n"
+                "  5. If URL changed, update MERGE_WEBAPP_URL in google_slides_upload.py"
+            )
+        if response.status_code != 200:
+            raise RuntimeError(f"Merge web app error: {response.status_code} {response.text}")
+
+        result = response.json()
+        if result.get('success'):
+            return result
+
+        # Transient failure — retry after backoff
+        error = result.get('error', 'Unknown error')
+        if attempt < max_retries - 1:
+            wait = 2 ** (attempt + 1)
+            rp.fansi_print(f"  Merge attempt {attempt + 1} failed: {error}, retrying in {wait}s...", 'yellow')
+            time.sleep(wait)
+        else:
+            raise RuntimeError(f"Merge failed after {max_retries} attempts: {error}")
 
     return result
+
+
+def merge_and_finalize(drive_service, presentation_ids: list[str], folder_id: str, merged_name: str) -> dict:
+    """
+    Merge presentations via Apps Script, move result to folder, set sharing.
+
+    Args:
+        drive_service: Authenticated Google Drive service.
+        presentation_ids: IDs of source presentations to merge.
+        folder_id: Google Drive folder to move merged presentation into.
+        merged_name: Name for the merged presentation.
+
+    Returns:
+        dict with 'id', 'url', 'share_url', 'name', 'slideCount'.
+
+    Examples:
+        >>> # result = merge_and_finalize(svc, ['id1', 'id2'], 'folder_id', 'My Pres')
+        >>> # result['slideCount']  # total slides in merged presentation
+    """
+    rp.fansi_print(f"\nMerging {len(presentation_ids)} presentations...", 'cyan')
+    merged = merge_presentations_via_webapp(presentation_ids, merged_name)
+
+    # Move merged presentation into folder
+    drive_service.files().update(
+        fileId=merged['presentationId'],
+        addParents=folder_id,
+        fields='id',
+    ).execute()
+
+    # Try to make publicly viewable
+    rp.fansi_print("Setting sharing permissions...", 'cyan')
+    public_url = make_public(drive_service, merged['presentationId'])
+    merged_url = f"https://docs.google.com/presentation/d/{merged['presentationId']}/edit"
+    share_url = public_url or merged_url
+
+    rp.fansi_print("\nSuccess!", 'green', 'bold')
+    rp.fansi_print(f"  Total slides: {merged['slideCount']}", 'green')
+    if public_url:
+        rp.fansi_print(f"  Shareable link: {public_url}", 'green', 'bold')
+    else:
+        rp.fansi_print(f"  Edit link: {merged_url}", 'green')
+
+    return {
+        'id': merged['presentationId'],
+        'url': merged_url,
+        'share_url': share_url,
+        'name': merged_name,
+        'slideCount': merged['slideCount'],
+    }
+
+
+def cleanup_drive_parts(drive_service, file_ids: list[str]):
+    """
+    Trash files on Google Drive.
+
+    Args:
+        drive_service: Authenticated Google Drive service.
+        file_ids: List of file IDs to trash.
+
+    Examples:
+        >>> # cleanup_drive_parts(svc, ['id1', 'id2'])
+    """
+    rp.fansi_print("\nCleaning up Drive part presentations...", 'cyan')
+    for fid in file_ids:
+        drive_service.files().update(
+            fileId=fid,
+            body={'trashed': True},
+        ).execute()
 
 
 def upload_and_merge_pptx(
@@ -315,7 +414,8 @@ def upload_and_merge_pptx(
     folder_name: str = None,
     merged_name: str = None,
     parent_folder_id: str = None,
-    max_workers: int = 4,
+    cleanup_local: bool = False,
+    cleanup_drive: bool = False,
 ) -> dict:
     """
     Upload multiple PPTX files, convert to Google Slides, and merge into one presentation.
@@ -325,7 +425,9 @@ def upload_and_merge_pptx(
         folder_name: Name for the Google Drive folder. If None, auto-generated.
         merged_name: Name for the merged presentation. If None, auto-generated.
         parent_folder_id: Optional parent folder ID on Google Drive.
-        max_workers: Number of parallel upload threads.
+        cleanup_local: If True, delete local PPTX part files after successful merge.
+        cleanup_drive: If True, trash individual part presentations on Google Drive
+            after successful merge (keeps only the merged presentation).
 
     Returns:
         Dict with 'folder_id', 'folder_url', 'parts' (list of uploaded presentations),
@@ -369,121 +471,74 @@ def upload_and_merge_pptx(
     for part in parts:
         rp.fansi_print(f"  Uploaded: {part['name']}", 'green')
 
-    # Merge presentations using web app
-    rp.fansi_print(f"\nMerging {len(parts)} presentations into one...", 'cyan')
+    # Merge, move to folder, set sharing
     presentation_ids = [p['id'] for p in parts]
+    merged_info = merge_and_finalize(drive_service, presentation_ids, folder_id, merged_name)
 
-    merged = merge_presentations_via_webapp(presentation_ids, merged_name)
-
-    # Move merged presentation to the folder
-    drive_service.files().update(
-        fileId=merged['presentationId'],
-        addParents=folder_id,
-        fields='id'
-    ).execute()
-
-    # Try to make it publicly viewable (may fail due to org policy)
-    rp.fansi_print("\nSetting sharing permissions...", 'cyan')
-    public_url = make_public(drive_service, merged['presentationId'])
-
-    merged_url = f"https://docs.google.com/presentation/d/{merged['presentationId']}/edit"
-    share_url = public_url or merged_url
-
-    rp.fansi_print("\nSuccess!", 'green', 'bold')
-    rp.fansi_print(f"  Total slides: {merged['slideCount']}", 'green')
-    if public_url:
-        rp.fansi_print(f"  Shareable link (anyone can view): {public_url}", 'green', 'bold')
-    else:
-        rp.fansi_print(f"  Edit link: {merged_url}", 'green')
+    # Cleanup
+    if cleanup_drive and len(parts) > 1:
+        cleanup_drive_parts(drive_service, [p['id'] for p in parts])
+    if cleanup_local:
+        rp.fansi_print("\nCleaning up local PPTX files...", 'cyan')
+        for fp in pptx_paths:
+            if rp.file_exists(fp):
+                rp.delete_file(fp)
+                rp.fansi_print(f"  Deleted: {fp}", 'white')
 
     return {
         'folder_id': folder_id,
         'folder_url': folder_url,
         'parts': parts,
-        'merged': {
-            'id': merged['presentationId'],
-            'url': merged_url,
-            'share_url': share_url,
-            'name': merged_name,
-            'slideCount': merged['slideCount'],
-        }
+        'merged': merged_info,
     }
 
 
-HELP = """Upload PPTX files to Google Drive, convert to Google Slides, and merge.
+def _upload_cli(
+    *paths,
+    folder_name: str = None,
+    merged_name: str = None,
+    cleanup: bool = False,
+    cleanup_local: bool = False,
+    cleanup_drive: bool = False,
+):
+    """
+    Upload PPTX files to Google Slides and merge into one presentation.
 
-Usage:
-    python google_slides_upload.py <paths...> [options]
-    python google_slides_upload.py <folder> [options]
+    Accepts one or more PPTX file paths, or a single folder containing PPTX files.
 
-Arguments:
-    paths           One or more PPTX file paths
-    folder          A folder containing PPTX files
+    Args:
+        *paths: PPTX file paths or a single folder path.
+        folder_name: Google Drive folder name (default: auto from first filename).
+        merged_name: Merged presentation name (default: same as folder_name).
+        cleanup: Shorthand for --cleanup_local --cleanup_drive.
+        cleanup_local: Delete local PPTX files after successful merge.
+        cleanup_drive: Trash part presentations on Drive after merge.
 
-Options:
-    --folder_name   Name for Google Drive folder (default: auto from first filename)
-    --merged_name   Name for merged presentation (default: same as folder_name)
-
-Examples:
-    python google_slides_upload.py output_folder/
-    python google_slides_upload.py part1.pptx part2.pptx part3.pptx
-    python google_slides_upload.py output_folder/ --folder_name "My Presentation"
-    python google_slides_upload.py output_folder/ --merged_name "Final Presentation"
-    python google_slides_upload.py *.pptx --folder_name "Project X" --merged_name "Project X Final"
-
-Creates on Google Drive:
-    MyDrive/<folder_name>/
-        <name>_part1    <- Google Slides (converted from PPTX)
-        <name>_part2 ...
-        <merged_name>   <- merged presentation with all slides
-
-Note: First run opens browser for Google OAuth."""
+    Examples:
+        >>> # _upload_cli('output_folder/')
+        >>> # _upload_cli('part1.pptx', 'part2.pptx', folder_name='My Pres')
+    """
+    if cleanup:
+        cleanup_local = cleanup_drive = True
+    if not paths:
+        raise ValueError("No PPTX files or folder specified")
+    if len(paths) == 1 and rp.folder_exists(paths[0]):
+        pptx_paths = sorted(
+            p for p in rp.glob(rp.path_join(paths[0], '*.pptx'))
+            if not rp.get_file_name(p).startswith('~$')
+        )
+        if not pptx_paths:
+            raise FileNotFoundError(f"No .pptx files found in {paths[0]}")
+    else:
+        pptx_paths = list(paths)
+    result = upload_and_merge_pptx(
+        pptx_paths, folder_name, merged_name,
+        cleanup_local=cleanup_local, cleanup_drive=cleanup_drive,
+    )
+    print(f"\nMerged presentation URL: {result['merged']['url']}")
 
 
 if __name__ == '__main__':
-    import sys
-
-    args = sys.argv[1:]
-
-    if not args or args[0] in ('-h', '--help', 'help'):
-        print(HELP)
-        sys.exit(0)
-
-    # Parse arguments
-    paths = []
-    folder_name = None
-    merged_name = None
-
-    i = 0
-    while i < len(args):
-        arg = args[i]
-        if arg == '--folder-name' and i + 1 < len(args):
-            folder_name = args[i + 1]
-            i += 1
-        elif arg == '--merged-name' and i + 1 < len(args):
-            merged_name = args[i + 1]
-            i += 1
-        elif arg in ('-h', '--help'):
-            print(HELP)
-            sys.exit(0)
-        elif not arg.startswith('--'):
-            paths.append(arg)
-        i += 1
-
-    if not paths:
-        print("Error: No PPTX files or folder specified\n")
-        print(HELP)
-        sys.exit(1)
-
-    # Handle single folder path
-    if len(paths) == 1 and rp.folder_exists(paths[0]):
-        folder = paths[0]
-        pptx_paths = sorted(rp.glob(rp.path_join(folder, '*.pptx')))
-        if not pptx_paths:
-            print(f"Error: No .pptx files found in {folder}")
-            sys.exit(1)
-    else:
-        pptx_paths = paths
-
-    result = upload_and_merge_pptx(pptx_paths, folder_name, merged_name)
-    print(f"\nMerged presentation URL: {result['merged']['url']}")
+    rp.pip_import('fire')
+    import fire
+    fire.Fire(_upload_cli)

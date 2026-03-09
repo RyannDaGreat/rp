@@ -140,14 +140,26 @@ def run_worker(
 
 
 def run_orchestrator(
-    input_pptx: str,
     num_parts: int,
     signal_dir: str,
-    folder_name: str,
+    output_folder: str,
     merged_name: str,
+    cleanup_local: bool = False,
+    cleanup_drive: bool = False,
 ):
     """
     Orchestrator process: waits for all workers, then merges.
+
+    Args:
+        num_parts: Number of worker parts to wait for.
+        signal_dir: Directory where workers write signal files.
+        output_folder: Local folder containing output PPTX parts.
+        merged_name: Name for the merged Google Slides presentation.
+        cleanup_local: If True, delete local PPTX part files after successful merge.
+        cleanup_drive: If True, trash individual part presentations on Drive after merge.
+
+    Examples:
+        >>> # run_orchestrator(3, '/tmp/signals', '/tmp/output', 'My Presentation')
     """
     import rp
     from . import google_slides_upload as gsu
@@ -173,8 +185,10 @@ def run_orchestrator(
     # Check for errors
     errors = [r for r in results if r['status'] == 'error']
     if errors:
-        rp.fansi_print(f"Orchestrator: {len(errors)} part(s) failed!", 'red', 'bold')
-        return
+        error_msgs = [f"  Part {r['part']}: {r.get('error')}" for r in errors]
+        raise RuntimeError(
+            f"Orchestrator: {len(errors)} part(s) failed:\n" + "\n".join(error_msgs)
+        )
 
     # Sort by part number and get presentation IDs
     results.sort(key=lambda r: r['part'])
@@ -182,16 +196,17 @@ def run_orchestrator(
 
     rp.fansi_print(f"\nOrchestrator: Merging {len(presentation_ids)} presentations...", 'cyan', 'bold')
 
-    # Get credentials and merge
+    # Get credentials
     creds = gsu.get_credentials()
     from googleapiclient.discovery import build
     drive_service = build('drive', 'v3', credentials=creds)
 
-    # Create folder under rp/generated_slides/
+    # Create folder under rp/generated_slides/ using basename for Drive name
+    drive_folder_name = os.path.basename(output_folder)
     parent_id = gsu.get_rp_slides_folder(drive_service)
-    folder_id = gsu.create_folder(drive_service, folder_name, parent_id)
+    folder_id = gsu.create_folder(drive_service, drive_folder_name, parent_id)
     folder_url = f"https://drive.google.com/drive/folders/{folder_id}"
-    rp.fansi_print(f"  Folder: rp/generated_slides/{folder_name}", 'white')
+    rp.fansi_print(f"  Folder: rp/generated_slides/{drive_folder_name}", 'white')
     rp.fansi_print(f"  {folder_url}", 'white')
 
     # Move parts to folder
@@ -199,45 +214,63 @@ def run_orchestrator(
         drive_service.files().update(
             fileId=r['result']['id'],
             addParents=folder_id,
-            fields='id'
+            fields='id',
         ).execute()
 
-    # Merge
-    merged = gsu.merge_presentations_via_webapp(presentation_ids, merged_name)
+    # Merge, move to folder, set sharing
+    merged_info = gsu.merge_and_finalize(drive_service, presentation_ids, folder_id, merged_name)
 
-    # Move merged to folder
-    drive_service.files().update(
-        fileId=merged['presentationId'],
-        addParents=folder_id,
-        fields='id'
-    ).execute()
+    rp.fansi_print(f"\n  Folder: {folder_url}", 'green')
 
-    # Set permissions
-    public_url = gsu.make_public(drive_service, merged['presentationId'])
-    merged_url = f"https://docs.google.com/presentation/d/{merged['presentationId']}/edit"
-
-    rp.fansi_print("\n" + "="*60, 'green')
-    rp.fansi_print("SUCCESS!", 'green', 'bold')
-    rp.fansi_print(f"  Folder: {folder_url}", 'green')
-    rp.fansi_print(f"  Total slides: {merged['slideCount']}", 'green')
-    if public_url:
-        rp.fansi_print(f"  Shareable link: {public_url}", 'green', 'bold')
-    else:
-        rp.fansi_print(f"  Edit link: {merged_url}", 'green')
+    # Cleanup
+    if cleanup_drive and len(results) > 1:
+        gsu.cleanup_drive_parts(drive_service, [r['result']['id'] for r in results])
+    if cleanup_local:
+        rp.fansi_print("\nCleaning up local PPTX files...", 'cyan')
+        for fp in rp.glob(os.path.join(output_folder, '*.pptx')):
+            rp.delete_file(fp)
+            rp.fansi_print(f"  Deleted: {fp}", 'white')
 
 
 def convert_tmux(
     input_pptx: str,
     num_parts: int = 3,
     target_size: str = '100MB',
+    part_size: str = None,
     fps: int = 10,
     dpi_iters: int = 5,
     dither: bool = True,
     output_folder: str = None,
+    cleanup: bool = False,
+    cleanup_local: bool = False,
+    cleanup_drive: bool = False,
 ):
     """
-    Main entry point: sets up tmux session with parallel workers.
+    Parallel PowerPoint converter using tmux.
+
+    Spawns multiple tmux panes to convert slide ranges in parallel,
+    uploads each part, then merges into one Google Slides presentation.
+
+    Args:
+        input_pptx: Path to input PowerPoint file.
+        num_parts: Number of parallel workers (default: 3).
+        target_size: Target file size per part (default: 100MB).
+        part_size: Alias for target_size.
+        fps: Max GIF frame rate (default: 10).
+        dpi_iters: DPI bisection iterations (default: 5).
+        dither: Use FFmpeg dithering (default: True).
+        output_folder: Output folder name (default: auto).
+        cleanup: Shorthand for --cleanup_local --cleanup_drive.
+        cleanup_local: Delete local PPTX parts after merge.
+        cleanup_drive: Trash Drive parts after merge.
+
+    Examples:
+        >>> # convert_tmux('input.pptx', num_parts=5)
     """
+    if part_size is not None:
+        target_size = part_size
+    if cleanup:
+        cleanup_local = cleanup_drive = True
     if not rp.running_in_tmux():
         rp.fansi_print("This command must be run inside tmux!", 'red', 'bold')
         rp.fansi_print("Start tmux first, then run this command.", 'yellow')
@@ -298,11 +331,12 @@ def convert_tmux(
         f"import sys; sys.path.insert(0, '/opt/homebrew/lib/python3.10/site-packages'); "
         f"from rp.libs.powerpoint.convert_tmux import run_orchestrator; "
         f"run_orchestrator("
-        f"{repr(input_pptx)}, "
         f"{actual_parts}, "
         f"{repr(signal_dir)}, "
         f"{repr(output_folder)}, "
-        f"{repr(base_name)}"
+        f"{repr(base_name)}, "
+        f"{cleanup_local}, "
+        f"{cleanup_drive}"
         f")\""
     )
 
@@ -326,71 +360,7 @@ def convert_tmux(
     rp.fansi_print(f"  tmux attach -t {session_name}", 'white')
 
 
-HELP = """Parallel PowerPoint converter using tmux.
-
-Usage:
-    rp run ppt convert_tmux <input_pptx> [options]
-
-Spawns multiple tmux panes to convert slide ranges in parallel,
-uploads each part, then merges them into one presentation.
-
-Options:
-    --num_parts     Number of parallel workers (default: 3)
-    --part_size     Target file size per part (default: 100MB)
-    --fps           Max GIF frames per second (default: 10)
-    --dpi_iters     Binary search iterations for size (default: 5)
-    --dither        Enable dithering (default: True)
-    --no_dither     Disable dithering
-    --output        Output folder name
-
-Examples:
-    rp run ppt convert_tmux presentation.pptx
-    rp run ppt convert_tmux presentation.pptx --num_parts 5
-    rp run ppt convert_tmux presentation.pptx --part_size 50MB --fps 8
-"""
-
-
 if __name__ == '__main__':
-    import sys
-    args = sys.argv[1:]
-
-    if not args or args[0] in ('-h', '--help'):
-        print(HELP)
-        sys.exit(0)
-
-    # Simple arg parsing
-    input_pptx = args[0]
-    kwargs = {
-        'num_parts': 3,
-        'target_size': '100MB',
-        'fps': 10,
-        'dpi_iters': 5,
-        'dither': True,
-        'output_folder': None,
-    }
-
-    i = 1
-    while i < len(args):
-        arg = args[i]
-        if arg == '--num-parts' and i + 1 < len(args):
-            kwargs['num_parts'] = int(args[i + 1])
-            i += 1
-        elif arg == '--part-size' and i + 1 < len(args):
-            kwargs['target_size'] = args[i + 1]
-            i += 1
-        elif arg == '--fps' and i + 1 < len(args):
-            kwargs['fps'] = int(args[i + 1])
-            i += 1
-        elif arg == '--dpi-iters' and i + 1 < len(args):
-            kwargs['dpi_iters'] = int(args[i + 1])
-            i += 1
-        elif arg == '--dither':
-            kwargs['dither'] = True
-        elif arg == '--no-dither':
-            kwargs['dither'] = False
-        elif arg == '--output' and i + 1 < len(args):
-            kwargs['output_folder'] = args[i + 1]
-            i += 1
-        i += 1
-
-    convert_tmux(input_pptx, **kwargs)
+    rp.pip_import('fire')
+    import fire
+    fire.Fire(convert_tmux)
