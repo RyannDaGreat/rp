@@ -10686,7 +10686,7 @@ def _get_pywhispercpp_model(model_name):
     model = Model(model_name, n_threads=4, redirect_whispercpp_logs_to=None)
     return model
 
-def transcribe_audio_file_via_whisper(path, *, model="base", show_progress=True, initial_prompt=None):
+def transcribe_audio_file_via_whisper(path, *, model="base", show_progress=True, initial_prompt=None, as_string=True):
     """
     Transcribe audio file, returning text segments with timestamps
 
@@ -10706,24 +10706,31 @@ def transcribe_audio_file_via_whisper(path, *, model="base", show_progress=True,
         initial_prompt (str): Prefix tokens for the decoder. Biases output toward
                         words already in context. Use for names, jargon, or unusual
                         spellings Whisper wouldn't know. Example: "Sqwagqlduu, PyTorch"
+        as_string: Return plain string instead of _Transcription (default: True)
 
     Note:
         carry_initial_prompt is not yet exposed from pywhispercpp C bindings.
         When available, it would prepend initial_prompt to every 30s segment.
 
     Returns:
-        _Transcription: List-like object containing _TranscribedSegment objects.
-                        Has a .text property for full concatenated text.
+        str if as_string=True.
+        If as_string=False: a list-like _Transcription object with:
+            .text (str): Full concatenated transcription.
+            Iterable of segments, each with:
+                .text (str): Segment text.
+                .time_start (float): Start time in seconds.
+                .time_end (float): End time in seconds.
+                .duration (float): time_end - time_start.
 
     EXAMPLE:
-        >>> result = transcribe_audio_file("audio.mp3")
-        >>> result.text  # Full transcription
+        >>> transcribe_audio_file_via_whisper("audio.mp3")
         'Hello world this is a test'
+        >>> result = transcribe_audio_file_via_whisper("audio.mp3", as_string=False)
         >>> for segment in result:  # Iterate over segments
-        ...     print(f"[{segment.time_start:.1f}s] {segment.text}")
+        ...     print("[{0:.1f}s] {1}".format(segment.time_start, segment.text))
     """
     import sys
-    
+
     output = _Transcription()
 
     if show_progress:
@@ -10751,6 +10758,203 @@ def transcribe_audio_file_via_whisper(path, *, model="base", show_progress=True,
             segment = _TranscribedSegment(text, start_time, end_time)
             output.append(segment)
 
+    if as_string: output = output.text
+    return output
+
+
+def transcribe_audio_file_via_macos(path, *, show_progress=True, timeout=60, as_string=True):
+    """
+    Transcribe audio file using macOS SFSpeechRecognizer (on-device, no download).
+
+    Uses Apple's built-in speech recognition. Requires macOS and the Speech
+    framework (pyobjc-framework-Speech). The handler is dispatched on the main
+    run loop, so a Qt/Cocoa event loop must be running on the main thread.
+
+    Args:
+        path: Path to audio file (WAV, MP3, etc.)
+        show_progress: Print progress messages (default: True)
+        timeout: Max seconds to wait for transcription (default: 60)
+        as_string: Return plain string instead of _Transcription (default: True)
+
+    Returns:
+        str if as_string=True.
+        If as_string=False: a list-like _Transcription object with:
+            .text (str): Full concatenated transcription.
+            Iterable of segments, each with:
+                .text (str): Segment text.
+                .time_start (float): Start time in seconds.
+                .time_end (float): End time in seconds.
+                .duration (float): time_end - time_start.
+
+    EXAMPLE:
+        >>> transcribe_audio_file_via_macos("audio.wav")
+        'Hello world this is a test'
+        >>> transcribe_audio_file_via_macos("audio.wav", as_string=False).text
+        'Hello world this is a test'
+    """
+    import threading
+
+    pip_import("Speech")
+
+    if show_progress:
+        print("Transcribing via macOS Speech Recognition...", flush=True)
+
+    import Speech as _Speech
+    from Foundation import NSURL as _NSURL
+
+    recognizer = _Speech.SFSpeechRecognizer.alloc().init()
+    if not recognizer or not recognizer.isAvailable():
+        raise RuntimeError("macOS SFSpeechRecognizer is not available")
+
+    url = _NSURL.fileURLWithPath_(path)
+    request = _Speech.SFSpeechURLRecognitionRequest.alloc().initWithURL_(url)
+    request.setRequiresOnDeviceRecognition_(True)
+
+    done = threading.Event()
+    result_holder = {"text": None, "error": None}
+
+    def handler(result, error):
+        if error:
+            result_holder["error"] = str(error)
+            done.set()
+            return
+        if result and result.isFinal():
+            result_holder["text"] = result.bestTranscription().formattedString()
+            done.set()
+
+    task = recognizer.recognitionTaskWithRequest_resultHandler_(request, handler)
+    done.wait(timeout=timeout)
+
+    if not done.is_set():
+        task.cancel()
+        raise RuntimeError("macOS speech recognition timed out after %d seconds" % timeout)
+
+    if result_holder["text"] is not None:
+        text = result_holder["text"]
+        if show_progress:
+            print("Transcription complete.", flush=True)
+        output = _Transcription()
+        output.append(_TranscribedSegment(text, 0.0, 0.0))
+        if as_string: output = output.text
+        return output
+
+    raise RuntimeError(result_holder["error"] or "macOS speech recognition failed")
+
+
+_voxtral_model_cache = {}
+
+def _ensure_mlx_versions_match():
+    """Ensure pip mlx and Homebrew mlx are the same version.
+
+    DYLD_LIBRARY_PATH (often set for fluidsynth) causes macOS dyld to
+    load Homebrew's libmlx.dylib instead of pip's bundled copy. If the
+    versions differ, mlx crashes with missing symbols. This checks for
+    a mismatch and tells the user how to fix it.
+
+    >>> # _ensure_mlx_versions_match()  # raises if mismatch
+    """
+    import subprocess, importlib.metadata, os, shutil
+    if not currently_running_mac():
+        return
+    brew = shutil.which("brew")
+    if not brew:
+        return
+    # Check if Homebrew mlx is installed
+    result = subprocess.run(
+        [brew, "list", "--versions", "mlx"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return  # No Homebrew mlx, no conflict
+    brew_version = result.stdout.strip().split()[-1]
+    pip_version = importlib.metadata.version("mlx")
+    if brew_version != pip_version:
+        raise RuntimeError(
+            "mlx version mismatch: pip has %s but Homebrew has %s. "
+            "DYLD_LIBRARY_PATH causes the wrong library to load. "
+            "Fix with: brew upgrade mlx" % (pip_version, brew_version)
+        )
+
+def _get_voxtral_model_and_processor(model="mzbac/voxtral-mini-3b-4bit-mixed"):
+    """Load and cache a Voxtral model and processor for transcription.
+
+    >>> model, processor = _get_voxtral_model_and_processor()
+    >>> # Returns cached on subsequent calls
+    """
+    if model not in _voxtral_model_cache:
+        pip_import("mlx")
+        _ensure_mlx_versions_match()
+        pip_import("mlx_voxtral")
+        from mlx_voxtral import VoxtralProcessor, load_voxtral_model
+        import mlx.core as mx
+        loaded_model, config = load_voxtral_model(model, dtype=mx.bfloat16)
+        # Processor needs the base model tokenizer
+        base_model = config.get("_name_or_path", "mistralai/Voxtral-Mini-3B-2507")
+        processor = VoxtralProcessor.from_pretrained(base_model)
+        _voxtral_model_cache[model] = (loaded_model, processor)
+    return _voxtral_model_cache[model]
+
+
+def transcribe_audio_file_via_voxtral(path, *, model="mzbac/voxtral-mini-3b-4bit-mixed", show_progress=True, language="en", max_new_tokens=4096, as_string=True):
+    """
+    Transcribe audio file using Voxtral Mini via MLX (Apple Silicon native).
+
+    Uses Mistral's Voxtral Mini 3B model with 4-bit quantization by default,
+    running natively on Apple Silicon via MLX. Requires ~5GB RAM.
+
+    Args:
+        path: Path to audio file (WAV, MP3, etc.)
+        model: HuggingFace model ID. Default is 4-bit quantized Voxtral Mini 3B.
+        show_progress: Print progress messages (default: True)
+        language: ISO 639-1 language code (default: "en"). None for auto-detect.
+        max_new_tokens: Max tokens to generate (default: 4096)
+        as_string: Return plain string instead of _Transcription (default: True)
+
+    Returns:
+        str if as_string=True.
+        If as_string=False: a list-like _Transcription object with:
+            .text (str): Full concatenated transcription.
+            Iterable of segments, each with:
+                .text (str): Segment text.
+                .time_start (float): Start time in seconds.
+                .time_end (float): End time in seconds.
+                .duration (float): time_end - time_start.
+
+    EXAMPLE:
+        >>> transcribe_audio_file_via_voxtral("audio.wav")
+        'Hello world this is a test'
+        >>> transcribe_audio_file_via_voxtral("audio.wav", as_string=False).text
+        'Hello world this is a test'
+    """
+    if show_progress:
+        print("Loading Voxtral model...", flush=True)
+
+    loaded_model, processor = _get_voxtral_model_and_processor(model)
+
+    if show_progress:
+        print("Processing audio...", flush=True)
+
+    inputs = processor.apply_transcrition_request(audio=path, language=language)
+    mlx_inputs = {
+        "input_ids": inputs.input_ids,
+        "input_features": inputs.input_features,
+    }
+
+    output_ids = loaded_model.generate(
+        **mlx_inputs,
+        max_new_tokens=max_new_tokens,
+        temperature=0.0,
+    )
+
+    generated_tokens = output_ids[0, inputs.input_ids.shape[1]:]
+    text = processor.decode(generated_tokens, skip_special_tokens=True).strip()
+
+    if show_progress:
+        print("Transcription complete.", flush=True)
+
+    output = _Transcription()
+    output.append(_TranscribedSegment(text, 0.0, 0.0))
+    if as_string: output = output.text
     return output
 
 
@@ -16928,6 +17132,272 @@ def save_json(data, path=None, *, pretty=False, default=None):
     return string_to_text_file(path,text)
 
 
+def load_jsonl(path):
+    """
+    Load a JSONL (JSON Lines) file, returning a list of objects.
+
+    Each line in the file is parsed as a separate JSON object.
+    Dict objects are converted to EasyDict for dot notation access.
+
+    Args:
+        path (str): File path to JSONL file
+
+    Returns:
+        list: List of parsed JSON objects (dicts become EasyDicts)
+
+    Examples:
+        >>> data = [{"a": 1}, {"a": 2, "b": 3}]
+        >>> path = temporary_file_path('.jsonl')
+        >>> save_jsonl(data, path)
+        >>> result = load_jsonl(path)
+        >>> result[0].a  # 1
+        >>> result[1].b  # 3
+        >>> delete_file(path)
+
+    See Also:
+        save_jsonl(): Save a list of objects as JSONL
+        load_json(): Load a single JSON file
+    """
+    import json
+    text = text_file_to_string(path)
+    output = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        obj = json.loads(line)
+        if isinstance(obj, dict):
+            obj = as_easydict(obj)
+        output.append(obj)
+    return output
+
+
+def load_jsonls(*paths, concat=False, strict=True, num_threads=None, show_progress=False, lazy=False):
+    """
+    Plural of load_jsonl. Load multiple JSONL files.
+
+    Args:
+        *paths: File paths to JSONL files
+        concat (bool): If True, concatenate all results into a single flat list.
+            If False, return a list of lists (one per file). Default False.
+        strict (bool): If True, raise on failed loads. If False, skip failures.
+        num_threads (int, optional): Number of threads for concurrent loading.
+        show_progress: Show a progress bar. Accepts True, False, 'eta', 'tqdm'.
+        lazy (bool): If True, return a lazy iterator instead of a list.
+
+    Returns:
+        list: List of lists (one per file), or a flat list if concat=True.
+
+    Examples:
+        >>> d1 = [{"a": 1}, {"a": 2}]
+        >>> d2 = [{"b": 3}]
+        >>> p1, p2 = temporary_file_path('.jsonl'), temporary_file_path('.jsonl')
+        >>> save_jsonl(d1, p1); save_jsonl(d2, p2)
+        >>> load_jsonls(p1, p2)               # [[ {a:1},{a:2} ], [ {b:3} ]]
+        >>> load_jsonls(p1, p2, concat=True)   # [ {a:1},{a:2},{b:3} ]
+        >>> delete_file(p1); delete_file(p2)
+
+    See Also:
+        load_jsonl(): Load a single JSONL file
+    """
+    paths = detuple(paths)
+    if show_progress in ['eta', True]:
+        show_progress = 'eta:Loading JSONL files'
+    results = load_files(load_jsonl, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
+    if concat:
+        if lazy:
+            import itertools
+            return itertools.chain.from_iterable(results)
+        return [item for sublist in results for item in sublist]
+    return results
+
+
+def save_jsonl(data, path=None, *, default=None):
+    """
+    Save a list of objects as a JSONL (JSON Lines) file.
+
+    Each item is serialized as a single JSON line.
+
+    Args:
+        data (list): List of JSON-serializable objects
+        path (str, optional): Output file path. Defaults to "data.jsonl" (with unique copy).
+        default (callable, optional): Function to serialize non-JSON types
+
+    Returns:
+        str: Path to saved file
+
+    Examples:
+        >>> data = [{"x": 1}, {"x": 2, "y": "hello"}]
+        >>> path = save_jsonl(data)
+        >>> print(load_text_file(path))
+        {"x": 1}
+        {"x": 2, "y": "hello"}
+
+    See Also:
+        load_jsonl(): Load JSONL files back to Python objects
+        save_json(): Save a single JSON file
+    """
+    import json
+
+    if path is None:
+        path = get_unique_copy_path('data.jsonl')
+
+    lines = []
+    for item in data:
+        lines.append(json.dumps(item, default=default))
+    text = '\n'.join(lines)
+
+    return string_to_text_file(path, text)
+
+
+def append_jsonl(data, path):
+    """
+    Append one or more items to a JSONL file.
+
+    Each item is serialized as a single JSON line and appended to the file.
+    Creates the file if it doesn't exist.
+
+    Args:
+        data: A single object or list of objects to append.
+            If a dict or non-list, appends one line.
+            If a list, appends one line per item.
+        path (str): File path to append to.
+
+    Returns:
+        str: Path to the file.
+
+    Examples:
+        >>> path = temporary_file_path('.jsonl')
+        >>> append_jsonl({"a": 1}, path)
+        >>> append_jsonl([{"b": 2}, {"c": 3}], path)
+        >>> load_jsonl(path)  # [{'a': 1}, {'b': 2}, {'c': 3}]
+        >>> delete_file(path)
+
+    See Also:
+        save_jsonl(): Overwrite a JSONL file
+        load_jsonl(): Load a JSONL file
+    """
+    import json
+    import os
+
+    if not isinstance(data, list):
+        data = [data]
+
+    lines = '\n'.join(json.dumps(item) for item in data)
+
+    if os.path.exists(path):
+        # Add a leading newline so we don't merge with the last line
+        with open(path, 'a') as f:
+            f.write('\n' + lines)
+    else:
+        string_to_text_file(path, lines)
+
+    return path
+
+
+def load_jsonnet(path, **ext_vars):
+    """
+    Load a Jsonnet file and evaluate it to a Python object.
+
+    Jsonnet is a data templating language that extends JSON with
+    variables, conditionals, functions, imports, etc.
+
+    Dict results are converted to EasyDict for dot notation access.
+
+    Args:
+        path (str): File path to a .jsonnet or .libsonnet file
+        **ext_vars: External variables passed to Jsonnet evaluation
+            (equivalent to --ext-str on the command line)
+
+    Returns:
+        EasyDict or original type: Parsed result of the Jsonnet evaluation
+
+    Examples:
+        >>> path = temporary_file_path('.jsonnet')
+        >>> string_to_text_file(path, '{ x: 1+1, y: "hello" }')
+        >>> result = load_jsonnet(path)
+        >>> result.x  # 2
+        >>> result.y  # 'hello'
+        >>> delete_file(path)
+
+        >>> # With external variables
+        >>> path = temporary_file_path('.jsonnet')
+        >>> string_to_text_file(path, '{ name: std.extVar("name") }')
+        >>> result = load_jsonnet(path, name="world")
+        >>> result.name  # 'world'
+        >>> delete_file(path)
+
+    See Also:
+        load_json(): Load plain JSON files
+        load_jsonnets(): Load multiple Jsonnet files
+    """
+    pip_import('_gojsonnet')
+    import _gojsonnet
+    import json
+
+    text = text_file_to_string(path)
+
+    str_vars = {k: v for k, v in ext_vars.items() if isinstance(v, str)}
+    non_str_vars = {k: json.dumps(v) for k, v in ext_vars.items() if not isinstance(v, str)}
+
+    abs_path = get_absolute_path(path)
+    dir_path = get_absolute_path(path_join(abs_path, '..'))
+
+    def import_callback(dir_, rel):
+        full = path_join(dir_, rel)
+        if not file_exists(full):
+            full = path_join(dir_path, rel)
+        return full, text_file_to_string(full).encode()
+
+    result_json = _gojsonnet.evaluate_snippet(
+        abs_path,
+        text,
+        ext_vars=str_vars,
+        ext_codes=non_str_vars,
+        import_callback=import_callback,
+    )
+
+    out = json.loads(result_json)
+    if isinstance(out, dict):
+        return as_easydict(out)
+    return out
+
+
+def load_jsonnets(*paths, strict=True, num_threads=None, show_progress=False, lazy=False):
+    """
+    Plural of load_jsonnet. Load multiple Jsonnet files.
+
+    Please see load_files for more information.
+
+    Args:
+        *paths: File paths to Jsonnet files
+        strict (bool): If True, raise on failed loads. If False, skip failures.
+        num_threads (int, optional): Number of threads for concurrent loading.
+        show_progress: Show a progress bar. Accepts True, False, 'eta', 'tqdm'.
+        lazy (bool): If True, return a lazy iterator.
+
+    Returns:
+        list: List of evaluated Jsonnet results
+
+    Examples:
+        >>> p1 = temporary_file_path('.jsonnet')
+        >>> p2 = temporary_file_path('.jsonnet')
+        >>> string_to_text_file(p1, '{ a: 1 }')
+        >>> string_to_text_file(p2, '{ b: 2 }')
+        >>> results = load_jsonnets(p1, p2)
+        >>> results[0].a  # 1
+        >>> results[1].b  # 2
+        >>> delete_file(p1); delete_file(p2)
+
+    See Also:
+        load_jsonnet(): Load a single Jsonnet file
+    """
+    paths = detuple(paths)
+    if show_progress in ['eta', True]:
+        show_progress = 'eta:Loading Jsonnet files'
+    return load_files(load_jsonnet, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
+
+
 _load_msgpack_cache={}
 def load_msgpack(path, *, use_cache=False):
     """
@@ -17633,6 +18103,51 @@ def get_my_public_ip_address():
         # return get('https://api.ipify.org').text
     except Exception:
         return get('http://ipgrab.io').text.strip()
+
+def _print_my_ip_addresses(port=None):
+    """
+    Prints local and global IP addresses with aligned '=' signs.
+
+    Args:
+        port (int, optional): Port to append to each address.
+
+    Examples:
+        >>> # _print_my_ip_addresses(8080)
+        # Addresses:
+        #      Local = http://192.168.1.5:8080
+        #     Global = http://203.0.113.1:8080
+    """
+    fansi_print('Addresses:', 'cyan bold')
+    ip_addresses = {'Localhost':'localhost','Local': get_my_local_ip_address(), 'Global': get_my_public_ip_address()}
+    max_name_len = max(len(name) for name in ip_addresses)
+    for name, ip_address in ip_addresses.items():
+        address_string = ip_address + (':' + str(port) if port else '')
+        url = 'http://' + address_string
+        label = '    ' + name.rjust(max_name_len) + ' = ' + url
+        fansi_print(label, 'cyan', link=url)
+
+def _htp(port=8000):
+    """
+    Prints IP addresses then serves the current directory over HTTP.
+
+    Finds the next free port starting from the given port,
+    prints local/global addresses, then starts http.server.
+
+    Args:
+        port (int): Preferred starting port. Defaults to 8000.
+
+    Examples:
+        >>> # _htp()
+        # Addresses:
+        #      Local = http://192.168.1.5:8000
+        #     Global = http://203.0.113.1:8000
+        # Serving HTTP on 0.0.0.0 port 8000 ...
+    """
+    import sys, os
+    port = get_next_free_port(port)
+    _print_my_ip_addresses(port)
+    os.system(sys.executable + ' -m http.server ' + str(port))
+
 # endregion
 
 def get_my_zerotier_ip_addresses() -> dict:
@@ -18431,8 +18946,10 @@ def by_number(x):
     """
     return (len(x), x)
 
-def sorted_by_number(x, *, reverse=False):
-    return sorted(x, key=by_number, reverse=reverse)
+def sorted_by_number(x, *, key=None, reverse=False):
+    if key is None:
+        return sorted(x, key=by_number, reverse=reverse)
+    return sorted(x, key=lambda e: by_number(key(e)), reverse=reverse)
 
 def sorted_by_len(x, *, reverse=False):
     return sorted(x, key=len, reverse=reverse)
@@ -19139,6 +19656,13 @@ def is_namespaceable(c: str) -> bool:
 def is_literal(c: str) -> bool:  
     """ If character can be used as the first of a python variable's name """
     return c==":" or (is_namespaceable(c) or c.isalnum())and not c.lstrip().rstrip() in ['False','def','if','raise','None','del','import','return','True','elif','in','try','and','else','is','while','as','except','lambda','with','assert','finally','nonlocal','yield','break','for','not','class','from','or','continue','global','pass']
+
+def is_hidden_path(x):
+    """ Return true if x's filename starts with . """
+    return get_file_name(x).startswith('.')
+is_hidden_file = is_hidden_directory = is_hidden_folder = is_hidden_path
+
+
 
 def clip_string_width(x: str,max_width=None,max_wraps_per_line=1,clipped_suffix='…'):  
     """ clip to terminal size. works with multi lines at once. """
@@ -21799,10 +22323,11 @@ class eta:
         self.display_eta(n)
 
     def __iter__(self):
-        if len(self):
-            for i,e in enumerate(self.elements):
-                self(i)
-                yield e
+        i = -1
+        for i,e in enumerate(self.elements):
+            self(i)
+            yield e
+        if i >= 0:
             self(i+1)
 
     def __len__(self):
@@ -27124,8 +27649,8 @@ def pseudo_terminal(
         LSAG  $get_all_paths  (relative=False,sort_by='name') #LSA Global
         LSAFG $get_all_files  (relative=False,sort_by='name') #LSA Files Global
         LSADG $get_all_folders(relative=False,sort_by='name') #LSA Directories Global
-        LSM   $r._iterfzf($get_all_paths('.',relative=False,sort_by='name'),multi=True,exact=True)
-        LSRM  $r._iterfzf($get_all_paths('.',relative=True ,sort_by='name'),multi=True,exact=True)
+        LSM   $r._iterfzf_paths($get_all_paths('.',relative=False,sort_by='name'),multi=True,exact=True)
+        LSRM  $r._iterfzf_paths($get_all_paths('.',relative=True ,sort_by='name'),multi=True,exact=True)
         LSAI  $get_all_image_files()
 
         IASM $import_all_submodules(ans,verbose=True);
@@ -27387,8 +27912,8 @@ def pseudo_terminal(
         FARTA  $r._fart(ans); #Find and replace text in paths specified by ans. Tip: best to use this with FDT
         AFARTA $r._fart(ans)  #Find and replace text in paths specified by ans. Tip: best to use this with FDT
 
-        HTTP $os.system($sys.executable+' -m http.server')
-        HTP  $os.system($sys.executable+' -m http.server')
+        HTTP $r._htp()
+        HTP  $r._htp()
 
         FMA $r._view_markdown_in_terminal(ans) # Displays markdown
         MDA $r._view_markdown_in_terminal(ans) # Displays markdown
@@ -28659,13 +29184,16 @@ def pseudo_terminal(
                                 extra_style += ' faded italic '
                                 folder_style=''
 
+                            #When fansi is disabled, append / to folders since there's no color to distinguish them
+                            display_name = item + '/' if is_a_directory(item) and fansi_is_disabled() else item
+
                             if is_symbolic_link(item):
                                 if is_a_directory(item):
-                                    print_line(fansi(item,extra_style+'green'+folder_style))
+                                    print_line(fansi(display_name,extra_style+'green'+folder_style))
                                 else:
                                     print_line(fansi(item,extra_style+'green'))
                             elif is_a_directory(item):
-                                print_line(fansi(item,extra_style+'cyan'+folder_style))
+                                print_line(fansi(display_name,extra_style+'cyan'+folder_style))
                             elif is_a_file(item):
                                 print_line(fansi(item,extra_style+'gray'))
                             else:
@@ -29489,10 +30017,23 @@ def pseudo_terminal(
                                 fansi_print("LS FZF aka LSZ --> LS Fuzzy-Select --> Please select a file(s) or folder(s)",'blue','underlined')
                                 exact=False
 
+                            def _path_with_slash(path):
+                                path = path.replace('\n',' ').replace('\r',' ')
+                                if is_a_directory(path):
+                                    return path + '/'
+                                return path
+
                             try:
-                                result=_iterfzf((line.replace('\n',' ').replace('\r',' ') for line in breadth_first_path_iterator('.')),exact=exact,multi=True)
+                                result=_iterfzf((_path_with_slash(line) for line in breadth_first_path_iterator('.')),exact=exact,multi=True)
                             except:
                                 result=None
+
+                            if result:
+                                #Strip trailing slashes we added for display
+                                if isinstance(result, list):
+                                    result = [x.rstrip('/') for x in result]
+                                else:
+                                    result = result.rstrip('/')
 
                             if not result:
                                 raise KeyboardInterrupt #This is the only way this could have happened; and it seems pretty natural. More so than seeing an error message.
@@ -31634,13 +32175,45 @@ def get_process_start_date(pid=None):
     except Exception as e:
         return "An error occurred: {}".format(e)
 
-def kill_process(pid, signall="SIGKILL"):
+def _signal_name_to_int(signal):
+    """
+    Convert a signal name to its integer value, or pass through an int.
+
+    Pure function.
+
+    Args:
+        signal (str or int): Signal name (e.g. 'SIGKILL') or integer.
+
+    Returns:
+        int: The signal number.
+
+    Examples:
+        >>> _signal_name_to_int('SIGKILL') == 9
+        True
+        >>> _signal_name_to_int(15)
+        15
+    """
+    import signal as signal_module
+    if isinstance(signal, str):
+        try:
+            return getattr(signal_module, signal)
+        except AttributeError:
+            valid_signals = ", ".join([s for s in dir(signal_module) if s.startswith("SIG") and not s.startswith("SIG_")])
+            raise ValueError("Error: {} is not a valid signal. Choose from: {}".format(signal, valid_signals))
+    return signal
+
+
+def kill_process(pid, signal="SIGKILL", *, recursive=False):
     """
     Send a signal to a process identified by its PID.
 
     Args:
         pid (int): Process ID to which the signal is sent.
-        signall (str or int): The signal to send. Default is 'SIGKILL'.
+        signal (str or int): The signal to send. Default is 'SIGKILL'.
+        recursive (bool): If True, also kill all descendant processes.
+            Safer than kill_process_group because it only kills enumerated
+            PIDs rather than the whole process group (which could include
+            the caller).
 
     Common signals:
         SIGKILL - Immediately terminate the process (cannot be caught or ignored).
@@ -31649,44 +32222,153 @@ def kill_process(pid, signall="SIGKILL"):
         SIGINT  - Sent to a process by its controlling terminal when a user interrupts the process with a keyboard input, typically Ctrl+C.
 
     Examples of usage:
-        kill_process(1234)  # Defaults to sending SIGKILL
-        kill_process(1234, 'SIGTERM')  # Send SIGTERM to request graceful termination
-        kill_process(1234, 'SIGHUP')  # Send SIGHUP typically used to trigger a reload of configuration
-        kill_process(1234, 'SIGINT')  # Simulate a keyboard interrupt
+        >>> kill_process(1234)                    # Defaults to sending SIGKILL
+        >>> kill_process(1234, 'SIGTERM')         # Send SIGTERM to request graceful termination
+        >>> kill_process(1234, 'SIGHUP')          # Send SIGHUP, typically used to trigger a reload
+        >>> kill_process(1234, 'SIGINT')          # Simulate a keyboard interrupt
+        >>> kill_process(1234, recursive=True)    # Kill process and all descendants
+        >>> kill_process(1234, 'SIGTERM', recursive=True) # Graceful kill of whole tree
 
     Exceptions:
         ValueError: If the signal name is not valid or no such process exists.
-        Exception: For other unexpected errors.
     """
     import os
-    import signal
-
+    signal = _signal_name_to_int(signal)
+    if recursive:
+        for child in get_process_children(pid, recursive=True):
+            try:
+                os.kill(child, signal)
+            except ProcessLookupError:
+                pass
     try:
-        # Convert the signall to its corresponding integer value
-        if isinstance(signall, str):
-            signall = getattr(signal, signall)
-
-        # Send the signal to the process
-        os.kill(pid, signall)
-        print("Signal {} successfully sent to process {}.".format(signall, pid))
-    except AttributeError:
-        valid_signals = ", ".join([s for s in dir(signal) if s.startswith("SIG") and not s.startswith("SIG_")])
-        error_message = "Error: {} is not a valid signal. Choose from: {}".format(signall, valid_signals)
-        raise ValueError(error_message)
+        os.kill(pid, signal)
+        print("Signal {} successfully sent to process {}.".format(signal, pid))
     except ProcessLookupError:
-        error_message = "No process found with PID {}.".format(pid)
-        raise ValueError(error_message)
+        raise ValueError("No process found with PID {}.".format(pid))
 
 
-def kill_processes(*pids, signall="SIGKILL", strict=True):
+def kill_processes(*pids, signal="SIGKILL", strict=True):
     """Plural of rp.kill_process"""
     pids = detuple(pids)
     for pid in pids:
         try:
-            kill_process(pid)
+            kill_process(pid, signal)
         except Exception:
             if strict:
                 raise
+
+
+def get_process_group(pid):
+    """
+    Get the process group ID (PGID) for a given PID.
+
+    Args:
+        pid (int): Process ID.
+
+    Returns:
+        int: The process group ID.
+
+    Examples:
+        >>> # get_process_group(1234)  # 1200
+    """
+    import os
+    try:
+        return os.getpgid(pid)
+    except ProcessLookupError:
+        raise ValueError("No process found with PID {}.".format(pid))
+
+
+def get_process_groups(*pids):
+    """
+    Plural of rp.get_process_group.
+
+    Examples:
+        >>> # get_process_groups(1234, 5678)   # [1200, 5600]
+        >>> # get_process_groups([1234, 5678]) # [1200, 5600]
+    """
+    pids = detuple(pids)
+    return [get_process_group(pid) for pid in pids]
+
+
+def kill_process_group(pgid, signal="SIGKILL"):
+    """
+    Kill an entire process group by PGID.
+
+    Sends a signal to every process sharing the given PGID. Covers the full
+    tree unless a descendant explicitly called setsid/setpgid to break out,
+    which only daemons do intentionally.
+
+    Args:
+        pgid (int): Process group ID.
+        signal (str or int): The signal to send. Default is 'SIGKILL'.
+
+    Examples:
+        >>> # kill_process_group(1234)            # SIGKILL the whole group
+        >>> # kill_process_group(1234, 'SIGTERM') # Graceful termination of group
+    """
+    import os
+    signal = _signal_name_to_int(signal)
+    try:
+        os.killpg(pgid, signal)
+        print("Signal {} successfully sent to process group {}.".format(signal, pgid))
+    except ProcessLookupError:
+        raise ValueError("No process group found with PGID {}.".format(pgid))
+
+
+def kill_process_groups(*pgids, signal="SIGKILL", strict=True):
+    """
+    Plural of rp.kill_process_group.
+
+    Examples:
+        >>> # kill_process_groups(1234, 5678)                    # Kill two groups
+        >>> # kill_process_groups([1234, 5678])                  # Same, from a list
+        >>> # kill_process_groups([1234, 5678], signal='SIGTERM') # Graceful
+    """
+    pgids = detuple(pgids)
+    for pgid in pgids:
+        try:
+            kill_process_group(pgid, signal)
+        except Exception:
+            if strict:
+                raise
+
+
+def get_process_children(pid, recursive=False):
+    """
+    Get child PIDs of a process.
+
+    Args:
+        pid (int): Process ID.
+        recursive (bool): If True, return all descendants (flattened).
+            If False, return only direct children.
+
+    Returns:
+        list[int]: Child PIDs.
+
+    Examples:
+        >>> # get_process_children(1234)                 # [5678, 5679]
+        >>> # get_process_children(1234, recursive=True) # [5678, 5679, 6001, 6002]
+    """
+    import psutil
+    try:
+        proc = psutil.Process(pid)
+        return [child.pid for child in proc.children(recursive=recursive)]
+    except psutil.NoSuchProcess:
+        return []
+get_subprocesses = get_process_children
+
+
+#COMMENTED OUT BECAUSE IT NEEDS A BETTER NAME
+# def get_process_childrens(*pids, recursive=False):
+#     """
+#     Plural of rp.get_process_children.
+#
+#     Examples:
+#         >>> # get_process_childrens(1234, 5678)                   # [[5679, 5680], [6001]]
+#         >>> # get_process_childrens([1234, 5678], recursive=True) # [[5679, 5680, 7001], [6001, 6002]]
+#     """
+#     pids = detuple(pids)
+#     return [get_process_children(pid, recursive=recursive) for pid in pids]
 
 
 def search_processes(pattern, *, show_progress=False, whole_arg=False):
@@ -35560,11 +36242,13 @@ def labeled_image(image,
                   size=15,
                   position='top',
                   align='center',
+                  *,
                   text_color=(1,1,1,1),
                   background_color=(0,0,0,1),
                   flip_text=False,
                   size_by_lines=False,
                   font=None,
+                  byte_image=False,
                  ):
     """
     Adds a label to an image and returns an image
@@ -35698,6 +36382,12 @@ def labeled_image(image,
     assert align in ['left','right','center']
     assert isinstance(size,float) or isinstance(size,int)
 
+    def post_process(image):
+        if byte_image:
+            return as_byte_image(image, copy=False)
+        else:
+            return image
+
     text=str(text)
 
     if size_by_lines:
@@ -35742,7 +36432,7 @@ def labeled_image(image,
             height = min(height, image_height)
             overlay = uniform_float_color_image(image_height - height, image_width, background_color[:3]+(0,))
             overlay = gather_args_call(labeled_image, overlay, size=height, size_by_lines=False)
-            return blend_images(image, overlay)
+            return post_process(blend_images(image, overlay))
 
         height=max(height,1)         #Label height in pixels
         
@@ -35761,15 +36451,16 @@ def labeled_image(image,
         #We need to turn the RGB byte color into RGBA float color.
         #TODO: Make a method for this in RP along with other color conversion methods...
         label=blend_images(background_color,text_color,label)
+        label=post_process(label)
 
         if flip_text:
             label=rp.rotate_image(label,180)
         
         if position=='top':
-            return vertically_concatenated_images(label,image)
+            return post_process(vertically_concatenated_images(label,image))
         
         if position=='bottom':
-            return vertically_concatenated_images(image,label)
+            return post_process(vertically_concatenated_images(image,label))
         
     assert False,'This line should be unreachable'
 
@@ -38937,6 +39628,19 @@ def get_subfolders(folder,*,relative=False,sort_by=None):
     return get_all_paths(folder,include_files=False,include_folders=True,recursive=False,relative=relative,sort_by=sort_by)
 get_subdirectories=get_subfolders
 
+
+def get_empty_subfolders(root="."):
+    "Return a list of paths to all empty subfolders"
+    return path_join(
+        root,
+        [
+            x
+            for x in os.listdir(root)
+            if is_a_folder(path_join(root, x)) and not os.listdir(path_join(root, x))
+        ],
+    )
+
+
 def _os_listdir_files(folder):
     """
     like get_all_files, but returns only file names and is a little faster
@@ -40132,6 +40836,112 @@ js=javascript
 def javascript_console():
     """ Enter the javascript console, which lets you use JS in python interactively """
     return _get_javascript_runtime().console()
+
+def convert_to_blue_noise(noise, iterations=30, cutoff_divider=8.0):
+    """
+    Pure function. Rearranges pixels of a 2D noise array into a blue noise
+    pattern via alternating projections, preserving the original histogram.
+    Works with both numpy arrays and torch tensors.
+
+    Not as good as blue noise algorithms like Void and Cluster, but waaay faster
+
+    Args:
+        noise (np.ndarray or torch.Tensor): 2D input noise (any distribution).
+        iterations (int): Number of alternating projections. Defaults to 30.
+        cutoff_divider (float): Gaussian high-pass radius = min(H,W) / divider. Defaults to 4.0.
+            Too low value makes it more uniform, but more glitchy (too low does not look random)
+            Too high value makes it look like np.randn 
+            Goldilox zone is around 8 - see the cutoff divider comparison example for visuals
+
+    Returns:
+        Same type as input: same values as `noise`, spatially rearranged into blue noise.
+
+    Examples:
+        >>> result = convert_to_blue_noise(np.random.randn(64, 64))
+        >>> result.shape
+        (64, 64)
+        >>> np.sort(result.flat) # histogram is preserved
+        array([...])
+
+    Examples (dithered black-white image):
+        >>> # Load emma, convert to grayscale, then to blue-noise dithered binary
+        >>> emma = load_image('https://github.com/RyannDaGreat/Images/blob/master/test_images/emma.png?raw=true')
+        >>> gray = as_grayscale_image(emma)
+        >>> noise = convert_to_blue_noise(np.random.rand(*gray.shape))
+        >>> dithered = as_binary_image(noise < as_float_image(gray))
+        >>> display_image(dithered)
+        >>> path = save_image(dithered, 'emma_blue_noise_dithered')
+        >>> fansi_print(path, 'bold cyan')
+
+    Example (cutoff_divider comparison):
+        >>> uniform = np.random.rand(128, 128)
+        ... cutoffs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        ... blues = [convert_to_blue_noise(uniform, cutoff_divider=c) for c in cutoffs]
+        ... blues = labeled_images(blues, cutoffs, font="R:Futura", background_color="dark dark red")
+        ... grid = tiled_images(blues, border_color="red")
+        ... grid = labeled_image(grid, "rp.convert_to_blue_noise cutoff_divider", font="R:Futura", background_color="dark dark red", size=20)
+        ... save_image(grid, "blue_noise_cutoff_grid.png")
+        ... display_image(grid)
+
+    Example (silliness, seeing what it does to webcam feed):
+        >>> while True:
+        ...     image=load_image_from_webcam()
+        ...     image=resize_image_to_fit(image,height=256)
+        ...     image=as_grayscale_image(image)
+        ...     image=convert_to_blue_noise(image,iterations=10)
+        ...     display_image(image)
+
+    """
+    if not is_numpy_array(noise) and not is_torch_tensor(noise): raise ValueError("noise must be a numpy array or torch tensor, got %s" % type(noise).__name__)
+    if not is_a_matrix(noise):   raise ValueError("noise must be 2D, got shape %s" % (noise.shape,))
+    if iterations < 1:           raise ValueError("iterations must be >= 1, got %s" % iterations)
+    if cutoff_divider <= 0:      raise ValueError("cutoff_divider must be > 0, got %s" % cutoff_divider)
+
+    H, W = noise.shape
+    target_values = _sort(noise.reshape(-1))
+
+    # Precompute high-pass mask: broadcastable (H,1) and (1,W) coordinate arrays
+    Y = _arange(H, like=noise).reshape(H, 1)
+    X = _arange(W, like=noise).reshape(1, W)
+    center_y, center_x = H / 2, W / 2
+    dist_sq = (X - center_x) ** 2 + (Y - center_y) ** 2
+    D0 = min(H, W) / cutoff_divider
+    high_pass_mask = 1.0 - _exp(-dist_sq / (2 * D0 ** 2))
+
+    def apply_high_pass(image):
+        """Pure. Frequency constraint: removes low-frequency clumps."""
+        F = _fftshift(_fft2(image))
+        return _real(_ifft2(_ifftshift(F * high_pass_mask)))
+
+    def match_histogram(image, target_values, H, W):
+        """
+        Pure function. Spatial constraint: forces exact original pixel values.
+
+        Args:
+            image: 2D array/tensor whose rank-order determines placement.
+            target_values: Sorted 1D array/tensor of values to assign.
+            H (int): Output height.
+            W (int): Output width.
+
+        Returns:
+            Same type as input, shape (H, W), with values from target_values placed by rank order.
+
+        Examples:
+            >>> # Rank-orders image and assigns target_values accordingly
+            >>> match_histogram(np.array([[3,1],[2,0]]), np.array([10,20,30,40]), 2, 2)
+            array([[40, 20],
+                   [30, 10]])
+        """
+        order = _argsort(image.reshape(-1))
+        matched = _empty_like(target_values)
+        matched[order] = target_values
+        return matched.reshape(H, W)
+
+    result = _clone(noise)
+    for _ in range(iterations):
+        result = match_histogram(apply_high_pass(result), target_values, H, W)
+
+    return result
 
 @memoized
 def _get_byte_to_binary_grayscale_image_floyd_steinburg_dithering_function():
@@ -43100,7 +43910,8 @@ def download_youtube_video(url_or_id: str,
                            skip_existing=False,
                            show_progress=True,
                            overwrite=False,
-                           filetype='mp4'):
+                           filetype='mp4',
+                           proxy=False):
     """
     Downloads a YouTube video based on the given URL or video ID. The function can selectively download video only, 
     audio only, or both depending on the parameters. All downloads are currently as mp4 or webm files.
@@ -43138,6 +43949,10 @@ def download_youtube_video(url_or_id: str,
                                       If False, and the output path already exists, it will create a new non-conflicting path
                                       like some_video_copy.mp4 or some_video_copy2.mp4 etc
         - filetype (str, optional): Specifies the type of video file we will attempt to download. Can be either 'mp4' or 'webm'
+        - proxy (bool, optional): If True, routes the download through a Cloudflare WARP SOCKS5 proxy.
+                                  Automatically installs and starts WARP if needed. Useful on datacenter IPs
+                                  where YouTube blocks direct access with "Sign in to confirm you're not a bot".
+                                  Defaults to False.
 
     Returns:
         - str: The path to the downloaded MP4 file (which might contain just video, just audio or both)
@@ -43196,7 +44011,12 @@ def download_youtube_video(url_or_id: str,
     pip_import('pytubefix')
     from pytubefix import YouTube
     from pytubefix.cli import on_progress
-    yt = YouTube(url, on_progress_callback = on_progress if show_progress else None)
+    proxies = None
+    if proxy:
+        pip_import('socks', 'pysocks')
+        proxy_url = _ensure_warp_proxy_running()
+        proxies = {'https': proxy_url, 'http': proxy_url}
+    yt = YouTube(url, on_progress_callback = on_progress if show_progress else None, proxies=proxies)
     ys = yt.streams
     if need_audio:
         ys = ys.filter(progressive=True)
@@ -44648,12 +45468,12 @@ def convert_to_gif_via_ffmpeg(
         #This is a slow fix...but it does in fact fix the problem! TODO: Directly modify the delays in the GIF instead - that should be faster
         if show_progress:
             print("Setting the framerate to %i..."%framerate)
-            temp_path = temporary_file_path('gif')
-            move_file(output_path, temp_path)
-            try:
-                output_path = save_animated_gif(temp_path, output_path, framerate=framerate)
-            finally:
-                delete_file(temp_path)
+        temp_path = temporary_file_path('gif')
+        move_file(output_path, temp_path)
+        try:
+            output_path = save_animated_gif(temp_path, output_path, framerate=framerate)
+        finally:
+            delete_file(temp_path)
 
     return output_path
 
@@ -48233,10 +49053,17 @@ def _get_punkt_languages():
     
     return output
 
-def connected_to_internet():
+def connected_to_internet(timeout=None):
     """
     Return True if we're online, else False
     Code from: https://stackoverflow.com/questions/20913411/test-if-an-internet-connection-is-present-in-python/21460844
+
+    Args:
+        timeout (float or None): Socket connection timeout in seconds. None means no timeout.
+
+    Examples:
+        >>> connected_to_internet() in (True, False)
+        True
     """
     import socket
     try:
@@ -48248,7 +49075,7 @@ def connected_to_internet():
             #If we're in Google's internal XCloud, we should check a non-google URL
             url_to_try = 'https://www.microsoft.com'
 
-        socket.create_connection((url_to_try, 80))
+        socket.create_connection((url_to_try, 80), timeout=timeout)
         return True
     except OSError:
         pass
@@ -52396,6 +53223,136 @@ def _ensure_ntfy_installed():
         windows='scoop install ntfy',                   #https://docs.ntfy.sh/install/#windows
     )
 
+@_register_ensure_installed_func('warp-cli')
+def _ensure_warp_cli_installed():
+    """warp-cli: Cloudflare WARP proxy client for bypassing IP-based restrictions (e.g. YouTube on datacenter IPs)"""
+    if system_command_exists('warp-cli'):
+        return
+    if not currently_running_linux():
+        raise NotImplementedError("Cloudflare WARP auto-install only supported on Linux (Debian/Ubuntu)")
+    commands = [
+        'curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg',
+        'echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ jammy main" > /etc/apt/sources.list.d/cloudflare-client.list',
+        'apt-get update && apt-get install -y cloudflare-warp',
+    ]
+    for cmd in commands:
+        error_code = _run_sys_command(cmd)
+        if error_code:
+            raise RuntimeError('_ensure_warp_cli_installed: Failed command: ' + cmd)
+
+_WARP_PROXY_PORT = 49876
+_WARP_PROXY_URL = 'socks5h://127.0.0.1:'+str(_WARP_PROXY_PORT)
+
+def _warp_proxy_check(proxy_url):
+    """Return True if the WARP SOCKS5 proxy is responding with warp=on."""
+    import subprocess
+    _ensure_curl_installed()
+    try:
+        result = subprocess.run(
+            ['curl', '-s', '--max-time', '3', '-x', proxy_url, 'https://www.cloudflare.com/cdn-cgi/trace'],
+            capture_output=True, text=True, timeout=10,
+        )
+        return 'warp=on' in result.stdout
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def _ensure_warp_proxy_running(port=None):
+    """
+    Ensure Cloudflare WARP is installed, registered, and running as a SOCKS5 proxy.
+
+    Idempotent: if the proxy is already responding on the expected port, returns immediately.
+    Otherwise installs warp-cli, starts the daemon, registers, and configures proxy mode.
+
+    Uses a file lock to prevent multiple processes from racing through setup
+    simultaneously. The lock lives on /tmp (local tmpfs, not NFS) so it works
+    reliably even when the working directory is on a network drive.
+
+    This function is a big snaggle of code to prevent it from exiting before the server is up and ready
+    I hope it's reliable...
+
+    Args:
+        port: SOCKS5 proxy port. Defaults to _WARP_PROXY_PORT (49876).
+
+    Returns:
+        str: The SOCKS5 proxy URL, e.g. 'socks5h://127.0.0.1:49876'
+    """
+    pip_import('filelock')
+
+    import subprocess, time, tempfile
+    import filelock
+
+    lock_file_path = path_join(tempfile.tempdir, '.rp_warp_proxy.lock')
+
+    if port is None:
+        port = _WARP_PROXY_PORT
+
+    proxy_url = 'socks5h://127.0.0.1:%i' % port
+
+    # Fast path (no lock needed): if proxy is already up, return immediately.
+    if _warp_proxy_check(proxy_url):
+        return proxy_url
+
+    # Acquire a cross-process lock for the setup phase. Without this, concurrent
+    # callers race through daemon startup / registration / connect and can
+    # interfere with each other. Lock is on /tmp (local tmpfs) because flock
+    # is unreliable on NFS.
+    lock = filelock.FileLock(lock_file_path)
+    with lock:
+        # Re-check after acquiring the lock — another process may have
+        # completed setup while we were waiting.
+        if _warp_proxy_check(proxy_url):
+            return proxy_url
+
+        _ensure_warp_cli_installed()
+
+        # Always attempt to start warp-svc. If it's already running, the new
+        # instance exits immediately on the unix socket conflict — harmless.
+        # We don't use search_processes('warp-svc') because it matches any
+        # process whose command line contains "warp-svc" (including this
+        # script's own shell invocation), giving false positives.
+        subprocess.Popen(['warp-svc'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        # Poll until warp-cli can talk to the daemon
+        for _ in range(30):
+            time.sleep(1)
+            check = subprocess.run(['warp-cli', '--accept-tos', 'status'], capture_output=True, text=True, timeout=5)
+            if check.returncode == 0 and check.stdout.strip():
+                break
+        else:
+            raise RuntimeError('_ensure_warp_proxy_running: warp-svc not responding after 30s (failed to start server at '+proxy_url+')')
+
+        # All of these are idempotent — safe to re-run if already configured
+        subprocess.run(['warp-cli', '--accept-tos', 'registration', 'new'],     capture_output=True)
+        subprocess.run(['warp-cli', '--accept-tos', 'mode', 'proxy'],           capture_output=True)
+        subprocess.run(['warp-cli', '--accept-tos', 'proxy', 'port', str(port)], capture_output=True)
+        subprocess.run(['warp-cli', '--accept-tos', 'connect'],                 capture_output=True)
+
+        # Poll warp-cli status for "Connected" — the tunnel takes time to establish
+        for _ in range(30):
+            status_result = subprocess.run(
+                ['warp-cli', '--accept-tos', 'status'],
+                capture_output=True, text=True, timeout=5,
+            )
+            if 'Connected' in status_result.stdout:
+                break
+            time.sleep(1)
+        else:
+            raise RuntimeError('_ensure_warp_proxy_running: WARP did not reach Connected state. Last status: ' + status_result.stdout.strip()[:200])
+
+        # Final end-to-end verification. The tunnel may not be fully ready
+        # even after warp-cli reports "Connected", so retry a few times.
+        for _ in range(10):
+            if _warp_proxy_check(proxy_url):
+                break
+            time.sleep(1)
+        else:
+            raise RuntimeError('_ensure_warp_proxy_running: WARP reports Connected but proxy verification failed after 10 attempts')
+
+    fansi_print(' >> WARP PROXY RUNNING ON %s << ' % proxy_url, 'italic bold black black on green cyan')
+    return proxy_url
+
+
 def _install_ollama(force=False):
     _ensure_installed(
         'ollama',
@@ -52443,6 +53400,7 @@ def _launch_vscode_web_server(port=None):
     _ensure_vscode_installed()
     if port is None:
         port = get_next_free_port(51235)
+    _print_my_ip_addresses(port)
     _run_sys_command('code serve-web --host 0.0.0.0 --without-connection-token --port '+str(port)+' --accept-server-license-terms --disable-telemetry')
 
 #THIS FUNCTION INSTALLS IT FINE! BUT I DIDN'T FINISH MAKING IT USEFUL YET. UNCOMMENT ONCE I HAVE WRAPPERS FOR IT.
@@ -52810,6 +53768,7 @@ def _run_filebrowser(port=8080, root='.'):
     _configure_filebrowser()
 
     port=get_next_free_port(port)
+    _print_my_ip_addresses(port)
     command = 'filebrowser -r '+shlex.quote(root)+' -a 0.0.0.0 -p '+str(port)+ ' --noauth'
     print('r._run_filebrowser: Running '+repr(command))
 
@@ -52890,6 +53849,7 @@ def _run_filebrowser_quantum(port=3080, root='.'):
         yaml.dump(config, f)
 
     command = shlex.quote(binary_path) + ' -c ' + shlex.quote(config_path)
+    _print_my_ip_addresses(port)
     print('r._run_filebrowser_quantum: Serving ' + repr(root) + ' on port ' + str(port))
     print('r._run_filebrowser_quantum: Running ' + repr(command))
 
@@ -53095,41 +54055,40 @@ def get_process_using_port(port, strict=True):
 get_pid_using_port = get_process_using_port
 
 
-def killport(port, strict=True):
+def killport(port, signal="SIGKILL", *, strict=True, recursive=False):
     """
     Kills any process listening on the given TCP port.
 
-    If strict and no process uses that port, raise an error.
-    Uses get_process_using_port() for the existence check, then cleans up all listeners.
+    Args:
+        port (int): TCP port number.
+        signal (str or int): The signal to send. Default is 'SIGKILL'.
+        strict (bool): If True, raise an error if no process uses that port.
+        recursive (bool): If True, also kill all descendant processes.
+
+    Examples:
+        >>> # killport(8080)                          # SIGKILL listeners on port 8080
+        >>> # killport(8080, 'SIGTERM')               # Graceful termination
+        >>> # killport(8080, recursive=True)          # Kill listeners and all their children
+        >>> # killport(8080, strict=False)            # No error if port is free
     """
-    # First, rely on get_process_using_port to validate existence / strict behavior
     pid = get_process_using_port(port, strict=(True if strict else None))
 
     if pid is None:
-        # strict is False-ish path; nothing to do
         return
 
-    # There is at least one PID; now gather *all* and kill them
-    import os
-    import signal
-    
     all_pids = _listening_pids_via_lsof(port)
 
     if not all_pids:
-        # Very rare race where process exited between the check and here
         if strict:
             raise ValueError("killport: No processes using port {0}".format(port))
         return
 
     for p in all_pids:
         try:
-            os.kill(p, signal.SIGKILL)
-            print("Killed process with PID: {0}".format(p))
-        except ProcessLookupError:
-            # Process already gone
+            kill_process(p, signal, recursive=recursive)
+        except ValueError:
             print("Process {0} not found (already exited).".format(p))
         except PermissionError:
-            # Insufficient permissions
             print("Permission denied when trying to kill PID {0}.".format(p))
 
 
@@ -55390,8 +56349,9 @@ def _fd(query,select=False,silent=False):
 
         for result in globbed:
         # for result in chain( iglob(glob_query), iglob('*/**/'+glob_query,recursive=True)):
-            if query in get_path_name(result):  
-                print_line(highlighted(result,query))
+            if query in get_path_name(result):
+                display = result + '/' if is_a_directory(result) else result
+                print_line(highlighted(display,query))
     except KeyboardInterrupt:
         pass
     _maybe_display_string_in_pager(line_join(printed_lines))
@@ -56706,17 +57666,23 @@ def ntfy_send(message:str, topic='rp'):
     if not response.status_code==200:
         raise IOError(response.status_code)
 
-def ntfy_receive(*topics):
+def ntfy_receive(*topics, timeout=90):
     """
     Infinite generator that yields messages from ntfy topics as EasyDicts.
 
     Subscribes to one or more ntfy.sh topics via streaming JSON.
+    Includes a read timeout so dead connections raise instead of blocking
+    forever. ntfy.sh sends keepalives every ~30s, so the default 90s
+    timeout safely detects dead connections.
 
     >>> for msg in ntfy_receive('mychannel'):  # doctest: +SKIP
     ...     print(msg.topic, msg.message)
 
     Args:
         *topics: One or more topic name strings (e.g. 'rp', 'alerts')
+        timeout (int): Read timeout in seconds. If no data arrives within
+            this window, raises requests.exceptions.ReadTimeout so callers
+            can reconnect. Default 90.
 
     Yields:
         EasyDict with fields: id, time, topic, message,
@@ -56734,7 +57700,7 @@ def ntfy_receive(*topics):
 
     # ntfy supports comma-separated topics in a single stream
     url = "https://ntfy.sh/" + ",".join(topics) + "/json"
-    response = requests.get(url, stream=True)
+    response = requests.get(url, stream=True, timeout=(10, timeout))
     if response.status_code != 200:
         raise IOError(response.status_code)
 
@@ -58366,6 +59332,30 @@ def _ifft(x):
     if is_torch_tensor(x):return __import__('torch').fft.ifft(x)
     raise ValueError("IFFT not available for Python scalars")
 
+def _fft2(x):
+    """ works across libraries - such as numpy, torch """
+    if is_numpy_array (x):return np.fft.fft2(x)
+    if is_torch_tensor(x):return __import__('torch').fft.fft2(x)
+    raise ValueError("FFT2 not available for Python scalars")
+
+def _ifft2(x):
+    """ works across libraries - such as numpy, torch """
+    if is_numpy_array (x):return np.fft.ifft2(x)
+    if is_torch_tensor(x):return __import__('torch').fft.ifft2(x)
+    raise ValueError("IFFT2 not available for Python scalars")
+
+def _fftshift(x):
+    """ works across libraries - such as numpy, torch """
+    if is_numpy_array (x):return np.fft.fftshift(x)
+    if is_torch_tensor(x):return __import__('torch').fft.fftshift(x)
+    raise ValueError("fftshift not available for Python scalars")
+
+def _ifftshift(x):
+    """ works across libraries - such as numpy, torch """
+    if is_numpy_array (x):return np.fft.ifftshift(x)
+    if is_torch_tensor(x):return __import__('torch').fft.ifftshift(x)
+    raise ValueError("ifftshift not available for Python scalars")
+
 def _tanh(x):
     """ works across libraries - such as numpy, torch, pure python """
     if is_numpy_array (x):return np.tanh(x)
@@ -58476,6 +59466,32 @@ def _argsort(x, dim=-1):
     if is_torch_tensor(x):return __import__('torch').argsort(x, dim=dim)
     return sorted(range(len(x)), key=x.__getitem__)
 
+def _sort(x, dim=-1):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.sort(x, axis=dim)
+    if is_torch_tensor(x):return __import__('torch').sort(x, dim=dim).values
+    return sorted(x)
+
+def _real(x):
+    """ works across libraries - such as numpy, torch, pure python """
+    if is_numpy_array (x):return np.real(x)
+    if is_torch_tensor(x):return x.real
+    return x.real if hasattr(x, 'real') else x
+
+def _arange(n, *, like=None):
+    """
+    Works across libraries - such as numpy, torch.
+    If like is given, matches its type and device.
+
+    Examples:
+        >>> # _arange(5)
+        >>> # array([0, 1, 2, 3, 4])
+    """
+    if like is not None:
+        if is_torch_tensor(like):return __import__('torch').arange(n, device=like.device)
+        return np.arange(n)
+    return np.arange(n)
+
 #Nah don't need this, just multiply by 360/rp.tau - more explicit that way
 # def _degrees(x):
 #     """ works across libraries - such as numpy, torch, pure python """
@@ -58536,6 +59552,19 @@ def _randn_like(x, *, shape=None, dtype=None):
 def _rand_like(x, *, shape=None, dtype=None):
     """Works across libraries - such as numpy, torch"""
     return _create_array_like(x, func_name='rand', shape=shape, dtype=dtype)
+
+def _empty_like(x):
+    """ works across libraries - such as numpy, torch """
+    if is_numpy_array (x):return np.empty_like(x)
+    if is_torch_tensor(x):return __import__('torch').empty_like(x)
+    raise ValueError("type not supported: "+str(type(x)))
+
+def _clone(x):
+    """ works across libraries - such as numpy, torch """
+    if is_numpy_array (x):return x.copy()
+    if is_torch_tensor(x):return x.clone()
+    from copy import copy as _copy
+    return _copy(x)
 
 def _maximum(x, y):
     """ works across libraries - such as numpy, torch """
@@ -59766,6 +60795,34 @@ def _iterfzf_with_ls_preview(iterable, exact=False, **kwargs):
     output = _iterfzf(iterable, exact=exact, **kwargs)
     # output = strip_ansi_escapes(output)
     return output
+
+def _iterfzf_paths(paths, **kwargs):
+    """
+    Wrapper for _iterfzf that appends / to directories for display,
+    then strips it from the returned selection(s).
+
+    Args:
+        paths: Iterable of file/directory paths.
+        **kwargs: Passed to _iterfzf.
+
+    Returns:
+        str or list[str] or None: Selected path(s) without trailing slash.
+
+    Examples:
+        >>> # _iterfzf_paths(['/tmp', '/tmp/file.txt'])
+    """
+    def _add_slash(path):
+        if is_a_directory(path):
+            return path + '/'
+        return path
+
+    result = _iterfzf(map(_add_slash, paths), **kwargs)
+
+    if result is None:
+        return result
+    if isinstance(result, list):
+        return [x.rstrip('/') for x in result]
+    return result.rstrip('/')
 
 def _recursively_iter_subdirs(root_path='.'):
     """
@@ -61614,91 +62671,39 @@ def _copy_paths_to_bundle(paths=None, *, show_progress=False):
 def get_all_local_ip_addresses():
     """
     Returns a list of all local ip addresses currently in use on your local network
-    Code from: https://stackoverflow.com/questions/207234/list-of-ip-addresses-hostnames-from-local-network-in-python
-    Can take up to 20 seconds to complete
+    Pings all 254 addresses in your /24 subnet in parallel using threads.
+    Can take up to 20 seconds to complete.
     EXAMPLE:
          >>> get_all_local_ip_addresses()
          ans = ['192.168.1.1', '192.168.1.21', '192.168.1.33', '192.168.1.32', '192.168.1.53', '192.168.1.105', '192.168.1.122', '192.168.1.136', '192.168.1.171', '192.168.1.190', '192.168.1.205', '192.168.1.235', '192.168.1.237', '192.168.1.175', '192.168.1.228', '192.168.1.249']
-    TODO: Condense this function into less lines. It's pretty big...
     """
-     
-    import socket,multiprocessing,subprocess,os
-    
-    def pinger(job_q, results_q):
-        """
-        Do Ping
-        :param job_q:
-        :param results_q:
-        :return:
-        """
-        DEVNULL = open(os.devnull, 'w')
-        while True:
-    
-            ip = job_q.get()
-    
-            if ip is None:
-                break
-    
-            try:
-                subprocess.check_call(['ping', '-c1', ip],
-                                      stdout=DEVNULL)
-                results_q.put(ip)
-            except Exception:
-                pass
-    
-    
-    def get_my_ip():
-        """
-        Find my IP address
-        :return:
-        """
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    
-    
-    def map_network(pool_size=255):
-        """
-        Maps the network
-        :param pool_size: amount of parallel ping processes
-        :return: list of valid ip addresses
-        """
-    
-        ip_list = list()
-    
-        # get my IP and compose a base like 192.168.1.xxx
-        ip_parts = get_my_ip().split('.')
-        base_ip = ip_parts[0] + '.' + ip_parts[1] + '.' + ip_parts[2] + '.'
-    
-        # prepare the jobs queue
-        jobs = multiprocessing.Queue()
-        results = multiprocessing.Queue()
-    
-        pool = [multiprocessing.Process(target=pinger, args=(jobs, results)) for i in range(pool_size)]
-    
-        for p in pool:
-            p.start()
-    
-        # cue hte ping processes
-        for i in range(1, 255):
-            jobs.put(base_ip + '{0}'.format(i))
-    
-        for p in pool:
-            jobs.put(None)
-    
-        for p in pool:
-            p.join()
-    
-        # collect he results
-        while not results.empty():
-            ip = results.get()
-            ip_list.append(ip)
-    
-        return ip_list
-    
-    return map_network()
+    import socket, subprocess, os
+    from concurrent.futures import ThreadPoolExecutor
+
+    # Find our local IP to determine the subnet
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))
+    my_ip = s.getsockname()[0]
+    s.close()
+
+    ip_parts = my_ip.split('.')
+    base_ip = ip_parts[0] + '.' + ip_parts[1] + '.' + ip_parts[2] + '.'
+
+    DEVNULL = open(os.devnull, 'w')
+
+    def ping(ip):
+        try:
+            subprocess.check_call(['ping', '-c1', ip], stdout=DEVNULL, stderr=DEVNULL)
+            return ip
+        except Exception:
+            return None
+
+    ips = [base_ip + str(i) for i in range(1, 255)]
+
+    with ThreadPoolExecutor(max_workers=255) as pool:
+        results = pool.map(ping, ips)
+
+    return [ip for ip in results if ip is not None]
 
 def ip_to_mac_address(address):
     """
@@ -68354,20 +69359,35 @@ def pip_import(module_name,package_name=None,*,auto_yes=False):
     - Performance: ~20x faster than importlib.import_module() for successful imports (uses __import__ internally)
     - Comparison: vs standard import - handles missing packages automatically; vs importlib - much faster for basic cases
 
+    When module_name != package_name, prefer adding the mapping to the
+    known_pypi_module_package_names dict (at the bottom of r.py) instead of
+    passing package_name explicitly. This way all callers benefit automatically.
+
     Parameters:
         module_name (str): Python module name to import (e.g., 'cv2', 'torch', 'matplotlib.pyplot')
-        package_name (str, optional): PyPI package name if different from module name (e.g., 'opencv-python' for 'cv2')
+        package_name (str, optional): PyPI package name if different from module name (e.g., 'opencv-python' for 'cv2').
+            Prefer adding to known_pypi_module_package_names instead of using this parameter.
         auto_yes (bool): Skip user confirmation for installation. Defaults to False. Always True in Colab.
 
     Returns:
         module: The imported Python module object, ready to use
 
+    When module_name != package_name, the preferred approach is to add the
+    mapping to known_pypi_module_package_names (dict at the bottom of r.py)
+    so all callers benefit automatically. Passing package_name as the second
+    arg is acceptable when you are not modifying r.py.
+
     Examples:
-        >>> cv2 = pip_import('cv2')  # Auto-installs opencv-python if needed
-        >>> torch = pip_import('torch')  # Handles PyTorch installation
-        >>> plt = pip_import('matplotlib.pyplot', 'matplotlib')  # Custom package name
-        >>> PIL = pip_import('PIL', 'Pillow')  # Pillow package provides PIL module
-        >>> np = pip_import('numpy')  # Simple case where module == package name
+        >>> cv2   = pip_import('cv2')                              # Auto-installs opencv-python if needed
+        >>> torch = pip_import('torch')                            # Handles PyTorch installation
+        >>> plt   = pip_import('matplotlib.pyplot', 'matplotlib')  # Custom package name
+        >>> PIL   = pip_import('PIL', 'Pillow')                    # Pillow package provides PIL module
+        >>> np    = pip_import('numpy')                            # Simple case where module == package name
+        >>> # Standard usage: pip_import ensures installed, then normal import below
+        >>> pip_import('numpy')                                    # Ensure numpy is installed
+        >>> pip_import('scipy')                                    # Ensure scipy is installed
+        >>> import numpy as np                                     # Then import normally
+        >>> import scipy.fft as sfft                               # Submodules work too
 
     Tags: imports, dependencies, auto-install, lazy-loading, core-utility, package-management
     """
@@ -68791,6 +69811,7 @@ known_pypi_module_package_names={
     '_bimpy': 'bimpy',
     '_black_version': 'black',
     '_dlib_pybind11': 'dlib',
+    '_gojsonnet': 'gojsonnet',
     '_plotly_future_': 'plotly',
     '_plotly_utils': 'plotly',
     '_sentencepiece': 'sentencepiece',
@@ -68974,6 +69995,7 @@ known_pypi_module_package_names={
     'typing_extensions': 'typing-extensions',
     'websocket': 'websocket-client',
     'speech_recognition' : 'SpeechRecognition',
+    'Speech':'pyobjc-framework-Speech',
     'websockets/extensions': 'websockets',
     'werkzeug': 'Werkzeug',
     'wheel-platform-tag-is-broken-on-empty-wheels-see-issue-141': 'sklearn',

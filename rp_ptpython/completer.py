@@ -232,8 +232,13 @@ class PythonCompleter(Completer):
         directory, prefix = extract_path_components(before_line, cmd_prefix)
         path_objs = list_path_candidates(directory, prefix, dirs_only=dirs_only, files_only=files_only, check_text_files=check_text_files, sort_by_mtime=sort_by_mtime)
 
+        # Deprioritize hidden files when user hasn't typed a dot prefix
+        hidden_penalty = 0 if prefix.startswith('.') else 10
+
         def make_candidate(c):
             priority = priority_func(c) if priority_func else 0
+            if c.name.startswith('.'):
+                priority += hidden_penalty
             return Candidate(name=c.name, priority=priority, is_dir=c.is_dir, is_text_file=c.is_text_file, display_style='path', replace_origin=prefix)
 
         return [make_candidate(c) for c in path_objs]

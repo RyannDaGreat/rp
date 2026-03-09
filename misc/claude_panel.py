@@ -71,8 +71,12 @@ def get_process_stats(pid: int) -> tuple[str, float, float, str]:
 
 
 def kill_process(pid: int):
-    """Kill a process by PID."""
-    subprocess.run(["kill", "-9", str(pid)], check=False)
+    """Kill a process and all its descendants."""
+    from rp import kill_process as rp_kill_process
+    try:
+        rp_kill_process(pid, recursive=True)
+    except ValueError:
+        pass
 
 
 def goto_window(window_id: str):

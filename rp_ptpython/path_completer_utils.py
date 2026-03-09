@@ -28,8 +28,8 @@ BUGS FIXED from the old system (completer_git_original.py):
    OLD BUG: Complex, brittle logic with multiple edge cases for ./paths
             Tried to strip ./ prefix but only in certain conditions
             Hidden files (.git, .bashrc) had hacky special handling
-   FIX: Clean prefix-based matching - if user types ".", show hidden files
-        If user types "./", handle it properly
+   FIX: Always show hidden files. Deprioritized in completer.py when
+        prefix doesn't start with "."
 
 5. SLASH HANDLING BUGS (lines 838-852)
    OLD BUG: Added/removed slashes inconsistently:
@@ -277,7 +277,6 @@ def list_path_candidates(
     prefix='',
     files_only=False,
     dirs_only=False,
-    show_hidden=None,
     check_text_files=False,
     sort_by_mtime=False
 ):
@@ -289,8 +288,6 @@ def list_path_candidates(
         prefix: Filename prefix to match (case-sensitive)
         files_only: Only return files (not directories)
         dirs_only: Only return directories (not files)
-        show_hidden: Whether to show hidden files (starting with .)
-                    If None, auto-detect from prefix (show if prefix starts with .)
         check_text_files: Whether to check if files are text files (for VIM prioritization)
                          Default False to avoid unnecessary I/O
         sort_by_mtime: Sort by modification time (newest first) instead of name
@@ -305,11 +302,6 @@ def list_path_candidates(
         >>> list_path_candidates('.', '', dirs_only=True)
         [PathCandidate(name='src', ...), PathCandidate(name='tests', ...)]
     """
-    # Auto-detect hidden file preference from prefix
-    # BUT: always show hidden directories when listing dirs_only
-    if show_hidden is None:
-        show_hidden = prefix.startswith('.') or dirs_only
-
     candidates = []
 
     # Use mtime version only when needed (slower due to stat calls)
@@ -319,10 +311,6 @@ def list_path_candidates(
         entries = [(e.name, e.is_dir, None) for e in get_dir_entries(directory)]  # cached, no stat
 
     for name, is_dir, mtime in entries:
-        # Skip hidden files unless explicitly requested
-        if not show_hidden and name.startswith('.'):
-            continue
-
         # Check prefix match (case-sensitive, like bash)
         if not name.startswith(prefix):
             continue

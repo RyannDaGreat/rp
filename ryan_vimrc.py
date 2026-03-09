@@ -257,6 +257,8 @@ set statusline=%<%t\ %h%m%r%=\ %{taghelper#curtag()}\ %=%-14.(%l,%c%V%)\ %P
 Plugin 'ryanoasis/vim-devicons'
 set encoding=utf8
 
+Plugin 'google/vim-jsonnet' " Jsonnet syntax highlighting
+
 " All of your Plugins must be added before the following line
 call vundle#end()            " required
 filetype plugin indent on    " required
