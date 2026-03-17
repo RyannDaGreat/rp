@@ -36397,7 +36397,7 @@ def labeled_image(image,
                   flip_text=False,
                   size_by_lines=False,
                   font=None,
-                  byte_image=False,
+                  byte_image=False
                  ):
     """
     Adds a label to an image and returns an image
