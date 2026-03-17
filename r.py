@@ -9542,7 +9542,70 @@ def convert_image_files(
 # endregion
 # region Text-To-Speech: ［text_to_speech，text_to_speech_via_apple，text_to_speech_via_google，text_to_speech_voices_comparison，text_to_speech_voices_for_apple，text_to_speech_voices_for_google，text_to_speech_voices_all，text_to_speech_voices_favorites］
 # region ［text_to_speech_via_apple］
-text_to_speech_voices_for_apple=['Alex','Alice','Alva','Amelie','Anna','Carmit','Damayanti','Daniel','Diego','Ellen','Fiona','Fred','Ioana','Joana','Jorge','Juan','Kanya','Karen','Kyoko','Laura','Lekha','Luca','Luciana','Maged','Mariska','Mei-Jia','Melina','Milena','Moira','Monica','Nora','Paulina','Samantha','Sara','Satu','Sin-ji','Tessa','Thomas','Ting-Ting','Veena','Victoria','Xander','Yelda','Yuna','Yuri','Zosia','Zuzana']  # The old voices (that don't work on sierra. They used to work on el-capitan though): ["Samantha",'Bad News','Bahh','Bells','Boing','Bubbles','Cellos','Deranged','Good News','Hysterical','Pipe Organ','Trinoids','Whisper','Zarvox','Agnes','Kathy','Princess','Vicki','Victoria','Alex','Bruce','Fred','Junior','Ralph','Albert']
+
+def text_to_speech_via_espeak(text):
+    """Plays audio from text by reading out loud. Cross-platform: supports windows, mac and linux. Uses espeak-ng and auto-installs if you dont already have it. Not a very good sounding voice though."""
+    import subprocess
+
+    _ensure_espeakng_installed()
+
+    subprocess.run(
+        [
+            "espeak-ng",
+            text,
+        ],
+        check=True,
+    )
+
+@memoized
+def get_macos_voices():
+    """
+    Query, general. Returns all voices installed on this macOS system.
+
+    Discovers voices at runtime via the ``say -v ?`` command, so it always
+    reflects whatever is actually installed (including newly downloaded
+    premium voices). Results are cached after the first call.
+
+    Replaces the old hardcoded list (circa El Capitan / Sierra era):
+        Alex, Alice, Alva, Amelie, Anna, Carmit, Damayanti, Daniel, Diego,
+        Ellen, Fiona, Fred, Ioana, Joana, Jorge, Juan, Kanya, Karen, Kyoko,
+        Laura, Lekha, Luca, Luciana, Maged, Mariska, Mei-Jia, Melina,
+        Milena, Moira, Monica, Nora, Paulina, Samantha, Sara, Satu, Sin-ji,
+        Tessa, Thomas, Ting-Ting, Veena, Victoria, Xander, Yelda, Yuna,
+        Yuri, Zosia, Zuzana
+
+    Returns:
+        list[str]: Sorted voice names (e.g. ['Alex', 'Bad News', ...]).
+
+    Examples:
+        >>> voices = get_macos_voices()
+        >>> 'Samantha' in voices  # Present on every macOS install
+        True
+        >>> voices == sorted(voices)  # Always sorted
+        True
+    """
+    import subprocess
+    result = subprocess.run(['say', '-v', '?'], capture_output=True, text=True)
+    voices = set()
+    for line in result.stdout.strip().split('\n'):
+        if not line:
+            continue
+        # Format: "VoiceName  lang_REGION  # description"
+        # Voice names may contain spaces (e.g. "Bad News", "Good News").
+        # The locale is always xx_XX or xx-xxx — split on that.
+        parts = line.split()
+        name_parts = []
+        for part in parts:
+            # Locale pattern: 2-3 letter code, underscore or dash, then more letters
+            if len(part) >= 4 and (part[2] in '_-' or part[3] in '_-'):
+                break
+            if part == '#':
+                break
+            name_parts.append(part)
+        if name_parts:
+            voices.add(' '.join(name_parts))
+    return sorted(voices)
+
 # Favorites (in this order): Samantha, Alex, Moira, Tessa, Fiona, Fred
 def text_to_speech_via_apple(
     text: str,
@@ -9564,7 +9627,7 @@ def text_to_speech_via_apple(
     Parameters:
         text (str): The text to be spoken
         voice (str): Voice name from Apple's TTS voices (default: "Samantha")
-            Choose from rp.text_to_speech_voices_for_apple
+            Choose from rp.get_macos_voices()
         run_as_thread (bool): If True, runs TTS asynchronously (default: True)
         rate_in_words_per_minute (int, optional): Speech rate (90-720 WPM effective range)
     
@@ -9589,9 +9652,9 @@ def text_to_speech_via_apple(
         >>> text_to_speech_via_apple("Wait for this", run_as_thread=False)
         >>> 
         >>> # View available voices
-        >>> from rp import text_to_speech_voices_for_apple
-        >>> print(text_to_speech_voices_for_apple[:5])  # First 5 voices
-        ['Alex', 'Alice', 'Alva', 'Amelie', 'Anna']
+        >>> from rp import get_macos_voices
+        >>> print(get_macos_voices()[:3])  # First 3 voices
+        ['Albert', 'Alex', 'Alice']
         
         >>> # Popular voices by accent
         >>> text_to_speech_via_apple("American English", voice="Samantha")  # US English
@@ -9625,7 +9688,7 @@ def text_to_speech_via_apple(
     Related Functions:
         - text_to_speech: Base multiplexing function that chooses backend
         - text_to_speech_via_google: Alternative Google TTS backend
-        - text_to_speech_voices_for_apple: Complete voice list
+        - get_macos_voices: Complete voice list (discovered at runtime)
         - fog: Used internally for threading the shell command
         
     Platform Requirements:
@@ -9685,7 +9748,7 @@ def text_to_speech_via_apple(
     """
     # endregion
     # Only works on macs
-    assert voice in text_to_speech_voices_for_apple
+    assert voice in get_macos_voices()
     text=str(text)
     # if filter_characters:  # So you don't have to worry about confusing the terminal with command characters like '|', which would stop the terminal from reading anything beyond that.
     #     text=''.join(list(c if c.isalnum() or c in ".," else " " for c in text))  # remove_characters_that_confuse_the_terminal
@@ -9716,6 +9779,75 @@ def text_to_speech_via_apple(
 #         run_as_new_thread(lambda :shell_command("say -v "+voice+" "+msg))
 #     else:
 #         shell_command("say -v " + voice + " " + msg)
+# endregion
+# region ［text_to_speech_via_siri］
+
+def get_siri_voices():
+    """
+    Query, general. Returns sorted list of available Siri TTS voice names.
+
+    Uses Apple's private SiriTTSService.framework via XPC to enumerate
+    downloaded high-quality Siri voices. Deduplicates by quality tier,
+    keeping only the best variant per voice name.
+
+    macOS only. Requires pyobjc.
+
+    Returns:
+        list[str]: Sorted voice names (e.g. ['Aaron', 'Martha', 'Quinn', ...])
+
+    Examples:
+        >>> voices = get_siri_voices()  # doctest: +SKIP
+        >>> 'Aaron' in voices  # doctest: +SKIP
+        True
+    """
+    pip_import('objc')
+    from rp.libs.siri_tts import list_voice_names
+    return list_voice_names()
+
+
+def text_to_speech_via_siri(
+    text,
+    voice="Aaron",
+    rate=1.0,
+    pitch=1.0,
+    volume=1.0,
+    output_path=None,
+):
+    """
+    Command, general. Synthesize speech using Apple's Siri TTS voices.
+
+    Uses the private SiriTTSService.framework XPC interface to access
+    high-quality Siri voices (48kHz 16-bit LPCM). No system state mutation,
+    direct voice selection, no entitlement checks.
+
+    macOS only. Requires pyobjc.
+
+    Args:
+        text (str): Text to speak.
+        voice (str): Siri voice name (default 'Aaron'). Use get_siri_voices().
+        rate (float): Speaking rate multiplier (default 1.0; 0.5 = slow, 2.0 = fast).
+        pitch (float): Pitch adjustment (default 1.0).
+        volume (float): Volume 0.0 to 1.0 (default 1.0).
+        output_path (str, optional): Save audio to this WAV path instead of playing.
+
+    Returns:
+        str or None: output_path if saving to file, None if playing immediately.
+
+    Examples:
+        >>> text_to_speech_via_siri("Hello world")  # doctest: +SKIP
+        >>> text_to_speech_via_siri("Hello", voice="Martha", output_path="out.wav")  # doctest: +SKIP
+    """
+    pip_import('objc')
+    from rp.libs.siri_tts import text_to_speech
+    return text_to_speech(
+        text,
+        voice=voice,
+        rate=rate,
+        pitch=pitch,
+        volume=volume,
+        output_path=output_path,
+    )
+
 # endregion
 # region ［text_to_speech_via_google］
 text_to_speech_voices_for_google=['fr','es-us','el','sr','sv','la','af','lv','zh-tw','sq','da','en-au','ko','cy','mk','id','hy','es','ro','is','zh-yue','hi','zh-cn','th','ta','it','de','ca','sw','ar','nl','pt','cs','sk','ja','tr','zh','hr','es-es','eo','pt-br','pl','fi','hu','en','ru','en-uk','bn','no','en-us','vi']
@@ -9942,12 +10074,12 @@ def text_to_speech_via_google(text: str,voice='en',*,play_sound: bool = True,run
         delete_file(mp3_file_path)
 
 # endregion
-text_to_speech_voices_all=text_to_speech_voices_for_apple + text_to_speech_voices_for_google
 text_to_speech_voices_favorites=['da','en-au','zh-yue','hi','sk','zh','en','it','Samantha','Alex','Moira','Tessa','Fiona','Fred']
 def text_to_speech_voices_comparison(text="Hello world",time_per_voice=2,voices=None):
     """
     Will cycle through different voices so you can choose which one you like best. I selected my favorite voices to be the beginning, and it will cycle through all available voices by the end.
     """
+    text_to_speech_voices_all = get_macos_voices() + text_to_speech_voices_for_google
     voices = voices or text_to_speech_voices_favorites + shuffled(text_to_speech_voices_all)
     for voice in voices:
         print("Voice: " + voice)
@@ -10887,7 +11019,17 @@ def _get_voxtral_model_and_processor(model="mzbac/voxtral-mini-3b-4bit-mixed"):
         pip_import("mlx_voxtral")
         from mlx_voxtral import VoxtralProcessor, load_voxtral_model
         import mlx.core as mx
-        loaded_model, config = load_voxtral_model(model, dtype=mx.bfloat16)
+        # hf-xet causes deadlocks on large downloads (macOS, multiple shards).
+        # Disable it so huggingface_hub falls back to standard httpx downloader.
+        _prev_xet = os.getenv("HF_HUB_DISABLE_XET")
+        os.environ["HF_HUB_DISABLE_XET"] = "1"
+        try:
+            loaded_model, config = load_voxtral_model(model, dtype=mx.bfloat16)
+        finally:
+            if _prev_xet is None:
+                del os.environ["HF_HUB_DISABLE_XET"]
+            else:
+                os.environ["HF_HUB_DISABLE_XET"] = _prev_xet
         # Processor needs the base model tokenizer
         base_model = config.get("_name_or_path", "mistralai/Voxtral-Mini-3B-2507")
         processor = VoxtralProcessor.from_pretrained(base_model)
@@ -27502,6 +27644,8 @@ def pseudo_terminal(
         strip ans.strip()
         sp    ans.strip()
 
+        LDT $list_dict_transpose(ans)
+
         RZG  $r._load_ryan_lazygit_config()
 
         VIMPROF $r._profile_vim_startup_plugins()
@@ -27593,6 +27737,8 @@ def pseudo_terminal(
         BOP TOP
         BTOP $r._ensure_btop_installed();$r._run_sys_command('btop')
         VT $r._run_voicething()
+        RH  $r._run_report_hub() #Clara-specific
+        RRH $r._run_report_hub() #Clara-specific
 
         bashtop $r._run_bashtop() #Good where BOP doesn't work and MON is too basic
 
@@ -28596,10 +28742,13 @@ def pseudo_terminal(
                         os_name = env_info.os or platform_type
 
                         disk_stat_path='.' #VS /
+                        disk_mount_point = os.path.realpath(disk_stat_path)
+                        while not os.path.ismount(disk_mount_point):
+                            disk_mount_point = os.path.dirname(disk_mount_point)
                         print('Python version: '+version+' at '+fansi(sys.executable,'magenta'))
                         print('Current time: '+_format_datetime(get_current_date()))
                         print(
-                            "Disk space: "
+                            "Disk space (%s): " % fansi(disk_mount_point, 'cyan')
                             + "%s / %s used   :  %s free"
                             % (
                                 human_readable_file_size(get_used_disk_space(disk_stat_path)),
@@ -53223,6 +53372,33 @@ def _ensure_ntfy_installed():
         windows='scoop install ntfy',                   #https://docs.ntfy.sh/install/#windows
     )
 
+@_register_ensure_installed_func
+def _ensure_uv_installed():
+    """uv: Extremely fast Python package manager written in Rust"""
+    try:
+        import uv
+    except ImportError:
+        pip_install("uv", backend="pip")
+
+@_register_ensure_installed_func('espeak-ng')
+def _ensure_espeakng_installed():
+    """espeak-ng: text-to-speech program"""
+    _ensure_installed(
+        'espeak-ng',
+        mac    ='brew install espeak-ng',                       #https://formulae.brew.sh/formula/espeak --> https://formulae.brew.sh/formula/espeak-ng
+        linux  ='apt install espeak-ng --yes',                  #
+        windows='winget install -e --id eSpeak-NG.eSpeak-NG',   #https://winget.run/pkg/espeak/espeak
+    )
+
+@_register_ensure_installed_func('claude-esp')
+def _ensure_claudeesp_installed():
+    """claude-esp: lets you monitor claude subagents"""
+    _ensure_installed(
+        'claude-esp',
+        unix='go install github.com/phiat/claude-esp@latest',
+    )
+    _ensure_shell_has_path(unix="~/go/bin")
+
 @_register_ensure_installed_func('warp-cli')
 def _ensure_warp_cli_installed():
     """warp-cli: Cloudflare WARP proxy client for bypassing IP-based restrictions (e.g. YouTube on datacenter IPs)"""
@@ -53567,6 +53743,23 @@ def _run_bashtop():
 
     #Run it!
     os.system('bashtop')
+
+
+def _run_report_hub():
+    """
+    Command, specific. Launches the Report Catalog hub server in a tmux session.
+
+    Clara-specific: requires ~/CleanCode/Reports/Catalog/ to exist.
+    The server handles its own tmux session management.
+    Opens the dashboard in the browser (unless in SSH).
+    """
+    server_path = get_absolute_path("~/CleanCode/Reports/Catalog/server/server.py")
+    assert file_exists(server_path), "Report Catalog server not found at " + server_path
+
+    _run_sys_command(shlex.join([sys.executable, server_path]))
+
+    if not running_in_ssh():
+        open_file_with_default_application("http://localhost:5555")
 
 
 def _run_voicething():
@@ -57576,28 +57769,55 @@ def _launch_ranger():
 
     return out
 
-def curl(url:str, *, show_progress=False)->str:
-    """
-    Meant to imitate the 'curl' command in linux
-    Sends a get request to the given URL and returns the result string
-    """
-    return curl_bytes(url, show_progress=show_progress).decode('utf-8')
+def curl(url:str, *, show_progress=False, cookies=None)->str:
+    """ Wrapper of rp.curl_bytes - see it for documentation.  """
+    return gather_args_call(curl_bytes).decode('utf-8')
 
-def curl_bytes(url, *, show_progress=False):
+def curl_json(url:str, *, show_progress=False, cookies=None):
+    """ Wrapper of rp.curl_bytes - see it for documentation.  """
+    import json
+    string = gather_args_call(curl)
+    data = json.loads(string)
+    data = as_easydict(data)
+    return data
+
+def curl_bytes(url, *, show_progress=False, cookies=None):
     """
     Fetches a file from a specified URL and returns its bytes
 
     Parameters:
         url (str): The URL of the file to fetch.
-        show_progress (bool): If True, displays download progress bar
+        show_progress (bool): If True, displays download progress bar.
+        cookies: Either a browser name string to auto-extract cookies via
+            browser_cookie3 (one of: 'chrome', 'safari', 'firefox', 'brave',
+            'edge', 'chromium', 'opera', 'vivaldi', 'librewolf', 'opera_gx',
+            'lynx'), or a dict or http.cookiejar.CookieJar to pass directly
+            to requests.get. None means no cookies.
 
     Returns:
         bytes: The bytestring of the file data.
 
-    Example:
-        display_image(decode_image_from_bytes(curl_bytes('https://fileinfo.com/img/ss/xl/jpg_44-2.jpg')))
+    Examples:
+        >>> # Fetch an image
+        >>> # display_image(decode_image_from_bytes(curl_bytes('https://fileinfo.com/img/ss/xl/jpg_44-2.jpg')))
+        >>> # Fetch authenticated content using Chrome cookies
+        >>> # curl_bytes('https://internal.example.com/api', cookies='chrome')
     """
     pip_import('requests')
+
+    extra_kwargs = {} #To be passed to requests.get
+
+    browser_names = 'vivaldi safari opera_gx opera lynx librewolf firefox edge chromium chrome brave'.split()
+    if cookies in browser_names:
+        pip_import('browser_cookie3')
+        pip_import('requests')
+        import browser_cookie3, requests
+
+        browser_name = cookies
+        get_cookies = getattr(browser_cookie3, browser_name)
+        cookies = get_cookies()
+
+        extra_kwargs['cookies']=cookies
 
     assert isinstance(url,str)
 
@@ -57610,7 +57830,7 @@ def curl_bytes(url, *, show_progress=False):
     from io import BytesIO
 
     if show_progress:
-        response = requests.get(url, stream=True)
+        response = requests.get(url, stream=True, **extra_kwargs)
         response.raise_for_status()
 
         content_length = response.headers.get('content-length')
@@ -57633,11 +57853,15 @@ def curl_bytes(url, *, show_progress=False):
             # For unknown size, print completion message
             from datetime import timedelta
             elapsed = time_time() - start_time
-            _print_status("Download: Done! Downloaded {0} in {1}\n".format(human_readable_file_size(bytes_received), timedelta(seconds=elapsed)))
+            _print_status(
+                "Download: Done! Downloaded {0} in {1}\n".format(
+                    human_readable_file_size(bytes_received), timedelta(seconds=elapsed)
+                )
+            )
 
         return b''.join(chunks)
     else:
-        response = requests.get(url)
+        response = requests.get(url, **extra_kwargs)
         response.raise_for_status()
         return BytesIO(response.content).getvalue()
 
@@ -69141,14 +69365,6 @@ def get_free_disk_space(path='/'):
     total, used, free = shutil.disk_usage(path)
     return free
 
-@_register_ensure_installed_func
-def _ensure_uv_installed():
-    """uv: Extremely fast Python package manager written in Rust"""
-    try:
-        import uv
-    except ImportError:
-        pip_install("uv", backend="pip")
-
 _pip_install_needs_sudo=True
 _pip_install_default_backend='pip'
 def pip_install(pip_args:str,*,backend=None):
@@ -69826,6 +70042,7 @@ known_pypi_module_package_names={
     'black_primer': 'black',
     'blackd': 'black',
     'blib2to3': 'black',
+    'browser_cookie3':'browser-cookie3',
     'bs4': 'beautifulsoup4',
     'cached_property': 'cached-property',
     'caffe2': 'torch',
