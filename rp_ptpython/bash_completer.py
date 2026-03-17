@@ -82,6 +82,19 @@ class BashCompleter:
 
             candidates = []
 
+            # Compute replace_origin for flag completions.
+            # Same idea as the path dotfile fix: get_word_before_cursor_custom
+            # doesn't include dashes, so typing "!rm -re" gives name_origin="re"
+            # and the "-" stays in the backspaced doc. Without replace_origin,
+            # completing "--recursive" replaces only "re" → "!rm ---recursive".
+            # Fix: set replace_origin to the dash prefix so it gets replaced too.
+            flag_replace_origin = None
+            if cursor_token_idx < len(tokens):
+                tok = tokens[cursor_token_idx]
+                tok_end = tok.position + len(tok.text)
+                if bash_cursor_pos <= tok_end and tok.text.startswith('-'):
+                    flag_replace_origin = tok.text[:len(tok.text) - len(tok.text.lstrip('-'))]
+
             # Add schema completions with priority=0 (highest)
             if schema_completions:
                 has_descriptions = isinstance(schema_completions, dict)
@@ -103,11 +116,14 @@ class BashCompleter:
                         display = text
                         description = ''
 
+                    # Only set replace_origin on flag candidates (those starting with -)
+                    replace_origin = flag_replace_origin if text.startswith('-') else None
                     candidates.append(Candidate(
                         name=text,
                         display=display,
                         display_meta=description,
-                        priority=0
+                        priority=0,
+                        replace_origin=replace_origin,
                     ))
 
             # Add path completions with priority=1 (lower) unless completing command name

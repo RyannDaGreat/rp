@@ -106,12 +106,32 @@ TTY=$(tmux display -p -t "$PANE" "#{pane_tty}")
 # --- Run command, mirror to tmux ---
 # Show the command at the top of the live pane with inverted formatting
 printf '\033[7m$ %s\033[0m\n\n' "$FULL_CMD" > "$TTY"
-if [ -t 0 ]; then
-    if [ "$IS_MACOS" ]; then
-        script -q "$TTY" "$BASH_BIN" "$@"
+
+if [[ -n "$CLAUDE_FILTER" ]]; then
+    # CLAUDE_FILTER mode: full output to tmux, filtered output to Claude's context
+    CLAUDE_LOGFILE=$(mktemp /tmp/claude_bash_output.XXXXXX)
+    if [ -t 0 ]; then
+        if [ "$IS_MACOS" ]; then
+            script -q "$TTY" "$BASH_BIN" "$@" > "$CLAUDE_LOGFILE" 2>&1
+        else
+            script -qefc "$(printf '%q ' "$BASH_BIN" "$@")" /dev/stdout | tee "$TTY" > "$CLAUDE_LOGFILE"
+        fi
     else
-        script -qefc "$(printf '%q ' "$BASH_BIN" "$@")" /dev/stdout | tee "$TTY"
+        "$BASH_BIN" "$@" 2>&1 | tee "$TTY" > "$CLAUDE_LOGFILE"
     fi
+    CLAUDE_EXIT=$?
+    eval "$CLAUDE_FILTER" < "$CLAUDE_LOGFILE"
+    rm -f "$CLAUDE_LOGFILE"
+    exit $CLAUDE_EXIT
 else
-    "$BASH_BIN" "$@" 2>&1 | tee "$TTY"
+    # Default: full output to both tmux and Claude
+    if [ -t 0 ]; then
+        if [ "$IS_MACOS" ]; then
+            script -q "$TTY" "$BASH_BIN" "$@"
+        else
+            script -qefc "$(printf '%q ' "$BASH_BIN" "$@")" /dev/stdout | tee "$TTY"
+        fi
+    else
+        "$BASH_BIN" "$@" 2>&1 | tee "$TTY"
+    fi
 fi
