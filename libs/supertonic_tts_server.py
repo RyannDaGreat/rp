@@ -243,6 +243,11 @@ def run_server(port=DEFAULT_PORT):
                     self._send_json({'error': str(e)}, 400)
                 return
 
+            if parsed.path == '/stop':
+                sd.stop()
+                self._send_json({'ok': True, 'stopped': True})
+                return
+
             if parsed.path != '/speak':
                 self._send_json({'error': 'Use GET /speak?text=...'}, 404)
                 return

@@ -8439,7 +8439,7 @@ def load_openexr_image(file_path,*,channels=None):
     # Read into tensor
     image = np.zeros((height, width, len(channels)))
     for i, channel in enumerate(channels):
-        rgb32f = np.fromstring(input_file.channel(channel, pixel_type), dtype=np.float32)
+        rgb32f = np.frombuffer(input_file.channel(channel, pixel_type), dtype=np.float32)
         image[:, :, i] = rgb32f.reshape(height, width)
 
     return image
@@ -8958,9 +8958,8 @@ def save_image_jpg(image,path=None,*,quality=100,add_extension=True):
 
     make_parent_directory(path) #Make sure the directory exists
     image=as_numpy_image(image)
-    image=as_rgb_image(image)
-    image=as_byte_image(image)
-    assert 0<=quality<=100,'Jpg quality is measured in percent' 
+    image=_as_rgb_byte_image(image)
+    assert 0<=quality<=100,'Jpg quality is measured in percent'
     if is_image(image):image=as_rgb_image(image)
     if not get_file_extension(path).lower() in {'jpeg','jpg'}:
         path+='.jpg'
@@ -9184,19 +9183,18 @@ def save_animated_webp(video, path=None, *, framerate=60, quality=100, loop=True
     Save an animated video in WebP format.
     If add_extension is True, adds '.webp' extension if not already present.
     """
-    if path is None:
-        path = get_unique_copy_path('video.webp')
-
-    make_parent_directory(path)
-
     assert 0 <= quality <= 100, 'WebP quality is measured in percent'
 
-    if add_extension and not get_file_extension(path).lower() == 'webp':
-        path += '.webp'
+    if add_extension:
+        path = _normalize_video_output_path(path, 'webp')
+    else:
+        if path is None:
+            path = _get_default_video_path('webp')
+        make_parent_directory(path)
+        path = get_absolute_path(path)
    
-    video = as_rgba_images(video) 
-    video = as_byte_images(video)
-    video = as_pil_images(video)
+    video = _as_rgba_byte_video(video)
+    video = as_pil_images(video, copy=False)
     
     kwargs = dict(
         save_all=True,
@@ -10574,6 +10572,88 @@ def stop_sound():
     except ImportError:
         pass
 
+def _tell_spotify(command):
+    """
+    Command, general. Send a command to the native Spotify app via AppleScript.
+
+    macOS only. Spotify must be installed.
+
+    Args:
+        command (str): AppleScript command to send (e.g. 'play', 'pause',
+                       'next track', 'previous track').
+
+    Examples:
+        >>> _tell_spotify('play')   # doctest: +SKIP
+        >>> _tell_spotify('pause')  # doctest: +SKIP
+    """
+    if not currently_running_mac():
+        raise OSError("_tell_spotify uses AppleScript and is only available on macOS")
+    from subprocess import run
+    result = run(
+        ["osascript", "-e", 'tell application "Spotify" to ' + command],
+        check=True, capture_output=True, text=True,
+    )
+    return result.stdout.strip()
+
+def spotify_play():
+    """
+    Command, general. Resume playback on the native Spotify app via AppleScript.
+
+    macOS only. Spotify must be installed. If Spotify is not running,
+    this will launch it and start playback.
+
+    Examples:
+        >>> spotify_play()  # doctest: +SKIP
+    """
+    _tell_spotify("play")
+
+def spotify_pause():
+    """
+    Command, general. Pause playback on the native Spotify app via AppleScript.
+
+    macOS only. Spotify must be running.
+
+    Examples:
+        >>> spotify_pause()  # doctest: +SKIP
+    """
+    _tell_spotify("pause")
+
+def spotify_is_running():
+    """
+    Query, general. Check if the Spotify app is currently running.
+
+    Uses pgrep to avoid launching Spotify (AppleScript would launch it).
+    macOS only.
+
+    Returns:
+        bool
+
+    Examples:
+        >>> spotify_is_running()  # doctest: +SKIP
+        True
+    """
+    if not currently_running_mac():
+        raise OSError("spotify_is_running is only available on macOS")
+    from subprocess import run
+    result = run(["pgrep", "-x", "Spotify"], capture_output=True)
+    return result.returncode == 0
+
+def spotify_is_playing():
+    """
+    Query, general. Check if Spotify is currently playing.
+
+    Returns True if playing, False if paused/stopped.
+    macOS only. Spotify must be running.
+
+    Returns:
+        bool
+
+    Examples:
+        >>> spotify_is_playing()  # doctest: +SKIP
+        True
+    """
+    return _tell_spotify("player state as string") == "playing"
+
 def mp3_to_wav(mp3_file_path: str,wav_output_path: str = None,samplerate=None) -> str:
     """
     This is a audio file converter that converts mp3 files to wav files.
@@ -11285,18 +11365,307 @@ def _display_video_in_marimo(video, *, framerate, loop):
 #     else:
 #         display_embedded_video_in_notebook(video)
 
+def _round_dimensions_to_even(height, width):
+    """
+    Pure function, general. Round height and width down to the nearest even numbers.
+
+    Video codecs (h264, h265, vp9, etc.) require dimensions divisible by 2.
+    This rounds down (crops one row/column) rather than up (which would require padding).
+
+    Args:
+        height (int): Frame height
+        width (int):  Frame width
+
+    Returns:
+        tuple[int, int]: (height, width) both guaranteed even
+
+    Examples:
+        >>> _round_dimensions_to_even(101, 200)
+        (100, 200)
+        >>> _round_dimensions_to_even(100, 99)
+        (100, 98)
+        >>> _round_dimensions_to_even(101, 99)
+        (100, 98)
+        >>> _round_dimensions_to_even(100, 200)
+        (100, 200)
+    """
+    if height % 2: height -= 1
+    if width  % 2: width  -= 1
+    return height, width
+
+def _as_rgb_byte_image(image):
+    """
+    Pure function, general. Convert an image to RGB uint8.
+
+    Examples:
+        >>> import numpy as np
+        >>> _as_rgb_byte_image(np.zeros((10, 10, 3))).dtype
+        dtype('uint8')
+    """
+    return as_byte_image(as_rgb_image(image, copy=False), copy=False)
+
+def _as_rgba_byte_image(image):
+    """
+    Pure function, general. Convert an image to RGBA uint8.
+
+    Examples:
+        >>> import numpy as np
+        >>> _as_rgba_byte_image(np.zeros((10, 10, 4))).shape[2]
+        4
+    """
+    return as_byte_image(as_rgba_image(image, copy=False), copy=False)
+
+def _as_rgb_byte_video(video):
+    """
+    Pure function, general. Convert video frames to RGB uint8.
+
+    Examples:
+        >>> import numpy as np
+        >>> _as_rgb_byte_video([np.zeros((10, 10, 3))])[0].dtype
+        dtype('uint8')
+    """
+    return as_byte_images(as_rgb_images(video, copy=False), copy=False)
+
+def _as_rgba_byte_video(video):
+    """
+    Pure function, general. Convert video frames to RGBA uint8.
+
+    Examples:
+        >>> import numpy as np
+        >>> _as_rgba_byte_video([np.zeros((10, 10, 4))])[0].shape[2]
+        4
+    """
+    return as_byte_images(as_rgba_images(video, copy=False), copy=False)
+
+def _normalize_video_output_path(path, extension):
+    """
+    Pure function, general. Normalize a video output path.
+
+    Applies default path generation, extension enforcement, parent directory
+    creation, and absolute path resolution. Used by video save functions.
+
+    Args:
+        path (str or None): Output path, or None for auto-generated default
+        extension (str):    File extension without dot (e.g. 'mp4', 'webm', 'avi')
+
+    Returns:
+        str: Absolute path with correct extension, parent directory guaranteed to exist
+
+    Examples:
+        >>> # _normalize_video_output_path(None, 'mp4')  # returns something like '/abs/path/video.mp4'
+        >>> # _normalize_video_output_path('out', 'webm')  # returns '/abs/path/out.webm'
+    """
+    if path is None:
+        path = _get_default_video_path(extension)
+    if not has_file_extension(path) or get_file_extension(path).lower() != extension:
+        path += '.' + extension
+    make_parent_directory(path)
+    path = get_absolute_path(path)
+    return path
+
+
+def _infer_bit_depth_from_pix_fmt(pix_fmt):
+    """
+    Pure function, general. Infer per-component bit depth from an ffmpeg pixel format string.
+
+    Parses the pix_fmt string to determine the number of bits per color
+    component. Used to select the correct input format (uint8 vs uint16)
+    when the user specifies a raw ffmpeg pix_fmt string.
+
+    Handles three naming conventions:
+    - Planar depth suffix: yuv420p10le, gbrp12le, yuv444p → 10, 12, 8
+    - Packed total-bits: rgb48le → 48/3=16, rgba64le → 64/4=16, rgb24 → 24/3=8
+    - Everything else: nv12, uyvy422, etc. → 8 (these are 8-bit formats
+      despite having numbers in their names)
+
+    Args:
+        pix_fmt (str): ffmpeg pixel format string (e.g. 'yuv420p10le')
+
+    Returns:
+        int: Bits per component (8, 10, 12, 16, etc.)
+
+    Examples:
+        >>> _infer_bit_depth_from_pix_fmt('yuv420p')
+        8
+        >>> _infer_bit_depth_from_pix_fmt('yuv420p10le')
+        10
+        >>> _infer_bit_depth_from_pix_fmt('yuv444p12le')
+        12
+        >>> _infer_bit_depth_from_pix_fmt('gbrp')
+        8
+        >>> _infer_bit_depth_from_pix_fmt('gbrp12le')
+        12
+        >>> _infer_bit_depth_from_pix_fmt('rgb48le')
+        16
+        >>> _infer_bit_depth_from_pix_fmt('rgba64le')
+        16
+        >>> _infer_bit_depth_from_pix_fmt('rgb24')
+        8
+        >>> _infer_bit_depth_from_pix_fmt('nv12')
+        8
+        >>> _infer_bit_depth_from_pix_fmt('gbrap10le')
+        10
+    """
+    import re
+    # Planar depth suffix: p10le, p12le, p10be, p10, p12, p16, etc.
+    m = re.search(r'p(\d{1,2})(le|be)?$', pix_fmt)
+    if m:
+        return int(m.group(1))
+    # Packed total-bits: rgb24, rgb48le, rgba64le, etc.
+    m = re.search(r'(rgba?)(\d+)(le|be)?$', pix_fmt)
+    if m:
+        total = int(m.group(2))
+        channels = 4 if m.group(1) == 'rgba' else 3
+        return total // channels
+    return 8
+
+def _video_encode_pix_fmts(pix_fmt='yuv420p', alpha=False):
+    """
+    Pure function, general. Return pixel format config for video encoding.
+
+    Single source of truth for pixel format selection across all video backends.
+    Returns the input format (for raw frames), output format (for encoder),
+    numpy dtype, and scale maximum. The pix_fmt string is passed directly to
+    ffmpeg — no gatekeeping. ffmpeg validates codec/pix_fmt compatibility.
+
+    Args:
+        pix_fmt (str):   ffmpeg pixel format string, passed directly as the
+                         encoder output format. Any valid ffmpeg pix_fmt is
+                         accepted — run `ffmpeg -pix_fmts` for the full list
+                         (272 formats).
+
+                         Common formats:
+                           yuv420p        8-bit  4:2:0  (most compatible, default)
+                           yuv420p10le   10-bit  4:2:0
+                           yuv420p12le   12-bit  4:2:0
+                           yuv444p        8-bit  4:4:4  (full chroma resolution)
+                           yuv444p10le   10-bit  4:4:4
+                           yuv444p12le   12-bit  4:4:4
+                           yuva420p       8-bit  4:2:0 + alpha
+                           gbrp           8-bit  planar RGB (no YUV conversion)
+                           gbrp10le      10-bit  planar RGB
+                           gbrp12le      12-bit  planar RGB
+                           gbrap          8-bit  planar RGBA
+                           gbrap10le     10-bit  planar RGBA
+                           gbrap12le     12-bit  planar RGBA
+                           gray           8-bit  grayscale
+                           gray10le      10-bit  grayscale
+                           gray12le      12-bit  grayscale
+
+        alpha (bool):    Whether alpha channel is needed. Used to select the
+                         correct raw input format (rgb vs rgba).
+
+    Returns:
+        tuple: (fmt_in, fmt_out, np_dtype, scale_max)
+            - fmt_in:    Pixel format for raw input frames ('rgb24', 'rgb48le', etc.)
+            - fmt_out:   Pixel format for encoder ('yuv420p', 'yuv444p12le', etc.)
+            - np_dtype:  Numpy dtype for frame data (np.uint8 or np.uint16)
+            - scale_max: Maximum pixel value for the input format (255 for 8-bit,
+                         65535 for >8-bit). Note: rgb48le/rgba64le always use the
+                         full 16-bit range [0, 65535]; the encoder's output format
+                         (yuv420p10le, yuv420p12le) handles the actual bit depth
+                         quantization.
+
+    Examples:
+        >>> _video_encode_pix_fmts('yuv420p')
+        ('rgb24', 'yuv420p', dtype('uint8'), 255)
+        >>> _video_encode_pix_fmts('yuv420p10le')
+        ('rgb48le', 'yuv420p10le', dtype('uint16'), 65535)
+        >>> _video_encode_pix_fmts('yuv420p12le')
+        ('rgb48le', 'yuv420p12le', dtype('uint16'), 65535)
+        >>> _video_encode_pix_fmts('yuva420p', alpha=True)
+        ('rgba', 'yuva420p', dtype('uint8'), 255)
+        >>> _video_encode_pix_fmts('yuv444p12le')
+        ('rgb48le', 'yuv444p12le', dtype('uint16'), 65535)
+        >>> _video_encode_pix_fmts('yuv444p')
+        ('rgb24', 'yuv444p', dtype('uint8'), 255)
+        >>> _video_encode_pix_fmts('gbrp12le')
+        ('rgb48le', 'gbrp12le', dtype('uint16'), 65535)
+        >>> _video_encode_pix_fmts('gbrp')
+        ('rgb24', 'gbrp', dtype('uint8'), 255)
+    """
+    depth = _infer_bit_depth_from_pix_fmt(pix_fmt)
+    if depth > 8:
+        fmt_in = 'rgba64le' if alpha else 'rgb48le'
+        return (fmt_in, pix_fmt, np.uint16, 65535)
+    fmt_in = 'rgba' if alpha else 'rgb24'
+    return (fmt_in, pix_fmt, np.uint8, 255)
+
+def _prepare_video_frame_for_encoding(frame, height, width, mode='rgb', scale_max=255):
+    """
+    Pure function, general. Crop and convert a frame for video encoding.
+
+    Crops to (height, width), converts to the target channel mode,
+    and ensures correct dtype for the given scale_max.
+
+    Args:
+        frame:          Image (numpy array, torch tensor, PIL image, etc.)
+        height (int):   Target height
+        width (int):    Target width
+        mode (str):     'rgb' for 3-channel or 'rgba' for 4-channel output
+        scale_max (int): Max pixel value for the input format. 255 for 8-bit
+            (rgb24), 65535 for >8-bit (rgb48le/rgba64le). The encoder's output
+            format (yuv420p10le, yuv420p12le) handles actual bit depth quantization.
+
+    Returns:
+        numpy.ndarray: (H, W, C) array ready for encoding.
+            uint8 when scale_max<=255, uint16 when scale_max>255.
+
+    Examples:
+        >>> import numpy as np
+        >>> f = np.zeros((100, 100, 3), dtype=np.uint8)
+        >>> out = _prepare_video_frame_for_encoding(f, 50, 50, mode='rgb')
+        >>> out.shape, out.dtype
+        ((50, 50, 3), dtype('uint8'))
+        >>> f16 = np.zeros((100, 100, 3), dtype=np.float32)
+        >>> out16 = _prepare_video_frame_for_encoding(f16, 50, 50, scale_max=65535)
+        >>> out16.dtype
+        dtype('uint16')
+    """
+    # For >8-bit: convert to numpy first, then crop/channel-convert.
+    # crop_image and as_rgb_image use is_image() which rejects uint16,
+    # so we must handle uint16 frames by converting to float first.
+    frame = as_numpy_image(frame, copy=False)
+    if scale_max > 255 and frame.dtype == np.uint16:
+        # Normalize uint16 [0, 65535] to float [0, 1] so crop/channel helpers work
+        frame = frame.astype(np.float32) / 65535.0
+
+    frame = crop_image(frame, height, width, copy=False)
+    if mode == 'rgba':
+        frame = as_rgba_image(frame, copy=False)
+    else:
+        frame = as_rgb_image(frame, copy=False)
+
+    if scale_max <= 255:
+        frame = as_byte_image(frame, copy=False)
+    else:
+        frame = as_numpy_image(frame, copy=False)
+        if is_float_image(frame):
+            frame = np.round(_clamp_float_image(frame) * scale_max).astype(np.uint16)
+        elif frame.dtype == np.uint8:
+            # Upscale uint8 [0, 255] to full uint16 [0, 65535].
+            # 65535 = 255 * 257, so v * 257 is exact with no division needed.
+            # Use int32 to avoid uint16 overflow (255 * 257 = 65535 fits int32).
+            frame = (frame.astype(np.int32) * 257).astype(np.uint16)
+        else:
+            raise ValueError(
+                "Unsupported frame dtype %r for scale_max=%d. "
+                "Expected float, uint8, or uint16."
+                % (frame.dtype, scale_max)
+            )
+
+    return frame
+
 def _make_video_dimensions_even(video):
-    """ 
-    Make the video have an even height and width. Used for saving MP4's. 
+    """
+    Command, specific. Make the video have an even height and width. Used for saving MP4's.
     Without this, if a video with odd height or odd width is displayed with mediapy, it renders as a black rectangle.
     If you download that video, it can be viewed with more niche video viewers like Videoloupe, but it cannot be viewed in Vivaldi
     """
     video = rp.crop_images_to_max_size(video)
     height, width = rp.get_video_dimensions(video)
-    if height%2 or width%2:
-        #Can't display an MP4 video with odd height or width!
-        new_height = math.ceil(height/2)*2
-        new_width  = math.ceil(width /2)*2
+    new_height, new_width = _round_dimensions_to_even(height, width)
+    if new_height != height or new_width != width:
         video = rp.crop_images(video, new_height, new_width)
     return video
 
@@ -11307,9 +11676,8 @@ def _display_video_via_mediapy(video, framerate):
     import mediapy
 
     #Prepare the video
-    video = rp.as_numpy_images(video)
-    video = rp.as_rgb_images(video)
-    video = rp.as_byte_images(video)
+    video = rp.as_numpy_images(video, copy=False)
+    video = _as_rgb_byte_video(video)
     video = _make_video_dimensions_even(video)
 
     return mediapy.show_video(video, fps=framerate)
@@ -12577,8 +12945,7 @@ def display_cv_color_histogram(
     import cv2 as cv
     from matplotlib import pyplot as plt
 
-    image = as_rgba_image(image)
-    image = as_byte_image(image)
+    image = _as_rgba_byte_image(image)
 
     colors = {"r": 0, "g": 1, "b": 2, "a": 3}
     for channel in channels:
@@ -16391,7 +16758,7 @@ def record_mono_audio(time_in_seconds,samplerate=default_samplerate,stream=None,
             default_audio_mono_input_stream=pyaudio.PyAudio().open(format=pyaudio.paInt16,channels=1,rate=default_samplerate,input=True,frames_per_buffer=default_audio_stream_chunk_size)
         stream=default_audio_mono_input_stream
     number_of_chunks_needed=np.ceil(time_in_seconds * samplerate / chunk_size)  # Rounding up.
-    out=np.hstack([np.fromstring(stream.read(num_frames=chunk_size,exception_on_overflow=False),dtype=np.int16) for _ in [None] * int(number_of_chunks_needed)])  # Record the audio
+    out=np.hstack([np.frombuffer(stream.read(num_frames=chunk_size,exception_on_overflow=False),dtype=np.int16) for _ in [None] * int(number_of_chunks_needed)])  # Record the audio
     out=np.ndarray.astype(out,float)  # Because by default it's an integer (not a floating point thing)
     out/=2 ** 15  # --> ∈［﹣1，1］ because we use pyaudio.paInt16. I confirmed this by banging on the speaker loudly and seeing 32743.0 as the max observed value.  ﹙# out/=max([max(out),-min(out)]) ⟵ originally this﹚
     # stream.stop_stream();stream.close() ⟵ Is slow. Takes like .1 seconds. I profiled this method so that it runs very, very quickly (response time is about a 1% of a millisecond)
@@ -21119,8 +21486,7 @@ def display_image_in_terminal_color(image,*,truecolor=True):
 
     assert is_image(image)
     image=as_numpy_image(image,copy=False)
-    image=as_rgb_image(image)
-    image=as_byte_image(image)
+    image=_as_rgb_byte_image(image)
     image=resize_image_to_fit(image,width=get_terminal_width(),allow_growth=False)
 
     if get_image_height(image)%2:
@@ -21194,10 +21560,9 @@ def display_image_in_terminal_imgcat(image, *, pixels_per_line=24):
         image = open(image)
     else:
         assert is_image(image)
-        
-        image = as_rgb_image(image)
-        image = as_byte_image(image)
-        
+
+        image = _as_rgb_byte_image(image)
+
         #I don't know the maximum size, but I'm sure this will do just fine
         #After a certain size, it just won't display...
         # image = resize_image_to_fit(image, width=1024, height=1024, allow_growth=False)
@@ -24676,6 +25041,9 @@ def replace_symlinks_with_hardlinks(
     symlink_paths = rp_iglob(symlink_paths)
     return load_files(replace_symlink_with_hardlink, symlink_paths, lazy=lazy, strict=strict, show_progress=show_progress, num_threads=num_threads)
 
+harden_symlinks=replace_symlinks_with_hardlinks
+harden_symlink=replace_symlink_with_hardlink
+
 
 def make_symlink(original_path, symlink_path=".", *, relative=False, replace=False, strict=True):
     """
@@ -25252,7 +25620,7 @@ def _rma(ans):
         if bad_paths:
             print("The following paths don't exist:\n"+['    '+x for x in bad_paths])
         if input_yes_no("Are you sure you want to delete the below paths?\n"+line_join(['    '+str(x) for x in ans])):
-            for x in ans:
+            for x in eta(ans, title='Deleting %s paths' % len(ans)):
                 delete_path(x)
     else:
         if not path_exists(ans):
@@ -26579,6 +26947,7 @@ def pseudo_terminal(
         
   Tags: repl, terminal, interactive, command-system, ptpython
   """
+  import os,re,sys
   if style is None:style = _pseudo_terminal_style()
   with _PtermLevelTitleContext(level_title):
     try:
@@ -27307,6 +27676,7 @@ def pseudo_terminal(
         SC SHORTCUTS
 
         CO  COPY
+        COS $string_to_clipboard(str(ans))
         WCO WCOPY
         LC  LCOPY
         WC  WCOPY
@@ -27739,6 +28109,7 @@ def pseudo_terminal(
         VT $r._run_voicething()
         RH  $r._run_report_hub() #Clara-specific
         RRH $r._run_report_hub() #Clara-specific
+        RRC $r._run_report_hub() #Clara-specific - Run Report Catalog
 
         bashtop $r._run_bashtop() #Good where BOP doesn't work and MON is too basic
 
@@ -27855,7 +28226,7 @@ def pseudo_terminal(
         HLPH $r._cpah($string_from_clipboard(),method=$partial($make_hardlink,recursive=True))#HardLink Paste Here
         HLP  $r._cpah($string_from_clipboard(),method=$partial($make_hardlink,recursive=True))#HardLink Paste Here
 
-        TMDA $os.system('tmux list-sessions -F "#{session_name}" | xargs -I % tmux detach -s %') #Detach all users from all tmux sessions
+        TMDA $r._tmda() #Detach all users from all tmux sessions
         TMKS !tmux kill-server
     
         RF    $random_element([x for x in $os.scandir() if not x.is_dir(follow_symlinks=False)]).name
@@ -28048,7 +28419,7 @@ def pseudo_terminal(
 
         NL $fansi_print('Number of lines in ans: %i'%$number_of_lines(ans), 'yellow')
 
-        ZG $r._install_lazygit();$os.system('lazygit')
+        ZG $r._ensure_lazygit_installed();$r._launch_lazygit()
         UNCOMMIT !git reset --soft HEAD^
 
         # ZGA $os.system('cd '+ans'+' && lazygit') #NOT Ready yet - CDA's logic is more complex and can handle funcs and modules, this could only handle strings...
@@ -28207,9 +28578,11 @@ def pseudo_terminal(
                     # if 'vim' in scope():
                     #     print("GLOO GLOO")
                         
+                    _was_command_shortcut=False
                     if user_message in command_shortcuts and user_message not in scope():
                         original_user_message=user_message
                         user_message=command_shortcuts[user_message]
+                        _was_command_shortcut=True
                         if _get_pterm_verbose() or not user_message.isupper(): fansi_print("Transformed input to "+repr(user_message.replace(rp_import,''))+' because variable '+repr(original_user_message)+' doesn\'t exist but is a shortcut in SHORTCUTS','magenta','bold')
 
                     if user_message.strip().isalpha() and user_message.strip() and user_message.islower() and not user_message.strip() in scope() and user_message.upper().strip() in help_commands_no_spaces_to_spaces:
@@ -30904,7 +31277,7 @@ def pseudo_terminal(
                                     set_ans(get_ans())
                                 del _temp_old_ans#
                                 # raise KeyboardInterrupt()
-                                if __error is None and result is None:
+                                if __error is None and (result is None):# or _was_command_shortcut):
                                     add_to_successful_command_history(user_message)
                                 elif __error is None:
                                     dupdate(dicts[0],'ans')
@@ -44627,28 +45000,185 @@ def video_has_audio(path, *, use_cache=True, strict=False, include_silent=True):
 #     import smart_open
 #     path=smart_open.smart_open(path, mode)
 
-def _load_video_stream(location, start_frame=0):
+def _get_video_bit_depth(path):
+    """
+    Query, general. Probe a video file's pixel format via PyAV and return its bit depth.
+
+    Returns 8, 10, or 12. Defaults to 8 if detection fails or format is unrecognized.
+
+    Args:
+        path (str): Path to a video file.
+
+    Returns:
+        int: Bit depth (8, 10, or 12).
+
+    Examples:
+        >>> # _get_video_bit_depth('8bit.mp4')
+        8
+        >>> # _get_video_bit_depth('10bit_h265.mp4')
+        10
+    """
+    av = pip_import('av')
+    _pix_fmt_bit_depths = {
+        'yuv420p':     8,  'yuv422p':     8,  'yuv444p':     8,
+        'yuv420p10le': 10, 'yuv422p10le': 10, 'yuv444p10le': 10,
+        'yuv420p10be': 10, 'yuv422p10be': 10, 'yuv444p10be': 10,
+        'yuv420p12le': 12, 'yuv422p12le': 12, 'yuv444p12le': 12,
+        'yuv420p12be': 12, 'yuv422p12be': 12, 'yuv444p12be': 12,
+        'yuva420p':    8,  'yuva444p':    8,
+        'rgb24':       8,  'bgr24':       8,  'rgba':        8,
+        'rgb48le':     16, 'rgb48be':     16,
+        'gbrp':        8,  'gbrp10le':    10, 'gbrp12le':    12,
+    }
+    try:
+        container = av.open(str(path))
+        stream = container.streams.video[0]
+        pix_fmt = stream.codec_context.pix_fmt
+        container.close()
+        return _pix_fmt_bit_depths.get(pix_fmt, 8)
+    except Exception:
+        return 8
+
+
+def _cv_load_video_stream(location, start_frame=0):
     #I don't know how to stream videos directly from the web. So instead we'll download it as a temp file and stram it from there. Not ideal but better than nothing.
     with _MaybeTemporarilyDownloadVideo(location) as path:
-        
+
         cv2=pip_import('cv2')
         assert file_exists(path),'load_video error: path '+repr(path)+' does not point to a file that exists'#Opencv will silently fail if this breaks
         cv_stream=cv2.VideoCapture(path)
-        
+
         if start_frame:
             # Set the frame position to start_frame
             # This is always faster than iterating though all the frames! Even so, it might still be slow for big videos.
             # Needs to find the nearest iframe and decode from there.
             cv_stream.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-        
+
         while True:
             not_done,frame=cv_stream.read()
             if not not_done:
                 return
             yield cv_bgr_rgb_swap(frame)
 
-def load_video_stream(path, *, start_frame=0, with_length=True, frame_transform=None):
+
+def _load_video_stream_via_av(location, start_frame=0, dtype=None):
     """
+    Command, general. Decode video frames via PyAV.
+
+    Yields (H, W, C) numpy arrays. Output dtype depends on the `dtype` param:
+
+        dtype=None picks the smallest dtype that preserves full precision:
+
+            Bit depth | Encoder pix_fmt | Decode via  | Output dtype | Range       | Why
+            ----------|-----------------|-------------|--------------|-------------|----
+            8         | yuv420p         | rgb24       | uint8        | [0, 255]    | Standard, same as cv2 path
+            10        | yuv420p10le     | rgb48le     | float16      | [0.0, 1.0]  | float16 has a 10-bit mantissa, so 1024 levels map losslessly
+            12        | yuv420p12le     | rgb48le     | float32      | [0.0, 1.0]  | float16 mantissa is only 10 bits -> would lose 25% of 4096 levels
+
+        dtype='byte':  always uint8  [0, 255]     — clips >8-bit to 8-bit
+        dtype='int':   raw integers, no math       — uint8 for 8-bit, uint16 [0, 65535] for >8-bit
+        dtype='float': always float32 [0.0, 1.0]   — normalizes any bit depth
+
+    PyAV decodes >8-bit video to rgb48le (uint16 [0, 65535]) regardless of
+    whether the source is 10 or 12-bit. The 'auto' and 'float' modes normalize
+    to [0, 1] by dividing by 65535. The 'int' mode returns the raw uint16 values.
+
+    Alpha channels (yuva* pix_fmts) are detected automatically -> (H, W, 4).
+
+    Args:
+        location (str): Path or URL to a video file.
+        start_frame (int): Frame index to start decoding from.
+        dtype (str or None): None, 'byte', 'int', or 'float'. Controls output dtype.
+
+    Yields:
+        numpy.ndarray: (H, W, 3) or (H, W, 4) frames.
+    """
+    av = pip_import('av')
+
+    with _MaybeTemporarilyDownloadVideo(location) as path:
+        assert file_exists(path), 'load_video error: path %r does not point to a file that exists' % path
+
+        container = av.open(str(path))
+        video_stream = container.streams.video[0]
+        pix_fmt = video_stream.codec_context.pix_fmt
+
+        bit_depth = _get_video_bit_depth(path)
+        has_alpha = pix_fmt.startswith('yuva')
+
+        # Resolve dtype=None based on bit depth
+        if dtype is None:
+            if bit_depth <= 8:
+                resolved = 'byte'
+            elif bit_depth <= 10:
+                resolved = 'float16'
+            else:
+                resolved = 'float32'
+        else:
+            resolved = dtype  # 'byte', 'int', or 'float'
+
+        # Pick decode format and output conversion
+        if resolved == 'byte':
+            # Decode to 8-bit RGB regardless of source
+            decode_fmt = 'rgba' if has_alpha else 'rgb24'
+            out_dtype = np.uint8
+            scale = None
+        elif resolved == 'int':
+            # Raw integer values: uint8 for 8-bit, uint16 for >8-bit
+            if bit_depth <= 8:
+                decode_fmt = 'rgba' if has_alpha else 'rgb24'
+                out_dtype = np.uint8
+            else:
+                decode_fmt = 'rgba64le' if has_alpha else 'rgb48le'
+                out_dtype = np.uint16
+            scale = None
+        elif resolved == 'float16':
+            # float16 mantissa = 10 bits = 1024 levels, matches 10-bit exactly
+            decode_fmt = 'rgba64le' if has_alpha else 'rgb48le'
+            out_dtype = np.float16
+            scale = np.float32(1.0 / 65535)
+        else:
+            # 'float' or 'float32': safe for any bit depth
+            if bit_depth <= 8:
+                decode_fmt = 'rgba' if has_alpha else 'rgb24'
+                out_dtype = np.float32
+                scale = np.float32(1.0 / 255)
+            else:
+                decode_fmt = 'rgba64le' if has_alpha else 'rgb48le'
+                out_dtype = np.float32
+                scale = np.float32(1.0 / 65535)
+
+        if start_frame:
+            # Seek to nearest keyframe before start_frame, then skip forward
+            video_stream.codec_context.skip_frame = 'NONKEY'
+            container.seek(start_frame, stream=video_stream)
+            video_stream.codec_context.skip_frame = 'DEFAULT'
+
+        frame_index = 0
+        for packet in container.demux(video_stream):
+            for frame in packet.decode():
+                if frame.pts is None:
+                    continue  # Flushing packet at end of stream
+                if start_frame and frame_index < start_frame:
+                    frame_index += 1
+                    continue
+                frame_index += 1
+
+                arr = frame.to_ndarray(format=decode_fmt)
+
+                if scale is not None:
+                    # Normalize uint16 [0, 65535] -> float [0, 1]
+                    # Multiply in float32 for precision, then cast to output dtype
+                    arr = (arr.astype(np.float32) * scale).astype(out_dtype)
+
+                yield arr
+
+        container.close()
+
+
+def load_video_stream(path, *, start_frame=0, with_length=True, frame_transform=None, backend='auto', dtype=None):
+    """
+    Command, general. Stream video frames as a generator.
+
     Much faster than load_video, which loads all the frames into a numpy array. This means load_video has to iterate through all the frames before you can even use the first frame.
     load_video_stream is a generator, meaning to get the next frame you use python's builtin 'next' function
     Returns a generator that iterates through the frame images
@@ -44661,6 +45191,24 @@ def load_video_stream(path, *, start_frame=0, with_length=True, frame_transform=
     If with_length, will attempt to give this iterator a __len__. If it fails, it won't error - the output simply won't have a __len__ attribute.
     with_length will make it a tiny bit slower, as calling get_video_file_num_frames is not instant.
 
+    Args:
+        path (str): Path or URL to video file.
+        start_frame (int): Frame index to start from.
+        with_length (bool): Attach __len__ to iterator if possible.
+        frame_transform (callable): Optional per-frame transform.
+        backend (str): 'auto', 'cv', or 'av'.
+            - 'auto': picks the best backend for the requested dtype and video
+            - 'cv': always use cv2 (can only output uint8)
+            - 'av': always use PyAV
+        dtype (str or None): None, 'byte', 'int', or 'float'. Controls output dtype.
+            - None: picks the smallest dtype that preserves full precision (default):
+                8-bit  -> uint8   [0, 255]
+                10-bit -> float16 [0, 1]  (float16 has 10-bit mantissa = lossless)
+                12-bit -> float32 [0, 1]  (float16 would lose 25% of 4096 levels)
+            - 'byte':  always uint8  [0, 255]
+            - 'int':   raw integers, no normalization (uint8 for 8-bit, uint16 [0, 65535] for >8-bit)
+            - 'float': always float32 [0.0, 1.0]
+
     EXAMPLE:
         display_video(load_video_stream('https://www.shutterstock.com/shutterstock/videos/10884623/preview/stock-footage--k-pastel-pixel-animation-background-seamless-loop.webm'))
     EXAMPLE:
@@ -44668,10 +45216,34 @@ def load_video_stream(path, *, start_frame=0, with_length=True, frame_transform=
     EXAMPLE:
         for frame in load_video_stream(download_youtube_video('https://www.youtube.com/watch?v=cAy4zULKFDU')):display_image(frame)  #Monty python clip
     """
-    assert isinstance(start_frame, int) and start_frame >= 0, "rp.load_video_stream: start_frame must be a non-negative integer, got {}".format(start_frame)
-    assert isinstance(path, str), "rp.load_video_stream: path must be a string, got {}".format(type(path).__name__)
+    assert isinstance(start_frame, int) and start_frame >= 0, "rp.load_video_stream: start_frame must be a non-negative integer, got %s" % start_frame
+    assert isinstance(path, str), "rp.load_video_stream: path must be a string, got %s" % type(path).__name__
+    assert backend in ('auto', 'cv', 'av'), "rp.load_video_stream: backend must be 'auto', 'cv', or 'av', got %r" % backend
+    assert dtype in (None, 'byte', 'int', 'float'), "rp.load_video_stream: dtype must be None, 'byte', 'int', or 'float', got %r" % dtype
 
-    frame_iterator = _load_video_stream(path, start_frame=start_frame)
+    # Choose backend
+    if backend == 'cv':
+        use_av = False
+    elif backend == 'av':
+        use_av = True
+    else:
+        # auto: need av for anything other than byte output on >8-bit video,
+        # and also need av for int/float output since cv2 can only do uint8
+        if dtype in ('int', 'float'):
+            use_av = True
+        elif dtype == 'byte':
+            use_av = False
+        else:
+            # dtype=None: probe bit depth, need av if >8-bit
+            try:
+                use_av = _get_video_bit_depth(path) > 8
+            except Exception:
+                use_av = False
+
+    if use_av:
+        frame_iterator = _load_video_stream_via_av(path, start_frame=start_frame, dtype=dtype)
+    else:
+        frame_iterator = _cv_load_video_stream(path, start_frame=start_frame)
 
     if frame_transform is not None:
         frame_iterator = map(frame_transform, frame_iterator)
@@ -44698,7 +45270,9 @@ def load_video_streams(
     num_threads=0, #Sometimes segfaulted when I did it this way...
     strict=True,
     lazy=False,
-    buffer_limit=None
+    buffer_limit=None,
+    backend='auto',
+    dtype=None
 ):
     """ Plural of load_video_stream. If transpose==True, returns a single iterator that returns tuples of frames """
 
@@ -44711,7 +45285,7 @@ def load_video_streams(
     assert len(start_frame)==len(paths), 'Must specify start_frame for each video'
 
     def load(i):
-        return load_video_stream(paths[i], start_frame=start_frame[i], with_length=with_length, frame_transform=frame_transform)
+        return load_video_stream(paths[i], start_frame=start_frame[i], with_length=with_length, frame_transform=frame_transform, backend=backend, dtype=dtype)
 
     streams = gather_args_call(load_files, load, range(len(paths)))
         
@@ -44729,8 +45303,10 @@ def load_video_streams(
 
 
 _load_video_cache = {}
-def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cache=False, frame_transform=None):
+def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cache=False, frame_transform=None, backend='auto', dtype=None, lazy=False):
     """
+    Command, general. Load video frames into a numpy array (or lazy iterator).
+
     This function does not take into account framerates or audio. It just returns a numpy array full of images.
     It's slower to call than load_video_stream, but it can be cached using use_cache (which would actually make it faster, if applicable)
 
@@ -44739,14 +45315,27 @@ def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cach
         start_frame (int, optional): The frame number to start loading from. Defaults to 0.
         length (int, optional): The maximum number of frames to load. If None, all frames are loaded.
         show_progress (bool, optional): Whether to display progress messages during loading. Defaults to True.
-                                        Setting this to False can result in a small performance boost, as it won't 
+                                        Setting this to False can result in a small performance boost, as it won't
                                         check the length of the video (which might take a small bit of time)
         use_cache (bool, optional): Whether to cache the loaded video for faster subsequent loading. Defaults to False.
-                                    
         frame_transform (callable, optional): If specified, transforms each frame with this function.
+        backend (str): 'auto', 'cv', or 'av'. Which decoder library to use.
+            - 'auto': picks the best backend for the requested dtype and video (default)
+            - 'cv': always use cv2 (can only output uint8)
+            - 'av': always use PyAV
+        dtype (str or None): None, 'byte', 'int', or 'float'. Controls output dtype.
+            - None: picks the smallest dtype that preserves full precision (default):
+                8-bit  -> uint8   [0, 255]
+                10-bit -> float16 [0, 1]  (float16 has 10-bit mantissa = lossless for 1024 levels)
+                12-bit -> float32 [0, 1]  (float16 would lose 25% of 4096 levels)
+            - 'byte':  always uint8  [0, 255]
+            - 'int':   raw integers, no normalization (uint8 for 8-bit, uint16 [0, 65535] for >8-bit)
+            - 'float': always float32 [0.0, 1.0]
+        lazy (bool): If True, return an IteratorWithLen instead of collecting into a numpy array.
 
     Returns:
         numpy.ndarray: A NumPy array containing the loaded video frames in THWC form.
+        Or IteratorWithLen if lazy=True.
 
     Notes:
         - This function does not consider framerates or audio. It only returns a NumPy array of frame images.
@@ -44767,10 +45356,62 @@ def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cach
 
         >>> video = load_video('https://videos.pexels.com/video-files/5229792/5229792-uhd_2560_1440_24fps.mp4',use_cache=True)
 
+        >>> stream = load_video("path/to/video.mp4", lazy=True)
+        >>> # isinstance(stream, IteratorWithLen) and hasattr(stream, '__len__')
+
+        Round-trip precision proof — save a gradient at 8/10/12-bit, then load
+        with each dtype mode and verify that the outputs differ as expected:
+        >>> import numpy as np, tempfile
+        >>> gradient = np.linspace(0, 1, 64*64).reshape(1, 64, 64, 1).repeat(3, axis=3)
+        >>> gradient = np.tile(gradient, (10, 1, 1, 1))  # 10 frames of grayscale ramp
+        >>> p8  = tempfile.mktemp(suffix='.mp4')
+        >>> p10 = tempfile.mktemp(suffix='.mp4')
+        >>> p12 = tempfile.mktemp(suffix='.mp4')
+        >>> _ = save_video_mp4(gradient, p8,  codec='h264', pix_fmt='yuv420p',    video_bitrate='high', show_progress=False)
+        >>> _ = save_video_mp4(gradient, p10, codec='h265', pix_fmt='yuv420p10le', video_bitrate='high', show_progress=False)
+        >>> _ = save_video_mp4(gradient, p12, codec='h265', pix_fmt='yuv420p12le', video_bitrate='high', show_progress=False)
+        >>>
+        >>> # dtype=None: auto-selects dtype based on video bit depth
+        >>> v8  = load_video(p8,  show_progress=False)   # 8-bit  -> uint8
+        >>> v10 = load_video(p10, show_progress=False)   # 10-bit -> float16
+        >>> v12 = load_video(p12, show_progress=False)   # 12-bit -> float32
+        >>> assert v8.dtype == np.uint8 and v10.dtype == np.float16 and v12.dtype == np.float32
+        >>>
+        >>> # Higher bit depth = lower round-trip error
+        >>> err_8  = abs(v8.astype('f8') / 255 - gradient).max()
+        >>> err_10 = abs(v10.astype('f8')       - gradient).max()
+        >>> err_12 = abs(v12.astype('f8')       - gradient).max()
+        >>> assert err_12 < err_10 < err_8
+        >>>
+        >>> # dtype='byte': always uint8, even from a 12-bit video (loses precision)
+        >>> v12_byte = load_video(p12, show_progress=False, dtype='byte')
+        >>> assert v12_byte.dtype == np.uint8
+        >>> err_12_byte = abs(v12_byte.astype('f8') / 255 - gradient).max()
+        >>> assert err_12 < err_12_byte  # byte mode loses the extra precision
+        >>>
+        >>> # dtype='int': raw integer values, no normalization
+        >>> v10_int = load_video(p10, show_progress=False, dtype='int')
+        >>> assert v10_int.dtype == np.uint16       # 10-bit video -> uint16 raw values
+        >>> assert v10_int.max() > 255              # Values exceed 8-bit range
+        >>> v8_int = load_video(p8, show_progress=False, dtype='int')
+        >>> assert v8_int.dtype == np.uint8         # 8-bit video -> uint8 raw values
+        >>>
+        >>> # dtype='float': always float32, even from an 8-bit video
+        >>> v8_float = load_video(p8, show_progress=False, dtype='float')
+        >>> assert v8_float.dtype == np.float32
+        >>> assert 0 <= v8_float.min() and v8_float.max() <= 1.0
+        >>>
+        >>> # Prove float16 is lossless for 10-bit: 1024 distinct levels survive float16
+        >>> levels_10bit = np.linspace(0, 1, 1024, dtype=np.float64)
+        >>> assert len(np.unique(levels_10bit.astype(np.float16))) == 1024
+        >>> # But float16 is lossy for 12-bit: 4096 levels collapse
+        >>> levels_12bit = np.linspace(0, 1, 4096, dtype=np.float64)
+        >>> assert len(np.unique(levels_12bit.astype(np.float16))) < 4096
+
     """
-    assert length is None or (isinstance(length, int) and length >= 0), "rp.load_video: length must be None or a non-negative integer, got {}".format(length)
-    assert isinstance(start_frame, int) and start_frame >= 0, "rp.load_video: start_frame must be a non-negative integer, got {}".format(start_frame)
-    assert isinstance(path, str), "rp.load_video: path must be a string, got {}".format(type(path).__name__)
+    assert length is None or (isinstance(length, int) and length >= 0), "rp.load_video: length must be None or a non-negative integer, got %s" % repr(length)
+    assert isinstance(start_frame, int) and start_frame >= 0, "rp.load_video: start_frame must be a non-negative integer, got %s" % repr(start_frame)
+    assert isinstance(path, str), "rp.load_video: path must be a string, got %s" % type(path).__name__
 
     progress_prefix = "\rload_video: path=" + repr(path) + ": "
     
@@ -44796,13 +45437,22 @@ def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cach
         pil_video = _load_animated_image_via_pil(path, use_cache=False) #Can support alpha GIF's. This func handles caching.
         stream = iter(pil_video)
     else:
-        #All other videos such as MP4's use CV2
-        stream = load_video_stream(path, start_frame = start_frame, with_length=show_progress, frame_transform=frame_transform)
+        stream = load_video_stream(path, start_frame=start_frame, with_length=show_progress, frame_transform=frame_transform, backend=backend, dtype=dtype)
+
+    if lazy:
+        # Return the stream directly, with length truncation if needed
+        if length is not None:
+            import itertools
+            limited = itertools.islice(stream, length)
+            if hasattr(stream, '__len__'):
+                return IteratorWithLen(limited, min(length, len(stream)))
+            return limited
+        return stream
 
     out = []
-    
+
     for i, frame in enumerate(stream):
-        if length is not None and i>= length:
+        if length is not None and i >= length:
             break
         if show_progress:
             if hasattr(stream, "__len__"):
@@ -44810,25 +45460,25 @@ def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cach
                 #This is the number of frames that will be returned
                 output_length = len(stream)
                 if length is not None:
-                    output_length = min(length, len(stream)) 
+                    output_length = min(length, len(stream))
 
                 progress_message = "Loaded frame %i of %i..." % (i + 1, output_length)
             else:
                 progress_message = "Loaded frame %i..." % (i+1)
             print(end=progress_prefix + progress_message)
         out.append(frame)
-    
+
     if show_progress:
         print(end=progress_prefix + 'done loading frames, creating numpy array...')
-    
+
     out = np.asarray(out)
-    
+
     if show_progress:
         print(end='done.\r\n')
-    
+
     if use_cache:
         _load_video_cache[cache_id] = out
-    
+
     return out
 
 
@@ -44842,7 +45492,9 @@ def load_videos(
     num_threads=None,
     strict=True,
     lazy=False,
-    buffer_limit=None
+    buffer_limit=None,
+    backend='auto',
+    dtype=None
 ):
     """
     Plural of load_video
@@ -44867,6 +45519,8 @@ def load_videos(
             show_progress=False,
             use_cache=use_cache,
             frame_transform=frame_transform,
+            backend=backend,
+            dtype=dtype,
         )
 
     return gather_args_call(load_files, load, paths)
@@ -44889,7 +45543,11 @@ def load_video_via_decord(path, indices=None, *, as_dict=False):
 
     Returns:
         ndarray (T, H, W, C) or dict if as_dict=True.
-        
+
+    Note:
+        decord always decodes to uint8, regardless of the video's bit depth.
+        For high-bit-depth video (10-bit, 12-bit), use load_video(path, backend='av')
+        which auto-detects bit depth and returns float16 or float32 accordingly.
     """
     pip_import("decord")
     import decord
@@ -44949,8 +45607,7 @@ def save_video_avi(frames,path:str=None,framerate:int=30):
                       )
                       
     for frame in frames:
-        frame=as_rgb_image(frame)
-        frame=as_byte_image(frame)
+        frame=_as_rgb_byte_image(frame)
         frame=cv_bgr_rgb_swap(frame)
         out.write(frame)
 
@@ -45005,6 +45662,8 @@ class VideoWriterMP4:
              - h264/h265: 0-51, default ~23, good quality ~18-23
              - vp9: 0-63, default ~31, good quality ~30-35
              - av1: 0-63, default ~30, good quality ~23-30
+        pix_fmt: ffmpeg pixel format string (default 'yuv420p'). See save_video_mp4
+             for common formats.
 
     Example:
         >>> writer = VideoWriterMP4('output.mp4', framerate=30)
@@ -45025,15 +45684,14 @@ class VideoWriterMP4:
         'mp4v'  : 'mpeg4',
     }
 
-    def __init__(self, path=None, framerate=60, video_bitrate='medium', height=None, width=None, show_progress=True, codec='h264', crf=None):
+    def __init__(self, path=None, framerate=60, video_bitrate='medium', height=None, width=None, show_progress=True, codec='h264', crf=None, pix_fmt='yuv420p'):
         # Originally from: https://github.com/kkroening/ffmpeg-python/issues/246
 
         _ensure_ffmpeg_installed()
 
         self.show_progress=show_progress
 
-        if path is None: path=_get_default_video_path()
-        if not has_file_extension(path) or get_file_extension(path).lower()!='mp4': path+='.mp4'
+        path = _normalize_video_output_path(path, 'mp4')
 
         rp.pip_import('ffmpeg', 'ffmpeg-python')
 
@@ -45047,15 +45705,21 @@ class VideoWriterMP4:
         assert codec_lower in self._CODEC_MAP, "Unknown codec %r. Choose from: %s" % (codec, list(self._CODEC_MAP.keys()))
         vcodec = self._CODEC_MAP[codec_lower]
 
-        self.path          = get_absolute_path(path)
+        # Get pixel formats
+        fmt_in, fmt_out, np_dtype, scale_max = _video_encode_pix_fmts(pix_fmt)
+
+        self.path          = path
         self.vcodec        = vcodec
         self.framerate     = framerate
         self.video_bitrate = video_bitrate
         self.crf           = crf
+        self.fmt_in        = fmt_in
+        self.fmt_out       = fmt_out
+        self.scale_max     = scale_max
 
         self.started  = False
         self.finished = False
-    
+
         self.height=height
         self.width=width
         
@@ -45069,26 +45733,18 @@ class VideoWriterMP4:
 
         assert not self.finished
 
-        assert not is_a_folder(self.path)
-        make_parent_directory(self.path)
-
         if not self.started:
             self.started = True
 
             height = get_image_height(frame) if self.height is None else self.height
             width  = get_image_width (frame) if self.width  is None else self.width 
 
-            #Make sure the height and width are even. If it isn't, ffmpeg will throw a fit:
-            #     ...   [libx264 @ 0x55e695b389c0] width not divisible by 2 (611x550)    ...
-            if height%2:
-                height-=1
-            if width%2:
-                width-=1
+            height, width = _round_dimensions_to_even(height, width)
 
             # Build output kwargs - use CRF if specified, otherwise bitrate
             # Note: mpeg4 (mp4v) doesn't support CRF
             output_kwargs = dict(
-                pix_fmt="yuv420p",
+                pix_fmt=self.fmt_out,
                 vcodec=self.vcodec,
             )
             if self.crf is not None and self.vcodec != 'mpeg4':
@@ -45100,7 +45756,7 @@ class VideoWriterMP4:
                 ffmpeg.input(
                     "pipe:",
                     format="rawvideo",
-                    pix_fmt="rgb24",
+                    pix_fmt=self.fmt_in,
                     s="{}x{}".format(width, height),
                     r=self.framerate,
                     **(dict(loglevel="quiet") if not self.show_progress else dict())
@@ -45114,11 +45770,7 @@ class VideoWriterMP4:
             self.width  = width
 
 
-        #Prepare the frame for the writer...
-        frame=rp.crop_image   (frame, self.height, self.width, copy=False)
-        frame=rp.as_rgb_image (frame, copy=False)
-        frame=rp.as_byte_image(frame, copy=False)
-
+        frame = _prepare_video_frame_for_encoding(frame, self.height, self.width, scale_max=self.scale_max)
         self.process.stdin.write(frame.tobytes())
 
 
@@ -45128,40 +45780,6 @@ class VideoWriterMP4:
         self.process.wait()
         self.finished=True
         
-
-def _cv_save_video_mp4(
-    video,
-    path,
-    *,
-    framerate,
-    show_progress
-):
-    pip_import("cv2")
-    import cv2
-
-    video = as_rgb_images(video)
-    video = as_byte_images(video)
-    video = as_numpy_array(video)
-
-    if path is None:
-        path = get_unique_copy_path('video.mp4')
-
-    if not has_file_extension(path):
-        path = with_file_extension(path, 'mp4')
-
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    _, h, w, c = video.shape
-    video_writer = cv2.VideoWriter(path, fourcc, fps=framerate, frameSize=(w, h))
-
-    video_iter = video
-    if show_progress:
-        video_iter = eta(video_iter, title='rp.r.'+get_current_function_name())
-
-    for frame in video_iter:
-        frame = cv_rgb_bgr_swap(frame)
-        video_writer.write(img)
-
-    return path
 
 def _cv_save_video_mp4(
     video,
@@ -45178,20 +45796,12 @@ def _cv_save_video_mp4(
     pip_import("cv2")
     import cv2
 
-    video = as_rgb_images(video)
-    video = as_byte_images(video)
+    video = _as_rgb_byte_video(video)
     video = as_numpy_array(video)
 
     quality = _as_video_quality(quality)
 
-    if path is None:
-        path = get_unique_copy_path('video.mp4')
-
-    if not has_file_extension(path):
-        path = with_file_extension(path, 'mp4')
-
-    if not folder_exists(get_parent_folder(path)):
-        make_parent_directory(path)
+    path = _normalize_video_output_path(path, 'mp4')
 
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     _, h, w, c = video.shape
@@ -45213,15 +45823,290 @@ def _cv_save_video_mp4(
 
     return path
 
-_save_video_mp4_default_backend = 'ffmpeg'
+def _write_video_via_imageio_ffmpeg(
+    frames,
+    path,
+    *,
+    framerate,
+    codec,
+    video_bitrate=None,
+    crf=None,
+    output_params=None,
+    height=None,
+    width=None,
+    show_progress=True,
+    alpha=False,
+    pix_fmt='yuv420p'
+):
+    """
+    Command, specific. Write video frames via imageio-ffmpeg's bundled binary.
+
+    Handles codec resolution, quality params, lazy dimension detection,
+    frame preparation, progress display, and cleanup. Used by save_video_mp4
+    (backend='imageio') and save_video_webm.
+
+    Args:
+        frames:              Iterable of images (numpy arrays or file path strings)
+        path (str):          Output file path (should already be normalized)
+        framerate (int):     Video framerate in fps
+        codec (str):         User-friendly name ('h264', 'h265', 'vp9', etc.)
+                             or raw ffmpeg codec string ('libx264', 'libvpx-vp9')
+        video_bitrate (int): Bitrate in bytes/sec (used when crf is None)
+        crf (int):           Constant Rate Factor (overrides video_bitrate when set)
+        output_params (list): Extra ffmpeg CLI flags appended after bitrate/crf
+        height (int):        Frame height (None = auto from first frame)
+        width (int):         Frame width (None = auto from first frame)
+        show_progress (bool): Show eta progress bar and ffmpeg warnings
+        alpha (bool):        If True, encode RGBA. If False, RGB.
+        pix_fmt (str):       ffmpeg pixel format string (default 'yuv420p').
+
+    Returns:
+        str: Path to the saved video file
+
+    Examples:
+        >>> # _write_video_via_imageio_ffmpeg(frames, '/tmp/out.mp4',
+        ... #     framerate=30, codec='h264', video_bitrate=10000000)
+    """
+    pip_import('imageio_ffmpeg', 'imageio-ffmpeg')
+    from imageio_ffmpeg import write_frames
+
+    # Get pixel formats from pix_fmt
+    pix_fmt_in, pix_fmt_out, np_dtype, scale_max = _video_encode_pix_fmts(pix_fmt, alpha)
+    mode = 'rgba' if alpha else 'rgb'
+
+    # Resolve codec: user-friendly name → ffmpeg string, or pass through as-is
+    vcodec = VideoWriterMP4._CODEC_MAP.get(codec.lower(), codec)
+
+    # Build ffmpeg output params from quality settings
+    params = []
+    if crf is not None and vcodec != 'mpeg4':
+        params += ['-crf', str(crf)]
+    elif video_bitrate is not None:
+        params += ['-b:v', str(video_bitrate)]
+    if output_params:
+        params += output_params
+
+    log_level = 'warning' if show_progress else 'quiet'
+
+    gen = None
+
+    try:
+        frame_iter = frames
+        if show_progress and hasattr(frames, '__len__'):
+            frame_iter = eta(frames, title='rp.r._write_video_via_imageio_ffmpeg')
+
+        for frame in frame_iter:
+            if isinstance(frame, str):
+                frame = load_image(frame)
+
+            if gen is None:
+                h = get_image_height(frame) if height is None else height
+                w = get_image_width(frame)  if width  is None else width
+                h, w = _round_dimensions_to_even(h, w)
+
+                gen = write_frames(
+                    path,
+                    size=(w, h),
+                    pix_fmt_in=pix_fmt_in,
+                    pix_fmt_out=pix_fmt_out,
+                    fps=framerate,
+                    codec=vcodec,
+                    macro_block_size=2,
+                    ffmpeg_log_level=log_level,
+                    output_params=params,
+                )
+                gen.send(None)
+
+                height = h
+                width  = w
+
+            frame = _prepare_video_frame_for_encoding(frame, height, width, mode=mode, scale_max=scale_max)
+            gen.send(frame.tobytes())
+    finally:
+        if gen is not None:
+            gen.close()
+
+    return path
+
+def _write_video_via_av(
+    frames,
+    path,
+    *,
+    framerate,
+    codec,
+    video_bitrate=None,
+    crf=None,
+    output_params=None,
+    height=None,
+    width=None,
+    show_progress=True,
+    alpha=False,
+    pix_fmt='yuv420p'
+):
+    """
+    Command. Write video frames via PyAV (direct ffmpeg library bindings).
+
+    Same interface as _write_video_via_imageio_ffmpeg but uses PyAV instead of
+    spawning a subprocess. PyAV bundles its own ffmpeg libraries — no system
+    ffmpeg needed. Faster than imageio-ffmpeg for large videos due to no
+    subprocess/pipe overhead.
+
+    Args:
+        frames:              Iterable of images (numpy arrays or file path strings)
+        path (str):          Output file path (should already be normalized)
+        framerate (int):     Video framerate in fps
+        codec (str):         User-friendly name ('h264', 'h265', 'vp9', etc.)
+                             or raw ffmpeg codec string ('libx264', 'libvpx-vp9')
+        video_bitrate (int): Bitrate in bytes/sec (used when crf is None)
+        crf (int):           Constant Rate Factor (overrides video_bitrate when set)
+        output_params (list): Extra ffmpeg CLI flags as ['-key', 'val', ...] pairs,
+                             parsed into codec options dict for PyAV
+        height (int):        Frame height (None = auto from first frame)
+        width (int):         Frame width (None = auto from first frame)
+        show_progress (bool): Show eta progress bar
+        alpha (bool):        If True, encode RGBA. If False, RGB.
+        pix_fmt (str):       ffmpeg pixel format string (default 'yuv420p').
+
+    Returns:
+        str: Path to the saved video file
+
+    Examples:
+        >>> # _write_video_via_av(frames, '/tmp/out.mp4',
+        ... #     framerate=30, codec='h264', video_bitrate=10000000)
+    """
+    pip_import('av')
+    import av
+
+    # Get pixel formats from pix_fmt
+    fmt_in, fmt_out, np_dtype, scale_max = _video_encode_pix_fmts(pix_fmt, alpha)
+    mode = 'rgba' if alpha else 'rgb'
+
+    # Resolve codec: user-friendly name -> ffmpeg string, or pass through as-is
+    vcodec = VideoWriterMP4._CODEC_MAP.get(codec.lower(), codec)
+
+    # PyAV bundles libsvtav1 instead of libaom-av1 for AV1 encoding
+    # But SVT-AV1 only supports up to 10-bit, so keep libaom-av1 for 12-bit
+    if vcodec == 'libaom-av1' and _infer_bit_depth_from_pix_fmt(pix_fmt) <= 10:
+        vcodec = 'libsvtav1'
+
+    # Build codec options from quality settings + output_params
+    options = {}
+    if crf is not None and vcodec != 'mpeg4':
+        options['crf'] = str(crf)
+    if output_params:
+        # Parse ['-key', 'val', ...] pairs into dict
+        i = 0
+        while i < len(output_params):
+            key = output_params[i].lstrip('-')
+            if i + 1 < len(output_params) and not output_params[i + 1].startswith('-'):
+                options[key] = output_params[i + 1]
+                i += 2
+            else:
+                options[key] = ''
+                i += 1
+
+    container = None
+    stream = None
+
+    try:
+        frame_iter = frames
+        if show_progress and hasattr(frames, '__len__'):
+            frame_iter = eta(frames, title='rp.r._write_video_via_av')
+
+        for frame in frame_iter:
+            if isinstance(frame, str):
+                frame = load_image(frame)
+
+            if container is None:
+                h = get_image_height(frame) if height is None else height
+                w = get_image_width(frame)  if width  is None else width
+                h, w = _round_dimensions_to_even(h, w)
+
+                try:
+                    container = av.open(path, mode='w')
+                    stream = container.add_stream(vcodec, rate=framerate)
+                    stream.width = w
+                    stream.height = h
+                    stream.pix_fmt = fmt_out
+                    stream.options = options
+                    if video_bitrate is not None and 'crf' not in options:
+                        stream.bit_rate = video_bitrate
+                except Exception as e:
+                    # Clean up container if stream creation failed
+                    if container is not None:
+                        container.close()
+                        container = None
+                    raise RuntimeError(
+                        "Failed to initialize encoder: vcodec=%r, pix_fmt=%r, "
+                        "codec=%r. %s. "
+                        "Try backend='imageio' or a different codec "
+                        "(e.g. codec='h265') for this pix_fmt."
+                        % (vcodec, fmt_out, codec, e)
+                    ) from e
+
+                height = h
+                width  = w
+
+            frame = _prepare_video_frame_for_encoding(frame, height, width, mode=mode, scale_max=scale_max)
+            video_frame = av.VideoFrame.from_ndarray(frame, format=fmt_in)
+            for packet in stream.encode(video_frame):
+                container.mux(packet)
+    finally:
+        if container is not None and stream is not None:
+            # Flush encoder
+            for packet in stream.encode():
+                container.mux(packet)
+            container.close()
+
+    return path
+
+_save_video_mp4_default_backend = 'auto'
 
 def set_save_video_mp4_default_backend(backend):
-    assert backend in ('ffmpeg', 'cv2'), backend
+    """
+    Command, specific. Set the default backend for save_video_mp4.
+
+    Args:
+        backend (str): One of:
+            - 'auto' (default): Uses 'av' (PyAV) for all codecs.
+                      Best performance without requiring system ffmpeg.
+            - 'av':      Uses PyAV (direct ffmpeg library bindings). No system
+                         ffmpeg needed. Fastest backend (~2-4x faster than imageio).
+            - 'imageio': Uses imageio-ffmpeg's bundled ffmpeg binary. No system
+                         ffmpeg install needed. Supports all codecs including av1.
+            - 'ffmpeg':  Uses system-installed ffmpeg via ffmpeg-python.
+                         Requires ffmpeg on PATH.
+            - 'cv2':     Uses OpenCV's VideoWriter. Ignores codec/crf options,
+                         always uses mp4v. Lowest quality but fewest dependencies.
+
+    Examples:
+        >>> set_save_video_mp4_default_backend('auto')     # default, picks av or imageio per codec
+        >>> set_save_video_mp4_default_backend('av')        # force pyav
+        >>> set_save_video_mp4_default_backend('imageio')   # force imageio-ffmpeg
+        >>> set_save_video_mp4_default_backend('ffmpeg')    # use system ffmpeg
+        >>> set_save_video_mp4_default_backend('cv2')       # opencv fallback
+    """
+    assert backend in ('auto', 'imageio', 'av', 'ffmpeg', 'cv2'), backend
     global _save_video_mp4_default_backend
     _save_video_mp4_default_backend = backend
 
-def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', height=None, width=None, show_progress=True, backend=None, codec='h264', crf=None):
+def save_video_mp4(
+    frames,
+    path=None,
+    framerate=60,
+    *,
+    video_bitrate="high",
+    height=None,
+    width=None,
+    show_progress=True,
+    backend=None,
+    codec="h264",
+    crf=None,
+    pix_fmt='yuv420p'
+):
     """
+    Command, specific. Save video frames to an MP4 file.
+
     frames: a list of images as defined by rp.is_image(). Saves an .mp4 file at the path
         - frames can also contain strings, if those strings are image file paths
         - frames can also be a glob or a folder of images, and if so they will be sorted by number
@@ -45233,8 +46118,21 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
     video_bitrate: controls the quality of the output. If your backend is opencv, this parameter has no effect!
     height, width: If frames have various sizes, and are given as a generator, use this to set the height and width or else it will use the first frame's height and width
     show_progress: Whether to show the saving progress
-    backend: Defaults to 'ffmpeg'. Can also be 'cv2' if you can't install 'ffmpeg' for some reason.
-        Note: cv2 backend uses mp4v codec and ignores codec/crf options.
+    backend: Which encoding backend to use. Options:
+        - 'auto' (default): Uses 'av' (PyAV) for all codecs. Fastest backend,
+              no system ffmpeg required. Uses libsvtav1 for av1 encoding.
+        - 'av': Uses PyAV (direct ffmpeg library bindings). No system ffmpeg needed.
+              Fastest backend (~2-4x faster than imageio, no subprocess overhead).
+              Install: pip install av
+        - 'imageio': Uses imageio-ffmpeg's bundled static ffmpeg binary.
+              No system ffmpeg installation required. Supports all codecs including av1.
+              Install: pip install imageio-ffmpeg
+        - 'ffmpeg': Uses system-installed ffmpeg via the ffmpeg-python package.
+              Requires ffmpeg to be installed on the system and available on PATH.
+              Install: pip install ffmpeg-python && brew/apt install ffmpeg
+        - 'cv2': Uses OpenCV's VideoWriter with mp4v codec.
+              Ignores codec/crf options. Lowest quality but fewest dependencies.
+              Install: pip install opencv-python
     codec: Video codec - 'h264', 'h265'/'hevc', 'vp9', 'av1', or 'mp4v' (default: 'h264')
         - h264: Most compatible, good quality, fast encoding
         - h265/hevc: Better compression than h264, slower encoding
@@ -45247,10 +46145,26 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
         - h264/h265: 0-51, default ~23, good quality ~18-23
         - vp9: 0-63, default ~31, good quality ~30-35
         - av1: 0-63, default ~30, good quality ~23-30
+    pix_fmt: ffmpeg pixel format string (default 'yuv420p'). Passed directly to
+        the encoder — any valid ffmpeg pix_fmt is accepted. Run `ffmpeg -pix_fmts`
+        for the full list. Common formats:
+          yuv420p        8-bit  4:2:0  (most compatible, default)
+          yuv420p10le   10-bit  4:2:0
+          yuv420p12le   12-bit  4:2:0
+          yuv444p        8-bit  4:4:4  (full chroma resolution)
+          yuv444p10le   10-bit  4:4:4
+          yuv444p12le   12-bit  4:4:4
+          gbrp           8-bit  planar RGB (no YUV conversion)
+          gbrp10le      10-bit  planar RGB
+          gbrp12le      12-bit  planar RGB
+          gray           8-bit  grayscale
+          gray10le      10-bit  grayscale
+        Higher bit depths give more precision between 0.0 and 1.0, reducing
+        banding in gradients. Does NOT extend the range beyond 0-1 — values
+        outside [0, 1] are clamped. To load back with full precision, use
+        load_video() which auto-detects bit depth and returns the appropriate
+        float dtype.
 
-    If you can't install ffmpeg, please set the backend to 'cv2'
-    If you need this to be the default, call rp.r.set_save_video_mp4_default_backend('cv2') instead of 'ffmpeg', the default
-    
     EXAMPLE BITRATES (used for the Sunkist soda example):
      10^5: 100000    : ( 345KB) is decent, and very compressed. It starts out a bit mushy though
      10^6: 1000000   : ( 3.3MB) I believe this is close to ffmpeg's default rate. It looks okay, but it does look a tiny bit mushy
@@ -45262,16 +46176,50 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
     if backend is None:
         backend = _save_video_mp4_default_backend
 
+    if backend == 'auto':
+        # PyAV's bundled encoders have bit depth limits:
+        #   - libsvtav1 (AV1): max 10-bit
+        #   - libvpx-vp9 (VP9): max 10-bit
+        # Fall back to imageio for 12-bit AV1/VP9.
+        inferred_depth = _infer_bit_depth_from_pix_fmt(pix_fmt)
+        if codec.lower() in ('av1', 'vp9') and inferred_depth > 10:
+            backend = 'imageio'
+        else:
+            backend = 'av'
+
     if backend=='ffmpeg':
         try:
             _ensure_ffmpeg_installed()
         except Exception as e:
-            raise RuntimeError("save_video_mp4: Can't use backend=='ffmpeg' because ffmpeg is not installed. Consider setting backend=='cv2' instead? Or, if you can't change this argument, you can try running rp.r.set_save_video_mp4_default_backend('cv2')") from e
+            raise RuntimeError(
+                "save_video_mp4: Can't use backend=='ffmpeg' because ffmpeg is not installed."
+                " Consider setting backend=='av' or backend=='imageio' (no system install needed)"
+                " or backend=='cv2' instead."
+                " To change the default: rp.r.set_save_video_mp4_default_backend('auto')"
+            ) from e
 
-    assert backend in ('ffmpeg', 'cv2'), backend
+    assert backend in ('imageio', 'av', 'ffmpeg', 'cv2'), (
+        "Unknown backend %r. Choose from: 'auto', 'imageio', 'av', 'ffmpeg', 'cv2'" % backend
+    )
+
+    #Make frames specifiable as a glob, folder path, list of images, or list of image paths
+    if isinstance(frames, str):
+        if is_a_folder(frames):
+            frames = get_all_image_files(frames, sort_by='number')
+        else:
+            frames = glob.glob(frames)
+            frames = sorted(frames)
+            frames = sorted(frames, key=len)
+
     assert not isinstance(frames, str), 'The first argument should be the sequence of video frames, not the path!'
 
     if backend=='cv2':
+        if pix_fmt != 'yuv420p':
+            raise ValueError(
+                "pix_fmt=%r is not supported with backend='cv2' (only 'yuv420p'). "
+                "Use backend='av' or backend='imageio' for other pixel formats."
+                % pix_fmt
+            )
         return _cv_save_video_mp4(
             frames,
             path,
@@ -45280,16 +46228,31 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
             quality=video_bitrate, #Included for future updates of CV2...but right now it's inert. This parameter has no effect on the saved videos.
         )
 
+    if backend in ('imageio', 'av'):
+        writer = _write_video_via_av if backend == 'av' else _write_video_via_imageio_ffmpeg
+        return writer(
+            frames,
+            _normalize_video_output_path(path, 'mp4'),
+            framerate=framerate,
+            codec=codec,
+            video_bitrate=_as_video_bitrate(video_bitrate),
+            crf=crf,
+            height=height,
+            width=width,
+            show_progress=show_progress,
+            pix_fmt=pix_fmt,
+        )
+
     height = None if height is None else height
-    width  = None if width  is None else width 
-    
+    width  = None if width  is None else width
+
     if hasattr(frames,'__len__') and not isinstance(frames, str) and all(map(is_image, frames)):
         # If we're not fed a generator without a predefined number of frames,
         # Calculate the max height and width in the video and use that to be the height and width
         max_height, max_width = get_max_image_dimensions(frames)
         if height is None: height=max_height
-        if width  is None: width =max_width 
-    
+        if width  is None: width =max_width
+
     # YES, this is faster, but it also means more memory...probably not the best thing to do right?
     # #Speed improvement - batch-convert to uint8
     # if is_numpy_array(frames) or isinstance(frames, list) or is_torch_tensor(frames):
@@ -45297,34 +46260,18 @@ def save_video_mp4(frames, path=None, framerate=60, *, video_bitrate='high', hei
     #     frames = as_byte_images(frames, copy=False)
     #     frames = as_rgb_images(frames, copy=False)
 
-    writer = VideoWriterMP4(path, framerate, video_bitrate=video_bitrate, height=height, width=width, show_progress=show_progress, codec=codec, crf=crf)
-
-    #Make frames speficiable as a glob, folder path, list of images, or list of image paths
-    def load_frame(frame):
-        #This is used to make image loading parallel...
-        if isinstance(frame, str):
-            return load_image(frame)
-        else:
-            return frame
-    if isinstance(frames, str):
-        if is_a_folder(frames):
-            frames = get_all_image_files(frames, sort_by='number')
-        else:
-            frames = glob.glob(frames)
-            frames = sorted(frames)
-            frames = sorted(frames, key=len)
-    loaded_frames = load_files(load_frame, frames, lazy=True)
+    writer = VideoWriterMP4(path, framerate, video_bitrate=video_bitrate, height=height, width=width, show_progress=show_progress, codec=codec, crf=crf, pix_fmt=pix_fmt)
 
     try:
         for frame in frames:
             writer.write_frame(frame)
     finally:
         writer.finish()
-        
+
     return writer.path
 
 
-def save_video_webm(frames, path=None, framerate=60, *, video_quality='high', height=None, width=None, show_progress=True):
+def save_video_webm(frames, path=None, framerate=60, *, video_quality='high', height=None, width=None, show_progress=True, pix_fmt='yuva420p'):
     """
     Save video frames to WebM format with alpha channel support using VP9 codec.
 
@@ -45340,14 +46287,19 @@ def save_video_webm(frames, path=None, framerate=60, *, video_quality='high', he
               Adds .webm extension if not present
         framerate: Video framerate in fps (default: 60)
         video_quality: Quality setting for VP9 codec (default: 'high')
-                      - 'low': CRF 40 (smaller files, lower quality)
-                      - 'medium': CRF 30 (balanced)
-                      - 'high': CRF 20 (larger files, higher quality)
+                      - 'low': CRF 57 (smaller files, lower quality)
+                      - 'medium': CRF 36 (balanced)
+                      - 'high': CRF 12 (larger files, higher quality)
                       - 'max': CRF 10 (lossless-like quality)
                       - Or integer 0-63 (lower = better quality, larger file)
         height: Force specific height (default: auto from first frame)
         width: Force specific width (default: auto from first frame)
         show_progress: Whether to show encoding progress (default: True)
+        pix_fmt: ffmpeg pixel format string (default 'yuva420p' for alpha).
+            Common formats for WebM:
+              yuva420p       8-bit  4:2:0 + alpha (default)
+              yuva420p10le  10-bit  4:2:0 + alpha
+              yuv420p        8-bit  4:2:0  (no alpha)
 
     Returns:
         str: Absolute path to the saved WebM file
@@ -45367,19 +46319,7 @@ def save_video_webm(frames, path=None, framerate=60, *, video_quality='high', he
         - save_animated_webp: For animated WebP with alpha
         - save_video_gif: For animated GIFs
     """
-    pip_import('imageio_ffmpeg', 'imageio-ffmpeg')
-    from imageio_ffmpeg import write_frames
-
-    _ensure_ffmpeg_installed()
-
-    if path is None:
-        path = _get_default_video_path('webm')
-
-    if not has_file_extension(path) or get_file_extension(path).lower() != 'webm':
-        path += '.webm'
-
-    make_parent_directory(path)
-    path = get_absolute_path(path)
+    path = _normalize_video_output_path(path, 'webm')
 
     # Convert quality parameter to CRF value (0-63, lower is better)
     if video_quality in _named_video_qualities:
@@ -45389,78 +46329,31 @@ def save_video_webm(frames, path=None, framerate=60, *, video_quality='high', he
     elif isinstance(video_quality, int):
         crf = max(0, min(63, video_quality))
     else:
-        crf = 20  # Default to high quality
+        raise ValueError(
+            "Unknown video_quality %r. Use 'low', 'medium', 'high', 'max', or an integer 0-63."
+            % (video_quality,)
+        )
 
-    # Determine dimensions from frames if not specified
-    if height is None or width is None:
-        if hasattr(frames, '__len__') and not isinstance(frames, str) and all(map(is_image, frames)):
-            max_height, max_width = get_max_image_dimensions(frames)
-            if height is None:
-                height = max_height
-            if width is None:
-                width = max_width
-        else:
-            # Will determine from first frame during iteration
-            first_frame = None
-            if hasattr(frames, '__iter__'):
-                frames_iter = iter(frames)
-                first_frame = next(frames_iter)
-                height = get_image_height(first_frame) if height is None else height
-                width = get_image_width(first_frame) if width is None else width
-                # Recreate frames with first frame prepended
-                import itertools
-                frames = itertools.chain([first_frame], frames_iter)
+    # Detect alpha from pix_fmt string (yuva*, gbrap*)
+    alpha = 'yuva' in pix_fmt or 'gbrap' in pix_fmt or pix_fmt == 'rgba'
 
-    # Ensure dimensions are even (required by libvpx-vp9)
-    if height % 2:
-        height -= 1
-    if width % 2:
-        width -= 1
-
-    # Configure ffmpeg parameters for VP9 with alpha
     output_params = [
         '-crf', str(crf),
-        '-b:v', '0',  # Use CRF mode (constant quality)
-        '-auto-alt-ref', '0',  # Prevent transparency encoding errors
+        '-b:v', '0',          # VP9 CRF-only mode: bitrate=0 forces pure CRF
+        '-auto-alt-ref', '0', # Required for alpha (yuva420p) with libvpx-vp9
     ]
 
-    if not show_progress:
-        output_params.extend(['-loglevel', 'quiet'])
-
-    # Create video writer with VP9 alpha support
-    writer = write_frames(
-        path,
-        (width, height),
-        pix_fmt_in='rgba',      # Input: RGBA frames
-        pix_fmt_out='yuva420p',  # Output: YUV with alpha channel
-        codec='libvpx-vp9',      # VP9 codec
-        fps=framerate,
-        output_params=output_params
+    return _write_video_via_imageio_ffmpeg(
+        frames, path,
+        framerate=framerate,
+        codec='vp9',
+        output_params=output_params,
+        height=height,
+        width=width,
+        show_progress=show_progress,
+        alpha=alpha,
+        pix_fmt=pix_fmt,
     )
-
-    writer.send(None)  # Seed the generator
-
-    try:
-        frame_iter = frames
-        if show_progress and hasattr(frames, '__len__'):
-            frame_iter = eta(frames, title='rp.r.save_video_webm')
-
-        for frame in frame_iter:
-            if isinstance(frame, str):
-                frame = load_image(frame)
-
-            # Convert to RGBA byte image
-            frame = crop_image(frame, height, width, copy=False)
-            frame = as_rgba_image(frame, copy=False)
-            frame = as_byte_image(frame, copy=False)
-
-            # Send frame bytes to writer
-            writer.send(frame.tobytes())
-
-    finally:
-        writer.close()
-
-    return path
 
 
 save_animated_webm = save_video_webm
@@ -46228,6 +47121,10 @@ def _rnh(new_name=None):
     new_path = rename_current_directory(new_name)
     fansi_print("Renamed to: " + new_path, 'green', 'bold')
     return new_path
+
+def _tmda():
+    """Command, specific. Detach all users from all tmux sessions."""
+    _run_sys_command('tmux list-sessions -F "#{session_name}" | xargs -I % tmux detach -s %', title='TMDA')
 
 def move_path(from_path,to_path):
     """
@@ -51426,6 +52323,74 @@ def longest_common_suffix(a,b):
     return out
 
 
+def strip_common_prefix(*sequences):
+    """
+    Pure function, general. Remove the longest common prefix from each sequence.
+
+    Works on anything sliceable (strings, lists, tuples). Takes varargs or a
+    single iterable (via detuple).
+
+    Args:
+        *sequences: Sliceable sequences (or a single iterable of them).
+
+    Returns:
+        list: Each element with the shared prefix removed.
+
+    Examples:
+        >>> strip_common_prefix('abcX', 'abcY', 'abcZ')
+        ['X', 'Y', 'Z']
+        >>> strip_common_prefix(['hello world', 'hello there'])
+        ['world', 'there']
+        >>> strip_common_prefix([1,2,3,4], [1,2,5,6])
+        [[3, 4], [5, 6]]
+        >>> strip_common_prefix('abc', 'xyz')
+        ['abc', 'xyz']
+        >>> strip_common_prefix('same', 'same')
+        ['', '']
+    """
+    sequences = list(detuple(sequences))
+    if not sequences:
+        return []
+    prefix = longest_common_prefix(*sequences)
+    n = len(prefix)
+    return [s[n:] for s in sequences]
+
+
+def strip_common_suffix(*sequences):
+    """
+    Pure function, general. Remove the longest common suffix from each sequence.
+
+    Works on anything sliceable (strings, lists, tuples). Takes varargs or a
+    single iterable (via detuple).
+
+    Args:
+        *sequences: Sliceable sequences (or a single iterable of them).
+
+    Returns:
+        list: Each element with the shared suffix removed.
+
+    Examples:
+        >>> strip_common_suffix('Xabc', 'Yabc', 'Zabc')
+        ['X', 'Y', 'Z']
+        >>> strip_common_suffix(['world.py', 'hello.py'])
+        ['world', 'hello']
+        >>> strip_common_suffix([1,2,3,4,5], [7,6,3,4,5])
+        [[1, 2], [7, 6]]
+        >>> strip_common_suffix('abc', 'xyz')
+        ['abc', 'xyz']
+        >>> strip_common_suffix('same', 'same')
+        ['', '']
+    """
+    sequences = list(detuple(sequences))
+    if not sequences:
+        return []
+    suffix = longest_common_suffix(*sequences)
+    n = len(suffix)
+    if n == 0:
+        return list(sequences)
+    return [s[:-n] for s in sequences]
+
+
 @reduce_wrap(detuple=True)
 def longest_common_substring(a,b):
     """
@@ -52286,6 +53251,12 @@ def _set_ryan_vimrc(confirm=False):
             except Exception:
                 print("Skipped pip install ..."+str(package))
 
+        #Jsonnet LSP for vim ALE integration (completion + linting)
+        try:
+            _ensure_jsonnet_language_server_installed()
+        except Exception:
+            print("Skipped jsonnet-language-server install")
+
     # Phase 3: Vimrc file handling
     should_handle_vimrc = False
     if skip_setup_phases:
@@ -52939,11 +53910,19 @@ def _ensure_ffmpeg_installed():
 @_register_ensure_installed_func('claude')
 def _ensure_claudecode_installed():
     """claude: Anthropic's agentic CLI for AI-assisted coding"""
-    _ensure_node_installed(min_version=18)
+    # OLD: npm-based install (requires Node.js 18+, breaks if npm is broken)
+    # _ensure_node_installed(min_version=18)
+    # _ensure_installed(
+    #     'claude',
+    #     # https://github.com/anthropics/claude-code
+    #     unix   ='npm install -g @anthropic-ai/claude-code',
+    #     windows='npm install -g @anthropic-ai/claude-code',
+    # )
+    # NEW: Standalone binary install (no Node.js/npm dependency)
     _ensure_installed(
         'claude',
         # https://github.com/anthropics/claude-code
-        unix   ='npm install -g @anthropic-ai/claude-code',
+        unix   ='curl -fsSL https://claude.ai/install.sh | bash',
         windows='npm install -g @anthropic-ai/claude-code',
     )
 
@@ -53240,6 +54219,41 @@ def _ensure_shfmt_installed():
         windows='winget install --id=mvdan.shfmt',
     )
  
+@_register_ensure_installed_func
+def _ensure_jsonnet_language_server_installed():
+    """jsonnet-language-server: LSP server for Jsonnet (completion, linting, goto-def)"""
+    import platform, stat
+
+    cmd = "jsonnet-language-server"
+    if system_command_exists(cmd):
+        return
+
+    version = "v0.17.0"
+    machine = platform.machine().lower() #x86_64, arm64, aarch64
+    arch_map = {"x86_64": "amd64", "amd64": "amd64", "arm64": "arm64", "aarch64": "arm64"}
+    arch = arch_map.get(machine)
+    assert arch, "Unsupported architecture: %s" % machine
+
+    if   currently_running_linux(): os_name = "linux"
+    elif currently_running_mac()  : os_name = "darwin"
+    else: raise NotImplementedError("jsonnet-language-server: only Linux and macOS supported")
+
+    #~/.local/bin — no sudo needed, on PATH by default on most systems
+    home = get_home_directory()
+    bin_dir = path_join(home, ".local", "bin")
+    make_directory(bin_dir)
+    dest = path_join(bin_dir, cmd)
+
+    ver = version.lstrip("v")
+    filename = "jsonnet-language-server_%s_%s_%s" % (ver, os_name, arch)
+    url = "https://github.com/grafana/jsonnet-language-server/releases/download/%s/%s" % (version, filename)
+
+    download_url(url, dest)
+    os.chmod(dest, os.stat(dest).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+    if not system_command_exists(cmd):
+        fansi_print("Installed to %s but %s is not on $PATH — add it to your shell profile" % (dest, bin_dir), "yellow", "bold")
+
 @_register_ensure_installed_func
 def _ensure_pdftocairo_installed():
     """pdftocairo: PDF to PNG/SVG/PS converter from Poppler"""
@@ -53636,7 +54650,7 @@ def _launch_vscode_web_server(port=None):
 
 
 def _load_ryan_lazygit_config():
-    _install_lazygit()
+    _ensure_lazygit_installed()
 
     #Get the path depending on the platform
     #https://github.com/jesseduffield/lazygit/blob/master/docs/Config.md
@@ -53659,7 +54673,7 @@ def _load_ryan_lazygit_config():
             quit-alt1: '<c-d>' # alternative/alias of quit
             # return: 'q' # return to previous menu, will quit if there's nowhere to return
             return: '<c-c>' # return to previous menu, will quit if there's nowhere to return
-            scrollDownMain-alt2: null #NOT <c-d>
+            scrollDownMain-alt2: <disabled> #NOT <c-d>
         refresher:
           refreshInterval: 60 # Save battery life...
           # fetchInterval: 60 # re-fetch interval in seconds
@@ -53671,8 +54685,8 @@ def _load_ryan_lazygit_config():
 
     return path
 
-def _install_lazygit(force=False):
-    #https://github.com/jesseduffield/lazygit/tree/master?tab=readme-ov-file#installation
+def _ensure_lazygit_installed(force=False):
+    """ https://github.com/jesseduffield/lazygit/tree/master?tab=readme-ov-file#installation """
     
     if 'lazygit' in get_system_commands() and not force:
         # print('lazygit is already installed. Not installing because force==False.')
@@ -53695,6 +54709,13 @@ def _install_lazygit(force=False):
         elif currently_running_windows():
             #Untested
             _run_sys_command("""winget install -e --id=JesseDuffield.lazygit""")
+
+def _launch_lazygit():
+    _ensure_lazygit_installed()
+    command='lazygit'
+    if not system_command_exists(command):
+        command='/usr/local/bin/lazygit'
+    os.system(command)
         
 @_register_ensure_installed_func
 def _ensure_filebrowser_installed():
@@ -53937,13 +54958,17 @@ def _setup_claude_bash():
         os.environ["SHELL"] = _claude_bash_script  # TODO: Dont modify it this way...
         rp.fansi_print("Setting $SHELL="+shlex.quote(os.environ['SHELL']),'green bold')
 
-def _run_claude_code(code,*,fullperm=False):
+def _run_claude_code(code,*,fullperm=False,return_command=False):
     """ See rp.r._run_ai_coder_cli.__doc__ """
-    _ensure_claudecode_installed()
-    _setup_claude_bash()
 
     command = 'claude --dangerously-skip-permissions' if fullperm else 'claude'
     command = 'export IS_SANDBOX=1 && '+command
+
+    if return_command:
+        return command
+
+    _ensure_claudecode_installed()
+    _setup_claude_bash()
     return _run_ai_coder_cli(code,command)
 
 def _run_gemini_cli(code):
@@ -54114,6 +55139,10 @@ def get_next_free_port(port,n=0):
     while get_port_is_taken(port):
         port+=1
     return port
+
+def get_next_free_ports(port, n=1):
+    """ Get the next n free ports after or including the given port """
+    return [get_next_free_port(port, i) for i in range(n)]
 
 # def get_process_using_port(port: int, *, strict = True):
 #     """
@@ -58574,8 +59603,7 @@ def skia_resize_image(image, size, interp='auto'):
         
         #Conform to the correct input types
         image=as_numpy_image(image, copy=False)
-        image=as_rgba_image(image,copy=False)
-        image=as_byte_image(image,copy=False)
+        image=_as_rgba_byte_image(image)
         if not image.flags['C_CONTIGUOUS']:
             image=np.ascontiguousarray(image)
             
@@ -59841,6 +60869,135 @@ def _copy_tensor(x):
     if is_torch_tensor(x): return x.clone() #You cannot use copy(x) or else it doesn't actually copy the data
     return copy(x)
 
+def _searchsorted(sorted_sequence, values, *, right=False, side=None, sorter=None):
+    """
+    works across libraries - such as numpy, torch
+
+    Find indices where values should be inserted into sorted_sequence
+    to maintain sort order. Equivalent to binary search.
+
+    Accepts both numpy-style side='left'/'right' and torch-style right=True/False.
+    If side is given it takes precedence over right.
+
+    Examples:
+        >>> # _searchsorted(np.array([1., 3., 5.]), np.array([2., 4.]))
+        >>> # array([1, 2])
+        >>> # _searchsorted(np.array([1., 3., 5.]), np.array([3.]), side='right')
+        >>> # array([2])
+    """
+    if side is not None:
+        right = (side == 'right')
+    if is_numpy_array (sorted_sequence):return np.searchsorted(sorted_sequence, values, side='right' if right else 'left', sorter=sorter)
+    if is_torch_tensor(sorted_sequence):return __import__('torch').searchsorted(sorted_sequence, values, right=right, sorter=sorter)
+    raise ValueError("type not supported: "+str(type(sorted_sequence)))
+
+def _cumsum(x, dim=0):
+    """
+    works across libraries - such as numpy, torch
+
+    Cumulative sum along a dimension.
+    dim defaults to 0 (first axis). Use dim=None for flattened cumsum (numpy only).
+
+    Examples:
+        >>> # _cumsum(np.array([1, 2, 3]))
+        >>> # array([1, 3, 6])
+    """
+    if is_numpy_array (x):return np.cumsum(x, axis=dim)
+    if is_torch_tensor(x):
+        if dim is None:return __import__('torch').cumsum(x.flatten(), dim=0)
+        return __import__('torch').cumsum(x, dim=dim)
+    raise ValueError("type not supported: "+str(type(x)))
+
+def _linspace(start, stop, num, *, like=None, dtype=None, device=None):
+    """
+    works across libraries - such as numpy, torch
+
+    Return num evenly spaced values from start to stop (inclusive).
+    If like is given, matches its library type, dtype, and device.
+    Explicit dtype/device override like's.
+
+    Examples:
+        >>> # _linspace(0, 1, 5)
+        >>> # array([0.  , 0.25, 0.5 , 0.75, 1.  ])
+    """
+    if like is not None:
+        if is_torch_tensor(like):
+            return __import__('torch').linspace(start, stop, num, dtype=dtype or like.dtype, device=device or like.device)
+        return np.linspace(start, stop, num, dtype=dtype or like.dtype)
+    if device is not None:
+        return __import__('torch').linspace(start, stop, num, dtype=dtype, device=device)
+    return np.linspace(start, stop, num, dtype=dtype)
+
+def _unique(x, sorted=True, return_inverse=False, return_counts=False, dim=None):
+    """
+    works across libraries - such as numpy, torch
+
+    Return unique values (sorted by default).
+    Signature matches torch.unique / np.unique optional returns.
+
+    When return_inverse or return_counts is True, returns a tuple.
+
+    Examples:
+        >>> # _unique(np.array([3, 1, 2, 1, 3]))
+        >>> # array([1, 2, 3])
+        >>> # _unique(np.array([3, 1, 1, 2]), return_counts=True)
+        >>> # (array([1, 2, 3]), array([2, 1, 1]))
+    """
+    if is_numpy_array(x):
+        return np.unique(x, return_inverse=return_inverse, return_counts=return_counts, axis=dim)
+    if is_torch_tensor(x):
+        return __import__('torch').unique(x, sorted=sorted, return_inverse=return_inverse, return_counts=return_counts, dim=dim)
+    if not return_inverse and not return_counts:
+        return sorted(set(x)) if sorted else list(set(x))
+    raise ValueError("return_inverse/return_counts not supported for plain lists")
+
+def _where(condition, x=None, y=None):
+    """
+    works across libraries - such as numpy, torch
+
+    Element-wise conditional selection. If only condition is given,
+    returns indices where condition is True (like np.where(cond)).
+    If x and y are given, returns x where True, y where False.
+
+    Examples:
+        >>> # _where(np.array([True, False, True]), 1, 0)
+        >>> # array([1, 0, 1])
+    """
+    if x is None and y is None:
+        if is_numpy_array (condition):return np.where(condition)
+        if is_torch_tensor(condition):return __import__('torch').where(condition)
+        raise ValueError("type not supported: "+str(type(condition)))
+    if is_numpy_array (condition):return np.where(condition, x, y)
+    if is_torch_tensor(condition):return __import__('torch').where(condition, x, y)
+    raise ValueError("type not supported: "+str(type(condition)))
+
+def _scatter_add(target, dim, index, src):
+    """
+    works across libraries - such as numpy, torch
+
+    Scatter-add: for each i, target[index[i]] += src[i] along dim.
+    Returns a new array (non-mutating).
+
+    For 1D: equivalent to target[index[i]] += src[i] for all i,
+    with accumulation for duplicate indices.
+
+    No standard signature exists — torch uses an in-place method
+    (Tensor.scatter_add_), numpy uses np.add.at. This provides
+    a unified functional (non-mutating) interface.
+
+    Examples:
+        >>> # _scatter_add(np.zeros(3), 0, np.array([0, 1, 1, 2]), np.array([1., 2., 3., 4.]))
+        >>> # array([1., 5., 4.])
+    """
+    if is_numpy_array(target):
+        out = target.copy()
+        np.add.at(out, index, src)
+        return out
+    if is_torch_tensor(target):
+        out = target.clone()
+        out.scatter_add_(dim, index, src)
+        return out
+    raise ValueError("type not supported: "+str(type(target)))
 
 #NOT Doing std, np and torch behave differently (one has N-1 correction [torch], the other doesn'ti [numpy])
 # def _std(x, dim=None, keepdim=False):
@@ -59895,6 +61052,83 @@ def quantize_to_nearest_values(tensor, values):
     indices = rp.r._argmin(diffs, dim=1)
     return values[indices].reshape(shape)
 
+
+def get_optimal_quantization_levels(values, n_levels, freqs=None, backend='cffi'):
+    """
+    Pure function, general.
+    Find the K quantization levels that minimize weighted MSE over
+    N sorted values. Globally optimal for any distribution — not
+    iterative, not approximate, just correct.
+
+    Key insight: in 1D, optimal clusters must be contiguous intervals
+    — you'd never skip a closer value. So the problem reduces to
+    placing K-1 fences in a sorted array, which DP solves exactly.
+
+    Formerly Lloyd-Max (k-means in a trenchcoat). 48% lower MSE on
+    real data. Rest in peace.
+
+    Where N = len(values) (number of unique sorted values, not total
+    pixel count or tensor numel) and K = n_levels:
+        Time:   O(KN log N)
+        Memory: O(KN)
+
+    Works with numpy arrays and torch tensors.
+
+    Args:
+        values (array-like): (N,) sorted unique values.
+        n_levels (int): K, number of quantization levels
+            (e.g. 4096 for 12-bit).
+        freqs (array-like or None): (N,) frequency/weight per value.
+            Same length as values. If None, uniform weights.
+            A value with freq=100 pulls the level toward it 100x
+            more than freq=1. Typical source: histogram counts.
+        backend (str): 'cffi' or 'numba'.
+            - 'cffi': embedded C, auto-compiled. Fastest. (default)
+            - 'numba': pure Python @njit. ~1.3x slower. No compiler.
+
+    Returns:
+        numpy.ndarray or torch.Tensor: (K,) sorted quantization levels.
+
+    Examples:
+        >>> import numpy as np
+        >>> get_optimal_quantization_levels(np.array([0., 1., 2., 3.]), 2)
+        array([0.5, 2.5])
+
+        >>> get_optimal_quantization_levels(np.array([0., 1., 2., 3., 4., 5.]), 3)
+        array([0.5, 2.5, 4.5])
+
+        Weighted: value 1.0 has 3x the weight, so the single level
+        is pulled toward 1.0:
+        >>> get_optimal_quantization_levels(np.array([0., 1.]), 1, freqs=np.array([1., 3.]))
+        array([0.75])
+    """
+    from rp.libs.optimal_1d_quantization import get_optimal_quantization_levels as _impl
+    return _impl(values, n_levels, freqs=freqs, backend=backend)
+
+
+# def get_quantization_mse(values, levels, freqs=None):
+#     """
+#     Pure function, general.
+#     How bad is this quantization? Snaps each value to its nearest
+#     level and returns the weighted mean squared error.
+#
+#     Args:
+#         values (array-like): (N,) values to quantize.
+#         levels (array-like): (M,) sorted quantization levels.
+#         freqs (array-like or None): (N,) weights per value. If None, uniform.
+#
+#     Returns:
+#         float: weighted mean squared error.
+#
+#     Examples:
+#         >>> import numpy as np
+#         >>> get_quantization_mse(np.array([0., 1.]), np.array([0.5]))
+#         0.25
+#         >>> get_quantization_mse(np.array([0., 1.]), np.array([0., 1.]))
+#         0.0
+#     """
+#     from rp.libs.optimal_1d_quantization import get_quantization_mse as _impl
+#     return _impl(values, levels, freqs=freqs)
 
 
 def get_bilinear_weights(x, y):
@@ -61167,8 +62401,7 @@ def cv_floodfill_mask(image, position: tuple, tolerance: int = 32, *, bridge_dia
     import cv2
 
     assert is_image(image)
-    image = as_rgb_image(image)
-    image = as_byte_image(image)
+    image = _as_rgb_byte_image(image)
     height, width = get_image_dimensions(image)
 
     # position is an (x,y) tuple for pixel position
@@ -61746,8 +62979,7 @@ def image_to_text(image)->str:
     EXAMPLE:
         print(image_to_text(load_image('http)://www.morefamousquotes.com/images/topics/20170915/quotes-about-hitchhikers-guide-to-the-galaxy.jpg'))
     """
-    image=as_rgb_image(image)
-    image=as_byte_image(image)
+    image=_as_rgb_byte_image(image)
     pip_import('pytesseract')
     from pytesseract import image_to_string
     text=image_to_string(image)
@@ -63650,8 +64882,7 @@ def run_depth_pro(image, *, focal_length=None, device=None):
     else:
         assert is_image(image)
         # Load and preprocess an image.
-        image = as_rgb_image(image)
-        image = as_byte_image(image)
+        image = _as_rgb_byte_image(image)
         f_px = None
 
     image = transform(image).to(device)

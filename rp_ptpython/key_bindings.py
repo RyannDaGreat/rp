@@ -2777,7 +2777,8 @@ def handle_character(buffer,char,event=None):
                 'pipr':'PIP install -r',
                 'pipu':'PIP uninstall',
                 'piu':'PIP uninstall',
-                'uv':'PYM uv pip install',
+                # 'uv':'PYM uv pip install',
+                'uvr':'!uv run',
                 'pu':'PU',
                 'pd': 'PYM pudb',
                 'vi':'VIM',
@@ -2804,6 +2805,10 @@ def handle_character(buffer,char,event=None):
 
 
                 'torchrun':'PYM torch.distributed.run',
+
+                'cch' :'!'+rp.r._run_claude_code('.',return_command=True),
+                'cchd':'!'+rp.r._run_claude_code('.',fullperm=True,return_command=True),
+                'chd' :'!'+rp.r._run_claude_code('.',fullperm=True,return_command=True),
             })
 
             import rp.rp_ptpython.r_iterm_comm as ric
@@ -4530,6 +4535,18 @@ def load_python_bindings(python_input):
     #     current_line=document.current_line
 
 
+    def _maybe_bash_prefix(data):
+        """If data looks like a bash command (not valid python), prepend '!' to it."""
+        import rp
+        if not data.startswith(' ') and data.split():
+            first_word=data.split()[0] if data else ''
+            import rp.rp_ptpython.r_iterm_comm as ric
+            import keyword
+            python_keywords = keyword.kwlist
+            if not data.startswith('!') and first_word in rp.r._get_cached_system_commands() and rp.is_valid_shell_syntax(data) and (not rp.is_valid_python_syntax(data) or not first_word in set(ric.globa)|set(python_keywords) ):
+                data='!'+data
+        return data
+
     @handle(Keys.BracketedPaste)
     def _(event):
         " Pasting from clipboard. "
@@ -4552,16 +4569,8 @@ def load_python_bindings(python_input):
 
         import rp
         if not data.startswith(' ') and data.split():
-            first_word=data.split()[0] if data else ''
-            import rp.rp_ptpython.r_iterm_comm as ric
-            import keyword
-
-            # Get the list of all Python keywords
-            python_keywords = keyword.kwlist
-
-            if not data.startswith('!') and first_word in rp.r._get_cached_system_commands() and rp.is_valid_shell_syntax(data) and (not rp.is_valid_python_syntax(data) or not first_word in set(ric.globa)|set(python_keywords) ) and not before and not after:
-                #Assume we're pasting a shell command instead 
-                data='!'+data
+            if not before and not after:
+                data=_maybe_bash_prefix(data)
 
             # #On paste, if its a path, turn it into CD <path>
             # #This works well! But it got annoying - can't we do this on a CLI-level?
@@ -6127,6 +6136,8 @@ def load_python_bindings(python_input):
                     clip=repr(str(get_ans()))
                 else:
                     clip=str(get_ans())
+                if not buffer.document.text:
+                    clip=_maybe_bash_prefix(clip)
                 buffer.cut_selection()
                 buffer.insert_text(clip)
             except:

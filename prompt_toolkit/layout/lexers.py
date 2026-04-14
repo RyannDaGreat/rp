@@ -522,7 +522,35 @@ class BashTokenizer(LanguageInjectionMixin):
         """Tokenize bash code with language injection support."""
         from pygments.token import Token
 
-        raw_tokens = list(self.bash_lexer.get_tokens_unprocessed(text))
+        #<CLAUDE ADDED START> [Goal: To highlight the token after ! in bash mode]
+        # Strip the ! prefix — it's a pterm prefix, not bash syntax.
+        # The BashLexer chokes on it (e.g. !echo → Token.Text instead of
+        # Token.Name.Builtin). Handle it as a separate keyword token.
+        bang_offset = 0
+        if text.startswith('!'):
+            bang_offset = 1
+            yield (start_pos, Token.Keyword, '!')
+            text = text[1:]
+        #
+        # Append \n so the BashLexer's comment regex (#.*\n) can match
+        # trailing comments on the last line.
+        raw_tokens = list(self.bash_lexer.get_tokens_unprocessed(text + '\n'))
+        #
+        # Strip the \n we appended from the result tokens.
+        if raw_tokens:
+            last_pos, last_type, last_text = raw_tokens[-1]
+            if last_text == '\n':
+                raw_tokens.pop()
+            elif last_text.endswith('\n'):
+                raw_tokens[-1] = (last_pos, last_type, last_text[:-1])
+                if not raw_tokens[-1][2]:
+                    raw_tokens.pop()
+        #
+        # Offset positions to account for the stripped !
+        if bang_offset:
+            raw_tokens = [(pos + bang_offset, ttype, ttext)
+                          for pos, ttype, ttext in raw_tokens]
+        #<CLAUDE ADDED END>
 
         i = 0
         while i < len(raw_tokens):

@@ -287,7 +287,7 @@ filetype plugin indent on    " required
 
 set undofile "Persistent undo
 set mouse=a
-set ttymouse=sgr " Fix for some terminals
+set ttymouse=sgr
 set nu
 set paste
 set cursorline
@@ -1073,8 +1073,11 @@ Plugin 'simeji/winresizer' "Use control+e to resize windows
                 "Python linting! Toggle with \jl
                 "NOTE: To be useful, I need to dig into this and disable stupid errors...
                 Plugin 'dense-analysis/ale'
-                let g:ale_enabled=0 "Disable ale by default
-                let g:ale_linters={'python':['pyflakes']} " I coudn't care less about the other linters...flake8 has pep8 in it, so screw it...just use pyflakes which is a subset of flake8
+                let g:ale_enabled=0 "Disable ale by default. \jl toggles on/off
+                let g:ale_disable_lsp=0
+                let g:ale_linters={'python':['pyflakes'], 'jsonnet':['jsonnet_lsp']} " I coudn't care less about the other linters...flake8 has pep8 in it, so screw it...just use pyflakes which is a subset of flake8
+                call ale#linter#Define('jsonnet', {'name': 'jsonnet_lsp', 'lsp': 'stdio', 'executable': 'jsonnet-language-server', 'command': 'jsonnet-language-server --lint', 'project_root': {b -> ale#path#FindNearestDirectory(b, '.git')}})
+                imap <C-f> <Plug>(ale_complete)
                 autocmd VimEnter * nnoremap ]l :ALENextWrap<cr>
                 autocmd VimEnter * nnoremap [l :ALEPreviousWrap<cr>
                 " ]l and [l stand for next lint and prev lint

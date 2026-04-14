@@ -199,7 +199,8 @@ def convert_pptx_videos_to_gifs(
     slides: str = None,
     num_parts: int = None,
     upload: bool = False,
-    max_gif_size: str = '15MB',
+    max_gif_size: str = '45MB',
+    max_dpi: int = 1200,
     cleanup: bool = False,
     cleanup_local: bool = False,
     cleanup_drive: bool = False,
@@ -220,8 +221,10 @@ def convert_pptx_videos_to_gifs(
         slides: Slide range (e.g. "1-5", "1,3,7-10"). Default: all.
         num_parts: Split into N output files (default: 1, or slide count with --upload).
         upload: Upload to Google Slides after conversion.
-        max_gif_size: Max per-GIF size (default: 15MB, 0 to disable).
+        max_gif_size: Max per-GIF size (default: 45MB, 0 to disable).
             GIF frames are also capped at 1000 (Google Slides rejects more).
+        max_dpi: Max DPI for GIF encoding (default: 1200). Output is still clamped
+            to native video resolution, so this just removes the artificial ceiling.
         cleanup: Shorthand for --cleanup_local --cleanup_drive.
         cleanup_local: Delete local PPTX parts after upload+merge.
         cleanup_drive: Trash Drive parts after merge.
@@ -363,6 +366,7 @@ def convert_pptx_videos_to_gifs(
                         input_pptx, part_path, target_bytes, fps, dpi_iters, dither,
                         part_visible, part_offscreen, thumb_map, tmpdir, work_dir,
                         slide_range=(start, end), max_gif_bytes=max_gif_bytes,
+                        max_dpi=max_dpi,
                     )
 
             rp.fansi_print(f"\n{'='*60}", 'green')
@@ -390,6 +394,7 @@ def convert_pptx_videos_to_gifs(
             input_pptx, output_pptx, target_bytes, fps, dpi_iters, dither,
             visible, offscreen, thumb_map, tmpdir, work_dir,
             max_gif_bytes=max_gif_bytes,
+            max_dpi=max_dpi,
         )
 
     if upload:
@@ -422,6 +427,7 @@ def _convert_single(
     work_dir: str,
     slide_range: tuple[int, int] = None,
     max_gif_bytes: int = 0,
+    max_dpi: int = 1200,
 ):
     """Convert a single PPTX with the given visible videos.
 
@@ -429,7 +435,7 @@ def _convert_single(
     """
     # If per-GIF cap guarantees total fits under target, skip bisection — max DPI in 1 iteration
     if max_gif_bytes > 0 and len(visible) * max_gif_bytes <= target_bytes:
-        initial_dpi = 300
+        initial_dpi = max_dpi
         dpi_iters = 1
         rp.fansi_print(f"Per-GIF cap guarantees fit, encoding at max DPI={initial_dpi}", 'green')
     else:
@@ -487,7 +493,7 @@ def _convert_single(
 
     # Search for best DPI using geometric+bisection
     best_dpi, best_path = _find_max_satisfying(
-        try_dpi, lo=10, hi=300, initial=initial_dpi, max_calls=dpi_iters
+        try_dpi, lo=10, hi=max_dpi, initial=initial_dpi, max_calls=dpi_iters
     )
 
     # Save best result (or last attempt as fallback — oversized but best effort)
@@ -501,12 +507,12 @@ def _convert_single(
 
     final_size = rp.get_file_size(output_pptx)
     rp.fansi_print(f"\nCreated: {output_pptx}", 'green', 'bold')
-    rp.fansi_print(f"Final: {rp.human_readable_file_size(final_size, mib=False)} at DPI={final_dpi}", 'green')
+    rp.fansi_print(f"Final: {rp.human_readable_file_size(final_size, mib=False)} (nominal DPI={final_dpi})", 'green')
 
 
 # --- Utility functions ---
 
-def _find_max_satisfying(test_fn, lo: int = 10, hi: int = 300, initial: int = None, max_calls: int = 5):
+def _find_max_satisfying(test_fn, lo: int = 10, hi: int = 1200, initial: int = None, max_calls: int = 5):
     """Find highest integer in [lo, hi] where test_fn returns truthy, using geometric+bisection.
 
     If test_fn returns 'CEILING', the result is at native resolution — no point
@@ -654,7 +660,7 @@ def _estimate_initial_dpi(
     dpi = dpi // 2
 
     # Clamp to reasonable range
-    return max(10, min(300, dpi))
+    return max(10, min(1200, dpi))
 
 
 def _get_video_info(work_dir: str, placements: dict) -> dict:
@@ -738,6 +744,15 @@ def _convert_video_to_gif(
     target_h = min(int(visible_inches[1] * dpi), info['height'])
     target_w, target_h = max(16, target_w), max(16, target_h)
 
+    nat_w, nat_h = info['width'], info['height']
+    eff_dpi = min(target_w / visible_inches[0], target_h / visible_inches[1])
+    pct = 100 * (target_w * target_h) / (nat_w * nat_h)
+    rp.fansi_print(
+        f"  {rp.path_split(video_path)[-1]}: {nat_w}x{nat_h} -> {target_w}x{target_h} "
+        f"({pct:.0f}% of native, effective {eff_dpi:.0f} DPI)",
+        'white',
+    )
+
     # Calculate frame indices and output fps to preserve video duration
     # Duration = num_frames / src_fps must equal len(output_frames) / out_fps
     src_fps, num_frames = info['fps'], info['num_frames']
@@ -763,8 +778,9 @@ def _convert_video_to_gif(
     # Load frames at original resolution (kept for potential re-encoding at smaller size)
     frames = rp.load_video_via_decord(video_path, indices=indices)
 
-    # Clamp to the known max resolution that fits under max_bytes for this video.
-    # Avoids wasting time encoding oversized GIFs at higher DPIs just to shrink them.
+    # Clamp to the known max resolution that fit under max_bytes for this video
+    # from a previous iteration at a different DPI. Avoids re-encoding oversized
+    # GIFs just to throw them away.
     res_key = (video_path, out_fps, use_ffmpeg)
     if max_bytes > 0 and res_key in _gif_max_res:
         prev_w, prev_h = _gif_max_res[res_key]
@@ -772,69 +788,115 @@ def _convert_video_to_gif(
             target_w = min(target_w, prev_w)
             target_h = min(target_h, prev_h)
 
-    # Pre-estimate: if full-res GIF would exceed max_bytes, start at a resolution
-    # predicted to be near max_bytes instead of encoding full-res just to discard it.
-    # The shrink loop below still fine-tunes if the estimate is imprecise.
-    if max_bytes > 0 and res_key not in _gif_max_res:
-        num_output_frames = len(indices) if indices else num_frames
-        est_size = _estimate_gif_size(target_w, target_h, num_output_frames, use_ffmpeg)
-        if est_size > max_bytes:
-            # The GIF size estimate (2 bytes/pixel) is conservative — actual GIFs
-            # compress better at lower resolutions. Use 1.5x overshoot so the
-            # shrink loop only needs 0-1 additional iterations to fine-tune.
-            scale = (max_bytes / est_size) ** 0.5 * 1.5
-            target_w = max(16, int(target_w * scale))
-            target_h = max(16, int(target_h * scale))
+    # Helper: encode GIF at (w, h), return file size. Uses cache.
+    full_w, full_h = target_w, target_h
 
-    # Encode GIF, shrinking if it exceeds max_bytes
-    did_shrink = False
-    while True:
-        cache_key = (video_path, target_w, target_h, out_fps, use_ffmpeg)
+    def _encode_at(w, h):
+        cache_key = (video_path, w, h, out_fps, use_ffmpeg)
         cached = _gif_cache.get(cache_key)
-
         if cached:
-            cached_path, gif_size = cached
+            cached_path, size = cached
             rp.copy_file(cached_path, gif_path)
         else:
-            video = rp.resize_video_to_fit(frames, height=target_h, width=target_w, allow_growth=False)
+            video = rp.resize_video_to_fit(frames, height=h, width=w, allow_growth=False)
             _save_gif(video, gif_path, out_fps, use_ffmpeg)
-            gif_size = rp.get_file_size(gif_path)
-            # Cache to a temp file so it survives work_dir wipes between iterations
+            size = rp.get_file_size(gif_path)
             cache_path = rp.path_join(tempfile.gettempdir(), f'gif_cache_{hash(cache_key) & 0xFFFFFFFF:08x}.gif')
             rp.copy_file(gif_path, cache_path)
-            _gif_cache[cache_key] = (cache_path, gif_size)
+            _gif_cache[cache_key] = (cache_path, size)
+        return size
 
-        if max_bytes <= 0:
-            break
+    if max_bytes <= 0:
+        # No cap — encode at full resolution
+        _encode_at(target_w, target_h)
+        return gif_name
 
+    # Bisection search for the maximum resolution that fits under max_bytes.
+    # Scale factor s in (0, 1] maps to (full_w * s, full_h * s).
+    # Goal: find the largest s where GIF size <= max_bytes.
+
+    best_s = None  # largest scale that fit
+    lo_s, hi_s = 0.0, 1.0  # bisection bounds: lo=too small (fits), hi=too big or untested
+
+    # First try full resolution
+    gif_size = _encode_at(full_w, full_h)
+    if gif_size <= max_bytes:
+        # Full res fits — done
+        return gif_name
+
+    rp.fansi_print(
+        f"  {gif_name}: {rp.human_readable_file_size(gif_size)} exceeds "
+        f"{rp.human_readable_file_size(max_bytes)} limit, bisecting...",
+        'yellow',
+    )
+
+    # Quick descent: find a scale that fits by halving
+    hi_s = 1.0  # known too big
+    s = (max_bytes / gif_size) ** 0.5  # proportional estimate
+    s = max(0.1, min(0.9, s))
+
+    for _ in range(6):  # at most 6 attempts to find initial fit
+        w = max(16, int(full_w * s))
+        h = max(16, int(full_h * s))
+        gif_size = _encode_at(w, h)
         if gif_size <= max_bytes:
-            # Only remember max resolution if we actually had to shrink to get
-            # here. If it fit on the first try, higher resolutions might also
-            # fit — don't clamp future iterations.
-            if did_shrink:
-                _gif_max_res[res_key] = (target_w, target_h)
-            break
-
-        if target_w <= 16 and target_h <= 16:
+            best_s = s
+            lo_s = s
             rp.fansi_print(
-                f"  Warning: {gif_name} is {rp.human_readable_file_size(gif_size)} "
-                f"(exceeds {rp.human_readable_file_size(max_bytes)} per-image limit, cannot shrink further)",
-                'yellow',
+                f"  {gif_name}: {w}x{h} = {rp.human_readable_file_size(gif_size)} fits",
+                'green',
             )
             break
+        else:
+            hi_s = s
+            s = s * (max_bytes / gif_size) ** 0.5  # refine estimate
+            s = max(0.05, min(s, hi_s * 0.9))
+            rp.fansi_print(
+                f"  {gif_name}: {w}x{h} = {rp.human_readable_file_size(gif_size)} too big",
+                'yellow',
+            )
 
-        # Shrink proportionally: GIF size ~ width * height, so scale by sqrt(ratio)
-        did_shrink = True
-        scale = (max_bytes / gif_size) ** 0.5
-        scale = max(0.5, min(0.9, scale))  # avoid tiny steps or huge jumps
-        target_w = max(16, int(target_w * scale))
-        target_h = max(16, int(target_h * scale))
-        tag = ' [Cached]' if cached else ''
+    if best_s is None:
+        # Nothing fit — use smallest attempt as fallback
         rp.fansi_print(
-            f"  {gif_name}: {rp.human_readable_file_size(gif_size)} exceeds "
-            f"{rp.human_readable_file_size(max_bytes)} per-image limit, retrying at {target_w}x{target_h}{tag}",
+            f"  Warning: {gif_name} cannot fit under {rp.human_readable_file_size(max_bytes)}",
             'yellow',
         )
+        _gif_max_res[res_key] = (max(16, int(full_w * 0.1)), max(16, int(full_h * 0.1)))
+        return gif_name
+
+    # Bisect between lo_s (fits) and hi_s (too big) to maximize resolution
+    for i in range(3):  # 3 bisection steps
+        mid_s = (lo_s + hi_s) / 2
+        w = max(16, int(full_w * mid_s))
+        h = max(16, int(full_h * mid_s))
+        # Skip if dimensions haven't changed (small range)
+        if w == max(16, int(full_w * lo_s)) and h == max(16, int(full_h * lo_s)):
+            break
+        gif_size = _encode_at(w, h)
+        if gif_size <= max_bytes:
+            best_s = mid_s
+            lo_s = mid_s
+            rp.fansi_print(
+                f"  {gif_name}: bisect {i+1}/3: {w}x{h} = {rp.human_readable_file_size(gif_size)} fits",
+                'green',
+            )
+        else:
+            hi_s = mid_s
+            rp.fansi_print(
+                f"  {gif_name}: bisect {i+1}/3: {w}x{h} = {rp.human_readable_file_size(gif_size)} too big",
+                'yellow',
+            )
+
+    # Final encode at best scale
+    best_w = max(16, int(full_w * best_s))
+    best_h = max(16, int(full_h * best_s))
+    _encode_at(best_w, best_h)
+    _gif_max_res[res_key] = (best_w, best_h)
+    rp.fansi_print(
+        f"  {gif_name}: final {best_w}x{best_h} ({100*best_s:.0f}% of target)",
+        'cyan',
+    )
 
     return gif_name
 
