@@ -299,6 +299,12 @@ def scoop(funcⵓscoopˏnew,list_in,init_value=None):
         scoop_value=funcⵓscoopˏnew(scoop_value,element)
     return scoop_value
 # endregion
+
+def set_intersection(*sets):
+    sets=detuple(sets)
+    sets = list(map(set,sets))
+    return sets and set.intersection(*sets) or set()
+
 # region ［seq_map‚ par_map］
 def seq_map(func,*iterables):
     """
@@ -708,6 +714,16 @@ def tic() -> callable:
         local_tic=time.time()
     local_toc.tic=reset_timer
     return local_toc  # Returns a method so you can do a=tic();a.toc() ⟵ Gives a local (not global) toc value so each tic can be used as a new timer
+def _local_tic():
+    """Like tic() but does NOT reset the global timer. For internal use."""
+    local_tic=time.time()
+    def local_toc():
+        return gtoc() - local_tic
+    def reset_timer():
+        nonlocal local_tic
+        local_tic=time.time()
+    local_toc.tic=reset_timer
+    return local_toc
 def toc() -> float:
     return gtoc() - _global_tic
 def ptoc(title='',*,new_line=True) -> None:
@@ -7256,6 +7272,61 @@ def temporary_seed_all(seed=None):
     with contexts:
         yield
 
+
+def log_minor_steps(step: int, subdivs=None, base=10, from_start=True, from_end=True) -> list:
+    """
+    Pure function. Returns sorted checkpoint steps worth keeping, log-spaced
+    via subdivs × powers of base, plus dense milestones approaching step.
+
+    Args:
+        step (int): Current step number
+        subdivs (tuple[int, ...] | None): Allowed multipliers per power of base.
+            None → range(1, base). Can be multi-digit (e.g. 25, 50).
+        base (int): Geometric spacing between scales.
+        from_start (bool): Include log-spaced intervals from 0 upward.
+        from_end (bool): Include dense milestones approaching step.
+
+    Returns:
+        list[int]
+
+    Examples:
+        >>> keepers(100)
+        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+        >>> keepers(1000, subdivs=(1, 5))
+        [1, 5, 10, 50, 100, 500, 1000]
+        >>> keepers(1000, subdivs=(1, 2, 5))
+        [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
+        >>> keepers(10000, subdivs=(25, 50, 75, 100))
+        [25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000]
+        >>> keepers(1000, subdivs=(1,))
+        [1, 10, 100, 1000]
+        >>> keepers(64, base=2)
+        [1, 2, 4, 8, 16, 32, 64]
+        >>> keepers(64, subdivs=(1, 3), base=4)
+        [1, 3, 4, 12, 16, 48, 64]
+        >>> keepers(1000, subdivs=(1,), from_end=False)
+        [1, 10, 100, 1000]
+        >>> keepers(1234, subdivs=(1,), from_start=False)
+        [1000, 1100, 1200, 1210, 1220, 1230, 1231, 1232, 1233, 1234]
+    """
+    max_power = 1
+    while base ** max_power <= step:
+        max_power += 1
+
+    result = set()
+
+    if from_start:
+        mults = set(subdivs) if subdivs else set(range(1, base))
+        result |= {m * base**p for p in range(max_power) for m in mults if m * base**p <= step}
+
+    if from_end:
+        # Floor the step at each magnitude, then mirror backwards
+        result |= {step - (step % base**p) - (i * base**p)
+                    for p in range(max_power)
+                    for i in range((step // base**p) % base)}
+
+    return sorted(result)
+
 # endregion
 # region rant/ranp: ［run_as_new_thread，run_as_new_process］
 def run_as_new_thread(func,*args,**kwargs):
@@ -7522,13 +7593,16 @@ def _load_files(
             # This is currently-undocumented functionality, used internally in rp. Maybe I'll document it in the future
             eta_title = show_progress[len('eta:'):]
         show_eta = eta(num_paths, title=eta_title)
+        import threading
         num_yielded = 0
+        _progress_lock = threading.Lock()
         start_time = gtoc()
         def progress_func(action):
             nonlocal num_yielded
             if action == "update":
-                num_yielded += 1
-                show_eta(num_yielded)
+                with _progress_lock:
+                    num_yielded += 1
+                    show_eta(num_yielded)
             elif action == "done":
                 elapsed_time = gtoc() - start_time
                 # _print_status("%s: Done! Did %i items in %.3f seconds"%(eta_title, num_yielded, elapsed_time))#This is here because of the specifics of the eta function we're using to display progress
@@ -11511,6 +11585,10 @@ def _infer_bit_depth_from_pix_fmt(pix_fmt):
     m = re.search(r'p(\d{1,2})(le|be)?$', pix_fmt)
     if m:
         return int(m.group(1))
+    # Grayscale: gray, gray10le, gray12be, gray16le, etc.
+    m = re.search(r'^gray(\d+)?(le|be)?$', pix_fmt)
+    if m:
+        return int(m.group(1)) if m.group(1) else 8
     # Packed total-bits: rgb24, rgb48le, rgba64le, etc.
     m = re.search(r'(rgba?)(\d+)(le|be)?$', pix_fmt)
     if m:
@@ -22664,8 +22742,8 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
     if completion_verb is None:
         completion_verb = "Did"
 
-    timer = tic()
-    interval_timer = tic()
+    timer = _local_tic()
+    interval_timer = _local_tic()
     title = title + ": "
     shown_done = False
     style = 'invert'
@@ -22682,7 +22760,7 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
             nonlocal interval_timer
 
             if interval_timer()>=min_interval:
-                interval_timer=tic()
+                interval_timer=_local_tic()
                 temp=timedelta(seconds=time_elapsed_in_seconds)
 
                 # Calculate average rate
@@ -22709,7 +22787,7 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
             return  # Already printed completion, don't print again
 
         if interval_timer()>=min_interval or done and not shown_done:
-            interval_timer=tic()
+            interval_timer=_local_tic()
 
             # Estimated time of arrival printer
             temp=timedelta(seconds=time_elapsed_in_seconds)
@@ -28288,6 +28366,7 @@ def pseudo_terminal(
         CCA  $r._run_claude_code(ans).code
         CCH  $r._run_claude_code('.')
         CCHD $r._run_claude_code('.',fullperm=True)
+        CX   !codex --dangerously-bypass-approvals-and-sandbox
         CHD  $r._run_claude_code('.',fullperm=True)
         GEM  $r._run_gemini_cli('.')
         GEMA $r._run_gemini_cli(ans).code
@@ -45029,6 +45108,8 @@ def _get_video_bit_depth(path):
         'rgb24':       8,  'bgr24':       8,  'rgba':        8,
         'rgb48le':     16, 'rgb48be':     16,
         'gbrp':        8,  'gbrp10le':    10, 'gbrp12le':    12,
+        'gray':        8,  'gray10le':    10, 'gray12le':    12, 'gray16le':  16,
+        'gray10be':    10, 'gray12be':    12, 'gray16be':    16,
     }
     try:
         container = av.open(str(path))
@@ -53906,6 +53987,16 @@ def _ensure_ffmpeg_installed():
         elif currently_running_linux  (): assert False, "Please install ffmpeg! >>> sudo apt install ffmpeg"
         elif currently_running_mac    (): assert False, "Please install ffmpeg! >>> brew install ffmpeg #get brew at https://brew.sh"
         else:                             assert False, "Please install ffmpeg!"
+
+@_register_ensure_installed_func
+def _ensure_codex_installed():
+    """codex: OpenAI's agentic CLI for AI-assisted coding"""
+    _ensure_node_installed(min_version=18)
+    _ensure_installed(
+        'codex',
+        unix   ='npm install -g @openai/codex',
+        windows='npm install -g @openai/codex',
+    )
 
 @_register_ensure_installed_func('claude')
 def _ensure_claudecode_installed():
@@ -66948,6 +67039,47 @@ def git_existing_ignored_files():
         capture_output=True, text=True, check=True
     )
     return [path_join(root, line) for line in result.stdout.splitlines() if line.strip()]
+
+
+def git_nuke_file_history(*paths, repo_dir=".",auto_yes=False):
+    """
+    Command. Dangerous! Erases files from all git history while keeping them on disk.
+
+    !! BE CAREFUL WITH THIS FUNCTION !!
+
+    Rewrites every commit, removing all traces of the given paths from
+    git history. The files themselves remain in the working tree — they
+    just won't exist in any commit afterward (so they'll show up as
+    untracked).
+
+    Uses git-filter-repo under the hood. After running, you'll need
+    to re-add the remote and force-push if desired.
+
+    This can reduce the size of a repo. Useful in case you committed large files sometime in git history.
+
+    Requires: pip install git-filter-repo
+
+    Args:
+        *paths (str): File paths (relative to repo root) whose history to erase
+        repo_dir (str): Path to the git repository (default: ".")
+
+    Examples:
+        >>> # git_nuke_file_history("secrets.env")
+        >>> # git_nuke_file_history("big.bin", "other.bin", repo_dir="/my/repo")
+    """
+    import subprocess
+
+    paths = detuple(paths)
+
+    if auto_yes or not input_yes_no("Are you sure you want to erase "+str(paths)+" from the git history of repo "+repr(repo_dir)+" permanently? It will rewrite history so these paths never existed in any commit. The files will remain on disk as untracked files."):
+        return
+
+    assert all(map(file_exists,paths)), "Not all given paths exist as files. This function is dangerous, so this error prevents mistakes. Make sure all specified files exist."
+
+    cmd = ["git", "filter-repo", "--invert-paths", "--force"]
+    for p in paths:
+        cmd += ["--path", p]
+    subprocess.run(cmd, cwd=repo_dir, check=True)
 
 
 def _autoformat_python_code_via_black(code:str,line_length=1000):
