@@ -7505,8 +7505,7 @@ def _erase_terminal_line():
 
 def load_files(
     load_file,
-    file_paths,
-    *,
+    *file_paths,
     num_threads:int=None,
     show_progress=False,
     strict=True,
@@ -7516,8 +7515,8 @@ def load_files(
     """
     Load a list of files with optional multithreading.
 
-    - load_file (function): A function to load a single file. Expected signature: load_file(str) -> any.
-    - file_paths (iterable): Paths to the files to be loaded. It's ok if this iterator is slow - paths are loaded concurrently with files.
+    - load_file (function): A function to load a single file. Signature: load_file(*args) -> any. With one iterable, called as load_file(path); with N iterables, called as load_file(arg1, arg2, ..., argN) zipped par_map-style.
+    - *file_paths (iterables): One or more iterables. With one iterable, items are paths; with multiple, they are zipped and load_file receives each tuple unpacked (mirrors par_map / built-in map). It's ok if these iterators are slow - they're consumed concurrently with file loads.
     - num_threads (int, optional): Number of threads for concurrent loading. Defaults to 32 if set to None. If set to 0, runs on the main thread.
     - show_progress (True, False, 'eta' or 'tqdm'): Whether to show a progress bar. If set to 'tqdm', uses tqdm library. If set to 'eta', uses rp.eta. Defaults to False.
     - strict (True, False, or None): Behavior if a file fails to load. True throws an error, False skips the file, None yields None.
@@ -7527,20 +7526,20 @@ def load_files(
 
     This function is a generator that yields the loaded files one by one.
 
+    Multi-iterable usage enables save_files-style parallelism, e.g. load_files(save_image, images, paths).
 
     TODO: This function is more powerful than the arg names and function name imply. This could be used for general-purpose parallelism with loading bars and error handling. Make a more generalized version of this function and then re-implement a shorter version of this function that uses it.
-    TODO: Make a save_files version of this - big question: can a save_files function be implemented with the load_files function (and more elegantly with the above generalized version?)
-    TODO: The eta can't display a specific message like "loading images" etc - it's locked to load_files right now. How can I *elegantly* allow this naming but also allow it to use tqdm? 
+    TODO: The eta can't display a specific message like "loading images" etc - it's locked to load_files right now. How can I *elegantly* allow this naming but also allow it to use tqdm?
     TODO: Make convert_image_files take advantage of this function
     """
 
     files = _load_files(
         load_file,
-        file_paths,
-        num_threads,
-        show_progress,
-        strict,
-        buffer_limit,
+        *file_paths,
+        num_threads=num_threads,
+        show_progress=show_progress,
+        strict=strict,
+        buffer_limit=buffer_limit,
     )
 
     if lazy:
@@ -7550,32 +7549,32 @@ def load_files(
 
 def _load_files(
     load_file,
-    file_paths,
+    *file_paths,
     num_threads:int=None,
     show_progress=False,
     strict=True,
-    buffer_limit=None,
+    buffer_limit=None
 ):
     "Helper function for load_files"
 
     assert strict is True or strict is False or strict is None, "The 'strict' parameter must be set to either True, False, or None."
     assert show_progress in {True, False, "tqdm", "eta"} or isinstance(show_progress, str) and starts_with_any(show_progress, 'eta:'), "The 'show_progress' parameter must be either True, False, or 'tqdm'."
     assert num_threads is None or isinstance(num_threads, int) and num_threads >= 0, "Must have at least 1 thread, or set num_threads=0 to run in the main thread only"
-    assert is_iterable(file_paths), 'rp.load_files: file_paths must be iterable, but type(file_paths) is '+str(type(file_paths))
+    assert len(file_paths) >= 1, 'rp.load_files: must pass at least one iterable of paths/args'
+    assert all(is_iterable(p) for p in file_paths), 'rp.load_files: every *file_paths argument must be iterable'
     assert callable(load_file), 'rp.load_files: load_file must be a function that takes a file path and returns a value, but type(load_file) is '+str(type(load_file))
 
     if num_threads is None:
         # Choose a nice default value
-        num_threads = 32 
+        num_threads = 32
 
     SKIP = object()  # Special object indicating a skipped file
     cancelled = None  # Will be set if any thread, including the main thread, throws an error
 
     # Define progress_func here...
     if show_progress:
-        file_paths = list(file_paths)
-        assert hasattr(file_paths,"__len__"), "Cannot show progress because file_paths doesnt have a length"
-        num_paths = len(file_paths)
+        file_paths = tuple(list(p) for p in file_paths)
+        num_paths = min(len(p) for p in file_paths)
 
     if show_progress == "tqdm":
         pip_import('tqdm') # Ensures tqdm is installed
@@ -7593,16 +7592,13 @@ def _load_files(
             # This is currently-undocumented functionality, used internally in rp. Maybe I'll document it in the future
             eta_title = show_progress[len('eta:'):]
         show_eta = eta(num_paths, title=eta_title)
-        import threading
         num_yielded = 0
-        _progress_lock = threading.Lock()
         start_time = gtoc()
         def progress_func(action):
             nonlocal num_yielded
             if action == "update":
-                with _progress_lock:
-                    num_yielded += 1
-                    show_eta(num_yielded)
+                num_yielded += 1
+                show_eta(num_yielded)
             elif action == "done":
                 elapsed_time = gtoc() - start_time
                 # _print_status("%s: Done! Did %i items in %.3f seconds"%(eta_title, num_yielded, elapsed_time))#This is here because of the specifics of the eta function we're using to display progress
@@ -7612,14 +7608,14 @@ def _load_files(
             pass
 
 
-    def _load_file(path):
+    def _load_file(*args):
 
         nonlocal cancelled
         if cancelled:
             raise cancelled
 
         try:
-            content = load_file(path)
+            content = load_file(*args)
         except BaseException as e:
             if strict is True:
                 cancelled = e
@@ -7640,13 +7636,13 @@ def _load_files(
     try:
         if not num_threads:
             # Load all the files in the main thread
-            yield from skip_filter(map(_load_file, file_paths))
+            yield from skip_filter(map(_load_file, *file_paths))
         else:
             # Load files with multiple threads
             yield from skip_filter(lazy_par_map(
                 _load_file,
-                file_paths,
-                num_threads=num_threads, 
+                *file_paths,
+                num_threads=num_threads,
                 buffer_limit=buffer_limit,
             ))
 
@@ -11538,19 +11534,128 @@ def _normalize_video_output_path(path, extension):
     return path
 
 
+_PIX_FMT_BIT_DEPTHS = {
+    # YUV planar                 420p  422p  440p  444p
+    'yuv420p':      8, 'yuv422p':      8, 'yuv440p':      8, 'yuv444p':      8,
+    'yuv420p9le':   9, 'yuv422p9le':   9,                    'yuv444p9le':   9,
+    'yuv420p9be':   9, 'yuv422p9be':   9,                    'yuv444p9be':   9,
+    'yuv420p10le': 10, 'yuv422p10le': 10, 'yuv440p10le': 10, 'yuv444p10le': 10,
+    'yuv420p10be': 10, 'yuv422p10be': 10, 'yuv440p10be': 10, 'yuv444p10be': 10,
+    'yuv420p12le': 12, 'yuv422p12le': 12, 'yuv440p12le': 12, 'yuv444p12le': 12,
+    'yuv420p12be': 12, 'yuv422p12be': 12, 'yuv440p12be': 12, 'yuv444p12be': 12,
+    'yuv420p14le': 14, 'yuv422p14le': 14,                    'yuv444p14le': 14,
+    'yuv420p14be': 14, 'yuv422p14be': 14,                    'yuv444p14be': 14,
+    'yuv420p16le': 16, 'yuv422p16le': 16,                    'yuv444p16le': 16,
+    'yuv420p16be': 16, 'yuv422p16be': 16,                    'yuv444p16be': 16,
+    'yuv444p10msble': 10, 'yuv444p10msbbe': 10,
+    'yuv444p12msble': 12, 'yuv444p12msbbe': 12,
+
+    # YUVA planar (YUV + alpha)  420p  422p  444p
+    'yuva420p':      8, 'yuva422p':      8, 'yuva444p':      8,
+    'yuva420p9le':   9, 'yuva422p9le':   9, 'yuva444p9le':   9,
+    'yuva420p9be':   9, 'yuva422p9be':   9, 'yuva444p9be':   9,
+    'yuva420p10le': 10, 'yuva422p10le': 10, 'yuva444p10le': 10,
+    'yuva420p10be': 10, 'yuva422p10be': 10, 'yuva444p10be': 10,
+                        'yuva422p12le': 12, 'yuva444p12le': 12,
+                        'yuva422p12be': 12, 'yuva444p12be': 12,
+    'yuva420p16le': 16, 'yuva422p16le': 16, 'yuva444p16le': 16,
+    'yuva420p16be': 16, 'yuva422p16be': 16, 'yuva444p16be': 16,
+
+    # YUVJ (JPEG-range YUV, 8-bit only)
+    'yuvj411p': 8, 'yuvj420p': 8, 'yuvj422p': 8, 'yuvj440p': 8, 'yuvj444p': 8,
+    'yuv410p':  8, 'yuv411p':  8,
+
+    # GBR planar RGB               gbrp        gbrap (+ alpha)
+    'gbrp':          8,  'gbrap':          8,
+    'gbrp9le':       9,
+    'gbrp9be':       9,
+    'gbrp10le':     10,  'gbrap10le':     10,
+    'gbrp10be':     10,  'gbrap10be':     10,
+    'gbrp12le':     12,  'gbrap12le':     12,
+    'gbrp12be':     12,  'gbrap12be':     12,
+    'gbrp14le':     14,  'gbrap14le':     14,
+    'gbrp14be':     14,  'gbrap14be':     14,
+    'gbrp16le':     16,  'gbrap16le':     16,
+    'gbrp16be':     16,  'gbrap16be':     16,
+    'gbrpf16le':    16,  'gbrapf16le':    16,
+    'gbrpf16be':    16,  'gbrapf16be':    16,
+    'gbrpf32le':    32,  'gbrapf32le':    32,
+    'gbrpf32be':    32,  'gbrapf32be':    32,
+    'gbrap32le':    32,  'gbrap32be':     32,
+    'gbrp10msble':  10,  'gbrp10msbbe':   10,
+    'gbrp12msble':  12,  'gbrp12msbbe':   12,
+
+    # Grayscale                    gray       gray+alpha
+    'gray':          8,  'ya8':          8,
+    'gray9le':       9,
+    'gray9be':       9,
+    'gray10le':     10,
+    'gray10be':     10,
+    'gray12le':     12,
+    'gray12be':     12,
+    'gray14le':     14,
+    'gray14be':     14,
+    'gray16le':     16,  'ya16le':      16,
+    'gray16be':     16,  'ya16be':      16,
+    'grayf16le':    16,  'yaf16le':     16,
+    'grayf16be':    16,  'yaf16be':     16,
+    'gray32le':     32,
+    'gray32be':     32,
+    'grayf32le':    32,  'yaf32le':     32,
+    'grayf32be':    32,  'yaf32be':     32,
+
+    # RGB/BGR packed
+    'rgb24':   8, 'bgr24':   8, 'rgb0':  8, 'bgr0':  8,
+    'rgba':    8, 'bgra':    8, 'argb':  8, 'abgr':  8, '0rgb': 8, '0bgr': 8,
+    'rgb48le': 16, 'rgb48be': 16, 'bgr48le': 16, 'bgr48be': 16,
+    'rgba64le': 16, 'rgba64be': 16, 'bgra64le': 16, 'bgra64be': 16,
+    'rgb96le': 32, 'rgb96be': 32, 'rgba128le': 32, 'rgba128be': 32,
+    'rgbf16le': 16, 'rgbf16be': 16, 'rgbaf16le': 16, 'rgbaf16be': 16,
+    'rgbf32le': 32, 'rgbf32be': 32, 'rgbaf32le': 32, 'rgbaf32be': 32,
+
+    # RGB/BGR sub-byte and palette
+    'rgb4': 1, 'bgr4': 1, 'rgb4_byte': 1, 'bgr4_byte': 1,
+    'rgb8': 3, 'bgr8': 3, 'pal8': 8,
+    'rgb444le':  4, 'rgb444be':  4, 'bgr444le':  4, 'bgr444be':  4,
+    'rgb555le':  5, 'rgb555be':  5, 'bgr555le':  5, 'bgr555be':  5,
+    'rgb565le':  5, 'rgb565be':  5, 'bgr565le':  5, 'bgr565be':  5,
+
+    # NV semi-planar
+    'nv12': 8, 'nv21': 8, 'nv16': 8, 'nv24': 8, 'nv42': 8,
+    'nv20le': 10, 'nv20be': 10,
+
+    # P semi-planar               p0xx  p2xx  p4xx
+    'p010le': 10, 'p210le': 10, 'p410le': 10,
+    'p010be': 10, 'p210be': 10, 'p410be': 10,
+    'p012le': 12, 'p212le': 12, 'p412le': 12,
+    'p012be': 12, 'p212be': 12, 'p412be': 12,
+    'p016le': 16, 'p216le': 16, 'p416le': 16,
+    'p016be': 16, 'p216be': 16, 'p416be': 16,
+
+    # YUV packed
+    'yuyv422': 8, 'yvyu422': 8, 'uyvy422': 8, 'uyyvyy411': 8,
+    'ayuv': 8, 'vuya': 8, 'vuyx': 8, 'vyu444': 8, 'uyva': 8,
+    'ayuv64le': 16, 'ayuv64be': 16,
+
+    # Monochrome
+    'monob': 1, 'monow': 1,
+
+    # Bayer                        bggr  gbrg  grbg  rggb
+    'bayer_bggr8':    2, 'bayer_gbrg8':    2, 'bayer_grbg8':    2, 'bayer_rggb8':    2,
+    'bayer_bggr16le': 4, 'bayer_gbrg16le': 4, 'bayer_grbg16le': 4, 'bayer_rggb16le': 4,
+    'bayer_bggr16be': 4, 'bayer_gbrg16be': 4, 'bayer_grbg16be': 4, 'bayer_rggb16be': 4,
+
+    # Exotic packed
+    'v30xle': 10, 'v30xbe': 10, 'xv30le': 10, 'xv30be': 10,
+    'xv36le': 12, 'xv36be': 12, 'xv48le': 16, 'xv48be': 16,
+    'x2rgb10le': 10, 'x2rgb10be': 10, 'x2bgr10le': 10, 'x2bgr10be': 10,
+    'xyz12le': 12, 'xyz12be': 12,
+    'y210le': 10, 'y210be': 10, 'y212le': 12, 'y212be': 12, 'y216le': 16, 'y216be': 16,
+}
+
 def _infer_bit_depth_from_pix_fmt(pix_fmt):
     """
-    Pure function, general. Infer per-component bit depth from an ffmpeg pixel format string.
-
-    Parses the pix_fmt string to determine the number of bits per color
-    component. Used to select the correct input format (uint8 vs uint16)
-    when the user specifies a raw ffmpeg pix_fmt string.
-
-    Handles three naming conventions:
-    - Planar depth suffix: yuv420p10le, gbrp12le, yuv444p → 10, 12, 8
-    - Packed total-bits: rgb48le → 48/3=16, rgba64le → 64/4=16, rgb24 → 24/3=8
-    - Everything else: nv12, uyvy422, etc. → 8 (these are 8-bit formats
-      despite having numbers in their names)
+    Pure function, general. Look up per-component bit depth for an ffmpeg pixel format.
 
     Args:
         pix_fmt (str): ffmpeg pixel format string (e.g. 'yuv420p10le')
@@ -11579,23 +11684,16 @@ def _infer_bit_depth_from_pix_fmt(pix_fmt):
         8
         >>> _infer_bit_depth_from_pix_fmt('gbrap10le')
         10
+        >>> _infer_bit_depth_from_pix_fmt('gray')
+        8
+        >>> _infer_bit_depth_from_pix_fmt('gray10le')
+        10
+        >>> _infer_bit_depth_from_pix_fmt('gray16le')
+        16
     """
-    import re
-    # Planar depth suffix: p10le, p12le, p10be, p10, p12, p16, etc.
-    m = re.search(r'p(\d{1,2})(le|be)?$', pix_fmt)
-    if m:
-        return int(m.group(1))
-    # Grayscale: gray, gray10le, gray12be, gray16le, etc.
-    m = re.search(r'^gray(\d+)?(le|be)?$', pix_fmt)
-    if m:
-        return int(m.group(1)) if m.group(1) else 8
-    # Packed total-bits: rgb24, rgb48le, rgba64le, etc.
-    m = re.search(r'(rgba?)(\d+)(le|be)?$', pix_fmt)
-    if m:
-        total = int(m.group(2))
-        channels = 4 if m.group(1) == 'rgba' else 3
-        return total // channels
-    return 8
+    if pix_fmt not in _PIX_FMT_BIT_DEPTHS:
+        raise ValueError("Unrecognized pix_fmt: %r" % pix_fmt)
+    return _PIX_FMT_BIT_DEPTHS[pix_fmt]
 
 def _video_encode_pix_fmts(pix_fmt='yuv420p', alpha=False):
     """
@@ -45098,25 +45196,14 @@ def _get_video_bit_depth(path):
         10
     """
     av = pip_import('av')
-    _pix_fmt_bit_depths = {
-        'yuv420p':     8,  'yuv422p':     8,  'yuv444p':     8,
-        'yuv420p10le': 10, 'yuv422p10le': 10, 'yuv444p10le': 10,
-        'yuv420p10be': 10, 'yuv422p10be': 10, 'yuv444p10be': 10,
-        'yuv420p12le': 12, 'yuv422p12le': 12, 'yuv444p12le': 12,
-        'yuv420p12be': 12, 'yuv422p12be': 12, 'yuv444p12be': 12,
-        'yuva420p':    8,  'yuva444p':    8,
-        'rgb24':       8,  'bgr24':       8,  'rgba':        8,
-        'rgb48le':     16, 'rgb48be':     16,
-        'gbrp':        8,  'gbrp10le':    10, 'gbrp12le':    12,
-        'gray':        8,  'gray10le':    10, 'gray12le':    12, 'gray16le':  16,
-        'gray10be':    10, 'gray12be':    12, 'gray16be':    16,
-    }
     try:
         container = av.open(str(path))
         stream = container.streams.video[0]
         pix_fmt = stream.codec_context.pix_fmt
         container.close()
-        return _pix_fmt_bit_depths.get(pix_fmt, 8)
+        return _PIX_FMT_BIT_DEPTHS[pix_fmt]
+    except KeyError:
+        raise ValueError("Unrecognized pix_fmt: %r" % pix_fmt)
     except Exception:
         return 8
 
