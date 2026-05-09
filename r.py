@@ -36348,6 +36348,7 @@ def omni_load(path):
     - Data URIs → Dispatched by mediatype (image/video/audio)
     - .json → load_json()
     - .yaml → load_yaml()
+    - .jsonnet/.libsonnet → load_jsonnet()
     - Image formats → load_image() or _omni_load_animated_image()
     - Video formats → load_video()
     - Audio formats → load_sound_file()
@@ -36379,6 +36380,7 @@ def omni_load(path):
     # File-based dispatching
     if ends_with_any(path, '.json'): return rp.load_json(path)
     if ends_with_any(path, '.yaml'): return rp.load_yaml(path)
+    if ends_with_any(path, '.jsonnet .libsonnet'.split()): return rp.load_jsonnet(path)
     if ends_with_any(path, '.png .webp .gif'.split()): return _omni_load_animated_image(path)
     if ends_with_any(path, '.jpg .jpeg .jxl .exr .psd .tga .tiff .tif .jp2 .bmp'.split()): return rp.load_image(path)
     if ends_with_any(path, '.mp4 .avi .mkv .flv .mov .m4v .wmv .webm'.split()): return rp.load_video(path)
@@ -45208,6 +45210,10 @@ def _get_video_bit_depth(path):
         return 8
 
 
+class _VideoCodecError(RuntimeError):
+    """Raised when cv2 can read the container but not decode frames (unsupported codec)."""
+    pass
+
 def _cv_load_video_stream(location, start_frame=0):
     #I don't know how to stream videos directly from the web. So instead we'll download it as a temp file and stram it from there. Not ideal but better than nothing.
     with _MaybeTemporarilyDownloadVideo(location) as path:
@@ -45222,10 +45228,19 @@ def _cv_load_video_stream(location, start_frame=0):
             # Needs to find the nearest iframe and decode from there.
             cv_stream.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
 
+        expected_frames = cv_stream.get(cv2.CAP_PROP_FRAME_COUNT)
+        frame_count = 0
         while True:
             not_done,frame=cv_stream.read()
             if not not_done:
+                if frame_count == 0 and expected_frames > 0:
+                    raise _VideoCodecError(
+                        "cv2.VideoCapture read 0 frames from %s "
+                        "(expected %d — likely unsupported codec, e.g. AV1 without dav1d). "
+                        "Try backend='av'" % (path, int(expected_frames))
+                    )
                 return
+            frame_count += 1
             yield cv_bgr_rgb_swap(frame)
 
 
@@ -45343,6 +45358,15 @@ def _load_video_stream_via_av(location, start_frame=0, dtype=None):
         container.close()
 
 
+def _cv_with_av_fallback(path, start_frame, dtype):
+    """Lazy generator: try cv2, on _VideoCodecError switch to PyAV."""
+    try:
+        yield from _cv_load_video_stream(path, start_frame=start_frame)
+    except _VideoCodecError:
+        fansi_print("rp.load_video_stream: cv2 codec unsupported for %s, retrying with PyAV" % path, 'yellow')
+        yield from _load_video_stream_via_av(path, start_frame=start_frame, dtype=dtype)
+
+
 def load_video_stream(path, *, start_frame=0, with_length=True, frame_transform=None, backend='auto', dtype=None):
     """
     Command, general. Stream video frames as a generator.
@@ -45411,7 +45435,10 @@ def load_video_stream(path, *, start_frame=0, with_length=True, frame_transform=
     if use_av:
         frame_iterator = _load_video_stream_via_av(path, start_frame=start_frame, dtype=dtype)
     else:
-        frame_iterator = _cv_load_video_stream(path, start_frame=start_frame)
+        if backend == 'auto':
+            frame_iterator = _cv_with_av_fallback(path, start_frame, dtype)
+        else:
+            frame_iterator = _cv_load_video_stream(path, start_frame=start_frame)
 
     if frame_transform is not None:
         frame_iterator = map(frame_transform, frame_iterator)
@@ -55819,6 +55846,24 @@ def tmux_get_active_window_index() -> int:
 def tmux_get_active_window_name() -> str:
     """Returns the name of the current tmux window."""
     return _run_tmux_command(["tmux", "display-message", "-p", "#{window_name}"])
+
+def tmux_get_active_pane_id() -> int:
+    """Returns the numeric ID of the current tmux pane (e.g. 5 from %5).
+
+    Unlike pane_index (position within window), pane_id is unique across the
+    entire tmux server and stable across pane moves/swaps.
+    """
+    pane_id = _run_tmux_command(["tmux", "display-message", "-p", "#{pane_id}"])
+    return int(pane_id.lstrip("%"))
+
+def tmux_get_active_window_id() -> int:
+    """Returns the numeric ID of the current tmux window (e.g. 3 from @3).
+
+    Unlike window_index (position within session), window_id is unique across
+    the entire tmux server and stable across window moves/renumbering.
+    """
+    window_id = _run_tmux_command(["tmux", "display-message", "-p", "#{window_id}"])
+    return int(window_id.lstrip("@"))
 
 def tmux_get_active_session_id() -> int:
     """Returns the numeric ID of the current tmux session (e.g. 11 from $11)."""
@@ -67619,58 +67664,69 @@ def _load_safetensors_metadata(path, device="cpu"):
         return as_easydict(f.metadata())
 
 
-def _load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, include_tensors=True, include_shapes=False, include_dtypes=False):
+def _load_safetensors(path, device="cpu", *, show_progress=False, verbose=False, include_tensors=True, include_shapes=False, include_dtypes=False, lazy_tensors=False):
     """
     Internal helper that always returns dict[key] -> dict mapping.
     Values are empty dicts if nothing requested.
+    When lazy_tensors=True, tensor values are callables instead of tensors.
     """
     pip_import("safetensors")
     from safetensors import safe_open
 
-    # Load Safetensors file
-    with safe_open(path, framework="pt", device=device) as f:
-        def get_tensor(k): return f.get_tensor(k)
-        def get_shape(k): return f.get_slice(k).get_shape()
-        def get_dtype(k):
-            dtype_str = str(f.get_slice(k).get_dtype())
-            import torch
-            dtype_map = {
-                "F32": torch.float32,
-                "F16": torch.float16,
-                "BF16": torch.bfloat16,
-                "F64": torch.float64,
-                "I8": torch.int8,
-                "I16": torch.int16,
-                "I32": torch.int32,
-                "I64": torch.int64,
-                "U8": torch.uint8,
-                "BOOL": torch.bool,
-            }
-            return dtype_map.get(dtype_str, dtype_str)  # fallback to string if unknown
+    # When lazy, keep the handle alive (no 'with') so callables can read later.
+    # The handle is captured by the closures and lives as long as they do.
+    f = safe_open(path, framework="pt", device=device)
 
-        keys = f.keys()
+    def get_shape(k): return f.get_slice(k).get_shape()
+    def get_dtype(k):
+        dtype_str = str(f.get_slice(k).get_dtype())
+        import torch
+        dtype_map = {
+            "F32": torch.float32,
+            "F16": torch.float16,
+            "BF16": torch.bfloat16,
+            "F64": torch.float64,
+            "I8": torch.int8,
+            "I16": torch.int16,
+            "I32": torch.int32,
+            "I64": torch.int64,
+            "U8": torch.uint8,
+            "BOOL": torch.bool,
+        }
+        return dtype_map.get(dtype_str, dtype_str)  # fallback to string if unknown
 
-        if show_progress:
-            keys = rp.eta(keys, title="rp.load_safetensors")
+    keys = list(f.keys())
 
-        data = {}
-        for k in keys:
-            if verbose:
-                print("    - " + str(k))
+    # Fast path: lazy_tensors with no shapes/dtypes — skip the per-key loop entirely
+    if lazy_tensors and include_tensors and not include_shapes and not include_dtypes:
+        return {k: {"tensor": partial(f.get_tensor, k)} for k in keys}
 
-            item = {}
-            if include_tensors: item['tensor'] = get_tensor(k)
-            if include_shapes: item['shape'] = get_shape(k)
-            if include_dtypes: item['dtype'] = get_dtype(k)
-            data[k] = item
+    if show_progress:
+        keys = rp.eta(keys, title="rp.load_safetensors")
 
-        return data
+    data = {}
+    for k in keys:
+        if verbose:
+            print("    - " + str(k))
+
+        item = {}
+        if include_tensors:
+            if lazy_tensors:
+                item['tensor'] = partial(f.get_tensor, k)
+            else:
+                item['tensor'] = f.get_tensor(k)
+        if include_shapes: item['shape'] = get_shape(k)
+        if include_dtypes: item['dtype'] = get_dtype(k)
+        data[k] = item
+
+    return data
 
 
 def load_safetensors(
     path,
     device="cpu",
     *,
+    lazy_tensors=False,
     show_progress=False,
     verbose=False,
     use_cache=False,
@@ -67685,6 +67741,7 @@ def load_safetensors(
     Args:
         path (str): Path to .safetensors file, or a glob for safetensor files, or a list of files
         device (str, optional): Device (cpu, cuda, etc.). Defaults to 'cpu'.
+        lazy_tensors (bool): Replace tensors with callables that load on demand, so you can quickly load a subset of the file without spending the RAM/VRAM to load every tensor. Defaults to False.
         show_progress (bool, optional): Show progress bar. Defaults to False.
         verbose (bool, optional): Print tensor names. Defaults to False.
         include_tensors (bool): Include tensor data. Defaults to True.
@@ -67725,6 +67782,10 @@ def load_safetensors(
         >>> tensors = load_safetensors('model.safetensors')
         >>> print(tensors['layer1.weight'].shape)
         torch.Size([512, 256])
+
+        >>> # Lazy load - only materialize the one tensor you need
+        >>> lazy = load_safetensors('model.safetensors', lazy_tensors=True)
+        >>> weight = lazy['layer1.weight']()  # call to load just this tensor
 
     """
     # Handle Cache
