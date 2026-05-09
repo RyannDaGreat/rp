@@ -193,9 +193,63 @@ def _spotify_decrypt_blob(username, blob_b64, device_id):
     )
 
 
+import functools as _functools
+import threading as _threading
+
+
+# Serializes librespot-protocol calls. The librespot-python SyncCallback class
+# uses class-level (shared) queue/condition objects (audio/__init__.py:294-295),
+# so concurrent get_audio_key() calls race and crash with _queue.Empty. We hold
+# this lock around stream-load (which fetches the audio key + sets up the CDN
+# request) so only one track is in that critical section at a time. The actual
+# CDN bytes are still streamed in parallel because each thread's stream object
+# pulls from its own HTTP connection once load() returns.
+_SPOTIFY_SESSION_LOCK = _threading.Lock()
+
+
+# Spotify's keymaster has a per-session burst limit. We track an adaptive
+# baseline wait across tracks: after a track succeeds, halve it (decays toward
+# zero); when a track is rate-limited and we have to back off, lift this
+# baseline so the NEXT track preemptively sleeps before its first attempt.
+# Self-modulating throttle: a few rate-limited tracks raise the floor, a run
+# of successes lowers it again. State is module-global so all downloads in
+# this Python process feed the same throttle.
+_SPOTIFY_BACKOFF_LOCK = _threading.Lock()
+_SPOTIFY_BACKOFF_FLOOR = 0.0  # seconds, current preemptive-sleep baseline
+
+
+def _spotify_backoff_take():
+    """Query. Return current baseline preemptive sleep (seconds)."""
+    with _SPOTIFY_BACKOFF_LOCK:
+        return _SPOTIFY_BACKOFF_FLOOR
+
+
+def _spotify_backoff_record_success():
+    """Command. Halve the baseline -- decays toward zero on consecutive successes."""
+    global _SPOTIFY_BACKOFF_FLOOR
+    with _SPOTIFY_BACKOFF_LOCK:
+        _SPOTIFY_BACKOFF_FLOOR /= 2.0
+
+
+def _spotify_backoff_record_rate_limit(last_wait_seconds):
+    """Command. Lift baseline to at least the wait that just succeeded."""
+    global _SPOTIFY_BACKOFF_FLOOR
+    with _SPOTIFY_BACKOFF_LOCK:
+        if last_wait_seconds > _SPOTIFY_BACKOFF_FLOOR:
+            _SPOTIFY_BACKOFF_FLOOR = last_wait_seconds
+
+
+@_functools.lru_cache(maxsize=None)
 def _spotify_authenticate(credentials_path):
     """
     Command. Authenticate to Spotify and return a librespot Session.
+
+    Memoized for the lifetime of the Python process: the first call per
+    credentials_path opens a real session; all subsequent calls return the same
+    Session object, avoiding the AP-handshake cost per track when downloading
+    playlists/albums. (functools.lru_cache rather than rp.memoized because this
+    module is imported during rp's own initialization, before rp.memoized is
+    bound on the namespace.)
 
     Tries (in order):
       1. Existing `credentials.json` at credentials_path (cached from prior run).
@@ -207,6 +261,10 @@ def _spotify_authenticate(credentials_path):
     import time
     rp.pip_import('librespot')
     from librespot.core import Session
+
+    def _announce(sess):
+        rp.fansi_print('rp.download_spotify_audio: authenticated as '+sess.username(),'green')
+        return sess
 
     def _create_with_retry(builder, attempts=3, delay=1.5):
         last = None
@@ -228,7 +286,7 @@ def _spotify_authenticate(credentials_path):
         if b.login_credentials is not None:
             sess = _create_with_retry(b)
             if sess is not None:
-                return sess
+                return _announce(sess)
             rp.fansi_print('rp.download_spotify_audio: cached credentials present but session create failed; falling through to fresh blob extraction','yellow')
 
     extracted = _extract_spotify_desktop_blob()
@@ -248,7 +306,7 @@ def _spotify_authenticate(credentials_path):
             b.login_credentials = creds
             sess = _create_with_retry(b)
             if sess is not None:
-                return sess
+                return _announce(sess)
             last_err = RuntimeError("create() retries exhausted")
         rp.fansi_print('rp.download_spotify_audio: all device_id candidates failed; last error: '+str(last_err),'yellow')
     else:
@@ -262,7 +320,7 @@ def _spotify_authenticate(credentials_path):
     b.oauth(_cb)
     if b.login_credentials is None:
         raise RuntimeError("rp.download_spotify_audio: OAuth did not produce credentials")
-    return b.create()
+    return _announce(b.create())
 
 
 def _assert_spotify_audio_url(url):
@@ -368,13 +426,193 @@ def _tag_spotify_audio_file(path, track_meta):
         return
 
 
+def _parse_spotify_collection(url_or_id):
+    """
+    Pure function. Extract (kind, base62_id) from a Spotify URL/URI/ID for a
+    track collection. Treats both playlists and albums as collections, since
+    "download every track in this thing" makes equal sense for either.
+
+    Returns:
+        (kind, id) where kind is "playlist" or "album".
+
+    Raises ValueError if no collection ID is found.
+
+    >>> _parse_spotify_collection("https://open.spotify.com/playlist/37i9dQZF1F5p3rmiWPIYgZ?si=x")
+    ('playlist', '37i9dQZF1F5p3rmiWPIYgZ')
+    >>> _parse_spotify_collection("https://open.spotify.com/album/4XgGOMRY7H4hl6OQi5wb2Z?si=x")
+    ('album', '4XgGOMRY7H4hl6OQi5wb2Z')
+    >>> _parse_spotify_collection("spotify:album:4XgGOMRY7H4hl6OQi5wb2Z")
+    ('album', '4XgGOMRY7H4hl6OQi5wb2Z')
+    """
+    import re
+    m = re.search(r'(playlist|album)[:/]([A-Za-z0-9]{22})', url_or_id)
+    if not m:
+        raise ValueError("Cannot parse Spotify playlist/album id from: " + repr(url_or_id))
+    return m.group(1), m.group(2)
+
+
+def _track_id_to_url(track_id):
+    """Pure function. Wrap a 22-char base62 track ID in a public Spotify URL.
+
+    >>> _track_id_to_url("53DCgVviFW9hgCM9dKZmcQ")
+    'https://open.spotify.com/track/53DCgVviFW9hgCM9dKZmcQ'
+    """
+    return "https://open.spotify.com/track/" + track_id
+
+
+def _list_playlist_track_ids(session, base62_id):
+    """Query. Return a list of base62 track IDs in playlist order."""
+    from librespot.metadata import PlaylistId
+    pid = PlaylistId.from_uri("spotify:playlist:" + base62_id)
+    result = session.api().get_playlist(pid)
+    out = []
+    for item in result.contents.items:
+        if item.uri.startswith("spotify:track:"):
+            out.append(item.uri.split(":")[-1])
+    return out
+
+
+def _list_album_track_ids(session, base62_id):
+    """Query. Return a list of base62 track IDs in album order (across all discs)."""
+    from librespot.metadata import AlbumId, TrackId
+    aid = AlbumId.from_base62(base62_id)
+    album = session.api().get_metadata_4_album(aid)
+    out = []
+    for disc in album.disc:
+        for track in disc.track:
+            uri = TrackId.from_hex(track.gid.hex()).to_spotify_uri()
+            out.append(uri.split(":")[-1])
+    return out
+
+
+_SPOTIFY_COLLECTION_LISTERS = {
+    'playlist': _list_playlist_track_ids,
+    'album':    _list_album_track_ids,
+}
+
+
+def get_spotify_playlist_song_urls(url_or_id, *, credentials_path=None):
+    """
+    Returns the list of `https://open.spotify.com/track/<id>` URLs for every
+    track in a Spotify playlist OR album. Albums are accepted as well as
+    playlists -- in this library they are treated identically. Authenticates
+    silently using the same credentials as `download_spotify_audio`.
+
+    Parameters:
+        - url_or_id (str): Playlist or album URL/URI. Bare 22-char IDs are
+                           ambiguous and not accepted.
+        - credentials_path (str, optional): Path to the cached librespot credentials.json
+                                            (defaults to ~/.spotify_rp_creds.json).
+
+    Returns:
+        - list[str]: One open.spotify.com/track/... URL per track, in collection order.
+
+    Examples:
+        >>> urls = get_spotify_playlist_song_urls("https://open.spotify.com/playlist/37i9dQZF1F5p3rmiWPIYgZ")
+        >>> len(urls)
+        573
+        >>> urls[0]
+        'https://open.spotify.com/track/53DCgVviFW9hgCM9dKZmcQ'
+        >>> urls = get_spotify_playlist_song_urls("https://open.spotify.com/album/4XgGOMRY7H4hl6OQi5wb2Z")
+        >>> len(urls)
+        26
+    """
+    import os
+    if credentials_path is None:
+        credentials_path = os.path.expanduser("~/.spotify_rp_creds.json")
+    rp.pip_import('librespot')
+
+    kind, base62_id = _parse_spotify_collection(url_or_id)
+    session = _spotify_authenticate(credentials_path)
+    track_ids = _SPOTIFY_COLLECTION_LISTERS[kind](session, base62_id)
+    return [_track_id_to_url(tid) for tid in track_ids]
+
+
+def download_spotify_playlist(url_or_id,
+                              out_dir=None,
+                              *,
+                              filetype='mp3',
+                              skip_existing=True,
+                              credentials_path=None,
+                              show_progress='eta:Downloading Spotify Audio',
+                              num_threads=0,
+                              strict=False,
+                              timeout=None):
+    """
+    Downloads every track in a Spotify playlist (including "Liked Songs") at the
+    same 320kbps quality as `download_spotify_audio`. Files are saved as
+    `<artist> - <title>.<filetype>` inside `out_dir`. Skips tracks whose output
+    file already exists by default (so the call is resumable).
+
+    Uses rp.load_files under the hood for parallelism and progress reporting.
+
+    Parameters:
+        - url_or_id (str): Playlist URL, URI, or 22-char base62 ID.
+        - out_dir (str, optional): Output directory. Defaults to CWD.
+        - filetype (str, optional): "mp3" or "ogg". Defaults to "mp3".
+        - skip_existing (bool, optional): If True (default), already-downloaded
+                                          files are skipped. Set False to
+                                          re-download everything.
+        - credentials_path (str, optional): Path to the cached librespot creds.
+        - show_progress: Forwarded to rp.load_files. True / False / 'eta' / 'tqdm'.
+                         Defaults to 'eta'.
+        - num_threads (int, optional): Concurrent downloads. Defaults to 0
+                                       (serial, main-thread). Spotify's keymaster
+                                       throttles per-session bursts and returns
+                                       "Audio key error code 2" once tripped, so
+                                       parallelism mostly hurts. Bump to 2-4 for
+                                       small playlists where you accept retries.
+        - strict (bool or None, optional): Forwarded to rp.load_files. True
+                                           raises on any failure; False (default)
+                                           skips failed tracks; None substitutes
+                                           None for failed tracks.
+
+    Returns:
+        - list[str]: Absolute paths to the downloaded files (one per track,
+                     in playlist order; failed tracks are absent or None
+                     depending on `strict`).
+
+    Examples:
+        >>> paths = download_spotify_playlist("https://open.spotify.com/playlist/37i9dQZF1F5p3rmiWPIYgZ", out_dir="liked_songs")
+        >>> len(paths)
+        573
+    """
+    if out_dir is None:
+        out_dir = "."
+    rp.make_directory(out_dir)
+    out_dir = rp.get_absolute_path(out_dir)
+
+    import functools
+    if credentials_path is None:
+        credentials_path = rp.r._spotify_credentials_path
+    urls = get_spotify_playlist_song_urls(url_or_id, credentials_path=credentials_path)
+    _spotify_authenticate(credentials_path)  # warm the lru_cache before threads fan out
+
+    return rp.load_files(
+        functools.partial(
+            download_spotify_audio,
+            filetype=filetype,
+            skip_existing=skip_existing,
+            out_dir=out_dir,
+            credentials_path=credentials_path,
+            timeout=timeout,
+        ),
+        urls,
+        num_threads=num_threads,
+        show_progress=show_progress,
+        strict=strict,
+    )
+
+
 def download_spotify_audio(url_or_id,
                            path=None,
                            *,
                            filetype='mp3',
                            skip_existing=False,
                            overwrite=False,
-                           credentials_path=None):
+                           out_dir=None,
+                           credentials_path=None,
+                           timeout=None):
     """
     Downloads a Spotify track at full quality (320kbps OGG Vorbis with Premium,
     160kbps with free tier). Audio bytes come exclusively from Spotify-controlled
@@ -433,34 +671,108 @@ def download_spotify_audio(url_or_id,
     track_id = _parse_spotify_track_id(url_or_id)
 
     if credentials_path is None:
-        import os
-        credentials_path = os.path.expanduser("~/.spotify_rp_creds.json")
+        credentials_path = rp.r._spotify_credentials_path
+
+    # Earliest possible skip_existing short-circuit: when the user passed an
+    # explicit `path`, we know the final output location WITHOUT any network
+    # call, so we can bail out before authenticating or hitting any Spotify
+    # endpoint. This avoids both the AP handshake and the keymaster rate limit.
+    def _resolve_path(p):
+        if out_dir is not None:
+            import os
+            rp.make_directory(out_dir)
+            p = os.path.join(out_dir, os.path.basename(p))
+        return rp.with_file_extension(p, filetype, replace=True)
+
+    if path is not None:
+        path = _resolve_path(path)
+        if skip_existing and rp.path_exists(path):
+            return rp.get_absolute_path(path)
 
     rp.pip_import('librespot')
     from librespot.audio.decoders import VorbisOnlyAudioQuality, AudioQuality
     from librespot.metadata import TrackId
 
     session = _spotify_authenticate(credentials_path)
-    rp.fansi_print('rp.download_spotify_audio: authenticated as '+session.username(),'green')
 
+    # librespot-python's SyncCallback uses class-level shared state
+    # (audio/__init__.py:294-295), so concurrent stream loads race each other
+    # and crash with _queue.Empty. Hold a process-wide lock around the
+    # stream-load call. CDN byte streaming below is still parallel because
+    # each thread reads from its own HTTP connection.
+    #
+    # Spotify's keymaster also rate-limits audio-key requests per session: a
+    # rapid burst returns AudioKey error code 2 (KEY_NOT_AVAILABLE/PERMISSION_DENIED).
+    # Retry-with-backoff handles that.
+    import time
     tid = TrackId.from_uri("spotify:track:"+track_id)
-    stream = session.content_feeder().load(
-        tid,
-        VorbisOnlyAudioQuality(AudioQuality.VERY_HIGH),
-        False,
-        None,
-    )
+    # Cheap metadata pre-fetch (one mercury call, NOT keymaster-rate-limited)
+    # so failure messages can name the song AND so we can resolve the default
+    # "<artist> - <title>" path BEFORE the expensive content_feeder().load().
+    with _SPOTIFY_SESSION_LOCK:
+        meta_for_label = session.api().get_metadata_4_track(tid)
+    label_artist = meta_for_label.artist[0].name if meta_for_label.artist else "?"
+    label_title = meta_for_label.name or track_id
+    label = label_artist+" - "+label_title
+
+    # Second skip_existing short-circuit: when `path` was None we now have
+    # enough metadata to derive the default name. Bail out before the
+    # rate-limited audio-key fetch if the file already exists.
+    if path is None:
+        derived_artist = meta_for_label.artist[0].name if meta_for_label.artist else "Unknown Artist"
+        derived_title = meta_for_label.name or track_id
+        path = _resolve_path(derived_artist + " - " + derived_title)
+        if skip_existing and rp.path_exists(path):
+            return rp.get_absolute_path(path)
+
+    # Preemptive sleep using the cross-track adaptive baseline. If the previous
+    # track had to wait N seconds to get past the keymaster rate limit, this
+    # track sleeps N/2 BEFORE its first attempt -- more likely to succeed first
+    # try. After a clean success, the baseline halves; over many failures it
+    # rises. Self-modulates instead of every track resetting to zero.
+    preemptive = _spotify_backoff_take()
+    if preemptive >= 1:
+        rp.fansi_print('rp.download_spotify_audio: preemptively waiting '+str(int(preemptive))+'s before '+repr(label)+' (adaptive throttle)','cyan')
+        time.sleep(preemptive)
+
+    last_err = None
+    elapsed = preemptive
+    last_wait = preemptive
+    attempt = 0
+    stream = None
+    while timeout is None or elapsed < timeout:
+        with _SPOTIFY_SESSION_LOCK:
+            try:
+                stream = session.content_feeder().load(
+                    tid,
+                    VorbisOnlyAudioQuality(AudioQuality.VERY_HIGH),
+                    False,
+                    None,
+                )
+                break
+            except RuntimeError as e:
+                if "Failed fetching audio key" not in str(e):
+                    raise
+                last_err = e
+        wait = 16 * (2 ** attempt)
+        if timeout is not None:
+            wait = min(wait, timeout - elapsed)
+        budget_str = 'unlimited' if timeout is None else str(int(timeout))+'s'
+        rp.fansi_print('rp.download_spotify_audio: keymaster rate-limited for '+repr(label)+' (attempt '+str(attempt+1)+', cumulative '+str(int(elapsed))+'s/'+budget_str+'); waiting '+str(int(wait))+'s','yellow')
+        time.sleep(wait)
+        elapsed += wait
+        last_wait = wait
+        attempt += 1
+    if stream is None:
+        raise RuntimeError("rp.download_spotify_audio: keymaster refused audio key for "+repr(label)+" after "+str(int(elapsed))+"s timeout: "+str(last_err))
+
+    if attempt == 0:
+        _spotify_backoff_record_success()
+    else:
+        _spotify_backoff_record_rate_limit(last_wait)
 
     track_meta = stream.track if hasattr(stream, "track") else None
-    if track_meta is not None and path is None:
-        artist = track_meta.artist[0].name if track_meta.artist else "Unknown Artist"
-        title = track_meta.name or track_id
-        path = artist + " - " + title
 
-    if path is None:
-        path = track_id
-
-    path = rp.with_file_extension(path, filetype)
     if rp.path_exists(path):
         if skip_existing:
             return rp.get_absolute_path(path)
@@ -469,51 +781,43 @@ def download_spotify_audio(url_or_id,
         else:
             path = rp.get_unique_copy_path(path)
 
-    if track_meta is not None:
-        try:
-            files = list(getattr(track_meta, "file", []))
-            for alt in getattr(track_meta, "alternative", []):
-                files.extend(list(getattr(alt, "file", [])))
-            for f in files:
-                if not f.file_id:
-                    continue
-                sr = session.content_feeder().resolve_storage_interactive(f.file_id, False)
-                for u in list(sr.cdnurl):
-                    _assert_spotify_audio_url(u)
-        except AttributeError:
-            pass
+    # Atomic download: stream OGG bytes to a /tmp partial file, transcode (if
+    # mp3) and tag in /tmp too, only mv to the final path on success. Crashes
+    # mid-download leave nothing in `out_dir`, so skip_existing stays accurate.
+    import os
+    import shutil
+    import tempfile
+    tmp_dir = tempfile.mkdtemp(prefix='rp_spotify_')
+    try:
+        tmp_ogg = os.path.join(tmp_dir, 'track.ogg')
+        audio_in = stream.input_stream.stream()
+        total = 0
+        with open(tmp_ogg, "wb") as f:
+            while True:
+                chunk = audio_in.read(64 * 1024)
+                if not chunk:
+                    break
+                f.write(chunk)
+                total += len(chunk)
+        if total < 1024:
+            raise RuntimeError("rp.download_spotify_audio: only "+str(total)+" bytes downloaded -- something is wrong")
 
-    if filetype == 'ogg':
-        out_path = path
-    else:
-        out_path = rp.with_file_extension(path, 'ogg')
-        if rp.path_exists(out_path):
-            out_path = rp.get_unique_copy_path(out_path)
+        if filetype == 'mp3':
+            rp.r._ensure_ffmpeg_installed()
+            import subprocess
+            tmp_final = os.path.join(tmp_dir, 'track.mp3')
+            cmd = ['ffmpeg', '-y', '-i', tmp_ogg, '-codec:a', 'libmp3lame', '-b:a', '320k', tmp_final]
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            if res.returncode != 0:
+                raise RuntimeError("rp.download_spotify_audio: ffmpeg transcode failed:\n"+res.stderr)
+        else:
+            tmp_final = tmp_ogg
 
-    audio_in = stream.input_stream.stream()
-    total = 0
-    with open(out_path, "wb") as f:
-        while True:
-            chunk = audio_in.read(64 * 1024)
-            if not chunk:
-                break
-            f.write(chunk)
-            total += len(chunk)
-    if total < 1024:
-        rp.delete_file(out_path)
-        raise RuntimeError("rp.download_spotify_audio: only "+str(total)+" bytes downloaded -- something is wrong")
+        if track_meta is not None:
+            _tag_spotify_audio_file(tmp_final, track_meta)
 
-    if filetype == 'mp3':
-        rp.r._ensure_ffmpeg_installed()
-        import subprocess
-        cmd = ['ffmpeg', '-y', '-i', out_path, '-codec:a', 'libmp3lame', '-b:a', '320k', path]
-        res = subprocess.run(cmd, capture_output=True, text=True)
-        if res.returncode != 0:
-            raise RuntimeError("rp.download_spotify_audio: ffmpeg transcode failed:\n"+res.stderr)
-        rp.delete_file(out_path)
-        out_path = path
+        shutil.move(tmp_final, path)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    if track_meta is not None:
-        _tag_spotify_audio_file(out_path, track_meta)
-
-    return rp.get_absolute_path(out_path)
+    return rp.get_absolute_path(path)

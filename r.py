@@ -75,6 +75,7 @@ _cached_code_styles_path      = os.path.join(_rp_boot_cache, "code_styles.rpo")
 _cached_system_commands_path  = os.path.join(_rp_boot_cache, "system_commands.txt")
 _ruff_cache_dir               = os.path.join(tempfile.gettempdir(), 'rp_ruff_cache')
 _claude_bash_script           = os.path.join(_rp_folder, 'misc', 'claude_bash.sh')
+_spotify_credentials_path     = os.path.join(_rp_folder, "r.py.rp_spotify_credentials.json")
 
 #Add RP's libraries to system path
 sys.path.append(_rp_folder)
@@ -44898,7 +44899,7 @@ def download_tiktok_video(url: str, path=None):
     return video_path
 
 
-from rp.libs.spotify_downloader import download_spotify_audio  # implementation lives in rp/libs/spotify_downloader.py
+from rp.libs.spotify_downloader import download_spotify_audio, download_spotify_playlist, get_spotify_playlist_song_urls  # implementation lives in rp/libs/spotify_downloader.py
 
 
 def _moviepy_VideoFileClip(path, *args, **kwargs):
@@ -44984,10 +44985,7 @@ def _load_image_from_audio_file_cover_art(path):
                     break
     if not image_bytes:
         return None
-    pip_import('PIL', 'Pillow')
-    from PIL import Image
-    import io
-    return as_numpy_array(Image.open(io.BytesIO(image_bytes)))
+    return decode_image_from_bytes(image_bytes)
 
 
 _get_audio_file_duration_cache={}
