@@ -8222,6 +8222,12 @@ def _load_image_from_file(file_name, *, use_cache=False):
     if is_video_file(file_name):
         return load_video(file_name, length=1, show_progress=False)[0]
 
+    if is_audio_file(file_name):
+        cover = _load_image_from_audio_file_cover_art(file_name)
+        if cover is None:
+            raise ValueError("load_image: audio file has no embedded cover art: "+repr(file_name))
+        return cover
+
     try               :return _load_image_from_file_via_imageio(file_name)#Imageio will not forget the alpha channel when loading png files
     except Exception  :pass #Don't cry over spilled milk...if imageio didn't work we'll try the other libraries.
     try               :return _load_image_from_file_via_scipy  (file_name)#Expecting that scipy.misc.imread doesn't exist on the interpereter for whatever reason
@@ -44888,8 +44894,11 @@ def download_tiktok_video(url: str, path=None):
     video_path = get_absolute_path(video_path)
     if path is not None:
         video_path = move_file(video_path, path)
-        
+
     return video_path
+
+
+from rp.libs.spotify_downloader import download_spotify_audio  # implementation lives in rp/libs/spotify_downloader.py
 
 
 def _moviepy_VideoFileClip(path, *args, **kwargs):
@@ -44926,6 +44935,60 @@ def get_video_file_duration(path,use_cache=True):
     out=_get_video_file_duration_via_moviepy(path)
     _get_video_file_duration_cache[path]=out
     return out
+
+def _load_image_from_audio_file_cover_art(path):
+    """
+    Query. Extract embedded cover art from an audio file and return a numpy
+    image array (HWC uint8). Returns None if no embedded artwork is present.
+
+    Used by _load_image_from_file so that load_image('song.mp3') returns the
+    album cover instead of failing.
+
+    Supports the audio formats whose tag containers can hold pictures:
+    mp3 (ID3v2 APIC), m4a/mp4 (covr atom), flac (PICTURE block), ogg vorbis /
+    opus (METADATA_BLOCK_PICTURE base64), wav (ID3 chunk).
+    """
+    pip_import('mutagen')
+    import base64
+    from mutagen import File as MutagenFile
+    from mutagen.id3 import ID3, ID3NoHeaderError
+    from mutagen.flac import FLAC, Picture
+    from mutagen.mp4 import MP4
+
+    f = MutagenFile(path)
+    if f is None:
+        return None
+
+    image_bytes = None
+    if isinstance(f, MP4):
+        covr = f.tags.get('covr') if f.tags else None
+        if covr:
+            image_bytes = bytes(covr[0])
+    elif isinstance(f, FLAC):
+        if f.pictures:
+            image_bytes = f.pictures[0].data
+    else:
+        try:
+            id3 = ID3(path)
+            apic = id3.getall('APIC')
+            if apic:
+                image_bytes = apic[0].data
+        except ID3NoHeaderError:
+            pass
+        if image_bytes is None and f.tags is not None:
+            for key in ('metadata_block_picture', 'METADATA_BLOCK_PICTURE'):
+                vals = f.tags.get(key) if hasattr(f.tags, 'get') else None
+                if vals:
+                    pic = Picture(base64.b64decode(vals[0]))
+                    image_bytes = pic.data
+                    break
+    if not image_bytes:
+        return None
+    pip_import('PIL', 'Pillow')
+    from PIL import Image
+    import io
+    return as_numpy_array(Image.open(io.BytesIO(image_bytes)))
+
 
 _get_audio_file_duration_cache={}
 def get_audio_file_duration(path,use_cache=True):
@@ -71528,6 +71591,7 @@ known_pypi_module_package_names={
     # A list of some non-obvious pypi package names given their module names, used by pip_import
     # Let's make this dict as big as we can! More the merrier...
     'Crypto': 'pycrypto',
+    'Cryptodome': 'pycryptodomex',
     'IPython': 'ipython',
     'OpenGL': 'PyOpenGL',
     'PIL': 'Pillow',
