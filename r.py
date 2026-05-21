@@ -79,9 +79,10 @@ _spotify_credentials_path     = os.path.join(_rp_folder, "r.py.rp_spotify_creden
 
 #Add RP's libraries to system path
 sys.path.append(_rp_folder)
-from rp.libs.stamp_tensor import stamp_tensor, crop_tensor 
+from rp.libs.stamp_tensor import stamp_tensor, crop_tensor
 from rp.libs.tracetraptest import * #A few libs debugging features. These things mostly need to be renamed.
 from rp.libs.debug_comment import debug_comment
+from rp.libs.exr_to_mp4 import exr_to_mp4
 import rp.rp_ptpython.prompt_style as ps
 
 #Lazy load modules for a speed boost
@@ -779,9 +780,9 @@ def get_current_directory(pid=None):
     try:
         import os
         return os.getcwd()
-    except FileNotFoundError as e:
-        return '.' #A simple, but technically correct way to answer this question...will prevent errors in other places when the current directory is deleted...
-        raise FileNotFoundError(str(e)+"\nPerhaps the directory you're working in no longer exists?")
+    except OSError as e:
+        #Covers FileNotFoundError (ENOENT, deleted dir) and ENOTCONN (errno 107, unmounted filesystem like rclone/sshfs)
+        return '.' #A simple, but technically correct way to answer this question...will prevent errors in other places when the current directory is deleted or unmounted...
 
 def set_current_directory(path):
     """Changes the current working directory to the specified path.
@@ -23564,7 +23565,7 @@ def _bash_quote_cstring(code):
 
     return payload
 
-def format_bash_to_oneliner(code: str) -> str:
+def format_bash_to_oneliner(code: str, command='eval') -> str:
     r'''
     Turn a Bash code string into a one-liner that runs it with 100% correctness.
     The returned line is human-readable (ANSI-C $'..' style, no base64).
@@ -23586,6 +23587,7 @@ def format_bash_to_oneliner(code: str) -> str:
     payload = _bash_quote_cstring(code)
 
     # Return a runnable one-liner
+    return command + " " + payload
     return "eval " + payload    #Does not work in sh, only bash and zsh etc
     return "bash -c " + payload #Safer - but starts as subprocess
 
@@ -31533,8 +31535,8 @@ def pseudo_terminal(
                         current_pwd=get_current_directory()
                         if not pwd_history or pwd_history[-1]!=current_pwd:
                             pwd_history.append(current_pwd)
-                    except FileNotFoundError:
-                        #When the folder we're working in is deleted, get_current_directory throws an error
+                    except OSError:
+                        #When the folder we're working in is deleted or unmounted (e.g. rclone transport endpoint disconnected), get_current_directory may throw an error
                         #This is ok, just ignore it.
                         pass
 
@@ -43129,6 +43131,94 @@ def get_color_alpha(color):
     else:
         return as_rgba_float_color(color)[3]
 
+def transform_image_colorspace_via_ocio(
+    image,
+    src_colorspace: str,
+    *,
+    dst_view=None,
+    dst_display=None,
+    copy=True
+):
+    """
+    Transform an HWC float RGB image from an OCIO source colorspace into a display view.
+
+       src_colorspace = what the input pixels are encoded as
+       dst_display    = what display/device family to render for
+       dst_view       = what viewing transform/look to use on that display
+
+    If copy=False, and image is RGB float32 numpy array, input will be mutated. This is for speed.
+
+    """
+
+    #The following variables might be globalized in the future
+
+    OCIO_BUILTIN_CONFIG = "studio-config-v4.0.0_aces-v2.0_ocio-v2.5"
+
+    OCIO_COLORSPACE_ALIASES = {
+        "ARRI_LogC4_AWG4": "ARRI LogC4",
+        "ARRI_Linear_WG": "Linear ARRI Wide Gamut 3",
+        "Sony_Linear_Gam3_Venice": "Linear Venice S-Gamut3",
+        "Red_Linear_REDWideGamut": "Linear REDWideGamutRGB",
+    }
+
+    OCIO_DST_PRESETS = {
+        "hdr": {
+            "display": "Rec.2100-PQ - Display",
+            "view": "ACES 2.0 - HDR 1000 nits (Rec.2020)",
+        },
+        "sdr": {
+            "display": "Rec.1886 Rec.709 - Display",
+            "view": "ACES 2.0 - SDR 100 nits (Rec.709)",
+        },
+    }
+    
+    ###########################
+
+    pip_import("PyOpenColorIO")
+    import PyOpenColorIO as ocio
+    import numpy as np
+
+    #Arg Handling
+    if dst_view    is None: dst_view   =OCIO_DST_PRESETS["sdr"]["view"]
+    if dst_display is None: dst_display=OCIO_DST_PRESETS["sdr"]["display"]
+    if src_colorspace in OCIO_COLORSPACE_ALIASES: src_colorspace = OCIO_COLORSPACE_ALIASES[src_colorspace]
+
+    image = rp.as_float_image(rp.as_rgb_image(image, copy=False), copy=False)
+    image_out = np.ascontiguousarray(image.astype(np.float32, copy=copy))
+
+    config = ocio.Config.CreateFromBuiltinConfig(OCIO_BUILTIN_CONFIG)
+
+    transform = ocio.DisplayViewTransform(
+        src=src_colorspace,
+        display=dst_display,
+        view=dst_view,
+    )
+    processor = config.getProcessor(transform).getDefaultCPUProcessor()
+    processor.applyRGB(image_out)
+
+    return image_out
+
+
+def transform_images_colorspace_via_ocio(
+    images,
+    src_colorspace: str,
+    *,
+    dst_view=None,
+    dst_display=None,
+    copy=True,
+    show_progress=False,
+    lazy=False
+):
+    """Plural of transform_image_colorspace_via_ocio. CPU-bound; no threading."""
+    transform = gather_args_bind(transform_image_colorspace_via_ocio)
+    output = (transform(image) for image in images)
+    if show_progress:
+        output = eta(output, 'rp.transform_images_colorspace_via_ocio', length=len(images))
+    if not lazy:
+        output = list(output)
+    return output
+
+
 def get_image_dimensions(image, *, as_dict=False):
     """ Return (height,width) of an image 
     
@@ -45419,6 +45509,23 @@ def _load_video_stream_via_av(location, start_frame=0, dtype=None):
         container.close()
 
 
+def _rs_load_video_stream(location, start_frame=0):
+    """
+    Command, general. Stream video frames via video_reader-rs (Rust/ffmpeg).
+
+    Thin wrapper over load_video_via_rs(lazy=True). Yields (H, W, 3) uint8 RGB frames.
+
+    Args:
+        location (str): Path or URL to a video file.
+        start_frame (int): Frame index to start decoding from.
+
+    Yields:
+        numpy.ndarray: (H, W, 3) uint8 RGB frames.
+    """
+    indices = slice(start_frame, None) if start_frame else None
+    yield from load_video_via_rs(location, indices=indices, lazy=True)
+
+
 def _cv_with_av_fallback(path, start_frame, dtype):
     """Lazy generator: try cv2, on _VideoCodecError switch to PyAV."""
     try:
@@ -45449,10 +45556,11 @@ def load_video_stream(path, *, start_frame=0, with_length=True, frame_transform=
         start_frame (int): Frame index to start from.
         with_length (bool): Attach __len__ to iterator if possible.
         frame_transform (callable): Optional per-frame transform.
-        backend (str): 'auto', 'cv', or 'av'.
+        backend (str): 'auto', 'cv', 'av', or 'rs'.
             - 'auto': picks the best backend for the requested dtype and video
             - 'cv': always use cv2 (can only output uint8)
             - 'av': always use PyAV
+            - 'rs': always use video_reader-rs (Rust/ffmpeg, uint8 only)
         dtype (str or None): None, 'byte', 'int', or 'float'. Controls output dtype.
             - None: picks the smallest dtype that preserves full precision (default):
                 8-bit  -> uint8   [0, 255]
@@ -45471,35 +45579,33 @@ def load_video_stream(path, *, start_frame=0, with_length=True, frame_transform=
     """
     assert isinstance(start_frame, int) and start_frame >= 0, "rp.load_video_stream: start_frame must be a non-negative integer, got %s" % start_frame
     assert isinstance(path, str), "rp.load_video_stream: path must be a string, got %s" % type(path).__name__
-    assert backend in ('auto', 'cv', 'av'), "rp.load_video_stream: backend must be 'auto', 'cv', or 'av', got %r" % backend
     assert dtype in (None, 'byte', 'int', 'float'), "rp.load_video_stream: dtype must be None, 'byte', 'int', or 'float', got %r" % dtype
 
-    # Choose backend
-    if backend == 'cv':
-        use_av = False
-    elif backend == 'av':
-        use_av = True
-    else:
-        # auto: need av for anything other than byte output on >8-bit video,
-        # and also need av for int/float output since cv2 can only do uint8
+    # Resolve 'auto' to a concrete backend:
+    # - av for int/float dtype (cv can only output uint8)
+    # - av for >8-bit video when dtype=None (preserve precision)
+    # - otherwise 'cv,av' (cv with av fallback for unsupported codecs)
+    if backend == 'auto':
         if dtype in ('int', 'float'):
-            use_av = True
-        elif dtype == 'byte':
-            use_av = False
-        else:
-            # dtype=None: probe bit depth, need av if >8-bit
+            backend = 'av'
+        elif dtype is None:
             try:
-                use_av = _get_video_bit_depth(path) > 8
+                backend = 'av' if _get_video_bit_depth(path) > 8 else 'cv,av'
             except Exception:
-                use_av = False
-
-    if use_av:
-        frame_iterator = _load_video_stream_via_av(path, start_frame=start_frame, dtype=dtype)
-    else:
-        if backend == 'auto':
-            frame_iterator = _cv_with_av_fallback(path, start_frame, dtype)
+                backend = 'cv,av'
         else:
-            frame_iterator = _cv_load_video_stream(path, start_frame=start_frame)
+            backend = 'cv,av'
+
+    if backend == 'av':
+        frame_iterator = _load_video_stream_via_av(path, start_frame=start_frame, dtype=dtype)
+    elif backend == 'cv':
+        frame_iterator = _cv_load_video_stream(path, start_frame=start_frame)
+    elif backend == 'cv,av':
+        frame_iterator = _cv_with_av_fallback(path, start_frame, dtype)
+    elif backend == 'rs':
+        frame_iterator = _rs_load_video_stream(path, start_frame=start_frame)
+    else:
+        raise ValueError("rp.load_video_stream: backend must be 'auto', 'cv', 'av', 'rs', or 'cv,av', got %r" % backend)
 
     if frame_transform is not None:
         frame_iterator = map(frame_transform, frame_iterator)
@@ -45781,6 +45887,133 @@ def load_videos(
 
     return gather_args_call(load_files, load, paths)
 
+def _load_video_via_indexed_reader(path, indices, as_dict, open_reader):
+    """
+    Query. Shared core for load_video_via_decord and load_video_via_rs.
+
+    Handles URL download, num_frames lookup, index resolution, and the as_dict
+    wrapping. The per-backend bits live entirely in `open_reader`.
+
+    Args:
+        path (str): Local path or URL.
+        indices: None | int | slice | iterable of ints. See _resolve_video_frame_indices.
+        as_dict (bool): If True, wrap the output in {'video', 'indices', 'num_frames'}.
+        open_reader (callable): path -> (num_frames: int, get_batch: callable).
+            get_batch(list[int]) must return an (N, H, W, C) uint8 ndarray.
+
+    Returns:
+        ndarray (T, H, W, C) uint8, or dict if as_dict=True.
+    """
+    if not file_exists(path) and is_valid_url(path):
+        url = path
+        with TemporarilyDownloadUrl(url) as path:
+            return _load_video_via_indexed_reader(path, indices, as_dict, open_reader)
+
+    num_frames, get_batch = open_reader(path)
+    indices = _resolve_video_frame_indices(indices, num_frames)
+    video = get_batch(indices)
+
+    if as_dict:
+        return gather_vars("video", "indices", "num_frames")
+    return video
+
+
+def _resolve_video_frame_indices(indices, num_frames):
+    """
+    Pure function. Resolves the `indices` argument shared by load_video_via_decord
+    and load_video_via_rs into a concrete list of integer frame indices.
+
+    Args:
+        indices: None | int | slice | iterable of ints
+            - None: every frame [0, num_frames)
+            - int: evenly sample that many frames (via resize_list)
+            - slice: a slice of the full range
+            - iterable: explicit indices, returned as a list
+        num_frames (int): Total frames in the source video.
+
+    Returns:
+        list[int]
+
+    Examples:
+        >>> _resolve_video_frame_indices(None, 5)
+        [0, 1, 2, 3, 4]
+        >>> _resolve_video_frame_indices(3, 10)
+        [0, 4, 9]
+        >>> _resolve_video_frame_indices(slice(0, 6, 2), 10)
+        [0, 2, 4]
+        >>> _resolve_video_frame_indices([1, 4, 2], 10)
+        [1, 4, 2]
+    """
+    if indices is None:
+        return list(range(num_frames))
+    if isinstance(indices, int):
+        return resize_list(range(num_frames), indices)
+    if isinstance(indices, slice):
+        return list(range(num_frames)[indices])
+    assert is_iterable(indices)
+    return list(indices)
+
+
+def _open_decord_reader(path):
+    """
+    Query. Opens `path` with decord and returns (num_frames, get_batch). The
+    returned get_batch enters decord's native bridge scope so the result is
+    always converted to a numpy ndarray.
+    """
+    pip_import("decord")
+    import decord
+    reader = decord.VideoReader(path)
+    def get_batch(idx):
+        with decord.bridge._BridgeScope("native"):
+            return reader.get_batch(idx).asnumpy()
+    return len(reader), get_batch
+
+
+def _open_rs_reader(path):
+    """
+    Query. Opens `path` with video-reader-rs and returns (num_frames, get_batch).
+
+    Uses PyVideoReader.get_batch for random-access decode. video_reader-rs also
+    exposes __iter__ (true streaming with a persistent FFmpeg cursor) and
+    __getitem__ (per-frame seek), but get_batch consistently wins for
+    materializing a known set of indices - its auto-fallback picks between
+    sequential and seek-based decode based on a cost estimate. The iterator
+    is the right tool for the lazy/streaming path (single sequential pass);
+    __getitem__ rewinds per call and is unusably slow for batches.
+
+    Bench on a 121-frame 1024x320 h264 clip (min ms / call, 30 reps):
+
+    rs strategies (which API on rs to use for known indices):
+        scenario                  get_batch  iter+skip  __getitem__
+        dense (all 121)               20         32         198
+        every other (60)              26         24         114
+        every 5th (25)                21         19          65
+        sparse 10 (clustered)         17         18          39
+        sparse 5 (spread)             17         17          25
+        very sparse 3 endpoints       16         17          23
+        first 5                        7          7           8
+        last 5                        16         17          62
+
+    rs vs decord (both via their respective get_batch):
+        scenario                  rs    decord   speedup
+        dense (all 121)           21      40      1.93x
+        every other (60)          19      38      1.98x
+        every 5th (25)            15      20      1.36x
+        sparse 10 (clustered)     14      16      1.18x
+        sparse 5 (spread)         14      15      1.11x
+        very sparse 3 endpoints   13      14      1.07x
+        first 5                    7       8      1.13x
+        last 5                    13      14      1.06x
+
+    So rs's big speedup over decord is for dense reads (~2x); for very sparse
+    reads both are dominated by per-seek cost and the gap shrinks to ~1.1x.
+    """
+    pip_import("video_reader")
+    from video_reader import PyVideoReader
+    reader = PyVideoReader(path)
+    return len(reader), reader.get_batch
+
+
 def load_video_via_decord(path, indices=None, *, as_dict=False):
     """
     Load video frames with decord.
@@ -45804,38 +46037,98 @@ def load_video_via_decord(path, indices=None, *, as_dict=False):
         decord always decodes to uint8, regardless of the video's bit depth.
         For high-bit-depth video (10-bit, 12-bit), use load_video(path, backend='av')
         which auto-detects bit depth and returns float16 or float32 accordingly.
+        For AV1, use load_video_via_rs (decord can't decode AV1).
     """
-    pip_import("decord")
-    import decord
+    return _load_video_via_indexed_reader(path, indices, as_dict, _open_decord_reader)
 
-    if not file_exists(path) and is_valid_url(path):
-        url = path
-        with TemporarilyDownloadUrl(url) as path:
-            return load_video_via_decord(url)
 
-    reader = decord.VideoReader(path)
-    num_frames = len(reader)
+def load_video_via_rs(path, indices=None, *, as_dict=False, lazy=False):
+    """
+    Load video frames with video-reader-rs ('rs' = Rust).
+    Repo: https://github.com/gcanat/video_reader-rs
 
-    if indices is None:
-        indices=range(num_frames)
-    elif isinstance(indices, int):
-        indices = resize_list(range(num_frames), indices)
-    elif isinstance(indices, slice):
-        indices = range(num_frames)[indices]
-    else:
-        assert is_iterable(indices)
-        indices = list(indices)
+    Same signature and return shape as load_video_via_decord. Uses a Rust + FFmpeg
+    decoder, so it supports codecs decord can't - notably AV1.
 
-    with decord.bridge._BridgeScope("native"):
-        # This scope ensures it always returns the same type
-        # This function should be agnostic to backend, meaning it might not always use decord in the future
-        # So, let's KISS
-        video = reader.get_batch(indices)
-        video = video.asnumpy()
-        
+    Args:
+        See load_video_via_decord.
+        lazy (bool): If True, return an IteratorWithLen that yields ONE frame
+            at a time (O(1) peak memory regardless of video length). Critical
+            for huge videos on memory-constrained hardware (e.g. 8K on a Pi).
+            With as_dict=True, the dict's 'video' field IS the iterator.
+
+    Returns:
+        ndarray (T, H, W, C) uint8 RGB, or IteratorWithLen if lazy=True,
+        or dict if as_dict=True.
+
+    Note:
+        Like decord, this always decodes to uint8 regardless of the video's bit
+        depth. For high-bit-depth output, use load_video(path, backend='av').
+
+        Lazy speed & memory (measured on 121-frame 1024x320 h264):
+            - monotonic-ascending indices (None, int, slice, sorted lists):
+              ~1.5x slower than eager. Truly O(1) memory - RSS plateaus at
+              ~21 MB of rs FFmpeg overhead regardless of frame count.
+            - non-monotonic indices (reversed, shuffled): up to ~38x slower
+              for fully-reversed full reads. Not strictly O(1) - rs's
+              per-index seek path appears to pool buffers, so RSS grows
+              sub-linearly (~0.4 MB/frame on this clip vs ~1 MB/frame for
+              eager). Still a big win over eager's full-array allocation.
+              If you can afford the RAM for arbitrary-order access, prefer
+              lazy=False.
+    """
+    if not lazy:
+        return _load_video_via_indexed_reader(path, indices, as_dict, _open_rs_reader)
+    return _load_video_via_rs_lazy(path, indices, as_dict)
+
+
+def _load_video_via_rs_lazy(path, indices, as_dict):
+    """
+    Query. O(1)-memory lazy path for load_video_via_rs. Returns an
+    IteratorWithLen yielding one (H, W, C) uint8 RGB frame at a time.
+
+    URL handling matches the _cv_load_video_stream pattern: wraps the inner
+    streaming generator in _MaybeTemporarilyDownloadVideo so the temp file
+    stays alive across yields. URLs are downloaded twice (once for num_frames
+    probe, once for streaming) - same pre-existing wart as the cv backend.
+
+    For monotonic-ascending indices (which covers the common cases: None, int,
+    slice, sorted lists), uses iter(reader) for a single sequential pass with
+    a persistent FFmpeg cursor. For anything else, falls back to per-index
+    reader[i] which is honest O(1) but pays a seek per frame.
+    """
+    pip_import("video_reader")
+    from video_reader import PyVideoReader
+
+    # Pre-flight: open the file once to discover num_frames and resolve indices.
+    # The actual streaming uses a second open (inside the generator) so the
+    # download context (_MaybeTemporarilyDownloadVideo) spans the iterator's lifetime.
+    with _MaybeTemporarilyDownloadVideo(path) as local_path:
+        num_frames = len(PyVideoReader(local_path))
+    indices = _resolve_video_frame_indices(indices, num_frames)
+    monotonic = all(indices[i] <= indices[i+1] for i in range(len(indices) - 1))
+
+    def stream():
+        with _MaybeTemporarilyDownloadVideo(path) as local_path:
+            reader = PyVideoReader(local_path)
+            if not indices:
+                return
+            if monotonic:
+                it = iter(reader)
+                seen = -1
+                cur = None
+                for target in indices:
+                    while seen < target:
+                        cur = next(it)
+                        seen += 1
+                    yield cur
+            else:
+                for i in indices:
+                    yield reader[i]
+
+    video = IteratorWithLen(stream(), len(indices))
     if as_dict:
-        return gather_vars("video", "indices","num_frames")
-
+        return gather_vars("video", "indices", "num_frames")
     return video
 
 
@@ -48221,6 +48514,11 @@ def make_parent_directory(path):
     """
     return make_directory(get_parent_directory(path))
 make_parent_folder=make_parent_directory
+
+def make_parent_directories(*paths):
+    "Plural of make_parent_directory"
+    return make_directories(get_paths_parents(paths))
+make_parent_folders=make_parent_directories
 
 def take_directory(path):
     """Creates a directory (if it doesn't exist) and changes to it in one operation.
@@ -51360,6 +51658,112 @@ def s3_list_objects(s3url, *, recursive=True, include_metadata=False, lazy=False
     return output
 
 
+def mount_s3_via_rclone(
+    s3url,
+    mount_point,
+    *,
+    block=True,
+    read_only=True,
+    region=None,
+    cache_dir=None,
+    cache_max_size="64G",
+    cache_max_age="24h",
+    read_ahead="256M",
+    dir_cache_time="24h"
+):
+    """
+    Mount an S3 URL as a local filesystem via rclone + FUSE.
+
+    Uses the AWS credential chain (env / IMDS / ~/.aws). Requires `rclone`
+    and `fuse3` (apt install fuse3) on the host.
+
+        block=True       block until Ctrl+C, then auto-unmount (default)
+        block=False      daemonize rclone and return immediately
+        region=None      auto-detect via x-amz-bucket-region HEAD response
+        cache_dir=None   use {tempfile.gettempdir()}/rclone-cache
+
+    Cache flags (cache_max_size / cache_max_age / read_ahead /
+    dir_cache_time) are passed verbatim to rclone, which has its own
+    size/duration parser.
+
+    >>> mount_s3_via_rclone('http://not-s3', '/tmp/x')
+    Traceback (most recent call last):
+        ...
+    AssertionError: need s3:// URL, got 'http://not-s3'
+
+    >>> mount_s3_via_rclone(  # doctest: +SKIP
+    ...     's3://acme-media-prod/projects/2024/shoot_42',
+    ...     '/mnt/shoot_42', block=False)
+    '/mnt/shoot_42'
+    """
+    _ensure_rclone_installed()
+    _ensure_fuse3_installed()
+
+    import os, subprocess, tempfile
+    from shlex import quote as q
+
+    assert s3url.startswith("s3://"), "need s3:// URL, got %r" % s3url
+    remote = ":s3:" + s3url[len("s3://") :]
+
+    def detect_region(bucket):
+        """
+        Sniff a bucket's region from the x-amz-bucket-region HEAD response.
+
+        S3 returns this header on every response, including 403s, so this
+        works on any bucket -- public, private, your account or another's --
+        with no IAM permissions required.
+
+        >>> detect_region('acme-media-prod-us-east-1')  # doctest: +SKIP
+        'us-east-1'
+        """
+        import urllib.request, urllib.error
+
+        req = urllib.request.Request("https://%s.s3.amazonaws.com/" % bucket, method="HEAD")
+        try:
+            headers = urllib.request.urlopen(req).headers
+        except urllib.error.HTTPError as e:
+            headers = e.headers
+        region = headers.get("x-amz-bucket-region")
+        if not region:
+            raise RuntimeError("could not detect region for bucket %r" % bucket)
+        return region
+
+    if region is None:
+        region = detect_region(s3url[len("s3://") :].split("/", 1)[0])
+    if cache_dir is None:
+        cache_dir = os.path.join(tempfile.gettempdir(), "rclone-cache")
+
+    extra = ("--read-only " if read_only else "") + ("" if block else "--daemon ")
+    # double-quote: q() once for the umount line, q() again so trap sees one arg
+    cleanup = ("trap %s EXIT" % q("sudo umount -l " + q(mount_point))) if block else ""
+
+    script = """
+         #!/bin/bash
+         set -e
+         mkdir -p %(mount)s
+         %(cleanup)s
+         rclone mount %(remote)s %(mount)s \\
+             --s3-provider AWS --s3-env-auth --s3-region %(region)s \\
+             --vfs-cache-mode full --cache-dir %(cache_dir)s \\
+             --vfs-cache-max-size %(cache_max_size)s --vfs-cache-max-age %(cache_max_age)s \\
+             --vfs-read-ahead %(read_ahead)s --dir-cache-time %(dir_cache_time)s \\
+             --no-modtime -v --stats 10s %(extra)s
+     """ % {
+        "mount": q(mount_point),
+        "cleanup": cleanup,
+        "remote": q(remote),
+        "region": q(region),
+        "cache_dir": q(cache_dir),
+        "cache_max_size": q(cache_max_size),
+        "cache_max_age": q(cache_max_age),
+        "read_ahead": q(read_ahead),
+        "dir_cache_time": q(dir_cache_time),
+        "extra": extra,
+    }
+
+    subprocess.run(script, shell=True, check=True)
+    return mount_point
+
 def is_s3_url(url):
     "Returns true if the given string is an Amazon S3 URL"
     return isinstance(url,str) and url.startswith('s3://')
@@ -54121,8 +54525,23 @@ def _ensure_rclone_installed():
     _ensure_installed(
         'rclone',
         mac='brew install rclone',
-        linux='apt install rclone --yes',
+        # linux='apt install rclone --yes',
+        linux='curl https://rclone.org/install.sh | sudo bash', #More up-to-date than apt
         windows='winget install --id=Rclone.Rclone', #https://rclone.org/install/
+    )
+
+@_register_ensure_installed_func('fusermount3')
+def _ensure_fuse3_installed():
+    """
+    fuse3: Filesystem in Userspace v3 — required by `rclone mount` (and other FUSE-based mounts) on Linux.
+    The binary that proves it's installed is `fusermount3`.
+    On macOS the equivalent is macFUSE (cask); on Windows it's WinFsp.
+    """
+    _ensure_installed(
+        'fusermount3',
+        linux='apt install fuse3 --yes',  # https://packages.debian.org/bookworm/fuse3
+        mac='brew install --cask macfuse',  # https://osxfuse.github.io
+        windows='winget install --id=WinFsp.WinFsp',  # https://winfsp.dev
     )
 
 @_register_ensure_installed_func
@@ -54162,6 +54581,16 @@ def _ensure_ffmpeg_installed():
         elif currently_running_linux  (): assert False, "Please install ffmpeg! >>> sudo apt install ffmpeg"
         elif currently_running_mac    (): assert False, "Please install ffmpeg! >>> brew install ffmpeg #get brew at https://brew.sh"
         else:                             assert False, "Please install ffmpeg!"
+
+@_register_ensure_installed_func
+def _ensure_oiiotool_installed():
+    """oiiotool: OpenImageIO's swiss-army-knife CLI for image format conversion, EXR/HDR processing, and pixel manipulation"""
+    _ensure_installed(
+        'oiiotool',
+        mac='brew install openimageio',  # https://formulae.brew.sh/formula/openimageio
+        linux='apt install openimageio-tools --yes',  # https://packages.debian.org/bookworm/openimageio-tools
+        windows='winget install --id=OpenImageIO.OpenImageIO',
+    )
 
 @_register_ensure_installed_func
 def _ensure_codex_installed():
@@ -56294,6 +56723,84 @@ def tmux_send_keys(keys: str, target=None, literal=False):
         cmd += ["-l"]
     cmd += [keys]
     subprocess.run(cmd, check=True)
+
+
+def tmux_split_pane_grid(height: int, width: int, target=None):
+    """
+    Splits a tmux pane into a height x width grid, with cell sizes as even as
+    possible. Defaults to splitting the currently active pane.
+
+    Args:
+        height: Number of rows in the grid (>= 1).
+        width: Number of columns in the grid (>= 1).
+        target: Tmux target pane (e.g. "%5"). None for current pane. See
+            tmux_send_keys for the full target syntax.
+
+    Returns:
+        list[list[str]]: 2D list of pane IDs, shape (height, width), ordered
+            top-to-bottom and left-to-right. grid[0][0] is the top-left pane
+            (the original target).
+
+    Raises:
+        ValueError: if height or width is < 1, or if the pane is too small to
+            fit the requested grid (each cell needs at least 1 line/column,
+            plus 1 line/column per divider).
+
+    Examples:
+        >>> # 3x4 grid in the active pane
+        >>> grid = tmux_split_pane_grid(3, 4)  # doctest: +SKIP
+        >>> # 2x2 grid in a specific pane
+        >>> grid = tmux_split_pane_grid(2, 2, target="%5")  # doctest: +SKIP
+    """
+    if height < 1 or width < 1:
+        raise ValueError(
+            "rp.tmux_split_pane_grid: height and width must be >= 1 (got "
+            + str(height) + "x" + str(width) + ")"
+        )
+
+    def even_sizes(total, n):
+        """Distribute `total` cells across `n` panes, reserving 1 cell per divider."""
+        content = total - (n - 1)
+        if content < n:
+            raise ValueError(
+                "rp.tmux_split_pane_grid: cannot split "
+                + str(total) + " into " + str(n) + " parts (need at least "
+                + str(2 * n - 1) + ")"
+            )
+        base, extra = divmod(content, n)
+        return [base + (1 if i < extra else 0) for i in range(n)]
+
+    if target is None:
+        target = "%" + str(tmux_get_active_pane_id())
+
+    H = int(_run_tmux_command(["tmux", "display-message", "-p", "-t", target, "#{pane_height}"]))
+    W = int(_run_tmux_command(["tmux", "display-message", "-p", "-t", target, "#{pane_width}"]))
+
+    row_sizes = even_sizes(H, height)
+    col_sizes = even_sizes(W, width)
+
+    row_panes = [target]
+    for i in range(height - 1, 0, -1):
+        new = _run_tmux_command([
+            "tmux", "split-window", "-v", "-d", "-t", target,
+            "-l", str(row_sizes[i]),
+            "-P", "-F", "#{pane_id}",
+        ])
+        row_panes.insert(1, new)
+
+    grid = []
+    for row_pane in row_panes:
+        cols = [row_pane]
+        for j in range(width - 1, 0, -1):
+            new = _run_tmux_command([
+                "tmux", "split-window", "-h", "-d", "-t", row_pane,
+                "-l", str(col_sizes[j]),
+                "-P", "-F", "#{pane_id}",
+            ])
+            cols.insert(1, new)
+        grid.append(cols)
+
+    return grid
 
 
 def tmux_get_scrollback(with_ansi=True, target=None) -> str:
@@ -71593,6 +72100,7 @@ known_pypi_module_package_names={
     'IPython': 'ipython',
     'OpenGL': 'PyOpenGL',
     'PIL': 'Pillow',
+    'PyOpenColorIO': 'opencolorio',
     'PyQt5': 'PyQt5-sip',
     'Xlib': 'python-xlib',
     '_ast27': 'typed-ast',
@@ -71710,6 +72218,7 @@ known_pypi_module_package_names={
     'neural_style': 'neural-style',
     'nmap3': 'python3-nmap',
     'notebook_as_pdf': 'notebook-as-pdf',
+    'PyOpenColorIO':'opencolorio',
     'nvidia_smi': 'nvidia-ml-py3',
     'oembed': 'python-oembed',
     'ometa': 'Parsley',
@@ -71796,6 +72305,8 @@ known_pypi_module_package_names={
     'zalgo_text': 'zalgo-text',
     'hitherdither' : "git+https://www.github.com/hbldh/hitherdither",
     'decord' : "decord2", # 'decord' : "eva-decord" if currently_running_mac() else "decord", #https://www.piwheels.org/project/eva-decord/ - decord doesn't pip install on mac
+    # 'video_reader': 'video-reader-rs', # Rust-based video decoder (gcanat/video_reader-rs); decodes AV1, which decord can't
+    'video_reader': 'video-reader-rs-next', # Fork of video-reader-rs that doesn't crash on Netflix
 }
 
 
