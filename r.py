@@ -51662,7 +51662,7 @@ def mount_s3_via_rclone(
     s3url,
     mount_point,
     *,
-    block=True,
+    daemon=False,
     read_only=True,
     region=None,
     cache_dir=None,
@@ -51677,8 +51677,9 @@ def mount_s3_via_rclone(
     Uses the AWS credential chain (env / IMDS / ~/.aws). Requires `rclone`
     and `fuse3` (apt install fuse3) on the host.
 
-        block=True       block until Ctrl+C, then auto-unmount (default)
-        block=False      daemonize rclone and return immediately
+        daemon=False     block until Ctrl+C, then auto-unmount (default)
+        daemon=True      detach rclone (--daemon) so the mount outlives
+                         this Python process; you must `umount` it yourself
         region=None      auto-detect via x-amz-bucket-region HEAD response
         cache_dir=None   use {tempfile.gettempdir()}/rclone-cache
 
@@ -51693,7 +51694,7 @@ def mount_s3_via_rclone(
 
     >>> mount_s3_via_rclone(  # doctest: +SKIP
     ...     's3://acme-media-prod/projects/2024/shoot_42',
-    ...     '/mnt/shoot_42', block=False)
+    ...     '/mnt/shoot_42', daemon=True)
     '/mnt/shoot_42'
     """
     _ensure_rclone_installed()
@@ -51733,9 +51734,9 @@ def mount_s3_via_rclone(
     if cache_dir is None:
         cache_dir = os.path.join(tempfile.gettempdir(), "rclone-cache")
 
-    extra = ("--read-only " if read_only else "") + ("" if block else "--daemon ")
+    extra = ("--read-only " if read_only else "") + ("--daemon " if daemon else "")
     # double-quote: q() once for the umount line, q() again so trap sees one arg
-    cleanup = ("trap %s EXIT" % q("sudo umount -l " + q(mount_point))) if block else ""
+    cleanup = "" if daemon else ("trap %s EXIT" % q("sudo umount -l " + q(mount_point)))
 
     script = """
          #!/bin/bash
