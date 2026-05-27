@@ -6013,6 +6013,101 @@ def vertically_concatenated_videos(*videos,origin=None):
     #TODO: Optimize this to not use vertically_concatenated_images (which is slow)
     return _concatenated_videos(vertically_concatenated_images,videos,origin=origin)
 
+
+def _build_stack_filter(srcs, cat_type, size):
+    """
+    Build the -filter_complex string for stacking srcs.
+
+    vstack requires matching widths; hstack requires matching heights.
+    'size' controls how to handle inputs whose stacking dimension differs:
+        None   - require matching sizes; raise informatively if they don't
+        'pad'  - center-pad to the max size with black bars
+        'min'  - downscale all to the smallest size (preserve aspect)
+        'max'  - upscale all to the largest size (preserve aspect)
+    """
+    valid_sizes = (None, 'pad', 'min', 'max')
+    if size not in valid_sizes:
+        raise ValueError('size must be one of '+repr(valid_sizes)+', got '+repr(size))
+
+    if cat_type == 'vstack':
+        sizes = [get_video_file_width(s) for s in srcs]
+        dim_name = 'width'
+    elif cat_type == 'hstack':
+        sizes = [get_video_file_height(s) for s in srcs]
+        dim_name = 'height'
+    else:
+        raise ValueError("cat_type must be 'vstack' or 'hstack', got "+repr(cat_type))
+
+    n = len(srcs)
+
+    if size is None:
+        if len(set(sizes)) != 1:
+            raise ValueError(
+                cat_type+' requires matching '+dim_name+'s, got '+repr(sizes)+
+                ". Pass size='pad', size='min', or size='max' to normalize."
+            )
+        return cat_type+'=inputs='+str(n)  # legacy fast path: no preprocessing
+
+    target = min(sizes) if size == 'min' else max(sizes)
+    target += target & 1  # even for yuv420p
+
+    def op_for(i):
+        if size == 'pad' and cat_type == 'vstack':
+            return 'pad='+str(target)+':ih:('+str(target)+'-iw)/2:0:color=black'
+        if size == 'pad' and cat_type == 'hstack':
+            return 'pad=iw:'+str(target)+':0:('+str(target)+'-ih)/2:color=black'
+        if cat_type == 'vstack':
+            return 'scale='+str(target)+':-2'  # match width, height auto (even)
+        return 'scale=-2:'+str(target)         # match height, width auto (even)
+
+    steps  = ['['+str(i)+':v]'+op_for(i)+'[v'+str(i)+']' for i in range(n)]
+    labels = ''.join('[v'+str(i)+']'                     for i in range(n))
+    return ';'.join(steps) + ';' + labels + cat_type + '=inputs=' + str(n)
+
+
+def _concatenate_video_files(srcs, dst, cat_type='vstack', size=None):
+    import subprocess
+
+    assert not isinstance(srcs, str), 'srcs should be an iterable of strings - not a string. srcs = '+repr(srcs)
+    assert isinstance(dst, str), dst
+    assert all(isinstance(x, str) for x in srcs), srcs
+
+    if len(srcs) < 2:
+        raise ValueError("At least two source video files are required for concatenation.")
+
+    filter_string = _build_stack_filter(srcs, cat_type, size)
+
+    command = ['ffmpeg', '-y']
+    for src in srcs:
+        command.extend(['-i', src])
+    command.extend(['-filter_complex', filter_string])
+    command.append(dst)
+
+    subprocess.run(command, check=True)
+    return dst
+
+def vertically_concatenate_video_files(srcs:list, dst:str, size=None):
+    """
+    Vertically concatenates two or more video files using FFmpeg.
+
+    size: None | 'pad' | 'min' | 'max'
+        How to handle inputs with mismatched widths.
+        None raises; 'pad' center-pads with black bars to the max width;
+        'min'/'max' rescale to the smallest/largest width preserving aspect ratio.
+    """
+    return gather_args_call(_concatenate_video_files, cat_type='vstack')
+
+def horizontally_concatenate_video_files(srcs:list, dst:str, size=None):
+    """
+    Horizontally concatenates two or more video files using FFmpeg.
+
+    size: None | 'pad' | 'min' | 'max'
+        How to handle inputs with mismatched heights.
+        None raises; 'pad' center-pads with black bars to the max height;
+        'min'/'max' rescale to the smallest/largest height preserving aspect ratio.
+    """
+    return gather_args_call(_concatenate_video_files, cat_type='hstack')
+
 def max_filter(image,diameter,single_channel: bool = False,mode: str = 'reflect',shutup: bool = False):
     # NOTE: order refers to the derivative of the gauss curve; for edge detection etc.
     if diameter == 0:
@@ -8522,6 +8617,44 @@ def load_openexr_image(file_path,*,channels=None):
 
     return image
 
+def load_exr_metadata(path):
+    pip_import('OpenEXR')
+    import OpenEXR
+
+    # Open the EXR file
+    file = OpenEXR.InputFile(path)
+
+    # Retrieve the header metadata as a dictionary
+    metadata = file.header()
+
+    return metadata
+
+def load_exr_metadatas(
+    *paths,
+    show_progress=False,
+    lazy=False,
+    num_threads=None,
+    buffer_limit=None,
+    strict=True
+):
+    """
+    [C] Plural of load_exr_metadata.
+    Loads EXR header metadata for many files.
+
+    Args:
+        See load_exr_metadata for documentation on the path arg.
+        See load_files for documentation on the num_threads, show_progress, strict, lazy and buffer_limit args.
+    """
+    if show_progress in ['eta', True]: show_progress = 'eta:rp.load_exr_metadatas'
+
+    paths = detuple(paths)
+
+    def load(path):
+        return load_exr_metadata(path)
+
+    return gather_args_call(load_files, load, paths)
+
+
 _opencv_supported_image_formats='bmp dib exr hdr jp2 jpe jpeg jpg pbm pfm pgm pic png pnm ppm pxm ras sr tif tiff webp'.split()
 
 
@@ -9613,6 +9746,246 @@ def convert_image_files(
     )
 
 
+def convert_video_file_via_ffmpeg(
+    input_file,
+    new_extension=None,
+    output_folder=None,
+    *,
+    skip_overwrite=False,
+    name_transform=lambda file_name: file_name,
+    delete_original=False,
+    codec=None,
+    crf=None,
+    video_bitrate=None,
+    pix_fmt=None,
+    framerate=None,
+    keep_audio=True,
+    show_progress=False
+):
+    """
+    Command. Converts a video file to a different format/codec using ffmpeg.
+
+    Signature mirrors rp.convert_image_file. Encoding options mirror rp.save_video_mp4
+    (codec, crf, video_bitrate, pix_fmt). All encoding options default to None, which
+    means "let ffmpeg pick its default" (yielding the smallest, most generic ffmpeg
+    invocation, e.g. `ffmpeg -i input.mov output.mp4`).
+
+    Audio is copied through unchanged ("-c:a copy") by default. Pass keep_audio=False
+    to drop audio entirely ("-an"), producing a silent output video.
+
+    Args:
+        input_file (str): Path to the input video file.
+        new_extension (str, optional): Output extension (e.g. "mp4", "mov", "webm").
+            If None, keeps the input extension.
+        output_folder (str, optional): Where to save the converted file. Defaults to
+            the input file's folder.
+        skip_overwrite (bool, optional): If True and the output already exists, don't
+            re-convert. Defaults to False.
+        name_transform (func, optional): Transforms the bare file name (no path, no
+            extension). E.g. lambda x: "converted_" + x.
+        delete_original (bool, optional): USE WITH CAUTION. If True, deletes the
+            input file after successful conversion.
+        codec (str, optional): Video codec name as accepted by rp.save_video_mp4 —
+            'h264', 'h265'/'hevc', 'vp9', 'av1', 'mp4v', or a raw ffmpeg encoder
+            string like 'libx264'. None lets ffmpeg pick a default for the container.
+        crf (int, optional): Constant Rate Factor — lower is better quality / bigger
+            file. Ranges from rp.save_video_mp4: h264/h265 0-51 (good 18-23),
+            vp9 0-63 (good 30-35), av1 0-63 (good 23-30). None uses codec default.
+        video_bitrate (str or int, optional): 'low'/'medium'/'high'/'max' (mapped via
+            rp's named bitrates table) or an integer in bits/sec. None omits -b:v.
+        pix_fmt (str, optional): ffmpeg pixel format string (e.g. 'yuv420p',
+            'yuv420p10le', 'yuv444p'). See rp.save_video_mp4 for the common list.
+            None omits -pix_fmt.
+        framerate (float, optional): Output framerate. None keeps source framerate.
+        keep_audio (bool, optional): If True (default), audio is copied through
+            unchanged. If False, audio is stripped from the output.
+        show_progress (bool, optional): If True, prints ffmpeg's stderr live;
+            otherwise runs ffmpeg with "-loglevel quiet". Defaults to False.
+
+    Returns:
+        str: Path to the converted video file.
+
+    Raises:
+        FileNotFoundError: If the input file doesn't exist, or ffmpeg didn't produce
+            the output file.
+        RuntimeError: If ffmpeg fails or is not installed.
+        TypeError: If input_file, output_folder, or new_extension is not a string.
+
+    Example:
+        convert_video_file_via_ffmpeg(
+            "clip.mov",
+            new_extension="mp4",
+            codec="h265",
+            crf=20,
+            pix_fmt="yuv420p10le",
+            name_transform=lambda x: "compressed_" + x,
+        )
+    """
+    import subprocess
+
+    if output_folder is None:
+        output_folder = get_parent_folder(input_file)
+    if new_extension is None:
+        new_extension = get_file_extension(input_file)
+
+    if not isinstance(input_file   , str): raise TypeError("Input file must be a string, but got %s."   % type(input_file   ))
+    if not isinstance(new_extension, str): raise TypeError("New extension must be a string, but got %s."% type(new_extension))
+    if not isinstance(output_folder, str): raise TypeError("Output folder must be a string, but got %s."% type(output_folder))
+
+    if not path_exists(input_file):
+        raise FileNotFoundError("Input file not found: " + input_file)
+
+    _ensure_ffmpeg_installed()
+
+    input_file_name  = get_file_name(input_file, include_file_extension=False)
+    output_file_name = name_transform(input_file_name)
+    output_file_name = with_file_extension(output_file_name, new_extension)
+    output_file      = path_join(output_folder, output_file_name)
+
+    assert isinstance(output_file, str)
+
+    if file_exists(output_file) and skip_overwrite:
+        return output_file
+
+    make_parent_directory(output_file)
+
+    in_place = get_absolute_path(output_file) == get_absolute_path(input_file)
+    ffmpeg_output = output_file
+    if in_place:
+        ffmpeg_output = output_file + ".tmp_convert." + get_file_extension(output_file)
+
+    codec_arg = None
+    if codec is not None:
+        codec_arg = _video_codec_alias_map.get(codec.lower(), codec) if hasattr(codec, 'lower') else codec
+
+    cmd = ["ffmpeg"]
+    if not show_progress:
+        cmd += ["-loglevel", "quiet"]
+    cmd += ["-y", "-i", input_file]
+    if framerate     is not None: cmd += ["-r"      , str(framerate)]
+    if codec_arg     is not None: cmd += ["-c:v"    , str(codec_arg)]
+    if crf           is not None: cmd += ["-crf"    , str(crf)]
+    if video_bitrate is not None: cmd += ["-b:v"    , str(_as_video_bitrate(video_bitrate))]
+    if pix_fmt       is not None: cmd += ["-pix_fmt", str(pix_fmt)]
+    cmd += ["-c:a", "copy"] if keep_audio else ["-an"]
+    cmd += [ffmpeg_output]
+
+    try:
+        subprocess.run(
+            cmd,
+            check=True,
+            stdout=subprocess.PIPE if not show_progress else None,
+            stderr=subprocess.PIPE if not show_progress else None,
+        )
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr.decode() if e.stderr else "Unknown error"
+        raise RuntimeError("Error converting video file: " + error_msg) from e
+    except FileNotFoundError:
+        raise RuntimeError("FFmpeg not found. Please install FFmpeg to convert video files.")
+
+    if not file_exists(ffmpeg_output):
+        raise FileNotFoundError("Failed to create output file: " + ffmpeg_output)
+
+    if in_place:
+        os.replace(ffmpeg_output, output_file)  # atomic; no rp wrapper for this
+
+    if delete_original and file_exists(output_file) and file_exists(input_file) and get_absolute_path(output_file) != get_absolute_path(input_file):
+        delete_file(input_file)
+
+    return output_file
+
+
+def convert_video_files_via_ffmpeg(
+    input_files=".",
+    new_extension=None,
+    output_folder=None,
+    *,
+    strict=True,
+    parallel=True,
+    show_progress=True,
+    skip_overwrite=False,
+    name_transform=lambda file_name: file_name,
+    delete_original=False,
+    codec=None,
+    crf=None,
+    video_bitrate=None,
+    pix_fmt=None,
+    framerate=None,
+    keep_audio=True
+):
+    """
+    Command. Batch-converts video files via ffmpeg.
+
+    Mirrors rp.convert_image_files (signature, parallelism, strict-mode, progress).
+    Per-file work is delegated to rp.convert_video_file_via_ffmpeg — see that
+    function for encoding-option semantics (codec/crf/video_bitrate/pix_fmt/...).
+
+    Args:
+        input_files (list or str): Paths to the video files to convert, or a folder.
+            Defaults to '.', i.e. every video file in the current working directory
+            (as picked up by get_all_video_files).
+        new_extension (str, optional): Output extension. If None, keeps each input's
+            extension (useful for batch re-encoding in place).
+        output_folder (str, optional): Where to write converted files. If None, each
+            file is written next to its input.
+        strict (bool, optional): How to handle per-file failures, matching convert_image_files:
+                True  (default) — raise on first failure.
+                False           — skip failed files (drop from output list).
+                None            — keep position as None in output list.
+        parallel (bool, optional): If True, runs files concurrently. ffmpeg is
+            already multithreaded so parallel=False can be sensible for large files.
+        show_progress (bool, optional): If True, shows a progress bar across the
+            batch. Per-file ffmpeg stderr is always suppressed in batch mode.
+        skip_overwrite (bool, optional): If True, won't overwrite existing outputs.
+        name_transform (func, optional): Bare-filename transform — see
+            convert_video_file_via_ffmpeg.
+        delete_original (bool, optional): USE WITH CAUTION. Deletes each input file
+            after its conversion succeeds.
+        codec, crf, video_bitrate, pix_fmt, framerate, keep_audio: forwarded to
+            convert_video_file_via_ffmpeg — see that docstring.
+
+    Returns:
+        list: Paths to the converted video files (with None entries when strict=None).
+
+    Example:
+        convert_video_files_via_ffmpeg(
+            "raw_clips/",
+            new_extension="mp4",
+            output_folder="compressed",
+            codec="h265",
+            crf=23,
+            pix_fmt="yuv420p10le",
+            name_transform=lambda n: "small_" + n,
+            show_progress=True,
+            skip_overwrite=True,
+        )
+    """
+    assert output_folder is None or isinstance(output_folder, str), "Output folder must be a string, but got {}.".format(type(output_folder))
+
+    def convert_single_video_file(input_file):
+        return convert_video_file_via_ffmpeg(
+            input_file, new_extension, output_folder,
+            skip_overwrite=skip_overwrite,
+            name_transform=name_transform,
+            delete_original=delete_original,
+            codec=codec,
+            crf=crf,
+            video_bitrate=video_bitrate,
+            pix_fmt=pix_fmt,
+            framerate=framerate,
+            keep_audio=keep_audio,
+            show_progress=False
+        )
+
+    return _convert_files(
+        input_files=input_files,
+        get_all_files_func=get_all_video_files,
+        convert_single_file_func=convert_single_video_file,
+        progress_title='Converting Videos',
+        strict=strict,
+        parallel=parallel,
+        show_progress=show_progress
+    )
 
 
 # endregion
@@ -22946,17 +23319,19 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
 
 
     def out(n):
-        # Calculate proportion based on work done in this session
-        if total_n - start_n > 0:
-            proportion = (n - start_n) / (total_n - start_n)
+        # total_n may be a callable so the shared-eta registry can grow the total
+        # as more concurrent callers attach to the same call site.
+        cur_total = total_n() if callable(total_n) else total_n
+        if cur_total - start_n > 0:
+            proportion = (n - start_n) / (cur_total - start_n)
         else:
             proportion = 1.0  # Already at or past total
 
         return display_eta(
             proportion,
             timer(),
-            TOTAL_TO_COMPLETE=total_n,
-            COMPLETED_SO_FAR=n,
+            TOTAL_TO_COMPLETE=cur_total,
+            COMPLETED_SO_FAR=n
         )
 
     return out
@@ -23008,10 +23383,10 @@ class eta:
             assert is_number(x)
             self.elements = range(x)
 
-        self.display_eta = _eta(x, title=title, min_interval=min_interval)
+        self._tick = _shared_eta_attach(x, title=title, min_interval=min_interval, _caller_depth=1)
 
     def __call__(self, n):
-        self.display_eta(n)
+        self._tick(n)
 
     def __iter__(self):
         i = -1
@@ -23023,7 +23398,112 @@ class eta:
 
     def __len__(self):
         return len(self.elements)
-            
+
+    def __del__(self):
+        self._tick.release()
+
+
+# Concurrent etas created at the same source line coalesce into one shared
+# display so a parallel fan-out (e.g. multiple threads each running load_files)
+# produces a single progress bar instead of interleaved output that appears
+# to step backwards. All of that machinery lives here so the eta class stays
+# small and the slop is contained to one place.
+def _shared_eta_attach(local_total, *, title, min_interval, _caller_depth):
+    """
+    Attach to the shared-eta state for the caller's source line and return a
+    callable tick. _caller_depth is how many frames above this helper the
+    user's call site is (1 for a direct caller, 2 if one wrapper sits between).
+    """
+    caller = sys._getframe(_caller_depth + 1)
+    callsite = (caller.f_code.co_filename, caller.f_lineno)
+    with _SharedEtaState._lock:
+        state = _SharedEtaState._registry.get(callsite)
+        if state is None:
+            state = _SharedEtaState(callsite=callsite, title=title, min_interval=min_interval)
+            _SharedEtaState._registry[callsite] = state
+        return state.attach(local_total)
+
+
+class _SharedEtaState:
+    """
+    Shared progress state for concurrent etas at the same call site.
+
+    total grows as new attachers arrive; progress is the sum of attachers'
+    local counts. display is a single _eta callback whose total_n is a closure
+    over self.total so the dynamic total is always honored.
+    """
+
+    _registry = {}
+    _lock = threading.RLock()
+
+    def __init__(self, *, callsite, title, min_interval):
+        self.callsite = callsite
+        self.total = 0
+        self.progress = 0
+        self.ticks = set()
+        self.display = _eta(lambda: self.total, title=title, min_interval=min_interval)
+
+    def attach(self, local_total):
+        # Called under _lock (via _shared_eta_attach).
+        tick = _SharedEtaTick(self, local_total)
+        self.ticks.add(id(tick))
+        self.total += local_total
+        return tick
+
+    def advance(self, delta):
+        # Called under _lock (via _SharedEtaTick.__call__).
+        self.progress += delta
+        # Cap below total so _eta doesn't latch shown_done while other ticks
+        # are still running; the final 'Done!' fires when the last tick releases.
+        show_n = min(self.progress, self.total - 1) if self.total > 0 else 0
+        self.display(show_n)
+
+    def detach(self, tick):
+        # Called under _lock (via _SharedEtaTick._release_locked).
+        self.ticks.discard(id(tick))
+        if not self.ticks:
+            self.display(self.total)
+            _SharedEtaState._registry.pop(self.callsite, None)
+
+
+class _SharedEtaTick:
+    """
+    Per-attacher handle returned by _shared_eta_attach. Forwards (n) updates
+    into the shared state and releases itself when local_total is reached or
+    when release() is called explicitly.
+    """
+
+    def __init__(self, state, local_total):
+        self.state = state
+        self.local_total = local_total
+        self.local_n = 0
+
+    def __call__(self, n):
+        if self.state is None:
+            return
+        with _SharedEtaState._lock:
+            if self.state is None:
+                return
+            delta = n - self.local_n
+            if delta:
+                self.local_n = n
+                self.state.advance(delta)
+            if n >= self.local_total:
+                self._release_locked()
+
+    def release(self):
+        if self.state is None:
+            return
+        with _SharedEtaState._lock:
+            self._release_locked()
+
+    def _release_locked(self):
+        state = self.state
+        if state is None:
+            return
+        self.state = None
+        state.detach(self)
+
 
 
 
@@ -26901,7 +27381,8 @@ def _upfp(autoyes=False):
     assert file_bundle.data.startswith(b'""" Welcome to RP: Ryan Python """')
     new_code=file_bundle.data.decode()
     old_code=get_source_code(r)
-    dunk_string_diff(old_code, new_code)
+    if not autoyes:
+        dunk_string_diff(old_code, new_code)
     if old_code==new_code:
         fansi_print("RP Update: No change needed, old = new",'green bold')
         return
@@ -27758,6 +28239,7 @@ def pseudo_terminal(
         CDM
         CDZ
         CDQ
+        CDL
         CAT
         NCAT
         CCAT
@@ -31081,6 +31563,7 @@ def pseudo_terminal(
                             or user_message == "CDA"
                             or user_message in "CDZ"
                             or user_message == "CDQ"
+                            or user_message == "CDL"
                             or user_message.replace('CDB','')=='' and user_message
                         ):
                             if not is_valid_python_syntax(user_message) and folder_exists(rp.os.path.expanduser(user_message)):
@@ -31186,6 +31669,15 @@ def pseudo_terminal(
                                     continue
                                 else:
                                     user_message='CD '+result
+                            if user_message=='CDL':
+                                fansi_print("CDL (aka CD Latest) --> CDing into the most recently modified subfolder",'blue')
+                                subfolders=get_subfolders('.',sort_by='date modified')
+                                if not subfolders:
+                                    fansi_print("CDL aborted: there are no subfolders in the current directory to CD into",'red','underlined')
+                                    cancel=True
+                                    continue
+                                else:
+                                    user_message='CD '+subfolders[-1]
                             cancel=False
                             if user_message=='CDP':
                                 new_dir=string_from_clipboard()
@@ -46173,6 +46665,15 @@ _named_video_bitrates = {
     "high"   : 10000000,
     "max"    : 10000000000,
 }
+# Maps friendly codec names (h264, hevc, vp9, ...) to ffmpeg encoder strings (libx264, libx265, libvpx-vp9, ...).
+# Shared by VideoWriterMP4 and convert_video_file_via_ffmpeg.
+_video_codec_alias_map = {
+    'h264': 'libx264', 'x264': 'libx264',
+    'h265': 'libx265', 'x265': 'libx265', 'hevc': 'libx265',
+    'vp9' : 'libvpx-vp9',
+    'av1' : 'libaom-av1',
+    'mp4v': 'mpeg4',
+}
 _named_video_qualities = {
     "low"    : 10,
     "medium" : 50,
@@ -46222,16 +46723,7 @@ class VideoWriterMP4:
     """
     #Todo: If this ever gets fucky, try https://github.com/imageio/imageio-ffmpeg - it looks pretty good!
 
-    _CODEC_MAP = {
-        'h264'  : 'libx264',
-        'x264'  : 'libx264',
-        'h265'  : 'libx265',
-        'x265'  : 'libx265',
-        'hevc'  : 'libx265',
-        'vp9'   : 'libvpx-vp9',
-        'av1'   : 'libaom-av1',
-        'mp4v'  : 'mpeg4',
-    }
+    _CODEC_MAP = _video_codec_alias_map
 
     def __init__(self, path=None, framerate=60, video_bitrate='medium', height=None, width=None, show_progress=True, codec='h264', crf=None, pix_fmt='yuv420p'):
         # Originally from: https://github.com/kkroening/ffmpeg-python/issues/246
@@ -51736,21 +52228,24 @@ def mount_s3_via_rclone(
 
     extra = ("--read-only " if read_only else "") + ("--daemon " if daemon else "")
     # double-quote: q() once for the umount line, q() again so trap sees one arg
-    cleanup = "" if daemon else ("trap %s EXIT" % q("sudo umount -l " + q(mount_point)))
+    unmount_command = "sudo umount -l " + q(mount_point)
+    cleanup = "" if daemon else ("trap %s EXIT" % q(unmount_command))
 
     script = """
          #!/bin/bash
          set -e
          mkdir -p %(mount)s
+         %(unmount_command)s || true #Unmount right away so it can replace an existing mount (ok if not mounted)
          %(cleanup)s
          rclone mount %(remote)s %(mount)s \\
              --s3-provider AWS --s3-env-auth --s3-region %(region)s \\
              --vfs-cache-mode full --cache-dir %(cache_dir)s \\
              --vfs-cache-max-size %(cache_max_size)s --vfs-cache-max-age %(cache_max_age)s \\
              --vfs-read-ahead %(read_ahead)s --dir-cache-time %(dir_cache_time)s \\
-             --no-modtime -v --stats 10s %(extra)s
+             --use-server-modtime -v --stats 10s %(extra)s
      """ % {
         "mount": q(mount_point),
+        "unmount_command": unmount_command,
         "cleanup": cleanup,
         "remote": q(remote),
         "region": q(region),
@@ -51761,6 +52256,8 @@ def mount_s3_via_rclone(
         "dir_cache_time": q(dir_cache_time),
         "extra": extra,
     }
+
+    display_code_cell(script, language='bash', title='rp.mount_s3_via_rclone')
 
     subprocess.run(script, shell=True, check=True)
     return mount_point
