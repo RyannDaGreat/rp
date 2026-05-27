@@ -377,6 +377,20 @@ class PythonCompleter(Completer):
             )
             jedi_completions = jedi_info.interpreter.complete(jedi_info.line, jedi_info.column)
 
+            # Forward-wrapper enrichment: if cursor is inside a registered wrapper call
+            # (partial, gather_args_call, **kwargs forwarder, ...) merge in the target's
+            # completions so e.g. partial(pad_string_to_dims, wid|) suggests `width=`.
+            # Also backfill scope (globals/locals/builtins) — jedi.complete() returns
+            # nothing inside **kwargs-accepting calls, so without this we'd clobber the
+            # user's regular completions.
+            from .jedi_utils import synthesize_target_completions, synthesize_scope_completions  # [C]
+            extra = synthesize_target_completions(jedi_info.interpreter, document.text, document.cursor_position)
+            if extra:
+                scope = synthesize_scope_completions(jedi_info.interpreter, document.text, document.cursor_position)  # [C]
+                seen = {(jc.name, jc.type) for jc in jedi_completions}
+                jedi_completions = list(jedi_completions) + [
+                    e for e in extra + scope if (e.name, e.type) not in seen]  # [C]
+
             # Prioritize __all__ members for "from x import |"
             all_members = set()
             m = re.match(r'\s*from\s+([\w.]+)\s+import\s*', before_line)

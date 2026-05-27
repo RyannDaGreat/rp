@@ -129,7 +129,12 @@ def fansi_syntax_highlighting(code: str,
                 if not squelch:
                     traceback.print_exception(e)
                 pass
-            line_upto_token,written=combine_range(lines,written,(erow,ecol))
+            #Flush whatever's left as plain (un-highlighted) text. We go to end-of-source instead
+            #of the last token's (erow,ecol): if tokenization aborts early (e.g. an unterminated
+            #string literal) those vars are never bound, and we still want to emit the rest of the
+            #code after the error traceback rather than crash with UnboundLocalError.
+            end_of_source=(len(lines),0)
+            line_upto_token,written=combine_range(lines,written,end_of_source)
             yield '',line_upto_token
         def ansi_highlight(classified_text,colors=default_ansi):
             'Add syntax highlighting to source code using ANSI escape sequences'

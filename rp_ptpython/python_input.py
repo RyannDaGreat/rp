@@ -1322,6 +1322,9 @@ class PythonInput(object):
                             signatures[0].params
                     except AttributeError:
                         pass
+                    from .jedi_utils import apply_signature_special_cases
+                    signatures = apply_signature_special_cases(
+                        jedi_info.interpreter, cache_info.cache_text, signatures)
             except Exception:
                 signatures = []
 
