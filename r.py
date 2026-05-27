@@ -6108,6 +6108,76 @@ def horizontally_concatenate_video_files(srcs:list, dst:str, size=None):
     """
     return gather_args_call(_concatenate_video_files, cat_type='hstack')
 
+def concat_video_files(srcs:list, dst:str):
+    """
+    Command. Concatenate video files end-to-end with no re-encode via ffmpeg's
+    concat demuxer (`-c copy`). Use this instead of
+    `vertically_concatenate_video_files` / `horizontally_concatenate_video_files`
+    when you have time-sequential shards from the same encoder (e.g. parallel
+    `exr_to_mp4` outputs) and want lossless join in O(filesize).
+
+    No pre-flight ffprobe walk: ffmpeg is invoked directly. If it fails (e.g.
+    inputs disagree on codec/pix_fmt/resolution for stream-copy), we *then*
+    inspect via PyAV and re-raise with the offending metadata so the user
+    knows exactly which file broke the chain.
+
+    Args:
+        srcs (list[str]): Two or more source video files. Time order = list order.
+        dst  (str)      : Destination path.
+
+    Returns:
+        str: `dst`
+
+    Raises:
+        subprocess.CalledProcessError : if ffmpeg fails and inputs *do* match
+                                        (something else is wrong)
+        ValueError                    : if ffmpeg fails *because* inputs disagree
+    """
+    import subprocess
+    _ensure_ffmpeg_installed()
+
+    assert not isinstance(srcs, str), 'srcs should be an iterable of strings - not a string. srcs = '+repr(srcs)
+    assert isinstance(dst, str), dst
+    assert all(isinstance(x, str) for x in srcs), srcs
+    if len(srcs) < 2:
+        raise ValueError("At least two source video files are required for concatenation.")
+
+    # ffmpeg concat demuxer reads a listfile of "file '<path>'" lines.
+    listfile = temporary_file_path('txt')
+    try:
+        with open(listfile, 'w') as f:
+            for s in srcs:
+                escaped = get_absolute_path(s).replace("'", r"'\''")
+                f.write("file '" + escaped + "'\n")
+        cmd = ['ffmpeg', '-hide_banner', '-nostats', '-y',
+               '-f', 'concat', '-safe', '0', '-i', listfile,
+               '-c', 'copy', dst]
+        try:
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError:
+            # Post-mortem: only now do we pay for ffprobe. If inputs disagree,
+            # re-raise with the diff so the user knows what to fix; otherwise
+            # bubble up the original ffmpeg failure.
+            av = pip_import('av')
+            def _meta(path):
+                c = av.open(str(path))
+                try:
+                    s = c.streams.video[0]
+                    return s.codec_context.name, s.codec_context.pix_fmt, s.codec_context.width, s.codec_context.height
+                finally:
+                    c.close()
+            metas = [_meta(s) for s in srcs]
+            if len(set(metas)) != 1:
+                rows = '\n  '.join(srcs[i]+'  ->  '+repr(metas[i]) for i in range(len(srcs)))
+                raise ValueError(
+                    "concat_video_files: ffmpeg stream-copy failed because inputs disagree "
+                    "on (codec, pix_fmt, width, height):\n  " + rows
+                )
+            raise
+    finally:
+        delete_file(listfile, strict=False)
+    return dst
+
 def max_filter(image,diameter,single_channel: bool = False,mode: str = 'reflect',shutup: bool = False):
     # NOTE: order refers to the derivative of the gauss curve; for edge detection etc.
     if diameter == 0:
@@ -6359,29 +6429,35 @@ def _resize_image_via_skimage(image,scale,interp='bilinear'):
 def resize_image(image,scale,interp='bilinear'):
     """
     resize_image resizes images. Who woulda thunk it? Stretchy-squishy image resizing!
-    Now uses cv_resize_image by default (faster). Falls back to skimage if needed.
-    :param image: a numpy array, preferably. But it can also handle pure-python list-of-lists if that fails.
-    :param scale: can either be a scalar (get it? for SCALE? lol ok yeah that died quickly) or a tuple of integers to specify the new dimensions we want like (128,128)
-    :param interp: ONLY APPLIES FOR numpy arrays! interp ∈ {'auto','nearest','bilinear','bicubic','cubic'}
-    :return: returns the resized image
+    Now polymorphic: torch CHW tensors are routed through torch_resize_image,
+    everything else goes through cv_resize_image (with skimage / pure-Python fallbacks).
+    :param image: numpy array (HWC) | CHW torch tensor | list-of-lists fallback.
+    :param scale: scalar (uniform scale) or (height, width) tuple.
+    :param interp: 'auto','nearest','bilinear','bicubic','cubic'. Numpy: all supported.
+                   Torch: see torch_resize_image (adds 'area', 'nearest-exact').
+    :return: resized image, same type/layout as input.
     """
     if interp=='auto': interp='bilinear'
     assert interp in {'nearest','bilinear','bicubic'}
     if scale == 1:
         return image
-    
+
+    # Torch path: route to torch_resize_image (rp convention is CHW torch images)
+    if is_torch_image(image):
+        return torch_resize_image(image, scale, interp=interp)
+
     # Try fast OpenCV first
     try:
         return cv_resize_image(image, scale, interp)
     except Exception:
         pass
-    
+
     # Fall back to skimage
     try:
         return _resize_image_via_skimage(image, scale, interp)
     except Exception:
         pass
-    
+
     # Last resort - pure Python (slowest)
     if is_number(scale):
         return grid2d(int(len(image) * scale),int(len(image[0]) * scale),lambda x,y:image[int(x / scale)][int(y / scale)])
@@ -23226,6 +23302,10 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
     title = title + ": "
     shown_done = False
     style = 'invert'
+    # High-water marks so the visible bar and ETR never regress when TOTAL_TO_COMPLETE
+    # grows mid-flight (e.g. another thread attaches to a shared eta).
+    max_bar_proportion = 0.0
+    max_eta_proportion = 0.0
 
     def fansi_progress(string, proportion):
         """ Used to show a progress bar under the ETA text! """
@@ -23259,6 +23339,8 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
     def display_eta(proportion_for_eta,time_elapsed_in_seconds,TOTAL_TO_COMPLETE,COMPLETED_SO_FAR):
         nonlocal interval_timer
         nonlocal shown_done
+        nonlocal max_bar_proportion
+        nonlocal max_eta_proportion
 
         done = COMPLETED_SO_FAR >= TOTAL_TO_COMPLETE
 
@@ -23282,6 +23364,20 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
 
             # Visual progress bar shows actual completion
             proportion_for_bar = COMPLETED_SO_FAR / TOTAL_TO_COMPLETE if TOTAL_TO_COMPLETE > 0 else 1.0
+
+            # Hold the bar and the ETA estimate at their high-water marks. When a
+            # shared eta's TOTAL_TO_COMPLETE grows (a new thread attaches), the raw
+            # proportion drops and the bar would visibly recede; clamping to the
+            # max keeps the display monotone. The Progress N/M string and the rate
+            # still reflect the real, current values.
+            if proportion_for_bar > max_bar_proportion:
+                max_bar_proportion = proportion_for_bar
+            else:
+                proportion_for_bar = max_bar_proportion
+            if proportion_for_eta > max_eta_proportion:
+                max_eta_proportion = proportion_for_eta
+            else:
+                proportion_for_eta = max_eta_proportion
 
             if proportion_for_eta <= 0:
                 return _print_status(
@@ -52160,8 +52256,17 @@ def mount_s3_via_rclone(
     cache_dir=None,
     cache_max_size="64G",
     cache_max_age="24h",
-    read_ahead="256M",
-    dir_cache_time="24h"
+    read_ahead="2G",
+    dir_cache_time="24h",
+    buffer_size="128M",
+    s3_chunk_size="64M",
+    transfers=64,
+    vfs_read_chunk_size="4M",
+    vfs_read_chunk_streams=16,
+    attr_timeout="10m",
+    no_checksum=True,
+    fast_fingerprint=True,
+    max_buffer_memory=None
 ):
     """
     Mount an S3 URL as a local filesystem via rclone + FUSE.
@@ -52176,8 +52281,55 @@ def mount_s3_via_rclone(
         cache_dir=None   use {tempfile.gettempdir()}/rclone-cache
 
     Cache flags (cache_max_size / cache_max_age / read_ahead /
-    dir_cache_time) are passed verbatim to rclone, which has its own
-    size/duration parser.
+    dir_cache_time / attr_timeout) are passed verbatim to rclone, which
+    has its own size/duration parser.
+
+    Throughput defaults are tuned for a fat pipe + plenty of RAM (64 GiB+),
+    and try to serve both "giant sequential file" and "tons of small files"
+    workloads from ONE config. Small files self-tune: rclone caps streams at
+    `ceil(size / vfs_read_chunk_size)`, so anything smaller than one chunk
+    only ever spawns 1 stream regardless of vfs_read_chunk_streams. The
+    async-reader buffer is likewise skipped for files <1 MiB. So the same
+    aggressive numbers are cheap for small files and fast for large ones.
+
+        read_ahead=2G              per-open-file sequential prefetch; pure
+                                   win on big files, no-op on small ones
+                                   (clipped at EOF)
+        buffer_size=128M           per-open-file async-reader cap; lazy,
+                                   skipped under 1 MiB, so free on small
+                                   files
+        s3_chunk_size=64M          multipart upload chunk -> ~640 GiB single
+                                   file upload ceiling (5 MiB default caps
+                                   at 48 GiB through a mount)
+        transfers=64               parallel workers across DIFFERENT files;
+                                   matters for many-small-file concurrency,
+                                   harmless for big-file streams
+        vfs_read_chunk_size=4M     ncw's canonical S3 value (forum/t/47677).
+                                   Doubles as the small/big threshold:
+                                   files <4 MiB get the auto-1-stream path
+        vfs_read_chunk_streams=16  parallel HTTP streams per big file;
+                                   ~16 * vfs_read_chunk_size = 64 MiB
+                                   pipelined per open big file.
+                                   Requires rclone >= 1.68.
+        attr_timeout=10m           kernel stat() cache. NOTE: assumes the
+                                   bucket is immutable or near-immutable.
+                                   On a mutable bucket, stale reads up to
+                                   10m are possible -- drop this to 1s if
+                                   that's a concern.
+        no_checksum=True           skip MD5 verification (3-4x reported
+                                   speedup on small-file reads)
+        fast_fingerprint=True      --vfs-fast-fingerprint; cheap fingerprint
+                                   for VFS-cache-over-S3
+        max_buffer_memory=None     global cap on TOTAL buffer RAM across all
+                                   open files. None = unlimited. Set e.g.
+                                   "32G" as a safety net if you expect many
+                                   concurrent big-file opens. Requires
+                                   rclone >= 1.70.
+
+    Worst-case per open big file: streams*chunk_size + read_ahead
+    = 16*4M + 2G ~= 2.1 GiB. Worst-case per open small file: ~0.
+    Recommended rclone: >=1.73.1 (avoids a v1.70 pacer/max-connections
+    deadlock).
 
     >>> mount_s3_via_rclone('http://not-s3', '/tmp/x')
     Traceback (most recent call last):
@@ -52226,7 +52378,13 @@ def mount_s3_via_rclone(
     if cache_dir is None:
         cache_dir = os.path.join(tempfile.gettempdir(), "rclone-cache")
 
-    extra = ("--read-only " if read_only else "") + ("--daemon " if daemon else "")
+    extra = (
+        ("--read-only " if read_only else "")
+        + ("--daemon " if daemon else "")
+        + ("--no-checksum " if no_checksum else "")
+        + ("--vfs-fast-fingerprint " if fast_fingerprint else "")
+        + (("--max-buffer-memory %s " % q(max_buffer_memory)) if max_buffer_memory else "")
+    )
     # double-quote: q() once for the umount line, q() again so trap sees one arg
     unmount_command = "sudo umount -l " + q(mount_point)
     cleanup = "" if daemon else ("trap %s EXIT" % q(unmount_command))
@@ -52242,6 +52400,11 @@ def mount_s3_via_rclone(
              --vfs-cache-mode full --cache-dir %(cache_dir)s \\
              --vfs-cache-max-size %(cache_max_size)s --vfs-cache-max-age %(cache_max_age)s \\
              --vfs-read-ahead %(read_ahead)s --dir-cache-time %(dir_cache_time)s \\
+             --buffer-size %(buffer_size)s --s3-chunk-size %(s3_chunk_size)s \\
+             --transfers %(transfers)s \\
+             --vfs-read-chunk-size %(vfs_read_chunk_size)s \\
+             --vfs-read-chunk-streams %(vfs_read_chunk_streams)s \\
+             --attr-timeout %(attr_timeout)s \\
              --use-server-modtime -v --stats 10s %(extra)s
      """ % {
         "mount": q(mount_point),
@@ -52254,6 +52417,12 @@ def mount_s3_via_rclone(
         "cache_max_age": q(cache_max_age),
         "read_ahead": q(read_ahead),
         "dir_cache_time": q(dir_cache_time),
+        "buffer_size": q(buffer_size),
+        "s3_chunk_size": q(s3_chunk_size),
+        "transfers": q(str(transfers)),
+        "vfs_read_chunk_size": q(vfs_read_chunk_size),
+        "vfs_read_chunk_streams": q(str(vfs_read_chunk_streams)),
+        "attr_timeout": q(attr_timeout),
         "extra": extra,
     }
 
@@ -55079,6 +55248,79 @@ def _ensure_ffmpeg_installed():
         elif currently_running_linux  (): assert False, "Please install ffmpeg! >>> sudo apt install ffmpeg"
         elif currently_running_mac    (): assert False, "Please install ffmpeg! >>> brew install ffmpeg #get brew at https://brew.sh"
         else:                             assert False, "Please install ffmpeg!"
+
+
+# Cross-codec ffmpeg helpers shared by rp.libs.exr_to_mp4 and (eventually)
+# rp.save_video_mp4's ffmpeg-backed paths. The `ffmpeg`-named identifiers keep
+# them grep-able amid rp's larger function namespace.
+
+@memoized
+def get_available_ffmpeg_codecs():
+    """
+    Query (memoized). Set of video-encoder names the local ffmpeg binary
+    exposes — i.e. what `ffmpeg -encoders` lists with a leading 'V'. Lets
+    callers fail fast on `codec="hevc_nvenc"` etc. when the local build
+    doesn't ship that encoder, instead of waiting for ffmpeg to complain
+    mid-encode. Memoization means one ~50 ms shell-out per Python process.
+
+    Usage:
+        if codec not in get_available_ffmpeg_codecs():
+            raise ValueError(...)
+
+    Examples:
+        >>> # 'libx264' in get_available_ffmpeg_codecs()        # almost always True
+        >>> # 'hevc_nvenc' in get_available_ffmpeg_codecs()     # only on NVIDIA boxes
+    """
+    import subprocess
+    result = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-encoders"],
+        capture_output=True, text=True, check=True,
+    )
+    encoders = set()
+    # Lines look like: " V..... libx264              libx264 H.264 ..."
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if line.startswith("V"):
+            parts = line.split(None, 2)
+            if len(parts) >= 2:
+                encoders.add(parts[1])
+    return encoders
+
+
+def _ffmpeg_quality_flags(codec, crf):
+    """
+    Pure. Translate a user-facing `crf` (the 'lower=better' 0..63 scale familiar
+    from libx264/libx265/libaom-av1/libsvtav1) into the ffmpeg argv tokens
+    that `codec` actually understands. Lets one `crf=N` argument drive both CPU
+    encoders (which take -crf) and GPU encoders (NVENC takes -cq with -rc vbr;
+    VideoToolbox takes -q:v on an inverted 1..100 scale).
+
+    Returns the list of ffmpeg argv tokens to splice in where `-crf <n>` would go.
+
+    Examples:
+        >>> _ffmpeg_quality_flags("libx265", 20)
+        ['-crf', '20']
+        >>> _ffmpeg_quality_flags("hevc_nvenc", 20)
+        ['-rc', 'vbr', '-cq', '20']
+        >>> _ffmpeg_quality_flags("hevc_videotoolbox", 20)   # 100 - 2*20 = 60
+        ['-q:v', '60']
+        >>> _ffmpeg_quality_flags("hevc_videotoolbox", 51)   # clamped to >= 1
+        ['-q:v', '1']
+    """
+    n = int(crf)
+    if codec.endswith("_nvenc"):
+        # NVENC: -cq uses the same 0..51 scale as -crf, but needs -rc vbr (or
+        # constqp) for the value to drive quality. vbr is the modern default
+        # and gives the best size/quality tradeoff.
+        return ["-rc", "vbr", "-cq", str(n)]
+    if codec.endswith("_videotoolbox"):
+        # VideoToolbox: -q:v is 1..100, higher=better. Linearly invert from the
+        # CRF scale (lower=better). crf=20 → q=60, crf=23 → q=54, crf=30 → q=40 —
+        # all close to the "looks good" zone for HEVC/H.264 on Apple Silicon.
+        q = max(1, min(100, 100 - 2 * n))
+        return ["-q:v", str(q)]
+    # libx264 / libx265 / libaom-av1 / libsvtav1 / most other ffmpeg encoders.
+    return ["-crf", str(n)]
 
 @_register_ensure_installed_func
 def _ensure_oiiotool_installed():
@@ -63106,6 +63348,40 @@ def accumulate_flows(*flows,reduce=True,reverse=False):
         assert False, 'All flows should be either torch tensors or all numpy arrays, not a mix of both.'
 
 
+def _resize_image_to_hold_scale(image_height, image_width, height, width, allow_shrink):
+    """
+    Pure. Compute the uniform scale factor that resizes an image
+    (image_height x image_width) so that the given bounding box (height x width)
+    fits entirely inside it, preserving aspect ratio.
+
+    Used by resize_image_to_hold; not for general use — its companion is
+    _resize_image_to_fit_scale (note the inverted comparison direction).
+
+    Either height or width may be None to leave that axis unconstrained.
+    If allow_shrink is False, the scale will never go below 1.
+
+    Returns:
+        float: scale > 0. May be 0 only when the caller has violated the
+        contract (both bounds None or both 0); callers assert > 0 afterward.
+
+    Examples:
+        >>> _resize_image_to_hold_scale(200, 300, height=100,  width=None, allow_shrink=True)  # → 0.5
+        0.5
+        >>> _resize_image_to_hold_scale(200, 300, height=1000, width=None, allow_shrink=True)  # → 5.0
+        5.0
+        >>> _resize_image_to_hold_scale(200, 300, height=None, width=100,  allow_shrink=False) # → 1.0
+        1.0
+    """
+    scale = 0
+    if height is not None and height > image_height * scale:
+        scale = height / image_height
+    if width is not None and width > image_width * scale:
+        scale = width / image_width
+    if not allow_shrink and scale < 1:
+        scale = 1
+    return scale
+
+
 def resize_image_to_hold(image, height: int = None, width: int = None, interp='auto', *, allow_shrink=True, alpha_weighted=False):
     """
     Resizes an image so that the specified bounding box can fit entirely inside the image, while maintaining the
@@ -63114,16 +63390,16 @@ def resize_image_to_hold(image, height: int = None, width: int = None, interp='a
 
     Also see this function's sister: rp.resize_image_to_fit
 
-    :param image: The input image to be resized.
+    :param image: The input image to be resized. Accepts numpy (HWC) or CHW torch tensors.
     :param height: The height of the bounding box (default is None).
     :param width: The width of the bounding box (default is None).
     :param interp: Interpolation method to be used while resizing (default is 'auto').
     :param allow_shrink: A boolean flag that determines if the image can be shrunk (default is True).
-    :return: The resized image with the specified dimensions fitting inside.
-    
+    :return: The resized image with the specified dimensions fitting inside. Same type/layout as input.
+
     EXAMPLES:
         im=uniform_float_color_image(height=200,width=300,color=(0,0,0))
-        assert resize_image_to_hold(im, height=100 ,width=None,allow_shrink=True ).shape == ( 100,  150, 3) 
+        assert resize_image_to_hold(im, height=100 ,width=None,allow_shrink=True ).shape == ( 100,  150, 3)
         assert resize_image_to_hold(im, height=100 ,width=100 ,allow_shrink=True ).shape == ( 100,  150, 3)
         assert resize_image_to_hold(im, height=None,width=100 ,allow_shrink=True ).shape == (  67,  100, 3)
         assert resize_image_to_hold(im, height=None,width=100 ,allow_shrink=False).shape == ( 200,  300, 3)
@@ -63133,6 +63409,22 @@ def resize_image_to_hold(image, height: int = None, width: int = None, interp='a
         assert resize_image_to_hold(im, height=1000,width=None,allow_shrink=True ).shape == (1000, 1500, 3)
         assert resize_image_to_hold(im, height=1000,width=None,allow_shrink=False).shape == (1000, 1500, 3)
     """
+    # Both paths share the same scale math via _resize_image_to_hold_scale;
+    # the only divergence is the resize backend (torch vs cv2) and copy idiom.
+    if is_torch_image(image):
+        if alpha_weighted:
+            raise NotImplementedError("alpha_weighted not supported for torch input; convert to numpy first")
+        assert height is not None or width is not None
+        if allow_shrink:
+            assert height or width, ('If allow_shrink is True, at least one dimension must be nonzero. '
+                                     'Scaling an image to a factor of 0 is not allowed.')
+        image_height, image_width = rp.get_image_dimensions(image)
+        if height is None and width is None:
+            return image.clone()
+        scale = _resize_image_to_hold_scale(image_height, image_width, height, width, allow_shrink)
+        assert scale > 0, 'Invalid arguments resulted in a scale of 0.'
+        return torch_resize_image(image, scale, interp=interp)
+
     assert rp.is_image(image)
     assert height is not None or width is not None
     image = as_numpy_image(image,copy=False)
@@ -63146,19 +63438,48 @@ def resize_image_to_hold(image, height: int = None, width: int = None, interp='a
     if height is None and width is None:
         return image + 0  # Return an unmodified copy
 
-    scale = 0
-    if height is not None and height > image_height * scale:
-        scale = height / image_height
-
-    if width is not None and width > image_width * scale:
-        scale = width / image_width
-
-    if not allow_shrink and scale < 1:
-        scale = 1
+    scale = _resize_image_to_hold_scale(image_height, image_width, height, width, allow_shrink)
 
     assert scale > 0, 'Invalid arguments resulted in a scale of 0.'
 
     return rp.cv_resize_image(image, scale, interp=interp, alpha_weighted=alpha_weighted)
+
+def _resize_image_to_fit_scale(image_height, image_width, height, width, allow_growth):
+    """
+    Pure. Compute the uniform scale factor that resizes an image
+    (image_height x image_width) so that it fits inside the given bounding
+    box (height x width), preserving aspect ratio.
+
+    Used by resize_image_to_fit; not for general use — its companion is
+    _resize_image_to_hold_scale (note the inverted comparison direction).
+
+    Either height or width may be None to leave that axis unconstrained
+    (treated internally as 999999, effectively infinity).
+    If allow_growth is False, the scale will never exceed 1.
+
+    Returns:
+        float: scale > 0. The caller is expected to handle the both-None
+        early-return before reaching this helper.
+
+    Examples:
+        >>> _resize_image_to_fit_scale(200, 300, height=720,  width=720,  allow_growth=True)  # → 2.4
+        2.4
+        >>> _resize_image_to_fit_scale(200, 300, height=100,  width=None, allow_growth=True)  # → 0.5
+        0.5
+        >>> _resize_image_to_fit_scale(200, 300, height=None, width=1000, allow_growth=False) # → 1
+        1
+    """
+    if height is None:
+        height = 999999
+    if width is None:
+        width = 999999
+    scale = 999999 if allow_growth else 1
+    if height < image_height * scale:
+        scale = height / image_height
+    if width < image_width * scale:
+        scale = width / image_width
+    return scale
+
 
 def resize_image_to_fit(
     image,
@@ -63170,14 +63491,26 @@ def resize_image_to_fit(
     alpha_weighted=False
 ):
     """
-    Scale image on both axes evenly to fit in this bounding box
-    If not allow_growth, it won't modify the image if height and width are larger than the input image
+    Scale image on both axes evenly to fit in this bounding box.
+    If not allow_growth, it won't modify the image if height and width are larger than the input image.
+    Accepts numpy (HWC) or CHW torch tensors; returns the same type/layout.
     """
     #TODO: Make height or width optional (done), make cv_resize_image interchangeable with resize_image (todo)
-    
+
+    # Both paths share the same scale math via _resize_image_to_fit_scale;
+    # the only divergence is the resize backend (torch vs cv2) and copy idiom.
+    if is_torch_image(image):
+        if alpha_weighted:
+            raise NotImplementedError("alpha_weighted not supported for torch input; convert to numpy first")
+        if height is None and width is None:
+            return image.clone()
+        assert height is not None or width is not None
+        image_height, image_width = rp.get_image_dimensions(image)
+        scale = _resize_image_to_fit_scale(image_height, image_width, height, width, allow_growth)
+        return torch_resize_image(image, scale, interp=interp)
+
     assert rp.is_image(image)
     image_height, image_width = rp.get_image_dimensions(image)
-    scale = 1
 
     image = as_numpy_image(image,copy=False)
 
@@ -63185,20 +63518,9 @@ def resize_image_to_fit(
     if height is None and width is None:
         return image+0 #Return an unmodified copy
     assert height is not None or width is not None
-    if height is None:
-        height = 999999
-    if width is None:
-        width = 999999
-    
-    if allow_growth:
-        scale = 999999 #It will be decreased...
-    
-    if height < image_height * scale:
-        scale = height / image_height
-        
-    if width < image_width * scale:
-        scale = width / image_width
-        
+
+    scale = _resize_image_to_fit_scale(image_height, image_width, height, width, allow_growth)
+
     return rp.cv_resize_image(image, scale, interp=interp, alpha_weighted=alpha_weighted)
 
 def resize_images_to_hold(

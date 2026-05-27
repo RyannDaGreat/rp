@@ -1,7 +1,20 @@
 # https://gist.github.com/SqrtRyan/719c46b275db344ec4bd9f1bcc82945c
+#
+# GPU-resident proof-of-concept rewrite. All per-frame compute lives on `device`
+# (cuda / mps / cpu — selectable via the `device` kwarg). The only data crossing
+# the CPU/GPU boundary per frame is one upload (OIIO decode -> tensor) and one
+# download (uint16 tensor -> ffmpeg stdin bytes). No ping-pong.
+#
+# OCIO is called exactly once, at startup, to bake a log2-shaper + 65^3 3D LUT.
+# Per frame the color transform is a torch grid_sample trilinear interpolation —
+# OCIO is never on the hot path.
 
 import glob
+import json
+import os
+import shlex
 import subprocess
+import tempfile
 import threading
 import time
 from functools import partial
@@ -13,20 +26,27 @@ import rp
 OCIO_CONFIG = "studio-config-v4.0.0_aces-v2.0_ocio-v2.5"
 DST_DISPLAY = "Rec.1886 Rec.709 - Display"          # output is locked to Rec.709 SDR
 DST_VIEW = "ACES 2.0 - SDR 100 nits (Rec.709)"
-PRINT_STYLE = "bold orange"                          # used for every line we emit via console_print
+PRINT_STYLE = "bold orange"
+
+# log2 input domain covered by the 3D LUT. 2^-10 .. 2^+10 in scene-linear
+# brackets ACES-style HDR comfortably (~1e-3 to ~1e3).
+LUT3D_SIZE = 65
+SHAPER_LOG2_MIN = -10.0
+SHAPER_LOG2_MAX = +10.0
+
+# Serializes GPU work across decode worker threads. Decode (OIIO, GIL-released)
+# runs in parallel; the GPU stage is a serial funnel — that's fine because the
+# GPU work per frame is tiny compared to OIIO decode + ffmpeg encode, and we
+# avoid concurrent stream chaos for the PoC.
+_gpu_lock = threading.Lock()
 
 
 def console_print(text):
-    # Wrapper around rp.fansi_print so the rp attribute lookup is deferred to call time
-    # (a module-level `partial(rp.fansi_print, ...)` would break when this file is imported
-    # mid-load by rp.r — `rp.fansi_print` may not exist yet at that point).
     rp.fansi_print(text, text_color=PRINT_STYLE)
-
-_thread_state = threading.local()
 
 
 def _read_header(path):
-    """Read framesPerSecond and PixelAspectRatio from an EXR header (defaults: 24.0, 1.0)."""
+    """Query. Read framesPerSecond and PixelAspectRatio from an EXR header (defaults: 24.0, 1.0)."""
     import OpenImageIO as oiio
     inp = oiio.ImageInput.open(path)
     if inp is None:
@@ -42,29 +62,8 @@ def _read_header(path):
         inp.close()
 
 
-def _unsquash(image, pixel_aspect):
-    """Stretch image width by pixel_aspect so pixels become square. No-op for PAR == 1.0."""
-    if pixel_aspect == 1.0:
-        return image
-    import cv2
-    h, w = image.shape[:2]
-    return cv2.resize(image, (int(round(w * pixel_aspect)), h), interpolation=cv2.INTER_CUBIC)
-
-
-def _get_processor(src_colorspace):
-    # OCIO processor construction is expensive (~50ms); cache per worker thread, keyed by src_colorspace.
-    import PyOpenColorIO as ocio
-    cache = getattr(_thread_state, "processors", None)
-    if cache is None:
-        _thread_state.processors = cache = {}
-    if src_colorspace not in cache:
-        config = ocio.Config.CreateFromBuiltinConfig(OCIO_CONFIG)
-        transform = ocio.DisplayViewTransform(src=src_colorspace, display=DST_DISPLAY, view=DST_VIEW)
-        cache[src_colorspace] = config.getProcessor(transform).getDefaultCPUProcessor()
-    return cache[src_colorspace]
-
-
 def _read_image(path):
+    """Query. Reads an EXR as (H, W, C) float32 numpy."""
     import OpenImageIO as oiio
     inp = oiio.ImageInput.open(path)
     if inp is None:
@@ -78,27 +77,359 @@ def _read_image(path):
     return image
 
 
-def _process_frame(path, *, frame_transform, src_colorspace, pixel_aspect, out_h, out_w):
-    image = _read_image(path)
-    image = _unsquash(image, pixel_aspect)                 # anamorphic → square pixels, before any user transform
-    if frame_transform is not None:
-        image = frame_transform(image)
-    image = image[:out_h, :out_w]                          # crop to announced even dims if transform left odd
-    image = np.ascontiguousarray(image, dtype=np.float32)
-    _get_processor(src_colorspace).applyRGB(image)
-    image = np.clip(image, 0.0, 1.0)
-    return (image * 65535.0 + 0.5).astype("<u2", copy=False).tobytes()
+def _normalize_device_str(d):
+    """
+    Pure. Coerce one device value to a torch device string.
+
+    int -> 'cuda:N' (the obvious shorthand)
+    str -> as-is
+    Anything else raises TypeError.
+
+    Examples:
+        >>> _normalize_device_str(0)
+        'cuda:0'
+        >>> _normalize_device_str('cuda:1')
+        'cuda:1'
+        >>> _normalize_device_str('mps')
+        'mps'
+    """
+    if isinstance(d, bool):                                            # bool is a subclass of int — reject
+        raise TypeError("device cannot be a bool; got " + repr(d))
+    if isinstance(d, int):
+        return "cuda:" + str(d)
+    if isinstance(d, str):
+        return d
+    raise TypeError("device entries must be int, str, or list of those; got " + repr(type(d).__name__))
+
+
+def _normalize_device_list(device):
+    """
+    Query (touches torch for auto-detect). Coerce `device` to a list of fully
+    *indexed* torch device strings, so worker subprocesses never have to do
+    any resolution themselves.
+
+    None / 'auto' / 'cuda' -> all visible CUDA devices, else ['mps'], else ['cpu'].
+        Bare 'cuda' (no index) is ambiguous — treat it as auto-detect rather
+        than shipping an indexless string to workers.
+    int                        -> ['cuda:N']
+    str ('cuda:N' / 'mps' / 'cpu') -> [str]
+    list/tuple                 -> [_normalize_device_str(x) for x in list]
+
+    Examples:
+        >>> _normalize_device_list('cuda:2')
+        ['cuda:2']
+        >>> _normalize_device_list(3)
+        ['cuda:3']
+        >>> _normalize_device_list([0, 1, 2])
+        ['cuda:0', 'cuda:1', 'cuda:2']
+    """
+    if device is None or device == "auto" or device == "cuda":
+        import torch
+        if torch.cuda.is_available():
+            return ["cuda:" + str(i) for i in range(torch.cuda.device_count())]
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return ["mps"]
+        return ["cpu"]
+    if isinstance(device, (list, tuple)):
+        if not device:
+            raise ValueError("device list is empty")
+        return [_normalize_device_str(d) for d in device]
+    return [_normalize_device_str(device)]
+
+
+def _pick_device(device):
+    """
+    Query. Resolve a single device value (str/int/None) to a torch.device.
+    None picks cuda > mps > cpu. CUDA devices are always returned with an
+    explicit index (e.g. cuda:0 not bare cuda) because torch.cuda.set_device,
+    which our worker threads call, rejects an indexless 'cuda' device.
+    """
+    import torch
+    if device is None or device == "auto":
+        if torch.cuda.is_available():
+            return torch.device("cuda", torch.cuda.current_device())
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return torch.device("mps")
+        return torch.device("cpu")
+    d = torch.device(_normalize_device_str(device))
+    if d.type == "cuda" and d.index is None:
+        d = torch.device("cuda", torch.cuda.current_device())
+    return d
+
+
+def _bake_lut_3d(src_colorspace, device):
+    """
+    Command (calls OCIO once, allocates a device tensor). Build a 3D LUT tensor that
+    maps scene-linear `src_colorspace` -> Rec.709 SDR, with a log2 shaper on the
+    input axis covering 2^SHAPER_LOG2_MIN .. 2^SHAPER_LOG2_MAX scene-linear.
+
+    Returns:
+        lut_3d: (1, 3, N, N, N) float32 on `device`, where N=LUT3D_SIZE. Laid out
+        for torch.nn.functional.grid_sample as (N, C, D, H, W) with the LUT's
+        R-axis at W (last), G-axis at H, B-axis at D, so a grid coord of
+        (R, G, B) in [-1, 1] addresses the right cell.
+    """
+    import PyOpenColorIO as ocio
+    import torch
+
+    n = LUT3D_SIZE
+    axis = np.linspace(0.0, 1.0, n, dtype=np.float32)
+    # Shaper-space lattice: shaper_rgb[i,j,k] = (axis[i], axis[j], axis[k]) = (R, G, B) in [0, 1]
+    r, g, b = np.meshgrid(axis, axis, axis, indexing="ij")
+    shaper_rgb = np.stack([r, g, b], axis=-1)                          # (n, n, n, 3)
+    # Inverse log2 shaper: shaper [0,1] -> scene-linear
+    linear_rgb = np.power(
+        2.0, SHAPER_LOG2_MIN + shaper_rgb * (SHAPER_LOG2_MAX - SHAPER_LOG2_MIN)
+    ).astype(np.float32)
+    flat = np.ascontiguousarray(linear_rgb.reshape(-1, 3))
+    config = ocio.Config.CreateFromBuiltinConfig(OCIO_CONFIG)
+    transform = ocio.DisplayViewTransform(src=src_colorspace, display=DST_DISPLAY, view=DST_VIEW)
+    proc = config.getProcessor(transform).getDefaultCPUProcessor()
+    proc.applyRGB(flat)                                                # in-place, ~10ms for 65^3
+    out = flat.reshape(n, n, n, 3)                                     # (n_r, n_g, n_b, 3)
+    # Lay out for grid_sample: (n_r, n_g, n_b, 3) -> (1, 3, n_b, n_g, n_r) = (N, C, D, H, W)
+    from einops import rearrange
+    out_t = rearrange(torch.from_numpy(out), "n_r n_g n_b c -> 1 c n_b n_g n_r").contiguous()
+    return out_t.to(device)
+
+
+def _unsquash_gpu(t, pixel_aspect):
+    """
+    Pure (on device). Stretch (H, W, C) tensor width by `pixel_aspect` via bicubic.
+    No-op for pixel_aspect == 1.0.
+    """
+    if pixel_aspect == 1.0:
+        return t
+    import torch.nn.functional as F
+    from einops import rearrange
+    h, w = t.shape[:2]
+    new_w = int(round(w * pixel_aspect))
+    nchw = rearrange(t, "h w c -> 1 c h w")                            # F.interpolate wants NCHW
+    nchw = F.interpolate(nchw, size=(h, new_w), mode="bicubic", align_corners=False)
+    return rearrange(nchw, "1 c h w -> h w c").contiguous()
+
+
+def _color_transform_gpu(t, lut_3d):
+    """
+    Pure (on device). Apply log2 shaper + 3D LUT to (H, W, 3) scene-linear -> Rec.709 SDR.
+
+    Args:
+        t: (H, W, 3) float32 on device, scene-linear values
+        lut_3d: (1, 3, N, N, N) float32 on device, baked by `_bake_lut_3d`
+
+    Returns:
+        (H, W, 3) float32 on device, Rec.709 SDR (typically in [0, 1])
+    """
+    import torch
+    import torch.nn.functional as F
+    from einops import rearrange
+    eps = 2.0 ** SHAPER_LOG2_MIN
+    span = SHAPER_LOG2_MAX - SHAPER_LOG2_MIN
+    # log2 shaper: scene-linear -> [0, 1], still HWC
+    s = ((torch.log2(t.clamp_min(eps)) - SHAPER_LOG2_MIN) / span).clamp_(0.0, 1.0)
+    # grid_sample wants grid (N, D_out, H_out, W_out, 3) with last dim = (x, y, z) = (W, H, D) = (R, G, B)
+    grid = rearrange(s * 2.0 - 1.0, "h w c -> 1 1 h w c")
+    sampled = F.grid_sample(
+        lut_3d, grid, mode="bilinear", padding_mode="border", align_corners=True
+    )                                                                  # (1, 3, 1, H, W)
+    return rearrange(sampled, "1 c 1 h w -> h w c").contiguous()
+
+
+def _process_frame(path, *, frame_transform, pre_unsquash_frame_transform,
+                   pixel_aspect, out_h, out_w, clip, lut_3d, device):
+    """
+    Command. EXR file -> rgb48le bytes for ffmpeg stdin. All compute on `device`.
+
+    Pipeline (one upload, one download):
+        OIIO decode -> upload -> pre_unsquash_frame_transform -> unsquash (bicubic)
+        -> frame_transform -> crop -> log2 shaper -> 3D LUT -> clip -> quantize uint16
+        -> download -> tobytes
+    """
+    import torch
+
+    np_image = _read_image(path)                                       # (H, W, C) float32
+    t_cpu = torch.from_numpy(np_image)
+    if device.type == "cuda":
+        # PyTorch's "current CUDA device" is per-thread and defaults to cuda:0
+        # for every new worker thread that rp.load_files spawns. Even though
+        # .to(device) targets the right GPU, the thread's CUDA context (and
+        # any op that allocates without an explicit device) lands on cuda:0
+        # — which is why nvidia-smi showed work on 0 when device='cuda:2'.
+        # Pinning the current device for this thread fixes it.
+        torch.cuda.set_device(device)
+        t_cpu = t_cpu.pin_memory()
+
+    from einops import rearrange
+
+    with _gpu_lock:
+        t = t_cpu.to(device, non_blocking=True)                        # HWC, pipeline-internal layout
+
+        # User transforms receive CHW (rp convention for torch images); we
+        # rearrange in and out around each call so the pipeline's HWC internals
+        # don't leak to user code, and rp helpers like resize_image_to_fit
+        # drop in as a frame_transform with no wrapper.
+        if pre_unsquash_frame_transform is not None:
+            t = rearrange(pre_unsquash_frame_transform(rearrange(t, "h w c -> c h w")), "c h w -> h w c")
+
+        t = _unsquash_gpu(t, pixel_aspect)
+
+        if frame_transform is not None:
+            t = rearrange(frame_transform(rearrange(t, "h w c -> c h w")), "c h w -> h w c")
+
+        t = t[:out_h, :out_w]
+        if t.shape[-1] > 3:                                            # drop alpha if present
+            t = t[..., :3]
+        t = t.contiguous().float()
+
+        t = _color_transform_gpu(t, lut_3d)
+
+        if clip:
+            t.clamp_(0.0, 1.0)
+
+        t.mul_(65535.0).add_(0.5).clamp_(0.0, 65535.0)
+        quantized = t.to(torch.uint16)
+        result = quantized.cpu().numpy()
+
+    # Force little-endian for ffmpeg rgb48le. No-op view on LE hosts.
+    return result.astype("<u2", copy=False).tobytes()
+
+
+_FANOUT_FORWARDED_KWARGS = (
+    "src_colorspace", "num_threads", "buffer_limit", "codec", "crf", "preset",
+    "pix_fmt", "unsquash", "atomic", "clip", "fps", "overwrite", "show_progress",
+)
+
+
+def _fanout_exr_to_mp4(exr_paths, out_path, *, devices, num_shards, kwargs):
+    """
+    Command. Shard `exr_paths` into `num_shards` contiguous chunks, launch each
+    chunk as a subprocess pinned to one device via CUDA_VISIBLE_DEVICES, wait
+    for all to finish, then losslessly concat the shard mp4s into `out_path`
+    via `rp.concat_video_files`. The bash command for each shard is printed
+    before launch so the user can audit what's about to run.
+
+    Each shard's EXR list is written to a temp .txt file; the subprocess loads
+    it via `rp.load_file_lines(...)` — so non-globbable lists work fine.
+
+    Forwarded kwargs: see `_FANOUT_FORWARDED_KWARGS`. Not supported in fanout
+    mode: `frame_transform`, `pre_unsquash_frame_transform` (can't serialize
+    Python callables across processes), `ffmpeg_extra_args` (use single-shard).
+    """
+    if num_shards is None or num_shards < 1:
+        raise ValueError("num_shards must be >= 1")
+    if not devices:
+        devices = ["cuda"]
+    if kwargs.get("ffmpeg_extra_args"):
+        raise ValueError("ffmpeg_extra_args not supported in fanout mode (run single-shard for codec-specific tuning)")
+
+    # Resolve exr_paths into a concrete list (mirrors the single-shard branch).
+    if isinstance(exr_paths, str):
+        if rp.is_a_folder(exr_paths):
+            exr_paths = rp.get_all_paths(exr_paths, file_extension_filter="exr", sort_by="number")
+        else:
+            exr_paths = rp.sorted_by_number(glob.glob(exr_paths))
+    exr_paths = list(exr_paths)
+    if not exr_paths:
+        raise ValueError("exr_paths is empty")
+    num_shards = min(num_shards, len(exr_paths))
+
+    rp.make_parent_directory(out_path)
+
+    # One scratch directory for the whole fanout, prefixed for greppability.
+    # All shard listfiles, shard mp4s, and the callable .rpo blobs live in
+    # here with legible names — easier to debug than 16 anonymous /tmp/tmpXXXX
+    # paths scattered across the system tempdir.
+    tmp_dir = tempfile.mkdtemp(prefix="exr_to_mp4_")
+    pad = len(str(num_shards - 1))                                     # 16 shards -> 2-digit zero-pad
+
+    shards = rp.split_into_n_sublists(exr_paths, num_shards)
+    shard_listfiles = [os.path.join(tmp_dir, "shard_" + str(i).zfill(pad) + "_frames.txt") for i in range(num_shards)]
+    shard_outputs   = [os.path.join(tmp_dir, "shard_" + str(i).zfill(pad) + ".mp4")        for i in range(num_shards)]
+    for listfile, shard in zip(shard_listfiles, shards):
+        rp.string_to_text_file(listfile, "\n".join(shard))
+
+    # `rp call` parses `--kwarg value` by evaluating value as Python and
+    # `---kwarg value` by treating it as a literal string. Strings whose value
+    # *parses* as Python (e.g. 'ACES2065-1' → `ACES2065 - 1` → NameError) must
+    # use `---`. Bools/ints/floats want `--` so 'True'/'20' become real values.
+    def _flag(name, val):
+        return ["---" + name if isinstance(val, str) else "--" + name, str(val)]
+
+    forwarded = []
+    for name in _FANOUT_FORWARDED_KWARGS:
+        if name in kwargs and kwargs[name] is not None:
+            forwarded.extend(_flag(name, kwargs[name]))
+
+    # Callable kwargs (frame_transform, pre_unsquash_frame_transform) are
+    # serialized to one shared .rpo file per kwarg (rp's "RP Object" format,
+    # dill-based, the same thing object_to_file / file_to_object / omni_save /
+    # omni_load all use). Forwarded as the Python expression
+    # `file_to_object(".../frame_transform.rpo")` — rp call evaluates the expr
+    # at startup and the child receives a real callable, no API change inside
+    # exr_to_mp4. Lives in tmp_dir so it's deleted by the same cleanup.
+    for name in ("frame_transform", "pre_unsquash_frame_transform"):
+        val = kwargs.get(name)
+        if val is not None:
+            rpo = os.path.join(tmp_dir, name + ".rpo")
+            rp.object_to_file(val, rpo)
+            forwarded.extend(["--" + name, "file_to_object(" + json.dumps(rpo) + ")"])
+
+    # First positional is exr_paths, given as a Python expression that rp call
+    # will eval — `load_file_lines("/tmp/x.txt")`. The path is rendered with
+    # json.dumps so it stays in double quotes; the whole expr then survives
+    # bash's outer single-quote wrap without any apostrophe escaping.
+    plans = []
+    for i, (listfile, shard_out) in enumerate(zip(shard_listfiles, shard_outputs)):
+        device_str = devices[i % len(devices)]
+        cmd = ["rp", "call", "exr_to_mp4",
+               "load_file_lines(" + json.dumps(listfile) + ")",
+               "---", shard_out,
+               *_flag("device", device_str),
+               *forwarded]
+        plans.append(cmd)
+
+    # Format the whole fanout as one bash script (copy-pasteable, ending with `wait`).
+    script_lines = [
+        "# exr_to_mp4 fanout: " + str(num_shards) + " shards across "
+        + str(len(devices)) + " device(s) -> " + shlex.quote(out_path),
+    ]
+    for cmd in plans:
+        script_lines.append(" ".join(shlex.quote(x) for x in cmd) + " &")
+    script_lines.append("wait")
+    rp.display_code_cell("\n".join(script_lines), language="bash", title="exr_to_mp4 fanout")
+
+    started = time.perf_counter()
+    # stdin=DEVNULL: launching from an interactive `rp` REPL leaves the
+    # subprocesses sharing the parent's controlling tty. The first one to
+    # touch stdin gets SIGTTIN and suspends, hanging the whole fanout. The
+    # hand-pasted bash version doesn't hit this because `cmd &` in interactive
+    # bash detaches stdin per backgrounded job.
+    procs = [subprocess.Popen(c, stdin=subprocess.DEVNULL) for c in plans]
+    fails = []
+    try:
+        for i, p in enumerate(procs):
+            rc = p.wait()
+            if rc != 0:
+                fails.append((i, rc))
+        if fails:
+            raise RuntimeError("exr_to_mp4 fanout: shards failed " + repr(fails))
+        rp.concat_video_files(shard_outputs, out_path)
+    finally:
+        rp.delete_folder(tmp_dir, recursive=True, strict=False)
+    elapsed = time.perf_counter() - started
+    console_print("exr_to_mp4 fanout done in " + str(round(elapsed, 3)) + "s -> " + out_path)
+    return out_path
 
 
 def _ffmpeg_command(out_path, fps, out_w, out_h, *, codec, crf, preset, pix_fmt, extra_args):
-    # Color metadata is locked to Rec.709 SDR / bt709 / TV-range to match the OCIO output.
     return [
         "ffmpeg", "-hide_banner", "-nostats", "-y",
         "-f", "rawvideo", "-pix_fmt", "rgb48le",
         "-s", str(out_w) + "x" + str(out_h), "-r", str(fps),
         "-i", "-",
         "-vf", "format=" + pix_fmt,
-        "-c:v", codec, "-preset", preset, "-crf", str(crf),
+        "-c:v", codec, "-preset", preset,
+        *rp.r._ffmpeg_quality_flags(codec, crf),
         *extra_args,
         "-color_primaries", "bt709", "-color_trc", "bt709",
         "-colorspace", "bt709", "-color_range", "tv",
@@ -111,198 +442,217 @@ def exr_to_mp4(
     exr_paths,
     out_path,
     *,
-    frame_transform=None,           # callable(HWC float) -> HWC float; None = identity (no resize/flip/crop)
-    overwrite=True,                 # if False, raise FileExistsError when out_path already exists instead of clobbering it
-    fps=None,                       # None = use EXR header's framesPerSecond (fallback 24); pass a float to override
-    src_colorspace="ACES2065-1",    # OCIO source; output is locked to Rec.709 SDR
-    num_threads=10,                 # parallel EXR reader / OCIO worker threads
-    buffer_limit=None,              # max in-flight frames; None = num_threads (rp default)
-    show_progress=True,             # True = "eta:exr to mp4" bar; False = silent; or pass any rp.load_files-style str ("eta:My Title", "tqdm")
-    codec="libx264",                # ffmpeg encoder: libx264, libx265, libsvtav1, libaom-av1, ...
-    crf=20,                         # quality, lower = better/larger. x264/265 ~20, AV1 ~30
-    preset="ultrafast",             # speed/quality. x264/265 ultrafast..veryslow; svtav1 "0".."13"
-    pix_fmt="yuv420p10le",          # output pixel format; drives bit depth & chroma (yuv420p / yuv420p10le / yuv420p12le / yuv444p10le ...)
-    ffmpeg_extra_args=(),           # extra ffmpeg flags for codec-specific tuning, e.g. ("-svtav1-params", "tune=0:film-grain=8")
-    unsquash=True                   # custom flag (see docstring): undo anamorphic squash from EXR's PixelAspectRatio header. No-op for square-pixel EXRs.
+    device=None,                    # int (cuda:N) | str ('cuda', 'mps', 'cpu', 'cuda:N') | list of those | None=auto.
+                                    # A list (or len>1 after normalizing) triggers fanout: each shard pinned to one device
+                                    # via CUDA_VISIBLE_DEVICES, round-robined across the list.
+    num_shards=None,                # number of shards. Defaults to len(device list).
+                                    # If < len(device list), only the first num_shards devices are used.
+                                    # If > len(device list), devices are round-robined (multi-shard per GPU).
+                                    # If > frame count, clamped down to frame count (one shard per frame).
+    frame_transform=None,           # callable(CHW float32 tensor on device) -> same. None = identity. CHW matches rp convention; the pipeline's HWC internals are wrapped around the call.
+    overwrite=True,
+    fps=None,
+    src_colorspace="ACES2065-1",
+    num_threads=8,
+    buffer_limit=None,
+    show_progress=True,
+    codec="libx264",
+    crf=20,
+    preset="ultrafast",
+    pix_fmt="yuv420p10le",
+    ffmpeg_extra_args=(),
+    unsquash=True,
+    atomic=False,
+    clip=True,
+    pre_unsquash_frame_transform=None
 ):
     """
-    Convert a sequence of EXR frames to an MP4. EXRs are tone-mapped from
-    `src_colorspace` to Rec.709 SDR via OCIO (using the ACES 2.0 SDR view),
-    then piped raw to ffmpeg for encoding. Output color metadata is locked to
-    Rec.709 / bt709 / TV-range so players interpret the pixels correctly.
+    Convert a sequence of EXR frames to MP4 with a fully torch-resident pipeline.
+
+    Color transform (`src_colorspace` -> Rec.709 SDR via the ACES 2.0 SDR view) is
+    baked into a 65^3 3D LUT + log2 shaper at startup. Per frame everything runs
+    on `device`: unsquash (bicubic), `pre_unsquash_frame_transform`,
+    `frame_transform`, color transform, clip, uint16 quantize. Exactly one
+    CPU->device upload (OIIO decode) and one device->CPU download (-> ffmpeg
+    rgb48le bytes) per frame.
+
+    `frame_transform` / `pre_unsquash_frame_transform` contract — strict:
+
+        Input  : torch.Tensor, shape (C, H, W), dtype float32, on `device`.
+                 Layout is CHW — matches rp's convention for torch images
+                 (`rp.is_torch_image`, `rp.torch_resize_image`, etc), so
+                 numpy-free rp helpers drop in as a frame_transform with no
+                 wrapper. The pipeline's internal layout is HWC; we rearrange
+                 to CHW around your call so you never see HWC. C is typically
+                 3 (RGB) but may be 4 if the source EXR has alpha (alpha is
+                 dropped after this transform). Values are scene-linear in
+                 `src_colorspace` (e.g. ACES2065-1) — HDR, unbounded above;
+                 expect highlights well above 1.0. The OCIO tonemap to
+                 Rec.709 [0,1] runs AFTER `frame_transform`.
+
+        Output : same — torch.Tensor, (C, H', W'), float32, on `device`,
+                 CHW, scene-linear. No silent conversion; numpy returns,
+                 wrong-device tensors, or non-float dtypes will crash the
+                 next stage. If you need numpy ops, wrap them yourself.
+
+        `pre_unsquash_frame_transform` is the same shape and dtype but
+        runs BEFORE the anamorphic unsquash — pixels may be non-square if
+        the EXR's PixelAspectRatio != 1.
 
     Performance:
-        EXR reads + OCIO transforms run in parallel across `num_threads`
-        Python threads (the GIL is released during EXR disk I/O and the
-        C-implemented OCIO `applyRGB` call). Encoded frames stream lazily
-        into ffmpeg's stdin as raw rgb48le bytes; ffmpeg runs as a separate
-        OS process with its own internal codec threading.
-
-        There is no Python-side wrapper around the encoder — no PyAV, no
-        imageio-ffmpeg, no cv2.VideoWriter — so the only data crossing the
-        Python ↔ ffmpeg boundary is the raw pixel buffer through an OS pipe.
-        That gives three independent parallelism layers (disk read fan-out,
-        OCIO compute, codec encode) running concurrently, and throughput is
-        bounded by whichever of disk-bandwidth / OCIO-CPU / encoder-CPU
-        saturates first rather than by interpreter overhead.
-
-        Requires the `ffmpeg` binary on the system PATH
-        (e.g. `brew install ffmpeg` / `apt install ffmpeg`).
+        - OIIO decode runs in parallel across `num_threads` (GIL-released in C++).
+        - GPU stage is serialized by a module-level lock (one frame on GPU at a time).
+          The lock is fine — GPU work per frame is far smaller than decode + encode.
+        - ffmpeg encodes as a separate OS process.
 
     Args:
-        exr_paths: The EXR sequence to convert. Accepts:
-            - a list of EXR file path strings (used as-is, in order)
-            - a folder path string (all .exr files inside, sorted by frame
-              number)
-            - a glob pattern string (expanded, sorted by frame number)
-        out_path: Output .mp4 file path. The parent directory is created if
-            missing. An existing file at this path is deleted and replaced
-            unless `overwrite=False` (in which case `FileExistsError` is
-            raised).
-        frame_transform: Optional callable applied to each loaded EXR after
-            `unsquash` and before the OCIO transform. Signature
-            `(HWC float ndarray) -> (HWC float ndarray)`. None = identity
-            (no resize/crop/flip). The first frame's transformed dimensions
-            determine the output video size (rounded down to even).
-        overwrite: If True (default), an existing file at `out_path` is
-            deleted and re-encoded. If False, raise `FileExistsError` when
-            `out_path` already exists instead of clobbering it.
-        fps: Output framerate. `None` (default) = read from the first EXR's
-            `framesPerSecond` header attribute, falling back to 24 if absent.
-            Pass a float to override.
-        src_colorspace: OCIO source colorspace name. Default "ACES2065-1".
-            Output is always Rec.709 SDR — that side is locked because the
-            ffmpeg color metadata tags would have to change in lockstep with
-            any output colorspace change.
-        num_threads: Parallel EXR reader / OCIO worker threads. Each worker
-            reads one frame from disk and runs the OCIO transform on it.
-            Default 10.
-        buffer_limit: Maximum in-flight processed frames buffered ahead of
-            ffmpeg's stdin consumer. None = use `num_threads` (rp's
-            `lazy_par_map` default).
-        show_progress: Progress bar control. `True` (default) shows
-            `"eta:exr to mp4"`; `False` is silent; or pass any
-            `rp.load_files`-style string (`"eta:My Title"`, `"tqdm"`).
-        codec: ffmpeg encoder name. Tested: `"libx264"` (default),
-            `"libx265"`, `"libsvtav1"`, `"libaom-av1"`. Other codecs work
-            but the default `crf`/`preset` values are tuned for libx264.
-        crf: Constant Rate Factor — quality knob. Lower = better quality,
-            larger file. libx264/265: 0-51, ~20 looks good.
-            libsvtav1/libaom-av1: 0-63, ~30 looks good.
-        preset: Speed/quality tradeoff. libx264/265:
-            `"ultrafast"`..`"veryslow"`. libsvtav1: `"0"`..`"13"` (higher =
-            faster).
-        pix_fmt: Output pixel format. Drives bit depth and chroma
-            subsampling. Common values: `"yuv420p"` (8-bit, max compat),
-            `"yuv420p10le"` (10-bit, default), `"yuv420p12le"` (12-bit,
-            libx265 / AV1 only), `"yuv444p10le"` (full chroma resolution).
-            libx264 auto-selects the right profile from this.
-        ffmpeg_extra_args: Tuple of extra flag/value strings appended to
-            the ffmpeg command for codec-specific tuning. Examples:
-            `("-svtav1-params", "tune=0:film-grain=8")`, `("-tiles", "2x2")`.
-            Auto-applied per-codec (this kwarg appends on top):
-              - libx264: `("-x264-params", "threads=0:lookahead-threads=auto")`
-              - libaom-av1: `("-row-mt", "1", "-cpu-used", "4")` (libaom's
-                stock defaults are single-threaded and ~10-100x slower).
-            libsvtav1 and libx265 get nothing automatic (their defaults are
-            already sane).
-        unsquash: Undo anamorphic squash by stretching each frame horizontally
-            to match its EXR header's `PixelAspectRatio`. Default True.
-            No-op for square-pixel EXRs.
-
-            This is a CUSTOM, script-specific flag, not a generic ffmpeg/OCIO
-            concept. Background:
-
-                Anamorphic source — typically from cinema lenses, wide-format
-                renders, or legacy DV/NTSC formats — stores a non-square
-                pixel grid plus a `PixelAspectRatio` (PAR) attribute in the
-                EXR header indicating how much to stretch each pixel
-                horizontally for correct display. For example, a 2:1
-                anamorphic shot might be stored as 960x1080 with PAR=2.0,
-                meaning the intended display size is 1920x1080. Dumping
-                those pixels straight to a square-pixel MP4 produces a
-                horizontally-squashed image.
-
-                With `unsquash=True` (default), this function reads
-                `PixelAspectRatio` from the first EXR header and
-                pre-stretches every frame horizontally by that factor (via
-                `cv2.resize`, cubic interpolation) BEFORE passing the image
-                to `frame_transform`. So `frame_transform` always sees
-                square-pixel geometry and never has to know or care about
-                anamorphic source. For square-pixel EXRs (PAR=1.0, the
-                common case) this is a complete no-op: no resize, no
-                overhead, no extra allocations.
-
-                Set `unsquash=False` only if you want raw non-square pixels
-                passed through unchanged and you'll handle the aspect math
-                yourself inside `frame_transform`.
-
-                The PAR is read once from the first EXR and applied to all
-                frames. If your sequence mixes PARs (very unusual) you'd
-                need to handle it in `frame_transform` with `unsquash=False`.
-
-    Recipes (codec + bit-depth combos — copy-paste these kwargs):
-
-        # 8-bit H.264 (max compatibility, smallest CPU)
-        codec="libx264", pix_fmt="yuv420p", crf=23
-
-        # 10-bit H.264 (default — best balance of quality and compatibility)
-        codec="libx264", pix_fmt="yuv420p10le", crf=20
-
-        # 12-bit H.265 (archival; libx264 caps at 10-bit so 12-bit needs libx265 or AV1)
-        codec="libx265", pix_fmt="yuv420p12le", crf=20, preset="medium"
-
-        # 8-bit AV1 via SVT-AV1 (fast modern encode)
-        codec="libsvtav1", pix_fmt="yuv420p", crf=30, preset="6"
-
-        # 10-bit AV1 via SVT-AV1
-        codec="libsvtav1", pix_fmt="yuv420p10le", crf=30, preset="6"
-
-        # 12-bit AV1 via libaom-av1 (SVT-AV1 caps at 10-bit; libaom is slower)
-        # (-row-mt 1 and -cpu-used 4 are auto-applied for libaom-av1 — see codec_extras)
-        codec="libaom-av1", pix_fmt="yuv420p12le", crf=28, preset="medium"
+        device: int | str | list of int/str | None.
+            A scalar runs single-shard. A list (or `num_shards > 1`) triggers
+            subprocess fanout: each shard is launched as `rp call exr_to_mp4`
+            with `--device cuda:N` targeting one device from the resolved list
+            (round-robined). Shard outputs are losslessly stitched into
+            `out_path` via `rp.concat_video_files`. The bash for every shard
+            is printed (via `rp.display_code_cell(language='bash')`) before
+            launch for audit. Callable kwargs (`frame_transform` /
+            `pre_unsquash_frame_transform`) are saved to a tmp `.rpo`
+            (RP Object) file in fanout mode and re-loaded in each shard
+            via `file_to_object("...")` in the printed bash — so closures,
+            lambdas, and partials all survive the boundary. Non-empty
+            `ffmpeg_extra_args` is the only thing fanout still rejects.
+        num_shards: total shards in fanout mode. Defaults to len(resolved
+            device list). If smaller than the device list, only the first
+            num_shards devices get work (the rest sit idle — user's call).
+            If larger than the device list, devices are round-robined
+            (multiple shards per GPU). If larger than the frame count,
+            clamped down to the frame count (one shard per frame).
 
     Examples:
 
-        # Default: H.264 10-bit, source resolution (with anamorphic unsquash if applicable)
+        # Single GPU (auto), single process. Local development / testing.
         exr_to_mp4(paths, "out.mp4")
 
-        # Resize to 480p (matches the legacy CLI's default behavior)
+        # Pin to a specific GPU.
+        exr_to_mp4(paths, "out.mp4", device="cuda:2")     # or device=2
+
+        # Fan out across all visible GPUs (auto-detect via torch.cuda.device_count).
+        # On an 8-GPU box: 8 subprocesses, one shard per GPU.
+        exr_to_mp4(paths, "out.mp4", num_shards=8)
+        # Equivalent shortcut: omit num_shards, it defaults to the visible GPU count.
+        exr_to_mp4(paths, "out.mp4", device=None)
+
+        # 2 shards per GPU on an 8-GPU box (16 processes, round-robined).
+        exr_to_mp4(paths, "out.mp4", num_shards=16)
+
+        # Pick a subset of GPUs explicitly.
+        exr_to_mp4(paths, "out.mp4", device=[0, 2, 4, 6])               # 4 shards, one each
+        exr_to_mp4(paths, "out.mp4", device=[0, 2, 4, 6], num_shards=8) # 8 shards, 2 per
+
+        # CPU-only fanout (silly but works for testing).
+        exr_to_mp4(paths, "out.mp4", device=["cpu", "cpu"], num_shards=2)
+
+        # Downscale to fit 720x720 (preserves aspect → ~720p for 16:9 input).
+        # rp.resize_image_to_fit accepts CHW torch tensors directly — pickled
+        # by dill across fanout shards, runs on-device, no CPU roundtrip.
         from functools import partial
         exr_to_mp4(paths, "out.mp4",
-                   frame_transform=partial(rp.resize_image_to_fit, height=480))
+                   frame_transform=partial(rp.resize_image_to_fit, height=720, width=720))
 
-        # AV1 via SVT-AV1
-        exr_to_mp4(paths, "out.mp4", codec="libsvtav1", crf=30, preset="6")
+        # 10-bit AV1 via SVT-AV1 (fast, good quality, modern players).
+        # Requires an ffmpeg build with libsvtav1 — check `ffmpeg -encoders`.
+        exr_to_mp4(paths, "out.mp4",
+                   codec="libsvtav1", pix_fmt="yuv420p10le", crf=30, preset="6")
 
-        # 8-bit fast preview
-        exr_to_mp4(paths, "out.mp4", pix_fmt="yuv420p", crf=23)
+        # 12-bit AV1 via libaom-av1 (archival; SVT-AV1 caps at 10-bit so 12-bit
+        # needs libaom, which is much slower — -row-mt and -cpu-used=4 are
+        # auto-applied to make it merely slow rather than glacial).
+        exr_to_mp4(paths, "out.mp4",
+                   codec="libaom-av1", pix_fmt="yuv420p12le", crf=28, preset="medium")
 
-        # Non-ACES source colorspace (any OCIO ACES Studio config name works)
-        exr_to_mp4(paths, "out.mp4", src_colorspace="Linear ARRI Wide Gamut 3")
+        # 10-bit H.265 (libx265; ubiquitous, fast, good quality).
+        exr_to_mp4(paths, "out.mp4",
+                   codec="libx265", pix_fmt="yuv420p10le", crf=20, preset="medium")
 
-        # Vertical flip via frame_transform
-        exr_to_mp4(paths, "out.mp4", frame_transform=np.flipud)
+        # 12-bit H.265 (archival; libx264 caps at 10-bit so 12-bit needs libx265).
+        exr_to_mp4(paths, "out.mp4",
+                   codec="libx265", pix_fmt="yuv420p12le", crf=20, preset="medium")
 
-        # Pass a folder of EXRs directly (auto-sorted by frame number)
-        exr_to_mp4("/renders/shot_010", "out.mp4")
+        # ---- GPU encoders: same `crf=` semantics, codec name does the work. ----
+        # The function translates `crf` internally: -crf for libx*, -rc vbr -cq
+        # for *_nvenc, -q:v on an inverted scale for *_videotoolbox. So one
+        # script runs unchanged on a Mac (VideoToolbox) and an NVIDIA box
+        # (NVENC) — just swap the codec name.
+        #
+        # Note: GPU encoders cap at 10-bit. For 12-bit you need libx265 / libaom-av1.
+        # pix_fmt for 10-bit GPU is `p010le` (NV12-style 10-bit) — NVENC and
+        # VideoToolbox reject the libx*-style `yuv420p10le`.
 
-        # Or a glob pattern
-        exr_to_mp4("/renders/shot_010/*.exr", "out.mp4")
+        # 10-bit HEVC on NVIDIA GPU (Turing+; ~5–10× faster than libx265).
+        exr_to_mp4(paths, "out.mp4",
+                   codec="hevc_nvenc", pix_fmt="p010le", crf=23, preset="p5")
 
-        # Silent / custom progress
-        exr_to_mp4(paths, "out.mp4", show_progress=False)
-        exr_to_mp4(paths, "out.mp4", show_progress="eta:shot_010")
+        # 8-bit H.264 on NVIDIA GPU (every NVENC-capable card; max compatibility).
+        exr_to_mp4(paths, "out.mp4",
+                   codec="h264_nvenc", pix_fmt="yuv420p", crf=23, preset="p5")
+
+        # 10-bit AV1 on NVIDIA GPU (RTX 40-series / Ada Lovelace+ only).
+        exr_to_mp4(paths, "out.mp4",
+                   codec="av1_nvenc", pix_fmt="p010le", crf=30, preset="p5")
+
+        # 10-bit HEVC on Apple Silicon / Intel Mac (VideoToolbox).
+        exr_to_mp4(paths, "out.mp4",
+                   codec="hevc_videotoolbox", pix_fmt="p010le", crf=23, preset="medium")
+
+        # 8-bit H.264 on Mac (VideoToolbox).
+        exr_to_mp4(paths, "out.mp4",
+                   codec="h264_videotoolbox", pix_fmt="yuv420p", crf=23, preset="medium")
     """
-    # Ensure runtime deps (no-op if already installed); kept inside the public
-    # function so importing this module is cheap and the only entry point that
-    # touches OIIO / OCIO / cv2 / ffmpeg is the one that asks for them.
+    # Resolve runtime deps in the parent BEFORE any fanout, so subprocesses
+    # don't race each other to pip-install the same packages. Subsequent
+    # pip_import calls in the shards are no-ops once the parent succeeds.
     rp.pip_import("OpenImageIO")
     rp.pip_import("PyOpenColorIO")
-    rp.pip_import("cv2")
+    rp.pip_import("torch")
+    rp.pip_import("einops")
     rp.r._ensure_ffmpeg_installed()
+    # Fail fast if the requested codec isn't in this ffmpeg build. Otherwise
+    # we'd decode the entire shard before ffmpeg said "Unknown encoder".
+    if codec not in rp.get_available_ffmpeg_codecs():
+        raise ValueError(
+            "codec=" + repr(codec) + " is not available in this ffmpeg build. "
+            "Available codecs: rp.get_available_ffmpeg_codecs()"
+        )
 
-    # Mirror rp.save_video_mp4's input dispatch: folder | glob | list-of-paths.
+    # Fanout dispatch: a list device or num_shards>1 means subprocess fanout.
+    is_list_device = isinstance(device, (list, tuple))
+    if is_list_device or (num_shards is not None and num_shards > 1):
+        device_list = _normalize_device_list(device)
+        if num_shards is None:
+            num_shards = len(device_list)
+        # If shards < devices (e.g. auto-detect grabbed 8 GPUs but user asked
+        # for num_shards=4), round-robin only hits the first num_shards devices
+        # and the rest sit idle. That's the user's call, not an error.
+        if num_shards < len(device_list):
+            device_list = device_list[:num_shards]
+        # A single-element list with num_shards==1 is effectively single-shard — fall through.
+        if not (len(device_list) == 1 and num_shards == 1):
+            return _fanout_exr_to_mp4(
+                exr_paths, out_path,
+                devices=device_list,
+                num_shards=num_shards,
+                kwargs=dict(
+                    src_colorspace=src_colorspace, num_threads=num_threads,
+                    buffer_limit=buffer_limit, codec=codec, crf=crf, preset=preset,
+                    pix_fmt=pix_fmt, unsquash=unsquash, atomic=atomic, clip=clip,
+                    fps=fps, overwrite=overwrite, show_progress=show_progress,
+                    frame_transform=frame_transform,
+                    pre_unsquash_frame_transform=pre_unsquash_frame_transform,
+                    ffmpeg_extra_args=ffmpeg_extra_args,
+                ),
+            )
+        device = device_list[0]                                        # collapse [x] -> x for single-shard path
+
+    import torch
+
     if isinstance(exr_paths, str):
         if rp.is_a_folder(exr_paths):
             exr_paths = rp.get_all_paths(exr_paths, file_extension_filter="exr", sort_by="number")
@@ -311,26 +661,30 @@ def exr_to_mp4(
     if not exr_paths:
         raise ValueError("exr_paths is empty")
 
+    dev = _pick_device(device)
+
     header_fps, pixel_aspect = _read_header(exr_paths[0])
     if fps is None:
         fps = header_fps
     if not unsquash:
         pixel_aspect = 1.0
 
-    # Probe frame 0 through the same pre-transform pipeline to determine ffmpeg output dims.
-    probe = _unsquash(_read_image(exr_paths[0]), pixel_aspect)
+    lut_3d = _bake_lut_3d(src_colorspace, dev)
+
+    # Probe frame 0 through the geometry stages to determine ffmpeg input dims.
+    # Mirror the per-frame HWC↔CHW wrap so user transforms see CHW here too.
+    from einops import rearrange as _probe_rearrange
+    probe = torch.from_numpy(_read_image(exr_paths[0])).to(dev)
+    if pre_unsquash_frame_transform is not None:
+        probe = _probe_rearrange(pre_unsquash_frame_transform(_probe_rearrange(probe, "h w c -> c h w")), "c h w -> h w c")
+    probe = _unsquash_gpu(probe, pixel_aspect)
     if frame_transform is not None:
-        probe = frame_transform(probe)
+        probe = _probe_rearrange(frame_transform(_probe_rearrange(probe, "h w c -> c h w")), "c h w -> h w c")
     out_h, out_w = probe.shape[:2]
     out_h, out_w = rp.r._round_dimensions_to_even(out_h, out_w)
+    del probe
     n = len(exr_paths)
 
-    # Per-codec defaults that we always want unless overridden in ffmpeg_extra_args:
-    #   - libx264: explicit threading params (matches libx264's own defaults but kept for the
-    #     perf this script was tuned for).
-    #   - libaom-av1: row-mt + a usable cpu-used. libaom's defaults are notoriously bad
-    #     (single-threaded, cpu-used=1) and would otherwise encode 10-100x slower than necessary.
-    #     libsvtav1 has sensible defaults so it gets nothing extra.
     codec_extras = {
         "libx264":    ("-x264-params", "threads=0:lookahead-threads=auto"),
         "libaom-av1": ("-row-mt", "1", "-cpu-used", "4"),
@@ -341,6 +695,7 @@ def exr_to_mp4(
         console_print(
             "frames=" + str(n)
             + " num_threads=" + str(num_threads)
+            + " device=" + str(dev)
             + " codec=" + codec
             + " pixel_aspect=" + str(pixel_aspect)
             + " output=" + str(out_w) + "x" + str(out_h)
@@ -350,15 +705,23 @@ def exr_to_mp4(
     if not overwrite and rp.file_exists(out_path):
         raise FileExistsError("out_path already exists and overwrite=False: " + out_path)
     rp.make_parent_directory(out_path)
-    rp.delete_file(out_path, strict=False)
 
-    cmd = _ffmpeg_command(out_path, fps, out_w, out_h,
+    encode_path = rp.temporary_file_path("mp4") if atomic else out_path
+    if not atomic:
+        rp.delete_file(out_path, strict=False)
+
+    cmd = _ffmpeg_command(encode_path, fps, out_w, out_h,
                           codec=codec, crf=crf, preset=preset,
                           pix_fmt=pix_fmt, extra_args=extra)
     progress = "eta:exr to mp4" if show_progress is True else show_progress
-    fn = partial(_process_frame,
-                 frame_transform=frame_transform, src_colorspace=src_colorspace,
-                 pixel_aspect=pixel_aspect, out_h=out_h, out_w=out_w)
+
+    fn = partial(
+        _process_frame,
+        frame_transform=frame_transform,
+        pre_unsquash_frame_transform=pre_unsquash_frame_transform,
+        pixel_aspect=pixel_aspect, out_h=out_h, out_w=out_w,
+        clip=clip, lut_3d=lut_3d, device=dev,
+    )
 
     started = time.perf_counter()
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
@@ -378,10 +741,17 @@ def exr_to_mp4(
     except Exception:
         proc.kill()
         proc.wait()
+        if atomic:
+            rp.delete_file(encode_path, strict=False)
         raise
     elapsed = time.perf_counter() - started
     if rc != 0:
+        if atomic:
+            rp.delete_file(encode_path, strict=False)
         raise RuntimeError("ffmpeg failed with exit " + str(rc))
+    if atomic:
+        rp.delete_file(out_path, strict=False)
+        rp.move_path(encode_path, out_path)
     if not show_progress:
         console_print("elapsed_seconds=" + str(round(elapsed, 3)))
         console_print("fps_processed=" + str(round(n / elapsed, 3)))
