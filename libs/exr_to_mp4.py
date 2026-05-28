@@ -9,6 +9,7 @@
 # Per frame the color transform is a torch grid_sample trilinear interpolation —
 # OCIO is never on the hot path.
 
+import functools
 import glob
 import json
 import os
@@ -222,11 +223,19 @@ def _pick_device(device):
     return d
 
 
+@functools.lru_cache(maxsize=128)
 def _bake_lut_3d(src_colorspace, device):
     """
-    Command (calls OCIO once, allocates a device tensor). Build a 3D LUT tensor that
-    maps scene-linear `src_colorspace` -> Rec.709 SDR, with a log2 shaper on the
+    Command on first call per (src_colorspace, device) pair, then memoized
+    forever in this Python process. Build a 3D LUT tensor that maps
+    scene-linear `src_colorspace` -> Rec.709 SDR, with a log2 shaper on the
     input axis covering 2^SHAPER_LOG2_MIN .. 2^SHAPER_LOG2_MAX scene-linear.
+
+    The LRU cache is keyed by `(src_colorspace, device)`. Each entry is a
+    ~3 MB GPU tensor and rarely changes within a run — a long-lived
+    `exrs_to_mp4s` worker that processes many sequences in the same
+    colorspace bakes the LUT exactly once, paying only ~10ms of OCIO work
+    on its first job and ~zero on every subsequent job.
 
     Returns:
         lut_3d: (1, 3, N, N, N) float32 on `device`, where N=LUT3D_SIZE. Laid out
@@ -540,7 +549,7 @@ def exr_to_mp4(
     atomic=False,
     clip=True,
     pre_unsquash_frame_transform=None,
-    strict=True,                    # bad-EXR policy. True/'strict' (default) raises on any unreadable frame.
+    strict=True                     # bad-EXR policy. True/'strict' (default) raises on any unreadable frame.
                                     # 'skip' drops bad frames (output is shorter). 'pad' substitutes the
                                     # previous good frame (or the first upcoming good frame for leading
                                     # bad ones, or black if every frame is bad).
@@ -606,6 +615,15 @@ def exr_to_mp4(
             clamped down to the frame count (one shard per frame).
 
     Examples:
+
+        #Process a bunch of foders of exr's
+        exr_folders=rp_iglob('/dailies/*/exrs')
+        out_dir='/users/burgert/dailies/mp4s'
+        for exr_folder in exr_folders:
+            fansi_print(exr_folder,'bold orange')
+            mp4_filename=path_join(path_split(exr_folder)[-3:-1]).replace('/','>>')+'.mp4'
+            exr_glob=path_join(exr_folder,'*.exr')
+            exr_to_mp4(exr_glob,num_shards=32,out_path=mp4_filename,strict='pad')
 
         # Single GPU (auto), single process. Local development / testing.
         exr_to_mp4(paths, "out.mp4")
@@ -754,6 +772,16 @@ def exr_to_mp4(
 
     import torch
 
+    # Startup phase logging. Per-shard cold-start (CUDA init, OCIO config
+    # first-load, OIIO plugin discovery, probe frame) can collectively take
+    # tens of seconds before `rp.load_files` yields its first frame and the
+    # progress bar starts ticking. Without these prints, the user sees a long
+    # silence after the bash audit block and has no idea where the time goes.
+    _startup_t0 = time.perf_counter()
+    _shard_tag = "[" + str(device) + "]"
+    def _phase(msg):
+        console_print(_shard_tag + " " + msg + " (+" + str(round(time.perf_counter() - _startup_t0, 2)) + "s)")
+
     if isinstance(exr_paths, str):
         if rp.is_a_folder(exr_paths):
             exr_paths = rp.get_all_paths(exr_paths, file_extension_filter="exr", sort_by="number")
@@ -762,16 +790,20 @@ def exr_to_mp4(
     if not exr_paths:
         raise ValueError("exr_paths is empty")
 
+    _phase("warming CUDA / picking device")
     dev = _pick_device(device)
 
+    _phase("reading first EXR header (OIIO plugin discovery)")
     header_fps, pixel_aspect = _read_header(exr_paths[0])
     if fps is None:
         fps = header_fps
     if not unsquash:
         pixel_aspect = 1.0
 
+    _phase("baking OCIO 3D LUT to " + str(dev))
     lut_3d = _bake_lut_3d(src_colorspace, dev)
 
+    _phase("running probe frame to resolve output dims")
     # Probe frame 0 through the geometry stages to determine ffmpeg input dims.
     # Mirror the per-frame HWC↔CHW wrap so user transforms see CHW here too.
     from einops import rearrange as _probe_rearrange
@@ -785,6 +817,7 @@ def exr_to_mp4(
     out_h, out_w = rp.r._round_dimensions_to_even(out_h, out_w)
     del probe
     n = len(exr_paths)
+    _phase("startup done; output=" + str(out_w) + "x" + str(out_h) + " frames=" + str(n) + " — starting encode")
 
     codec_extras = {
         "libx264":    ("-x264-params", "threads=0:lookahead-threads=auto"),

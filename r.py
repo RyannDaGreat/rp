@@ -52250,7 +52250,9 @@ def mount_s3_via_rclone(
     s3url,
     mount_point,
     *,
+    remount=True,
     daemon=False,
+    wait_for_mount=True,
     read_only=True,
     region=None,
     cache_dir=None,
@@ -52271,7 +52273,9 @@ def mount_s3_via_rclone(
     """
     Mount an S3 URL as a local filesystem via rclone + FUSE.
 
-    Good to pair with rp.wait_for_mount(mount_point) when daemon=True
+    When daemon=True, wait_for_mount=True (default) blocks until the mount
+    point is actually visible to the OS before returning -- saves you from
+    pairing every call with rp.wait_for_mount(mount_point) yourself.
 
     Uses the AWS credential chain (env / IMDS / ~/.aws). Requires `rclone`
     and `fuse3` (apt install fuse3) on the host.
@@ -52279,6 +52283,9 @@ def mount_s3_via_rclone(
         daemon=False     block until Ctrl+C, then auto-unmount (default)
         daemon=True      detach rclone (--daemon) so the mount outlives
                          this Python process; you must `umount` it yourself
+        wait_for_mount   when daemon=True, block until the mount point is
+                         visible to the OS before returning. No effect when
+                         daemon=False (that path already blocks). Default True.
         region=None      auto-detect via x-amz-bucket-region HEAD response
         cache_dir=None   use {tempfile.gettempdir()}/rclone-cache
 
@@ -52348,6 +52355,10 @@ def mount_s3_via_rclone(
 
     import os, subprocess, tempfile
     from shlex import quote as q
+
+    if not remount and os.path.ismount(mount_point):
+        fansi_print('rp.mount_s3_via_rclone: '+mount_point + " is already mounted! Skipping",'yellow')
+        return mount_point
 
     assert s3url.startswith("s3://"), "need s3:// URL, got %r" % s3url
     remote = ":s3:" + s3url[len("s3://") :]
@@ -52431,6 +52442,10 @@ def mount_s3_via_rclone(
     display_code_cell(script, language='bash', title='rp.mount_s3_via_rclone')
 
     subprocess.run(script, shell=True, check=True)
+
+    if daemon and wait_for_mount:
+        wait_for_mount(mount_point)
+
     return mount_point
 
 def is_s3_url(url):
