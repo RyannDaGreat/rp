@@ -6702,30 +6702,38 @@ def _is_easydict(x) -> bool:
 
 
 
+def random_indices(arr_or_len,n:int)->list:
+    """
+    See random_index, this chooses n and returns a list
+    """
+    from random import randint
+    
+    if isinstance(arr_or_len, dict) or issubclass(type(arr_or_len), dict):
+        return random_batch(list(arr_or_len.keys()),n)
+    
+    if has_len(arr_or_len):
+        length = len(arr_or_len)
+    elif isinstance(arr_or_len, int):
+        length = arr_or_len
+    else:
+        raise TypeError("Input must be an integer, an array with a len, or dict-like object but got type "+str(type(arr_or_len)))
+
+    assert length != 0, "Array length cannot be zero."
+
+    return random_batch(range(length),n)
+
 def random_index(arr_or_len):
     """
     Returns a random index for a given array or array length.
 
-    If the input is a dictionary or a subclass of dict, it returns a random element from the list of values.
+    If the input is a dictionary or a subclass of dict, it returns a random element from the list of keys.
     If the input is an integer, it returns a random integer between 0 (inclusive) and the input (exclusive).
     If the input is an array-like object with a __len__ method, it returns a random index within the array.
 
     :param arr_or_len: The array, array length, or dict-like object.
     :return: A random index or element.
     """
-    from random import randint
-    
-    if isinstance(arr_or_len, dict) or issubclass(type(arr_or_len), dict):
-        return random_element(list(arr_or_len.values()))
-
-    if isinstance(arr_or_len, int):
-        assert arr_or_len != 0, "Array length cannot be zero."
-        return randint(0, arr_or_len - 1)
-    
-    if has_len(arr_or_len):
-        return random_index(len(arr_or_len))
-    
-    raise TypeError("Input must be an integer, an array with a len, or dict-like object but got type "+str(type(arr_or_len)))
+    return random_indices(arr_or_len,1)[0]
 
     #OLD VERSION: Works perfectly fine, I just wanted to make the code a bit cleaner to read
     # def random_index(array_length_or_array_itself):
@@ -7203,6 +7211,38 @@ def shuffled(l):
     if isinstance(l,str):  # random_permutation("ABCDE") ⟶ 'EDBCA' special case: if its a string we want a string output, so we can jumble letters in words etc.
         return ''.join(shuffled(list(l)))
     return random_batch(l)  # Due to an r-code identity in random_batch
+
+def pool_shuffled(iterator, *, prob=None, pool_size=None):
+    """
+    Lazily shuffles a stream by buffering items in a pool and yielding random
+    items as the pool grows. Acts as an online approximation of a full shuffle
+    without materializing the entire stream.
+    
+    You must set either prob or pool_size - see below
+
+    Args:
+        iterator: Any iterable to shuffle.
+        prob (float): Chance of drawing from the pool. Smaller numbers -> more random, such as 1/100
+        pool_size (int): Maximum pool size before forcing a yield. Bigger -> more random.
+
+    Yields:
+        Items from `iterator` in shuffled order.
+
+    Examples:
+        >>> import random
+        >>> random.seed(0)
+        >>> list(pool_shuffled(range(10), prob=0.5, pool_size=3))
+        [1, 0, 4, 2, 6, 7, 5]
+    """
+    if prob is None and pool_size is None:
+        raise ValueError("rp.pool_shuffled: Must specify either prob or pool_size, but both are None")
+    pool = []
+    for x in iterator:
+        pool.append(x)
+        if (pool_size and len(pool) > pool_size) or (prob and random_chance(prob)):
+            yield pop_random(pool)
+    yield from shuffled(pool)
+
 
 def random_parallel_batch(*full_lists,batch_size: int = None,retain_order: bool = False):
     # Created for machine learning input/output training-pairs generation.
@@ -13884,6 +13924,25 @@ def gather(iterable,*indices, as_dict=False, strict=True):
     else:
         return {i:iterable[i] for i in indices if (strict or valid_index(iterable, i))}
 
+# def pop_gather(x,*indices):
+#     """
+#     Uses CSE214 definition of 'pop', in the context of popping stacks.
+#     It is difficult to simultaneously delete multiple indices in a list.
+#     My algorithm goes through the indices chronologically, compensating for
+#     the change in indices by subtracting incrementally larger values from them
+#     Example:
+#      >>> ⵁ = ['0', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
+#      >>> pop_gather(ⵁ,1,3,5,7,9)
+#     ans = ['a', 'c', 'e', 'g', 'i']
+#      >>> g
+#     ans = ['0', 'b', 'd', 'f', 'h']
+#     """
+#     indices=detuple(indices)
+#     out=gather(x,indices)
+#     for a,b in enumerate(sorted(set(indices))):
+#         del x[b - a]
+#     return out
+
 def pop_gather(x,*indices):
     """
     Uses CSE214 definition of 'pop', in the context of popping stacks.
@@ -13897,11 +13956,40 @@ def pop_gather(x,*indices):
      >>> g
     ans = ['0', 'b', 'd', 'f', 'h']
     """
-    indices=detuple(indices)
-    out=gather(x,indices)
+    if isinstance(x,dict):
+        output = rp.gather(x,indices)
+        for i in indices:
+            del x[i]
+        return output
+            
+    indices=rp.detuple(indices)
+    out=rp.gather(x,indices)
     for a,b in enumerate(sorted(set(indices))):
         del x[b - a]
     return out
+
+
+def pop_random(x,n=None):
+    """
+    EXAMPLE:
+        >>> a=[1,2,3,4,5,6,7,8,9]
+        >>> pop_random(a,3)
+        [2, 9, 1]
+        >>> a
+        [3, 4, 5, 6, 7, 8]
+    """
+    assert n is None or isinstance(n,int) and n>=0
+    if n is None:
+        # return x.pop(random_index) <--- accomplishes this
+        return pop_random(x,n=1)[0] #literally just this though since we want one logic flow
+    elif isinstance(x,set):
+        chosen=random_batch(x,n)
+        x-=n
+        return x
+    else:
+        indices=random_indices(x,n)
+        return pop_gather(x,indices)
+
 
 def gather_vars(*var_names, frames_back=1, skip_missing=False, as_dict=True):
     """
