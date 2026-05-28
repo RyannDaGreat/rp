@@ -52271,6 +52271,8 @@ def mount_s3_via_rclone(
     """
     Mount an S3 URL as a local filesystem via rclone + FUSE.
 
+    Good to pair with rp.wait_for_mount(mount_point) when daemon=True
+
     Uses the AWS credential chain (env / IMDS / ~/.aws). Requires `rclone`
     and `fuse3` (apt install fuse3) on the host.
 
@@ -52470,6 +52472,30 @@ def is_google_drive_url(url):
         if re.match(pattern, url):
             return True
     return False
+
+
+def wait_for_mount(path: str, *, timeout: float = None, poll_interval: float = 1.0) -> bool:
+    """
+    Blocks until the specified path becomes a mount point.
+    
+    Args:
+        path: The absolute path to check.
+        timeout: Maximum time to wait in seconds. If None, waits indefinitely.
+        poll_interval: How many seconds to sleep between checks.
+        
+    Returns:
+        True if the path successfully mounted, False if it timed out.
+    """
+    start_time = time.monotonic()
+    
+    # os.path.ismount safely returns False if the path doesn't exist yet
+    while not os.path.ismount(path):
+        if timeout is not None and (time.monotonic() - start_time) > timeout:
+            return False
+            
+        time.sleep(poll_interval)
+        
+    return True
 
 def load_text_from_google_doc(url):
     """

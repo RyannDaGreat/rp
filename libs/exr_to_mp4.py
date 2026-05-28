@@ -77,6 +77,71 @@ def _read_image(path):
     return image
 
 
+# ---- Bad-frame policies -------------------------------------------------
+# Three self-contained generator wrappers, one per `strict` mode. Each one
+# takes a stream of (bytes | None) — `None` signals "this frame failed to
+# read" — and yields one bytes object per *input* item (skip yields fewer)
+# according to its policy. The active policy is selected once in the main
+# loop based on the user's `strict=` kwarg; the read site (`_process_frame`)
+# only has to decide between raising and returning None.
+
+def _strict_bad_frame_stream(stream):
+    """
+    Pure (generator). Pass-through stream wrapper for `strict='strict'`. The
+    upstream `_process_frame` is supposed to raise on bad reads in this mode,
+    so any None reaching here is an internal bug — assert loudly.
+    """
+    for x in stream:
+        assert x is not None, "strict mode received None from _process_frame; that's a bug"
+        yield x
+
+
+def _skip_bad_frame_stream(stream):
+    """
+    Pure (generator). For `strict='skip'`. Drops None entries entirely — the
+    output video has fewer frames than the input list. Timing of surviving
+    frames advances by their original index, so a bad frame in the middle
+    just disappears (slight one-frame "jump cut" at the gap).
+    """
+    for x in stream:
+        if x is not None:
+            yield x
+
+
+def _pad_bad_frame_stream(stream, *, out_w, out_h):
+    """
+    Pure-ish (generator; allocates a black-frame buffer lazily). For
+    `strict='pad'`. Substitutes a bad frame with:
+        - the previous good frame's bytes, if any have been seen, else
+        - the next good frame's bytes (held in a count of pending leading
+          bad frames; emitted retroactively when the first good frame
+          arrives), else
+        - a black rgb48le frame (only reached when *every* input was bad).
+
+    rgb48le = 16-bit RGB interleaved = 6 bytes per pixel.
+    """
+    pending = 0      # leading bad frames buffered until we see a good one
+    last_good = None # most recent good frame's bytes
+    for x in stream:
+        if x is None:
+            if last_good is not None:
+                yield last_good
+            else:
+                pending += 1
+        else:
+            if pending and last_good is None:
+                for _ in range(pending):
+                    yield x
+                pending = 0
+            yield x
+            last_good = x
+    if last_good is None and pending:
+        # All frames were bad — emit black for each.
+        black = bytes(out_w * out_h * 6)
+        for _ in range(pending):
+            yield black
+
+
 def _normalize_device_str(d):
     """
     Pure. Coerce one device value to a torch device string.
@@ -236,7 +301,7 @@ def _color_transform_gpu(t, lut_3d):
 
 
 def _process_frame(path, *, frame_transform, pre_unsquash_frame_transform,
-                   pixel_aspect, out_h, out_w, clip, lut_3d, device):
+                   pixel_aspect, out_h, out_w, clip, lut_3d, device, strict):
     """
     Command. EXR file -> rgb48le bytes for ffmpeg stdin. All compute on `device`.
 
@@ -244,10 +309,19 @@ def _process_frame(path, *, frame_transform, pre_unsquash_frame_transform,
         OIIO decode -> upload -> pre_unsquash_frame_transform -> unsquash (bicubic)
         -> frame_transform -> crop -> log2 shaper -> 3D LUT -> clip -> quantize uint16
         -> download -> tobytes
+
+    If `strict='strict'`, a failed OIIO read re-raises (kills the run). If
+    `strict` is 'skip' or 'pad', a failed read returns None and the
+    downstream policy wrapper decides what bytes (if any) make it to ffmpeg.
     """
     import torch
 
-    np_image = _read_image(path)                                       # (H, W, C) float32
+    try:
+        np_image = _read_image(path)                                   # (H, W, C) float32
+    except RuntimeError:
+        if strict == "strict":
+            raise
+        return None
     t_cpu = torch.from_numpy(np_image)
     if device.type == "cuda":
         # PyTorch's "current CUDA device" is per-thread and defaults to cuda:0
@@ -297,6 +371,7 @@ def _process_frame(path, *, frame_transform, pre_unsquash_frame_transform,
 _FANOUT_FORWARDED_KWARGS = (
     "src_colorspace", "num_threads", "buffer_limit", "codec", "crf", "preset",
     "pix_fmt", "unsquash", "atomic", "clip", "fps", "overwrite", "show_progress",
+    "strict",
 )
 
 
@@ -464,7 +539,11 @@ def exr_to_mp4(
     unsquash=True,
     atomic=False,
     clip=True,
-    pre_unsquash_frame_transform=None
+    pre_unsquash_frame_transform=None,
+    strict=True,                    # bad-EXR policy. True/'strict' (default) raises on any unreadable frame.
+                                    # 'skip' drops bad frames (output is shorter). 'pad' substitutes the
+                                    # previous good frame (or the first upcoming good frame for leading
+                                    # bad ones, or black if every frame is bad).
 ):
     """
     Convert a sequence of EXR frames to MP4 with a fully torch-resident pipeline.
@@ -605,6 +684,19 @@ def exr_to_mp4(
         # 8-bit H.264 on Mac (VideoToolbox).
         exr_to_mp4(paths, "out.mp4",
                    codec="h264_videotoolbox", pix_fmt="yuv420p", crf=23, preset="medium")
+
+        # ---- Bad-frame policies via `strict=` ---------------------------
+        # Default `strict=True` raises immediately if any EXR can't be read
+        # (truncated file, wrong format, permissions, ...). Two relaxed modes:
+
+        # Skip unreadable frames entirely (output is shorter; surviving frames
+        # advance in time at their original index — a slight jump-cut at each gap).
+        exr_to_mp4(paths, "out.mp4", strict="skip")
+
+        # Pad unreadable frames with the previous good frame's content (or the
+        # first upcoming good frame for any leading bad ones, or black if every
+        # frame is bad). Output length matches input frame count.
+        exr_to_mp4(paths, "out.mp4", strict="pad")
     """
     # Resolve runtime deps in the parent BEFORE any fanout, so subprocesses
     # don't race each other to pip-install the same packages. Subsequent
@@ -621,6 +713,14 @@ def exr_to_mp4(
             "codec=" + repr(codec) + " is not available in this ffmpeg build. "
             "Available codecs: rp.get_available_ffmpeg_codecs()"
         )
+
+    # Normalize the `strict` kwarg to one of the three internal string values.
+    # `True` is the user-facing default and aliases 'strict'; `False` aliases
+    # 'skip' (the natural meaning of "stop being strict").
+    if strict is True:  strict = "strict"
+    if strict is False: strict = "skip"
+    if strict not in ("strict", "skip", "pad"):
+        raise ValueError("strict must be True/'strict', False/'skip', or 'pad'; got " + repr(strict))
 
     # Fanout dispatch: a list device or num_shards>1 means subprocess fanout.
     is_list_device = isinstance(device, (list, tuple))
@@ -647,6 +747,7 @@ def exr_to_mp4(
                     frame_transform=frame_transform,
                     pre_unsquash_frame_transform=pre_unsquash_frame_transform,
                     ffmpeg_extra_args=ffmpeg_extra_args,
+                    strict=strict,
                 ),
             )
         device = device_list[0]                                        # collapse [x] -> x for single-shard path
@@ -721,7 +822,17 @@ def exr_to_mp4(
         pre_unsquash_frame_transform=pre_unsquash_frame_transform,
         pixel_aspect=pixel_aspect, out_h=out_h, out_w=out_w,
         clip=clip, lut_3d=lut_3d, device=dev,
+        strict=strict,
     )
+
+    # Wrap the per-frame stream with the bad-frame policy. _process_frame
+    # returns None when `strict != 'strict'` and OIIO fails; the wrapper
+    # decides what (if anything) goes to ffmpeg for those Nones.
+    _bad_frame_wrap = {
+        "strict": _strict_bad_frame_stream,
+        "skip":   _skip_bad_frame_stream,
+        "pad":    lambda s: _pad_bad_frame_stream(s, out_w=out_w, out_h=out_h),
+    }[strict]
 
     started = time.perf_counter()
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
@@ -734,7 +845,7 @@ def exr_to_mp4(
             show_progress=progress,
             lazy=True,
         )
-        for frame_bytes in stream:
+        for frame_bytes in _bad_frame_wrap(stream):
             proc.stdin.write(frame_bytes)
         proc.stdin.close()
         rc = proc.wait()
