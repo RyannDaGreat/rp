@@ -7233,6 +7233,13 @@ def pool_shuffled(iterator, *, prob=None, pool_size=None):
         >>> random.seed(0)
         >>> list(pool_shuffled(range(10), prob=0.5, pool_size=3))
         [1, 0, 4, 2, 6, 7, 5]
+
+    Example Use-Case:
+        #For paralellizing processors across computers without globbing everything
+        >>> paths=rp_iglob('glob/to/paths')
+        ... for exr_folder in pool_shuffled(paths,pool_size=100):
+        ...     process_path(path)
+
     """
     if prob is None and pool_size is None:
         raise ValueError("rp.pool_shuffled: Must specify either prob or pool_size, but both are None")
@@ -52532,7 +52539,7 @@ def mount_s3_via_rclone(
     subprocess.run(script, shell=True, check=True)
 
     if daemon and wait_for_mount:
-        wait_for_mount(mount_point)
+        rp.wait_for_mount(mount_point)
 
     return mount_point
 
