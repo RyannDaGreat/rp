@@ -1207,8 +1207,10 @@ PSEUDO TERMINAL COMMANDS:
 			Shortcut: ap
 		TAKE: Like the 'take' command in zsh; it will make a directory then cd into it.
 			Shortcut: tk
+		TKA: (Take ans) Like TAKE, but uses str(ans) as the directory name
 		MKDIR: Makes a directory specified by the user
 			Shortcut: mk
+		MKA: (Mkdir ans) Like MKDIR, but uses str(ans) as the directory name
 		OPEN: Opens a selected file or directory with the default application
 			Shortcut: op
 		OPENH: Open-here. Equivalent to 'OPEN .'

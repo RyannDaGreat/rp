@@ -247,7 +247,7 @@ def split_python_tokens(string,return_tokens=False,ignore_errors=True):
     #    ⮤ split_python_tokens('aosid aoisjd aois   j d; ')
     #    ans = ['aosid', 'aoisjd', 'aois', 'j', 'd', ';']
     #    ⮤ split_python_tokens(' lambda x: 3,1')
-    #    ans = [' ', 'lambda', 'x', ':', '3', ',', '1', '']
+    #    ans = [' ', 'lambda', 'x', ':', '3', ',', '1']
     import tokenize
     i=iter(string.splitlines())
     def f():return next(i).encode()
@@ -264,7 +264,7 @@ def split_python_tokens(string,return_tokens=False,ignore_errors=True):
             else:
                 raise
     tokens=tokens[1:]#The first and last token are never useful (just begin/end of field tokens. Even tokenizing an empty string would yield these two tokens.)
-    if tokens and tokens[-1].type==tokenize.ENDMARKER:#This token is useless imho. Especially when we're trying to return strings split from python tokens. It just adds an empty string to the end of the output. Useless...
+    while tokens and tokens[-1].string=='':#Strip trailing structural tokens (ENDMARKER, NEWLINE, NL, DEDENT). Python 3.12+'s tokenizer emits these even for a partial single line, which throws off the negative-index token lookups callers rely on (e.g. 'def f(x' would give [..., 'x', ''] so before_tokens[-4]=='def' would miss). They carry no text, so dropping them is always safe.
         del tokens[-1]
     if return_tokens:
         return tokens

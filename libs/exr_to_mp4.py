@@ -63,19 +63,98 @@ def _read_header(path):
         inp.close()
 
 
-def _read_image(path):
-    """Query. Reads an EXR as (H, W, C) float32 numpy."""
+def _read_image(path, want_metadata=False):
+    """
+    Query. Reads an EXR as (H, W, C) float32 numpy.
+
+    With want_metadata=True, returns (image, metadata) instead — metadata is
+    the JSON-safe header dict from `_spec_metadata`, captured from the same
+    open file handle as the pixels. Zero extra opens/reads: this matters when
+    the EXR sits behind a slow remote mount (e.g. rclone with a VFS cache) —
+    the header is grabbed while the file is already downloaded and hot.
+    """
     import OpenImageIO as oiio
     inp = oiio.ImageInput.open(path)
     if inp is None:
-        raise RuntimeError("Could not open " + path)
+        # oiio.geterror() both explains WHY (e.g. "not an OpenEXR file") and
+        # clears OIIO's pending-error state (which otherwise warns at exit).
+        raise RuntimeError("Could not open " + path + ": " + oiio.geterror())
     try:
+        metadata = _spec_metadata(inp.spec()) if want_metadata else None
         image = inp.read_image(format=oiio.FLOAT)
+        if image is None:
+            raise RuntimeError("Could not read " + path + ": " + inp.geterror())
     finally:
         inp.close()
-    if image is None:
-        raise RuntimeError("Could not read " + path)
-    return image
+    return (image, metadata) if want_metadata else image
+
+
+def _json_safe(value):
+    """
+    Pure function. Recursively convert a value into something json.dumps
+    accepts. OIIO attribute values are already str/int/float/tuple, so this
+    is normally a pass-through (tuples become lists); anything exotic
+    degrades to str(value) — visibly, in the output, rather than crashing
+    the encode over one odd header attribute.
+
+    Examples:
+        >>> _json_safe((1.0, 2.0))
+        [1.0, 2.0]
+        >>> _json_safe("zip")
+        'zip'
+        >>> _json_safe(b"raw")
+        "b'raw'"
+    """
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, (tuple, list)):
+        return [_json_safe(v) for v in value]
+    return str(value)
+
+
+def _spec_metadata(spec):
+    """
+    Pure function. OIIO ImageSpec -> JSON-safe metadata dict: core geometry
+    fields plus every header attribute (compression, smpte:TimeCode,
+    worldToCamera, framesPerSecond, arbitrary show-specific attribs, ...).
+
+    Args:
+        spec (OpenImageIO.ImageSpec): as returned by ImageInput.spec()
+
+    Returns:
+        dict: {'width': int, 'height': int, 'x': int, 'y': int,
+               'nchannels': int, 'channelnames': list of str, 'format': str,
+               plus one key per header attribute}
+
+    Examples:
+        >>> # spec of a 64x48 RGB half EXR with a timecode:
+        >>> # _spec_metadata(spec) -> {'width': 64, 'height': 48, 'x': 0,
+        >>> #     'y': 0, 'nchannels': 3, 'channelnames': ['R', 'G', 'B'],
+        >>> #     'format': 'half', 'compression': 'zip',
+        >>> #     'smpte:TimeCode': [16909060, 0], 'framesPerSecond': 24.0}
+    """
+    metadata = dict(
+        width=spec.width, height=spec.height, x=spec.x, y=spec.y,
+        nchannels=spec.nchannels, channelnames=list(spec.channelnames),
+        format=str(spec.format)
+    )
+    for attrib in spec.extra_attribs:
+        metadata[attrib.name] = _json_safe(attrib.value)
+    return metadata
+
+
+def _metadata_tee_stream(stream, jsonl_file):
+    """
+    Generator command (writes jsonl_file as a side effect). Unzips a stream
+    of (frame_bytes, metadata) pairs from _process_frame(collect_metadata=
+    True): writes one JSON line per input EXR — in input order, including
+    {'path':..., 'error':...} lines for unreadable frames — and yields the
+    bytes (or None) onward, so the bad-frame policy wrappers downstream see
+    the exact same stream they'd see with metadata off.
+    """
+    for frame_bytes, metadata in stream:
+        jsonl_file.write(json.dumps(metadata) + "\n")
+        yield frame_bytes
 
 
 # ---- Bad-frame policies -------------------------------------------------
@@ -310,7 +389,8 @@ def _color_transform_gpu(t, lut_3d):
 
 
 def _process_frame(path, *, frame_transform, pre_unsquash_frame_transform,
-                   pixel_aspect, out_h, out_w, clip, lut_3d, device, strict):
+                   pixel_aspect, out_h, out_w, clip, lut_3d, device, strict,
+                   collect_metadata=False):
     """
     Command. EXR file -> rgb48le bytes for ffmpeg stdin. All compute on `device`.
 
@@ -322,15 +402,26 @@ def _process_frame(path, *, frame_transform, pre_unsquash_frame_transform,
     If `strict='strict'`, a failed OIIO read re-raises (kills the run). If
     `strict` is 'skip' or 'pad', a failed read returns None and the
     downstream policy wrapper decides what bytes (if any) make it to ffmpeg.
+
+    With `collect_metadata=True`, returns (frame_bytes, metadata) pairs
+    instead — metadata is the JSON-safe header dict (plus 'path'), read from
+    the same file handle as the pixels; failed reads pair None with
+    {'path':..., 'error':...}. `_metadata_tee_stream` unzips these before the
+    bad-frame policy wrappers, which only ever see plain bytes|None.
     """
     import torch
 
+    metadata = None
     try:
-        np_image = _read_image(path)                                   # (H, W, C) float32
-    except RuntimeError:
+        if collect_metadata:
+            np_image, metadata = _read_image(path, want_metadata=True)  # (H, W, C) float32
+            metadata = dict(path=path, **metadata)
+        else:
+            np_image = _read_image(path)                               # (H, W, C) float32
+    except RuntimeError as e:
         if strict == "strict":
             raise
-        return None
+        return (None, dict(path=path, error=str(e))) if collect_metadata else None
     t_cpu = torch.from_numpy(np_image)
     if device.type == "cuda":
         # PyTorch's "current CUDA device" is per-thread and defaults to cuda:0
@@ -374,7 +465,8 @@ def _process_frame(path, *, frame_transform, pre_unsquash_frame_transform,
         result = quantized.cpu().numpy()
 
     # Force little-endian for ffmpeg rgb48le. No-op view on LE hosts.
-    return result.astype("<u2", copy=False).tobytes()
+    frame_bytes = result.astype("<u2", copy=False).tobytes()
+    return (frame_bytes, metadata) if collect_metadata else frame_bytes
 
 
 _FANOUT_FORWARDED_KWARGS = (
@@ -384,13 +476,15 @@ _FANOUT_FORWARDED_KWARGS = (
 )
 
 
-def _fanout_exr_to_mp4(exr_paths, out_path, *, devices, num_shards, kwargs):
+def _fanout_exr_to_mp4(exr_paths, out_path, *, devices, num_shards, meta_path, kwargs):
     """
     Command. Shard `exr_paths` into `num_shards` contiguous chunks, launch each
     chunk as a subprocess pinned to one device via CUDA_VISIBLE_DEVICES, wait
-    for all to finish, then losslessly concat the shard mp4s into `out_path`
-    via `rp.concat_video_files`. The bash command for each shard is printed
-    before launch so the user can audit what's about to run.
+    for all to finish, then losslessly concat the shard videos into `out_path`
+    via `rp.concat_video_files`. If `meta_path` is set, each shard
+    writes its own metadata JSONL and they're merged (concatenated in shard
+    order — same ordering guarantee as the video). The bash command for each
+    shard is printed before launch so the user can audit what's about to run.
 
     Each shard's EXR list is written to a temp .txt file; the subprocess loads
     it via `rp.load_file_lines(...)` — so non-globbable lists work fine.
@@ -420,15 +514,19 @@ def _fanout_exr_to_mp4(exr_paths, out_path, *, devices, num_shards, kwargs):
     rp.make_parent_directory(out_path)
 
     # One scratch directory for the whole fanout, prefixed for greppability.
-    # All shard listfiles, shard mp4s, and the callable .rpo blobs live in
+    # All shard listfiles, shard videos, and the callable .rpo blobs live in
     # here with legible names — easier to debug than 16 anonymous /tmp/tmpXXXX
     # paths scattered across the system tempdir.
     tmp_dir = tempfile.mkdtemp(prefix="exr_to_mp4_")
     pad = len(str(num_shards - 1))                                     # 16 shards -> 2-digit zero-pad
 
     shards = rp.split_into_n_sublists(exr_paths, num_shards)
+    ext = rp.get_file_extension(out_path)  # shards share out_path's container (.mp4/.mov/...)
     shard_listfiles = [os.path.join(tmp_dir, "shard_" + str(i).zfill(pad) + "_frames.txt") for i in range(num_shards)]
-    shard_outputs   = [os.path.join(tmp_dir, "shard_" + str(i).zfill(pad) + ".mp4")        for i in range(num_shards)]
+    shard_outputs   = [os.path.join(tmp_dir, "shard_" + str(i).zfill(pad) + "." + ext)     for i in range(num_shards)]
+    shard_metadatas = None
+    if meta_path is not None:
+        shard_metadatas = [os.path.join(tmp_dir, "shard_" + str(i).zfill(pad) + "_metadata.jsonl") for i in range(num_shards)]
     for listfile, shard in zip(shard_listfiles, shards):
         rp.string_to_text_file(listfile, "\n".join(shard))
 
@@ -458,6 +556,35 @@ def _fanout_exr_to_mp4(exr_paths, out_path, *, devices, num_shards, kwargs):
             rp.object_to_file(val, rpo)
             forwarded.extend(["--" + name, "file_to_object(" + json.dumps(rpo) + ")"])
 
+    # Probe ONCE in the parent and forward the result to every shard, so the
+    # shards skip their own _read_header + frame probe + user-transform-on-
+    # frame-0 entirely. Probe runs on CPU — the parent never touches a GPU,
+    # so it pays no CUDA cold-init cost on top of the shards'.
+    import torch as _torch
+    from einops import rearrange as _parent_rearrange
+    parent_dev = _torch.device("cpu")
+    header_fps, pixel_aspect = _read_header(exr_paths[0])
+    probe_fps = kwargs.get("fps") or header_fps
+    probe_par = 1.0 if (kwargs.get("unsquash", True) is False) else pixel_aspect
+    probe_t = _torch.from_numpy(_read_image(exr_paths[0])).to(parent_dev)
+    if kwargs.get("pre_unsquash_frame_transform") is not None:
+        probe_t = _parent_rearrange(
+            kwargs["pre_unsquash_frame_transform"](_parent_rearrange(probe_t, "h w c -> c h w")),
+            "c h w -> h w c",
+        )
+    probe_t = _unsquash_gpu(probe_t, probe_par)
+    if kwargs.get("frame_transform") is not None:
+        probe_t = _parent_rearrange(
+            kwargs["frame_transform"](_parent_rearrange(probe_t, "h w c -> c h w")),
+            "c h w -> h w c",
+        )
+    probe_out_h, probe_out_w = probe_t.shape[:2]
+    probe_out_h, probe_out_w = rp.r._round_dimensions_to_even(probe_out_h, probe_out_w)
+    del probe_t
+    probe_rpo = os.path.join(tmp_dir, "probe.rpo")
+    rp.object_to_file((probe_fps, probe_par, probe_out_h, probe_out_w), probe_rpo)
+    forwarded.extend(["--_probe", "file_to_object(" + json.dumps(probe_rpo) + ")"])
+
     # First positional is exr_paths, given as a Python expression that rp call
     # will eval — `load_file_lines("/tmp/x.txt")`. The path is rendered with
     # json.dumps so it stays in double quotes; the whole expr then survives
@@ -470,6 +597,8 @@ def _fanout_exr_to_mp4(exr_paths, out_path, *, devices, num_shards, kwargs):
                "---", shard_out,
                *_flag("device", device_str),
                *forwarded]
+        if shard_metadatas is not None:
+            cmd.extend(_flag("meta_path", shard_metadatas[i]))
         plans.append(cmd)
 
     # Format the whole fanout as one bash script (copy-pasteable, ending with `wait`).
@@ -498,6 +627,14 @@ def _fanout_exr_to_mp4(exr_paths, out_path, *, devices, num_shards, kwargs):
         if fails:
             raise RuntimeError("exr_to_mp4 fanout: shards failed " + repr(fails))
         rp.concat_video_files(shard_outputs, out_path)
+        if shard_metadatas is not None:
+            # Merge shard JSONLs in shard order — line order matches frame
+            # order in the concatenated video (shards are contiguous chunks).
+            rp.make_parent_directory(meta_path)
+            rp.string_to_text_file(
+                meta_path,
+                "".join(rp.text_file_to_string(p) for p in shard_metadatas)
+            )
     finally:
         rp.delete_folder(tmp_dir, recursive=True, strict=False)
     elapsed = time.perf_counter() - started
@@ -525,6 +662,9 @@ def _ffmpeg_command(out_path, fps, out_w, out_h, *, codec, crf, preset, pix_fmt,
 def exr_to_mp4(
     exr_paths,
     out_path,
+    meta_path=None,                 # optional: also write per-frame EXR header metadata as JSONL
+                                    # (one JSON object per input frame, in frame order). True derives
+                                    # the path from out_path (out.mov -> out.jsonl). See Args.
     *,
     device=None,                    # int (cuda:N) | str ('cuda', 'mps', 'cpu', 'cuda:N') | list of those | None=auto.
                                     # A list (or len>1 after normalizing) triggers fanout: each shard pinned to one device
@@ -549,13 +689,18 @@ def exr_to_mp4(
     atomic=False,
     clip=True,
     pre_unsquash_frame_transform=None,
-    strict=True                     # bad-EXR policy. True/'strict' (default) raises on any unreadable frame.
+    strict=True,                    # bad-EXR policy. True/'strict' (default) raises on any unreadable frame.
                                     # 'skip' drops bad frames (output is shorter). 'pad' substitutes the
                                     # previous good frame (or the first upcoming good frame for leading
                                     # bad ones, or black if every frame is bad).
+    _probe=None                     # PRIVATE. (fps, pixel_aspect, out_h, out_w) tuple. When set, single-shard
+                                    # path skips its probe + header read entirely — fanout's parent probes
+                                    # once and passes the result to each shard so we don't duplicate
+                                    # `_read_header` + `_read_image` + `frame_transform` across N shards.
 ):
     """
-    Convert a sequence of EXR frames to MP4 with a fully torch-resident pipeline.
+    Convert a sequence of EXR frames to MP4 (or MOV — see `out_path`) with a
+    fully torch-resident pipeline.
 
     Color transform (`src_colorspace` -> Rec.709 SDR via the ACES 2.0 SDR view) is
     baked into a 65^3 3D LUT + log2 shaper at startup. Per frame everything runs
@@ -594,6 +739,33 @@ def exr_to_mp4(
         - ffmpeg encodes as a separate OS process.
 
     Args:
+        out_path: destination video file. The container is chosen by ffmpeg
+            from the extension — `.mp4` and `.mov` are both supported (the
+            function's name notwithstanding). This applies in every mode:
+            single-shard, `atomic=True`, and fanout (shards are encoded in
+            the same container, then losslessly concatenated).
+        meta_path: optional (positional, right after out_path): ALSO capture
+            per-frame EXR header metadata as JSONL — one JSON object per
+            input frame, in frame order. Pass True to derive the path from
+            out_path by swapping the extension (out.mov -> out.jsonl). Each line: 'path', core fields (width, height, x, y,
+            nchannels, channelnames, format), and every header attribute
+            (framesPerSecond, smpte:TimeCode, worldToCamera, compression,
+            show-specific attribs, ...). Values are JSON-safe (tuples become
+            lists; exotic types degrade to their str()).
+            Why here and not a separate pass: headers are read from the SAME
+            open file handle as the pixels — zero extra I/O. When EXRs sit
+            behind a slow remote mount (e.g. rclone with a VFS cache), the
+            metadata is grabbed while each file is already downloaded and
+            hot, instead of re-downloading whole files later just for
+            headers. (For a standalone metadata pass, see
+            `rp.load_exr_metadatas` — note it returns raw OpenEXR header
+            dicts, a different shape than these OIIO-derived lines.)
+            With strict='skip'/'pad', unreadable frames still get a line:
+            {"path": ..., "error": ...} — so line count always equals input
+            frame count, even when the video has fewer/padded frames.
+            Honors `atomic` (temp file + rename) and `overwrite`. In fanout
+            mode each shard writes its own JSONL and they're merged in shard
+            order, exactly like the shard videos.
         device: int | str | list of int/str | None.
             A scalar runs single-shard. A list (or `num_shards > 1`) triggers
             subprocess fanout: each shard is launched as `rp call exr_to_mp4`
@@ -673,6 +845,25 @@ def exr_to_mp4(
         exr_to_mp4(paths, "out.mp4",
                    codec="libx265", pix_fmt="yuv420p12le", crf=20, preset="medium")
 
+        # MOV container: just use a .mov extension (works in all modes,
+        # including atomic and fanout).
+        exr_to_mp4(paths, "out.mov")
+
+        # Capture per-frame EXR header metadata while encoding (one JSON line
+        # per input frame, in frame order — timecode, camera matrices, etc).
+        # Free: headers come from the same file handle as the pixels, so on a
+        # slow mount (rclone etc) they're grabbed while each file is hot.
+        exr_to_mp4(paths, "out.mp4", "out_metadata.jsonl")
+        # Or just pass True to write alongside the video: out.mp4 -> out.jsonl
+        exr_to_mp4(paths, "out.mp4", True)
+
+        # ProRes 422 HQ in MOV (editorial delivery). NOTE: prores_ks ignores
+        # `crf` and `preset` (ffmpeg warns but proceeds) — quality is set by
+        # -profile:v (proxy/lt/standard/hq/4444) and optionally -qscale:v.
+        exr_to_mp4(paths, "out.mov",
+                   codec="prores_ks", pix_fmt="yuv422p10le",
+                   ffmpeg_extra_args=("-profile:v", "hq"))
+
         # ---- GPU encoders: same `crf=` semantics, codec name does the work. ----
         # The function translates `crf` internally: -crf for libx*, -rc vbr -cq
         # for *_nvenc, -q:v on an inverted scale for *_videotoolbox. So one
@@ -740,6 +931,11 @@ def exr_to_mp4(
     if strict not in ("strict", "skip", "pad"):
         raise ValueError("strict must be True/'strict', False/'skip', or 'pad'; got " + repr(strict))
 
+    # meta_path=True derives the path from out_path: out.mov -> out.jsonl.
+    # Resolved before fanout dispatch so the merged JSONL lands at the derived path.
+    if meta_path is True:
+        meta_path = rp.with_file_extension(out_path, "jsonl", replace=True)
+
     # Fanout dispatch: a list device or num_shards>1 means subprocess fanout.
     is_list_device = isinstance(device, (list, tuple))
     if is_list_device or (num_shards is not None and num_shards > 1):
@@ -757,6 +953,7 @@ def exr_to_mp4(
                 exr_paths, out_path,
                 devices=device_list,
                 num_shards=num_shards,
+                meta_path=meta_path,
                 kwargs=dict(
                     src_colorspace=src_colorspace, num_threads=num_threads,
                     buffer_limit=buffer_limit, codec=codec, crf=crf, preset=preset,
@@ -793,29 +990,35 @@ def exr_to_mp4(
     _phase("warming CUDA / picking device")
     dev = _pick_device(device)
 
-    _phase("reading first EXR header (OIIO plugin discovery)")
-    header_fps, pixel_aspect = _read_header(exr_paths[0])
-    if fps is None:
-        fps = header_fps
-    if not unsquash:
-        pixel_aspect = 1.0
-
     _phase("baking OCIO 3D LUT to " + str(dev))
     lut_3d = _bake_lut_3d(src_colorspace, dev)
 
-    _phase("running probe frame to resolve output dims")
-    # Probe frame 0 through the geometry stages to determine ffmpeg input dims.
-    # Mirror the per-frame HWC↔CHW wrap so user transforms see CHW here too.
-    from einops import rearrange as _probe_rearrange
-    probe = torch.from_numpy(_read_image(exr_paths[0])).to(dev)
-    if pre_unsquash_frame_transform is not None:
-        probe = _probe_rearrange(pre_unsquash_frame_transform(_probe_rearrange(probe, "h w c -> c h w")), "c h w -> h w c")
-    probe = _unsquash_gpu(probe, pixel_aspect)
-    if frame_transform is not None:
-        probe = _probe_rearrange(frame_transform(_probe_rearrange(probe, "h w c -> c h w")), "c h w -> h w c")
-    out_h, out_w = probe.shape[:2]
-    out_h, out_w = rp.r._round_dimensions_to_even(out_h, out_w)
-    del probe
+    if _probe is not None:
+        # Fanout parent already probed; skip _read_header + frame probe entirely.
+        fps, pixel_aspect, out_h, out_w = _probe
+        _phase("reusing probe from parent (fps=" + str(fps) + " out=" + str(out_w) + "x" + str(out_h) + ")")
+    else:
+        _phase("reading first EXR header (OIIO plugin discovery)")
+        header_fps, pixel_aspect = _read_header(exr_paths[0])
+        if fps is None:
+            fps = header_fps
+        if not unsquash:
+            pixel_aspect = 1.0
+
+        _phase("running probe frame to resolve output dims")
+        # Probe frame 0 through the geometry stages to determine ffmpeg input dims.
+        # Mirror the per-frame HWC↔CHW wrap so user transforms see CHW here too.
+        from einops import rearrange as _probe_rearrange
+        probe = torch.from_numpy(_read_image(exr_paths[0])).to(dev)
+        if pre_unsquash_frame_transform is not None:
+            probe = _probe_rearrange(pre_unsquash_frame_transform(_probe_rearrange(probe, "h w c -> c h w")), "c h w -> h w c")
+        probe = _unsquash_gpu(probe, pixel_aspect)
+        if frame_transform is not None:
+            probe = _probe_rearrange(frame_transform(_probe_rearrange(probe, "h w c -> c h w")), "c h w -> h w c")
+        out_h, out_w = probe.shape[:2]
+        out_h, out_w = rp.r._round_dimensions_to_even(out_h, out_w)
+        del probe
+
     n = len(exr_paths)
     _phase("startup done; output=" + str(out_w) + "x" + str(out_h) + " frames=" + str(n) + " — starting encode")
 
@@ -840,7 +1043,17 @@ def exr_to_mp4(
         raise FileExistsError("out_path already exists and overwrite=False: " + out_path)
     rp.make_parent_directory(out_path)
 
-    encode_path = rp.temporary_file_path("mp4") if atomic else out_path
+    collect_metadata = meta_path is not None
+    if collect_metadata:
+        if not overwrite and rp.file_exists(meta_path):
+            raise FileExistsError("meta_path already exists and overwrite=False: " + meta_path)
+        rp.make_parent_directory(meta_path)
+
+    # The temp file must share out_path's extension: ffmpeg picks the muxer from
+    # the extension, so a hardcoded "mp4" here would mux MP4 then rename it to
+    # .mov — a mislabeled container.
+    encode_path = rp.temporary_file_path(rp.get_file_extension(out_path)) if atomic else out_path
+    meta_encode_path = (rp.temporary_file_path("jsonl") if atomic else meta_path) if collect_metadata else None
     if not atomic:
         rp.delete_file(out_path, strict=False)
 
@@ -855,7 +1068,7 @@ def exr_to_mp4(
         pre_unsquash_frame_transform=pre_unsquash_frame_transform,
         pixel_aspect=pixel_aspect, out_h=out_h, out_w=out_w,
         clip=clip, lut_3d=lut_3d, device=dev,
-        strict=strict,
+        strict=strict, collect_metadata=collect_metadata,
     )
 
     # Wrap the per-frame stream with the bad-frame policy. _process_frame
@@ -869,6 +1082,7 @@ def exr_to_mp4(
 
     started = time.perf_counter()
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+    meta_file = None
     try:
         assert proc.stdin is not None
         stream = rp.load_files(
@@ -878,24 +1092,41 @@ def exr_to_mp4(
             show_progress=progress,
             lazy=True,
         )
+        if collect_metadata:
+            # Tee sits upstream of the bad-frame policy: it writes one JSON
+            # line per INPUT frame (in order) and passes plain bytes|None on,
+            # so 'skip'/'pad' still see the stream shape they expect.
+            meta_file = open(meta_encode_path, "w")
+            stream = _metadata_tee_stream(stream, meta_file)
         for frame_bytes in _bad_frame_wrap(stream):
             proc.stdin.write(frame_bytes)
         proc.stdin.close()
+        if meta_file is not None:
+            meta_file.close()
         rc = proc.wait()
     except Exception:
         proc.kill()
         proc.wait()
+        if meta_file is not None and not meta_file.closed:
+            meta_file.close()
         if atomic:
             rp.delete_file(encode_path, strict=False)
+            if collect_metadata:
+                rp.delete_file(meta_encode_path, strict=False)
         raise
     elapsed = time.perf_counter() - started
     if rc != 0:
         if atomic:
             rp.delete_file(encode_path, strict=False)
+            if collect_metadata:
+                rp.delete_file(meta_encode_path, strict=False)
         raise RuntimeError("ffmpeg failed with exit " + str(rc))
     if atomic:
         rp.delete_file(out_path, strict=False)
         rp.move_path(encode_path, out_path)
+        if collect_metadata:
+            rp.delete_file(meta_path, strict=False)
+            rp.move_path(meta_encode_path, meta_path)
     if not show_progress:
         console_print("elapsed_seconds=" + str(round(elapsed, 3)))
         console_print("fps_processed=" + str(round(n / elapsed, 3)))

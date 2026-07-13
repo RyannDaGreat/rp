@@ -3908,18 +3908,18 @@ def _get_gradient_preset(name):
         TypeError: If name is not a string
         ValueError: If gradient name is not found in either RP presets or matplotlib
     """
-    pip_import("cmapy")
-    import cmapy
-    
     if not isinstance(name, str):
         raise TypeError("Gradient name must be a string, got {0}: {1}. ".format(type(name).__name__, repr(name))+
                         "Expected string colormap name like 'viridis', 'sunset', etc - see rp.gradient_presets for full list")
-    
+
     if name in gradient_presets:
-        # Check RP gradient presets first
+        # Check RP gradient presets first - these are built-in hex lists and need no matplotlib/cmapy
         return gradient_presets[name]
-    
+
     elif name in _matplotlib_gradient_preset_names:
+        # Only matplotlib colormap names need cmapy - import it lazily here, not for hex presets above
+        pip_import("cmapy")
+        import cmapy
         # Load matplotlib colormap and cache in gradient_presets
         gradient_presets._data.update({
             x: byte_colors_to_float_colors(cmapy.cmap(x)[:, 0])
@@ -4005,7 +4005,51 @@ def _gradient_dict_to_list(gradient_dict, start=0, end=1, res=256):
         interpolated_colors.append(tuple(interpolated_rgba))
     
     return interpolated_colors
-        
+
+def sample_gradient_colors(gradient, positions):
+    """
+    Pure function. RGBA float colors at the given positions along a gradient.
+
+    Looks up where each position (in [0, 1]) falls along the gradient and returns its interpolated
+    color. position 0 is the gradient's start, 1 its end. Use this to color N things along a
+    gradient in one call; for a single position see sample_gradient_color.
+
+    Args:
+        gradient: anything _as_gradient_dict accepts - a preset name ('sunset', 'instagram_classic',
+                  ...), a list of colors (evenly spaced), or a {position: color} dict
+        positions: array-like of floats in [0, 1] (values are clipped to [0, 1])
+
+    Returns:
+        a list of (r, g, b, a) float tuples, one per position
+
+    Examples:
+        >>> sample_gradient_colors(['red', 'lime'], [0.0, 0.5, 1.0])   # start, middle, end
+        [(1.0, 0.0, 0.0, 1.0), (0.5, 0.5, 0.0, 1.0), (0.0, 1.0, 0.0, 1.0)]
+    """
+    stops = sorted(_as_gradient_dict(gradient).items())
+    stop_pos = [float(p) for p, c in stops]
+    stop_rgba = np.array([as_rgba_float_color(c) for p, c in stops])  # (S, 4)
+    pos = np.clip(np.asarray(positions, dtype=float), 0.0, 1.0)
+    rgba = np.stack([np.interp(pos, stop_pos, stop_rgba[:, c]) for c in range(4)], -1)  # (N, 4)
+    return [tuple(float(v) for v in color) for color in rgba]
+
+def sample_gradient_color(gradient, position):
+    """
+    Pure function. The RGBA float color at a single position along a gradient (singular of sample_gradient_colors).
+
+    Args:
+        gradient: a preset name, color list, or {position: color} dict (see sample_gradient_colors)
+        position: a float in [0, 1] (clipped to [0, 1])
+
+    Returns:
+        a single (r, g, b, a) float tuple
+
+    Examples:
+        >>> sample_gradient_color(['#000000', '#ffffff'], 0.5)        # midpoint of black->white = grey
+        (0.5, 0.5, 0.5, 1.0)
+    """
+    return sample_gradient_colors(gradient, [position])[0]
+
 def _apply_colormap_to_image_via_np(values, gradient_dict):
     """Apply colormap using numpy interpolation with floating-point precision."""
     # Extract positions and colors directly in sorted order
@@ -28443,7 +28487,9 @@ def pseudo_terminal(
         CPWD
         APWD
         TAKE
+        TKA
         MKDIR
+        MKA
         OPEN
         OPENH
         OPENA
@@ -28869,8 +28915,9 @@ def pseudo_terminal(
         BASHRC VIM ~/.bashrc
         ZSHRC VIM ~/.zshrc
 
-        strip ans.strip()
-        sp    ans.strip()
+        STRIP ans.strip()
+        STP ans.strip()
+        SP    ans.strip()
 
         LDT $list_dict_transpose(ans)
 
@@ -29137,6 +29184,7 @@ def pseudo_terminal(
         UPA $r._user_path_ans(ans)
 
         UZA $r._pterm_pluralize($unzip_to_folder, ans, show_progress=True)
+        RUZA $r._pterm_pluralize($ripunzip_to_folder, ans)
         ZIH $make_zip_file_from_folder($get_absolute_path('.'),show_progress=True)
         ZIA $r._pterm_pluralize($make_zip_file_from_folder, ans, show_progress=True)
         ZIAH $make_zip_file_from_folder(ans,$path_join($get_absolute_path('.'),$get_file_name(ans)+'.zip'),show_progress=True)
@@ -31633,7 +31681,13 @@ def pseudo_terminal(
 
                             fansi_print("Transformed command into: " + user_message,'magenta')
 
-                        elif user_message.startswith("TAKE ") or user_message =='TAKE' or user_message=='MKDIR' or user_message.startswith('MKDIR '):
+                        elif user_message.startswith("TAKE ") or user_message =='TAKE' or user_message=='MKDIR' or user_message.startswith('MKDIR ') or user_message=='TKA' or user_message=='MKA':
+                            if user_message=='TKA':
+                                fansi_print("TKA (aka Take ans) is basically 'TAKE str(ans)'",'blue')
+                                user_message='TAKE '+str(get_ans())
+                            elif user_message=='MKA':
+                                fansi_print("MKA (aka Mkdir ans) is basically 'MKDIR str(ans)'",'blue')
+                                user_message='MKDIR '+str(get_ans())
                             make=user_message.startswith('MKDIR')
                             take=not make
                             if make:
@@ -34851,14 +34905,14 @@ def cv_draw_circle(
         )
         return image
     
-    if is_binary_image(image):
-        image = rp.as_rgb_image(image, copy=copy)
+    if is_binary_image(image) or is_grayscale_image(image):
+        image = rp.as_rgb_image(image, copy=copy)  # grayscale/binary -> RGB so we can draw a colored circle on it
     image = as_byte_image(image, copy=copy)
 
     if is_rgba_image(image):
         color=as_rgba_float_color(color)
     else:
-        assert is_rgb_image(image), 'Internal assertion'
+        assert is_rgb_image(image), 'Internal assertion'  # grayscale/binary were converted to RGB above; only RGB can reach here
     color=float_color_to_byte_color(color)
 
     radius = int(radius)        
@@ -35132,6 +35186,75 @@ def cv_draw_arrows(
             image = cv_draw_arrow(image, start_x, start_y, end_x, end_y, thickness, color, rim=rim, rim_color=rim_color, tip_length=tip_length, antialias=antialias, copy=False)
 
     return image
+
+
+def draw_image_point_matches(image_a, image_b, from_points, to_points, colors='light random', *, radius=3, thickness=1):
+    """
+    Query (draws lines; near-pure - 'light random' advances rp's RNG). Visualizes point correspondences between two images.
+
+    Places image_a and image_b side by side and draws a colored line from each from_points[i] in
+    A to its partner to_points[i] in B, with a dot at both endpoints - the standard "matches" figure.
+
+    Args:
+        image_a, image_b: rp images (drawn side by side, A left / B right)
+        from_points: (N, 2) (x, y) points in image_a   (anything as_points_array accepts)
+        to_points:   (N, 2) (x, y) points in image_b, to_points[i] is the match of from_points[i]
+        colors: a color string applied per line (default 'light random' -> a fresh light random color
+                each), or a list of N colors (one per pair, e.g. to encode inlier status or error)
+        radius: endpoint dot radius in pixels
+        thickness: connecting line thickness in pixels
+
+    Returns:
+        a byte rp image: [image_a | image_b] with the colored correspondence lines drawn on top
+
+    Examples:
+        Full demo - match the canonical Sacre Coeur pair from two image URLs and draw the result.
+        load_images fetches URLs directly; get_image_point_matches_via_vismatch finds the
+        correspondences; this draws them; display_image/save_image let you see the figure:
+
+        >>> # a, b = load_images(
+        >>> #     "https://raw.githubusercontent.com/cvg/LightGlue/main/assets/sacre_coeur1.jpg",
+        >>> #     "https://raw.githubusercontent.com/cvg/LightGlue/main/assets/sacre_coeur2.jpg",
+        >>> #     use_cache=True,
+        >>> # )
+        >>> # matches = get_image_point_matches_via_vismatch(a, b)   # ~270 matches, ~114 inliers
+        >>> # canvas  = draw_image_point_matches(a, b, matches.inlier_points_a, matches.inlier_points_b)
+        >>> # display_image(canvas)                                  # light-random colored lines per match
+        >>> # save_image(canvas, "sacre_coeur_matches.png")         # ...and write it to disk to keep
+
+        Color the lines yourself to encode meaning - e.g. green inliers / red outliers, drawing
+        ALL raw matches so you can see what verification rejected:
+
+        >>> # colors = ['lime' if keep else 'red' for keep in matches.inlier_mask]
+        >>> # display_image(draw_image_point_matches(a, b, matches.points_a, matches.points_b, colors))
+
+        Or a geometric-quality heatmap, coloring each inlier by its Sampson error (green=tight fit):
+
+        >>> # t = matches.sampson_px[matches.inlier_mask]
+        >>> # heat = sample_gradient_colors(['lime', 'yellow', 'red'], t / (t.max() or 1))
+        >>> # display_image(draw_image_point_matches(a, b, matches.inlier_points_a, matches.inlier_points_b, heat))
+
+        Live webcam demo (no UI): grab the first frame as a fixed reference, then match every
+        subsequent frame against it and display the correspondences in real time:
+
+        >>> # reference = load_image_from_webcam()
+        >>> # while True:
+        >>> #     live    = load_image_from_webcam()
+        >>> #     matches = get_image_point_matches_via_vismatch(reference, live)
+        >>> #     canvas  = draw_image_point_matches(reference, live, matches.inlier_points_a, matches.inlier_points_b)
+        >>> #     display_image(canvas)                # ESC or Ctrl-C to stop
+    """
+    from_points = as_points_array(from_points)
+    to_points   = as_points_array(to_points) + [get_image_width(image_a), 0]  # shift B-points into the right pane
+    if isinstance(colors, str):
+        colors = [as_rgba_float_color(colors) for _ in from_points]  # one color per line (random per-call if 'light random')
+
+    canvas = as_byte_image(horizontally_concatenated_images(image_a, image_b), copy=False)
+    for (xa, ya), (xb, yb), color in zip(from_points, to_points, colors):
+        canvas = cv_draw_arrow(canvas, xa, ya, xb, yb, thickness=thickness, color=color, tip_length=0, copy=False)
+        canvas = cv_draw_circle(canvas, xa, ya, radius=radius, color=color, copy=False)
+        canvas = cv_draw_circle(canvas, xb, yb, radius=radius, color=color, copy=False)
+    return canvas
 
 
 def cv_line_graph(
@@ -36007,6 +36130,637 @@ def is_counter_clockwise(loop):
 def cv_make_clockwise(contour):
     return contour if is_clockwise(contour) else contour[::-1]
 
+
+def cv_find_fundamental_matrix_from_2d_pairs(pts1, pts2, *, method='magsac', threshold_px=1.0, confidence=0.999, max_iters=None, strict=None):
+    """
+    Query (calls cv2 MAGSAC; nondeterministic). Estimates the fundamental matrix from matched 2d points.
+
+    This is the function that PRODUCES the F that sampson_errors consumes. If you
+    have two lists of matched pixel correspondences across two images and you don't
+    already have a fundamental matrix, start here - you do not need to know any
+    epipolar geometry to call it. See sampson_errors for what F means once you have it.
+
+    The sister function is rp.sampson_errors, which scores how well each pair fits
+    the F this returns (the F is the shared currency between the two).
+
+    The fundamental matrix F is the 3x3 object encoding the relative geometry of two
+    camera views: a true correspondence (p1, p2) satisfies p2^T F p1 == 0. By default
+    we estimate it with MAGSAC (a robust RANSAC variant), which also reports which input
+    pairs are geometric inliers (consistent with the recovered geometry) vs outliers
+    (mismatches). The estimator is selectable via the method argument (a plain string -
+    you never need to import cv2 or know any cv2 constants).
+
+    Args:
+        pts1: (N, 2) (x, y) pixel coords in image 1
+        pts2: (N, 2) (x, y) pixel coords in image 2, pts2[i] is the match of pts1[i]
+        method: which estimator to use, as a string (case-insensitive):
+                    'magsac'        - MAGSAC++, robust + threshold-insensitive (default, recommended)
+                    'usac_accurate' - USAC tuned for accuracy (slower)
+                    'usac_fast'     - USAC tuned for speed
+                    'usac_default'  - USAC default settings
+                    'ransac'        - classic RANSAC
+                    'lmeds'         - least-median-of-squares (no threshold; needs <50% outliers)
+                    '8point'        - plain 8-point fit, NON-robust (no outlier rejection;
+                                      inlier_mask comes back all-True)
+                ('7point' is intentionally unsupported: it can return up to 3 stacked
+                F matrices (9x3), which breaks the (3, 3) contract this function and
+                sampson_errors rely on.)
+        threshold_px: inlier reprojection threshold in pixels (max distance from a point
+                      to its epipolar line before it is called an outlier). Used by the
+                      RANSAC/USAC/MAGSAC methods; ignored by 'lmeds' and '8point'.
+        confidence: desired solver confidence (probability the estimate is correct) in [0, 1).
+                    Used by the robust methods; ignored by '8point'.
+        max_iters: max robust-method iterations, or None to use cv2's own default.
+        strict: what to do when the geometry is degenerate and F is unrecoverable
+                (e.g. pure camera rotation, or a near-planar scene):
+                    None  -> return (None, all-False mask), letting the caller detect it (default)
+                    True  -> raise ValueError instead of returning a None matrix
+                (strict=False is not meaningful here - there is a single F to return,
+                nothing to skip - so it is treated the same as None.)
+
+    Returns:
+        (F, inlier_mask) where
+            F:           (3, 3) fundamental matrix, or None if the geometry is degenerate
+                         (only when strict is not True; strict=True raises instead).
+            inlier_mask: (N,) bool, True where the pair fits the recovered geometry
+                         (all False when F is None)
+
+    Examples:
+        Two views of a scene related by a horizontal shift give a clean estimate; the
+        consistent pairs come back as inliers:
+        >>> import numpy as np
+        >>> rng = np.random.RandomState(0)
+        >>> p1 = rng.rand(40, 2) * 640
+        >>> p2 = p1 + [30, 0]                       # pure horizontal disparity
+        >>> F, inliers = cv_find_fundamental_matrix_from_2d_pairs(p1, p2)
+        >>> F.shape, inliers.shape, inliers.dtype.name
+        ((3, 3), (40,), 'bool')
+
+        Feed the result straight into sampson_errors to score each pair:
+        >>> # errs = sampson_errors(F, p1, p2)       # (40,) px, ~0 for inliers
+    """
+    import cv2
+    # '7point' is deliberately absent: it can return 3 stacked F's (9x3), breaking the (3,3) contract.
+    methods = {
+        'magsac':        cv2.USAC_MAGSAC,
+        'usac_accurate': cv2.USAC_ACCURATE,
+        'usac_fast':     cv2.USAC_FAST,
+        'usac_default':  cv2.USAC_DEFAULT,
+        'ransac':        cv2.FM_RANSAC,
+        'lmeds':         cv2.FM_LMEDS,
+        '8point':        cv2.FM_8POINT,
+    }
+    return _cv_find_geometry_matrix_from_2d_pairs(
+        cv2.findFundamentalMat, methods, 8,  # 8-point algorithm needs >= 8 correspondences
+        pts1, pts2, method=method, threshold_px=threshold_px,
+        confidence=confidence, max_iters=max_iters, strict=strict,
+    )
+
+
+def _cv_find_geometry_matrix_from_2d_pairs(cv2_func, method_constants, min_pts, pts1, pts2, *, method, threshold_px, confidence, max_iters, strict):
+    """
+    Private. Shared body for cv_find_fundamental_matrix_from_2d_pairs and cv_find_homography_from_2d_pairs.
+
+    Both estimate a 3x3 geometry matrix from matched 2d point pairs via a robust cv2
+    solver, differing only in WHICH cv2 function / method-constants / min-points they use -
+    passed in by the public wrapper (which imports cv2 and builds its own method dict). This
+    holds all the shared plumbing (point coercion, length + min-count guards, method-string
+    -> cv2-constant mapping, max_iters/strict/None handling) so the two public functions stay
+    DRY. Error messages name the PUBLIC caller (discovered via get_current_function_name), so
+    it must be called DIRECTLY by a public wrapper.
+
+    Args:
+        cv2_func: the cv2 estimator to call, e.g. cv2.findFundamentalMat or cv2.findHomography
+        method_constants: dict mapping friendly method strings -> cv2 method int constants
+        min_pts: minimum number of point pairs the estimator needs
+        pts1, pts2: (N, 2) matched (x, y) pixel coords
+        method, threshold_px, confidence, max_iters, strict: see the public functions
+
+    Returns:
+        (M, inlier_mask) - M is the 3x3 matrix (or None if degenerate and strict is not True),
+        inlier_mask is (N,) bool (all False when M is None)
+
+    Examples:
+        >>> # M, mask = _cv_find_geometry_matrix_from_2d_pairs(   # called directly by a public wrapper
+        >>> #     cv2.findHomography, methods, 4, pts1, pts2, method='magsac',
+        >>> #     threshold_px=3.0, confidence=0.999, max_iters=None, strict=None)
+    """
+    # The public wrapper's name, only needed if we raise - so look it up lazily (it walks the
+    # stack) rather than on every happy-path call. frames_back=1 == the public caller.
+    get_name = partial(get_current_function_name, frames_back=1)
+
+    method_key = method.lower()
+    if method_key not in method_constants:
+        raise ValueError(get_name() + ': unknown method ' + repr(method) + '; valid methods are ' + ', '.join(sorted(method_constants)))
+    method_constant = method_constants[method_key]
+
+    pts1 = as_points_array(pts1).astype(np.float32)  # (N, 2)
+    pts2 = as_points_array(pts2).astype(np.float32)  # (N, 2)
+    if len(pts1) != len(pts2):
+        raise ValueError('pts1 and pts2 must be matched pairs of equal length, got ' + str(len(pts1)) + ' and ' + str(len(pts2)))
+    if len(pts1) < min_pts:
+        # Below min_pts the cv2 solver crashes with a cryptic assertion; fail clearly instead.
+        # This is a usage error regardless of strict (you simply gave too few points), so always raise.
+        raise ValueError(get_name() + ' needs at least ' + str(min_pts) + ' point pairs, got ' + str(len(pts1)))
+
+    cv2_kwargs = dict(ransacReprojThreshold=threshold_px, confidence=confidence)
+    if max_iters is not None:
+        cv2_kwargs['maxIters'] = max_iters
+    matrix, mask = cv2_func(pts1, pts2, method_constant, **cv2_kwargs)
+    if matrix is None or mask is None:
+        # Degenerate geometry: the matrix is unrecoverable. strict=True wants a loud failure here.
+        if strict is True:
+            raise ValueError(get_name() + ': degenerate geometry, could not estimate a matrix (too few stable correspondences, or a configuration the model cannot represent). Pass strict=None to receive (None, all-False mask) instead.')
+        return None, np.zeros(len(pts1), dtype=bool)
+    return matrix, mask.ravel().astype(bool)
+
+
+def cv_find_homography_from_2d_pairs(pts1, pts2, *, method='magsac', threshold_px=3.0, confidence=0.999, max_iters=None, strict=None):
+    """
+    Query (calls cv2 MAGSAC; nondeterministic). Estimates the homography from matched 2d points.
+
+    The sister function is rp.cv_find_fundamental_matrix_from_2d_pairs. Use THIS one
+    (homography H) when the scene is PLANAR or the camera only ROTATED about its center
+    (no translation); use the fundamental one (F) for a freely-moving camera viewing a
+    general 3d scene. The difference matters: H assumes all matched points obey one 2d
+    projective warp (p2 ~ H p1, a point->point map), which is wrong when points at
+    different depths move with parallax - there, F is correct. When in doubt for a
+    handheld/moving camera, prefer the fundamental sister.
+
+    Like the fundamental sister, the estimator is selectable via a plain string method
+    (you never need to import cv2 or know any cv2 constants), and it reports which input
+    pairs are geometric inliers vs outliers.
+
+    Args:
+        pts1: (N, 2) (x, y) pixel coords in image 1
+        pts2: (N, 2) (x, y) pixel coords in image 2, pts2[i] is the match of pts1[i]
+        method: which estimator to use, as a string (case-insensitive):
+                    'magsac'        - MAGSAC++, robust + threshold-insensitive (default, recommended)
+                    'usac_accurate' - USAC tuned for accuracy (slower)
+                    'usac_fast'     - USAC tuned for speed
+                    'usac_default'  - USAC default settings
+                    'ransac'        - classic RANSAC
+                    'lmeds'         - least-median-of-squares (no threshold; needs <50% outliers)
+                    'least_squares' - plain least-squares fit over ALL points, NON-robust
+                                      (no outlier rejection; inlier_mask comes back all-True)
+        threshold_px: inlier reprojection threshold in pixels (max distance from H @ pts1 to
+                      pts2 before the pair is called an outlier). Used by the robust methods;
+                      ignored by 'lmeds' and 'least_squares'. Default 3.0 (homography's
+                      reprojection error is typically looser than fundamental's 1.0px epipolar).
+        confidence: desired solver confidence (probability the estimate is correct) in [0, 1).
+        max_iters: max robust-method iterations, or None to use cv2's own default.
+        strict: what to do when the geometry is degenerate and H is unrecoverable
+                (e.g. fewer than 4 non-collinear correspondences, or a pathological config):
+                    None  -> return (None, all-False mask), letting the caller detect it (default)
+                    True  -> raise ValueError instead of returning a None matrix
+
+    Returns:
+        (H, inlier_mask) where
+            H:           (3, 3) homography mapping pts1 -> pts2 (p2 ~ H p1 in homogeneous
+                         coords), or None if degenerate (only when strict is not True).
+            inlier_mask: (N,) bool, True where the pair fits the recovered warp
+                         (all False when H is None)
+
+    Examples:
+        Points related by a pure 2d translation are perfectly homography-consistent:
+        >>> import numpy as np
+        >>> rng = np.random.RandomState(0)
+        >>> p1 = rng.rand(40, 2) * 640
+        >>> p2 = p1 + [30, 10]                       # a translation is a valid homography
+        >>> H, inliers = cv_find_homography_from_2d_pairs(p1, p2)
+        >>> H.shape, inliers.shape, bool(inliers.all())
+        ((3, 3), (40,), True)
+    """
+    import cv2
+    # findHomography's non-robust plain fit is method=0 (least squares over all points).
+    methods = {
+        'magsac':        cv2.USAC_MAGSAC,
+        'usac_accurate': cv2.USAC_ACCURATE,
+        'usac_fast':     cv2.USAC_FAST,
+        'usac_default':  cv2.USAC_DEFAULT,
+        'ransac':        cv2.RANSAC,
+        'lmeds':         cv2.LMEDS,
+        'least_squares': 0,
+    }
+    return _cv_find_geometry_matrix_from_2d_pairs(
+        cv2.findHomography, methods, 4,  # homography has 8 DOF -> needs >= 4 correspondences
+        pts1, pts2, method=method, threshold_px=threshold_px,
+        confidence=confidence, max_iters=max_iters, strict=strict,
+    )
+
+
+class ImagePointMatches:
+    """
+    Immutable result of matching 2d points between image A and image B.
+
+    Holds the raw matched point pairs plus an inlier_mask saying which survived geometric
+    verification, and (optionally) the 3x3 geometry matrix that verification produced. The
+    @property accessors derive the common things you actually want (the inlier subsets, an
+    (N, 2, 2) stacked point-pairs array, counts, mean error) so callers never recompute them.
+
+    This is the return type of rp.get_image_point_matches_via_vismatch, but it is geometry-agnostic
+    and reusable for any pairwise matcher.
+
+    All point arrays are (M, 2) float32 (x, y), in their image's pixel coordinates, with
+    points_b[i] the match of points_a[i].
+
+    (Written as a plain class with a hand-rolled __init__, NOT a @dataclass, because r.py must
+    stay importable on Python 3.5 and the dataclasses module is 3.7+.)
+
+    Args:
+        points_a:    (M, 2) matched points in image A (raw matches, pre-verification)
+        points_b:    (M, 2) corresponding matched points in image B
+        inlier_mask: (M,) bool, True where the pair passed geometric verification
+                     (one entry per raw match, M == len(points_a)). Pass None as a
+                     shorthand for "every match is an inlier" - it is normalized to an
+                     all-True (M,) array in __init__, so the stored field is never None.
+        geometry:    'fundamental', 'homography', or None - which model produced inlier_mask
+        matrix:      the (3, 3) verification matrix (F if geometry=='fundamental',
+                     H if 'homography'), or None when geometry is None / verification failed
+        sampson_px:  (M,) per-pair Sampson epipolar error in pixels, or None unless
+                     geometry=='fundamental' (Sampson distance is epipolar-specific;
+                     it is meaningless for a homography)
+
+    Examples:
+        >>> import numpy as np
+        >>> a = np.array([[10., 5.], [20., 8.], [30., 9.]], np.float32)
+        >>> b = a + [40, 0]
+        >>> mask = np.array([True, True, False])
+        >>> m = ImagePointMatches(a, b, mask, geometry='homography', matrix=np.eye(3), sampson_px=None)
+        >>> m.num_matches, m.num_inliers
+        (3, 2)
+        >>> m.inlier_points_a
+        array([[10.,  5.],
+               [20.,  8.]], dtype=float32)
+        >>> m.point_pairs.shape          # (n_inliers, 2, 2): [:,0]=A pt, [:,1]=B pt, last=(x,y)
+        (2, 2, 2)
+
+        Pass inlier_mask=None (or omit it) to mean "every match is an inlier":
+        >>> ImagePointMatches(a, b).num_inliers          # all 3 raw matches kept
+        3
+    """
+
+    _frozen = False
+
+    def __init__(self, points_a, points_b, inlier_mask=None, geometry=None, matrix=None, sampson_px=None):
+        points_a = as_numpy_array(points_a)
+        points_b = as_numpy_array(points_b)
+        if inlier_mask is None:
+            inlier_mask = np.ones(len(points_a), dtype=bool)  # None means "every match is an inlier"
+        self.points_a = points_a
+        self.points_b = points_b
+        self.inlier_mask = inlier_mask
+        self.geometry = geometry
+        self.matrix = matrix
+        self.sampson_px = sampson_px
+        self._frozen = True  # snapshot complete; block further mutation
+
+    def __setattr__(self, key, value):
+        """Command. Makes the instance immutable after construction (a match result is a snapshot)."""
+        if self._frozen:
+            raise AttributeError('ImagePointMatches is immutable; cannot set ' + repr(key))
+        object.__setattr__(self, key, value)
+
+    def __repr__(self):
+        return 'ImagePointMatches(num_matches=%d, num_inliers=%d, geometry=%r)' % (self.num_matches, self.num_inliers, self.geometry)
+
+    @property
+    def num_matches(self):
+        """Query. Number of raw matches before geometric verification."""
+        return len(self.points_a)
+
+    @property
+    def num_inliers(self):
+        """Query. Number of matches that passed geometric verification."""
+        return int(self.inlier_mask.sum())
+
+    @property
+    def inlier_points_a(self):
+        """Query. (n_inliers, 2) matched points in A that passed verification."""
+        return self.points_a[self.inlier_mask]
+
+    @property
+    def inlier_points_b(self):
+        """Query. (n_inliers, 2) matched points in B that passed verification."""
+        return self.points_b[self.inlier_mask]
+
+    @property
+    def point_pairs(self):
+        """
+        Query. The inlier correspondences as an (n_inliers, 2, 2) float array.
+
+        Layout: result[:, 0] are the A-points, result[:, 1] the B-points, last axis is (x, y).
+        This is the compact "list of point pairs" form, inliers only.
+        """
+        return np.stack([self.inlier_points_a, self.inlier_points_b], axis=1)
+
+    @property
+    def mean_sampson(self):
+        """Query. Mean Sampson error (px) over inliers, or NaN if not a fundamental-verified result."""
+        if self.sampson_px is None:
+            return float('nan')
+        errs = self.sampson_px[self.inlier_mask]
+        return float(np.mean(errs)) if len(errs) else float('nan')
+
+    @property
+    def verified(self):
+        """
+        Query. True iff these matches were geometrically verified (geometry is not None).
+
+        A plainly-constructed ImagePointMatches (geometry=None) is unverified - its inlier_mask
+        is all-True and means "every match kept", not "every match passed a geometry check".
+        Verified instances come from from_raw_matches with geometry='fundamental'/'homography'.
+        """
+        return self.geometry is not None
+
+    @classmethod
+    def from_raw_matches(cls, points_a, points_b, *, geometry='fundamental', threshold_px=None):
+        """
+        Query (runs cv2 MAGSAC; nondeterministic). Builds a verified ImagePointMatches from raw matches.
+
+        Alternate constructor: takes raw matched point pairs (e.g. straight from a deep matcher)
+        and geometrically verifies them, returning an instance whose inlier_mask, matrix, and
+        sampson_px reflect the chosen model. Plain cls(...) construction leaves geometry=None
+        (unverified); this is how you get a verified one.
+
+        Too few points to estimate the chosen model degrades gracefully to an unverified all-True
+        result rather than raising - a matcher legitimately returning few matches is not an error.
+
+        Args:
+            points_a, points_b: (M, 2) raw matched (x, y) pairs
+            geometry: 'fundamental' (epipolar, +Sampson), 'homography' (planar), or None (no check)
+            threshold_px: estimator inlier threshold, or None for the estimator's default
+
+        Returns:
+            ImagePointMatches with .verified True (unless geometry is None / too few points)
+
+        Examples:
+            >>> # m = ImagePointMatches.from_raw_matches(pa, pb, geometry='fundamental')
+            >>> # m.verified, m.geometry            # True, 'fundamental'
+        """
+        num = len(points_a)
+        fundamental_min, homography_min = 8, 4
+
+        if geometry is None or (geometry == 'fundamental' and num < fundamental_min) or (geometry == 'homography' and num < homography_min):
+            # No verification requested, or too few matches to estimate the chosen model: keep all.
+            return cls(points_a, points_b, np.ones(num, dtype=bool), geometry=None, matrix=None, sampson_px=None)
+
+        kw = {} if threshold_px is None else dict(threshold_px=threshold_px)
+        if geometry == 'fundamental':
+            F, mask = cv_find_fundamental_matrix_from_2d_pairs(points_a, points_b, **kw)
+            sampson = sampson_errors(F, points_a, points_b).astype(np.float32) if F is not None else None
+            if F is None:
+                mask = np.zeros(num, dtype=bool)  # degenerate: report no inliers, loudly empty
+            return cls(points_a, points_b, mask, geometry='fundamental', matrix=F, sampson_px=sampson)
+
+        H, mask = cv_find_homography_from_2d_pairs(points_a, points_b, **kw)
+        if H is None:
+            mask = np.zeros(num, dtype=bool)
+        return cls(points_a, points_b, mask, geometry='homography', matrix=H, sampson_px=None)
+
+
+def sampson_errors(F, pts1, pts2):
+    """
+    Pure function. Sampson epipolar distance (pixels) for matched point pairs.
+
+    The Sampson error is the first-order approximation of the geometric distance
+    between a correspondence and the epipolar manifold defined by F (the set of
+    point pairs exactly satisfying p2^T F p1 == 0). It is the standard quality
+    metric for a fundamental-matrix fit: ~0px for a perfect correspondence,
+    growing as the pair violates the epipolar geometry. It measures distance to
+    the epipolar lines, NOT the pixel distance between pts1 and pts2 (matched
+    points generally don't coincide - they're projections of one 3d point).
+
+    The sister function is rp.cv_find_fundamental_matrix_from_2d_pairs, which
+    produces the F this consumes (the F is the shared currency between the two).
+
+    A pair whose epipolar lines are degenerate (a point at an epipole, giving a
+    zero-gradient constraint) has an undefined Sampson distance; this returns inf
+    for those rows rather than a silent nan, so the caller can detect them.
+
+    Background (for readers new to epipolar geometry):
+        What F is. The fundamental matrix is a single 3x3 object that encodes the
+        relative geometry between two camera views of the same scene. You do NOT
+        build it by hand - it is the output of an estimator. To get one from your
+        point pairs, call rp.cv_find_fundamental_matrix_from_2d_pairs(pts1, pts2)
+        (a thin wrapper over cv2.findFundamentalMat); then pass that F plus the
+        same point pairs here to score how well each pair fits.
+
+        Why the entries have no individual meaning. F is rank-2 and defined only
+        up to scale (multiplying it by any nonzero constant gives the same
+        geometry), so its 9 numbers are coupled - there is no "the value in row 0
+        col 1 means X". The rows and columns are not separately named or
+        interpretable; F has meaning only as a whole matrix. Treat it as opaque.
+
+        The vectors involved. A pixel (x, y) is written in HOMOGENEOUS form as the
+        3-vector [x, y, 1]. The trailing 1 is not depth - it is the homogeneous
+        coordinate that lets a 3x3 matrix express translation, not just rotation
+        and scale. So pts1/pts2 are ordinary (x, y) pixels; the code appends the 1
+        internally (the `ones` / hstack lines below).
+
+        What F does to a point - point in, LINE out. F does NOT map a point to a
+        point. It maps a point in image 1 to a LINE in image 2:
+
+            F @ [x, y, 1]  ->  [a, b, c]   meaning the line  a*x + b*y + c = 0
+
+        That output line is the "epipolar line": the true match of (x, y) is
+        guaranteed to lie somewhere on it. F.T @ p2 likewise gives the epipolar
+        line in image 1 for a point in image 2.
+
+        The constraint and the error. A correct correspondence (p1, p2) satisfies
+        p2^T F p1 == 0, i.e. each point lies exactly on the epipolar line implied
+        by its partner. The Sampson error returned here is, in pixels, how far the
+        pair is from satisfying that - the perpendicular distance from each point
+        to its epipolar line, combined across both images. 0 == perfect fit.
+
+        End-to-end type signature:
+            F:    (3, 3) opaque geometry matrix (from findFundamentalMat)
+            pts1: (N, 2) (x, y) pixels in image 1   [internally -> [x, y, 1]]
+            pts2: (N, 2) (x, y) pixels in image 2   [internally -> [x, y, 1]]
+            out:  (N,)   per-pair distance-to-epipolar-line in pixels
+
+    Args:
+        F: (3, 3) fundamental matrix; F maps pts1 -> epipolar lines in image 2
+        pts1: (N, 2) pixel coords (x, y) in image 1
+        pts2: (N, 2) pixel coords (x, y) in image 2
+
+    Returns:
+        (N,) float array of per-correspondence Sampson errors in pixels
+        (inf where the epipolar geometry is degenerate for that pair)
+
+    Examples:
+        A pair that exactly satisfies the epipolar constraint has ~0 error. Here
+        F encodes the y1==y2 constraint (horizontal epipolar lines), so two points
+        on the same scanline are perfectly consistent:
+        >>> F = np.array([[0., 0., 0.], [0., 0., -1.], [0., 1., 0.]])
+        >>> sampson_errors(F, [[10., 5.]], [[40., 5.]]).round(6)
+        array([0.])
+
+        Breaking the constraint by 3px vertically gives 3/sqrt(2) px error:
+        >>> float(sampson_errors(F, [[10., 5.]], [[40., 8.]])[0].round(4))
+        2.1213
+
+        Full end-to-end demo with the sister function. We don't have a fundamental
+        matrix lying around, so we synthesize a realistic one: take a known second
+        camera pose (rotate + translate), project a random 3d point cloud into both
+        views to get matched pixel pairs, then corrupt one match into an outlier.
+        rp.cv_find_fundamental_matrix_from_2d_pairs recovers F and flags inliers;
+        sampson_errors then scores every pair (clean ones ~0px, the outlier huge):
+        >>> rng = np.random.RandomState(0)
+        >>> K = np.array([[800., 0, 320], [0, 800., 240], [0, 0, 1]])  # intrinsics
+        >>> th = 0.12                                                  # camera-2 yaw (rad)
+        >>> R = np.array([[np.cos(th), 0, np.sin(th)],
+        ...               [0, 1, 0],
+        ...               [-np.sin(th), 0, np.cos(th)]])
+        >>> t = np.array([0.6, 0.05, 0.1])                            # camera-2 translation
+        >>> X = np.column_stack([rng.uniform(-2, 2, 40),              # 40 3d points,
+        ...                      rng.uniform(-2, 2, 40),
+        ...                      rng.uniform(4, 8, 40)])              # all in front
+        >>> def project(rot, tr, X):                                  # pinhole projection
+        ...     x = (K @ (X @ rot.T + tr).T).T
+        ...     return x[:, :2] / x[:, 2:3]
+        >>> pts1 = project(np.eye(3), np.zeros(3), X)                  # view 1 pixels
+        >>> pts2 = project(R, t, X)                                   # view 2 pixels
+        >>> pts2[0] = [600., 50.]                                     # corrupt match #0
+        >>> F, inliers = cv_find_fundamental_matrix_from_2d_pairs(pts1, pts2)
+        >>> errs = sampson_errors(F, pts1, pts2)                       # (40,) px, per pair
+        >>> int(inliers.sum()) >= 35          # the clean matches survive verification
+        True
+        >>> bool(inliers[0])                  # the planted outlier is correctly rejected
+        False
+        >>> bool(errs[inliers].max() < 1.0)   # every inlier sits on its epipolar line
+        True
+        >>> bool(errs[0] > 20.0)              # the outlier is far from its epipolar line
+        True
+    """
+    pts1 = as_points_array(pts1).astype(float)  # (N, 2)
+    pts2 = as_points_array(pts2).astype(float)  # (N, 2)
+    ones = np.ones((len(pts1), 1))
+    p1 = np.hstack([pts1, ones])   # (N, 3) homogeneous
+    p2 = np.hstack([pts2, ones])   # (N, 3) homogeneous
+    Fp1  = (F   @ p1.T).T          # (N, 3) epipolar lines in image 2
+    Ftp2 = (F.T @ p2.T).T          # (N, 3) epipolar lines in image 1
+    numerator = np.abs(np.sum(p2 * Fp1, axis=1))                       # |p2^T F p1|
+    denom = np.sqrt(Fp1[:,0]**2 + Fp1[:,1]**2 + Ftp2[:,0]**2 + Ftp2[:,1]**2)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        return np.where(denom > 0, numerator / denom, np.inf)
+
+
+@memoized
+def _get_vismatch_matcher(model, device, max_keypoints):
+    """
+    Query (loads/caches model weights). Returns a vismatch matcher, built once per (model, device, max_keypoints).
+
+    @memoized so the matcher is constructed a SINGLE time and reused - vismatch.get_matcher is
+    expensive (~175ms/call), so calling it every frame in a live loop dominates the runtime. This
+    cache is what makes get_image_point_matches_via_vismatch usable in real time.
+
+    Examples:
+        >>> # m = _get_vismatch_matcher('superpoint-lightglue', 'mps', 2048)   # built once, then cached
+    """
+    pip_import('vismatch')
+    import vismatch
+    try:
+        return vismatch.get_matcher(model, device=device, max_num_keypoints=max_keypoints)
+    except AssertionError as e:
+        # Some vismatch wrappers hard-whitelist cuda/cpu and assert on e.g. 'mps'. Report loudly.
+        raise RuntimeError('vismatch model ' + repr(model) + ' does not support device ' + repr(device) + ' (' + str(e) + '). Try device="cpu", or a different model.')
+
+
+def get_image_point_matches_via_vismatch(image_a, image_b, *, model='superpoint-lightglue', device=None, geometry='fundamental', max_keypoints=2048, threshold_px=None):
+    """
+    Query (runs a neural matcher; loads/caches weights, nondeterministic). Matches 2d points between two images.
+
+    Wraps the `vismatch` library (a unified zoo of ~50 deep image matchers - LightGlue,
+    SuperGlue, LoFTR, RoMa, DISK, ALIKED, ...). You give it two images, it returns the
+    matched keypoint pairs as an ImagePointMatches, optionally geometrically verified. The heavy
+    `vismatch` dependency is imported lazily, so plain `import rp` never pulls it in - only
+    callers of THIS function pay for it (pip install vismatch).
+
+    The `_via_vismatch` in the name is deliberate: this is matching via one particular
+    backend, leaving room for sibling backends later.
+
+    Geometric verification is done HERE by rp (not by vismatch's built-in homography step),
+    so you can choose the correct model for your scene:
+        - 'fundamental' (default): the epipolar model (rp.cv_find_fundamental_matrix_from_2d_pairs),
+          correct for a freely-moving camera viewing a general 3d scene. Also fills in
+          per-match Sampson errors.
+        - 'homography': the planar model (rp.cv_find_homography_from_2d_pairs), correct only
+          for planar scenes or pure camera rotation.
+        - None: no verification - return every raw match with an all-True inlier mask ("the
+          full dump").
+
+    Args:
+        image_a, image_b: rp images (H, W[, C]) or rp torch images (C, H, W). Converted to the
+                          (3, H, W) tensors vismatch wants via rp.as_torch_image.
+        model: a vismatch matcher name (default 'superpoint-lightglue'). Validated against
+               vismatch.available_models. See the Models table below for popular options.
+        device: torch device string ('mps'/'cuda'/'cpu'), or None to auto-pick the best via
+                rp.select_torch_device. NOTE: some vismatch models (e.g. xfeat, dedode) hard-reject
+                non-cuda devices; this raises a clear error rather than silently falling back.
+        geometry: 'fundamental' | 'homography' | None - which model verifies matches (see above)
+        max_keypoints: keypoint budget for the extractor
+        threshold_px: inlier reprojection threshold passed to the geometry estimator, or None to
+                      use that estimator's own default (1.0px fundamental / 3.0px homography)
+
+    Models (popular subset; vismatch.available_models lists all 71. params/size are approximate -
+    mostly measured from official checkpoints, NOT author-published; size is the on-disk download,
+    and for roma/omniglue/dedode it is dominated by a separately-downloaded backbone):
+
+        model                 │ ~params         │ download │ released │ original repo
+        ───────────────────────┼──────────────────┼──────────┼──────────┼─────────────────────────────────────
+        tiny-roma              │ ~3 M             │ ~11 MB   │ Jun 2024 │ github.com/Parskatt/RoMa
+        omniglue               │ ~98 M (+DINOv2)  │ ~378 MB  │ May 2024 │ github.com/google-research/omniglue
+        xfeat                  │ ~1.5 M           │ ~6 MB    │ Apr 2024 │ github.com/verlab/accelerated_features
+        eloftr                 │ ~16 M            │ ~193 MB  │ Mar 2024 │ github.com/zju3dv/EfficientLoFTR
+        dedode                 │ ~33 M            │ ~128 MB  │ Aug 2023 │ github.com/Parskatt/DeDoDe
+        superpoint-lightglue   │ ~13 M            │ ~55 MB   │ Jun 2023 │ github.com/cvg/LightGlue
+        roma                   │ ~410 M (+DINOv2) │ ~446 MB  │ May 2023 │ github.com/Parskatt/RoMa
+        aliked-lightglue       │ ~13 M            │ ~48 MB   │ Apr 2023 │ github.com/Shiaoming/ALIKED
+        loftr                  │ ~12 M            │ ~45 MB   │ Apr 2021 │ github.com/zju3dv/LoFTR
+        disk-lightglue         │ ~15 M            │ ~59 MB   │ Jun 2020 │ github.com/cvlab-epfl/disk
+        sift-nn                │ 0 (classical)    │ none     │ Sep 1999 │ cs.ubc.ca/~lowe/keypoints
+
+        Speed/quality rule of thumb on this hardware: superpoint-lightglue is the only one fast
+        enough for real-time (sub-second/pair on MPS); the dense models (roma, eloftr) are
+        offline-tier. sift-nn is the odd one out - a fully classical algorithm: weakest accuracy,
+        but zero learned weights, zero download, CPU-only, and immune to the GPU/MPS device
+        rejections and weight-download cost the neural models incur (a dependency-light fallback).
+        'released' is the first arXiv/code release of the core method.
+
+    Returns:
+        ImagePointMatches (see that class). Its `matrix` is F or H per `geometry`; `sampson_px` is
+        filled only for 'fundamental'.
+
+    Examples:
+        >>> # m = get_image_point_matches_via_vismatch(rp.load_image('a.png'), rp.load_image('b.png'))
+        >>> # m.num_inliers, m.point_pairs.shape            # geometry-verified pairs, (N, 2, 2)
+        >>> # m2 = get_image_point_matches_via_vismatch(a, b, model='loftr', geometry='homography')
+        >>> # m3 = get_image_point_matches_via_vismatch(a, b, geometry=None)   # every raw match
+    """
+    if geometry not in ('fundamental', 'homography', None):
+        raise ValueError("geometry must be 'fundamental', 'homography', or None, got " + repr(geometry))
+
+    pip_import('vismatch')
+    import vismatch
+
+    if model not in vismatch.available_models:
+        raise ValueError('Unknown vismatch model ' + repr(model) + '. The ' + str(len(vismatch.available_models)) + ' available models are: ' + ', '.join(sorted(vismatch.available_models)))
+
+    if device is None:
+        device = str(select_torch_device(prefer_used=True, silent=True))
+
+    matcher = _get_vismatch_matcher(model, device, max_keypoints)  # cached - built once, reused every call
+
+    # vismatch wants (3,H,W) float32; .float() is load-bearing (MPS rejects the float64 as_torch_image gives byte input).
+    # copy=False throughout: vismatch only reads the tensor, and .float() already allocates a fresh one for byte input.
+    to_chw = lambda image: as_torch_image(as_rgb_image(as_numpy_image(image, copy=False), copy=False)).float()
+    result = matcher(to_chw(image_a), to_chw(image_b))
+
+    points_a = np.asarray(result['matched_kpts0'], dtype=np.float32)  # (M, 2)
+    points_b = np.asarray(result['matched_kpts1'], dtype=np.float32)  # (M, 2)
+
+    return ImagePointMatches.from_raw_matches(points_a, points_b, geometry=geometry, threshold_px=threshold_px)
 
 
 def scatter_plot(x,y=None,*,block=False,clear=True,color=None,dot_size=1,ylabel=None,xlabel=None,title=None):
@@ -45334,6 +46088,128 @@ def get_youtube_video_url(url_or_id):
 def _is_youtube_video_url(url):
     return url.startswith("https://www.youtube.com/watch?v=") and is_valid_url(url)
 
+def get_youtube_playlist_url(url_or_id):
+    """
+    Returns a clean youtube playlist url, given either a playlist id, a playlist url, or any
+    watch url that carries a list= query parameter. Returns the canonical /playlist?list= form.
+
+    Also accepts the /show/VL<playlist_id> url form (youtube's "show" page for a playlist),
+    where the path segment is the playlist id with a VL prefix.
+
+    Example:
+         >>> get_youtube_playlist_url('PLHovnlOusNLgvAbnxluXCVB3KLj8e4QB-')
+         'https://www.youtube.com/playlist?list=PLHovnlOusNLgvAbnxluXCVB3KLj8e4QB-'
+         >>> get_youtube_playlist_url('https://www.youtube.com/watch?v=HwAPLk_sQ3w&list=PLHovnlOusNLgvAbnxluXCVB3KLj8e4QB-')
+         'https://www.youtube.com/playlist?list=PLHovnlOusNLgvAbnxluXCVB3KLj8e4QB-'
+         >>> get_youtube_playlist_url('https://www.youtube.com/show/VLPLBrrfZs-ew7NeZ-4sYoqnEsifM0jL7vQ7?sbp=KgtmRFpuMURQVE95TUAB')
+         'https://www.youtube.com/playlist?list=PLBrrfZs-ew7NeZ-4sYoqnEsifM0jL7vQ7'
+    """
+    from urllib.parse import urlparse, parse_qs
+
+    if '/' in url_or_id:
+        parsed = urlparse(url_or_id)
+        list_ids = parse_qs(parsed.query).get('list')
+        if list_ids:
+            playlist_id = list_ids[0]
+        elif parsed.path.startswith('/show/VL'):
+            # /show/VL<playlist_id> -> strip the leading "/show/VL" to recover the playlist id
+            playlist_id = parsed.path[len('/show/VL'):]
+        else:
+            raise ValueError("get_youtube_playlist_url: No list= parameter found in url: " + url_or_id)
+    else:
+        playlist_id = url_or_id
+
+    return "https://www.youtube.com/playlist?list=" + playlist_id
+
+def get_youtube_playlist_video_urls(playlist_url):
+    """
+    Returns the watch urls of every video in a youtube playlist, in playlist order.
+
+    Each returned url is a simple https://www.youtube.com/watch?v=... string.
+    This is a query (it reads from youtube over the network), not a pure function.
+
+    Accepts five input forms (all must keep working - test every one after any edit):
+        1. Bare playlist id ......... 'PLHovnlOusNLgvAbnxluXCVB3KLj8e4QB-'
+        2. Playlist url ............. 'https://www.youtube.com/playlist?list=PLHovnlOusNLgvAbnxluXCVB3KLj8e4QB-'
+        3. Watch url with &list= .... 'https://www.youtube.com/watch?v=HwAPLk_sQ3w&list=PLHovnlOusNLgvAbnxluXCVB3KLj8e4QB-'
+        4. /show/VL<id> url ......... 'https://www.youtube.com/show/VLPLBrrfZs-ew7NeZ-4sYoqnEsifM0jL7vQ7?sbp=...'
+        5. Anonymous playlist ....... 'https://www.youtube.com/watch_videos?video_ids=A,B,C' (inline ids, no network)
+    Forms 1-4 normalize via get_youtube_playlist_url then fetch the lockupViewModel layout (see below).
+    Form 5 has no real playlist - the ids are listed inline, so the watch urls are built directly.
+
+    History (so future edits don't regress): pre-2026 this used pytubefix's Playlist.video_urls with a
+    5x retry loop. In 2026 youtube migrated every playlist page to a "lockupViewModel" json layout that
+    pytubefix (<=10.9.0) cannot parse - .video_urls silently returns [] for ALL playlists, old and new.
+    Upgrading pytubefix does NOT fix it. So we parse the lockup ids ourselves and page via continuation
+    tokens. If a future pytubefix learns the new layout, .video_urls could replace the gather() loop.
+
+    Example:
+        >>> urls = get_youtube_playlist_video_urls('https://www.youtube.com/watch?v=HwAPLk_sQ3w&list=PLHovnlOusNLgvAbnxluXCVB3KLj8e4QB-')
+        >>> urls[0]
+        'https://www.youtube.com/watch?v=HwAPLk_sQ3w'
+        >>> all(url.startswith('https://www.youtube.com/watch?v=') for url in urls)
+        True
+        >>> # Form 5 (anonymous, no network) builds urls straight from the inline ids:
+        >>> get_youtube_playlist_video_urls('https://www.youtube.com/watch_videos?video_ids=aaa,bbb,ccc')
+        ['https://www.youtube.com/watch?v=aaa', 'https://www.youtube.com/watch?v=bbb', 'https://www.youtube.com/watch?v=ccc']
+    """
+    assert isinstance(playlist_url, str), type(playlist_url)
+
+    # An "anonymous playlist" url (youtube.com/watch_videos?video_ids=A,B,C) has no real playlist id -
+    # the video ids are listed inline, so we build the watch urls directly and skip the network fetch.
+    from urllib.parse import urlparse, parse_qs
+    if urlparse(playlist_url).path == '/watch_videos':
+        video_ids = parse_qs(urlparse(playlist_url).query).get('video_ids')
+        if not video_ids:
+            raise ValueError("get_youtube_playlist_video_urls: No video_ids= parameter found in url: " + playlist_url)
+        return ["https://www.youtube.com/watch?v=" + video_id for video_id in video_ids[0].split(",")]
+
+    playlist_url = get_youtube_playlist_url(playlist_url)
+
+    pip_import("pytubefix")
+    from pytubefix import Playlist
+    from pytubefix.innertube import InnerTube
+
+    # As of 2026 youtube serves playlists in a "lockupViewModel" layout that pytubefix (<=10.9.0)
+    # can't parse - .video_urls just returns [] - so we pull the lockup ids ourselves, following
+    # continuation tokens to page through long playlists. walk_page() collects every "contentId" and
+    # the next-page token from one json page; ~100 ids arrive per page. The page cap guards runaways.
+    def walk_page(node, ids, token):
+        if isinstance(node, dict):
+            lockup = node.get("lockupViewModel", {})
+            if lockup.get("contentType") == "LOCKUP_CONTENT_TYPE_VIDEO":
+                ids.append(lockup["contentId"])
+            try:
+                token[0] = node["continuationItemRenderer"]["continuationEndpoint"]["continuationCommand"]["token"]
+            except (KeyError, TypeError):
+                pass
+            node = node.values()
+        if isinstance(node, (list, type({}.values()))):
+            for value in node:
+                walk_page(value, ids, token)
+        return ids, token[0]
+
+    page = Playlist(playlist_url).initial_data
+    try:
+        visitor_data = page["responseContext"]["webResponseContextExtensionData"]["ytConfigData"]["visitorData"]
+    except (KeyError, TypeError):
+        visitor_data = None
+
+    ids, token = walk_page(page, [], [None])
+    for _ in range(200):  # page cap; each page hands the token for the next
+        if not token:
+            break
+        ids, token = walk_page(InnerTube('WEB').browse(continuation=token, visitor_data=visitor_data), ids, [None])
+
+    if ids:
+        return ["https://www.youtube.com/watch?v=" + video_id for video_id in unique(ids)]
+
+    raise ValueError(
+        "get_youtube_playlist_video_urls: Got no videos for %s "
+        "(playlist may be empty/private, or youtube returned an unparseable page)"
+        % playlist_url
+    )
+
 @memoized
 def get_youtube_video_transcript(url_or_id: str):
     """
@@ -45385,6 +46261,7 @@ def download_youtube_video(url_or_id: str,
                            *,
                            need_video=True,
                            need_audio=True,
+                           merge_audio=False,
                            max_resolution=None,
                            min_resolution=None,
                            resolution_preference=max,
@@ -45416,6 +46293,12 @@ def download_youtube_video(url_or_id: str,
                                            YouTube normally streams both separately, and the ones that have both tend to be smaller files. 
                                            If you need high resolution and audio, I reccomend using rp.add_audio_to_video_file and using this function twice:
                                            once for audio-only and once for video-only, and use that function to patch the audio into the video-only file.
+                                           (Or, just pass merge_audio=True - which automates exactly that.)
+        - merge_audio (bool, optional): Only matters when need_video and need_audio are both True. Defaults to False.
+                                        When True, instead of letting YouTube hand us its low-res (usually 360p) combined file,
+                                        we recursively download the highest-res video-only and best audio-only files separately,
+                                        merge them with rp.add_audio_to_video_file, and return that. The result is the highest
+                                        possible resolution WITH audio. Done in a temp dir that's cleaned up afterwards.
         - max_resolution (int, optional): The maximum resolution allowed for the video. Defaults to None. Only matters if need_video
         - min_resolution (int, optional): The minimum resolution required for the video. Defaults to None. Only matters if need_video
         - resolution_preference (callable, optional): A function to determine the preferred resolution from available options. Only matters if need_video
@@ -45470,6 +46353,12 @@ def download_youtube_video(url_or_id: str,
         ... output_file = add_audio_to_video_file(video_file, audio_file)
         ... print('Please play',output_file)
 
+    Example:
+        >>> #merge_audio=True automates the above: highest-res video WITH audio in one call
+        ... path = download_youtube_video("https://www.youtube.com/watch?v=jvipPYFebWc", merge_audio=True, show_progress=False)
+        >>> get_video_file_shape(path)
+        ans = (5234, 1080, 1920, 3)          #1080P with audio, not the 360P youtube hands us by default
+
     """
 
     #Common logic invariant to external libraries:
@@ -45486,7 +46375,23 @@ def download_youtube_video(url_or_id: str,
             delete_file(path)
         else:
             path=get_unique_copy_path(path)
-    assert get_file_extension(path) == filetype 
+    assert get_file_extension(path) == filetype
+
+    if merge_audio and need_video and need_audio:
+        #Special case: download best video-only and best audio-only separately then merge them, giving us the
+        #highest-res file WITH audio (youtube's directly-combined files are usually only 360p). All work happens
+        #in a temp dir that we copy the result out of and then delete.
+        temp_dir = temporary_file_path()
+        make_directory(temp_dir)
+        fansi_print("download_youtube_video(merge_audio): Downloading highest-res video-only track...", 'cyan', 'bold')
+        video_file = gather_args_recursive_call(need_video=True, need_audio=False, merge_audio=False, path=path_join(temp_dir, 'video'))
+        fansi_print("download_youtube_video(merge_audio): Downloading best audio-only track...", 'cyan', 'bold')
+        audio_file = gather_args_recursive_call(need_video=False, need_audio=True, merge_audio=False, path=path_join(temp_dir, 'audio'))
+        fansi_print("download_youtube_video(merge_audio): Merging audio into video and saving to "+path+" ...", 'green', 'bold')
+        merged_file = add_audio_to_video_file(video_file, audio_file, path_join(temp_dir, 'merged.'+filetype))
+        copy_file(merged_file, path)
+        delete_folder(temp_dir)
+        return path
 
     #Logic that's specific to pytubefix:
     pip_import('pytubefix')
@@ -46570,7 +47475,7 @@ def load_videos(
 
     return gather_args_call(load_files, load, paths)
 
-def _load_video_via_indexed_reader(path, indices, as_dict, open_reader):
+def _load_video_via_indexed_reader(path, indices, as_dict, open_reader, time_unit="frames"):
     """
     Query. Shared core for load_video_via_decord and load_video_via_rs.
 
@@ -46579,10 +47484,12 @@ def _load_video_via_indexed_reader(path, indices, as_dict, open_reader):
 
     Args:
         path (str): Local path or URL.
-        indices: None | int | slice | iterable of ints. See _resolve_video_frame_indices.
+        indices: None | number | slice | iterable. See _resolve_video_frame_indices.
         as_dict (bool): If True, wrap the output in {'video', 'indices', 'num_frames'}.
-        open_reader (callable): path -> (num_frames: int, get_batch: callable).
+        open_reader (callable): path -> (num_frames: int, fps: float, get_batch: callable).
             get_batch(list[int]) must return an (N, H, W, C) uint8 ndarray.
+        time_unit (str): 'frames' (indices are frame numbers) or 'seconds'
+            (numeric indices are timestamps, converted via fps from open_reader).
 
     Returns:
         ndarray (T, H, W, C) uint8, or dict if as_dict=True.
@@ -46590,9 +47497,12 @@ def _load_video_via_indexed_reader(path, indices, as_dict, open_reader):
     if not file_exists(path) and is_valid_url(path):
         url = path
         with TemporarilyDownloadUrl(url) as path:
-            return _load_video_via_indexed_reader(path, indices, as_dict, open_reader)
+            return _load_video_via_indexed_reader(path, indices, as_dict, open_reader, time_unit)
 
-    num_frames, get_batch = open_reader(path)
+    num_frames, fps, get_batch = open_reader(path)
+    if time_unit == "seconds" and indices is not None:
+        # timestamps (sec, floats ok) -> nearest frame indices; atleast_1d so a scalar stays a list
+        indices = np.round(np.atleast_1d(indices) * fps).astype(int).tolist()
     indices = _resolve_video_frame_indices(indices, num_frames)
     video = get_batch(indices)
 
@@ -46639,9 +47549,10 @@ def _resolve_video_frame_indices(indices, num_frames):
 
 def _open_decord_reader(path):
     """
-    Query. Opens `path` with decord and returns (num_frames, get_batch). The
+    Query. Opens `path` with decord and returns (num_frames, fps, get_batch). The
     returned get_batch enters decord's native bridge scope so the result is
-    always converted to a numpy ndarray.
+    always converted to a numpy ndarray. fps (reader.get_avg_fps()) comes from the
+    already-open reader, so time_unit='seconds' needs no extra file read.
     """
     pip_import("decord")
     import decord
@@ -46649,12 +47560,14 @@ def _open_decord_reader(path):
     def get_batch(idx):
         with decord.bridge._BridgeScope("native"):
             return reader.get_batch(idx).asnumpy()
-    return len(reader), get_batch
+    return len(reader), reader.get_avg_fps(), get_batch
 
 
 def _open_rs_reader(path):
     """
-    Query. Opens `path` with video-reader-rs and returns (num_frames, get_batch).
+    Query. Opens `path` with video-reader-rs and returns (num_frames, fps, get_batch).
+    fps (reader.get_fps()) comes from the already-open reader, so time_unit='seconds'
+    needs no extra file read.
 
     Uses PyVideoReader.get_batch for random-access decode. video_reader-rs also
     exposes __iter__ (true streaming with a persistent FFmpeg cursor) and
@@ -46694,24 +47607,30 @@ def _open_rs_reader(path):
     pip_import("video_reader")
     from video_reader import PyVideoReader
     reader = PyVideoReader(path)
-    return len(reader), reader.get_batch
+    return len(reader), reader.get_fps(), reader.get_batch
 
 
-def load_video_via_decord(path, indices=None, *, as_dict=False):
+def load_video_via_decord(path, indices=None, *, as_dict=False, time_unit="frames"):
     """
     Load video frames with decord.
     Often faster than using rp.load_video, especially if only a subset of frames are needed
 
     Args:
         path: Video path (or URL).
-        indices:
-            - None: all frames
-            - int: evenly sample that many frames
-            - slice: slice of frames
-            - iterable: explicit frame indices
+        indices: interpreted according to time_unit (see below).
         as_dict: If True, return {'video': frames, 'indices': resolved_indices, 'num_frames': int}.
+                 Note: resolved_indices are always frame indices (ints), even when
+                 time_unit='seconds' - they are the resolved frames, not timestamps.
                  Note: resolved_indices may differ from the input if an int or None was given.
                  Note: num_frames reflects the number of frames in the full video file
+        time_unit: 'frames' (default) or 'seconds'.
+            'frames': indices are integer frame numbers (None=all, int=evenly
+                sample that many, slice=slice of frames, iterable=explicit).
+            'seconds': numeric indices are timestamps in seconds (floats allowed),
+                each rounded to the nearest frame. None still means all frames;
+                a scalar selects one frame; an iterable selects those frames.
+            The frame rate is read from the already-open reader, so
+            time_unit='seconds' adds no extra file read.
 
     Returns:
         ndarray (T, H, W, C) or dict if as_dict=True.
@@ -46722,10 +47641,10 @@ def load_video_via_decord(path, indices=None, *, as_dict=False):
         which auto-detects bit depth and returns float16 or float32 accordingly.
         For AV1, use load_video_via_rs (decord can't decode AV1).
     """
-    return _load_video_via_indexed_reader(path, indices, as_dict, _open_decord_reader)
+    return _load_video_via_indexed_reader(path, indices, as_dict, _open_decord_reader, time_unit)
 
 
-def load_video_via_rs(path, indices=None, *, as_dict=False, lazy=False):
+def load_video_via_rs(path, indices=None, *, as_dict=False, lazy=False, time_unit="frames"):
     """
     Load video frames with video-reader-rs ('rs' = Rust).
     Repo: https://github.com/gcanat/video_reader-rs
@@ -46734,7 +47653,7 @@ def load_video_via_rs(path, indices=None, *, as_dict=False, lazy=False):
     decoder, so it supports codecs decord can't - notably AV1.
 
     Args:
-        See load_video_via_decord.
+        See load_video_via_decord (including time_unit='frames'|'seconds').
         lazy (bool): If True, return an IteratorWithLen that yields ONE frame
             at a time (O(1) peak memory regardless of video length). Critical
             for huge videos on memory-constrained hardware (e.g. 8K on a Pi).
@@ -46761,11 +47680,11 @@ def load_video_via_rs(path, indices=None, *, as_dict=False, lazy=False):
               lazy=False.
     """
     if not lazy:
-        return _load_video_via_indexed_reader(path, indices, as_dict, _open_rs_reader)
-    return _load_video_via_rs_lazy(path, indices, as_dict)
+        return _load_video_via_indexed_reader(path, indices, as_dict, _open_rs_reader, time_unit)
+    return _load_video_via_rs_lazy(path, indices, as_dict, time_unit)
 
 
-def _load_video_via_rs_lazy(path, indices, as_dict):
+def _load_video_via_rs_lazy(path, indices, as_dict, time_unit="frames"):
     """
     Query. O(1)-memory lazy path for load_video_via_rs. Returns an
     IteratorWithLen yielding one (H, W, C) uint8 RGB frame at a time.
@@ -46787,7 +47706,12 @@ def _load_video_via_rs_lazy(path, indices, as_dict):
     # The actual streaming uses a second open (inside the generator) so the
     # download context (_MaybeTemporarilyDownloadVideo) spans the iterator's lifetime.
     with _MaybeTemporarilyDownloadVideo(path) as local_path:
-        num_frames = len(PyVideoReader(local_path))
+        reader = PyVideoReader(local_path)
+        num_frames = len(reader)
+        fps = reader.get_fps()
+    if time_unit == "seconds" and indices is not None:
+        # timestamps (sec, floats ok) -> nearest frame indices; atleast_1d so a scalar stays a list
+        indices = np.round(np.atleast_1d(indices) * fps).astype(int).tolist()
     indices = _resolve_video_frame_indices(indices, num_frames)
     monotonic = all(indices[i] <= indices[i+1] for i in range(len(indices) - 1))
 
@@ -48000,6 +48924,234 @@ def change_video_file_framerate(video_path, new_framerate, output_path=None):
 
 def change_video_file_framerates(video_paths, new_framerate):
     return [change_video_file_framerate(video_path, new_framerate) for video_path in video_paths]
+
+
+def trim_video_file(video_path, start=None, end=None, output_path=None, *, time_unit='frames', crf=18, include_audio=True, show_progress=False):
+    """
+    Command. Extracts [start, end) from a video file frame-accurately with minimal
+    re-encoding (a "smart cut"): complete GOPs are losslessly stream-copied
+    byte-for-byte, and only the boundary frames that fall mid-GOP are re-encoded -
+    the frames between `start` and the first keyframe at-or-after it, plus (only
+    for codecs that reorder frames, like typical h264/hevc) the partial GOP at the
+    clip's end. For av1/vp9 the copy usually runs lossless to the very last frame.
+
+    Equivalent to load_video(video_path)[start:end] saved to a new file, except
+    almost all frames keep their original encoded bytes. Works on mp4/mov/m4v
+    files with h264, hevc, av1 or vp9 video. Audio is passthrough-copied (cut at
+    packet granularity); subtitle/data streams are dropped. Open-GOP hevc (x265's
+    default) has no clean stream-copy entry points and falls back to re-encoding.
+
+    Verified per-frame (decord/PyAV byte-comparisons + exact frame counts) on
+    av1/h264/vp9 mp4 and closed+open-GOP hevc mov, with and without audio.
+
+    Args:
+        video_path (str): Input video file (mp4/mov/m4v).
+        start (optional): Clip start, inclusive - frame number or seconds (see
+            time_unit). None (default) means the very beginning.
+        end (optional): Clip end, exclusive - frame number or seconds (see
+            time_unit). None (default) means the very end of the video.
+        output_path (str, optional): Where to write the clip. Defaults to the input
+            name plus a suffix, e.g. video_trim_223_887.mp4 (unique, never overwrites).
+        time_unit (str): 'frames' (default) - start/end are frame indices, converted
+            via the file's framerate - or 'seconds'. Same convention as rp.load_video.
+        crf (int): Quality of the few re-encoded boundary frames (lower = better).
+            Default 18 is visually lossless for most content.
+        include_audio (bool): If True (default), all audio tracks are passthrough-copied
+            (bit-identical, cut at ~one-packet granularity). If False, audio is dropped.
+        show_progress (bool): If True, show ffmpeg's live progress output.
+
+    Returns:
+        str: Path to the written clip.
+
+    Examples:
+        >>> # trim_video_file('video.mp4', 223, 887)          # frames 223..886
+        >>> # trim_video_file('video.mp4', 600, 605, time_unit='seconds')
+        >>> # trim_video_file('video.mp4', 223)                # frame 223 to the end
+        >>> # trim_video_file('video.mp4', end=100)            # the first 100 frames
+        >>> # trim_video_file('shot.mov', 0, 48, output_path='intro.mov')
+        >>> # trim_video_file('video.mp4', 223, 887, include_audio=False)  # silent clip
+    """
+    import json
+    import subprocess
+
+    _ensure_ffmpeg_installed()
+    assert time_unit in ('frames', 'seconds'), time_unit
+
+    # Only the ISO-BMFF family has the exact timestamps frame-accurate cutting needs.
+    # (Matroska quantizes timestamps to ~1ms and its seeks are unreliable for -c copy.)
+    for path in [video_path, output_path or video_path]:
+        if get_file_extension(path).lower() not in ('mp4', 'mov', 'm4v'):
+            raise ValueError('trim_video_file: only mp4/mov/m4v containers are supported, not ' + repr(get_file_extension(path)) + '. Losslessly remux first: ffmpeg -i input -c copy output.mp4')
+
+    # One probe for the video stream params the boundary re-encode must match
+    probe = subprocess.run(
+        ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries',
+         'stream=codec_name,codec_tag_string,pix_fmt,time_base,start_time,duration,has_b_frames,color_range,color_space,color_transfer,color_primaries',
+         '-of', 'json', video_path],
+        capture_output=True, text=True, check=True)
+    stream = json.loads(probe.stdout)['streams'][0]
+    codec = stream['codec_name']
+
+    fps = get_video_file_framerate(video_path)
+    if start is None:
+        start = 0
+    if end is None:
+        # The very end of the video, from the probe already in hand (rounded so a
+        # frames-unit end is a clean count, e.g. video_trim_100_1440.mp4)
+        duration = float(stream['duration'])
+        end = round(duration * fps) if time_unit == 'frames' else duration
+    assert end > start, (start, end)
+
+    if time_unit == 'frames':
+        start_t, end_t = start / fps, end / fps
+    else:
+        start_t, end_t = float(start), float(end)
+    tol = 0.5 / fps  # place every cut halfway between frames so float fuzz can't shift it
+
+    if output_path is None:
+        pattern = '_trim_%i_%i' if time_unit == 'frames' else '_trim_%gs_%gs'
+        output_path = get_unique_copy_path(
+            with_file_name(
+                video_path,
+                with_file_extension(
+                    get_file_name(video_path, include_file_extension=False) + pattern % (start, end),
+                    get_file_extension(video_path)
+                )
+            )
+        )
+
+    # Some files start the stream at a nonzero pts; anchor the frame math to it
+    start_time = stream.get('start_time', 'N/A')
+    start_time = 0.0 if start_time in (None, 'N/A') else float(start_time)
+    start_t += start_time
+    end_t += start_time
+
+    encoder_by_codec = {
+        'h264': 'libx264',
+        'hevc': 'libx265',
+        'av1': 'libsvtav1' if 'libsvtav1' in get_available_ffmpeg_codecs() else 'libaom-av1',
+        'vp9': 'libvpx-vp9'
+    }
+    if codec not in encoder_by_codec:
+        raise ValueError('trim_video_file: unsupported video codec ' + repr(codec) + ' in ' + video_path)
+    encoder = encoder_by_codec[codec]
+
+    # Packet map of the clip window, in decode (file) order: pts + keyframe flag.
+    # Gives both the keyframe positions and the exact packet counts the copy needs.
+    probe = subprocess.run(
+        ['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+         '-show_entries', 'packet=pts_time,flags', '-of', 'json',
+         '-read_intervals', '%f%%%f' % (start_t, end_t + 1), video_path],
+        capture_output=True, text=True, check=True)
+    packets = [(float(p['pts_time']), 'K' in p['flags']) for p in json.loads(probe.stdout)['packets']
+               if p.get('pts_time') is not None]
+    reorder = int(stream.get('has_b_frames', '0') or 0) > 0
+
+    def is_clean_entry(i):
+        # A keyframe is a clean stream-copy entry point unless packets right after it
+        # display before it - open-GOP CRA leading pictures (RASL) that reference frames
+        # before the cut and could never decode. (x265's open-gop default makes these.)
+        return all(pts > packets[i][0] for pts, k in packets[i + 1:i + 13])
+
+    key_indices = [i for i, (pts, k) in enumerate(packets) if k]
+    i1 = next((i for i in key_indices
+               if start_t - tol <= packets[i][0] < end_t - tol and is_clean_entry(i)), None)
+    kf1 = packets[i1][0] if i1 is not None else None
+
+    # h264/hevc: build the parts as MPEG-TS (annex-b) so BOTH the re-encoded part's and the
+    # copied source's SPS/PPS travel in-band and survive the concat; the final remux back to
+    # mp4/mov reassembles the global header. AV1/VP9 always carry headers in-band, so their
+    # parts stay in the native container (mpegts can't hold them anyway).
+    annexb = codec in ('h264', 'hevc')
+    mux = ['-video_track_timescale', stream['time_base'].split('/')[1]]
+    if stream['codec_tag_string'] not in ('', '[0][0][0][0]'):
+        mux += ['-tag:v', stream['codec_tag_string']]
+    color = []
+    for key, flag in [('color_range', '-color_range'), ('color_space', '-colorspace'),
+                      ('color_transfer', '-color_trc'), ('color_primaries', '-color_primaries')]:
+        if stream.get(key, 'unknown') != 'unknown':
+            color += [flag, stream[key]]
+
+    part = ['-muxdelay', '0', '-muxpreload', '0'] if annexb else mux  # no mpegts start offset
+    encode = ['-map', '0:v:0', '-an', '-c:v', encoder] + _ffmpeg_quality_flags(encoder, crf) + ['-pix_fmt', stream['pix_fmt']] + color + part
+    if encoder == 'libx264':
+        encode += ['-x264-params', 'sps-id=3']  # dodge SPS/PPS id collision with the copied source packets
+    if encoder == 'libx265':
+        encode += ['-x265-params', 'log-level=error']  # x265 prints its banner to stderr regardless of -loglevel
+    if encoder == 'libvpx-vp9':
+        encode += ['-b:v', '0']  # vp9 quirk: crf is only honored in constant-quality mode (-b:v 0)
+    copy = ['-map', '0:v:0', '-an', '-c', 'copy', '-avoid_negative_ts', 'make_zero'] + part
+    if annexb:
+        copy += ['-bsf:v', codec + '_mp4toannexb']  # inserts the source SPS/PPS in-band at its keyframe
+
+    def ffmpeg(args):
+        verbosity = ['-hide_banner'] + ([] if show_progress else ['-nostats', '-loglevel', 'error'])
+        env = None if show_progress else dict(os.environ, SVT_LOG='1')  # SVT-AV1 banner ignores -loglevel
+        subprocess.run(['ffmpeg', '-y'] + verbosity + args, check=True, env=env)
+
+    extension = get_file_extension(output_path)
+    temps = []
+    def temp(ext=None):
+        temps.append(temporary_file_path(ext or ('ts' if annexb else extension)))
+        return temps[-1]
+
+    parts = []
+    def encode_part(t0, t1):
+        parts.append(temp())
+        ffmpeg(['-ss', str(t0 - tol), '-to', str(t1 - tol), '-i', video_path] + encode + [parts[-1]])
+    def copy_part(n_packets):
+        parts.append(temp())
+        ffmpeg(['-ss', str(kf1 + tol), '-i', video_path, '-frames:v', str(n_packets)] + copy + [parts[-1]])
+
+    try:
+        if i1 is None:
+            n = 0                      # no clean keyframe inside the clip
+        elif reorder:
+            # With frame reordering a stream copy is only frame-exact when it ends at a
+            # keyframe (mid-GOP, trailing B-frames reference frames past the cut), so the
+            # clip's final partial GOP is re-encoded just like its head. The copied span's
+            # true display coverage is measured from the packets themselves - for an
+            # open-GOP end keyframe the RASL display gap is then re-encoded too.
+            i2 = max(i for i in key_indices if packets[i][0] < end_t - tol)
+            n = i2 - i1
+            if n:
+                copy_end = max(pts for pts, k in packets[i1:i2]) + 1.0 / fps
+        else:
+            # No reordering (typical av1/vp9): packets are in display order, so the
+            # copy can simply stop mid-GOP at the exact frame - lossless to the very end.
+            copy_end = end_t
+            n = sum(1 for pts, k in packets[i1:] if pts < end_t - tol)
+
+        if n == 0:
+            encode_part(start_t, end_t)
+        else:
+            if start_t + tol < kf1:
+                encode_part(start_t, kf1)
+            copy_part(n)
+            if copy_end < end_t - tol:
+                encode_part(copy_end, end_t)
+
+        if len(parts) == 1:
+            video_input = ['-i', parts[0]]
+        else:
+            listfile = temp('txt')
+            with open(listfile, 'w') as f:
+                for p in parts:
+                    f.write("file '" + get_absolute_path(p).replace("'", r"'\''") + "'\n")
+            video_input = ['-f', 'concat', '-safe', '0', '-i', listfile]
+
+        # Final remux into the output container (+ audio passthrough if the source has any).
+        # -map_chapters -1 / -write_tmcd 0: source chapters and timecode tags would otherwise
+        # materialize as bogus data tracks in the clip (with the SOURCE's chapter times/timecode).
+        audio = (['-ss', str(start_t - tol), '-t', str(end_t - start_t), '-i', video_path, '-map', '1:a']
+                 if include_audio and video_has_audio(video_path) else [])
+        ffmpeg(video_input + audio + ['-map', '0:v:0', '-map_chapters', '-1', '-write_tmcd', '0', '-c', 'copy'] + mux + [output_path])
+    finally:
+        for p in temps:
+            if file_exists(p):
+                delete_file(p)
+
+    return output_path
 
 
 def concat_mp4_files(*input_files, output_file=None):
@@ -52363,7 +53515,9 @@ def mount_s3_via_rclone(
     attr_timeout="10m",
     no_checksum=True,
     fast_fingerprint=True,
-    max_buffer_memory=None
+    max_buffer_memory=None,
+    no_sign_request=False,
+    preflight=True
 ):
     """
     Mount an S3 URL as a local filesystem via rclone + FUSE.
@@ -52372,8 +53526,11 @@ def mount_s3_via_rclone(
     point is actually visible to the OS before returning -- saves you from
     pairing every call with rp.wait_for_mount(mount_point) yourself.
 
-    Uses the AWS credential chain (env / IMDS / ~/.aws). Requires `rclone`
-    and `fuse3` (apt install fuse3) on the host.
+    Uses the AWS credential chain (env / IMDS / ~/.aws) unless
+    no_sign_request=True. Requires `rclone`, plus `fuse3` on Linux
+    (apt install fuse3). On macOS this uses `rclone nfsmount` (the
+    kernel's built-in NFS client) instead of FUSE, because Homebrew's
+    rclone build does not support `rclone mount` on macOS.
 
         daemon=False     block until Ctrl+C, then auto-unmount (default)
         daemon=True      detach rclone (--daemon) so the mount outlives
@@ -52429,6 +53586,30 @@ def mount_s3_via_rclone(
                                    "32G" as a safety net if you expect many
                                    concurrent big-file opens. Requires
                                    rclone >= 1.70.
+        no_sign_request=False      anonymous access for public buckets:
+                                   omits --s3-env-auth, making rclone
+                                   send unsigned requests -- no AWS
+                                   credentials needed (rclone has no
+                                   --s3-no-sign-request flag; blank
+                                   credentials = unsigned requests)
+        preflight=True             verify the remote is listable BEFORE
+                                   mounting: raises RuntimeError with
+                                   rclone's error (missing credentials,
+                                   private bucket, typo'd name...)
+                                   instead of mounting a zombie fs that
+                                   hangs every reader. Reads at most one
+                                   listing entry, so it's cheap even on
+                                   giant buckets. Set False for exotic
+                                   cases like list-denied-but-readable
+                                   buckets.
+
+    Off EC2, signed mounts get AWS_EC2_METADATA_DISABLED=true (unless you
+    set that env var yourself), so missing credentials fail in seconds --
+    otherwise the AWS credential chain retries the unreachable metadata
+    IP (169.254.169.254) for ~2.5min per S3 call, stalling the mount so
+    badly macOS pops "Server connections interrupted". "Off EC2" = a 1s
+    TCP probe of that IP fails; when it's reachable (real EC2, aws-vault
+    --server) everything is left untouched so IAM role credentials work.
 
     Worst-case per open big file: streams*chunk_size + read_ahead
     = 16*4M + 2G ~= 2.1 GiB. Worst-case per open small file: ~0.
@@ -52444,9 +53625,17 @@ def mount_s3_via_rclone(
     ...     's3://acme-media-prod/projects/2024/shoot_42',
     ...     '/mnt/shoot_42', daemon=True)
     '/mnt/shoot_42'
+
+    >>> # Public bucket, no AWS credentials -- runs on any computer:
+    >>> mount_s3_via_rclone(  # doctest: +SKIP
+    ...     's3://noaa-goes16',
+    ...     '/mnt/noaa_goes16', daemon=True, no_sign_request=True)
+    '/mnt/noaa_goes16'
     """
     _ensure_rclone_installed()
-    _ensure_fuse3_installed()
+    if not currently_running_mac():
+        #mac mounts via `rclone nfsmount` (kernel NFS client) -- no FUSE needed
+        _ensure_fuse3_installed()
 
     import os, subprocess, tempfile
     from shlex import quote as q
@@ -52486,6 +53675,52 @@ def mount_s3_via_rclone(
     if cache_dir is None:
         cache_dir = os.path.join(tempfile.gettempdir(), "rclone-cache")
 
+    s3_flags = (
+        "--s3-provider AWS "
+        + ("" if no_sign_request else "--s3-env-auth ")
+        + "--s3-region " + q(region)
+    )
+
+    def imds_reachable():
+        """
+        Query. True if the EC2 instance-metadata service (169.254.169.254)
+        accepts TCP connections -- i.e. we're on EC2 or something emulating
+        it (aws-vault --server). It's link-local so it answers in ~1ms on
+        real EC2; 1s timeout is generous.
+        """
+        import socket
+        try:
+            socket.create_connection(("169.254.169.254", 80), timeout=1).close()
+            return True
+        except OSError:
+            return False
+
+    env = dict(os.environ)
+    if not no_sign_request and "AWS_EC2_METADATA_DISABLED" not in env and not imds_reachable():
+        #Off EC2, stop the AWS credential chain from retrying the unreachable
+        #metadata IP for ~2.5min per S3 call -- that stalls the NFS/FUSE server
+        #so badly macOS pops "Server connections interrupted"
+        env["AWS_EC2_METADATA_DISABLED"] = "true"
+
+    if preflight:
+        #Fail loudly now if the remote can't be listed, instead of mounting a
+        #zombie filesystem that hangs or errors on every read
+        command = "rclone lsf --max-depth 1 --retries 1 %s %s" % (s3_flags, q(remote))
+        process = subprocess.Popen(command, shell=True, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if process.stdout.read(1):
+            #The listing streams: one byte proves we can read the remote.
+            #Kill it so we don't page through millions of keys on big buckets.
+            process.kill()
+            process.wait()
+        else:
+            process.wait() #EOF with exit code 0 just means the bucket is empty
+            if process.returncode:
+                raise RuntimeError(
+                    "rp.mount_s3_via_rclone: cannot list %s -- refusing to mount a broken remote. "
+                    "If this bucket deliberately denies listing but allows reads, pass preflight=False. "
+                    "Rclone says:\n%s" % (s3url, process.stderr.read().decode())
+                )
+
     extra = (
         ("--read-only " if read_only else "")
         + ("--daemon " if daemon else "")
@@ -52493,8 +53728,13 @@ def mount_s3_via_rclone(
         + ("--vfs-fast-fingerprint " if fast_fingerprint else "")
         + (("--max-buffer-memory %s " % q(max_buffer_memory)) if max_buffer_memory else "")
     )
+    if currently_running_mac():
+        mount_subcommand = "nfsmount" #brew's rclone build can't `rclone mount` on macOS (no FUSE support)
+        unmount_command  = "umount " + q(mount_point) #macOS umount has no -l; user NFS mounts need no sudo
+    else:
+        mount_subcommand = "mount"
+        unmount_command  = "sudo umount -l " + q(mount_point)
     # double-quote: q() once for the umount line, q() again so trap sees one arg
-    unmount_command = "sudo umount -l " + q(mount_point)
     cleanup = "" if daemon else ("trap %s EXIT" % q(unmount_command))
 
     script = """
@@ -52503,8 +53743,8 @@ def mount_s3_via_rclone(
          mkdir -p %(mount)s
          %(unmount_command)s || true #Unmount right away so it can replace an existing mount (ok if not mounted)
          %(cleanup)s
-         rclone mount %(remote)s %(mount)s \\
-             --s3-provider AWS --s3-env-auth --s3-region %(region)s \\
+         rclone %(mount_subcommand)s %(remote)s %(mount)s \\
+             %(s3_flags)s \\
              --vfs-cache-mode full --cache-dir %(cache_dir)s \\
              --vfs-cache-max-size %(cache_max_size)s --vfs-cache-max-age %(cache_max_age)s \\
              --vfs-read-ahead %(read_ahead)s --dir-cache-time %(dir_cache_time)s \\
@@ -52515,11 +53755,12 @@ def mount_s3_via_rclone(
              --attr-timeout %(attr_timeout)s \\
              --use-server-modtime -v --stats 10s %(extra)s
      """ % {
+        "mount_subcommand": mount_subcommand,
+        "s3_flags": s3_flags,
         "mount": q(mount_point),
         "unmount_command": unmount_command,
         "cleanup": cleanup,
         "remote": q(remote),
-        "region": q(region),
         "cache_dir": q(cache_dir),
         "cache_max_size": q(cache_max_size),
         "cache_max_age": q(cache_max_age),
@@ -52536,7 +53777,7 @@ def mount_s3_via_rclone(
 
     display_code_cell(script, language='bash', title='rp.mount_s3_via_rclone')
 
-    subprocess.run(script, shell=True, check=True)
+    subprocess.run(script, shell=True, check=True, env=env)
 
     if daemon and wait_for_mount:
         rp.wait_for_mount(mount_point)
@@ -55106,7 +56347,7 @@ def _ensure_shell_has_line(line: str):
         append_line_to_file(line, rc_path)
     fansi_print('r._ensure_shell_has_line: Wrote ' + repr(line) + ' to files: ' + repr(_all_shell_rc_paths), 'green bold')
 
-def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, unix=None, force=False) -> bool:
+def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, unix=None, all_os=None, force=False) -> bool:
     """ Attempts to install a program on various operating systems. Returns True if we install something. """
 
     assert isinstance(name,    str)
@@ -55114,9 +56355,11 @@ def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, unix=Non
     assert isinstance(mac,     str) or mac     is None
     assert isinstance(windows, str) or windows is None
     assert isinstance(unix,    str) or unix    is None
+    assert isinstance(all_os,  str) or all_os  is None
 
-    if mac   is None: mac   = unix
-    if linux is None: linux = unix
+    if mac     is None: mac     = unix or all_os
+    if linux   is None: linux   = unix or all_os
+    if windows is None: windows =         all_os
 
     if not force and (system_command_exists(name) or system_library_exists(name) or path_exists(name)):
         #Don't reinstall what we've already installed
@@ -55340,6 +56583,10 @@ def _ensure_fuse3_installed():
     The binary that proves it's installed is `fusermount3`.
     On macOS the equivalent is macFUSE (cask); on Windows it's WinFsp.
     """
+    if currently_running_mac() and path_exists('/Library/Filesystems/macfuse.fs'):
+        #macFUSE ships no fusermount3 binary, so _ensure_installed's existence
+        #check never passes on mac and brew would re-run on every call
+        return
     _ensure_installed(
         'fusermount3',
         linux='apt install fuse3 --yes',  # https://packages.debian.org/bookworm/fuse3
@@ -55527,6 +56774,8 @@ def _ensure_snap_installed():
         linux='sudo apt update ; sudo apt install snapd',
         windows=None,
     )
+    if currently_running_linux():
+        _run_sys_command('sudo systemctl start snapd.service')
 
 @_register_ensure_installed_func('code')
 def _ensure_vscode_installed():
@@ -55863,14 +57112,24 @@ def _ensure_raycast_installed():
         windows='winget install --id=Raycast.Raycast', #https://winstall.app/apps/Raycast.Raycast
     )
 
+#DOUBLE CHECK THAT IT WORKS. IT FAILED ON LINUX ONCE.
+# @_register_ensure_installed_func
+# def _ensure_vivaldi_installed():
+#     """vivaldi: Feature-rich Chromium-based browser"""
+#     _ensure_installed(
+#         'vivaldi' if not currently_running_mac() else '/Applications/Vivaldi.app',
+#         mac    ='brew install --cask vivaldi', #https://formulae.brew.sh/cask/vivaldi
+#         linux  ='sudo apt install vivaldi-stable -y', #https://vivaldi.com/download/
+#         windows='winget install --id=Vivaldi.Vivaldi', #https://winstall.app/apps/Vivaldi.Vivaldi
+#     )
+
+
 @_register_ensure_installed_func
-def _ensure_vivaldi_installed():
-    """vivaldi: Feature-rich Chromium-based browser"""
+def _ensure_ripunzip_installed():
+    """ripunzip: super fast unzipping of files by google"""
     _ensure_installed(
-        'vivaldi' if not currently_running_mac() else '/Applications/Vivaldi.app',
-        mac    ='brew install --cask vivaldi', #https://formulae.brew.sh/cask/vivaldi
-        linux  ='sudo apt install vivaldi-stable -y', #https://vivaldi.com/download/
-        windows='winget install --id=Vivaldi.Vivaldi', #https://winstall.app/apps/Vivaldi.Vivaldi
+        'ripunzip',
+        all_os = 'cargo install ripunzip', #https://github.com/GoogleChrome/ripunzip
     )
 
 @_register_ensure_installed_func
@@ -58859,6 +60118,9 @@ def extract_zip_file(zip_file_path, folder_path=None, *, treat_as=None, show_pro
 
     Returns:
         The path to the folder where files were extracted.
+
+    NOTE: This is single-threaded. If you need high performance unzipping, use rp.ripunzip_to_folder instead
+
     """
 
     assert treat_as in [None, 'zip', 'tar'], 'Currently treat_as only supports .zip and .tar files' #TODO: Expand this functionality to .rar files etc with pyunpack
@@ -58903,6 +60165,67 @@ def extract_zip_file(zip_file_path, folder_path=None, *, treat_as=None, show_pro
     return folder_path
 
 unzip_to_folder=extract_zip_file
+
+def ripunzip_to_folder(zip_file_path, folder_path=None, *, show_progress=True, password=None, single_threaded=False):
+    """
+    Command. Extracts a zip file to a folder using ripunzip, Google's parallel unzipper.
+
+    Much faster than rp.unzip_to_folder for large zip files because it decompresses
+    multiple entries across threads at once. Zip-only (use unzip_to_folder for tar/rar/7z/etc).
+    Installs ripunzip on first use via _ensure_ripunzip_installed.
+
+    If zip_file_path is a URL, ripunzip streams and unzips it directly without first
+    downloading the whole archive (the unzip-uri subcommand).
+
+    Parameters:
+        - zip_file_path (str): The path to the zip file, or a URL to a zip file.
+        - folder_path (str, optional): The destination folder. If not provided, extracts to a
+          new folder named after the file (minus the extension) - next to the zip file for local
+          paths, or in the current directory for URLs.
+        - show_progress (bool): If True (default), ripunzip draws its native progress bar
+          (spinner + bytes extracted) when running in a terminal. If False, passes -q to silence it.
+        - password (str, optional): Password for encrypted zip entries (ZipCrypto or AES).
+        - single_threaded (bool): If True, decompress on a single thread. Default False.
+
+    Returns:
+        The path to the folder where files were extracted.
+
+    Caveat: URL extraction needs an HTTP server that supports range requests (S3, most CDNs,
+    direct codeload links work fine). Servers without it - e.g. GitHub's redirecting archive
+    URLs or Python's http.server - error out with "failed to fill whole buffer".
+    """
+
+    assert isinstance(zip_file_path, str)
+    is_url = is_valid_url(zip_file_path)
+    assert is_url or file_exists(zip_file_path), 'ripunzip_to_folder: no such file: '+zip_file_path
+
+    if folder_path is None:
+        # By default, extract path/to/thing.zip to a new folder called path/to/thing
+        # (for URLs there's no parent dir, so the folder lands in the current directory)
+        folder_path = get_path_name(zip_file_path, include_file_extension=False) if is_url else strip_file_extension(zip_file_path)
+
+    assert isinstance(folder_path, str)
+    make_directory(folder_path)
+    assert folder_exists(folder_path)
+
+    _ensure_ripunzip_installed()
+
+    subcommand = 'unzip-uri' if is_url else 'unzip-file'
+    command = ['ripunzip']
+    if not show_progress:
+        command.append('-q')  # ripunzip shows its progress bar by default; -q silences it
+    command += [subcommand, zip_file_path, '-d', folder_path]
+    if single_threaded:
+        command.append('--single-threaded')
+    if password is not None:
+        command += ['--password', password]
+
+    exit_code = _run_sys_command(*command, title='rp.ripunzip_to_folder')
+    assert exit_code == 0, 'ripunzip_to_folder: ripunzip exited with code '+str(exit_code)
+
+    _maybe_unbury_folder(folder_path)  # If it created something like unzipped_folder/unzipped_folder/contents make it into unzipped_folder/contents instead
+
+    return folder_path
 
 def _extract_archive_via_pyunpack(archive_path, folder_path):
     """
@@ -73295,6 +74618,11 @@ def _rp_set_env_vars(prefix, parse=lambda x:x):
         >>> # RP_SET_STR_foo=bar   → rp.r.foo = 'bar'
         >>> # RP_SET_EVAL_x=[1,2]  → rp.r.x  = [1, 2]
     """
+
+    #Don't allow arbitrary execution.
+    variable_whitelist = ['_pip_import_autoyes']
+    value_whitelist = ['True','False']
+
     for name in sorted(os.environ):
         if name.startswith(prefix):
             var_name  = name[len(prefix):]
@@ -73302,7 +74630,7 @@ def _rp_set_env_vars(prefix, parse=lambda x:x):
             globals()[var_name]=var_value
             fansi_print('RP ENVIRON: rp.r.'+var_name+' SET TO '+str(var_value)[:100], 'green bold')
 
-_rp_set_env_vars('RP_SET_STR_')
+# _rp_set_env_vars('RP_SET_STR_')
 _rp_set_env_vars('RP_SET_EVAL_', parse=eval)
 
 
