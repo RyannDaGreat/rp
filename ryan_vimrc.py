@@ -152,6 +152,11 @@ let g:ctrlp_show_hidden = 1
 " Better javascript syntax highlighting
 Plugin 'pangloss/vim-javascript'
 
+" Svelte (*.svelte) syntax highlighting and indentation. Vim detects the svelte filetype itself but has no syntax for it.
+" vim-svelte needs vim-javascript (above) and html5.vim
+Plugin 'othree/html5.vim'
+Plugin 'evanleck/vim-svelte'
+
 
 "fzf requires an external program to be installed
 "Plugin 'junegunn/fzf.vim' "To quickly search for files..
@@ -258,6 +263,8 @@ Plugin 'ryanoasis/vim-devicons'
 set encoding=utf8
 
 Plugin 'google/vim-jsonnet' " Jsonnet syntax highlighting
+Plugin 'RyannDaGreat/dtab' " dtab (Delta Tab) config files: *.dtab highlighting, $ blocks with embedded languages, Δ icon in NERDTree
+Plugin 'nickeb96/fish.vim' " Fish shell syntax highlighting, indentation and omnicomplete for *.fish files. This is the upstream of Vim 9's builtin fish support, so it also gives older vims the same highlighting
 
 " All of your Plugins must be added before the following line
 call vundle#end()            " required

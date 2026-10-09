@@ -274,11 +274,26 @@ def get_pypi_info_from_module_name(module_name, info=None):
     dist_info_path = _find_dist_info_for_module(module_name)
     if dist_info_path:
         return get_pypi_info(dist_info_path)
-    
+
     # Fallback to full scan only if direct lookup fails
     name = module_name.split('.')[0]
     info = get_dist_infos()
-    return info.get(name)
+    if name in info:
+        return info[name]
+
+    # Python 3.10+: last resort, ask the stdlib which distribution installed this module.
+    # Unlike the glob and scan above, this handles wheels that ship no top_level.txt,
+    # because the stdlib falls back to the RECORD file (e.g. lance --> pylance, a maturin
+    # wheel). Older Pythons skip this block and return None exactly as before.
+    import sys
+    if sys.version_info >= (3, 10):
+        import importlib.metadata
+        for dist_name in importlib.metadata.packages_distributions().get(name, []):
+            dist = importlib.metadata.distribution(dist_name)
+            metadata_files = [f for f in dist.files or [] if f.name == 'METADATA' and f.parent.name.endswith('.dist-info')]
+            if metadata_files:
+                return get_pypi_info(str(metadata_files[0].locate().parent))
+    return None
 
 def get_pypi_module_package_names():
     import rp.libs.pypi_inspection as p

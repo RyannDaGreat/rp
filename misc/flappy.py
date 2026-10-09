@@ -132,7 +132,7 @@ def main():
         ("." * TERMINAL_SIZE.x + "\n") * 3
     GROUND = Sprite(GROUND)
     GROUND.pos = Vector(0, 21)
-    BIRD = Sprite(("== (.\n \___\\", " / (./\n===_/"))
+    BIRD = Sprite(("== (.\n \\___\\", " / (./\n===_/"))
     BIRD.pos = Vector(10, 0)
 
     t = 0

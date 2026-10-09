@@ -199,6 +199,7 @@ MICROCOMPLETIONS:
 			\mla  multi line arguments    (turns a lengthy def into a multi line def. See https://asciinema.org/a/RHuWRKsbwvkH3P28XZ81MnFYJ)
 			\tbp  toggle big parenthesis  (enables/disables using big parenthesis on a given line https://asciinema.org/a/jhxmIcRogKp4yJy1gojIZBAem)
 			\tts  tabs to spaces          (turns all tabs in the buffer into 4 spaces)
+			\stt  spaces to tabs          (turns leading 4-space indents in the buffer into tabs)
 			\23p  python 2 to 3           (converts python2 code to python3 code: "print raw_input('>>>')") --> "print(input('>>>'))")
 			\fo   for-loopify             (envelops the whole buffer into a for loop. Useful for when you have a command but just want to run it over without DITTO, which pollutes HISTORY)
 			\wh   while-loopify           (envelops the whole buffer into a 'while True' loop. Useful for when you have a command but just want to loop it indefinitely)

@@ -2809,6 +2809,7 @@ def handle_character(buffer,char,event=None):
                 'cch' :'!'+rp.r._run_claude_code('.',return_command=True),
                 'cchd':'!'+rp.r._run_claude_code('.',fullperm=True,return_command=True),
                 'chd' :'!'+rp.r._run_claude_code('.',fullperm=True,return_command=True),
+                'pih' :'!pi', # 'pi' itself is taken by 'PIP install'
             })
 
             import rp.rp_ptpython.r_iterm_comm as ric
@@ -3446,7 +3447,7 @@ def load_python_bindings(python_input):
                                          '\\wco':'web_copy',
                                          '\\ed':'editor',
                                          '\\vi':'vim',
-                                         '\\mi':'micro',
+                                         '\\mic':'micro',#NOT '\\mi': it would eat the prefix before the 'n' in '\\min' could be typed
                                          '\\na':'nano',
                                          '\\al':'align_lines',
                                          '\\ac':'align_char',
@@ -3481,6 +3482,7 @@ def load_python_bindings(python_input):
                                          '\\sl':'sort_lines',
                                          '\\rl':'reverse_lines',
                                          '\\ya':'yapf autoformat',
+                                         '\\bash':'shfmt bash autoformat',#NOT '\\shf': the '\\sh' shell command would eat the prefix before 'f' could be typed
                                          '\\gg':'go to top',
                                          '\\GG':'go to bottom',
                                          '\\vO':'vim open up',
@@ -4194,6 +4196,13 @@ def load_python_bindings(python_input):
 
                                 if header=='delete all':
                                     buffer.document=Document('',0,buffer.document.selection)
+                                if header=='shfmt bash autoformat':
+                                    try:
+                                        import rp
+                                        text=rp.autoformat_bash_via_shfmt(buffer.document.text)
+                                        buffer.document=Document(text,min(len(text),buffer.document.cursor_position),buffer.document.selection)
+                                    except Exception as e:
+                                        buffer.insert_text("\n#ERROR Using shfmt autoformatter: "+str(e))
                                 if header=='yapf autoformat':
                                     try:
                                         from rp import pip_import
@@ -7230,7 +7239,7 @@ def load_python_bindings(python_input):
     def escape_for_double_quote(s):
         """Escape a string for use inside double quotes in bash.
 
-        In double quotes, we need to escape: $ ` \ " and !
+        In double quotes, we need to escape: $ ` \\ " and !
         """
         result = []
         for c in s:
@@ -7490,7 +7499,7 @@ def load_python_bindings(python_input):
 
         @handle('\\', filter=has_selection & ~vi_mode_enabled & ~refactor_mode & ~bslash_mode, eager=True)
         def _(event):
-            """Start backslash command mode when \ pressed with selection."""
+            """Start backslash command mode when \\ pressed with selection."""
             buffer = event.cli.current_buffer
             doc = buffer.document
             start, end = get_selection_bounds(doc)

@@ -22,7 +22,7 @@ def create_pdb_grammar(pdb_commands):
             (?P<pdb_command>condition)       \s+  [0-9]+  \s+ (?P<python_code>.*)  |
             (?P<pdb_command>ignore)          \s+  (?P<breakpoint>[0-9]+)  \s+ [0-9]+  |
             (?P<pdb_command>commands)        \s+  (?P<breakpoint>[0-9]+)  |
-            (?P<pdb_command>alias)           \s+  [^\s]+   \s+  """ + (create_grammar(False) if recursive else '.+') + """
+            (?P<pdb_command>alias)           \s+  [^\s]+   \s+  """ + (create_grammar(False) if recursive else '.+') + r"""
             (?P<pdb_command>unalias)         \s+  (?P<alias_name>.*) |
             (?P<pdb_command>h|help)          \s+  (?P<pdb_command>.*) |
             (?P<pdb_command>display)         \s+  (?P<python_code>.*) |
@@ -43,7 +43,7 @@ def create_pdb_grammar(pdb_commands):
                         \s* (, \s* (?P<python_code>.*))? |
 
             # Known PDB commands (autocompletion & highlighting of all commands)
-            (?P<pdb_command>""" + pdb_commands_re + """)  (\s+  .*)? |
+            (?P<pdb_command>""" + pdb_commands_re + r""")  (\s+  .*)? |
 
             # Starting with exclamation mark -> always Python code.
             !(?P<python_code>.*) |
@@ -51,8 +51,8 @@ def create_pdb_grammar(pdb_commands):
             # When the input is no valid PDB command, we consider it Python code.
             # (We use negative lookahead to be sure it doesn't start with a pdb
             # command or an exclamation mark.)
-#            (?P<python_code>(?!(""" + pdb_commands_re + """)(\s+|$))(?!\!).*) |
-            (?P<python_code_highlight_only>(?!(""" + pdb_commands_re + """)(\s+|$))(?!\!).*) |
+#            (?P<python_code>(?!(""" + pdb_commands_re + r""")(\s+|$))(?!\!).*) |
+            (?P<python_code_highlight_only>(?!(""" + pdb_commands_re + r""")(\s+|$))(?!\!).*) |
         ) \s*
         """
     return compile(create_grammar())

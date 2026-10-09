@@ -20,7 +20,6 @@ import threading
 import time
 from functools import partial
 
-import numpy as np
 import rp
 
 
@@ -303,29 +302,49 @@ def _pick_device(device):
 
 
 @functools.lru_cache(maxsize=128)
-def _bake_lut_3d(src_colorspace, device):
+def _bake_lut_3d(src_colorspace, device, lut_size):
     """
-    Command on first call per (src_colorspace, device) pair, then memoized
+    Command on first call per (src_colorspace, device, lut_size), then memoized
     forever in this Python process. Build a 3D LUT tensor that maps
     scene-linear `src_colorspace` -> Rec.709 SDR, with a log2 shaper on the
     input axis covering 2^SHAPER_LOG2_MIN .. 2^SHAPER_LOG2_MAX scene-linear.
 
-    The LRU cache is keyed by `(src_colorspace, device)`. Each entry is a
-    ~3 MB GPU tensor and rarely changes within a run — a long-lived
+    Why a LUT rather than evaluating the transform directly: the ACES output
+    transform is closed-form — OCIO's GPU path uses no 3D LUT for any of the 105
+    transforms in the ACES 2.0 config — so the equations can be run per pixel
+    instead. Per-pixel cost of each:
+
+        equations   : 414 scalar ops, 37 transcendental (pow/sqrt/atan2/...)
+        LUT lookup  :  24 scalar ops,  3 transcendental (the log2 shaper)
+
+    The equations are ~366 separate elementwise steps, which in torch means one
+    full-frame intermediate tensor per step: 13.6 GB of traffic per 4K frame,
+    137x the 99.5 MB frame itself. Measured at 3840x2160:
+
+        exact OCIO on CPU, 1 thread        1970.0 ms/frame
+        equations in torch, eager           184.9 ms/frame
+        equations in torch, torch.compile    97.6 ms/frame
+        this LUT (65^3, grid_sample)          5.7 ms/frame
+
+    The LUT's cost is interpolation error — see `exr_to_mp4`'s `lut_size`.
+
+    The LRU cache is keyed by `(src_colorspace, device, lut_size)`. Each entry
+    is lut_size^3 * 12 bytes and rarely changes within a run — a long-lived
     `exrs_to_mp4s` worker that processes many sequences in the same
-    colorspace bakes the LUT exactly once, paying only ~10ms of OCIO work
-    on its first job and ~zero on every subsequent job.
+    colorspace bakes the LUT exactly once, paying the bake on its first job
+    and ~zero on every subsequent job.
 
     Returns:
-        lut_3d: (1, 3, N, N, N) float32 on `device`, where N=LUT3D_SIZE. Laid out
+        lut_3d: (1, 3, N, N, N) float32 on `device`, where N=lut_size. Laid out
         for torch.nn.functional.grid_sample as (N, C, D, H, W) with the LUT's
         R-axis at W (last), G-axis at H, B-axis at D, so a grid coord of
         (R, G, B) in [-1, 1] addresses the right cell.
     """
+    import numpy as np
     import PyOpenColorIO as ocio
     import torch
 
-    n = LUT3D_SIZE
+    n = lut_size
     axis = np.linspace(0.0, 1.0, n, dtype=np.float32)
     # Shaper-space lattice: shaper_rgb[i,j,k] = (axis[i], axis[j], axis[k]) = (R, G, B) in [0, 1]
     r, g, b = np.meshgrid(axis, axis, axis, indexing="ij")
@@ -472,7 +491,7 @@ def _process_frame(path, *, frame_transform, pre_unsquash_frame_transform,
 _FANOUT_FORWARDED_KWARGS = (
     "src_colorspace", "num_threads", "buffer_limit", "codec", "crf", "preset",
     "pix_fmt", "unsquash", "atomic", "clip", "fps", "overwrite", "show_progress",
-    "strict",
+    "strict", "lut_size",
 )
 
 
@@ -677,6 +696,7 @@ def exr_to_mp4(
     overwrite=True,
     fps=None,
     src_colorspace="ACES2065-1",
+    lut_size=LUT3D_SIZE,
     num_threads=8,
     buffer_limit=None,
     show_progress=True,
@@ -779,6 +799,50 @@ def exr_to_mp4(
             via `file_to_object("...")` in the printed bash — so closures,
             lambdas, and partials all survive the boundary. Non-empty
             `ffmpeg_extra_args` is the only thing fanout still rejects.
+        lut_size: edge length of the baked 3D LUT (default 65). The LUT is
+            lut_size^3 float32 RGB entries = lut_size^3 * 12 bytes on the GPU,
+            baked once per (src_colorspace, device, lut_size) and cached for
+            the process. See `_bake_lut_3d` for why a LUT is used at all.
+
+            The shaper spans 20 stops (2^-10 .. 2^+10), so cells/stop =
+            (n-1)/20 is what actually governs accuracy.
+
+               n     entries        memory   cells/stop   bake      p99 err
+              ----------------------------------------------------------------
+              33      35,937        0.4 MB          1.6   0.01 s     44.6 cv
+              65     274,625        3.3 MB          3.2   0.07 s     17.5 cv
+             129   2,146,689       25.8 MB          6.4   0.53 s      6.7 cv
+             257  16,974,593      203.7 MB         12.8   4.36 s      2.7 cv
+             513 135,005,697        1.62 GB        25.6   ~35 s      ~1.1 cv
+            1025 1,076,890,625     12.92 GB        51.2   ~4.7 min   ~0.5 cv
+
+            `p99 err` is the 99th-percentile error against exact OCIO in 10-bit
+            code values, measured on saturated content (the hard case); neutral
+            content is roughly 4x better. The 513 and 1025 rows are extrapolated
+            from the n^3 scaling, not measured.
+
+            Powers of two work too and cost marginally less (64 -> 3.1 MB,
+            128 -> 25.2 MB, 256 -> 201.3 MB, 512 -> 1.61 GB, 1024 -> 12.88 GB),
+            but odd sizes are the interchange convention — they put a lattice
+            point exactly at each end of the domain, which is what
+            grid_sample(align_corners=True) expects. 65 is the industry-standard
+            size (OCIO's ACES configs bake 3D LUTs at 65^3 by default:
+            https://opencolorio.readthedocs.io/en/latest/configurations/aces_1.0.3.html
+            — "The default resolution is 65x65x65 for the 3D LUTs").
+
+            Anything under ~100 MB is fine for most uses, which puts everything
+            up to 129 comfortably in range and makes 257 the first size you have
+            to think about.
+
+            129 is the best value if you can spend it: 2.9x the accuracy for
+            21% more time (8.0 vs 6.6 ms/frame at 4K). Past 257 the returns are
+            poor relative to the memory; those sizes are for archival masters.
+            For dailies, 65 is already far below the noise floor of an ultrafast
+            x264 encode.
+
+            Size changes every pixel slightly, so keep one size for a whole
+            project — mixing sizes across shots makes them fail to intercut.
+
         num_shards: total shards in fanout mode. Defaults to len(resolved
             device list). If smaller than the device list, only the first
             num_shards devices get work (the rest sit idle — user's call).
@@ -959,6 +1023,7 @@ def exr_to_mp4(
                     buffer_limit=buffer_limit, codec=codec, crf=crf, preset=preset,
                     pix_fmt=pix_fmt, unsquash=unsquash, atomic=atomic, clip=clip,
                     fps=fps, overwrite=overwrite, show_progress=show_progress,
+                    lut_size=lut_size,
                     frame_transform=frame_transform,
                     pre_unsquash_frame_transform=pre_unsquash_frame_transform,
                     ffmpeg_extra_args=ffmpeg_extra_args,
@@ -990,8 +1055,8 @@ def exr_to_mp4(
     _phase("warming CUDA / picking device")
     dev = _pick_device(device)
 
-    _phase("baking OCIO 3D LUT to " + str(dev))
-    lut_3d = _bake_lut_3d(src_colorspace, dev)
+    _phase("baking OCIO 3D LUT (" + str(lut_size) + "^3) to " + str(dev))
+    lut_3d = _bake_lut_3d(src_colorspace, dev, lut_size)
 
     if _probe is not None:
         # Fanout parent already probed; skip _read_header + frame probe entirely.

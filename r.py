@@ -99,8 +99,7 @@ except ImportError:
     try: import numpy as np
     except Exception as e: print("r.py import error: ",e)
 
-    try: import web_evaluator as we
-    except Exception as e: print("r.py import error: ",e)
+    #web_evaluator is not imported eagerly: it calls rp.pip_import at import time, which does not exist until rp finishes importing. Use `import rp.web_evaluator as we` after importing rp.
 
 try: from rp.libs.pw_crypt import encrypt_bytes_with_password, decrypt_bytes_with_password
 except Exception as e: 
@@ -3627,7 +3626,7 @@ gradient_presets = {
             },
 
     'turbo':  #https://research.google/blog/turbo-an-improved-rainbow-colormap-for-visualization/  -->  https://gist.github.com/mikhailov-work/ee72ba4191942acecc03fe6da94fc73f
-        [[.18995,.07176, .23217], [.19483, .08339, .26149], [.19956, .09498, .29024], [.20415, .10652, .31844], [.2086,  .11802, .34607], [.21291, .12947, .37314], [.21708, .14087, .39964], [.22111, .15223, .42558], [.225,   .16354, .45096], [.22875, .17481, .47578],
+        [[.18995, .07176, .23217], [.19483, .08339, .26149], [.19956, .09498, .29024], [.20415, .10652, .31844], [.2086,  .11802, .34607], [.21291, .12947, .37314], [.21708, .14087, .39964], [.22111, .15223, .42558], [.225,   .16354, .45096], [.22875, .17481, .47578],
          [.23236, .18603, .50004], [.23582, .1972,  .52373], [.23915, .20833, .54686], [.24234, .21941, .56942], [.24539, .23044, .59142], [.2483,  .24143, .61286], [.25107, .25237, .63374], [.25369, .26327, .65406], [.25618, .27412, .67381], [.25853, .28492, .693],
          [.26074, .29568, .71162], [.2628,  .30639, .72968], [.26473, .31706, .74718], [.26652, .32768, .76412], [.26816, .33825, .7805],  [.26967, .34878, .79631], [.27103, .35926, .81156], [.27226, .3697,  .82624], [.27334, .38008, .84037], [.27429, .39043, .85393],
          [.27509, .40072, .86692], [.27576, .41097, .87936], [.27628, .42118, .89123], [.27667, .43134, .90254], [.27691, .44145, .91328], [.27701, .45152, .92347], [.27698, .46153, .93309], [.2768,  .47151, .94214], [.27648, .48144, .95064], [.27603, .49132, .95857],
@@ -7295,6 +7294,31 @@ def pool_shuffled(iterator, *, prob=None, pool_size=None):
     yield from shuffled(pool)
 
 
+def limit_iter_rate(generator, fps=60):
+    """
+    Command (sleeps). Lazily yields items from generator, sleeping so at most fps items are yielded per second.
+    Time the consumer spends on an item and time the generator spends producing the next one both count toward the
+    delay, so slow consumers and slow sources, like a webcam that blocks until its next frame, aren't slowed further.
+
+    Examples:
+        >>> for frame in limit_iter_rate(frames, fps=30):
+        ...     display_image(frame)  # Plays at most 30 frames per second
+        >>> start = time.perf_counter()
+        >>> list(limit_iter_rate(range(4), fps=10))
+        ans = [0, 1, 2, 3]
+        >>> round(time.perf_counter() - start, 1)  # Items at 0, 0.1, 0.2 and 0.3 seconds
+        ans = 0.3
+    """
+    delay = 1.0 / fps
+    earliest = time.perf_counter()
+    for item in generator:
+        now = time.perf_counter()
+        if now < earliest:
+            time.sleep(earliest - now)
+        earliest = max(earliest, now) + delay #Scheduled from the ideal time, so sleep overshoot never accumulates
+        yield item
+
+
 def random_parallel_batch(*full_lists,batch_size: int = None,retain_order: bool = False):
     # Created for machine learning input/output training-pairs generation.
     # rCode:
@@ -7825,6 +7849,8 @@ def _load_files(
     assert show_progress in {True, False, "tqdm", "eta"} or isinstance(show_progress, str) and starts_with_any(show_progress, 'eta:'), "The 'show_progress' parameter must be either True, False, or 'tqdm'."
     assert num_threads is None or isinstance(num_threads, int) and num_threads >= 0, "Must have at least 1 thread, or set num_threads=0 to run in the main thread only"
     assert len(file_paths) >= 1, 'rp.load_files: must pass at least one iterable of paths/args'
+    #A single path, bytes or file object is one item, not an iterable of characters (plural loaders detuple a lone argument)
+    file_paths = tuple([p] if isinstance(p, (str, bytes, bytearray, memoryview, os.PathLike)) or hasattr(p, 'read') else p for p in file_paths)
     assert all(is_iterable(p) for p in file_paths), 'rp.load_files: every *file_paths argument must be iterable'
     assert callable(load_file), 'rp.load_files: load_file must be a function that takes a file path and returns a value, but type(load_file) is '+str(type(load_file))
 
@@ -8087,41 +8113,38 @@ def _load_animated_image_via_pil(location, *, use_cache=True):
     Returns:
         numpy.ndarray: Array of RGB image frames with shape (num_frames, height, width, 3) or RGBA (num_frames, height, width, 4) frames if transparency present.
     """
-    if path_exists(location):
+    location = _FileFormTranslator.canonicalize(location)
+    if _FileFormTranslator.is_path(location) and path_exists(location):
         location = get_absolute_path(location) #Important for caching
-    
-    # Use the same cache as load_video
+    cacheable = use_cache and isinstance(location, str) #Only str locations are cached
     cache_id = location
-    if use_cache and cache_id in _load_video_cache:
+    if cacheable and cache_id in _load_video_cache:
         return _load_video_cache[cache_id]
 
     pip_import('PIL')
     from PIL import Image, ImageSequence
 
     # Load image from URL or file
-    if is_valid_url(location):
-        from urllib.request import urlopen
-        image = Image.open(urlopen(location))
-    else:
-        if not file_exists(location):
+    with _FileFormTranslator.opened(location, ('file_object', 'path')) as source: #A path stays a path; every other form (urls included) becomes a seekable file object
+        if _FileFormTranslator.is_path(location) and not file_exists(location):
             raise FileNotFoundError('No such file exists: ' + repr(location))
-        image = Image.open(location)
+        image = Image.open(source)
 
-    # Check if any frame has transparency
-    has_transparency = False
-    for frame in ImageSequence.Iterator(image):
-        if (hasattr(frame, 'info') and 'transparency' in frame.info) or \
-           (hasattr(frame, 'mode') and 'A' in frame.mode):
-            has_transparency = True
-            break
+        # Check if any frame has transparency
+        has_transparency = False
+        for frame in ImageSequence.Iterator(image):
+            if (hasattr(frame, 'info') and 'transparency' in frame.info) or \
+               (hasattr(frame, 'mode') and 'A' in frame.mode):
+                has_transparency = True
+                break
     
-    # Convert frames, preserving alpha if transparency present
-    convert_mode = 'RGBA' if has_transparency else 'RGB'
-    frames = [as_numpy_array(frame.convert(convert_mode)) for frame in ImageSequence.Iterator(image)]
+        # Convert frames, preserving alpha if transparency present
+        convert_mode = 'RGBA' if has_transparency else 'RGB'
+        frames = [as_numpy_array(frame.convert(convert_mode)) for frame in ImageSequence.Iterator(image)]
     
-    frames = as_numpy_array(frames)
+        frames = as_numpy_array(frames)
 
-    if use_cache:
+    if cacheable:
         _load_video_cache[cache_id] = frames
 
     return frames
@@ -8255,7 +8278,7 @@ def load_image(location,*,use_cache=False):
     Handles both local file paths and web URLs
     
     Parameters:
-        - location (str): File path or URL to image
+        - location: File path, URL, data URI, bytes, an open file object or a stream (see _FileFormTranslator)
         - use_cache (bool, optional): Enable caching for faster repeated loads. Default False.
                                       If enabled and loading an image from a URL, downloads to a file
     
@@ -8279,13 +8302,22 @@ def load_image(location,*,use_cache=False):
     Examples:
         >>> image = load_image("https://github.com/RyannDaGreat/Diffusion-Illusions/blob/gh-pages/images/emma.png?raw=true", use_cache=True)
         ... display_image(image)
-    
-    """
-    assert isinstance(location, str), 'load_image: location must be str, got ' + repr(type(location))
 
-    if   is_valid_data_uri(location): image = _load_image_from_data_uri(location)
-    elif is_valid_url     (location): image = _load_image_from_url(location, use_cache=use_cache)
-    else                            : image = _load_image_from_file(location, use_cache=use_cache)
+    EXAMPLE (any file form):
+        >>> load_image('doggy.png').shape                                                 #A path (str, pathlib.Path or ~)
+        ans = (48, 64, 4)
+        >>> load_image('s3://open-images-dataset/validation/0001eeaf4aed83f9.jpg').shape  #An s3:// url (http, gs and data uris work too)
+        ans = (447, 1024, 3)
+        >>> load_image(file_to_bytes('doggy.png')).shape                                  #Bytes: the format is sniffed from the content
+        ans = (48, 64, 4)
+        >>> load_image(open('doggy.png','rb')).shape                                      #An open file object (io.BytesIO or a pipe work too)
+        ans = (48, 64, 4)
+        >>> load_image(dataset.take_blobs('image', indices=[0])[0]).shape                 #A Lance BlobFile (dataset = lance.dataset('photos.lance'))
+        ans = (48, 64, 4)
+    """
+    location = _FileFormTranslator.canonicalize(location) #pathlib.Path, ~ and file:// become a plain path str
+    if _FileFormTranslator.is_url(location) and location.startswith('http'): image = _load_image_from_url(location, use_cache=use_cache) #Keeps the download cache semantics
+    else                                                                     : image = _load_image_from_file(location, use_cache=use_cache) #A path, s3/gs url, data uri, bytes, file object or stream
 
     return _as_rgba_image_if_2_channels(image)
 
@@ -8293,6 +8325,18 @@ def load_rgb_image(location,*,use_cache=False):
     """
     Like load_image, but makes sure there's no alpha channel
     This function is really only here to save you from having to write it out every time
+
+    EXAMPLE (any file form):
+        >>> load_rgb_image('doggy.png').shape                                                 #A path: the alpha channel is dropped
+        ans = (48, 64, 3)
+        >>> load_rgb_image('s3://open-images-dataset/validation/0001eeaf4aed83f9.jpg').shape  #An s3:// url
+        ans = (447, 1024, 3)
+        >>> load_rgb_image(file_to_bytes('doggy.png')).shape                                  #Bytes
+        ans = (48, 64, 3)
+        >>> load_rgb_image(open('doggy.png','rb')).shape                                      #An open file object
+        ans = (48, 64, 3)
+        >>> load_rgb_image(dataset.take_blobs('image', indices=[0])[0]).shape                 #A Lance BlobFile
+        ans = (48, 64, 3)
     """
     return as_rgb_image(load_image(location,use_cache=use_cache), copy=False)
 
@@ -8321,6 +8365,17 @@ def load_images(*locations,use_cache=False,show_progress=False,num_threads=None,
         If strict==True, this function will throw an error if any one of the images fails to load
         If strict==False, this function will skip any images that fail to load (so you might not have as many images in the output as you did paths in the input)
         If strict==None, this function will replace any images that failed to load with 'None' instead of a numpy array. So the output might look like [image0. image1, image2, None, image4] where image1, image0 etc are numpy arrays
+
+    EXAMPLE (any file form):
+        >>> images = load_images(['doggy.png',                                                   #A path
+        ...                       's3://open-images-dataset/validation/0001eeaf4aed83f9.jpg',    #An s3:// url
+        ...                       file_to_bytes('cat.jpg'),                                      #Bytes
+        ...                       open('doggy.png','rb'),                                        #An open file object
+        ...                       dataset.take_blobs('image', indices=[1])[0]])                  #A Lance BlobFile
+        ... [image.shape for image in images]
+        ans = [(48, 64, 4), (447, 1024, 3), (48, 64, 3), (48, 64, 4), (48, 64, 3)]
+        >>> [image.shape for image in load_images(dataset.take_blobs('image', indices=[0, 1]))]  #The list from take_blobs can be passed as-is
+        ans = [(48, 64, 4), (48, 64, 3)]
     """
 
     assert strict in {True, False, None}, 'load_images: The \'strict\' parameter must be set to either True, False, or None. See the documentation for this function to see what that means.'
@@ -8330,8 +8385,7 @@ def load_images(*locations,use_cache=False,show_progress=False,num_threads=None,
     if isinstance(locations,str) and is_a_folder(locations):
         locations=get_all_image_files(locations,sort_by='number')
         return load_images(locations,use_cache=use_cache,show_progress=show_progress,strict=strict)
-    if isinstance(locations,str):
-        locations=[locations]
+    locations = rp_iglob(locations) #Globs, lists, lone paths, bytes, file objects and blobs
 
     if show_progress in ['eta',True]: show_progress='eta:Loading Images'
     return load_files(lambda path:load_image(path,use_cache=use_cache), locations, show_progress=show_progress, strict=strict, num_threads=num_threads)
@@ -8399,6 +8453,19 @@ def load_images(*locations,use_cache=False,show_progress=False,num_threads=None,
 
 _pdf_to_images_via_pdf2image_cache={}
 def _load_images_via_pdf2image(path, *, dpi=200, use_cache=False):
+    """
+    Command. Render a PDF as RGB byte images; spills non-path inputs and optionally updates the cache.
+
+    Args:
+        path: Any file form containing a PDF.
+        dpi (int): Rasterization resolution.
+        use_cache (bool): Reuse cached page images.
+    Returns:
+        list: One (H, W, 3) RGB array per page, e.g. three arrays of shape (267, 356, 3).
+    Examples:
+        >>> [page.shape for page in _load_images_via_pdf2image('file_forms_refactor/fixtures/pdf-3page.pdf')]
+        [(267, 356, 3), (267, 356, 3), (267, 356, 3)]
+    """
     pip_import('pdf2image')
     import pdf2image
     
@@ -8413,12 +8480,27 @@ def _load_images_via_pdf2image(path, *, dpi=200, use_cache=False):
         del cache[cache_key]
 
     #It has many other options. Not sure when I'll need to expose them though.
-    output = pdf2image.convert_from_path(path,dpi=dpi)
+    with _FileFormTranslator.opened(path, ('path',)) as source: #pdf2image needs a real file; other forms are spilled for the call
+        output = pdf2image.convert_from_path(source,dpi=dpi)
     output=as_byte_images(output)
     return output
 
 def load_pdf_as_images(path):
-    """ Given a PDF, returns a list of images - one for each page """
+    """
+    Command. Render a PDF, temporarily materializing non-path inputs for the backend.
+
+    Given a PDF, returns a list of images - one for each page
+
+    EXAMPLE (any file form):
+        >>> [image.shape for image in load_pdf_as_images('scan.pdf')]   # one image per page
+        ans = [(267, 356, 3), (267, 356, 3), (267, 356, 3)]
+        >>> len(load_pdf_as_images(file_to_bytes('scan.pdf')))   # non-path forms are spilled to a temp file for pdf2image, then deleted
+        ans = 3
+        >>> len(load_pdf_as_images(open('scan.pdf', 'rb')))
+        ans = 3
+        >>> len(load_pdf_as_images(dataset.take_blobs('scan', indices=[0])[0]))   # a lance BlobFile
+        ans = 3
+    """
     return _load_images_via_pdf2image(path)
 
 def get_pdf_num_pages(path:str)->int:
@@ -8429,25 +8511,68 @@ def get_pdf_num_pages(path:str)->int:
     return pdf2image.pdfinfo_from_path(path)["Pages"]
 
 def load_pdf_as_text(path):
-    """ Given a PDF, returns the text content as a string """
+    """
+    Command. Extract PDF text, temporarily materializing non-path inputs for the backend.
+
+    Given a PDF, returns the text content as a string
+
+    EXAMPLE (any file form):
+        >>> load_pdf_as_text('paper.pdf')
+        ans = Attention Is All You Need
+        >>> load_pdf_as_text('s3://bucket/paper.pdf')
+        >>> load_pdf_as_text(file_to_bytes('paper.pdf'))   # non-path forms are spilled to a temp file for pdfminer, then deleted
+        ans = Attention Is All You Need
+        >>> load_pdf_as_text(io.BytesIO(file_to_bytes('paper.pdf')))
+        ans = Attention Is All You Need
+        >>> load_pdf_as_text(dataset.take_blobs('pdf', indices=[0])[0])   # a lance BlobFile
+        ans = Attention Is All You Need
+    """
     return _load_pdf_as_text_via_pdfminer(path)
 
 def _load_pdf_as_text_via_pdfminer(path):
-    """ Extract text from PDF using pdfminer.six """
+    """
+    Command. Extract text from PDF using pdfminer.six; temporarily materializes non-path inputs.
+
+    Args:
+        path: Any file form containing a PDF.
+    Returns:
+        str: Extracted text.
+    Examples:
+        >>> _load_pdf_as_text_via_pdfminer('paper.pdf').strip()
+        'Hello PDF'
+    """
     pip_import('pdfminer')
     from pdfminer.high_level import extract_text
     
-    return extract_text(path)
+    with _FileFormTranslator.opened(path, ('path',)) as source: #pdfminer is given a real file; other forms are spilled for the call
+        return extract_text(source)
 
 extract_pdf_text = load_pdf_as_text
 # pdf_to_text = load_pdf_as_text
 
 def load_docx_as_text(path):
-    """ Given a DOCX file, returns the text content as a string """
+    """
+    Given a DOCX file, returns the text content as a string
+
+    EXAMPLE (any file form):
+        >>> load_docx_as_text('notes.docx')
+        ans = Meeting notes
+              Ship the file-forms refactor by Friday.
+        >>> load_docx_as_text(file_to_bytes('notes.docx'))   # python-docx reads file objects, so no form touches the disk
+        ans = Meeting notes
+              Ship the file-forms refactor by Friday.
+        >>> load_docx_as_text(open('notes.docx', 'rb'))
+        ans = Meeting notes
+              Ship the file-forms refactor by Friday.
+        >>> load_docx_as_text(dataset.take_blobs('docx', indices=[0])[0])   # a lance BlobFile
+        ans = Meeting notes
+              Ship the file-forms refactor by Friday.
+    """
     pip_import('docx')
     from docx import Document
 
-    doc = Document(path)
+    with _FileFormTranslator.opened(path) as f: #python-docx reads file objects
+        doc = Document(f)
     paragraphs = [paragraph.text for paragraph in doc.paragraphs]
     return '\n'.join(paragraphs)
 
@@ -8455,51 +8580,58 @@ extract_docx_text = load_docx_as_text
 # docx_to_text = load_docx_as_text
 
 def _load_image_from_file(file_name, *, use_cache=False):
-    """ Can try opencv as a fallback if this ever breaks """
-    assert file_exists(file_name),'No such image file exists: '+repr(file_name)
-    
-    # Normalize path for consistent caching
-    file_name = get_absolute_path(file_name, physical=False)
-    
-    # RP cache pattern
-    if use_cache:
-        if file_name not in _load_image_cache:
-            _load_image_cache[file_name] = _load_image_from_file(file_name, use_cache=False)
-        return _load_image_cache[file_name].copy()
-    elif file_name in _load_image_cache:
-        del _load_image_cache[file_name]
+    """
+    Command. Decode an image, consuming file objects and optionally updating the image cache.
 
-    if get_file_extension(file_name).upper()=='EXR':
-        #Imageio doesn't load exr files well consistently across my computers. Sometimes it gives incorrect results because of some glitch in the freeimage library. I don't know why this is...
-        #That being said, the load_openexr_image is more versatile anyway...and loads exr files properly
-        try             :return load_openexr_image(file_name)
-        except Exception:pass
+    Can try opencv as a fallback if this ever breaks
 
-    if get_file_extension(file_name).upper()=='HEIC':
-        #Apple photo format - use dedicated HEIC loader
-        return _load_image_heic(file_name)
-
-    if get_file_extension(file_name).upper()=='PDF':
-        #Assume it's 1 page. Load the image.
-        return load_pdf_as_images(file_name)[0]
-
-    if is_video_file(file_name):
-        return load_video(file_name, length=1, show_progress=False)[0]
-
-    if is_audio_file(file_name):
-        cover = _load_image_from_audio_file_cover_art(file_name)
-        if cover is None:
-            raise ValueError("load_image: audio file has no embedded cover art: "+repr(file_name))
-        return cover
-
-    try               :return _load_image_from_file_via_imageio(file_name)#Imageio will not forget the alpha channel when loading png files
-    except Exception  :pass #Don't cry over spilled milk...if imageio didn't work we'll try the other libraries.
-    try               :return _load_image_from_file_via_scipy  (file_name)#Expecting that scipy.misc.imread doesn't exist on the interpereter for whatever reason
-    except ImportError:pass
-    try               :return _load_image_from_file_via_opencv (file_name)#OpenCV is our last choice here, because when loading png files it forgets the alpha channel...
-    except Exception  :pass
-    try               :return _load_image_from_file_via_PIL    (file_name)#Last resort - use PIL. Its slow.
-    except Exception  :raise
+    Args:
+        file_name: Any file form containing an image; RGB/RGBA outputs have shape (H, W, C).
+        use_cache (bool): Cache local image files.
+    Returns:
+        numpy.ndarray: Decoded image, e.g. (48, 64, 3).
+    Examples:
+        >>> _load_image_from_file('file_forms_refactor/fixtures/jpg.jpg').shape
+        (48, 64, 3)
+    """
+    file_name = _FileFormTranslator.canonicalize(file_name)
+    if _FileFormTranslator.is_path(file_name):
+        assert file_exists(file_name),'No such image file exists: '+repr(file_name)
+        file_name = get_absolute_path(file_name, physical=False)
+        if use_cache:
+            if file_name not in _load_image_cache:
+                _load_image_cache[file_name] = _load_image_from_file(file_name, use_cache=False)
+            return _load_image_cache[file_name].copy()
+        elif file_name in _load_image_cache:
+            del _load_image_cache[file_name]
+    with _FileFormTranslator.opened(file_name, ('file_object', 'path')) as source: #A path stays a path; every other form becomes a seekable file object
+        extension = _FileFormTranslator.extension_of(source).upper() #From the name, else sniffed from the bytes
+        mediatype = _guess_mimetype(source)
+        position = None if isinstance(source, str) else source.tell()
+        def rewind():
+            #Each fallback backend below must see the file object from the same position
+            if position is not None:
+                source.seek(position)
+            return source
+        if extension=='EXR':
+            try             :return load_openexr_image(rewind()) #OpenEXR needs a real file; its loader handles that
+            except Exception:pass
+        if extension=='HEIC': return _load_image_heic(rewind())
+        if extension=='PDF': return load_pdf_as_images(rewind())[0] #pdf2image needs a real file; its loader handles that
+        if mediatype=='video': return load_video(rewind(), length=1, show_progress=False)[0]
+        if mediatype=='audio':
+            cover = _load_image_from_audio_file_cover_art(rewind())
+            if cover is None:
+                raise ValueError("load_image: audio file has no embedded cover art: "+repr(file_name))
+            return cover
+        try               :return _load_image_from_file_via_imageio(rewind())#Imageio will not forget the alpha channel when loading png files
+        except Exception  :pass #Don't cry over spilled milk...if imageio didn't work we'll try the other libraries.
+        try               :return _load_image_from_file_via_scipy  (rewind())#Expecting that scipy.misc.imread doesn't exist on the interpereter for whatever reason
+        except ImportError:pass
+        try               :return _load_image_from_file_via_opencv (rewind())#OpenCV is our last choice here, because when loading png files it forgets the alpha channel...
+        except Exception  :pass
+        try               :return _load_image_from_file_via_PIL    (rewind())#Last resort - use PIL. Its slow.
+        except Exception  :raise
 
 def _load_image_heic(path):
     """Clean HEIC loader following RP patterns"""
@@ -8522,7 +8654,9 @@ def _load_image_from_file_via_imageio(file_name):
     """
     pip_import('imageio')
     from imageio import imread
-    return imread(file_name)
+    if isinstance(file_name, str):
+        return imread(file_name)
+    return imread(io.BytesIO(_FileFormTranslator.as_bytes(file_name))) #imageio closes file objects it is handed; give it a private copy
 
 def _load_image_from_file_via_scipy(file_name):
     from scipy.misc import imread
@@ -8530,10 +8664,14 @@ def _load_image_from_file_via_scipy(file_name):
 
 def _load_image_from_file_via_opencv(file_name):
     cv2=pip_import('cv2')
-    image=cv2.imread(file_name, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+    if isinstance(file_name, str):
+        image=cv2.imread(file_name, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+    else:
+        #cv2 cannot read file objects, but it can decode bytes
+        image=cv2.imdecode(np.frombuffer(_FileFormTranslator.as_bytes(file_name), np.uint8), cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
     # image=cv2.imread(file_name) 
     if image is None:
-        assert False,("OpenCV failed to load image file at the path: "+file_name)#By default, opencv doesn't raise an error when the file isn't found, and just returns None....which is dumb. It should act like scipy.misc.imread, which throws a FileNotFoundError when given an invalid path.
+        assert False,("OpenCV failed to load image file at the path: "+str(file_name))#By default, opencv doesn't raise an error when the file isn't found, and just returns None....which is dumb. It should act like scipy.misc.imread, which throws a FileNotFoundError when given an invalid path.
     return cv_bgr_rgb_swap(image)#OpenCV is really weird and doesn't use RGB: It uses BGR for some strange legacy reason. We have to swap the channels to make it useful.
 
 
@@ -8546,24 +8684,6 @@ def _disable_insecure_request_warning():
         # Temporarily suppress InsecureRequestWarning
         warnings.simplefilter("ignore", InsecureRequestWarning)
         yield
-
-def _load_image_from_data_uri(data_uri: str):
-    """
-    Load an image from a data URI (e.g., data:image/png;base64,iVBORw0KG...)
-    Returns a numpy array
-
-    Example:
-        >>> # Load a tiny 16x16 Mario sprite
-        >>> mario_uri = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAA7ElEQVQ4EaXBsW2DQBiG4feTUrDGrcAK16RgAAYI7lx6CpfufBmAASjSsAIr3BoUkf6AhK1fpxNNnkf8k6gwMCoEoiAKBsYJgXBEwcA4IRCOKAwxGJvn/YF3uV3ZpTkLRzhDDMbmeX9Qc7ld2aU5i4NwbJmMjdoOWyY8tR22TOzUduIgCrZMxgm1nXBExRCDUZHmLAqiwsCoEIiCKBgYJwTCEaV+NQ6/Xz/sPr4/eRsb4QivX42XsRFevxovYyMO4qVfDW9shNevhjc2YiMOQwyGk+YsnCEGw0lzFhuxGWIwCmnOwhliMAppzvoD6bpMEei4FxAAAAAASUVORK5CYII='
-        >>> mario = _load_image_from_data_uri(mario_uri)
-        >>> mario.shape
-        (16, 16, 4)
-    """
-    import re
-    match = re.match(r'data:image/[^;]+;base64,(.+)', data_uri)
-    if not match:
-        raise ValueError("Invalid data URI format: {0}...".format(data_uri[:100]))
-    return decode_image_from_base64(match.group(1))
 
 def _load_image_from_url(url: str, *, use_cache=False):
     """
@@ -8604,11 +8724,8 @@ def _load_image_from_url(url: str, *, use_cache=False):
     
         # Direct PIL loading (no caching - current behavior for backward compatibility)
         pip_import('requests')
-        pip_import('PIL')
 
         import requests
-        from PIL import Image
-        from io import BytesIO
 
         if not connected_to_internet():
             raise RuntimeError("_load_image_from_url: Not connected to internet, cannot load "+url)
@@ -8616,7 +8733,7 @@ def _load_image_from_url(url: str, *, use_cache=False):
         with _disable_insecure_request_warning():
             response = requests.get(url, verify=False)
         
-        return np.add(Image.open(BytesIO(response.content)), 0)  # Converts it to a numpy array by adding 0 to it.
+        return _load_image_from_file(response.content) #Full format dispatch (exr, heic, pdf, video frame...) on the downloaded bytes
 
 def load_image_from_matplotlib(*,dpi:int=None,fig=None):
     """
@@ -8750,7 +8867,21 @@ def load_openexr_image(file_path,*,channels=None):
     This code was originally from https://www.programcreek.com/python/example/124985/OpenEXR.InputFile
     Imageio used to do this well...but for some reason, as of April 27 2022, it suddenly stopped working correctly and gave wrong values along the blue channel
     This function has been checked to make sure the resulting floating point numbers are correct
+
+    EXAMPLE (any file form):
+        >>> load_openexr_image('render.exr').shape                                 #A path
+        ans = (48, 64, 3)
+        >>> image = load_openexr_image('s3://bucket/render.exr')                   #An s3:// url works too
+        >>> load_openexr_image(file_to_bytes('render.exr')).shape                  #Bytes: spilled to a temp file, because OpenEXR needs a real file
+        ans = (48, 64, 3)
+        >>> load_openexr_image(open('render.exr','rb')).shape                      #An open file object
+        ans = (48, 64, 3)
+        >>> load_openexr_image(dataset.take_blobs('image', indices=[0])[0]).shape  #A Lance BlobFile
+        ans = (48, 64, 3)
     """
+    if not _FileFormTranslator.is_path(file_path):
+        with _FileFormTranslator.opened(file_path, ('path',)) as spilled: #OpenEXR needs a real file; other forms are spilled for the call
+            return load_openexr_image(spilled, channels=channels)
 
     pip_import('OpenEXR')
     pip_import('Imath')
@@ -8785,7 +8916,24 @@ def load_openexr_image(file_path,*,channels=None):
     return image
 
 def load_exr_metadata(path):
+    """
+    Returns the header of an OpenEXR file: a dict of its attributes. Accepts any file form (see _FileFormTranslator).
+
+    EXAMPLE (any file form):
+        >>> load_exr_metadata('render.exr')                                                     #A path: the OpenEXR header as a dict
+        ans = {'channels': {'B': FLOAT (1, 1), 'G': FLOAT (1, 1), 'R': FLOAT (1, 1)}, 'compression': ZIP_COMPRESSION, 'dataWindow': (0, 0) - (63, 47), ...(etc)... }
+        >>> metadata = load_exr_metadata('s3://bucket/render.exr')                              #An s3:// url works too
+        >>> load_exr_metadata(file_to_bytes('render.exr'))['compression']                       #Bytes: spilled to a temp file, because OpenEXR needs a real file
+        ans = ZIP_COMPRESSION
+        >>> load_exr_metadata(open('render.exr','rb'))['dataWindow']                            #An open file object
+        ans = (0, 0) - (63, 47)
+        >>> sorted(load_exr_metadata(dataset.take_blobs('image', indices=[0])[0])['channels'])  #A Lance BlobFile
+        ans = ['B', 'G', 'R']
+    """
     pip_import('OpenEXR')
+    if not _FileFormTranslator.is_path(path):
+        with _FileFormTranslator.opened(path, ('path',)) as spilled: #OpenEXR needs a real file; other forms are spilled for the call
+            return load_exr_metadata(spilled)
     import OpenEXR
 
     # Open the EXR file
@@ -8814,7 +8962,7 @@ def load_exr_metadatas(
     """
     if show_progress in ['eta', True]: show_progress = 'eta:rp.load_exr_metadatas'
 
-    paths = detuple(paths)
+    paths = rp_iglob(paths) #Globs, lists, lone paths, bytes, file objects and blobs
 
     def load(path):
         return load_exr_metadata(path)
@@ -8920,8 +9068,25 @@ def encode_image_to_bytes(image,filetype=None,quality=100):
 
 
 def encode_images_to_bytes(images, filetype=None, quality=100):
-    """Batch encode multiple images to bytes. See encode_image_to_bytes for single images.
-    To decode, use decode_images_from_bytes."""
+    """
+    Batch encode multiple images to bytes. See encode_image_to_bytes for single images.
+    To decode, use decode_images_from_bytes.
+
+    Command. Encode multiple images into one bytes value, loading source paths and initializing encoders as needed.
+
+    Args:
+        images: Sequence of (H, W, C) images, such as two (8, 12, 3) RGB arrays, or image paths.
+        filetype (str or None): Per-image format passed to encode_image_to_bytes.
+        quality (int): Per-image encoding quality from 0 to 100.
+    Returns:
+        bytes: Serialized encoded-image list; decode with decode_images_from_bytes.
+
+    EXAMPLE:
+        >>> images = [np.full((8, 12, 3), value, dtype=np.uint8) for value in (40, 180)]
+        >>> encoded = encode_images_to_bytes(images, filetype='png')
+        >>> [image.shape for image in decode_images_from_bytes(encoded)]
+        ans = [(8, 12, 3), (8, 12, 3)]
+    """
     object = [encode_image_to_bytes(x, filetype=filetype, quality=quality) for x in images]
     return object_to_bytes(object)
 
@@ -9029,19 +9194,139 @@ def decode_bytes_to_image(encoded_image:bytes):
 
 decode_image_from_bytes = decode_bytes_to_image
 
-def save_image(image, file_name=None, add_png_extension: bool = True):
+def _save_image_via_imageio(file_name, image, *, filetype=None):
     """
-    An easy function to save images. 
+    Command. Writes a numpy image to file_name with imageio. Backend of save_image.
+
+    Args:
+        file_name: Local path, S3 URI, or writable binary handle; a name supplies the format.
+        image (numpy.ndarray): HWC or HW image, already converted by save_image
+        filetype (str or None): Format for unnamed destinations; defaults to PNG.
+    Returns:
+        str or file object: Saved path/URI or the original writable handle, left open.
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> buffer = io.BytesIO()
+        >>> _save_image_via_imageio(buffer, np.full((8, 12, 3), 80, dtype=np.uint8)) is buffer
+        ans = True
+        >>> load_image(buffer.getvalue()).shape
+        ans = (8, 12, 3)
+        >>> load_image(_save_image_via_imageio(bytes, np.full((8, 12, 3), 80, dtype=np.uint8))).shape
+        ans = (8, 12, 3)
+    """
+    pip_import('imageio')
+    file_name = _FileDestination.canonicalize(file_name)
+    extension = _FileDestination.filetype(file_name, explicit=filetype, default='png')
+    if extension == 'exr':
+        from imageio import imwrite as imsave #Imageio is the best at saving .exr files
+    else:
+        from imageio import imsave as imsave
+    with _FileDestination.opened(file_name, forms=('path', 'file_object'), suffix='.' + extension, seekable=True) as target:
+        imsave(target, image, format=extension)
+    return _FileDestination.completed(file_name)
+
+def _save_image_via_scipy(file_name, image, *, filetype=None):
+    """
+    Command. Writes a numpy image with scipy.misc.imsave, which only exists on scipy < 1.2.
+    Former backend of save_image; untested in isolation (this environment has a newer scipy).
+
+    Args:
+        file_name: Local path, S3 URI, or writable binary handle.
+        image (numpy.ndarray): HWC or HW image
+        filetype (str or None): Format for unnamed destinations; defaults to PNG.
+    Returns:
+        str or file object: Saved path/URI or the original writable handle, left open.
+        Requires a separate legacy SciPy environment for verification.
+
+    Examples:
+        >>> # With scipy < 1.2: _save_image_via_scipy('image.png', np.zeros((8, 12, 3), np.uint8))
+        >>> # Returns 'image.png'.
+    """
+    from scipy.misc import imsave
+    file_name = _FileDestination.canonicalize(file_name)
+    extension = _FileDestination.filetype(file_name, explicit=filetype, default='png')
+    with _FileDestination.opened(file_name, forms=('path',), suffix='.' + extension) as target:
+        imsave(target, image)
+    return _FileDestination.completed(file_name)
+
+def _save_image_via_skimage(file_name, image, *, filetype=None):
+    """
+    Command. Writes a numpy image with skimage.io.imsave. Backend of save_image.
+
+    Args:
+        file_name: Local path, S3 URI, or writable binary handle.
+        image (numpy.ndarray): HWC or HW image
+        filetype (str or None): Format for unnamed destinations; defaults to PNG.
+    Returns:
+        str or file object: Saved path/URI or the original writable handle, left open.
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> buffer = io.BytesIO()
+        >>> image = np.arange(8 * 12 * 3, dtype=np.uint8).reshape(8, 12, 3)
+        >>> _save_image_via_skimage(buffer, image) is buffer
+        ans = True
+        >>> load_image(buffer.getvalue()).shape
+        ans = (8, 12, 3)
+        >>> load_image(_save_image_via_skimage(bytes, image)).shape
+        ans = (8, 12, 3)
+    """
+    from skimage.io import imsave
+    file_name = _FileDestination.canonicalize(file_name)
+    extension = _FileDestination.filetype(file_name, explicit=filetype, default='png')
+    with _FileDestination.opened(file_name, forms=('path',), suffix='.' + extension) as target:
+        imsave(target, image)
+    return _FileDestination.completed(file_name)
+
+def _cv_save_image(file_name, image, *, filetype=None):
+    """
+    Command. Writes a numpy image with cv2.imwrite, converting to byte RGBA and swapping to BGR first.
+    Backend of save_image.
+
+    Args:
+        file_name: Local path, S3 URI, or writable binary handle.
+        image (numpy.ndarray): HWC or HW image in RGB order
+        filetype (str or None): Format for unnamed destinations; defaults to PNG.
+    Returns:
+        str or file object: Saved path/URI or the original writable handle, left open.
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> buffer = io.BytesIO()
+        >>> _cv_save_image(buffer, np.full((8, 12, 3), 80, dtype=np.uint8)) is buffer
+        ans = True
+        >>> load_image(buffer.getvalue()).shape
+        ans = (8, 12, 4)
+        >>> load_image(_cv_save_image(bytes, np.full((8, 12, 3), 80, dtype=np.uint8))).shape
+        ans = (8, 12, 4)
+    """
+    pip_import('cv2')
+    from cv2 import imwrite
+    file_name = _FileDestination.canonicalize(file_name)
+    extension = _FileDestination.filetype(file_name, explicit=filetype, default='png')
+    image = cv_bgr_rgb_swap(as_rgba_image(as_byte_image(image, copy=False), copy=False))
+    with _FileDestination.opened(file_name, forms=('path',), suffix='.' + extension) as target:
+        if not imwrite(target, image):
+            raise IOError('_cv_save_image: OpenCV failed to write image as ' + extension)
+    return _FileDestination.completed(file_name)
+
+def save_image(image, file_name=None, add_png_extension: bool = True, *, filetype=None):
+    """
+    An easy function to save images.
+
+    Command. Save an image to a local path, S3 URI, writable binary handle or stream.
+    Input shape: (H, W), (H, W, 3) RGB or (H, W, 4) RGBA; for example (48, 64, 3).
+    Caller handles stay open and are written at their current position.
 
     Args:
         image: Image to save. Accepts numpy arrays, PIL images, torch tensors, and any other rp-supported image type
-        file_name (str, optional): Output file path. If None, generates unique filename
+        file_name: Local path, S3 URI or writable binary handle. None generates a unique filename.
         add_png_extension (bool): Legacy parameter for PNG extension handling (default True)
+        filetype (str, optional): Output extension for unnamed destinations; defaults to PNG.
 
     Returns:
-        str: Path to the saved image file
-
-    Provides several fallbacks to saving an image file
+        str or file object: Saved path/URI or the original writable handle.
 
     Saves an image to many different formats, depending on the given file extension.
     If no file extension is given (i.e. if file_name=='image' instead of 'image.jpg'), by default it will save it as a png
@@ -9073,182 +9358,177 @@ def save_image(image, file_name=None, add_png_extension: bool = True):
         >>> float_img = np.random.random((50, 50, 3))
         >>> save_image(float_img, 'float_image.png')
         
-    Todo: Add support for imageio, which can also write images
     Note: The add_png_extension is annoying legacy stuff...sorry...it would break some of my other scripts to change that right now.
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> image = np.full((8, 12, 3), [20, 80, 160], dtype=np.uint8)
+        >>> buffer = io.BytesIO()
+        >>> save_image(image, buffer) is buffer
+        ans = True
+        >>> load_image(buffer.getvalue()).shape
+        ans = (8, 12, 3)
+        >>> load_image(save_image(image, bytes)).shape
+        ans = (8, 12, 3)
+        >>> # Binary stdout: save_image(image, sys.stdout.buffer, filetype='png')
     """
 
+    if file_name is None:
+        extension = _FileDestination.filetype('', explicit=filetype, default='png')
+        file_name = get_unique_copy_path('image.' + extension)
+    file_name = _FileDestination.canonicalize(file_name)
+    extension = _FileDestination.filetype(file_name, explicit=filetype, default='png')
+    #Save a png file by default (unless filetype is specified)
+    if isinstance(file_name, str) and add_png_extension and not has_file_extension(file_name):
+        file_name += '.' + extension
+    #If the specified path's folders don't exist, make them. Don't whine and throw errors.
+    #Each backend's _FileDestination context handles parent directory creation.
     image = as_numpy_image(image, copy=False)
 
-    if file_name==None:
-        # file_name=temporary_file_path('png')
-        file_name=get_unique_copy_path('image.png')
+    #Note that exr filetypes must have a float32 dtype
+    if extension == 'exr': return save_openexr_image(image, file_name)
+    #Try to save using this jpg-specific method - it guarentees the quality=100 setting
+    if extension == 'jpg' : return save_image_jpg (image, file_name, quality=100)
+    if extension == 'jxl' : return save_image_jxl (image, file_name, quality=100)
+    if extension == 'avif': return save_image_avif(image, file_name, quality=100)
+    if extension == 'webp': return save_image_webp(image, file_name, quality=100)
 
-    if file_name.startswith('~'):
-        file_name=get_absolute_path(file_name)
-
-    #If the specified path's folders don't exist, make them. Don't whine and throw errors.
-    make_parent_directory(file_name)
-    
-    if get_file_extension(file_name)=='exr':
-        #Note that exr filetypes must have a float32 dtype
-        # image=as_float_image(image).astype(np.float32)
-        save_openexr_image(image, file_name)
-        return file_name
-
-    elif get_file_extension(file_name)=='jpg':
-        #Try to save using this jpg-specific method - it guarentees 100% quality
-        try: return save_image_jpg(image, file_name, quality=100)
-        except Exception: pass
-    elif get_file_extension(file_name)=='jxl':
-        try: return save_image_jxl(image, file_name, quality=100)
-        except Exception: pass
-    elif get_file_extension(file_name)=='avif':
-        try: return save_image_avif(image, file_name, quality=100)
-        except Exception: pass
-    elif get_file_extension(file_name)=='webp':
-        try: return save_image_webp(image, file_name, quality=100)
-        except Exception: pass
+    #Suppress any warnings about losing data when coming from a float_image...that's a given, considering that our byte images only have one byte per color channel...
+    image = as_byte_image(image)
+    if extension == 'jpeg':
+        image = as_rgb_image(image)
+    #Choose an installed backend before writing. Encoding errors must propagate.
+    #Each backend lives in a _save_image_via_* function.
+    import importlib.util
+    if importlib.util.find_spec('imageio') is not None:
+        #This is the best library for this task: it handles the most image types, and it does it just as fast as opencv
+        imsave = _save_image_via_imageio
+    elif importlib.util.find_spec('skimage') is not None:
+        imsave = _save_image_via_skimage
+    elif importlib.util.find_spec('cv2') is not None:
+        imsave = _cv_save_image
     else:
-        #Suppress any warnings about losing data when coming from a float_image...that's a given, considering that png's only have one byte per color channel...
-        image=as_byte_image(image)
-    
-    try:
-        try:
-            pip_import('imageio') #This is the best library for this task: it handles the most image types, and it does it just as fast as opencv
-            if get_file_extension(file_name)=='exr':
-                from imageio import imwrite as imsave #Imageio is the best at saving .exr files
-            else:
-                from imageio import imsave as imsave
-        except Exception:
-            from scipy.misc import imsave
-    except Exception:
-        try:
-            from skimage.io import imsave
-        except Exception:
-            try:
-                pip_import('cv2')
-                from cv2 import imwrite
-                imsave = lambda filename, data: imwrite(
-                    filename,
-                    cv_bgr_rgb_swap(
-                        as_rgba_image(
-                            as_byte_image(
-                                data,
-                                copy=False,
-                            ),
-                            copy=False,
-                        ),
-                    ),
-                )
-            except Exception:
-                pass
+        pip_import('imageio')
+        imsave = _save_image_via_imageio
+    return imsave(file_name, image, filetype=extension)
 
-    if add_png_extension and not has_file_extension(file_name):#Save a png file by default
-        file_name+=".png"
-
-    if get_file_extension(file_name).lower() in 'jpg jpeg'.split():
-        image=as_rgb_image(image)
-
-    imsave(file_name,image)
-
-    return file_name
-
-def save_images(images,paths:list=None,skip_overwrites=False,show_progress=False):
+def save_images(images, paths:list=None, skip_overwrites=False, show_progress=False, *, filetype=None):
     """
     Save images to specified paths concurrently.
 
+    Command. Save images concurrently to distinct paths, S3 URIs, or writable binary handles.
+
     Parameters:
-        - images (list): List of image objects to save, or a video file
-        - paths (list, str, or None, optional): Determines the file paths for saving images.
+        - images (iterable): List of image objects to save, or a video file
+          Sequence of (H, W, C) images, or (T, H, W, C), such as (3, 48, 64, 3).
+        - paths (list, str, PathLike, or None, optional): Determines the file paths for saving images.
           * If None, each image is saved with a random name followed by an index (such as 'Aos8Bs32_00001.png', 'Aos8Bs32_00002.png' ...)
-          * If a string:
+          * If a string or PathLike:
             - If its a folder, uses same names as setting paths==None, except images are saved in that subfolder
             - Treated as a format string (like 'image_%03i.png') to generate file paths.
-          * If a list, each element should be a path corresponding to each image.
-        - skip_overwrites (bool, optional): If True, does not overwrite existing files. Default is False.
+            - A single image also accepts a single filename.
+          * If a list, each element should be a destination corresponding to each image.
+            Local paths, S3 URIs and writable binary handles can be mixed. Handles stay open.
+          * If the bytes type, each image is encoded in memory and a list of bytes is returned.
+        - skip_overwrites (bool, optional): If True, does not overwrite existing local files. Default is False.
+          Requires local-path destinations.
         - show_progress (bool, optional): If True, shows progress and estimated time remaining. Default is False.
+          Prints progress to stderr.
+        - filetype (str or None): Output extension for unnamed destinations; defaults to PNG.
 
     Returns:
-        - list: Paths where images were saved.
+        - list: Paths where images were saved, original writable handles, or encoded bytes, in input order.
 
     Examples:
-        >>>  save_images(my_images, 'image_%03i.png', skip_overwrites=True, show_progress=True)
+        >>> save_images(my_images, 'image_%03i.png', skip_overwrites=True, show_progress=True)
 
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> images = [np.full((8, 12, 3), value, dtype=np.uint8) for value in (40, 180)]
+        >>> buffers = [io.BytesIO(), io.BytesIO()]
+        >>> [saved is buffer for saved, buffer in zip(save_images(images, buffers), buffers)]
+        ans = [True, True]
+        >>> [load_image(buffer.getvalue()).shape for buffer in buffers]
+        ans = [(8, 12, 3), (8, 12, 3)]
+        >>> [load_image(encoded).shape for encoded in save_images(images, bytes)]
+        ans = [(8, 12, 3), (8, 12, 3)]
+        >>> # Mixed destinations: save_images(images, ['first.png', io.BytesIO()])
     """
-
-    if isinstance(images, str) and is_video_file(images):
+    if isinstance(images, (str, os.PathLike)):
         images = load_video(images)
-        
-    if paths is None or isinstance(paths,str) and folder_exists(paths):
-        new_paths=random_namespace_hash()+'_%05i.png'
-        if folder_exists(paths):
-            new_paths=path_join(paths,new_paths)
-        paths=new_paths
-        
-        # paths=[None]*len(images)
+    images = list(images)
+    if paths is bytes:
+        paths = [bytes] * len(images) #Each image gets its own buffer, so this returns a list of bytes
+    if callable(getattr(paths, 'write', None)):
+        raise TypeError('save_images: supply one distinct destination per image, not a single writable handle')
+    if isinstance(paths, os.PathLike):
+        paths = os.fspath(paths)
+    if isinstance(paths, str):
+        paths = _FileDestination.canonicalize(paths)
+    if paths is None or isinstance(paths, str) and _FileDestination.is_path(paths) and folder_exists(paths):
+        extension = _FileDestination.filetype('', explicit=filetype, default='png')
+        template = random_namespace_hash() + '_%05i.' + extension
+        paths = path_join(paths, template) if paths is not None else template
+    if isinstance(paths, str):
+        if '%' in paths:
+            #Assume paths is a formattable string that takes an int index
+            paths = [paths % i for i in range(len(images))]
+        elif len(images) == 1:
+            paths = [paths]
+        else:
+            raise ValueError('save_images: multiple images require a filename template or one destination per image')
+    else:
+        paths = list(paths)
+    if len(paths) != len(images):
+        raise ValueError('save_images: must have exactly one destination per image')
+    if not all(map(is_image, images)):
+        raise ValueError('save_images: all inputs must be images as defined by rp.is_image')
 
-        #if show_progress:
-            #print("rp.save_images: No paths were specified for your %i images, so their names will be their hash values...calculating the image hash values...",end='',flush=True)
-          #
-        #paths=[str(handy_hash(image)) for image in images] #By defualt, give each image it's own unique name
-#
-        #if show_progress:
-            #sys.stdout.write('\033[2K\033[1G')#erase and go to beginning of line https://stackoverflow.com/questions/5290994/remove-and-replace-printed-items
-
-    if isinstance(paths,str):
-        #Assume paths is a formattable string that takes an int index
-        paths=[paths % i for i in range(len(images))]
-
-    if show_progress:
-        number_of_images_saved=0
-        show_time_remaining=eta(len(paths),title='Saving Images')
-        start_time=gtoc()
-    
-    assert len(paths)==len(images),'Must have exactly one path to go with every image'
-    assert all(map(is_image,images)),'All images must be images as defined by rp.is_image'
-    assert all(isinstance(path,str) or path is None for path in paths),'All paths must be strings. They are where the images are saved to.'
-    
-    cancelled=False #This variable is used to make sure that all the other image-saving threads halt if the user of this function throws an exception, such as a KeyboardInterrupt (maybe it was taking too long and they got impatient...)
-
-    def _save_image(image,path):
-
-        if cancelled:
-            return
-        
+    normalized = []
+    keys = set()
+    for image, path in zip(images, paths):
         if path is None:
-            path=str(handy_hash(image))+'.png'
+            extension = _FileDestination.filetype('', explicit=filetype, default='png')
+            path = str(handy_hash(image)) + '.' + extension
+        path = _FileDestination.canonicalize(path)
+        extension = _FileDestination.filetype(path, explicit=filetype, default='png')
+        #Sometimes save_image will change the filename, such as adding .png at the end
+        if isinstance(path, str) and not has_file_extension(path):
+            path += '.' + extension
+        if isinstance(path, str):
+            key = os.path.normcase(os.path.realpath(path)) if _FileDestination.is_path(path) else path
+            if key in keys:
+                raise ValueError('save_images: destinations must be distinct after filename normalization')
+            keys.add(key)
+        normalized.append(path)
+    paths = normalized
+    handles = [path for path in paths if not isinstance(path, str)]
+    if len({id(path) for path in handles}) != len(handles):
+        raise ValueError('save_images: writable handles must be distinct')
+    for path in paths:
+        if isinstance(path, io.TextIOBase):
+            raise TypeError('save_images: image destinations must be binary')
+        _FileDestination.filetype(path, explicit=filetype, default='png')
+        if skip_overwrites and not _FileDestination.is_path(path):
+            raise ValueError('save_images: skip_overwrites requires local-path destinations')
 
-        if skip_overwrites and path_exists(path):
-            pass #We do nothing, we're skipping this image!
-        else:    
-            maybe_path = save_image(image,path)
-            if maybe_path is not None:
-                #Sometimes save_image will change the filename, such as adding .png at the end
-                path=maybe_path
-        
-        if cancelled:
-            return
+    progress = eta(len(paths), title='Saving Images', file=sys.stderr) if show_progress and paths else None
+    progress_lock = threading.Lock()
+    completed = 0
 
-        if show_progress:
-            nonlocal number_of_images_saved
-            number_of_images_saved+=1
-            show_time_remaining(number_of_images_saved)
+    def save_one(image, path):
+        """Command. Save one validated image and update the shared progress display."""
+        nonlocal completed
+        #If the path exists and skip_overwrites is set: We do nothing, we're skipping this image!
+        result = path if skip_overwrites and path_exists(path) else save_image(image, path, filetype=filetype)
+        if progress is not None:
+            with progress_lock:
+                completed += 1
+                progress(completed)
+        return result
 
-        return path
-        
-    try:
-        saved_paths = par_map(_save_image,images,paths)#This is fast because it's multithreaded
-    except:
-        cancelled=True
-        raise
+    return par_map(save_one, images, paths) #This is fast because it's multithreaded
 
-    if show_progress:
-        end_time=gtoc()
-        elapsed_time=end_time-start_time
-        sys.stdout.write('\033[2K\033[1G')#erase and go to beginning of line https://stackoverflow.com/questions/5290994/remove-and-replace-printed-items
-        print('rp.save_images: Done! Saved %i images in %.3f seconds'%(len(images),elapsed_time))#This is here because of the specifics of the eta function we're using to display progress
-
-    return saved_paths
 
 def temp_saved_image(image):
     """
@@ -9290,6 +9570,10 @@ def save_image_to_imgur(image):
 def save_image_jpg(image,path=None,*,quality=100,add_extension=True):
     """
     Saves an image in JPEG format with specified quality settings.
+
+    Command. Saves to a file destination.
+    Shapes: (H, W), (H, W, 3), or (H, W, 4) -> encoded RGB JPEG, for example (48, 64, 3).
+    Paths, S3 URIs and writable binary handles are accepted; caller handles remain open.
     Handles various input formats (PIL, numpy arrays, torch tensors, taichi fields, etc)
     Automatically converts images to RGB (instead of RGBA, which jpeg doesn't support)
     
@@ -9299,12 +9583,12 @@ def save_image_jpg(image,path=None,*,quality=100,add_extension=True):
     
     Parameters:
         image: Image data in any RP-supported format (PIL, numpy array, torch tensor, taichi field, etc)
-        path (str, optional): Output file path. If None, uses "image.jpg", "image_copy.jpg", "image_copy1.jpg", etc
+        path: Local path, S3 URI or writable binary handle. If None, uses "image.jpg", "image_copy.jpg", "image_copy1.jpg", etc
         quality (int): JPEG quality 1-100 (100 = best quality, larger file)
         add_extension (bool): Whether to add .jpg extension if not present
     
     Returns:
-        str: Path where the image was saved
+        str or file object: Saved path/URI or the original writable handle.
     
     Usage Examples:
         >>> # Save with default quality
@@ -9329,17 +9613,27 @@ def save_image_jpg(image,path=None,*,quality=100,add_extension=True):
         - Converts RGBA to RGB (JPEG doesn't support transparency)
     
     Tags: image, jpeg, jpg, save, quality, compression
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> image = np.full((8, 12, 3), [20, 80, 160], dtype=np.uint8)
+        >>> buffer = io.BytesIO()
+        >>> save_image_jpg(image, buffer, quality=90) is buffer
+        ans = True
+        >>> load_image(buffer.getvalue()).shape
+        ans = (8, 12, 3)
+        >>> load_image(save_image_jpg(image, bytes, quality=90)).shape
+        ans = (8, 12, 3)
     """
 
     if path is None:
         path=get_unique_copy_path('image.jpg')
-
-    make_parent_directory(path) #Make sure the directory exists
+    path = _FileDestination.canonicalize(path)
     image=as_numpy_image(image)
     image=_as_rgb_byte_image(image)
     assert 0<=quality<=100,'Jpg quality is measured in percent'
     if is_image(image):image=as_rgb_image(image)
-    if not get_file_extension(path).lower() in {'jpeg','jpg'}:
+    if isinstance(path, str) and not get_file_extension(path).lower() in {'jpeg','jpg'}:
         path+='.jpg'
         
     extra_kwargs={}
@@ -9349,23 +9643,41 @@ def save_image_jpg(image,path=None,*,quality=100,add_extension=True):
         #https://pillow.readthedocs.io/en/stable/reference/JpegPresets.html
         extra_kwargs['subsampling']=0
         
-    as_pil_image(image, copy=False).save(path, "JPEG", quality=quality, optimize=False, progressive=True,**extra_kwargs)
-    return path
+    #Make sure the directory exists
+    with _FileDestination.opened(path, forms=('path', 'file_object'), suffix='.jpg', seekable=True) as target:
+        as_pil_image(image, copy=False).save(target, "JPEG", quality=quality, optimize=False, progressive=True,**extra_kwargs)
+    return _FileDestination.completed(path)
 
 def save_image_webp(image, path=None, *, quality=100, add_extension=True):
     """
-    Save image in WebP format. Set lossless=True for lossless compression, False for lossy.
+    Save image in WebP format. Set quality=100 for lossless compression, lower values for lossy.
     If add_extension is True, adds '.webp' extension if not already present.
+
+    Command. Saves to a file destination.
+    Shapes: (H, W), (H, W, 3), or (H, W, 4), such as (48, 64, 4).
     
     Args:
         image: Image data in any RP-supported format
-        path: Output file path (auto-generated if None)
+        path: Local path, S3 URI or writable binary handle; auto-generated if None.
         quality: WebP quality 1-100 (100 = lossless)
         add_extension: Whether to add .webp extension
-        metadata: String of text to embed in EXIF metadata
-        
+
     Examples:
-        >>> save_image_webp(img, "photo.webp", metadata="My WebP image")
+        >>> save_image_webp(img, "photo.webp")
+
+    Returns:
+        str or file object: Saved path/URI or the original open handle.
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> image = np.full((8, 12, 3), [20, 80, 160], dtype=np.uint8)
+        >>> buffer = io.BytesIO()
+        >>> save_image_webp(image, buffer) is buffer
+        ans = True
+        >>> load_image(buffer.getvalue()).shape
+        ans = (8, 12, 3)
+        >>> load_image(save_image_webp(image, bytes)).shape
+        ans = (8, 12, 3)
     """
 
     image = as_numpy_image(image)
@@ -9375,34 +9687,51 @@ def save_image_webp(image, path=None, *, quality=100, add_extension=True):
 
     if path is None:
         path = get_unique_copy_path('image.webp')
-
-    make_parent_directory(path)
+    path = _FileDestination.canonicalize(path)
 
     assert 0 <= quality <= 100, 'WebP quality is measured in percent'
 
-    if add_extension and not get_file_extension(path).lower() == 'webp':
+    if isinstance(path, str) and add_extension and not get_file_extension(path).lower() == 'webp':
         path += '.webp'
 
     kwargs = dict(lossless=quality==100, quality=quality)
-    as_pil_image(image, copy=False).save(path, "WEBP", **kwargs)
+    with _FileDestination.opened(path, forms=('path', 'file_object'), suffix='.webp', seekable=True) as target:
+        as_pil_image(image, copy=False).save(target, "WEBP", **kwargs)
 
-    return path
+    return _FileDestination.completed(path)
 
 
 def save_image_avif(image, path=None, *, quality=100, add_extension=True):
     """
-    Save image in AVIF format. Set lossless=True for lossless compression, False for lossy.
+    Save image in AVIF format. Set quality=100 to request lossless compression, lower values for lossy.
     If add_extension is True, adds '.avif' extension if not already present.
-    Returns the path of the saved image.
+    Returns the path of the saved image, or the original writable handle.
+
+    Command. Saves to a file destination.
+    Shapes: (H, W), (H, W, 3), or (H, W, 4), such as (48, 64, 4).
     
     Args:
         image: Image data in any RP-supported format
-        path: Output file path (auto-generated if None)
+        path: Local path, S3 URI or writable binary handle; auto-generated if None.
         quality: AVIF quality 1-100 (100 = lossless)
         add_extension: Whether to add .avif extension if not given
-        
+
     Examples:
         >>> path = save_image_avif(img, "photo.avif", )
+
+    Returns:
+        str or file object: Saved path/URI or the original open handle.
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> image = np.full((8, 12, 3), [20, 80, 160], dtype=np.uint8)
+        >>> buffer = io.BytesIO()
+        >>> save_image_avif(image, buffer) is buffer
+        ans = True
+        >>> load_image(buffer.getvalue()).shape
+        ans = (8, 12, 3)
+        >>> load_image(save_image_avif(image, bytes)).shape
+        ans = (8, 12, 3)
     """
     pip_import("pillow_avif", "pillow-avif-plugin")
 
@@ -9413,33 +9742,51 @@ def save_image_avif(image, path=None, *, quality=100, add_extension=True):
 
     if path is None:
         path = get_unique_copy_path('image.avif')
-
-    make_parent_directory(path)
+    path = _FileDestination.canonicalize(path)
 
     assert 0 <= quality <= 100, 'AVIF quality is measured in percent'
 
-    if add_extension and not get_file_extension(path).lower() == 'avif':
+    if isinstance(path, str) and add_extension and not get_file_extension(path).lower() == 'avif':
         path += '.avif'
 
     kwargs = dict(lossless=quality==100, quality=quality)
-    as_pil_image(image, copy=False).save(path, "AVIF", **kwargs)
+    with _FileDestination.opened(path, forms=('path', 'file_object'), suffix='.avif', seekable=True) as target:
+        as_pil_image(image, copy=False).save(target, "AVIF", **kwargs)
 
-    return path
+    return _FileDestination.completed(path)
 
 def save_image_jxl(image, path=None, *, quality=100, add_extension=True):
     """
     Save image in JPEG XL format. Set quality=100 for lossless compression.
     If add_extension is True, adds '.jxl' extension if not already present.
-    Returns the path of the saved image.
+    Returns the path of the saved image, or the original writable handle.
+
+    Command. Saves to a file destination.
+    Shapes: (H, W), (H, W, 3), or (H, W, 4), such as (48, 64, 4).
+    Paths, S3 URIs and writable binary handles are accepted; caller handles remain open.
     
     Args:
         image: Image data in any RP-supported format
-        path: Output file path (auto-generated if None)  
+        path: Local path, S3 URI or writable binary handle; auto-generated if None.
         quality: JXL quality 1-100 (100 = lossless)
         add_extension: Whether to add .jxl extension
-        
+
     EXAMPLE:
         >>> saved_path = save_image_jxl(img, "photo.jxl")
+
+    Returns:
+        str or file object: Saved path/URI or the original open handle.
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> image = np.full((8, 12, 3), [20, 80, 160], dtype=np.uint8)
+        >>> buffer = io.BytesIO()
+        >>> save_image_jxl(image, buffer) is buffer
+        ans = True
+        >>> load_image(buffer.getvalue()).shape
+        ans = (8, 12, 3)
+        >>> load_image(save_image_jxl(image, bytes)).shape
+        ans = (8, 12, 3)
     
     EXAMPLE (Comparison video between JPG and JXL quality):
         
@@ -9543,34 +9890,63 @@ def save_image_jxl(image, path=None, *, quality=100, add_extension=True):
 
     if path is None:
         path = get_unique_copy_path('image.jxl')
-    
-    make_parent_directory(path)
+    path = _FileDestination.canonicalize(path)
     
     assert 0 <= quality <= 100, 'JpgXL quality is measured in percent'
     
-    if add_extension and not get_file_extension(path).lower() == 'jxl':
+    if isinstance(path, str) and add_extension and not get_file_extension(path).lower() == 'jxl':
         path += '.jxl'
 
     kwargs = dict(lossless=True) if quality == 100 else dict(quality=quality)
-    as_pil_image(image).save(path, "JXL", **kwargs)
+    with _FileDestination.opened(path, forms=('path', 'file_object'), suffix='.jxl', seekable=True) as target:
+        as_pil_image(image).save(target, "JXL", **kwargs)
 
-    return path
+    return _FileDestination.completed(path)
 
 def save_animated_webp(video, path=None, *, framerate=60, quality=100, loop=True, add_extension=True):
     """
     Save an animated video in WebP format.
     If add_extension is True, adds '.webp' extension if not already present.
+
+    Command. Save (T, H, W, C) frames, such as (6, 48, 64, 4), as animated WebP.
+
+    Args:
+        video: RGB/RGBA frame iterable; generators are materialized once and alpha is preserved.
+        path: Local path, S3 URI, writable binary handle, or None for a generated path.
+        framerate (int): Frames per second.
+        quality (int): Encoding quality from 0 to 100.
+        loop (bool): Repeat the animation.
+        add_extension (bool): Append .webp to names without that extension.
+    Returns:
+        str or file object: Saved path/URI or the original open handle.
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> frames = [np.full((8, 12, 3), value, dtype=np.uint8) for value in (40, 180)]
+        >>> buffer = io.BytesIO()
+        >>> save_animated_webp(frames, buffer, framerate=10) is buffer
+        ans = True
+        >>> save_animated_webp(frames, bytes, framerate=10)[8:12]
+        ans = b'WEBP'
     """
     assert 0 <= quality <= 100, 'WebP quality is measured in percent'
 
-    if add_extension:
-        path = _normalize_video_output_path(path, 'webp')
-    else:
-        if path is None:
-            path = _get_default_video_path('webp')
-        make_parent_directory(path)
+    if path is None:
+        path = _get_default_video_path('webp')
+    path = _FileDestination.canonicalize(path)
+    if isinstance(path, io.TextIOBase):
+        raise TypeError('save_animated_webp: destination must be binary')
+    if framerate <= 0:
+        raise ValueError('save_animated_webp: framerate must be positive')
+    if isinstance(path, str) and add_extension and get_file_extension(path).lower() != 'webp':
+        path += '.webp'
+    if _FileDestination.is_path(path):
         path = get_absolute_path(path)
    
+    if not is_numpy_array(video) and not is_torch_tensor(video):
+        video = list(video)
+    if not len(video):
+        raise ValueError('save_animated_webp: video must contain at least one frame')
     video = _as_rgba_byte_video(video)
     video = as_pil_images(video, copy=False)
     
@@ -9581,21 +9957,37 @@ def save_animated_webp(video, path=None, *, framerate=60, quality=100, loop=True
         loop=0 if loop else 1,
         quality=quality,
     )
-    video[0].save(path, "WEBP", **kwargs)
+    with _FileDestination.opened(path, forms=('path', 'file_object'), suffix='.webp', seekable=True) as target:
+        video[0].save(target, "WEBP", **kwargs)
     
-    return path
+    return _FileDestination.completed(path)
 save_video_webp=save_animated_webp
 
 def save_openexr_image(image, file_path):
     """
-    Counterpart to load_openexr_image with optional text metadata support.
+    Counterpart to load_openexr_image.
+
+    Command. Save an RGB/RGBA float image, shape (H, W, C), as OpenEXR.
     
     Args:
         image: Image to save (numpy array)
-        file_path: Output EXR file path
+        file_path: Local path, S3 URI, or writable binary handle; caller handles remain open.
+    Returns:
+        str or file object: Saved path/URI or the original writable handle.
         
     Examples:
-        >>> save_openexr_image(img, "photo.exr", metadata="My HDR image")
+        >>> save_openexr_image(img, "photo.exr")
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> image = np.full((8, 12, 3), 2.5, dtype=np.float32)
+        >>> buffer = io.BytesIO()
+        >>> save_openexr_image(image, buffer) is buffer
+        ans = True
+        >>> load_openexr_image(buffer.getvalue()).shape
+        ans = (8, 12, 3)
+        >>> load_openexr_image(save_openexr_image(image, bytes)).shape
+        ans = (8, 12, 3)
         
     Alias: save_image_exr
 
@@ -9612,7 +10004,7 @@ def save_openexr_image(image, file_path):
     
     #Input assertions
     assert is_image(image)
-    assert isinstance(file_path,str)
+    file_path = _FileDestination.canonicalize(file_path)
         
     #Prepare the image: It should be either an RGB or RGBA floating point image
     if is_grayscale_image(image):
@@ -9633,9 +10025,13 @@ def save_openexr_image(image, file_path):
 
     #print(header) #Shows interesting info. Useful for debugging the OpenEXR library - it doesnt have much documentation
     
-    output_file = OpenEXR.OutputFile(file_path,header)
-    output_file.writePixels({channels[i] : image[:,:,i].astype(np.float32).tobytes() for i in range(num_channels)})
-    output_file.close()
+    with _FileDestination.opened(file_path, forms=('path',), suffix='.exr') as target:
+        output_file = OpenEXR.OutputFile(target,header)
+        try:
+            output_file.writePixels({channels[i] : image[:,:,i].astype(np.float32).tobytes() for i in range(num_channels)})
+        finally:
+            output_file.close()
+    return _FileDestination.completed(file_path)
 
 save_image_exr = save_openexr_image
 
@@ -10962,6 +11358,17 @@ def load_mp3_file(path):
     """
     Takes an mp3 file path, and returns a bunch of samples as a numpy array
     Returns floating-point samples in the range [-1.0 , 1.0]
+
+    EXAMPLE (any file form):
+        >>> load_mp3_file('speech.mp3')[0].shape   # a path; stereo samples come out (num_samples, 2)
+        ans = (16000, 2)
+        >>> samples, samplerate = load_mp3_file('s3://bucket/speech.mp3')   # an s3 url is read through a file object, no temp file
+        >>> load_mp3_file(file_to_bytes('speech.mp3'))[1]   # bytes; the second element is the samplerate
+        ans = 16000
+        >>> load_mp3_file(io.BytesIO(file_to_bytes('speech.mp3')))[0].shape   # any seekable binary file object
+        ans = (16000, 2)
+        >>> load_mp3_file(dataset.take_blobs('audio', indices=[0])[0])[0].shape   # a Lance blob
+        ans = (16000, 2)
     """
     pip_import('pydub')
     import pydub
@@ -10979,17 +11386,30 @@ def load_mp3_file(path):
             return a.frame_rate, np.float32(y) / 2**15
         else:
             return a.frame_rate, y
-    samplerate,samples= read(path,True)
+    with _FileFormTranslator.opened(path) as f: #Any file form
+        samplerate,samples= read(f,True)
     return samples,samplerate
 
 def load_wav_file(path):
     """
     Takes a wav file path, and returns a bunch of samples as a numpy array
     Returns floating-point samples in the range [-1.0 , 1.0]
+
+    EXAMPLE (any file form):
+        >>> load_wav_file('speech.wav')[0].shape   # a path; stereo samples come out (num_samples, 2)
+        ans = (16000, 2)
+        >>> samples, samplerate = load_wav_file('s3://bucket/speech.wav')   # an s3 url is read through a file object, no temp file
+        >>> load_wav_file(file_to_bytes('speech.wav'))[1]   # bytes; the second element is the samplerate
+        ans = 16000
+        >>> load_wav_file(open('speech.wav', 'rb'))[0].shape   # an open binary file (io.BytesIO works the same way)
+        ans = (16000, 2)
+        >>> load_wav_file(dataset.take_blobs('audio', indices=[0])[0])[0].shape   # a Lance blob
+        ans = (16000, 2)
     """
     pip_import('scipy')
     import scipy.io.wavfile as wav
-    samplerate,samples=wav.read(path)
+    with _FileFormTranslator.opened(path) as f: #Any file form
+        samplerate,samples=wav.read(f)
     try:
         samples=np.ndarray.astype(samples,float) / np.iinfo(samples.dtype).max  # ⟶ All samples ∈ [-1,1]
     except Exception:
@@ -11012,18 +11432,25 @@ def load_sound_file(file_path:str, samplerate:int=None):
     Returns the contents of a sound file at file_path as a numpy array of floats in the range [-1, 1]
     samplerate: either True, None or an int. If True, returns (samples, samplerate). If None, returns (samples at original samplerate). If int, returns (samples converted to samplerate).
     TODO: Add conversion functions between stereo and mono, and add parameters to this function that use them
+
+    EXAMPLE (any file form):
+        >>> load_sound_file('speech.wav').shape   # a path: the extension picks the wav or mp3 decoder
+        ans = (16000, 2)
+        >>> load_sound_file(file_to_bytes('speech.mp3')).shape   # nameless bytes: the format is sniffed from the leading bytes
+        ans = (16000, 2)
+        >>> load_sound_file(open('speech.wav', 'rb'), samplerate=True)[1]   # an open binary file; its .name gives the extension
+        ans = 16000
+        >>> load_sound_file(dataset.take_blobs('audio', indices=[0])[0], samplerate=8000).shape   # a Lance blob, resampled
+        ans = (8000, 2)
     """
 
     #Make sure we support the requested file type
-    assert isinstance(file_path,str),'r.load_sound_file: file_path must be a string, but you gave it a %s'%str(type(file_path))
-    assert has_file_extension(file_path), 'r.load_sound_file: Your file doesnt have an extension, so I\'m not sure what to do with it. Your file path: %s. Supported filetypes include: %s'%(repr(file_path),', '.join(supported_filetypes))
     supported_filetypes=['mp3','wav']
-    filetype=get_file_extension(file_path)
-    assert filetype.lower() in supported_filetypes, 'r.load_sound_file: Sorry, but this function doesnt support %s files. It only supports the following filetypes: %s'%(filetype,', '.join(supported_filetypes))
-
-    #Load the specific filetype
-    if   filetype=='wav': samples, original_samplerate = load_wav_file(file_path)
-    elif filetype=='mp3': samples, original_samplerate = load_mp3_file(file_path)
+    with _FileFormTranslator.opened(file_path, ('file_object', 'path')) as source: #A path stays a path; every other form becomes a seekable file object
+        filetype = _FileFormTranslator.extension_of(source) #From the name, else sniffed from the bytes
+        assert filetype in supported_filetypes, 'r.load_sound_file: Sorry, but this function doesnt support %s files. It only supports the following filetypes: %s'%(filetype,', '.join(supported_filetypes))
+        if   filetype=='wav': samples, original_samplerate = load_wav_file(source)
+        elif filetype=='mp3': samples, original_samplerate = load_mp3_file(source)
 
     #Handle the samplerate parameter
     if samplerate is True:
@@ -11073,14 +11500,72 @@ def load_sound_file(file_path:str, samplerate:int=None):
 #    new_number_of_samples=int(length_in_seconds * new_samplerate)
 #    return resample(samples,num=new_number_of_samples)
 
-def save_wav(samples,path,samplerate=None) -> None:  # Usually samples should be between -1 and 1
+def save_wav(samples,path,samplerate=None):  # Usually samples should be between -1 and 1
+    """
+    Command. Save (N,) mono or (N, C) multichannel samples to a WAV destination; C indexes audio channels.
+
+    Args:
+        samples (numpy.ndarray): Integer PCM or floating samples; for example (16000, 2) stereo.
+        path: Local path, S3 URI, writable binary handle or stream.
+        samplerate (int or None): Samples per second; defaults to default_samplerate.
+    Returns:
+        str or file object: Saved path/URI or the original writable handle, left open.
+    EXAMPLE (any file destination):
+        >>> buffer = io.BytesIO()
+        >>> save_wav(np.zeros((8, 2), dtype=np.int16), buffer, samplerate=16000) is buffer
+        ans = True
+        >>> buffer.getvalue()[:4]
+        ans = b'RIFF'
+        >>> save_wav(np.zeros((8, 2), dtype=np.int16), bytes, samplerate=16000)[:4]
+        ans = b'RIFF'
+        >>> buffer.closed
+        ans = False
+    """
     pip_import('scipy')
     from scipy.io import wavfile
+    path = _FileDestination.canonicalize(path)
     if samples.dtype == np.float64:
         samples=samples.astype(np.float32)
-    wavfile.write(path,samplerate or default_samplerate,samples)
+    #SciPy rewinds supplied handles on completion; stage so caller positions advance normally.
+    with _FileDestination.opened(path, forms=('path',), suffix='.wav') as output:
+        wavfile.write(output,samplerate or default_samplerate,samples)
+    return _FileDestination.completed(path)
 
 default_samplerate=44100  # In (Hz ⨯ Sample). Used for all audio methods in the 'r' class.
+
+def _save_mp3(samples, path, samplerate=None):
+    """
+    Command. Save (N,) mono or (N, C) multichannel samples as MP3; C indexes audio channels.
+
+    Args:
+        samples: Integer PCM or floating samples, e.g. (4410, 2) stereo.
+        path: Local path, S3 URI or writable binary handle.
+        samplerate: Samples per second; defaults to default_samplerate.
+    Returns:
+        str or file object: Saved path/URI or the original writable handle, left open.
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> buffer = io.BytesIO()
+        >>> _save_mp3(np.zeros((4410, 2), np.int16), buffer, samplerate=44100) is buffer
+        ans = True
+        >>> load_mp3_file(buffer.getvalue())[0].shape
+        ans = (4410, 2)
+        >>> load_mp3_file(_save_mp3(np.zeros((4410, 2), np.int16), bytes, samplerate=44100))[0].shape
+        ans = (4410, 2)
+    """
+    import tempfile
+    path = _FileDestination.canonicalize(path)
+    with tempfile.TemporaryDirectory(prefix='rp_save_audio_') as folder:
+        wav_path = os.path.join(folder, 'audio.wav')
+        mp3_path = os.path.join(folder, 'audio.mp3')
+        save_wav(samples, wav_path, samplerate=samplerate)
+        #FFmpeg infers its format from the filename; the caller's destination may have no extension.
+        convert_audio_file(wav_path, mp3_path)
+        with open(mp3_path, 'rb') as source, _FileDestination.opened(path) as target:
+            _FileDestination.copy(source, target)
+    return _FileDestination.completed(path)
+
 def play_sound_from_samples(samples,samplerate=None,blocking=False,loop=False,**kwargs):
     """
     For stereo, use a np matrix
@@ -11106,6 +11591,25 @@ def play_sound_from_samples(samples,samplerate=None,blocking=False,loop=False,**
         assert not blocking,'This function cannot currently block while playing audio when running in Jupyter'#This might change in future versions of rp
         Audio(samples,rate=samplerate,autoplay=True)
 
+def play_sound_file_via_sounddevice(path):
+    """
+    Command. Loads the file's samples and plays them through sounddevice on another thread. Backend of play_sound_file, moved verbatim out of it.
+    """
+    samples,samplerate=load_sound_file(path,samplerate=True)
+    # ic(samples,samplerate)
+    play_sound_from_samples(samples,samplerate)
+
+
+def play_sound_file_via_playsound(path):
+    """
+    Command. Plays the file with the playsound package. Backend of play_sound_file, moved verbatim out of it; untested in isolation
+    (it worked on Windows and did not on macOS, per the original comment).
+    """
+    pip_import('playsound')
+    from playsound import playsound
+    playsound(path)# Worked on windows, but didn't work on my mac
+
+
 def play_sound_file(path):
     """
     THIS Function is an abstraction of playing sound files. Just plug in whatever method works on your computer into this one to make it work
@@ -11113,19 +11617,13 @@ def play_sound_file(path):
     """
     try:
         if currently_running_linux():
-            samples,samplerate=load_sound_file(path,samplerate=True)
-            # ic(samples,samplerate)
-            play_sound_from_samples(samples,samplerate)
-
+            play_sound_file_via_sounddevice(path)
         elif currently_running_mac():
             play_sound_file_via_pygame(path)
             # play_sound_file_via_afplay(path)
             
         elif currently_running_windows():
-            pip_import('playsound')
-            from playsound import playsound
-            playsound(path)# Worked on windows, but didn't work on my mac
-
+            play_sound_file_via_playsound(path)
     except Exception:
         play_sound_file_via_pygame(path)
 
@@ -12057,17 +12555,18 @@ def _as_rgba_byte_video(video):
 
 def _normalize_video_output_path(path, extension):
     """
-    Pure function, general. Normalize a video output path.
+    Command. Normalize a video output path, or preserve a writable handle.
 
     Applies default path generation, extension enforcement, parent directory
     creation, and absolute path resolution. Used by video save functions.
 
     Args:
-        path (str or None): Output path, or None for auto-generated default
+        path: Local path, S3 URI, writable binary handle, or None for a default filename
         extension (str):    File extension without dot (e.g. 'mp4', 'webm', 'avi')
 
     Returns:
-        str: Absolute path with correct extension, parent directory guaranteed to exist
+        str or file object: Absolute local path with correct extension, parent directory guaranteed to exist;
+            S3 URI with correct extension; or the original writable handle
 
     Examples:
         >>> # _normalize_video_output_path(None, 'mp4')  # returns something like '/abs/path/video.mp4'
@@ -12075,10 +12574,14 @@ def _normalize_video_output_path(path, extension):
     """
     if path is None:
         path = _get_default_video_path(extension)
+    path = _FileDestination.canonicalize(path)
+    if not isinstance(path, str):
+        return path
     if not has_file_extension(path) or get_file_extension(path).lower() != extension:
         path += '.' + extension
-    make_parent_directory(path)
-    path = get_absolute_path(path)
+    if _FileDestination.is_path(path):
+        make_parent_directory(path)
+        path = get_absolute_path(path)
     return path
 
 
@@ -12429,24 +12932,21 @@ def display_video_in_notebook(video, filetype='mp4', *, embed=True, framerate=60
     """
     return gather_args_call(_display_video_in_notebook)
 
-def _display_video_in_notebook(video, filetype, *, embed, framerate, save_video=None):
+def _display_video_in_notebook_via_ipython(video, filetype, *, embed, framerate, save_video):
+    """
+    Command. Displays a video or animated image in a Jupyter notebook with IPython.display, embedding it as base64 HTML or linking a file.
+    Backend of _display_video_in_notebook, moved verbatim out of it.
 
-    if save_video is None:
-        save_video=save_video
-
+    Args:
+        video: Video array, or a path or url string
+        filetype (str): Lower-case extension without the dot: gif, png, webp, mp4, avi
+        embed (bool): Inline the bytes as base64 instead of referencing a file
+        framerate: Passed to save_video when the video is an array
+        save_video (callable): Writer used to materialize an array to a temp file
+    """
     from IPython.display import Image, display, HTML, Video
-
-    filetype = filetype.strip('.').lower()
     image_filetypes = 'gif png webp'.split()
     video_filetypes = 'mp4 avi'.split()
-
-    if embed and not isinstance(video, str) and filetype=='mp4':
-        try:
-            return _display_video_via_mediapy(video, framerate)
-        except ImportError:
-            #If we don't import mediapy, it's ok! We have a fallback, seen below.
-            pass
-
     try:
         if isinstance(video, str):
             assert is_valid_url(video) or file_exists(video), 'rp.display_video_in_notebook: Video file {0} does not exist'.format(video)
@@ -12486,6 +12986,20 @@ def _display_video_in_notebook(video, filetype, *, embed, framerate, save_video=
     finally:
         if not isinstance(video, str) and embed and file_exists(temp_path):
             delete_file(temp_path)
+
+def _display_video_in_notebook(video, filetype, *, embed, framerate, save_video=None):
+
+    if save_video is None:
+        save_video=save_video
+
+    filetype = filetype.strip('.').lower()
+    if embed and not isinstance(video, str) and filetype=='mp4':
+        try:
+            return _display_video_via_mediapy(video, framerate)
+        except ImportError:
+            #If we don't import mediapy, it's ok! We have a fallback, seen below.
+            pass
+    return _display_video_in_notebook_via_ipython(video, filetype, embed=embed, framerate=framerate, save_video=save_video)
 
 def display_video_in_notebook_webp(video, quality=100, framerate=60):
     """
@@ -12728,6 +13242,56 @@ class JupyterDisplayChannel:
 
 _disable_display_image=False #Set rp.r._disable_display_image=True to disable the display_image function. Right now this is undocumented functionality, might make it documented later on via helper functions like enable_display_image() and disable_display_image()
 
+def _display_image_via_matplotlib(image, block):
+    """
+    Command. Shows an image in a matplotlib figure; in Jupyter it sizes the figure to the image's true resolution.
+    Backend of display_image, moved verbatim out of it. Uses the module-level `plt` that display_image sets.
+
+    Args:
+        image (numpy.ndarray): RGB float image
+        block (bool): Whether plt.show blocks
+    """
+    plt.clf()
+    if running_in_ipython():
+        fig=plt.figure()#Make a new figure. When jupyter, this makes sense; but normally we don't want this (it will make a bazillion windows)
+        mpl=pip_import('matplotlib')
+        # import matplotlib as mpl
+        #region Set the jupyter resolution to the true image size (it usually squashes the image too small for comfort)
+        old_dpi,old_figsize=mpl.rcParams['figure.dpi'],mpl.rcParams['figure.figsize']#
+        arbitrary_number=100
+        mpl.rcParams['figure.dpi'] = arbitrary_number
+        mpl.rcParams['figure.figsize']=[image.shape[0]/arbitrary_number,image.shape[1]/arbitrary_number]
+    else:
+        fig = _fig()
+    ax = plt.Axes(fig, [0., 0., 1., 1.])
+    ax.set_axis_off()
+    fig.add_axes(ax)
+    ax.imshow(image, aspect='equal')
+    plt.show(block=block)
+    if not block:
+        plt.pause(0.0001)
+    if running_in_ipython():
+        plt.close(fig)#I don't know if this is necessary. It's a hunch it might make it faster in the long term if we have 239239872 figures opened in jupyter. It doesn't hurt, though, so I'm keeping it here.
+        mpl.rcParams['figure.dpi'],mpl.rcParams['figure.figsize']=old_dpi,old_figsize
+
+def _cv_display_image(image, block):
+    """
+    Command. Shows an image in an OpenCV window after coercing it to an RGB float or byte array.
+    Backend of display_image, moved verbatim out of its matplotlib-failure fallback.
+
+    Args:
+        image: Grayscale, RGB or RGBA array-like
+        block (bool): Whether the window waits for a keypress (Esc) instead of ~10ms
+    """
+    image=np.asarray(image)
+    ndim=len(image.shape)
+    assert ndim in {2,3},'Image tensor must have either two or three dimensions (either a grayscale image or RGB or RGBA image)'
+    if ndim==2:
+        image=grayscale_to_rgb(image)
+    if image.dtype==bool:
+        image=image.astype(_float_image_dtype())
+    return cv_imshow(image,wait=10 if not block else 1000000)#Hit esc in the image to exit it
+
 def display_image(image,block=False):
     """
     Very simple to understand: this function displays an image.
@@ -12787,39 +13351,11 @@ def display_image(image,block=False):
     if is_image(image):
         image=as_rgb_image(as_float_image(image))
     try:
-        plt.clf()
-        if running_in_ipython():
-            fig=plt.figure()#Make a new figure. When jupyter, this makes sense; but normally we don't want this (it will make a bazillion windows)
-            mpl=pip_import('matplotlib')
-            # import matplotlib as mpl
-            #region Set the jupyter resolution to the true image size (it usually squashes the image too small for comfort)
-            old_dpi,old_figsize=mpl.rcParams['figure.dpi'],mpl.rcParams['figure.figsize']#
-            arbitrary_number=100
-            mpl.rcParams['figure.dpi'] = arbitrary_number
-            mpl.rcParams['figure.figsize']=[image.shape[0]/arbitrary_number,image.shape[1]/arbitrary_number]
-        else:
-            fig = _fig()
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(image, aspect='equal')
-        plt.show(block=block)
-        if not block:
-            plt.pause(0.0001)
-        if running_in_ipython():
-            plt.close(fig)#I don't know if this is necessary. It's a hunch it might make it faster in the long term if we have 239239872 figures opened in jupyter. It doesn't hurt, though, so I'm keeping it here.
-            mpl.rcParams['figure.dpi'],mpl.rcParams['figure.figsize']=old_dpi,old_figsize
+        _display_image_via_matplotlib(image, block)
     except Exception:
         if not running_in_google_colab():
-            image=np.asarray(image)
             #The above seems not to work anymore, so the next thing to try is opencv's image display (in the event that it fails)...
-            ndim=len(image.shape)
-            assert ndim in {2,3},'Image tensor must have either two or three dimensions (either a grayscale image or RGB or RGBA image)'
-            if ndim==2:
-                image=grayscale_to_rgb(image)
-            if image.dtype==bool:
-                image=image.astype(_float_image_dtype())
-            return cv_imshow(image,wait=10 if not block else 1000000)#Hit esc in the image to exit it
+            return _cv_display_image(image, block)
 
 def with_alpha_checkerboard(image, *, tile_size=8, first_color=1.0, second_color=0.75):
     """ If the given image is RGBA, put a checkerboard pattern behind it and return a new opaque image """
@@ -16609,7 +17145,14 @@ class _FormTranslator(metaclass=_ClassMethodMetaclass):
         rp.is_image, rp.as_rgba_image, rp.as_rgb_image, as_grayscale_image, rp.as_pil_image etc etc
     It took O(N^2) code to write, and thought there's gotta be a better way...here it is!
     Please make a docstring for each child class explaining the methods created, they shouldn't have to look here.
+
+    Subclasses may also define:
+        source_only_forms: form names nothing can be converted INTO (e.g. a url). They need no incoming X_to_<form> edges.
+        canonicalize(value): a pre-step run on every input before classification (e.g. pathlib.Path -> str).
+    And every subclass gets as_one_of(value, forms): identity if value's form is in forms, else conversion to forms[0].
     """
+    source_only_forms = ()
+
     def __init_subclass__(cls):
         super().__init_subclass__()
         
@@ -16622,7 +17165,7 @@ class _FormTranslator(metaclass=_ClassMethodMetaclass):
             
         #CLASS VALIDATION: Make sure we have total connectivity - translators from every form to every other form
         for from_form, to_form in itertools.product(cls.forms, repeat=2):
-            if from_form != to_form:
+            if from_form != to_form and to_form not in cls.source_only_forms:
                 #For all pairs of different forms, we expect to find some method to translate between them
                 translator_name = from_form + "_to_" + to_form
                 if not hasattr(cls, translator_name):
@@ -16630,19 +17173,36 @@ class _FormTranslator(metaclass=_ClassMethodMetaclass):
             
     
     def get_form(cls, value):
+        value = cls.canonicalize(value)
         for form in cls.forms:
             if cls.is_form(value,form):
                 return form
         raise ValueError(cls.__name__ + ": Unknown form: " + str(value))
     
+    def canonicalize(cls, value):
+        #Subclasses override this to normalize inputs before classification. The base does nothing.
+        return value
+
     def as_form(cls, value, form):
+        value = cls.canonicalize(value)
         from_form = cls.get_form(value)
         
         if from_form==form:
             #We don't need to translate anything - they're already the right form
             return value
+
+        if form in cls.source_only_forms:
+            raise ValueError(cls.__name__ + ": " + form + " is a source-only form; nothing can be converted into it")
         
         return getattr(cls, from_form + "_to_" + form)(value)
+
+    def as_one_of(cls, value, forms):
+        """
+        Returns value unchanged if it is already in one of the given forms, else converts it to forms[0].
+        Receivers that accept several forms list them in preference order; identity always wins because it is free.
+        """
+        value = cls.canonicalize(value)
+        return value if cls.get_form(value) in forms else cls.as_form(value, forms[0])
     
     def is_form(cls,value,form):
         return getattr(cls, "is_" + form)(value)
@@ -16710,6 +17270,488 @@ class _FilesizeFormTranslator(_FormTranslator):
     def is_human    (cls,size): return isinstance(size, str)
 
 
+class _FileFormTranslator(_FormTranslator):
+    """
+    Translates between the forms a file's contents can arrive in, so every loader in rp can accept all of them
+    and every backend gets the cheapest form it can consume. See file_forms_refactor/PLAN.md while that folder exists.
+
+    Forms (SEMANTIC BINDING: file-forms-table):
+        path        str that is not a url or data uri (the file need not exist yet); pathlib.Path and other os.PathLike,
+                    "~" paths and file:// urls are canonicalized to a plain str first
+        url         http(s)://, s3://, gs:// ... (source-only: nothing converts INTO a url)
+        data_uri    "data:...;base64,..." strings
+        bytes       bytes, bytearray, memoryview. Bytes are always content, never a bytes path.
+        file_object readable AND seekable: open(path,'rb'), io.BytesIO, lance BlobFile, zip members, smart_open handles, mmap
+        stream      readable but not seekable: pipes, HTTP bodies, tar members (source-only)
+
+    Methods created: is_<form>(x), as_<form>(x), get_form(x), as_form(x, form), as_one_of(x, forms).
+    Same-form requests return the very same object, so a lazily-read file object stays lazy.
+    Conversions to file_object never touch disk; conversions to path spill to a temp file only when they must
+    (the caller that asked for a path deletes it), and a file object whose .name is an existing absolute path is
+    handed over with no copy at all.
+
+    EXAMPLES:
+        >>> import io
+        >>> path = bytes_to_file(b'hello')
+        >>> _FileFormTranslator.get_form(path)
+        'path'
+        >>> _FileFormTranslator.as_bytes(path)
+        b'hello'
+        >>> _FileFormTranslator.get_form(b'hello')
+        'bytes'
+        >>> _FileFormTranslator.as_file_object(b'hello').read()
+        b'hello'
+        >>> _FileFormTranslator.get_form(io.BytesIO(b'hello'))
+        'file_object'
+        >>> _FileFormTranslator.as_bytes(io.BytesIO(b'hello'))
+        b'hello'
+        >>> _FileFormTranslator.get_form('https://example.com/x.png')
+        'url'
+        >>> _FileFormTranslator.get_form('data:text/plain;base64,aGVsbG8=')
+        'data_uri'
+        >>> _FileFormTranslator.as_bytes('data:text/plain;base64,aGVsbG8=')
+        b'hello'
+        >>> _FileFormTranslator.as_one_of(path, ['file_object', 'path']) == path   # already a path: identity
+        True
+        >>> _FileFormTranslator.as_one_of(b'hello', ['file_object', 'path']).read()  # bytes: first listed form
+        b'hello'
+        >>> _FileFormTranslator.get_form(__import__('pathlib').Path(path))
+        'path'
+    """
+    source_only_forms = ('url', 'stream')
+    _spills = set() #Temp paths created by *_to_path conversions; opened() deletes them on exit, and never anything else
+    SNIFF_BYTES = 8192 #Bounded prefix for lightweight detection; formats without a matching header remain unknown
+
+    @contextlib.contextmanager
+    def opened(cls, value, forms=('file_object',)):
+        """
+        Context manager. Yields value in the first acceptable form (default: a seekable file object) and on exit closes it
+        only if this call created it; what the caller handed in is never closed. forms=("file_object", "path") yields a str
+        path unchanged for libraries that prefer to open files themselves.
+        """
+        out = cls.as_one_of(value, list(forms))
+        try:
+            yield out
+        finally:
+            if out is not value and hasattr(out, 'close'):
+                out.close()
+            if out is not value and isinstance(out, str) and out in cls._spills:
+                delete_file(out) #A temp file this call spilled; a caller's real file is never in _spills
+                cls._spills.discard(out)
+
+    def canonicalize(cls, value):
+        if sys.version_info < (3, 6):  #Python 3.5 has no os.PathLike or os.fspath; its path objects are pathlib's
+            import pathlib
+            if isinstance(value, pathlib.PurePath):
+                value = str(value)
+        elif isinstance(value, os.PathLike):
+            value = os.fspath(value)  #pathlib.Path, os.DirEntry, ...
+        if isinstance(value, str):
+            if value.startswith('file://'):
+                from urllib.parse import urlparse
+                from urllib.request import url2pathname
+                value = url2pathname(urlparse(value).path)
+            if value.startswith('~'):
+                value = os.path.expanduser(value)
+        if isinstance(value, io.TextIOBase):
+            raise TypeError(cls.__name__ + ': text-mode file objects are not supported; open the file in binary mode ("rb")')
+        return value
+
+    def name_of(cls, value):
+        """Query. The best-known name for value: the path or url itself, or a file object's .name when that is a str, else None."""
+        value = cls.canonicalize(value)
+        if isinstance(value, str):
+            return None if cls.is_data_uri(value) else value
+        name = getattr(value, 'name', None)
+        return name if isinstance(name, str) else None
+
+    def extension_of(cls, value):
+        """
+        Query. Lower-case extension without the dot: from the name when value has one (a path, url, or a file object
+        with a str .name), otherwise sniffed from the leading bytes. value must already be a path or a seekable file
+        object (convert streams with as_file_object first, and keep using that object).
+        """
+        name = cls.name_of(value)
+        if name is not None and has_file_extension(name):
+            return get_file_extension(name).lower()
+        extension = detect_filetype(value)
+        if not extension: raise ValueError(cls.__name__ + ': cannot tell the file type from its contents')
+        return extension
+
+    def as_str_or_file_object(cls, value):
+        """
+        Query. Local paths and http(s) urls stay str (rp's video backends open those themselves, YouTube included);
+        every other form (bytes, data uri, s3/gs url, file object, stream) becomes one seekable file object.
+        """
+        value = cls.canonicalize(value)
+        if isinstance(value, str) and (cls.is_path(value) or value.startswith('http')):
+            return value
+        return cls.as_file_object(value)
+
+    # Type checkers - mutually exclusive
+    def is_bytes      (cls, x): return isinstance(x, (bytes, bytearray, memoryview))
+    def is_data_uri   (cls, x): return isinstance(x, str) and is_valid_data_uri(x)
+    def is_url        (cls, x): return isinstance(x, str) and is_valid_url(x)
+    def is_path       (cls, x): return isinstance(x, str) and not is_valid_url(x) and not is_valid_data_uri(x)
+    def is_file_object(cls, x): return hasattr(x, 'read') and (x.seekable() if hasattr(x, 'seekable') else hasattr(x, 'seek'))
+    def is_stream     (cls, x): return hasattr(x, 'read') and not cls.is_file_object(x)
+
+    def _register_spill(cls, path):
+        """Command. Remembers a temp path this translator created so opened() can delete it later; returns the path."""
+        cls._spills.add(path)
+        return path
+
+    # Direct converters (each protects laziness, disk, or memory; see PLAN.md section 5.3)
+    def path_to_file_object(cls, path): return open(path, 'rb')
+    def path_to_bytes      (cls, path):
+        with open(path, 'rb') as f:
+            return f.read()
+    def url_to_path        (cls, url ): return cls._register_spill(download_url(url, temporary_file_path(get_file_extension(url))))
+    def url_to_bytes       (cls, url ):
+        #http(s) keeps rp's own downloader; s3://, gs:// and friends read through the smart_open edge
+        return curl_bytes(url) if url.startswith('http') else cls.url_to_file_object(url).read()
+    def url_to_file_object (cls, url ):
+        pip_import('smart_open')
+        import smart_open
+        if url.startswith('http'):
+            #smart_open can't tell when an http server ignores Range requests (it would then return bytes from the wrong offset), so probe with a 1-byte range first
+            pip_import('requests')
+            import requests
+            with requests.get(url, headers={'Range': 'bytes=0-0'}, stream=True) as probe:
+                if probe.status_code != 206:
+                    file_object = cls.bytes_to_file_object(cls.url_to_bytes(url)) #No Range support: buffer the whole body
+                    file_object.name = url
+                    return file_object
+            return smart_open.open(url, 'rb')
+        if is_s3_url(url):
+            pip_import('boto3')
+            import boto3, botocore, botocore.exceptions
+            try:
+                return smart_open.open(url, 'rb')
+            except botocore.exceptions.NoCredentialsError:
+                #No AWS credentials configured: retry unsigned, which works for public buckets and fails loudly otherwise
+                client = boto3.client('s3', config=botocore.config.Config(signature_version=botocore.UNSIGNED))
+                return smart_open.open(url, 'rb', transport_params={'client': client})
+        file_object = smart_open.open(url, 'rb')
+        return file_object if file_object.seekable() else cls.stream_to_file_object(file_object)
+    def data_uri_to_bytes(cls, data_uri):
+        header, payload = data_uri.split(',', 1)
+        if header.endswith(';base64'):
+            return base64_to_bytes(payload)
+        from urllib.parse import unquote_to_bytes
+        return unquote_to_bytes(payload)
+    def bytes_to_file_object(cls, b): return io.BytesIO(b)
+    def bytes_to_path       (cls, b): return cls._register_spill(bytes_to_file(bytes(b)))
+    def bytes_to_data_uri   (cls, b): return 'data:application/octet-stream;base64,' + bytes_to_base64(bytes(b))
+    def file_object_to_bytes(cls, f): return f.read()
+    def file_object_to_path (cls, f):
+        name = getattr(f, 'name', None)
+        if isinstance(name, str) and os.path.isabs(name) and file_exists(name):
+            return name #Already on disk (open(path), NamedTemporaryFile, ...): no copy needed
+        import shutil
+        path = temporary_file_path()
+        position = f.tell() if cls.is_file_object(f) else None #A seekable object is copied whole, from the start, and left where it was
+        if position is not None:
+            f.seek(0)
+        with open(path, 'wb') as out:
+            shutil.copyfileobj(f, out) #Chunked, so a huge stream never sits in RAM
+        if position is not None:
+            f.seek(position)
+        return cls._register_spill(path)
+    def stream_to_bytes      (cls, s): return s.read()
+    def stream_to_file_object(cls, s):
+        """
+        Command. Buffer a reader without closing it, retaining its name for format selection.
+
+        Args:
+            s: Binary reader to consume.
+        Returns:
+            io.BytesIO: Seekable contents at position zero, carrying the original name when known.
+        Examples:
+            >>> _FileFormTranslator.stream_to_file_object(io.BytesIO(b'hello')).read()
+            b'hello'
+        """
+        file_object = io.BytesIO(s.read())
+        file_object.name = cls.name_of(s)
+        return file_object
+    def stream_to_path       (cls, s): return cls.file_object_to_path(s)
+
+    # Composed converters: the payload is already in memory, or must be, on every one of these
+    def path_to_data_uri       (cls, x): return cls.bytes_to_data_uri(cls.path_to_bytes(x))
+    def url_to_data_uri        (cls, x): return cls.bytes_to_data_uri(cls.url_to_bytes(x))
+    def data_uri_to_file_object(cls, x): return cls.bytes_to_file_object(cls.data_uri_to_bytes(x))
+    def data_uri_to_path       (cls, x): return cls.bytes_to_path(cls.data_uri_to_bytes(x))
+    def file_object_to_data_uri(cls, x): return cls.bytes_to_data_uri(cls.file_object_to_bytes(x))
+    def stream_to_data_uri     (cls, x): return cls.bytes_to_data_uri(cls.stream_to_bytes(x))
+
+
+class _BytesDestination(io.BytesIO):
+    """In-memory destination that _FileDestination.canonicalize makes for the bytes type; _FileDestination.completed returns its contents."""
+
+
+class _FileDestination(metaclass=_ClassMethodMetaclass):
+    """
+    Commands and queries for writable file destinations. Savers choose a path or a file object their backend accepts.
+    Supports local paths, PathLike, file://, s3://, writable binary handles and streams; text writers also accept text handles.
+    The bytes type itself asks for the encoded bytes back: canonicalize makes a fresh buffer and completed returns its contents.
+    Caller handles stay open and are written at their current position. Only owned temporary files are removed.
+    S3 and incompatible handles receive the completed staged output. Direct writes can leave partial output on failure.
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> buffer = io.BytesIO()
+        >>> _FileDestination.write(buffer, b'hello') is buffer
+        ans = True
+        >>> buffer.getvalue()
+        ans = b'hello'
+        >>> _FileDestination.filetype(buffer, default='png')
+        ans = png
+        >>> _FileDestination.write(bytes, b'hello')
+        ans = b'hello'
+    """
+    COPY_CHUNK_SIZE = 1024 * 1024 #Bound transfer memory independently of the encoded file's size
+    FORMAT_ALIASES = {'jpeg': 'jpg', 'tif': 'tiff'}
+
+    def canonicalize(cls, value):
+        """
+        Query. Normalize a destination and reject unsupported schemes or non-writable objects.
+
+        Args:
+            value: Local path, S3 URI, writable file object, or the bytes type.
+        Returns:
+            str or file object: Normalized path, the original handle, or a fresh buffer for the bytes type.
+        Examples:
+            >>> _FileDestination.canonicalize(__import__('pathlib').Path('out.png'))
+            'out.png'
+        """
+        if not isinstance(value, io.TextIOBase):
+            value = _FileFormTranslator.canonicalize(value)
+        if value is bytes:
+            return _BytesDestination()
+        if isinstance(value, str):
+            if value.startswith('data:'):
+                raise ValueError('_FileDestination: a data URI is encoded content, not a writable destination')
+            if '://' in value:
+                from urllib.parse import urlsplit
+                parsed = urlsplit(value)
+                if parsed.scheme != 's3' or not parsed.netloc or not parsed.path.lstrip('/'):
+                    raise ValueError('_FileDestination: supported remote destinations are s3://bucket/key; got ' + value)
+                value = 's3://' + value.split('://', 1)[1]
+            return value
+        if not callable(getattr(value, 'write', None)):
+            raise TypeError('_FileDestination: expected a path, s3:// URI, writable file object, or the bytes type; got ' + type(value).__name__)
+        if getattr(value, 'closed', False):
+            raise ValueError('_FileDestination: destination is closed')
+        if hasattr(value, 'writable') and not value.writable():
+            raise ValueError('_FileDestination: destination is not writable')
+        return value
+
+    def completed(cls, value):
+        """
+        Pure function. What a saver returns once writing finishes: a bytes destination's contents, else the destination.
+
+        Args:
+            value: A destination returned by canonicalize.
+        Returns:
+            bytes, str or file object: The encoded bytes for a bytes destination; otherwise value unchanged.
+        Examples:
+            >>> buffer = _FileDestination.canonicalize(bytes)
+            >>> _ = buffer.write(b'hello')
+            >>> _FileDestination.completed(buffer)
+            b'hello'
+            >>> _FileDestination.completed('out.png')
+            'out.png'
+        """
+        return value.getvalue() if isinstance(value, _BytesDestination) else value
+
+    def is_path(cls, value):
+        """
+        Query. Whether a validated destination is a local path.
+
+        Args:
+            value: Destination to inspect.
+        Returns:
+            bool: True for a local path, including PathLike.
+        Examples:
+            >>> _FileDestination.is_path('out.png')
+            True
+            >>> _FileDestination.is_path(io.BytesIO())
+            False
+        """
+        value = cls.canonicalize(value)
+        return isinstance(value, str) and not value.startswith('s3://')
+
+    def filetype(cls, value, explicit=None, default=None):
+        """
+        Query. Choose an output extension from an explicit type, destination name, or default; reject conflicts.
+
+        Args:
+            value: Writable destination; a handle's name is used only to infer a format, never to reopen it.
+            explicit (str or None): Requested extension, with or without its dot.
+            default (str or None): Type to use when the destination has no extension.
+        Returns:
+            str: Lowercase extension without its dot.
+        Examples:
+            >>> _FileDestination.filetype('out.jpeg', 'jpg')
+            'jpg'
+            >>> _FileDestination.filetype(io.BytesIO(), '.png')
+            'png'
+        """
+        value = cls.canonicalize(value)
+        name = value if isinstance(value, str) else getattr(value, 'name', None)
+        named = get_file_extension(name).lower() if isinstance(name, str) and not name.startswith('<') else ''
+        if explicit is not None:
+            if not isinstance(explicit, str) or not explicit.lstrip('.') or not explicit.lstrip('.').isalnum():
+                raise ValueError('_FileDestination: filetype must be an extension such as png or .mp4')
+            explicit = explicit.lower().lstrip('.')
+            if named and cls.FORMAT_ALIASES.get(named, named) != cls.FORMAT_ALIASES.get(explicit, explicit):
+                raise ValueError('_FileDestination: filetype ' + explicit + ' conflicts with destination extension ' + named)
+        result = explicit or named or default
+        if not result:
+            raise ValueError('_FileDestination: an unnamed destination requires an explicit filetype')
+        return result.lower().lstrip('.')
+
+    def write_all(cls, output, data):
+        """
+        Command. Write all bytes or text, including to handles that accept only part of each write.
+
+        Args:
+            output: Writable binary or text handle matching data.
+            data (bytes or str): Content to write at the current position.
+        Returns:
+            int: Bytes or characters written.
+        Examples:
+            >>> buffer = io.BytesIO()
+            >>> _FileDestination.write_all(buffer, b'hello')
+            5
+        """
+        data = data if isinstance(data, str) else memoryview(data).cast('B')
+        total = len(data)
+        written = 0
+        while written < total:
+            count = output.write(data[written:])
+            if count is None:
+                raise BlockingIOError('_FileDestination: non-blocking destination cannot accept output yet')
+            if not isinstance(count, int) or count <= 0 or count > total - written:
+                raise OSError('_FileDestination: write returned an invalid byte/character count: ' + repr(count))
+            written += count
+        return total
+
+    def copy(cls, source, output):
+        """
+        Command. Copy a binary or text stream in bounded chunks, handling short destination writes.
+
+        Args:
+            source: Readable handle at its current position.
+            output: Writable handle with the same binary/text mode.
+        Returns:
+            int: Bytes or characters copied.
+        Examples:
+            >>> _FileDestination.copy(io.BytesIO(b'hello'), io.BytesIO())
+            5
+        """
+        total = 0
+        while True:
+            chunk = source.read(cls.COPY_CHUNK_SIZE)
+            if not chunk:
+                return total
+            total += cls.write_all(output, chunk)
+
+    @contextlib.contextmanager
+    def opened(cls, value, forms=('file_object',), suffix='', seekable=False, text=False):
+        """
+        Command. Yield a writable backend target, finalize staged output on success, and close only owned resources.
+
+        Args:
+            value: Destination path, S3 URI or writable handle.
+            forms (tuple): Backend accepts 'path', 'file_object', or both; a compatible destination stays in place.
+            suffix (str): Staging filename extension, such as '.mp4'.
+            seekable (bool): Backend needs absolute-position seeking; unfamiliar handles or nonzero offsets stage.
+            text (bool): Backend writes Unicode text (UTF-8 when encoded to a binary destination).
+        Yields:
+            str or file object: A path or writable handle for the backend.
+        Examples:
+            >>> buffer = io.BytesIO()
+            >>> with _FileDestination.opened(buffer) as target:
+            ...     _ = target.write(b'hello')
+            >>> buffer.getvalue(), buffer.closed
+            (b'hello', False)
+        """
+        import tempfile
+        if value is bytes:
+            raise TypeError('_FileDestination.opened: canonicalize a bytes destination first, or its output is lost')
+        value = cls.canonicalize(value)
+        if not forms or any(form not in ('path', 'file_object') for form in forms):
+            raise ValueError('_FileDestination: forms must contain path and/or file_object')
+        if not text and isinstance(value, io.TextIOBase):
+            raise TypeError('_FileDestination: binary output requires a binary handle, such as sys.stdout.buffer')
+        if suffix and (not suffix.startswith('.') or not suffix[1:].isalnum()):
+            raise ValueError('_FileDestination: suffix must be a file extension such as .png')
+        if cls.is_path(value):
+            make_parent_directory(value)
+            if 'path' in forms:
+                yield value
+            else:
+                with open(value, 'w' if text else 'wb', **({'encoding': 'utf-8'} if text else {})) as output:
+                    yield output
+            return
+        if not isinstance(value, str):
+            #Known buffered writers handle full writes. Custom writers stage so the final copy can handle short writes explicitly.
+            direct = type(value) in (io.BytesIO, _BytesDestination, io.BufferedRandom, io.BufferedWriter, io.StringIO, io.TextIOWrapper)
+            #Some remote writers report seekable() even though seek() is unsupported; unfamiliar handles stage instead.
+            can_seek = direct and value.seekable() and value.tell() == 0 and 'a' not in getattr(value, 'mode', '')
+            if direct and 'file_object' in forms and (not seekable or can_seek) and (not text or isinstance(value, io.TextIOBase)):
+                yield value
+                if hasattr(value, 'flush'):
+                    value.flush()
+                return
+        with tempfile.TemporaryDirectory(prefix='rp_save_') as folder:
+            staged = os.path.join(folder, 'output' + suffix)
+            if 'path' in forms:
+                yield staged
+            else:
+                with open(staged, 'w+' if text else 'w+b', **({'encoding': 'utf-8'} if text else {})) as output:
+                    yield output
+            if isinstance(value, str):
+                pip_import('smart_open')
+                import smart_open
+                output = smart_open.open(value, 'wb', compression='disable')
+                try:
+                    with open(staged, 'rb') as source:
+                        cls.copy(source, output)
+                    output.close()
+                except BaseException:
+                    output.terminate() #Abort an incomplete multipart upload; never publish a failed copy
+                    raise
+            else:
+                as_text = isinstance(value, io.TextIOBase)
+                with open(staged, 'r' if as_text else 'rb', **({'encoding': 'utf-8'} if as_text else {})) as source:
+                    cls.copy(source, value)
+                if hasattr(value, 'flush'):
+                    value.flush()
+
+    def write(cls, value, data):
+        """
+        Command. Save already-encoded bytes or text to a destination; return its normalized path, original handle, or the written bytes for a bytes destination.
+
+        Args:
+            value: Local path, S3 URI or writable handle.
+            data (bytes or str): Content; text is UTF-8 for binary destinations.
+        Returns:
+            str, file object or bytes: The destination, or the written bytes for a bytes destination.
+        Examples:
+            >>> buffer = io.BytesIO()
+            >>> _FileDestination.write(buffer, 'héllo') is buffer
+            True
+            >>> buffer.getvalue().decode('utf-8')
+            'héllo'
+        """
+        value = cls.canonicalize(value)
+        if isinstance(data, str) and not isinstance(value, io.TextIOBase):
+            data = data.encode('utf-8')
+        with cls.opened(value, text=isinstance(data, str)) as output:
+            cls.write_all(output, data)
+        return cls.completed(value)
 
 
 def get_current_timezone(*,form='human'):
@@ -17348,32 +18390,18 @@ def _cv_print_cam_props(index=0):
     list_cap_props(cap)
     cap.release()
 
-def load_image_from_webcam(webcam_index: int = 0,
-                           *,
-                           width:int=None,
-                           height:int=None,
-                           shutup=False
-                           ):
+def _cv_load_image_from_webcam(webcam_index, *, width, height):
     """
-    If your camera supports multiple resolutions, input the dimensions in the height and width parameters
-    For example, Xiang's raspberry pi webcam was taking pictures at 720p even though the camera could take 1080p pictures.
-      When I set width=1920 and height=1080, it fixed the problem, letting it take 1080p pictures
+    Command. Grabs one RGB frame from an OpenCV VideoCapture, optionally setting the capture resolution first (which persists).
+    Backend of load_image_from_webcam, moved verbatim out of it.
 
-    Note: this can be finicky! You have to set both the height and width correctly for this to work.
-    Note that when you set width and height using this method, they will stay like that until changed again.
-    For example, on my 2021 Macboox Max, using the default webcam, here are some results:
+    Args:
+        webcam_index (int): Which camera
+        width, height (int|None): Capture resolution to request
 
-    These properties can be discovered using the r._cv_print_cam_props function
-    To discover which resolutions are supported by your webcam, see this tutorial: 
-       https://www.learnpythonwithrune.org/find-all-possible-webcam-resolutions-with-opencv-in-python/
-
-    Change webcam_index if you have multiple cameras
-
-    EXAMPLE: while True: display_image(med_filter(load_image_from_webcam(1),σ=0));sleep(0);clf()#⟵ Constant webcam display
+    Returns:
+        numpy.ndarray: HWC uint8 RGB
     """
-
-    if running_in_google_colab():return _load_image_from_webcam_in_jupyter_notebook()
-
     pip_import('cv2')
     import cv2
 
@@ -17404,6 +18432,34 @@ def load_image_from_webcam(webcam_index: int = 0,
     img=cv_bgr_rgb_swap(img)
 
     return img
+
+def load_image_from_webcam(webcam_index: int = 0,
+                           *,
+                           width:int=None,
+                           height:int=None,
+                           shutup=False
+                           ):
+    """
+    If your camera supports multiple resolutions, input the dimensions in the height and width parameters
+    For example, Xiang's raspberry pi webcam was taking pictures at 720p even though the camera could take 1080p pictures.
+      When I set width=1920 and height=1080, it fixed the problem, letting it take 1080p pictures
+
+    Note: this can be finicky! You have to set both the height and width correctly for this to work.
+    Note that when you set width and height using this method, they will stay like that until changed again.
+    For example, on my 2021 Macboox Max, using the default webcam, here are some results:
+
+    These properties can be discovered using the r._cv_print_cam_props function
+    To discover which resolutions are supported by your webcam, see this tutorial: 
+       https://www.learnpythonwithrune.org/find-all-possible-webcam-resolutions-with-opencv-in-python/
+
+    Change webcam_index if you have multiple cameras
+
+    EXAMPLE: while True: display_image(med_filter(load_image_from_webcam(1),σ=0));sleep(0);clf()#⟵ Constant webcam display
+    """
+
+    if running_in_google_colab():return _load_image_from_webcam_in_jupyter_notebook()
+
+    return _cv_load_image_from_webcam(webcam_index, width=width, height=height)
 
 def load_webcam_stream():
     """ Instead of loading a single image from webcam, returns a generator that returns such images infinitely - essentially an infinitely long video """
@@ -17939,26 +18995,44 @@ def load_pickled_value(path: str):
         >>> loaded_data["nested"]["key"]  # 42
     
     Note: Pickle files are Python-specific and version-sensitive.
+
+    EXAMPLE (any file form):
+        >>> load_pickled_value('data.pkl')                                     # a path
+        ans = {'ints': [1, 2, 3], 'nested': {'k': 'v', 'f': 1.5}, 'none': None, 'array': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
+        >>> load_pickled_value('s3://bucket/data.pkl')                         # an s3:// url, streamed through smart_open
+        >>> load_pickled_value(file_to_bytes('data.pkl'))                      # bytes
+        ans = {'ints': [1, 2, 3], 'nested': {'k': 'v', 'f': 1.5}, 'none': None, 'array': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
+        >>> load_pickled_value(open('data.pkl', 'rb'))                         # an open file object: unpickled in place, never closed by rp
+        ans = {'ints': [1, 2, 3], 'nested': {'k': 'v', 'f': 1.5}, 'none': None, 'array': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
+        >>> load_pickled_value(dataset.take_blobs('pickle', indices=[0])[0])   # a Lance blob; nothing is written to disk
+        ans = {'ints': [1, 2, 3], 'nested': {'k': 'v', 'f': 1.5}, 'none': None, 'array': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
     """
     # Filenames are relative to the current file path
-    return pickle.load(open(path,"rb"))
+    with _FileFormTranslator.opened(path) as file_object: #Any file form
+        return pickle.load(file_object)
 
 def save_pickled_value(value, path: str):
     """
-    Load a Python object to a pickle file.
+    Command.
+
+    Save a Python object to a pickle file.
     
+    Destinations: local paths, PathLike, file:// or s3:// URIs, and writable binary handles/streams.
+    Caller handles remain open, receive output at their current position, and are flushed on success.
+
     Parameters:
         value: Variable to save
-        path (str): Path to pickle file to create/overwrite
+        path (str, os.PathLike or file object): Path to pickle file to create/overwrite; None generates a unique object.pkl filename
         
     Returns:
         The new file's path
+        Writable handles are returned unchanged; S3 destinations return their URI.
         
     EXAMPLE:
         >>> import tempfile
         >>> # Create and save test data
-        >>> test_data = {"numbers": [1, , 3], "name": "test", "nested": {"key": 42}}
-        >>> save_pickled_value(test_data, 'data.pkl', test_data)
+        >>> test_data = {"numbers": [1, 2, 3], "name": "test", "nested": {"key": 42}}
+        >>> save_pickled_value(test_data, 'data.pkl')
         >>> 
         >>> # Load the data back
         >>> loaded_data = load_pickled_value('data.pkl')
@@ -17966,28 +19040,59 @@ def save_pickled_value(value, path: str):
         >>> loaded_data["name"]  # 'test'
         >>> loaded_data["nested"]["key"]  # 42
 
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> from pathlib import Path
+        >>> data = {'name': 'test', 'values': [1, 2, 3]}
+        >>> saved = save_pickled_value(data, Path('data.pkl'))
+        >>> loaded = load_pickled_value(saved)
+        >>> loaded == data
+        ans = True
+        >>> buffer = io.BytesIO()
+        >>> save_pickled_value(data, buffer) is buffer
+        ans = True
+        >>> loaded = load_pickled_value(buffer.getvalue())
+        >>> loaded == data
+        ans = True
+        >>> load_pickled_value(save_pickled_value(data, bytes)) == data
+        ans = True
+        >>> with open('copy.pkl', 'wb') as output:
+        ...     saved = save_pickled_value(data, output)
+        ...     ownership_preserved = saved is output and not output.closed
+        >>> ownership_preserved
+        ans = True
+        >>> save_pickled_value(data, 's3://my-bucket/data.pkl')  # Replace with your writable bucket.
     """
     if path is None:
         path = get_unique_copy_path('object.pkl')
 
-    pickle.dump(value,open(path,'wb'))
-    return path
+    path = _FileDestination.canonicalize(path)
+    with _FileDestination.opened(path) as output:
+        pickle.dump(value, output)
+    return _FileDestination.completed(path)
 
 # endregion
 # region  .txt ⟷ str: ［string_to_text_file，text_file_to_string］
-def string_to_text_file(file_path: str,string: str,) -> None:
+def string_to_text_file(file_path: str,string: str,):
     """
+    Command.
+
     Writes a string to a text file
     
+    Destinations: local paths, PathLike, file:// or s3:// URIs, and writable binary handles/streams.
+    Text writers also accept writable text handles.
+    Caller handles remain open, receive output at their current position, and are flushed on success.
+
     Args:
-        file_path (str): Target file path - supports ~ expansion
+        file_path (str, os.PathLike or file object): Target file path - supports ~ expansion
         string (str): Text content
         
     Returns:
         str: path to newly saved file
+        Writable handles are returned unchanged; S3 destinations return their URI.
         
     Examples:
-        >>> content = "Hello, World!\nThis is a test file."
+        >>> content = "Hello, World!\\nThis is a test file."
         >>> print(string_to_text_file("/tmp/test.txt", content))
         /tmp/test.txt
         
@@ -17995,37 +19100,83 @@ def string_to_text_file(file_path: str,string: str,) -> None:
         - Uses UTF-8 encoding by default
         - Creates parent directories if they don't exist and provides clear error messages.
 
-    Alias: save_text_file
+    Content-first counterpart: save_text_file
 
     See Also:
         - text_file_to_string(...) aka load_text_file(...): Read text files
         - append_line_to_file(): Append content instead of overwrite
         
     Tags: file-io, text-files, file-writing, path-handling
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> from pathlib import Path
+        >>> data = 'héllo'
+        >>> saved = string_to_text_file(Path('data.txt'), data)
+        >>> loaded = load_text_file(saved)
+        >>> loaded == data
+        ans = True
+        >>> buffer = io.BytesIO()
+        >>> string_to_text_file(buffer, data) is buffer
+        ans = True
+        >>> loaded = load_text_file(buffer.getvalue())
+        >>> loaded == data
+        ans = True
+        >>> load_text_file(string_to_text_file(bytes, data)) == data
+        ans = True
+        >>> output = io.StringIO()
+        >>> string_to_text_file(output, data) is output
+        ans = True
+        >>> loaded = load_text_file(output.getvalue().encode('utf-8'))
+        >>> loaded == data
+        ans = True
+        >>> string_to_text_file('s3://my-bucket/data.txt', data)  # Replace with your writable bucket.
     """
-    file_path=get_absolute_path(file_path)#Make sure it recognizes ~/.vimrc AKA with the ~ attached
-    make_parent_directory(file_path)
-
-    try:
-        file=open(file_path,"w")
-    except Exception:
-        if not folder_exists(get_parent_folder(file_path)):
-            raise FileNotFoundError("Parent folder does not exist: "+str(get_parent_folder(file_path)))
-        raise
-
-    try:
-        file.write(string)
-    except Exception:
-        file=open(file_path,"w",encoding='utf-8')
-        file.write(string,)
-
-    file.close()
-    return file_path
+    file_path = _FileDestination.canonicalize(file_path)
+    if _FileDestination.is_path(file_path):
+        file_path = get_absolute_path(file_path) #Makes sure it recognizes paths like ~/.vimrc, and keeps the existing absolute-path return value
+    return _FileDestination.write(file_path, string)
 
 def save_text_file(string, file_path):
     """
+    Command.
+
     save_text_file(string, text_file) writes text file
     Please see rp.string_to_text_file for full documentation
+
+    Destinations: local paths, PathLike, file:// or s3:// URIs, and writable binary handles/streams.
+    Text writers also accept writable text handles.
+    Caller handles remain open, receive output at their current position, and are flushed on success.
+
+    Args:
+        string (str): Text to write; UTF-8 for binary destinations.
+        file_path: Destination.
+    Returns:
+        str or file object: Absolute local path, S3 URI, or original handle.
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> from pathlib import Path
+        >>> data = 'héllo'
+        >>> saved = save_text_file(data, Path('data.txt'))
+        >>> loaded = load_text_file(saved)
+        >>> loaded == data
+        ans = True
+        >>> buffer = io.BytesIO()
+        >>> save_text_file(data, buffer) is buffer
+        ans = True
+        >>> loaded = load_text_file(buffer.getvalue())
+        >>> loaded == data
+        ans = True
+        >>> load_text_file(save_text_file(data, bytes)) == data
+        ans = True
+        >>> output = io.StringIO()
+        >>> save_text_file(data, output) is output
+        ans = True
+        >>> loaded = load_text_file(output.getvalue().encode('utf-8'))
+        >>> loaded == data
+        ans = True
+        >>> save_text_file(data, 's3://my-bucket/data.txt')  # Replace with your writable bucket.
     """
     return string_to_text_file(file_path, string)
 
@@ -18033,6 +19184,7 @@ def save_text_file(string, file_path):
 _text_file_to_string_cache={}
 def text_file_to_string(file_path: str, *, use_cache=False) -> str:
     """
+    Accepts any file form: a path, url, data uri, bytes, an open file object or a stream (see _FileFormTranslator). use_cache applies to paths.
     Reads a text file
     
     Args:
@@ -18071,15 +19223,32 @@ def text_file_to_string(file_path: str, *, use_cache=False) -> str:
         - load_yaml_file(...): Loads YAML files
         
     Tags: file-io, text-processing, url-loading, caching
+
+    EXAMPLE (any file form):
+        >>> text_file_to_string('notes.txt')
+        ans = hello world
+              second line
+        >>> text_file_to_string(b'hello world')                               # bytes are content, never a path
+        ans = hello world
+        >>> text_file_to_string(io.BytesIO(b'hello world'))                   # any seekable file object
+        ans = hello world
+        >>> text_file_to_string(dataset.take_blobs('text', indices=[0])[0])   # a Lance BlobFile is a file object
+        ans = hello world
+              second line
     """
 
     #Only reason not to use use_cache is if you're worried about memory consumption
     #   It will refresh the cache entry if it's out of date even if use_cache is True.
     #   TODO: Make this happen on load_image, etc...all other functions that read from a file and have use_cache as an option
 
-    if is_valid_url(file_path):
-        #TODO: Add caching for when we use urls
-        return curl(file_path)
+    file_path = _FileFormTranslator.canonicalize(file_path) #pathlib.Path, ~ and file:// become a plain path str
+    if not _FileFormTranslator.is_path(file_path):
+        #A url, data uri, bytes, file object or stream: read it all and decode it like a file (utf-8, then latin)
+        data = _FileFormTranslator.as_bytes(file_path)
+        try:
+            return data.decode()
+        except UnicodeDecodeError:
+            return data.decode('latin')
 
     file_path=get_absolute_path(file_path)#Make sure it recognizes ~/.vimrc AKA with the ~ attached. Also, don't cache the same file twice under a relative and absolute path
 
@@ -18106,19 +19275,38 @@ def text_file_to_string(file_path: str, *, use_cache=False) -> str:
 load_text_file = text_file_to_string
 
 def load_file_lines(file_path, use_cache=False):
-    """ Returns all the lines in a file as a list of strings """
+    """
+    Returns all the lines in a file as a list of strings
+
+    EXAMPLE (any file form):
+        >>> load_file_lines('words.txt')
+        ans = ['one', 'two', 'three']
+        >>> load_file_lines(b'one\\ntwo\\nthree')                             # bytes are content, never a path
+        ans = ['one', 'two', 'three']
+        >>> load_file_lines(io.BytesIO(b'one\\ntwo\\nthree'))                 # any seekable file object
+        ans = ['one', 'two', 'three']
+        >>> load_file_lines(dataset.take_blobs('lines', indices=[0])[0])      # a Lance BlobFile is a file object
+        ans = ['one', 'two', 'three']
+    """
     return line_split(text_file_to_string(file_path, use_cache=use_cache))
 
 def save_file_lines(lines, file_path):
     """
+    Command.
+
     Save an iterable of lines to a text file.
+
+    Destinations: local paths, PathLike, file:// or s3:// URIs, and writable binary handles/streams.
+    Text writers also accept writable text handles.
+    Caller handles remain open, receive output at their current position, and are flushed on success.
 
     Args:
         lines: Iterable of lines to save (list, tuple, etc.)
-        file_path (str): Where to save it
+        file_path (str, os.PathLike or file object): Where to save it
         
     Returns:
         Result of string_to_text_file() - typically the file path
+        Writable handles are returned unchanged; S3 destinations return their URI.
         
     Examples:
         >>> # Save list of strings
@@ -18133,7 +19321,32 @@ def save_file_lines(lines, file_path):
     See Also: load_file_lines
     
     Tags: files, text, lines, save, writing
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> from pathlib import Path
+        >>> data = ['first', 'second', 'α']
+        >>> saved = save_file_lines(iter(data), Path('data.lines'))
+        >>> loaded = load_file_lines(saved)
+        >>> loaded == data
+        ans = True
+        >>> buffer = io.BytesIO()
+        >>> save_file_lines(iter(data), buffer) is buffer
+        ans = True
+        >>> loaded = load_file_lines(buffer.getvalue())
+        >>> loaded == data
+        ans = True
+        >>> load_file_lines(save_file_lines(iter(data), bytes)) == data
+        ans = True
+        >>> output = io.StringIO()
+        >>> save_file_lines(iter(data), output) is output
+        ans = True
+        >>> loaded = load_file_lines(output.getvalue().encode('utf-8'))
+        >>> loaded == data
+        ans = True
+        >>> save_file_lines(iter(data), 's3://my-bucket/data.lines')  # Replace with your writable bucket.
     """
+    file_path = _FileDestination.canonicalize(file_path)
     assert is_iterable(lines)
     lines = [str(x) for x in lines]
     string = line_join(lines)
@@ -18144,6 +19357,16 @@ def load_text_files(*paths, use_cache=False, strict=True, num_threads=None, show
     Plural of text_file_to_string
     Please see load_files and rp_iglob for more information
     Yields the strings as a generator
+
+    EXAMPLE (any file form):
+        >>> load_text_files('txt-ascii.txt', 'lines.lines')
+        ans = ['hello world\\nsecond line\\n', 'one\\ntwo\\nthree\\n']
+        >>> load_text_files(b'hello world')   # bytes are decoded as the text (utf-8, then latin-1), never treated as a path
+        ans = ['hello world']
+        >>> load_text_files(open('txt-ascii.txt', 'rb'))   # binary mode: a text-mode file object is read as a list of paths (see rp_iglob)
+        ans = ['hello world\\nsecond line\\n']
+        >>> load_text_files(dataset.take_blobs('text', indices=[0])[0])
+        ans = ['hello world\\nsecond line\\n']
     """
     if folder_exists(detuple(paths)):
         paths = detuple(paths)+'/*'
@@ -18310,10 +19533,21 @@ def load_json(path, *, use_cache=False):
         >>> api_data.name  # 'Leanne Graham'
         >>> api_data.email  # 'Sincere@april.biz'
         >>> api_data.address.city  # 'Gwenborough'
-    
+
+    EXAMPLE (any file form):
+        >>> load_json('config.json')
+        ans = {'a': 1, 'b': [1, 2, {'c': 'x'}], 'd': None}
+        >>> load_json('s3://my-bucket/config.json')                           # any url; s3:// is streamed with smart_open
+        >>> load_json(b'{"a": 1, "b": 2}').b                                  # bytes, never a path; dicts become EasyDicts
+        ans = 2
+        >>> load_json(io.BytesIO(b'[1, "two", [3]]'))                         # any seekable file object; lists stay lists
+        ans = [1, 'two', [3]]
+        >>> load_json(dataset.take_blobs('json', indices=[0])[0])             # a Lance BlobFile is a file object
+        ans = {'a': 1, 'b': [1, 2, {'c': 'x'}], 'd': None}
     """
 
-    if use_cache and path in _load_json_cache:
+    cacheable = isinstance(path, str) #Only str locations are cached; bytes and file objects are not
+    if use_cache and cacheable and path in _load_json_cache:
         output = _load_json_cache[path]
 
         if use_cache != 'nocopy':
@@ -18332,7 +19566,7 @@ def load_json(path, *, use_cache=False):
     if not isinstance(out, dict):
         return out
 
-    if use_cache or path in _load_json_cache:
+    if cacheable and (use_cache or path in _load_json_cache):
         _load_json_cache[path]=out
 
     return as_easydict(out)
@@ -18342,26 +19576,44 @@ def load_jsons(*paths, use_cache=False, strict=True, num_threads=None, show_prog
     Plural of load_json
     Please see load_files and rp_iglob for more information
     Yields the jsons as an iterator
+
+    EXAMPLE (any file form):
+        >>> load_jsons('json-dict.json', 'json-list.json')
+        ans = [{'a': 1, 'b': [1, 2, {'c': 'x'}], 'd': None}, [1, 'two', [3]]]
+        >>> load_jsons('s3://bucket/config.json')   # urls download per item; use_cache never applies to bytes or file objects
+        >>> load_jsons(b'{"a": 1, "b": [2, 3]}')   # bytes are the JSON text itself, never a path
+        ans = [{'a': 1, 'b': [2, 3]}]
+        >>> load_jsons(open('json-dict.json', 'rb'))
+        ans = [{'a': 1, 'b': [1, 2, {'c': 'x'}], 'd': None}]
+        >>> load_jsons(dataset.take_blobs('json', indices=[0])[0])   # one blob is one item, not a list of paths
+        ans = [{'a': 1, 'b': [1, 2, {'c': 'x'}], 'd': None}]
     """
     # paths = rp_iglob(paths)
-    paths = detuple(paths) #Not sure how to go between this and URL's...
+    paths = rp_iglob(paths) #Globs, lists, lone paths, bytes, file objects and blobs
     load_file = lambda path: load_json(path, use_cache=use_cache)
     if show_progress in ['eta',True]: show_progress='eta:Loading JSON files'
     return load_files(load_file, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
 
 def save_json(data, path=None, *, pretty=False, default=None):
     """
+    Command.
+
     Save Python data structures as JSON files with formatting options.
     
+    Destinations: local paths, PathLike, file:// or s3:// URIs, and writable binary handles/streams.
+    Text writers also accept writable text handles.
+    Caller handles remain open, receive output at their current position, and are flushed on success.
+
     Args:
         data: Python object to serialize (dict, list, etc.) - must be JSON-serializable
-        path (str): Output file path - will be created/overwritten. Defaults to None.
+        path (str, os.PathLike or file object): Output file path - will be created/overwritten. Defaults to None.
                     If None, defaults to "data.json", "data_copy.json", "data_copy1.json", etc
         pretty (bool): If True, format with indentation and spacing for readability
         default (callable, optional): Function to serialize non-JSON types
         
     Returns:
         (str) Path to saved file
+        Writable handles are returned unchanged; S3 destinations return their URI.
         
     Examples:
         >>> data = {'name': 'test', 'values': [1, 2, 3], 'config': {'enabled': True}}
@@ -18393,6 +19645,30 @@ def save_json(data, path=None, *, pretty=False, default=None):
         - load_json(): Read JSON files back to Python objects
         
     Tags: json, serialization, file-io, data-export, configuration
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> from pathlib import Path
+        >>> data = {'name': 'test', 'values': [1, 2, 3]}
+        >>> saved = save_json(data, Path('data.json'))
+        >>> loaded = load_json(saved)
+        >>> loaded == data
+        ans = True
+        >>> buffer = io.BytesIO()
+        >>> save_json(data, buffer) is buffer
+        ans = True
+        >>> loaded = load_json(buffer.getvalue())
+        >>> loaded == data
+        ans = True
+        >>> load_json(save_json(data, bytes)) == data
+        ans = True
+        >>> output = io.StringIO()
+        >>> save_json(data, output) is output
+        ans = True
+        >>> loaded = load_json(output.getvalue().encode('utf-8'))
+        >>> loaded == data
+        ans = True
+        >>> save_json(data, 's3://my-bucket/data.json')  # Replace with your writable bucket.
     """
     import json
 
@@ -18438,6 +19714,16 @@ def load_jsonl(path):
     See Also:
         save_jsonl(): Save a list of objects as JSONL
         load_json(): Load a single JSON file
+
+    EXAMPLE (any file form):
+        >>> load_jsonl('records.jsonl')
+        ans = [{'i': 0, 's': 's0'}, {'i': 1, 's': 's1'}, {'i': 2, 's': 's2'}, {'i': 3, 's': 's3'}, {'i': 4, 's': 's4'}]
+        >>> load_jsonl(b'{"i": 0}\\n{"i": 1}')                                 # bytes are content, never a path
+        ans = [{'i': 0}, {'i': 1}]
+        >>> load_jsonl(io.BytesIO(b'{"i": 0}\\n{"i": 1}'))[1].i                # any seekable file object; rows are EasyDicts
+        ans = 1
+        >>> load_jsonl(dataset.take_blobs('jsonl', indices=[0])[0])           # a Lance BlobFile is a file object
+        ans = [{'i': 0, 's': 's0'}, {'i': 1, 's': 's1'}, {'i': 2, 's': 's2'}, {'i': 3, 's': 's3'}, {'i': 4, 's': 's4'}]
     """
     import json
     text = text_file_to_string(path)
@@ -18481,7 +19767,7 @@ def load_jsonls(*paths, concat=False, strict=True, num_threads=None, show_progre
     See Also:
         load_jsonl(): Load a single JSONL file
     """
-    paths = detuple(paths)
+    paths = rp_iglob(paths) #Globs, lists, lone paths, bytes, file objects and blobs
     if show_progress in ['eta', True]:
         show_progress = 'eta:Loading JSONL files'
     results = load_files(load_jsonl, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
@@ -18495,17 +19781,24 @@ def load_jsonls(*paths, concat=False, strict=True, num_threads=None, show_progre
 
 def save_jsonl(data, path=None, *, default=None):
     """
+    Command.
+
     Save a list of objects as a JSONL (JSON Lines) file.
 
     Each item is serialized as a single JSON line.
 
+    Destinations: local paths, PathLike, file:// or s3:// URIs, and writable binary handles/streams.
+    Text writers also accept writable text handles.
+    Caller handles remain open, receive output at their current position, and are flushed on success.
+
     Args:
         data (list): List of JSON-serializable objects
-        path (str, optional): Output file path. Defaults to "data.jsonl" (with unique copy).
+        path (str, os.PathLike or file object, optional): Output file path. Defaults to "data.jsonl" (with unique copy).
         default (callable, optional): Function to serialize non-JSON types
 
     Returns:
         str: Path to saved file
+        Writable handles are returned unchanged; S3 destinations return their URI.
 
     Examples:
         >>> data = [{"x": 1}, {"x": 2, "y": "hello"}]
@@ -18517,11 +19810,36 @@ def save_jsonl(data, path=None, *, default=None):
     See Also:
         load_jsonl(): Load JSONL files back to Python objects
         save_json(): Save a single JSON file
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> from pathlib import Path
+        >>> data = [{'x': 1}, {'x': 2, 'name': 'α'}]
+        >>> saved = save_jsonl(iter(data), Path('data.jsonl'))
+        >>> loaded = load_jsonl(saved)
+        >>> loaded == data
+        ans = True
+        >>> buffer = io.BytesIO()
+        >>> save_jsonl(iter(data), buffer) is buffer
+        ans = True
+        >>> loaded = load_jsonl(buffer.getvalue())
+        >>> loaded == data
+        ans = True
+        >>> load_jsonl(save_jsonl(iter(data), bytes)) == data
+        ans = True
+        >>> output = io.StringIO()
+        >>> save_jsonl(iter(data), output) is output
+        ans = True
+        >>> loaded = load_jsonl(output.getvalue().encode('utf-8'))
+        >>> loaded == data
+        ans = True
+        >>> save_jsonl(iter(data), 's3://my-bucket/data.jsonl')  # Replace with your writable bucket.
     """
     import json
 
     if path is None:
         path = get_unique_copy_path('data.jsonl')
+    path = _FileDestination.canonicalize(path)
 
     lines = []
     for item in data:
@@ -18611,18 +19929,34 @@ def load_jsonnet(path, **ext_vars):
     See Also:
         load_json(): Load plain JSON files
         load_jsonnets(): Load multiple Jsonnet files
+
+    EXAMPLE (any file form):
+        >>> load_jsonnet('config.jsonnet')                                    # imports resolve next to the file
+        ans = {'a': 1, 'b': 2, 'c': [1, 2, 3]}
+        >>> load_jsonnet(b'{ a: 1, b: self.a + 1 }')                          # nameless: imports resolve from the cwd
+        ans = {'a': 1, 'b': 2}
+        >>> load_jsonnet(io.BytesIO(b'{ name: std.extVar("name") }'), name='world')   # ext_vars work for every form
+        ans = {'name': 'world'}
+        >>> load_jsonnet(dataset.take_blobs('jsonnet', indices=[0])[0])       # a Lance BlobFile is a file object
+        ans = {'a': 1, 'b': 2, 'c': [1, 2, 3]}
     """
     pip_import('_gojsonnet')
     import _gojsonnet
     import json
 
+    path = _FileFormTranslator.canonicalize(path)
     text = text_file_to_string(path)
 
     str_vars = {k: v for k, v in ext_vars.items() if isinstance(v, str)}
     non_str_vars = {k: json.dumps(v) for k, v in ext_vars.items() if not isinstance(v, str)}
 
-    abs_path = get_absolute_path(path)
-    dir_path = get_absolute_path(path_join(abs_path, '..'))
+    if _FileFormTranslator.is_path(path):
+        abs_path = get_absolute_path(path)
+        dir_path = get_absolute_path(path_join(abs_path, '..'))
+    else:
+        #Not a file on disk (url, bytes, file object...): name the snippet by its type and resolve imports from the working directory
+        abs_path = '<' + type(path).__name__ + '>'
+        dir_path = os.getcwd()
 
     def import_callback(dir_, rel):
         full = path_join(dir_, rel)
@@ -18673,7 +20007,7 @@ def load_jsonnets(*paths, strict=True, num_threads=None, show_progress=False, la
     See Also:
         load_jsonnet(): Load a single Jsonnet file
     """
-    paths = detuple(paths)
+    paths = rp_iglob(paths) #Globs, lists, lone paths, bytes, file objects and blobs
     if show_progress in ['eta', True]:
         show_progress = 'eta:Loading Jsonnet files'
     return load_files(load_jsonnet, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
@@ -18712,21 +20046,33 @@ def load_msgpack(path, *, use_cache=False):
         >>> result.config.port
         8080
         >>> delete_file(mp_path)
+
+    EXAMPLE (any file form):
+        >>> load_msgpack('data.msgpack')                                  # a path (only str paths and urls are cached by use_cache)
+        ans = {'ints': [1, 2, 3], 'nested': {'k': 'v', 'f': 1.5}, 'none': None, 'array': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
+        >>> load_msgpack('s3://bucket/data.msgpack')                      # an s3:// url, streamed through smart_open
+        >>> load_msgpack(file_to_bytes('data.msgpack'))                   # bytes
+        ans = {'ints': [1, 2, 3], 'nested': {'k': 'v', 'f': 1.5}, 'none': None, 'array': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
+        >>> load_msgpack(open('data.msgpack', 'rb'))                      # an open file object: unpacked in place, never closed by rp
+        ans = {'ints': [1, 2, 3], 'nested': {'k': 'v', 'f': 1.5}, 'none': None, 'array': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
+        >>> load_msgpack(dataset.take_blobs('msgpack', indices=[0])[0])   # a Lance blob; dicts still come back as EasyDict
+        ans = {'ints': [1, 2, 3], 'nested': {'k': 'v', 'f': 1.5}, 'none': None, 'array': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
     """
     pip_import('msgpack')
     import msgpack
 
-    if use_cache and path in _load_msgpack_cache:
+    cacheable = isinstance(path, str) #Only str locations are cached
+    if use_cache and cacheable and path in _load_msgpack_cache:
         output = _load_msgpack_cache[path]
         if use_cache != 'nocopy':
             from copy import deepcopy
             output = deepcopy(output)
         return as_easydict(output)
 
-    with open(path, 'rb') as f:
+    with _FileFormTranslator.opened(path) as f: #Any file form
         out = msgpack.unpack(f, raw=False, strict_map_key=False)
 
-    if use_cache or path in _load_msgpack_cache:
+    if cacheable and (use_cache or path in _load_msgpack_cache):
         _load_msgpack_cache[path] = out
 
     if not isinstance(out, dict):
@@ -18735,18 +20081,24 @@ def load_msgpack(path, *, use_cache=False):
 
 def save_msgpack(data, path=None, *, default=None):
     """
+    Command.
+
     Save Python data structures as MessagePack files.
 
     MessagePack is a binary serialization format that's faster and more compact than JSON.
 
+    Destinations: local paths, PathLike, file:// or s3:// URIs, and writable binary handles/streams.
+    Caller handles remain open, receive output at their current position, and are flushed on success.
+
     Args:
         data: Python object to serialize (dict, list, etc.)
-        path (str): Output file path - will be created/overwritten.
+        path (str, os.PathLike or file object): Output file path - will be created/overwritten.
                     If None, defaults to "data.msgpack", "data_copy.msgpack", etc.
         default (callable, optional): Function to serialize non-standard types.
 
     Returns:
         str: Path to saved file
+        Writable handles are returned unchanged; S3 destinations return their URI.
 
     Examples:
         >>> data = {'name': 'test', 'values': [1, 2, 3], 'config': {'enabled': True}}
@@ -18754,13 +20106,36 @@ def save_msgpack(data, path=None, *, default=None):
         >>> loaded = load_msgpack(mp_path)
         >>> loaded.name
         'test'
-        >>> loaded.values
+        >>> loaded['values']
         [1, 2, 3]
         >>> delete_file(mp_path)
 
     See Also:
         load_msgpack(): Read MessagePack files back to Python objects
         save_json(): JSON alternative (human-readable but slower)
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> from pathlib import Path
+        >>> data = {'name': 'test', 'values': [1, 2, 3]}
+        >>> saved = save_msgpack(data, Path('data.msgpack'))
+        >>> loaded = load_msgpack(saved)
+        >>> loaded == data
+        ans = True
+        >>> buffer = io.BytesIO()
+        >>> save_msgpack(data, buffer) is buffer
+        ans = True
+        >>> loaded = load_msgpack(buffer.getvalue())
+        >>> loaded == data
+        ans = True
+        >>> load_msgpack(save_msgpack(data, bytes)) == data
+        ans = True
+        >>> with open('copy.msgpack', 'wb') as output:
+        ...     saved = save_msgpack(data, output)
+        ...     ownership_preserved = saved is output and not output.closed
+        >>> ownership_preserved
+        ans = True
+        >>> save_msgpack(data, 's3://my-bucket/data.msgpack')  # Replace with your writable bucket.
     """
     pip_import('msgpack')
     import msgpack
@@ -18776,13 +20151,15 @@ _load_tsv_cache={}
 _load_tsv_cache={}
 def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False, sep="\t", mode='normal', max_rows=None):
     """
+    Command. Read delimited rows, consuming input streams and optionally updating the table cache.
+
     Read a TSV file with optional progress tracking and flexible header handling.
 
     By default tries to be robust - skipping all bad lines.
 
     Parameters:
         file_path (str): Path to the TSV file.
-        show_progress (bool): Whether to display a progress bar. Default is True.
+        show_progress (bool): Whether to display a progress bar. Default is False.
         header (str, int, list, or None): Header row handling.
             - 0 (default): Use the first row as column names.
             - None: Use no column names, only integer indices.
@@ -18814,6 +20191,16 @@ def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False, sep="
         ... 
         ...       [699926 rows x 4 columns]
 
+    EXAMPLE (any file form):
+        >>> load_tsv('table.tsv').shape                                #A path, as str or pathlib.Path
+        ans = (3, 3)
+        >>> load_tsv('s3://bucket/table.tsv')                          #A url: s3://, gs:// or http(s)://
+        >>> load_tsv(file_to_bytes('table.tsv')).shape                 #Bytes are always content, never a path
+        ans = (3, 3)
+        >>> load_tsv(open('table.tsv', 'rb')).shape                    #Any seekable binary file object, io.BytesIO included
+        ans = (3, 3)
+        >>> load_tsv(dataset.take_blobs('tsv', indices=[0])[0]).shape  #A Lance blob is a file object too; nothing is copied to disk
+        ans = (3, 3)
     """
 
     #Future Parameters:
@@ -18826,9 +20213,12 @@ def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False, sep="
     import pandas as pd
     import csv
 
-    args_hash = handy_hash((file_path, header, max_rows, sep, mode))
-    if use_cache and args_hash in _load_tsv_cache:
-        return _load_tsv_cache[args_hash]
+    file_path = _FileFormTranslator.canonicalize(file_path)
+    cacheable = use_cache and isinstance(file_path, str) #Only str locations are cached
+    if cacheable:
+        args_hash = handy_hash((file_path, header, max_rows, sep, mode))
+        if args_hash in _load_tsv_cache:
+            return _load_tsv_cache[args_hash]
     
     chunk_size = 1000
 
@@ -18845,32 +20235,36 @@ def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False, sep="
     if mode == "robust":
         kwargs.update({"quoting": csv.QUOTE_NONE, "on_bad_lines": "skip"})
 
-    iterator = pd.read_csv(file_path, **kwargs)
+    #A str path stays a path; every other form becomes a seekable file object
+    with _FileFormTranslator.opened(file_path, ('file_object', 'path')) as source: #Close what the translator opened, never what the caller handed us
+        if show_progress:
+            if isinstance(source, str):
+                total_lines = number_of_lines_in_file(source)
+            else:
+                total_lines = source.read().count(b'\n')
+                source.seek(0)
+            if isinstance(header, int):
+                total_lines -= 1
 
-    if show_progress:
-        pip_import("tqdm")
-        from tqdm import tqdm
+            if max_rows is not None:
+                total_lines = min(total_lines, max_rows)
 
-        total_lines = number_of_lines_in_file(file_path)
-        if isinstance(header, int):
-            total_lines -= 1
-        
-        if max_rows is not None:
-            total_lines = min(total_lines, max_rows)
-            
-        iterator = tqdm(iterator, total=total_lines // chunk_size)
+            title = 'Loading TSV' if sep == '\t' else 'Loading CSV'
+        iterator = pd.read_csv(source, **kwargs)
+        if show_progress:
+            iterator = eta(iterator, title=title, length=math.ceil(total_lines / chunk_size))
 
-    chunks = []
-    rows_collected = 0
-    
-    for chunk in iterator:
-        if max_rows is not None and rows_collected >= max_rows:
-            break
-            
-        chunks.append(chunk)
-        rows_collected += len(chunk)
+        chunks = []
+        rows_collected = 0
 
-    df = pd.concat(chunks, ignore_index=True).head(max_rows)
+        for chunk in iterator:
+            if max_rows is not None and rows_collected >= max_rows:
+                break
+
+            chunks.append(chunk)
+            rows_collected += len(chunk)
+
+        df = pd.concat(chunks, ignore_index=True).head(max_rows)
 
     if show_progress:
         _erase_terminal_line()
@@ -18888,7 +20282,7 @@ def load_tsv(file_path, *, show_progress=False, header=0, use_cache=False, sep="
     #     return dataframe
     # df = fix_dataframe_nans(df)
 
-    if use_cache:
+    if cacheable:
         _load_tsv_cache[args_hash]=df
 
     return df
@@ -18904,7 +20298,7 @@ def load_parquet(file_path, *, show_progress=False, use_cache=False):
 
     Parameters:
         file_path (str): Path to the Parquet file.
-        show_progress (bool): Whether to display a progress bar. Default is True.
+        show_progress (bool): Whether to display a progress bar. Default is False.
         use_cache: If True, will cache the result so you only have to load from drive once
 
     Returns:
@@ -18928,6 +20322,16 @@ def load_parquet(file_path, *, show_progress=False, use_cache=False):
         ...
         ...       [699926 rows x 4 columns]
 
+    EXAMPLE (any file form):
+        >>> load_parquet('table.parquet').shape                                #A path, as str or pathlib.Path
+        ans = (30, 3)
+        >>> load_parquet('s3://bucket/table.parquet')                          #A url: s3://, gs:// or http(s)://
+        >>> load_parquet(file_to_bytes('table.parquet')).shape                 #Bytes are always content, never a path
+        ans = (30, 3)
+        >>> load_parquet(open('table.parquet', 'rb')).shape                    #Any seekable binary file object, io.BytesIO included
+        ans = (30, 3)
+        >>> load_parquet(dataset.take_blobs('parquet', indices=[0])[0]).shape  #A Lance blob is a file object too; row groups are read straight from it
+        ans = (30, 3)
     """
 
     pip_import("pandas")
@@ -18936,32 +20340,158 @@ def load_parquet(file_path, *, show_progress=False, use_cache=False):
     import pandas as pd
     import pyarrow.parquet as pq
 
-    if use_cache:
+    file_path = _FileFormTranslator.canonicalize(file_path)
+    if use_cache and isinstance(file_path, str): #Only str locations are cached
         args_hash = handy_hash((file_path))
         if args_hash not in _load_parquet_cache:
             value = gather_args_call(load_parquet, use_cache=False)
             _load_parquet_cache[args_hash] = value
         return _load_parquet_cache[args_hash]
 
-    parquet_file = pq.ParquetFile(file_path)
-    num_row_groups = parquet_file.num_row_groups
+    with _FileFormTranslator.opened(file_path, ('file_object', 'path')) as source: #A str path stays a path; every other form becomes a seekable file object
+        parquet_file = pq.ParquetFile(source)
+        num_row_groups = parquet_file.num_row_groups
 
-    dfs = []
-    indices = range(num_row_groups)
+        dfs = []
+        indices = range(num_row_groups)
+        if show_progress: indices = eta(indices, title='Loading Parquet')
 
-    if show_progress:
-        pip_import("tqdm")
-        from tqdm import tqdm
-        #indices = eta(indices)
-        indices = tqdm(indices)
+        for i in indices:
+            df = parquet_file.read_row_group(i, use_threads=True).to_pandas()
+            dfs.append(df)
 
-    for i in indices:
-        df = parquet_file.read_row_group(i, use_threads=True).to_pandas()
-        dfs.append(df)
-
-    df = pd.concat(dfs, ignore_index=True)
+        df = pd.concat(dfs, ignore_index=True)
 
     return df
+
+
+_load_arrow_cache={}
+def load_arrow(file_path, *, show_progress=False, use_cache=False):
+    """
+    Query (reads the file; with use_cache=True it also writes to a module-level cache).
+    Read an Apache Arrow IPC file (.arrow, .arrows, .feather, .ipc) into a pandas DataFrame.
+
+    Arrow IPC has two layouts, and both get saved as .arrow in the wild:
+        - The file layout, aka Feather V2: starts with b'ARROW1' and ends with a footer that indexes its record batches.
+          Written by pandas' to_feather, polars' write_ipc and pyarrow.ipc.new_file.
+        - The streaming layout: no magic number and no footer.
+          Written by HuggingFace datasets for its .arrow shards, polars' write_ipc_stream and pyarrow.ipc.new_stream.
+    Each of pyarrow's two readers refuses the other layout, so this function picks the reader by the magic number.
+    Compressed (lz4, zstd) record batches are decompressed by pyarrow. Legacy Feather V1 (b'FEA1') is not supported.
+
+    Parameters:
+        file_path: The Arrow file, in any file form - see the examples below.
+        show_progress (bool): Whether to display a progress bar over the record batches. Default is False.
+            The streaming layout doesn't record how many batches it has, so it never gets a bar.
+        use_cache: If True, will cache the result so you only have to load from drive once
+
+    Returns:
+        pandas.DataFrame: The loaded Arrow data as a DataFrame.
+
+    EXAMPLE:
+        >>> load_arrow('file_layout.arrow', show_progress=True).head(3)
+        Loading Arrow: Done! Did 3 items in 0:00:00.000079
+        ans =    id name    x
+              0   0   n0  0.0
+              1   1   n1  0.5
+              2   2   n2  1.0
+        >>> frame = load_arrow('data-00000-of-00002.arrow')  #A HuggingFace datasets shard. Nested features come back as python objects
+        >>> frame.box[7], load_image(frame.image[5]['bytes']).shape
+        ans = ({'x': 7, 'y': 14}, (8, 8, 3))
+
+    EXAMPLE (any file form):
+        >>> load_arrow('file_layout.arrow').shape                        #A path, as str or pathlib.Path
+        ans = (30, 3)
+        >>> load_arrow('stream_layout.arrow').shape                      #The streaming layout loads the same way
+        ans = (30, 3)
+        >>> load_arrow('s3://bucket/table.arrow')                        #A url: s3://, gs:// or http(s)://
+        >>> load_arrow(file_to_bytes('file_layout.arrow')).shape         #Bytes are always content, never a path
+        ans = (30, 3)
+        >>> load_arrow(open('stream_layout.arrow', 'rb')).shape          #Any seekable binary file object, io.BytesIO included
+        ans = (30, 3)
+    """
+
+    pip_import("pandas")
+    pip_import("pyarrow")
+
+    import pyarrow as pa
+
+    file_path = _FileFormTranslator.canonicalize(file_path)
+    if use_cache and isinstance(file_path, str): #Only str locations are cached
+        args_hash = handy_hash((file_path))
+        if args_hash not in _load_arrow_cache:
+            _load_arrow_cache[args_hash] = gather_args_call(load_arrow, use_cache=False)
+        return _load_arrow_cache[args_hash]
+
+    with _FileFormTranslator.opened(file_path, ('file_object', 'path')) as source: #A str path stays a path; every other form becomes a seekable file object
+        if detect_filetype(source) == 'arrow':
+            reader = pa.ipc.open_file(source)
+            indices = range(reader.num_record_batches)
+            if show_progress: indices = eta(indices, title='Loading Arrow')
+            batches = [reader.get_batch(i) for i in indices]
+        else:
+            reader = pa.ipc.open_stream(source)
+            batches = list(reader)
+
+        #from_batches (unlike pandas.concat) also handles files with zero record batches
+        return pa.Table.from_batches(batches, reader.schema).to_pandas()
+
+
+_load_lance_cache={}
+def load_lance(path, *, show_progress=False, use_cache=False):
+    """
+    Query (reads from disk; with use_cache=True it also writes to a module-level cache).
+    Read a Lance dataset (a .lance directory) into a pandas DataFrame.
+
+    Lance is a columnar format like Parquet, but with fast random access, versioning and vector indices.
+    See https://github.com/lancedb/lance - the python package is installed via `pip install pylance`.
+
+    Parameters:
+        path (str): Path to the .lance dataset directory.
+        show_progress (bool): Whether to display a progress bar over the dataset's fragments (Lance's analog of Parquet row groups). Default is False.
+        use_cache (bool): If True, will cache the result so you only have to load from drive once.
+
+    Returns:
+        pandas.DataFrame: The loaded Lance data as a DataFrame.
+
+    EXAMPLE:
+        >>> load_lance('toy.lance', show_progress=True)
+        ans =    id name
+             0   0   n0
+             1   1   n1
+             2   2   n2
+
+    EXAMPLE (any file form):
+        >>> load_lance('toy.lance').shape                              #A path to the .lance directory (str or pathlib.Path), or an s3:// / gs:// uri that Lance opens itself
+        ans = (10, 2)
+        >>> load_lance(b'...')                                         #A dataset is a directory, so bytes, file objects and blobs are refused
+        ERROR: AssertionError: rp.load_lance: a Lance dataset is a directory (or an s3:// / gs:// uri), so it must be given as a path string, not bytes
+        >>> load_lance(dataset.take_blobs('parquet', indices=[0])[0])
+        ERROR: AssertionError: rp.load_lance: a Lance dataset is a directory (or an s3:// / gs:// uri), so it must be given as a path string, not BlobFile
+    """
+
+    pip_import("pandas")
+    path = _FileFormTranslator.canonicalize(path)
+    assert isinstance(path, str) and (_FileFormTranslator.is_path(path) or _FileFormTranslator.is_url(path)), 'rp.load_lance: a Lance dataset is a directory (or an s3:// / gs:// uri), so it must be given as a path string, not ' + type(path).__name__
+    pip_import("pyarrow")
+    pip_import("lance")
+
+    import pyarrow as pa
+    import lance
+
+    if use_cache:
+        args_hash = handy_hash(path)
+        if args_hash not in _load_lance_cache:
+            _load_lance_cache[args_hash] = gather_args_call(load_lance, use_cache=False)
+        return _load_lance_cache[args_hash]
+
+    dataset = lance.dataset(path)
+    fragments = dataset.get_fragments()
+    if show_progress: fragments = eta(fragments, title='Loading Lance')
+
+    #from_batches (unlike pandas.concat) also handles datasets with zero fragments
+    batches = [batch for fragment in fragments for batch in fragment.to_batches()]
+    return pa.Table.from_batches(batches, dataset.schema).to_pandas()
 
 
 def load_yaml_file(path, use_cache=False):
@@ -18969,11 +20499,20 @@ def load_yaml_file(path, use_cache=False):
     EXAMPLE:
         >>> load_yaml_file('alphablock_without_ssim_256.yaml')
         ans = {'max_iter': 300000, 'batch_size': 5, 'image_save_iter': 250, ...(etc)... }
+
+    EXAMPLE (any file form):
+        >>> load_yaml_file('config.yaml')
+        ans = {'a': 1, 'b': ['x', 'y'], 'c': {'d': True}}
+        >>> load_yaml_file(b'a: 1\\nb: [x, y]')                                # bytes are content, never a path
+        ans = {'a': 1, 'b': ['x', 'y']}
+        >>> load_yaml_file(io.BytesIO(b'a: 1\\nb: [x, y]')).b                  # any seekable file object
+        ans = ['x', 'y']
+        >>> load_yaml_file(dataset.take_blobs('yaml', indices=[0])[0])        # a Lance BlobFile is a file object
+        ans = {'a': 1, 'b': ['x', 'y'], 'c': {'d': True}}
     """
     pip_import('yaml')
     import yaml
-    assert file_exists(path)
-    text=text_file_to_string(path, use_cache=use_cache)
+    text=text_file_to_string(path, use_cache=use_cache) #Accepts any file form; asserts existence for paths
     data=yaml.safe_load(text)
     data=as_easydict(data)
     return data
@@ -18985,6 +20524,17 @@ def load_yaml_files(*paths, use_cache=False, strict=True, num_threads=None, show
     Plural of load_yaml_file
     Please see load_files and rp_iglob for more information
     Yields the jsons as an iterator
+
+    EXAMPLE (any file form):
+        >>> load_yaml_files('yaml.yaml')
+        ans = [{'a': 1, 'b': ['x', 'y'], 'c': {'d': True}}]
+        >>> load_yaml_files('s3://bucket/config.yaml')   # urls download per item; use_cache applies to paths only
+        >>> load_yaml_files(b'a: 1\\nb: [x, y]')   # bytes are the YAML text itself, never a path
+        ans = [{'a': 1, 'b': ['x', 'y']}]
+        >>> load_yaml_files(open('yaml.yaml', 'rb'))
+        ans = [{'a': 1, 'b': ['x', 'y'], 'c': {'d': True}}]
+        >>> load_yaml_files(dataset.take_blobs('yaml', indices=[0])[0])
+        ans = [{'a': 1, 'b': ['x', 'y'], 'c': {'d': True}}]
     """
     paths = rp_iglob(paths)
     load_file = lambda path: load_yaml_file(path, use_cache=use_cache)
@@ -18995,6 +20545,25 @@ def parse_yaml(string):
     pip_import('yaml')
     from yaml import safe_load
     output = safe_load(string)
+    output = as_easydict(output)
+    return output
+
+def parse_dtab(string):
+    """
+    Parses dtab (Delta Tab) text into nested dicts. dtab is a config format made of tab-separated paths:
+    one line is one path into a tree, and later lines are deltas on top of earlier ones. Every value is
+    a string. Raises ValueError, with the line number, on a key that is not letters, digits, _ . or -.
+    Format, editor plugins and a live demo: https://github.com/RyannDaGreat/dtab
+
+    EXAMPLE:
+        >>> parse_dtab('objects\\tl1,l2 light\\ndeltas\\tl1\\tposition\\tx 1\\ty .5\\n\\tz -2')
+        ans = {'objects': {'l1': 'light', 'l2': 'light'}, 'deltas': {'l1': {'position': {'x': '1', 'y': '.5', 'z': '-2'}}}}
+        >>> parse_dtab('$query sql\\n\\tSELECT *\\n\\tFROM users').query   # a $key holds the lines under it
+        ans = 'SELECT *\\nFROM users'
+    """
+    pip_import('dtab')
+    import dtab
+    output = dtab.parse(string)
     output = as_easydict(output)
     return output
 
@@ -19204,10 +20773,43 @@ def parse_dyaml(code:str)->dict:
     return parse_dyaml(code)
 
 def load_dyaml_file(path:str)->dict:
-    """ Load a dyaml file (a yaml file with some additional syntax features I added). Stands for "Delta Yaml" """
-    assert file_exists(path)
-    code=text_file_to_string(path)
+    """
+    Load a dyaml file (a yaml file with some additional syntax features I added). Stands for "Delta Yaml"
+
+    EXAMPLE (any file form):
+        >>> load_dyaml_file('config.dyaml')                                   # a:b: 1 expands to a: {b: 1}
+        ans = {'a': {'b': 1}, 'c': 2}
+        >>> load_dyaml_file(b'a:b: 1\\nc: 2')                                  # bytes are content, never a path
+        ans = {'a': {'b': 1}, 'c': 2}
+        >>> load_dyaml_file(io.BytesIO(b'a:b: 1\\nc: 2'))['a']                 # any seekable file object; result is a plain dict
+        ans = {'b': 1}
+        >>> load_dyaml_file(dataset.take_blobs('dyaml', indices=[0])[0])      # a Lance BlobFile is a file object
+        ans = {'a': {'b': 1}, 'c': 2}
+    """
+    code=text_file_to_string(path) #Accepts any file form; asserts existence for paths
     return parse_dyaml(code)
+
+def load_dtab(path):
+    """
+    Query. Loads a .dtab file (config files made of tab-separated paths, `pip install dtab`) into an EasyDict of strings.
+    Accepts any file form: a path, url, data uri, bytes, an open file object or a stream (see _FileFormTranslator).
+
+    EXAMPLE:
+        >>> load_dtab('scene.dtab')   # contents: objects\tl1,l2 light\ndeltas\tl1\tposition\tx 1\ty .5\n\tz -2
+        ans = {'objects': {'l1': 'light', 'l2': 'light'}, 'deltas': {'l1': {'position': {'x': '1', 'y': '.5', 'z': '-2'}}}}
+        >>> load_dtab(b'a\tb 1')
+        ans = {'a': {'b': '1'}}
+    """
+    return parse_dtab(text_file_to_string(path)) #Accepts any file form; asserts existence for paths
+
+def load_dtabs(*paths, strict=True, num_threads=None, show_progress=False, lazy=False):
+    """
+    Plural of load_dtab
+    Please see load_files and rp_iglob for more information
+    """
+    paths = rp_iglob(paths) #Globs, lists, lone paths, bytes, file objects and blobs
+    if show_progress in ['eta',True]: show_progress='eta:Loading dtab files'
+    return load_files(load_dtab, paths, show_progress=show_progress, strict=strict, num_threads=num_threads, lazy=lazy)
 
 def touch_file(path):
     """Equivalent to the 'touch' command - creates a file if it doesnt exist and if it does updates its date_modified"""
@@ -19320,6 +20922,46 @@ def get_my_local_ip_address() -> str:
         
 get_my_ip=get_my_local_ip_address #Legacy: Some of my old code might depend on this function. It's deprecated because it's a bad name
 
+def _get_my_mac_address_via_sysfs():
+    """
+    Query. MAC address of the default network interface on linux, read from /proc/net/route and /sys/class/net.
+    Backend of get_my_mac_address, moved verbatim out of it; untested in isolation (this machine is macOS).
+
+    Returns:
+        str: e.g. '28:cf:e9:17:d9:a5', or '00:00:00:00:00:00' if the interface's address file can't be read
+    """
+    def get_default_iface_name_linux():
+        #https://stackoverflow.com/questions/20908287/is-there-a-method-to-get-default-network-interface-on-local-using-python3
+        route = "/proc/net/route"
+        with open(route) as f:
+            for line in f.readlines():
+                try:
+                    iface, dest, _, flags, _, _, _, _, _, _, _, =  line.strip().split()
+                    if dest != '00000000' or not int(flags, 16) & 2:
+                        continue
+                    return iface
+                except Exception:
+                    continue
+    def getmac(interface):
+        #https://stackoverflow.com/questions/159137/getting-mac-address
+        try:
+            mac = open('/sys/class/net/' + interface + '/address').readline()
+        except Exception:
+            mac = "00:00:00:00:00:00"
+        return mac[0:17]
+    return getmac(get_default_iface_name_linux())
+
+def _get_my_mac_address_via_getmac():
+    """
+    Query. MAC address via the get-mac package (works on macOS and Windows). Backend of get_my_mac_address, moved verbatim out of it.
+
+    Returns:
+        str: e.g. '28:cf:e9:17:d9:a5'
+    """
+    pip_import('getmac','get-mac')
+    import getmac
+    return getmac.get_mac_address()
+
 def get_my_mac_address()->str:
     """
     EXAMPLE:
@@ -19327,33 +20969,10 @@ def get_my_mac_address()->str:
        ans = 28:cf:e9:17:d9:a5
     """
     if currently_running_linux():
-        #If we're running linux, this solution works - and we don't have to pip install get-mac
-        #    (pip install get-mac     also works, but this saves you the trouble of installing another package)
-        #Returned as a string
-        def get_default_iface_name_linux():
-            #https://stackoverflow.com/questions/20908287/is-there-a-method-to-get-default-network-interface-on-local-using-python3
-            route = "/proc/net/route"
-            with open(route) as f:
-                for line in f.readlines():
-                    try:
-                        iface, dest, _, flags, _, _, _, _, _, _, _, =  line.strip().split()
-                        if dest != '00000000' or not int(flags, 16) & 2:
-                            continue
-                        return iface
-                    except Exception:
-                        continue
-        def getmac(interface):
-            #https://stackoverflow.com/questions/159137/getting-mac-address
-            try:
-                mac = open('/sys/class/net/' + interface + '/address').readline()
-            except Exception:
-                mac = "00:00:00:00:00:00"
-            return mac[0:17]
-        return getmac(get_default_iface_name_linux())
+        #On linux this works without pip installing get-mac
+        return _get_my_mac_address_via_sysfs()
     else:
-        pip_import('getmac','get-mac')
-        import getmac
-        return getmac.get_mac_address()
+        return _get_my_mac_address_via_getmac()
 
 def get_my_public_ip_address():
     """
@@ -20857,6 +22476,60 @@ def mini_editor(out: str = "",namespace=(),message=""):
     return out
 
 
+def _get_terminal_size_via_win32_console():
+    """
+    Query. Terminal (width, height) from the Win32 console API via ctypes; (80, 25) if that fails.
+    Backend of get_terminal_size, moved verbatim out of it; untested in isolation on Windows (this machine is macOS).
+    """
+    try:
+        import struct
+        from ctypes import windll, create_string_buffer
+        # stdin handle is -10
+        # stdout handle is -11
+        # stderr handle is -12
+        h = windll.kernel32.GetStdHandle(-12)
+        csbi = create_string_buffer(22)
+        res = windll.kernel32.GetConsoleScreenBufferInfo(h, csbi)
+        if res:
+            (bufx, bufy, curx, cury, wattr,
+             left, top, right, bottom,
+             maxx, maxy) = struct.unpack("hhhhHhhhhhh", csbi.raw)
+            sizex = right - left + 1
+            sizey = bottom - top + 1
+            return sizex, sizey
+    except:
+        # Default value if above method fails
+        return 80, 25
+
+def _get_terminal_size_via_ioctl():
+    """
+    Query. Terminal (width, height) on unix via the TIOCGWINSZ ioctl on stdin, stdout, stderr or the controlling tty,
+    else from the LINES and COLUMNS environment variables, else (80, 25). Backend of get_terminal_size.
+    """
+    import os
+    def ioctl_GWINSZ(fd):
+        try:
+            import fcntl
+            import termios
+            import struct
+            #struct winsize has four unsigned shorts: rows, columns, x pixels, y pixels.
+            cr = struct.unpack('HHHH', fcntl.ioctl(fd, termios.TIOCGWINSZ, b'\0' * 8))[:2]
+        except:
+            return
+        return cr
+    cr = ioctl_GWINSZ(0) or ioctl_GWINSZ(1) or ioctl_GWINSZ(2)
+    if not cr:
+        try:
+            fd = os.open(os.ctermid(), os.O_RDONLY)
+            cr = ioctl_GWINSZ(fd)
+            os.close(fd)
+        except:
+            pass
+    if not cr:
+        # Default size or try environment variables
+        cr = (os.environ.get('LINES', 25), os.environ.get('COLUMNS', 80))
+    return int(cr[1]), int(cr[0])
+
 def get_terminal_size():
     """
     From http://stackoverflow.com/questions/566746/how-to-get-linux-console-window-width-in-python/14422538#14422538
@@ -20864,54 +22537,11 @@ def get_terminal_size():
     Returns a (width:int, height:int) tuple
     """
 
-    import os
     import platform
-
-    current_os = platform.system()
-    if current_os == 'Windows':
-        # For Windows
-        try:
-            import struct
-            from ctypes import windll, create_string_buffer
-            # stdin handle is -10
-            # stdout handle is -11
-            # stderr handle is -12
-            h = windll.kernel32.GetStdHandle(-12)
-            csbi = create_string_buffer(22)
-            res = windll.kernel32.GetConsoleScreenBufferInfo(h, csbi)
-            if res:
-                (bufx, bufy, curx, cury, wattr,
-                 left, top, right, bottom,
-                 maxx, maxy) = struct.unpack("hhhhHhhhhhh", csbi.raw)
-                sizex = right - left + 1
-                sizey = bottom - top + 1
-                return sizex, sizey
-        except:
-            # Default value if above method fails
-            return 80, 25
+    if platform.system() == 'Windows':
+        return _get_terminal_size_via_win32_console()
     else:
-        # For Linux
-        def ioctl_GWINSZ(fd):
-            try:
-                import fcntl
-                import termios
-                import struct
-                cr = struct.unpack('hh', fcntl.ioctl(fd, termios.TIOCGWINSZ, '1234'))
-            except:
-                return
-            return cr
-        cr = ioctl_GWINSZ(0) or ioctl_GWINSZ(1) or ioctl_GWINSZ(2)
-        if not cr:
-            try:
-                fd = os.open(os.ctermid(), os.O_RDONLY)
-                cr = ioctl_GWINSZ(fd)
-                os.close(fd)
-            except:
-                pass
-        if not cr:
-            # Default size or try environment variables
-            cr = (os.environ.get('LINES', 25), os.environ.get('COLUMNS', 80))
-        return int(cr[1]), int(cr[0])
+        return _get_terminal_size_via_ioctl()
 
 
 
@@ -22853,7 +24483,7 @@ def _clean_cd_history():
     #Removes all nonexistant paths from CDH
     #It removes all the red entries
     entries=_get_cd_history()
-    entries=[entry for entry in entries if path_exists(entry) or _cdh_folder_is_protected(entry)]
+    entries=[entry for entry in eta(entries,title='CDH CLEAN') if path_exists(entry) or _cdh_folder_is_protected(entry)]
     entries=[entry for entry in entries if not '/rp/outputs/claudecode/workspace_' in entry] #These get spammy...
     string_to_text_file(_cd_history_path,line_join(entries))
 
@@ -23305,6 +24935,25 @@ def open_url_in_web_browser(url:str):
     from webbrowser import open
     open(url)
 
+def open_urls_in_web_browser(*urls):
+    """
+    Command. Plural of open_url_in_web_browser: opens every given url in a web browser, in the order given.
+
+    Args:
+        *urls: Either multiple url strings, or a single iterable of url strings
+
+    Examples:
+        >>> open_urls_in_web_browser('https://google.com', 'https://wikipedia.org')   # doctest: +SKIP
+        >>> open_urls_in_web_browser(['https://google.com', 'https://wikipedia.org']) # doctest: +SKIP
+        >>> open_urls_in_web_browser(map(google_search_url, ['cats', 'dogs']))        # doctest: +SKIP
+    """
+    urls=detuple(urls)
+    if isinstance(urls,str):
+        urls=[urls]
+
+    for url in urls:
+        open_url_in_web_browser(url)
+
 def google_search_url(query:str)->None:
     """
     Returns the URL for google-searching the given query
@@ -23400,8 +25049,10 @@ def _print_status(x):
 
     _print_status_prev_len = len(x)
 
-def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,completion_unit="items",start_n=0,format_rate=None):
+def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,completion_unit="items",start_n=0,format_rate=None,file=None):
     """
+    Command. Reads time and writes status messages.
+
     Internal ETA implementation that creates a progress tracking function.
 
     Args:
@@ -23412,6 +25063,7 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
         completion_verb (str): Verb for completion message (default: "Did")
         completion_unit (str): Unit name for completion message (default: "items")
         start_n (int): Starting count for resumed operations (default: 0)
+        file: Optional text output stream; None preserves the normal terminal status display.
 
     Returns:
         callable: Progress function that accepts current count and updates display
@@ -23423,6 +25075,7 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
         ...     a(i)
     """
     from datetime import timedelta
+    print_status = _print_status if file is None else partial(print, file=file, flush=True)
 
     if min_interval is None: min_interval=.05
     if title is None: title="r.eta"
@@ -23468,7 +25121,7 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
                 else:
                     rate_str = ""
 
-                return _print_status(title + "T=" + str(temp) + rate_str + "\t" + format_value(COMPLETED_SO_FAR))
+                return print_status(title + "T=" + str(temp) + rate_str + "\t" + format_value(COMPLETED_SO_FAR))
 
         def out(n):
             return display_progress_only(timer(), COMPLETED_SO_FAR=n)
@@ -23519,7 +25172,7 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
                 proportion_for_eta = max_eta_proportion
 
             if proportion_for_eta <= 0:
-                return _print_status(
+                return print_status(
                     title
                     + "NO PROGRESS; INFINITE TIME REMAINING. T="
                     + str(temp)
@@ -23533,7 +25186,7 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
             if done:
                 shown_done = True
 
-            return _print_status(
+            return print_status(
                 fansi_progress(
                     title
                     + "ETR="
@@ -23572,7 +25225,10 @@ def _eta(total_n,*,min_interval,title,format_value=str,completion_verb=None,comp
     return out
 
 class eta:
-    """Progress bar with ETA data. RP's alternative to tqdm with time estimates.
+    """
+    Command. Reads time and writes progress messages.
+
+    Progress bar with ETA data. RP's alternative to tqdm with time estimates.
     Works as iterator wrapper or manual counter.
     
     Args:
@@ -23580,6 +25236,7 @@ class eta:
         title: Display title (default: 'r.eta') 
         min_interval: Min seconds between updates (default: 0.05)
         length: Override length for generators
+        file: Optional text output stream, such as sys.stderr; None keeps the normal stdout display.
         
     Examples:
         >>> # Manual counter - call eta(i) to update
@@ -23601,10 +25258,27 @@ class eta:
         Converting: ETR=0:00:00.203035  ETA=0:00:00.507588  T=0:00:00.304553  Progress: 3/5
         Converting: Done! Did 5 items in 0:00:00.510275
         
+        >>> output = io.StringIO()
+        >>> list(eta([1, 2], file=output))
+        [1, 2]
+        >>> 'Done!' in output.getvalue()
+        True
+
     Note: Uses ANSI color inversion so text and progress bar share the same space - no width competition.
     """
 
-    def __init__(self, x:int, title:str=None, min_interval:float=None, length:int=None):
+    def __init__(self, x:int, title:str=None, min_interval:float=None, length:int=None, *, file=None):
+        """
+        Command. Initialize an iterable or manual progress counter and attach its shared display.
+
+        Args:
+            x, title, min_interval, length, file: As documented on eta.
+        Returns:
+            None: Initializes the progress counter.
+        Examples:
+            >>> list(eta([1, 2], file=io.StringIO()))
+            [1, 2]
+        """
         assert isinstance(x, int) or hasattr(x, '__len__') or length is not None
 
         if length is not None:
@@ -23618,7 +25292,7 @@ class eta:
             assert is_number(x)
             self.elements = range(x)
 
-        self._tick = _shared_eta_attach(x, title=title, min_interval=min_interval, _caller_depth=1)
+        self._tick = _shared_eta_attach(x, title=title, min_interval=min_interval, _caller_depth=1, file=file)
 
     def __call__(self, n):
         self._tick(n)
@@ -23643,18 +25317,30 @@ class eta:
 # produces a single progress bar instead of interleaved output that appears
 # to step backwards. All of that machinery lives here so the eta class stays
 # small and the slop is contained to one place.
-def _shared_eta_attach(local_total, *, title, min_interval, _caller_depth):
+def _shared_eta_attach(local_total, *, title, min_interval, _caller_depth, file=None):
     """
+    Command.
+
     Attach to the shared-eta state for the caller's source line and return a
-    callable tick. _caller_depth is how many frames above this helper the
-    user's call site is (1 for a direct caller, 2 if one wrapper sits between).
+    callable tick. Each output stream has a separate shared state.
+
+    Args:
+        local_total: Number of items this caller contributes.
+        title, min_interval, file: Display settings passed to _eta.
+        _caller_depth: Frames above this helper's caller (1 for eta, 2 with another wrapper).
+    Returns:
+        _SharedEtaTick: Callable counter with an explicit release() method.
+    Examples:
+        >>> tick = _shared_eta_attach(2, title='Example', min_interval=0, _caller_depth=0, file=io.StringIO())
+        >>> tick(2) is None
+        True
     """
     caller = sys._getframe(_caller_depth + 1)
-    callsite = (caller.f_code.co_filename, caller.f_lineno)
+    callsite = (caller.f_code.co_filename, caller.f_lineno, id(file))
     with _SharedEtaState._lock:
         state = _SharedEtaState._registry.get(callsite)
         if state is None:
-            state = _SharedEtaState(callsite=callsite, title=title, min_interval=min_interval)
+            state = _SharedEtaState(callsite=callsite, title=title, min_interval=min_interval, file=file)
             _SharedEtaState._registry[callsite] = state
         return state.attach(local_total)
 
@@ -23671,12 +25357,25 @@ class _SharedEtaState:
     _registry = {}
     _lock = threading.RLock()
 
-    def __init__(self, *, callsite, title, min_interval):
+    def __init__(self, *, callsite, title, min_interval, file=None):
+        """
+        Command. Initialize counters and a display callback for one shared progress group.
+
+        Args:
+            callsite: Source filename, line number and output stream identity.
+            title, min_interval, file: Display settings passed to _eta.
+        Returns:
+            None: Initializes the shared state.
+        Examples:
+            >>> state = _SharedEtaState(callsite=('example.py', 1, None), title='Example', min_interval=0)
+            >>> state.total
+            0
+        """
         self.callsite = callsite
         self.total = 0
         self.progress = 0
         self.ticks = set()
-        self.display = _eta(lambda: self.total, title=title, min_interval=min_interval)
+        self.display = _eta(lambda: self.total, title=title, min_interval=min_interval, file=file)
 
     def attach(self, local_total):
         # Called under _lock (via _shared_eta_attach).
@@ -24101,6 +25800,79 @@ xrange=range  # To make it more compatiable when i copypaste py2 code
 
 term='pseudo_terminal(locals(),globals())'# For easy access: exec(term). Can use in the middle of other methods!
 
+def _is_valid_python_syntax_via_ast(code, mode):
+    """
+    Pure function. Parses code with the running interpreter's ast and returns False when it is valid, else the SyntaxError.
+    Backend of is_valid_python_syntax, moved verbatim out of it.
+
+    Examples:
+        >>> _is_valid_python_syntax_via_ast('x = 5', 'exec')
+        False
+        >>> type(_is_valid_python_syntax_via_ast('x = ', 'exec')).__name__
+        'SyntaxError'
+    """
+    import ast
+    try:
+        ast.parse(code,mode=mode)
+        out = False
+    # except SyntaxError: #ValueError: source code string cannot contain null bytes
+    except Exception as e:
+        out = e
+    return out
+
+def _is_valid_python_syntax_via_parso(code, mode, version):
+    """
+    Command (may download a parso grammar file). Checks code against a specific Python version's grammar with parso, falling back to
+    ast.parse(feature_version=...) when parso lacks that grammar. Returns False when valid, else a SyntaxError.
+    Backend of is_valid_python_syntax, moved verbatim out of it.
+
+    Examples:
+        >>> bool(_is_valid_python_syntax_via_parso('f"hello"', 'exec', '3.5'))
+        True
+    """
+    import ast
+    # Use pip-installable parso for version-specific parsing
+    parso = pip_import('parso')
+    import os
+
+    # Auto-download grammar files for older Python versions if needed
+    grammar_file = path_join(os.path.dirname(parso.__file__), 'python', 'grammar' + version.replace(".", "") + '.txt')
+    if not file_exists(grammar_file):
+        url = 'https://raw.githubusercontent.com/davidhalter/parso/v0.7.1/parso/python/grammar' + version.replace(".", "") + '.txt'
+        try:
+            download_url(url, grammar_file)
+        except:
+            pass
+
+    try:
+        grammar = parso.load_grammar(version=version)
+        module = grammar.parse(code)
+        errors = list(grammar.iter_errors(module))
+
+        if errors:
+            first_error = errors[0]
+            err = SyntaxError(first_error.message)
+            err.lineno = first_error.start_pos[0]
+            err.offset = first_error.start_pos[1]
+            lines = code.split('\n')
+            err.text = lines[err.lineno - 1] if err.lineno <= len(lines) else None
+            err.filename = '<string>'
+            out = err
+        else:
+            out = False
+    except (NotImplementedError, FileNotFoundError):
+        # Grammar not available, use ast.parse fallback
+        try:
+            feature_ver = tuple(map(int, version.split('.')))
+            ast.parse(code, mode=mode, feature_version=feature_ver)
+            out = False
+        except Exception as e:
+            out = e
+    except Exception as e:
+        out = e
+
+    return out
+
 def is_valid_python_syntax(code,mode='exec',version=None,return_error=False):
     """
     Returns True if the code is valid python syntax, False otherwise (when return_error=False).
@@ -24129,56 +25901,10 @@ def is_valid_python_syntax(code,mode='exec',version=None,return_error=False):
           and uses those to validate syntax via its interpereter. That, or fix the grammar...
     """
     assert isinstance(code,str),'Code should be a string'
-    import ast, traceback
-
     if version is None:
-        try:
-            ast.parse(code,mode=mode)
-            out = False
-        # except SyntaxError: #ValueError: source code string cannot contain null bytes
-        except Exception as e:
-            out = e
+        out = _is_valid_python_syntax_via_ast(code, mode)
     else:
-        # Use pip-installable parso for version-specific parsing
-        parso = pip_import('parso')
-        import os
-
-        # Auto-download grammar files for older Python versions if needed
-        grammar_file = path_join(os.path.dirname(parso.__file__), 'python', 'grammar' + version.replace(".", "") + '.txt')
-        if not file_exists(grammar_file):
-            url = 'https://raw.githubusercontent.com/davidhalter/parso/v0.7.1/parso/python/grammar' + version.replace(".", "") + '.txt'
-            try:
-                download_url(url, grammar_file)
-            except:
-                pass
-
-        try:
-            grammar = parso.load_grammar(version=version)
-            module = grammar.parse(code)
-            errors = list(grammar.iter_errors(module))
-
-            if errors:
-                first_error = errors[0]
-                err = SyntaxError(first_error.message)
-                err.lineno = first_error.start_pos[0]
-                err.offset = first_error.start_pos[1]
-                lines = code.split('\n')
-                err.text = lines[err.lineno - 1] if err.lineno <= len(lines) else None
-                err.filename = '<string>'
-                out = err
-            else:
-                out = False
-        except (NotImplementedError, FileNotFoundError):
-            # Grammar not available, use ast.parse fallback
-            try:
-                feature_ver = tuple(map(int, version.split('.')))
-                ast.parse(code, mode=mode, feature_version=feature_ver)
-                out = False
-            except Exception as e:
-                out = e
-        except Exception as e:
-            out = e
-
+        out = _is_valid_python_syntax_via_parso(code, mode, version)
     if not return_error:
         return not bool(out)
     return out
@@ -26088,28 +27814,111 @@ def symlink_move(from_path,to_path,*,relative=False):
     make_symlink(from_path,to_path,relative=relative)
     return to_path
 
+def detect_filetype(file):
+    """
+    Command. Detect a file's format from its contents; non-seekable readers advance through the prefix.
+
+    Args:
+        file: A path, pathlib.Path, URL, data URI, bytes, binary file object or stream.
+    Returns:
+        str or None: Lowercase format without a dot, such as 'png', 'jpg' or 'mp4'; None when unrecognized or empty.
+
+    Inspects up to 8192 bytes from the current position. Caller handles stay open and seekable positions are
+    restored, including on errors. Filename extensions and data-URI MIME labels do not influence detection.
+    URLs may be buffered when the server does not support ranged reads.
+    Signatures identify likely formats, not validity: formats sharing a container can be ambiguous.
+    Uses Puremagic for specific formats ('png'); _guess_mimetype groups formats into broad categories ('image').
+    See get_file_extension for the filename's suffix instead.
+
+    EXAMPLE (any file form):
+        >>> image = np.zeros((16, 16, 3), dtype=np.uint8)
+        >>> data = encode_image_to_bytes(image, 'png')
+        >>> detect_filetype(data)
+        ans = 'png'
+        >>> with io.BytesIO(data) as buffer:
+        ...     detect_filetype(buffer), buffer.tell(), buffer.closed
+        ans = ('png', 0, False)
+        >>> path = bytes_to_file(data)  # No image extension is needed
+        >>> detect_filetype(__import__('pathlib').Path(path))
+        ans = 'png'
+        >>> delete_file(path)
+        >>> detect_filetype(b'') is None
+        ans = True
+    """
+    with _FileFormTranslator.opened(file, ('file_object', 'stream')) as source:
+        position = source.tell() if _FileFormTranslator.is_file_object(source) else None
+        try:
+            head = source.read(_FileFormTranslator.SNIFF_BYTES)
+        finally:
+            if position is not None: source.seek(position)
+    if not head: return None
+    if head.startswith(b'ARROW1'): return 'arrow' #The Arrow IPC file layout (aka Feather V2), which puremagic doesn't know. Arrow's streaming layout has no magic number at all.
+    puremagic = pip_import('puremagic')
+    try:
+        extension = puremagic.from_string(head).lstrip('.').lower()
+    except puremagic.PureError:
+        return None #An unrecognized signature is a normal detection result
+    if head[4:8] == b'ftyp':
+        #HEIF images share the mp4 container; puremagic ranks them equally, so the brand decides
+        brand = head[8:12].decode('latin').strip().lower()
+        if brand in ('heic', 'heix', 'hevc', 'hevx', 'mif1', 'msf1'): return 'heic'
+        if brand in ('avif', 'avis'): return 'avif'
+    aliases = {'jfif': 'jpg', 'jpe': 'jpg', 'jpeg': 'jpg', 'tif': 'tiff', 'pickle': 'pkl'}
+    return aliases.get(extension, extension)
+
 def _guess_mimetype(file_path)->str:
+    """
+    Command. Media category from a named suffix, else content detection; nameless streams are consumed.
+
+    Returns a category ('image'), not a full MIME type ('image/png') or specific format ('png').
+    Python's mimetypes classifies named suffixes without reading contents; detect_filetype handles content detection.
+
+    Args:
+        file_path: Any file form. Local paths keep their filename-based classification.
+    Returns:
+        str or None: MIME category such as 'image', 'video' or 'audio', or None when unknown.
+    Examples:
+        >>> _guess_mimetype('https://example.com/sound.wav')
+        'audio'
+    """
     import mimetypes
-    if not file_exists(file_path):
-        return None
-    mimetype=mimetypes.guess_type(file_path)[0] #mimetype should be something like 'image/jpeg'
-    if mimetype is None:
-        return None
-    return mimetype.split('/')[0]
+    file_path = _FileFormTranslator.canonicalize(file_path)
+    if not isinstance(file_path, str) and not (_FileFormTranslator.is_bytes(file_path) or hasattr(file_path, 'read')): return None
+    if _FileFormTranslator.is_path(file_path) and not file_exists(file_path): return None
+    name = _FileFormTranslator.name_of(file_path)
+    if name is not None and not has_file_extension(name) and not _FileFormTranslator.is_path(file_path): name = None
+    extension = get_file_extension(name).lower() if name is not None else detect_filetype(file_path)
+    if extension=='exr': return 'image'
+    if name is None:
+        if not mimetypes.inited: mimetypes.init()
+        mimetype = mimetypes.types_map.get('.' + (extension or ''))
+    else:
+        mimetype = mimetypes.guess_type(_get_file_path(name))[0] #mimetype should be something like 'image/jpeg'
+    return mimetype.split('/')[0] if mimetype else None
 
 def is_image_file(file_path):
     """
+    Command. Classify named inputs by their suffix and nameless inputs by content; streams may be consumed.
+
     Check if given file is an image
     
     Args:
-        file_path (str): The file to check
+        file_path: A path, PathLike, URL, data URI, bytes, binary file object or stream to check
         
     Returns:
         bool: True if file is an image, False otherwise
-              If the file doesn't exist, returns False
+              Missing local files return False, except the historical .exr suffix shortcut
     
     Example filetypes:
         jpg, png, gif, svg, ico, bmp, jpeg, webp, exr
+
+    EXAMPLE (any file form):
+        >>> data = encode_image_to_bytes(np.zeros((16, 16, 3), dtype=np.uint8), 'png')
+        >>> is_image_file(data)
+        ans = True
+        >>> buffer = io.BytesIO(data)
+        >>> is_image_file(buffer), buffer.tell(), buffer.closed
+        ans = (True, 0, False)
         
     See Also:
         - is_video_file
@@ -26117,24 +27926,31 @@ def is_image_file(file_path):
         - is_text_file
         - is_utf8_file
     """
-    if not isinstance(file_path,str): return False
-    if get_file_extension(file_path) in 'exr'.split():
-        return True
+    file_path = _FileFormTranslator.canonicalize(file_path)
+    if isinstance(file_path, str) and get_file_extension(file_path)=='exr': return True
     return _guess_mimetype(file_path)=='image'
 
 def is_video_file(file_path):
     """
+    Command. Classify named inputs by their suffix and nameless inputs by content; streams may be consumed.
+
     Check if given file is a video file
     
     Args:
-        file_path (str): The file to check
+        file_path: A path, PathLike, URL, data URI, bytes, binary file object or stream to check
         
     Returns:
         bool: True if file is a video file, False otherwise
-              If the file doesn't exist, returns False
+              If a local file doesn't exist, returns False
     
     Example filetypes:
         mp4, webm
+
+    EXAMPLE (any file form):
+        >>> is_video_file('https://example.com/clip.mp4')  # A named input is classified without downloading
+        ans = True
+        >>> is_video_file(b'hello world')
+        ans = False
         
     See Also:
         - is_image_file
@@ -26146,17 +27962,25 @@ def is_video_file(file_path):
 
 def is_sound_file(file_path):
     """
+    Command. Classify named inputs by their suffix and nameless inputs by content; streams may be consumed.
+
     Check if given file is a sound/audio file
     
     Args:
-        file_path (str): The file to check
+        file_path: A path, PathLike, URL, data URI, bytes, binary file object or stream to check
         
     Returns:
         bool: True if file is a sound/audio file, False otherwise
-              If the file doesn't exist, returns False
+              If a local file doesn't exist, returns False
     
     Example filetypes:
         mp3, ogg, wav
+
+    EXAMPLE (any file form):
+        >>> is_sound_file('https://example.com/recording.wav')
+        ans = True
+        >>> is_sound_file(b'hello world')
+        ans = False
 
     Alias: is_audio_file
         
@@ -26170,19 +27994,38 @@ def is_sound_file(file_path):
 
 is_audio_file = is_sound_file
 
-def is_utf8_file(path):
+def is_utf8_file(path, *, allow_null=True):
     """
+    Command. Validate all remaining contents as UTF-8; non-seekable readers advance until rejection or EOF.
+
     Check if given file is a UTF-8 text file
     
     Args:
-        path (str): The file to check
+        path: A path, PathLike, URL, data URI, bytes, binary file object or stream to check
+        allow_null (bool): Accept NUL bytes (valid UTF-8); False helps distinguish text from binary data.
         
     Returns:
         bool: True if file is a UTF-8 text file, False otherwise
-              If the file doesn't exist, returns False
+              If a local file doesn't exist, returns False
+
+    Empty contents are valid UTF-8. Caller handles stay open and seekable positions are restored.
+    Validation reads in chunks and raises actual I/O errors; invalid UTF-8 returns False.
     
     Example filetypes:
         css, csv, html, js, json, md, py, txt, xml
+
+    EXAMPLE (any file form):
+        >>> is_utf8_file('hello 🌱'.encode('utf-8'))
+        ans = True
+        >>> is_utf8_file(b'hello\\n\\xff')
+        ans = False
+        >>> buffer = io.BytesIO(b'hello')
+        >>> is_utf8_file(buffer), buffer.tell(), buffer.closed
+        ans = (True, 0, False)
+        >>> is_utf8_file(b'')
+        ans = True
+        >>> is_utf8_file(b'hello\\x00world', allow_null=False)
+        ans = False
         
     See Also:
         - is_image_file
@@ -26190,16 +28033,24 @@ def is_utf8_file(path):
         - is_sound_file
         - is_text_file
     """
-    if not file_exists(path):
-        return False
+    path = _FileFormTranslator.canonicalize(path)
+    if not isinstance(path, str) and not (_FileFormTranslator.is_bytes(path) or hasattr(path, 'read')): return False
+    if _FileFormTranslator.is_path(path) and not file_exists(path): return False
     import codecs
-    try:
-        f = codecs.open(path, encoding='utf-8', errors='strict')
-        next(f)
-        return True
-    # except UnicodeDecodeError:
-    except Exception:
-        return False
+    chunk_size = 64 * 1024
+    decoder = codecs.getincrementaldecoder('utf-8')()
+    with _FileFormTranslator.opened(path, ('file_object', 'stream')) as source:
+        position = source.tell() if _FileFormTranslator.is_file_object(source) else None
+        try:
+            for chunk in iter(lambda: source.read(chunk_size), b''):
+                if not allow_null and b'\0' in chunk: return False
+                decoder.decode(chunk)
+            decoder.decode(b'', final=True)
+            return True
+        except UnicodeDecodeError:
+            return False
+        finally:
+            if position is not None: source.seek(position)
 # is_text_file=is_utf8_file #TODO: Not sure if this is the right way to do it
         
 def display_file_tree(root=None,*,all=False,only_directories=False,traverse_symlinks=False):
@@ -28770,6 +30621,9 @@ def pseudo_terminal(
         PAL  str(ans)+'\\n'+$string_from_clipboard()
         PLA  str(ans)+'\\n'+$string_from_clipboard()
 
+        MLR $repr_multiline(ans)
+        RML $repr_multiline(ans)
+
         PF PROF
         PO PROF
         POD PROF DEEP
@@ -28849,6 +30703,9 @@ def pseudo_terminal(
         VA VIMA
         VHE VIMH
         VIH VIMH
+
+        CLAUDEMD !vim ~/.claude/CLAUDE.md
+        AGENTMD !vim ~/.agents/instructions.md
 
         CM RMORE
 
@@ -29198,6 +31055,9 @@ def pseudo_terminal(
         CHD  $r._run_claude_code('.',fullperm=True)
         GEM  $r._run_gemini_cli('.')
         GEMA $r._run_gemini_cli(ans).code
+        PI   $r._run_pi_cli('.')
+        PIH  $r._run_pi_cli('.')
+        PIA  $r._run_pi_cli(ans).code
         CCB  $r._setup_claude_bash()
 
         RST __import__('os').system('reset')
@@ -29371,6 +31231,7 @@ def pseudo_terminal(
         command_shortcuts={x:y for x,y in command_shortcuts_pairs}
         for key in list(command_shortcuts):
             command_shortcuts[key.lower()]=command_shortcuts[key]#Make it case-insensitive
+        command_shortcuts_over_variables={'pi'}#These win even when a variable has that name (math's pi is in scope, but 'pi' should launch the pi agent)
 
         try:
             import rp.rp_ptpython.r_iterm_comm
@@ -29486,11 +31347,15 @@ def pseudo_terminal(
                     #     print("GLOO GLOO")
                         
                     _was_command_shortcut=False
-                    if user_message in command_shortcuts and user_message not in scope():
+                    if user_message in command_shortcuts and (user_message not in scope() or user_message in command_shortcuts_over_variables):
                         original_user_message=user_message
                         user_message=command_shortcuts[user_message]
                         _was_command_shortcut=True
-                        if _get_pterm_verbose() or not user_message.isupper(): fansi_print("Transformed input to "+repr(user_message.replace(rp_import,''))+' because variable '+repr(original_user_message)+' doesn\'t exist but is a shortcut in SHORTCUTS','magenta','bold')
+                        if original_user_message in scope():
+                            reason=repr(original_user_message)+' is a shortcut in SHORTCUTS, which overrides the variable of that name'
+                        else:
+                            reason='variable '+repr(original_user_message)+' doesn\'t exist but is a shortcut in SHORTCUTS'
+                        if _get_pterm_verbose() or not user_message.isupper(): fansi_print("Transformed input to "+repr(user_message.replace(rp_import,''))+' because '+reason,'magenta','bold')
 
                     if user_message.strip().isalpha() and user_message.strip() and user_message.islower() and not user_message.strip() in scope() and user_message.upper().strip() in help_commands_no_spaces_to_spaces:
                         original_user_message=user_message
@@ -32446,6 +34311,9 @@ def timeout(f,t):
 def save_animated_png(frames, path=None,*,framerate=None):
     """
     Save a sequence of images as an animated PNG (APNG) file.
+
+    Command. Saves to a file destination.
+    Input shape: (T, H, W, C), for example (6, 48, 64, 4), or a sequence of images.
     
     Enhanced Documentation:
     Creates animated PNG files from image sequences. APNG provides better quality
@@ -32453,12 +34321,13 @@ def save_animated_png(frames, path=None,*,framerate=None):
     numpngw dependency and handles frame rate conversion.
     
     Args:
-        frames: Sequence of images (list of numpy arrays) 
-        path (str, optional): Output file path. Auto-generated if None.
+        frames: Sequence of images (list of numpy arrays), or an iterable of images;
+            generators are materialized once for animation encoding.
+        path: Local path, S3 URI or writable binary handle; auto-generated if None.
         framerate (float, optional): Frames per second. If None, no delay between frames.
         
     Returns:
-        None (saves file to disk)
+        str or file object: Saved path/URI or the original open handle.
         
     Examples:
         >>> import numpy as np
@@ -32491,10 +34360,25 @@ def save_animated_png(frames, path=None,*,framerate=None):
         - save_video_png(): Same function, different name
         
     Tags: animation, apng, video-export, image-sequence, png
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> frames = [np.full((8, 12, 3), value, dtype=np.uint8) for value in (40, 180)]
+        >>> buffer = io.BytesIO()
+        >>> save_animated_png(frames, buffer, framerate=10) is buffer
+        ans = True
+        >>> save_animated_png(frames, bytes, framerate=10)[1:4]
+        ans = b'PNG'
     """
     if path is None:
         path = get_unique_copy_path("video.png")
-    path = with_file_extension(path ,'png')
+    path = _FileDestination.canonicalize(path)
+    if isinstance(path, io.TextIOBase):
+        raise TypeError('save_animated_png: destination must be binary')
+    if framerate is not None and framerate < 0:
+        raise ValueError('save_animated_png: framerate cannot be negative')
+    if isinstance(path, str):
+        path = with_file_extension(path, 'png')
         
     if not framerate:
         delay=None
@@ -32506,14 +34390,18 @@ def save_animated_png(frames, path=None,*,framerate=None):
     from numpngw import write_apng as save_animated_png#Takes numpy ndarray as input
     #Another option: https://github.com/eight04/pyAPNG
 
+    if not is_numpy_array(frames) and not is_torch_tensor(frames):
+        frames = list(frames)
+    if not len(frames):
+        raise ValueError('save_animated_png: video must contain at least one frame')
     frames = as_byte_images(frames)
 
-    make_parent_directory(path)
-    save_animated_png(path, frames, delay=delay)
+    with _FileDestination.opened(path, forms=('path', 'file_object'), suffix='.png', seekable=True) as target:
+        save_animated_png(target, frames, delay=delay)
+    if _FileDestination.is_path(path):
+        path = get_absolute_path(path)
 
-    path = get_absolute_path(path)
-
-    return path
+    return _FileDestination.completed(path)
 
 save_video_png = save_animated_png
 
@@ -33002,19 +34890,15 @@ def _rich_print(x):
     _maybe_display_string_in_pager(string,with_line_numbers=True)
     print(string)
 
-def pretty_print(x,with_lines=False):
+def _pretty_print_via_pprint(x, with_lines):
     """
-    Used to print out highly-nested dicts and lists etc, which are hard to read when it's all in one line.
-    Particularly useful for JSON objets from web requests.
-    """
-    if not with_lines and sys.version_info>(3,6):
-        try:
-            _rich_print(x)
-            return
-        except Exception as e:
-            print_stack_trace(e)
-            pass    
+    Command. Prints x via pprint.pformat with syntax highlighting, optionally drawing tree lines between nested levels.
+    Backend of pretty_print, moved verbatim out of it (the rich backend is _rich_print).
 
+    Args:
+        x: Any nested dict/list structure
+        with_lines (bool): Draw box-drawing guide lines down the nesting
+    """
     from pprint import pformat
     string=pformat(x)
     def pretty_lines(s):
@@ -33056,6 +34940,21 @@ def pretty_print(x,with_lines=False):
     if with_lines:
         string=pretty_lines(string)
     print(fansi_syntax_highlighting(string,style_overrides={'operator':('\033[0;34m','\033[0m'),'string':('\033[0;35m','\033[0m')}))
+
+def pretty_print(x,with_lines=False):
+    """
+    Used to print out highly-nested dicts and lists etc, which are hard to read when it's all in one line.
+    Particularly useful for JSON objets from web requests.
+    """
+    if not with_lines and sys.version_info>(3,6):
+        try:
+            _rich_print(x)
+            return
+        except Exception as e:
+            print_stack_trace(e)
+            pass    
+
+    _pretty_print_via_pprint(x, with_lines)
 
 def repr_kwargs_dict(x, *, align_equals=True):
     """
@@ -33133,6 +35032,8 @@ def repr_multiline(string):
         string = 'r'+string
 
     return string
+
+multiline_repr = repr_multiline #Alias
 
 def repr_vars(*vars, sort=True, frames_back=0):
     """
@@ -37755,12 +39656,82 @@ def _omni_load_animated_image(path):
         return video[0]
     return video
 
-def _omni_save_animated_image(video,path):
-    """ gif and webp and png can be either a video or image depending on context... """
+def _omni_save_animated_image(video,path,*,filetype=None):
+    """
+    Command. Save an image (H, W, C) or animation (T, H, W, C) to a PNG, WebP or GIF destination.
+
+    gif and webp and png can be either a video or image depending on context...
+
+    Args:
+        video: One image or frames; C is RGB or RGBA, e.g. (4, 48, 64, 3).
+        path: Writable destination.
+        filetype (str or None): Explicit format for unnamed destinations.
+    Returns:
+        str or file object: Destination returned by the selected saver.
+    Examples:
+        >>> buffer = io.BytesIO()
+        >>> _ = _omni_save_animated_image(np.zeros((16, 16, 3), np.uint8), buffer, filetype='png')
+        >>> buffer.getvalue()[:8]
+        b'\\x89PNG\\r\\n\\x1a\\n'
+    """
     if is_image(video):
-        return save_image(video, path)
+        return save_image(video, path, filetype=filetype)
     else:
-        return save_video(video, path)
+        return save_video(video, path, filetype=filetype)
+
+
+def _save_numpy(array, path):
+    """
+    Command. Save a NumPy array as NPY, preserving its shape and dtype, e.g. (2, 3) -> (2, 3).
+
+    Args:
+        array: Array to serialize.
+        path: Local path, S3 URI or writable binary handle; its filename is used exactly.
+    Returns:
+        str or file object: Saved path/URI or the original writable handle, left open.
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> buffer = io.BytesIO()
+        >>> _save_numpy(np.arange(6).reshape(2, 3), buffer) is buffer
+        ans = True
+        >>> np.load(io.BytesIO(buffer.getvalue())).tolist()
+        ans = [[0, 1, 2], [3, 4, 5]]
+        >>> np.load(io.BytesIO(_save_numpy(np.arange(6).reshape(2, 3), bytes))).tolist()
+        ans = [[0, 1, 2], [3, 4, 5]]
+    """
+    path = _FileDestination.canonicalize(path)
+    #A file object prevents NumPy from silently appending .npy to the requested filename.
+    with _FileDestination.opened(path, suffix='.npy', seekable=True) as target:
+        np.save(target, array)
+    return _FileDestination.completed(path)
+
+
+def _save_torch(object, path):
+    """
+    Command. Save a Torch object, preserving tensor shapes and dtypes, e.g. (3,) -> (3,).
+
+    Args:
+        object: Tensor or other object accepted by torch.save.
+        path: Local path, S3 URI or writable binary handle.
+    Returns:
+        str or file object: Saved path/URI or the original writable handle, left open.
+
+    EXAMPLE (any file destination):
+        >>> import io, torch
+        >>> buffer = io.BytesIO()
+        >>> _save_torch({'weight': torch.arange(3)}, buffer) is buffer
+        ans = True
+        >>> torch.load(io.BytesIO(buffer.getvalue()), weights_only=True)['weight'].tolist()
+        ans = [0, 1, 2]
+        >>> torch.load(io.BytesIO(_save_torch({'weight': torch.arange(3)}, bytes)), weights_only=True)['weight'].tolist()
+        ans = [0, 1, 2]
+    """
+    import torch
+    path = _FileDestination.canonicalize(path)
+    with _FileDestination.opened(path, ('path', 'file_object'), suffix='.pt') as target:
+        torch.save(object, target)
+    return _FileDestination.completed(path)
 
 
 def _omni_save_default_extension(x):
@@ -37777,7 +39748,10 @@ def _omni_save_default_extension(x):
 
 def omni_load(path):
     """
+    Command. Load a file form, consuming input streams and buffering them when required.
+
     Internal smart file loading dispatcher based on file extension and type detection.
+    Accepts any file form (path, url, data uri, bytes, file object, stream); nameless inputs are dispatched by their sniffed type.
     
     Enhanced Documentation:
     Private function that automatically determines file type and routes to appropriate
@@ -37800,6 +39774,7 @@ def omni_load(path):
     - Audio formats → load_sound_file()
     - .npy → np.load()
     - .csv/.tsv/.parquet → respective loaders
+    - .arrow/.arrows/.feather/.ipc → load_arrow()
     - .pkl → load_pickled_value()
     - .rpo → file_to_object()
     - .pt/.pth/.ckpt → torch.load()
@@ -37815,56 +39790,135 @@ def omni_load(path):
     >>> image = _omni_load('photo.jpg')   # Returns numpy array
     >>> model = _omni_load('weights.pkl') # Returns pickled object
     >>> mario = _omni_load('data:image/png;base64,iVBORw0...')  # Returns numpy array from data URI
+
+    EXAMPLE (any file form):
+        >>> omni_load('config.json')
+        ans = {'lr': 0.001, 'epochs': 10}
+        >>> omni_load('s3://open-images-dataset/validation/0001eeaf4aed83f9.jpg').shape   # urls and named file objects are dispatched by their extension
+        ans = (447, 1024, 3)
+        >>> omni_load(open('photo.jpg', 'rb')).shape
+        ans = (48, 64, 3)
+        >>> omni_load(file_to_bytes('photo.jpg')).shape   # nameless bytes are sniffed by their magic number
+        ans = (48, 64, 3)
+        >>> omni_load(b'hello world')   # nameless utf-8 bytes come back as a str, like an extensionless text file
+        ans = hello world
+        >>> omni_load(dataset.take_blobs('video', indices=[0])[0]).shape   # a lance BlobFile has no name either: sniffed as mp4
+        load_video: path=<BlobFile size=2940>: done loading frames, creating numpy array...done.
+        ans = (12, 48, 64, 3)
     """
     # Check for data URIs first (before file-based checks)
-    if is_valid_data_uri(path):
+    path = _FileFormTranslator.canonicalize(path)
+    if isinstance(path, str) and is_valid_data_uri(path):
         mediatype = _get_uri_mediatype(path)
         if   mediatype == 'image': return rp.load_image(path)
         elif mediatype == 'video': return rp.load_video(path)
         elif mediatype == 'audio': return rp.load_sound_file(path)
 
     # File-based dispatching
-    if ends_with_any(path, '.json'): return rp.load_json(path)
-    if ends_with_any(path, '.yaml'): return rp.load_yaml(path)
-    if ends_with_any(path, '.jsonnet .libsonnet'.split()): return rp.load_jsonnet(path)
-    if ends_with_any(path, '.png .webp .gif'.split()): return _omni_load_animated_image(path)
-    if ends_with_any(path, '.jpg .jpeg .jxl .exr .psd .tga .tiff .tif .jp2 .bmp'.split()): return rp.load_image(path)
-    if ends_with_any(path, '.mp4 .avi .mkv .flv .mov .m4v .wmv .webm'.split()): return rp.load_video(path)
-    if ends_with_any(path, '.wav .mp3 .ogg .aac .wma .aiff .m4a .flac'.split()): return rp.load_sound_file(path)
-    if ends_with_any(path, '.npy'.split()): return np.load(path)
-    if ends_with_any(path, '.tsv'.split()): return load_tsv(path,show_progress=True)
-    if ends_with_any(path, '.csv'.split()): return load_csv(path,show_progress=True)
-    if ends_with_any(path, '.parquet'.split()): return load_parquet(path,show_progress=True)
-    if ends_with_any(path, '.safetensors'.split()): return load_safetensors(path)
-    if ends_with_any(path, '.pt .pth .ckpt'.split()): return __import__('torch').load(path,map_location='cpu')
-    if ends_with_any(path, '.lines'.split()): return load_file_lines(path)
-    if ends_with_any(path, '.pkl'.split()): return load_pickled_value(path)
-    if ends_with_any(path, '.rpo'.split()): return file_to_object(path) #RP Object File
-    if is_image_file(path): return load_image(path)
-    if is_video_file(path): return load_video(path)
-    if is_utf8_file(path): return load_text_file(path)
-    return file_to_object(path)
+    name = _get_file_path(_FileFormTranslator.name_of(path) or '')
+    source = _FileFormTranslator.as_one_of(path, ['file_object', 'path'])
+
+    #Text formats need a name; nameless JSON/YAML/etc stay text
+    if ends_with_any(name, '.json'): return rp.load_json(source)
+    if ends_with_any(name, '.yaml'): return rp.load_yaml(source)
+    if ends_with_any(name, '.jsonnet .libsonnet'.split()): return rp.load_jsonnet(source)
+    if ends_with_any(name, '.dtab'): return load_dtab(source)
+    if ends_with_any(name, '.tsv'.split()): return load_tsv(source,show_progress=True)
+    if ends_with_any(name, '.csv'.split()): return load_csv(source,show_progress=True)
+    if ends_with_any(name, '.lines'.split()): return load_file_lines(source)
+
+    #Binary formats can also be recognized from contents
+    if not isinstance(source, str) and not has_file_extension(name):
+        if is_utf8_file(source, allow_null=False): return load_text_file(source)
+        name = '.' + (detect_filetype(source) or '')
+    if ends_with_any(name, '.png .webp .gif'.split()): return _omni_load_animated_image(source)
+    if ends_with_any(name, '.jpg .jpeg .jxl .exr .psd .tga .tiff .tif .jp2 .bmp'.split()): return rp.load_image(source)
+    if ends_with_any(name, '.mp4 .avi .mkv .flv .mov .m4v .wmv .webm'.split()): return rp.load_video(source)
+    if ends_with_any(name, '.wav .mp3 .ogg .aac .wma .aiff .m4a .flac'.split()): return rp.load_sound_file(source)
+    if ends_with_any(name, '.npy'.split()): return np.load(source)
+    if ends_with_any(name, '.parquet'.split()): return load_parquet(source,show_progress=True)
+    if ends_with_any(name, '.arrow .arrows .feather .ipc'.split()): return load_arrow(source,show_progress=True)
+    if ends_with_any(name, '.lance'.split()): return load_lance(source,show_progress=True)
+    if ends_with_any(name, '.safetensors'.split()): return load_safetensors(source)
+    if ends_with_any(name, '.pt .pth .ckpt'.split()): return __import__('torch').load(source,map_location='cpu')
+    if ends_with_any(name, '.pkl'.split()): return load_pickled_value(source)
+    if ends_with_any(name, '.msgpack .mp .msg'.split()): return load_msgpack(source)
+    if ends_with_any(name, '.rpo'.split()): return file_to_object(source) #RP Object File
+    if is_image_file(source): return load_image(source)
+    if is_video_file(source): return load_video(source)
+    source = file_to_bytes(source)
+    if is_utf8_file(source): return load_text_file(source)
+    return file_to_object(source)
 
 _omni_load = omni_load
 
-def omni_save(object, path, *, auto_extension=False):
+def omni_save(object, path, *, auto_extension=False, filetype=None):
+    """
+    Command. Save an object using the destination extension or an explicit filetype.
 
-    if auto_extension and not has_file_extension(path):
-        path += _omni_save_default_extension(object)
+    Args:
+        object: Image, video, samples, tensor, array, text, bytes or serializable object.
+        path: Local path, S3 URI or writable file object; caller handles stay open.
+        auto_extension (bool): Add filetype, or the type-based default extension, to extensionless paths.
+        filetype (str or None): Explicit extension for unnamed handles; conflicts with named extensions raise.
+    Returns:
+        str or file object: Saved path/URI (including any added extension) or the original writable handle.
+        Array/tensor shapes are preserved by their serializers, e.g. (3, 4) -> (3, 4).
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> buffer = io.BytesIO()
+        >>> omni_save({'answer': 42}, buffer, filetype='json') is buffer
+        ans = True
+        >>> buffer.getvalue()
+        ans = b'{"answer": 42}'
+        >>> omni_save({'answer': 42}, bytes, filetype='json')
+        ans = b'{"answer": 42}'
+        >>> omni_save({'answer': 42}, 's3://my-bucket/answer.json')
+        >>> image_output = io.BytesIO()
+        >>> _ = omni_save(np.zeros((16, 16, 3), np.uint8), image_output, filetype='png')
+        >>> image_output.getvalue()[:8]
+        ans = b'\\x89PNG\\r\\n\\x1a\\n'
+        >>> array = np.arange(12).reshape(3, 4)
+        >>> array_output = io.BytesIO()
+        >>> omni_save(array, array_output, filetype='npy') is array_output
+        ans = True
+        >>> np.array_equal(np.load(io.BytesIO(array_output.getvalue())), array)
+        ans = True
+        >>> import torch
+        >>> tensor = torch.arange(12).reshape(3, 4)
+        >>> tensor_output = io.BytesIO()
+        >>> omni_save(tensor, tensor_output, filetype='pt') is tensor_output
+        ans = True
+        >>> torch.equal(torch.load(io.BytesIO(tensor_output.getvalue()), weights_only=True), tensor)
+        ans = True
+        >>> yaml_output = io.BytesIO()
+        >>> omni_save({'answer': 42}, yaml_output, filetype='yaml') is yaml_output
+        ans = True
+        >>> load_yaml(yaml_output.getvalue()).answer
+        ans = 42
+    """
+    path = _FileDestination.canonicalize(path)
+    extensionless = isinstance(path, str) and not has_file_extension(path)
+    extension = '' if extensionless and filetype is None else _FileDestination.filetype(path, filetype)
+    if auto_extension and extensionless:
+        extension = extension or _omni_save_default_extension(object).lstrip('.')
+        if extension: path += '.' + extension
 
-    if ends_with_any(path.lower(), '.json'): return rp.save_json(object,path)
-    if ends_with_any(path.lower(), '.yaml'): return rp.save_yaml(object,path)
-    if ends_with_any(path.lower(), '.png .webp .gif'.split()): return rp.r._omni_save_animated_image(object, path)
-    if ends_with_any(path.lower(), '.jpg .jpeg .jxl .exr .psd .tga .tiff .tif .jp2 .bmp'.split()): return rp.save_image(object, path)
-    if ends_with_any(path.lower(), '.mp3'.split()): return rp.save_mp3_file(object, path)
-    if ends_with_any(path.lower(), '.wav'.split()): return rp.save_wav_file(object, path)
-    if ends_with_any(path.lower(), '.mp4'.split()): return rp.save_video(object, path)
-    if ends_with_any(path.lower(), '.npy'.split()): return np.save(path,object)
-    if ends_with_any(path.lower(), '.pt .pth .ckpt'.split()): return __import__('torch').save(object,path)
-    if ends_with_any(path.lower(), '.safetensors'.split()): return save_safetensors(object,path)
-    if ends_with_any(path.lower(), '.lines'.split()): return save_file_lines(object,path)
-    if ends_with_any(path.lower(), '.pkl'.split()): return save_pickled_value(object,path)
-    if ends_with_any(path.lower(), '.rpo'.split()): return object_to_file(object,path) #RP Object File
+    if extension == 'json': return save_json(object, path)
+    if extension == 'jsonl': return save_jsonl(object, path)
+    if extension == 'msgpack': return save_msgpack(object, path)
+    if extension in ('yaml', 'yml'): return save_text_file(pip_import('yaml').safe_dump(object, allow_unicode=True), path)
+    if extension in ('png', 'webp', 'gif'): return _omni_save_animated_image(object, path, filetype=extension)
+    if extension in 'jpg jpeg jxl avif exr psd tga tiff tif jp2 bmp'.split(): return save_image(object, path, filetype=extension)
+    if extension == 'wav': return save_wav(object, path)
+    if extension == 'mp3': return _save_mp3(object, path)
+    if extension in ('mp4', 'avi', 'webm'): return save_video(object, path, filetype=extension)
+    if extension == 'npy': return _save_numpy(object, path)
+    if extension in ('pt', 'pth', 'ckpt'): return _save_torch(object, path)
+    if extension == 'safetensors': return save_safetensors(object, path)
+    if extension == 'lines': return save_file_lines(object, path)
+    if extension == 'pkl': return save_pickled_value(object, path)
+    if extension == 'rpo': return object_to_file(object, path) #RP Object File
     if isinstance(object, str): return save_text_file(object, path)
     if isinstance(object, bytes): return bytes_to_file(object, path)
     return object_to_file(object,path)
@@ -38219,6 +40273,8 @@ class CachedInstances:
 
 def _get_hash(source, hash_func_name, func_display_name, *, show_progress, format):
     """
+    Command. Hash file contents, consuming streams and reporting progress when requested.
+
     Helper function to calculate a hash of the provided data or file contents.
     
     :param source: The data or file path to hash
@@ -38227,6 +40283,10 @@ def _get_hash(source, hash_func_name, func_display_name, *, show_progress, forma
     :param show_progress: Whether to display a progress bar
     :param format: Output format of the hash. Options: 'hex', 'int', 'bytes', 'base64'
     :return: The hash in the specified format
+
+    Examples:
+        >>> _get_hash(b'abc', 'md5', 'get_md5_hash', show_progress=False, format='hex')
+        '900150983cd24fb0d6963f7d28e17f72'
     """
     import hashlib
     import os
@@ -38234,36 +40294,31 @@ def _get_hash(source, hash_func_name, func_display_name, *, show_progress, forma
     import base64
     
     hash_obj = getattr(hashlib, hash_func_name)()
-    
-    if isinstance(source, bytes):
-        byte_stream = io.BytesIO(source)
-        total_size = len(source)
-        progress_desc = "Hashing data via " + hash_func_name
-    elif isinstance(source, str) and os.path.isfile(source):
-        byte_stream = open(source, 'rb')
+    source = _FileFormTranslator.canonicalize(source)
+    if _FileFormTranslator.is_path(source):
+        if not os.path.isfile(source):
+            raise FileNotFoundError("rp." + func_display_name + ": no such file: " + source)
         total_size = os.path.getsize(source)
         progress_desc = "Hashing file via " + hash_func_name
     else:
-        raise TypeError("rp." + func_display_name + ": Unsupported input type '" + type(source).__name__ + "'")
-    
-    progress_bar = None
+        #Bytes, data uri, file object, stream or url: streamed in chunks; the total is only known for bytes
+        total_size = len(source) if _FileFormTranslator.is_bytes(source) else None
+        progress_desc = "Hashing data via " + hash_func_name
     if show_progress:
         #TODO: Make it unified with load_files, one unified tqdm/eta function - supporting the same argument formats
-        pip_import('tqdm')
-        from tqdm import tqdm
-        progress_bar = tqdm(total=total_size, desc=progress_desc, unit='B', unit_scale=True, unit_divisor=1024)
+        show_eta = _eta_bytes(total_size, title=progress_desc, completion_verb="Hashed")
     
     chunk_size = 4096 #A nice big chunk size
-    while True:
-        chunk = byte_stream.read(chunk_size)
-        if not chunk:
-            break
-        hash_obj.update(chunk)
-        if show_progress:
-            progress_bar.update(len(chunk))
-    
-    if hasattr(byte_stream, 'close'):
-        byte_stream.close()
+    bytes_hashed = 0
+    with _FileFormTranslator.opened(source) as byte_stream: #Close what the translator opened, never what the caller handed us
+        while True:
+            chunk = byte_stream.read(chunk_size)
+            if not chunk:
+                break
+            hash_obj.update(chunk)
+            bytes_hashed += len(chunk)
+            if show_progress:
+                show_eta(bytes_hashed)
     
     # Return hash in requested format
     if format in ('hex', 'base16'):
@@ -38301,6 +40356,18 @@ def get_md5_hash(source, format='hex', *, show_progress: bool = False):
         78854878685254270795816465693052641713
         >>> get_md5_hash('/path/to/file', format='base64')
         'kJh5Sq2LpZ3v2dYHPvs8uQ=='
+
+    EXAMPLE (any file form):
+        >>> get_md5_hash('png-rgb.png')
+        ans = 446371fa4381568835dc54b8e11edeb8
+        >>> get_md5_hash('s3://open-images-dataset/validation/0001eeaf4aed83f9.jpg')   # urls are streamed in chunks, never saved to disk
+        ans = f5e98381292cdb1233bc9cf072197c83
+        >>> get_md5_hash(file_to_bytes('png-rgb.png'))   # bytes, an open file or a Lance blob of the same file: same hash
+        ans = 446371fa4381568835dc54b8e11edeb8
+        >>> get_md5_hash(open('png-rgb.png', 'rb'))
+        ans = 446371fa4381568835dc54b8e11edeb8
+        >>> get_md5_hash(lance.dataset('images.lance').take_blobs('image', indices=[0])[0])
+        ans = 446371fa4381568835dc54b8e11edeb8
     """
     return _get_hash(source, 'md5', 'get_md5_hash', show_progress=show_progress, format=format)
 
@@ -38328,6 +40395,18 @@ def get_sha256_hash(source, format='hex', *, show_progress: bool = False):
         69026873886289201118877060911792184041901559641924946149006354401672729373074
         >>> get_sha256_hash('/path/to/file', format='base64')
         'g+YuWoycDlhZ9+VRXimYoxXqkR+OFv4PlM0/Y9p9D0E='
+
+    EXAMPLE (any file form):
+        >>> get_sha256_hash('png-rgb.png')
+        ans = a17cb0e75afc250d35df7d921addb4683c8cfdc9f440de91c1a31cc379623550
+        >>> get_sha256_hash('s3://open-images-dataset/validation/0001eeaf4aed83f9.jpg')   # urls are streamed in chunks, never saved to disk
+        ans = 9e3a52e16ef4fc1379ecdacbad6dbfd7741062ce7f2ddbb7f1dd5f68aa9ec102
+        >>> get_sha256_hash(file_to_bytes('png-rgb.png'))   # bytes, an open file or a Lance blob of the same file: same hash
+        ans = a17cb0e75afc250d35df7d921addb4683c8cfdc9f440de91c1a31cc379623550
+        >>> get_sha256_hash(open('png-rgb.png', 'rb'))
+        ans = a17cb0e75afc250d35df7d921addb4683c8cfdc9f440de91c1a31cc379623550
+        >>> get_sha256_hash(dataset.take_blobs('image', indices=[0])[0])
+        ans = a17cb0e75afc250d35df7d921addb4683c8cfdc9f440de91c1a31cc379623550
     """
     return _get_hash(source, 'sha256', 'get_sha256_hash', show_progress=show_progress, format=format)
 
@@ -40991,6 +43070,7 @@ def get_file_extension(file_path):
         
     Related Functions:
         - has_file_extension(): Check if file has any extension
+        - detect_filetype(): Identify the format from the contents, regardless of filename
         - with_file_extension(): Add/replace file extension
         - strip_file_extension(): Remove extension from path
         
@@ -42031,20 +44111,28 @@ def rp_iglob(
     import glob
     import os
     for file_pattern in files:
+        if isinstance(file_pattern, os.PathLike):
+            file_pattern = os.fspath(file_pattern) #pathlib.Path etc. are plain paths
+        # A url or data uri is one item: never globbed (a query string contains "?"), and base64 text may contain newlines
+        if isinstance(file_pattern, str) and (is_valid_url(file_pattern) or is_valid_data_uri(file_pattern)):
+            yield file_pattern
         # If the input is a multi-line string
-        if isinstance(file_pattern, str) and '\n' in file_pattern:
+        elif isinstance(file_pattern, str) and '\n' in file_pattern:
             for line in file_pattern.strip().split('\n'):
                 if line:  # Skip empty lines
                     yield from rp_iglob(line)#, follow_symlinks=follow_symlinks)
         # If the input is an iterable but not a str (e.g., a list or a file object)
+        elif _FileFormTranslator.is_bytes(file_pattern) or (hasattr(file_pattern, 'read') and not isinstance(file_pattern, io.TextIOBase)):
+            #Bytes and binary file objects are file contents to load, not lists of patterns: one item each
+            yield file_pattern
         elif not isinstance(file_pattern, str) and hasattr(file_pattern, '__iter__'):
             for item in file_pattern:
                 if item:  # Skip empty lines/items
                     yield from rp_iglob(item)#, follow_symlinks=follow_symlinks)
         # If the input is a single-line string
         elif isinstance(file_pattern, str):
-            if not _has_globbing_characters(file_pattern) and not check_exists:
-                yield file_pattern
+            if os.path.exists(file_pattern) or (not _has_globbing_characters(file_pattern) and not check_exists):
+                yield file_pattern #An existing path is itself, even when its name contains glob characters like "photo [1].png"
             else:
                 for filepath in glob.iglob(file_pattern, recursive=True):  # Enable recursion
                     # if follow_symlinks or not os.path.islink(filepath):
@@ -46256,6 +48344,56 @@ def get_youtube_video_transcript(url_or_id: str):
 #Maybe uncomment in the future
 # get_youtube_video_captions = get_youtube_video_subtitles = get_youtube_video_transcript
 
+def _select_youtube_stream(streams, *, need_video, need_audio, filetype, min_resolution=None, max_resolution=None, resolution_preference=max):
+    """
+    Pure function. Chooses which of a youtube video's streams to download (yt-dlp calls them "formats").
+
+    Each stream is a dict from yt-dlp, like:
+        {'format_id':'137', 'ext':'mp4', 'vcodec':'avc1.640028', 'acodec':'none', 'width':1080, 'height':1920, 'tbr':1812}
+    A stream's resolution is min(width,height), so 720p means 720-tall for a landscape video and 720-wide for a vertical one.
+    Streams carrying both a video and an audio track (youtube calls these "progressive") only go up to 360p.
+
+    Args:
+        streams (list): Stream dicts, from yt_dlp's extract_info(url)['formats']
+        need_video (bool): If True, the stream must have a video track
+        need_audio (bool): If True, the stream must have an audio track
+        filetype (str): Either 'mp4' or 'webm'
+        min_resolution (int, optional): Reject streams below this resolution
+        max_resolution (int, optional): Reject streams above this resolution
+        resolution_preference (callable): Picks from the sorted list of allowed resolutions, like [144, 360, 1080]
+
+    Returns:
+        dict: One of the given streams
+
+    Examples:
+        >>> streams = [{'format_id':'18',  'ext':'mp4', 'vcodec':'avc1', 'acodec':'mp4a', 'width':640,  'height':360,  'tbr':500 },
+        ...            {'format_id':'134', 'ext':'mp4', 'vcodec':'avc1', 'acodec':'none', 'width':640,  'height':360,  'tbr':600 },
+        ...            {'format_id':'137', 'ext':'mp4', 'vcodec':'avc1', 'acodec':'none', 'width':1920, 'height':1080, 'tbr':4000},
+        ...            {'format_id':'399', 'ext':'mp4', 'vcodec':'av01', 'acodec':'none', 'width':1920, 'height':1080, 'tbr':4500},
+        ...            {'format_id':'140', 'ext':'m4a', 'vcodec':'none', 'acodec':'mp4a', 'width':None, 'height':None, 'tbr':130 }]
+        >>> _select_youtube_stream(streams, need_video=True, need_audio=True, filetype='mp4')['format_id']
+        '18'
+        >>> _select_youtube_stream(streams, need_video=True, need_audio=False, filetype='mp4')['format_id'] #h264 beats the bigger av1 stream
+        '137'
+        >>> _select_youtube_stream(streams, need_video=False, need_audio=True, filetype='mp4')['format_id']
+        '140'
+    """
+    if need_video:
+        candidates = [x for x in streams if (x.get('acodec') != 'none') == need_audio and x.get('ext') == filetype and x.get('width') and x.get('height')]
+        resolutions = sorted({min(x['width'], x['height']) for x in candidates}) #Like [144, 240, 360, 720, 1080]
+        allowed = [x for x in resolutions if (min_resolution is None or x >= min_resolution) and (max_resolution is None or x <= max_resolution)]
+        assert allowed, 'No resolutions fit between given min_resolution=%s and max_resolution=%s. Available resolutions are: %s' % (min_resolution, max_resolution, resolutions)
+        chosen_resolution = resolution_preference(allowed)
+        candidates = [x for x in candidates if min(x['width'], x['height']) == chosen_resolution]
+    else:
+        audio_extensions = {'mp4': ['m4a', 'mp4'], 'webm': ['webm']}[filetype] #Youtube serves its audio-only mp4 streams as .m4a
+        candidates = [x for x in streams if x.get('vcodec') == 'none' and x.get('ext') in audio_extensions]
+
+    assert candidates, 'Could not find a youtube stream with need_video=%s, need_audio=%s, filetype=%s. Try relaxing a constraint, such as merge_audio=True or a different filetype.\nAvailable Options:\n' % (need_video, need_audio, repr(filetype)) + '\n'.join('    ' + str(x.get('format')) for x in streams)
+
+    #Prefer h264 (avc1), as the old pytubefix code did - youtube's av1 streams choke older players and some opencv builds
+    return max(candidates, key=lambda x: ((x.get('vcodec') or '').startswith('avc1'), x.get('tbr') or 0))
+
 def download_youtube_video(url_or_id: str,
                            path=None,
                            *,
@@ -46274,7 +48412,7 @@ def download_youtube_video(url_or_id: str,
     Downloads a YouTube video based on the given URL or video ID. The function can selectively download video only, 
     audio only, or both depending on the parameters. All downloads are currently as mp4 or webm files.
 
-    NOTE: If it doesn't work, try "pip install pytubefix --upgrade"
+    NOTE: If it doesn't work, try "pip install yt-dlp --upgrade" - YouTube breaks downloaders often, and yt-dlp ships fixes quickly
 
     If need_audio is True, we might only download the audio file (or might download a video with audio)
     If need_video is True, we might download a video without audio (potentially at much higher resolution)
@@ -46322,10 +48460,12 @@ def download_youtube_video(url_or_id: str,
         - str: The path to the downloaded MP4 file (which might contain just video, just audio or both)
 
     Note:
-        - Current backend library: pytubefix. This might change in the future, but the black-box specification of download_youtube_video should always remain the same.
+        - Current backend library: yt-dlp. This might change in the future, but the black-box specification of download_youtube_video should always remain the same.
         - [Aug 19 2024]: pytube didnt work: https://stackoverflow.com/questions/78160027/how-to-solve-http-error-400-bad-request-in-pytube
                          so, I used this (as suggested in that stack overflow post): https://github.com/JuanBindez/pytubefix
-                         
+        - [Aug 13 2026]: pytubefix stopped working too - BotDetection ("This request was detected as a bot") even from a home
+                         connection, on videos yt-dlp downloads fine. So the backend is yt-dlp now.
+
     Examples:
         >>> download_youtube_video("https://www.youtube.com/watch?v=jvipPYFebWc", need_audio=True, need_video=True, show_progress=False)
         ans = /Users/ryan/Lindsey Stirling - Roundtable Rival (Official Music Video)_copy1.mp4
@@ -46393,42 +48533,37 @@ def download_youtube_video(url_or_id: str,
         delete_folder(temp_dir)
         return path
 
-    #Logic that's specific to pytubefix:
-    pip_import('pytubefix')
-    from pytubefix import YouTube
-    from pytubefix.cli import on_progress
-    proxies = None
-    if proxy:
-        pip_import('socks', 'pysocks')
-        proxy_url = _ensure_warp_proxy_running()
-        proxies = {'https': proxy_url, 'http': proxy_url}
-    yt = YouTube(url, on_progress_callback = on_progress if show_progress else None, proxies=proxies)
-    ys = yt.streams
-    if need_audio:
-        ys = ys.filter(progressive=True)
-        print(ys)
-    if need_video:
-        ys = ys.filter(mime_type='video/'+filetype)
-        print(ys)
-        #
-        #Allow us to choose the resolution of the video we load - we might want to avoid loading giant videos for example
-        resolutions=set(int(x.resolution[:-1])for x in ys if x.resolution if not None) #Like {360, 1080, 720, 360, 144}
-        original_resolutions = sorted(resolutions)
-        if min_resolution is not None:resolutions={x for x in resolutions if x>=min_resolution}
-        if max_resolution is not None:resolutions={x for x in resolutions if x<=max_resolution}
-        resolutions=sorted(resolutions) #An increasing list of unique integers 
-        assert len(resolutions), 'No resolutions fit between given min_resolution=%s and max_resolution=%s. Available resolutions for %s are: %s'%(min_resolution, max_resolution, url, original_resolutions)
-        preferred_resolution=resolution_preference(resolutions) #Choosing the best resoltion
-        best_resolution=str(max(resolutions))+'p' # Like "720p"
-        #
-        ys = ys.filter(resolution=best_resolution).get_highest_resolution(progressive=False)
-        print(ys)
-    else:
-        ys = yt.streams.filter(mime_type='audio/'+filetype).get_audio_only()
+    #Logic that's specific to yt-dlp:
+    pip_import('yt_dlp')
+    import yt_dlp
 
-    assert ys is not None, 'Could not find a youtube video that satisfied the given contsraints (url=%s, need_audio=%s, need_video=%s, max_resolution=%s, min_resolution=%s, filetype=%s). Try relaxing a contstraint, such as not requiring audio, not requiring video or using a different filetype etc.'%(repr(url),need_audio, need_video, max_resolution, min_resolution, repr(filetype)) + '\nAvailable Options:\n'+'\n'.join('    '+str(x) for x in yt.streams)
-    out_path = ys.download(output_path=get_parent_directory(path),filename=get_file_name(path))
-        
+    #yt-dlp has to run youtube's javascript to decrypt stream urls, or every download 403's. Deno is the only runtime
+    #it enables by default, so use whichever one is installed - and if there's none, pip-install node.
+    js_runtimes = {x: {} for x in ['deno', 'node', 'bun'] if system_command_exists(x)}
+    if not js_runtimes:
+        node_directory = get_parent_directory(pip_import('nodejs_wheel', 'nodejs-wheel-binaries').__file__) #Ships node as a wheel - no system install needed
+        js_runtimes = {'node': {'path': path_join(node_directory, 'node.exe') if currently_running_windows() else path_join(node_directory, 'bin', 'node')}}
+
+    options = {
+        'js_runtimes' : js_runtimes,
+        'outtmpl'     : path.replace('%', '%%'), #yt-dlp reads % as the start of a template field like %(title)s
+        'overwrites'  : True, #Any file already at this path was dealt with above, by skip_existing/overwrite/get_unique_copy_path
+        'quiet'       : not show_progress,
+        'noprogress'  : not show_progress,
+        'proxy'       : _ensure_warp_proxy_running() if proxy else None,
+    }
+    with yt_dlp.YoutubeDL(dict(options, skip_download=True)) as ydl:
+        streams = ydl.extract_info(url, download=False)['formats']
+
+    stream = _select_youtube_stream(streams, need_video=need_video, need_audio=need_audio, filetype=filetype, min_resolution=min_resolution, max_resolution=max_resolution, resolution_preference=resolution_preference)
+    if show_progress: fansi_print('download_youtube_video: Downloading ' + str(stream['format']), 'cyan')
+
+    with yt_dlp.YoutubeDL(dict(options, format=stream['format_id'])) as ydl:
+        out_path = ydl.extract_info(url, download=True)['requested_downloads'][0]['filepath'] #yt-dlp sanitizes filenames, so we ask it where the file landed
+    if get_absolute_path(out_path) != get_absolute_path(path):
+        out_path = move_path(out_path, path)
+
+
     #Common logic invariant to external libraries:
     assert file_exists(out_path)
     assert get_file_extension(out_path)==filetype, 'For simplicity I would like this function to only return mp4 or webm files. Is this possible?'+ out_path
@@ -46598,20 +48733,32 @@ def _moviepy_VideoFileClip(path, *args, **kwargs):
         finally:
             restore_console_output()
 
-def _get_video_file_duration_via_moviepy(path)->float:
-    """
-    Returns the duration of a video file, in seconds
-    https://stackoverflow.com/questions/3844430/how-to-get-the-duration-of-a-video-in-python
-    """
-    return _moviepy_VideoFileClip(path).duration
+def _get_video_file_duration_via_ffprobe(path)->float:
+    """ Query. Returns the container-level duration of a video file in seconds (the "Duration:" that ffmpeg -i prints). """
+    return float(_ffprobe_json(path, 'format=duration')['format']['duration'])
 
 _get_video_file_duration_cache={}
 def get_video_file_duration(path,use_cache=True):
-    """ Returns a float, representing the total video length in seconds """
+    """
+    Returns a float, representing the total video length in seconds
+
+    EXAMPLE (any file form):
+        >>> get_video_file_duration('video.mp4')                                     #path (also pathlib.Path)
+        ans = 1.0
+        >>> get_video_file_duration(open('video.mp4', 'rb').read())                  #bytes (url, bytes and file objects are spilled to a temp file for ffprobe)
+        ans = 1.0
+        >>> get_video_file_duration(open('video.mp4', 'rb'))                         #file object or io.BytesIO
+        ans = 1.0
+        >>> get_video_file_duration(dataset.take_blobs('video', indices=[0])[0])     #lance blob
+        ans = 1.0
+    """
+    if not _FileFormTranslator.is_path(path): #urls and data uris are str too, but not paths
+        with _FileFormTranslator.opened(path, ('path',)) as spilled: #ffprobe needs a real file; other forms are spilled for the call
+            return get_video_file_duration(spilled, use_cache=False)
     path=get_absolute_path(path) #This is important for caching.
     if use_cache and path in _get_video_file_duration_cache:
         return _get_video_file_duration_cache[path]
-    out=_get_video_file_duration_via_moviepy(path)
+    out=_get_video_file_duration_via_ffprobe(path)
     _get_video_file_duration_cache[path]=out
     return out
 
@@ -46691,15 +48838,31 @@ def get_audio_file_duration(path,use_cache=True):
         - load_wav_file
         - load_mp3_file
         - is_audio_file
+
+    EXAMPLE (any file form):
+        >>> get_audio_file_duration('speech.wav')   # a path (only paths are cached)
+        ans = 1.0
+        >>> get_audio_file_duration('s3://multimedia-commons/data/videos/mp4/002/3df/0023df13b53926d7ee7a479e2d36cf.mp4')   # an s3 url; a video's audio track counts too
+        ans = 90.024
+        >>> get_audio_file_duration(file_to_bytes('speech.mp3'))   # bytes: pydub sniffs the format
+        ans = 1.0
+        >>> get_audio_file_duration(io.BytesIO(file_to_bytes('speech.mp3')))   # any seekable binary file object
+        ans = 1.0
+        >>> get_audio_file_duration(dataset.take_blobs('audio', indices=[0])[0])   # a Lance blob
+        ans = 1.0
     """
-    path=get_absolute_path(path) #Important for caching
-    if use_cache and path in _get_audio_file_duration_cache:
+    cacheable = _FileFormTranslator.is_path(path) #Only local paths are cached (urls and data uris are str too, but not absolutized)
+    if cacheable:
+        path=get_absolute_path(path) #Important for caching
+    if use_cache and cacheable and path in _get_audio_file_duration_cache:
         return _get_audio_file_duration_cache[path]
     pip_import('pydub')
     from pydub import AudioSegment
-    audio=AudioSegment.from_file(path)
+    with _FileFormTranslator.opened(path, ('file_object', 'path')) as source: #Any file form; pydub sniffs the format itself
+        audio=AudioSegment.from_file(source)
     out=len(audio)/1000.0 #pydub returns duration in milliseconds
-    _get_audio_file_duration_cache[path]=out
+    if cacheable:
+        _get_audio_file_duration_cache[path]=out
     return out
 
 def get_audio_file_bitrate(file_path):
@@ -46724,24 +48887,35 @@ def get_audio_file_bitrate(file_path):
         FileNotFoundError: If the file does not exist.
         ValueError: If bitrate is unavailable for the file.
         RuntimeError: If ffprobe fails to read the file.
+
+    EXAMPLE (any file form):
+        >>> get_audio_file_bitrate('speech.mp3')   # a path goes straight to ffprobe
+        ans = 128000
+        >>> get_audio_file_bitrate(file_to_bytes('speech.wav'))   # bytes are spilled to a temp file for ffprobe, then deleted
+        ans = 512000
+        >>> get_audio_file_bitrate(open('speech.mp3', 'rb'))   # an open binary file (or io.BytesIO)
+        ans = 128000
+        >>> get_audio_file_bitrate(dataset.take_blobs('audio', indices=[0])[0])   # a Lance blob
+        ans = 128000
     """
     _ensure_ffmpeg_installed()
     import subprocess
     import os
-    cmd = [
-        'ffprobe', '-v', 'error', '-select_streams', 'a:0',
-        '-show_entries', 'stream=bit_rate',
-        '-of', 'default=noprint_wrappers=1:nokey=1', file_path
-    ]
-    try:
-        output = subprocess.check_output(cmd).decode().strip()
-        if not output or output == "N/A":
-            raise ValueError("get_audio_file_bitrate: bitrate unavailable for " + file_path)
-        return int(output)
-    except subprocess.CalledProcessError as e:
-        if not os.path.exists(file_path):
-            raise FileNotFoundError("get_audio_file_bitrate: " + file_path)
-        raise RuntimeError("get_audio_file_bitrate: ffprobe failed on " + file_path + ": " + str(e))
+    with _FileFormTranslator.opened(file_path, ('path',)) as file_path: #ffprobe needs a real file: other forms are spilled to a temp file and removed after
+        cmd = [
+            'ffprobe', '-v', 'error', '-select_streams', 'a:0',
+            '-show_entries', 'stream=bit_rate',
+            '-of', 'default=noprint_wrappers=1:nokey=1', file_path
+        ]
+        try:
+            output = subprocess.check_output(cmd).decode().strip()
+            if not output or output == "N/A":
+                raise ValueError("get_audio_file_bitrate: bitrate unavailable for " + file_path)
+            return int(output)
+        except subprocess.CalledProcessError as e:
+            if not os.path.exists(file_path):
+                raise FileNotFoundError("get_audio_file_bitrate: " + file_path)
+            raise RuntimeError("get_audio_file_bitrate: ffprobe failed on " + file_path + ": " + str(e))
 
 _get_video_file_framerate_cache={}
 def _get_video_file_framerate_via_moviepy(path, use_cache=True):
@@ -46755,6 +48929,73 @@ def _get_video_file_framerate_via_moviepy(path, use_cache=True):
 
     _get_video_file_framerate_cache[path] = framerate
     return framerate
+
+def _ffprobe_json(path, entries, select_streams=None):
+    """
+    Query. Runs ffprobe on a media file and returns its parsed JSON output.
+    Installs ffmpeg on demand. Raises CalledProcessError if ffprobe can't read the file.
+
+    Args:
+        path (str): Media file path
+        entries (str): ffprobe -show_entries spec, e.g. 'stream=width,height:format=duration'
+        select_streams (str or None): ffprobe -select_streams spec, e.g. 'v:0'. None means all streams.
+
+    Returns:
+        dict: e.g. {'streams': [{'width': 1920, 'height': 1080}], 'format': {'duration': '3.5'}}
+    """
+    import subprocess
+    import json
+
+    if not 'ffprobe' in get_system_commands():
+        _ensure_ffmpeg_installed()
+        if not 'ffprobe' in get_system_commands():
+            raise RuntimeError('rp._ffprobe_json: Please install ffmpeg! Unable to find the ffprobe command')
+
+    command = ['ffprobe', '-v', 'error']
+    if select_streams is not None:
+        command += ['-select_streams', select_streams]
+    command += ['-show_entries', entries, '-of', 'json', path]
+
+    output = subprocess.check_output(command).decode('utf-8')
+    return json.loads(output)
+
+def _get_video_file_shape_via_ffprobe(path):
+    """
+    Query. Returns (num_frames, height, width, num_channels) of a video file's first video stream via ffprobe.
+
+    Replaces the moviepy path: moviepy 2.2.1's ffmpeg-output text parser IndexErrors on any file
+    with a single chapter (e.g. mp4s exported by video editors), while ffprobe reads them fine.
+
+    Like moviepy, honors rotation metadata so a 90/270-degree rotated phone video reports its displayed size.
+    num_frames is the container's frame count when recorded (mp4/mov nb_frames), else int(fps * duration).
+
+    Example:
+        >>> _get_video_file_shape_via_ffprobe('media28.mp4') # 1920x2160 av1 mp4, 24fps, 713.5s, one chapter
+        (17124, 2160, 1920, 3)
+    """
+    data = _ffprobe_json(
+        path,
+        'stream=width,height,avg_frame_rate,nb_frames,duration:stream_side_data=rotation:stream_tags=rotate:format=duration',
+        select_streams='v:0',
+    )
+    stream = data['streams'][0]
+    width, height = stream['width'], stream['height']
+
+    rotations = [float(side_data['rotation']) for side_data in stream.get('side_data_list', []) if 'rotation' in side_data]
+    if 'rotate' in stream.get('tags', {}):
+        rotations.append(float(stream['tags']['rotate']))
+    if rotations and abs(rotations[0]) % 180 == 90:
+        width, height = height, width
+
+    if 'nb_frames' in stream:
+        num_frames = int(stream['nb_frames'])
+    else:
+        numerator, denominator = map(int, stream['avg_frame_rate'].split('/'))
+        duration = float(stream.get('duration', data['format']['duration']))
+        num_frames = int(numerator / denominator * duration)
+
+    num_channels = 3  # Assuming RGB - I'm not aware of any other formats
+    return (num_frames, height, width, num_channels)
 
 def _get_video_file_framerate_via_ffprobe(path, use_cache=True):
     """ 
@@ -46794,7 +49035,22 @@ def _get_video_file_framerate_via_ffprobe(path, use_cache=True):
     return framerate
 
 def get_video_file_framerate(path, use_cache=True):
-    """ Given a (str) path to a video file, returns a number (framerate) """
+    """
+    Given a (str) path to a video file, returns a number (framerate)
+
+    EXAMPLE (any file form):
+        >>> get_video_file_framerate('video.mp4')                                    #path (also pathlib.Path)
+        ans = 12.0
+        >>> get_video_file_framerate(open('video.mp4', 'rb').read())                 #bytes: non-path forms are spilled to a temp file
+        ans = 12.0
+        >>> get_video_file_framerate(open('video.mp4', 'rb'))                        #file object or io.BytesIO
+        ans = 12.0
+        >>> get_video_file_framerate(dataset.take_blobs('video', indices=[0])[0])    #lance blob
+        ans = 12.0
+    """
+    if not _FileFormTranslator.is_path(path): #urls and data uris are str too, but not paths
+        with _FileFormTranslator.opened(path, ('path',)) as spilled: #ffprobe needs a real file; other forms are spilled for the call
+            return get_video_file_framerate(spilled, use_cache=False)
     try:
         pip_import('moviepy')
 
@@ -46843,7 +49099,20 @@ def video_has_audio(path, *, use_cache=True, strict=False, include_silent=True):
         - is_video_file: Check if a file is a video
         - is_sound_file: Check if a file is an audio file
         - get_video_file_framerate: Get framerate of a video
+
+    EXAMPLE (any file form):
+        >>> video_has_audio('video.mp4')                                             #path (also pathlib.Path)
+        ans = True
+        >>> video_has_audio(open('video.mp4', 'rb').read())                          #bytes: non-path forms are spilled to a temp file and never cached
+        ans = True
+        >>> video_has_audio(open('video.mp4', 'rb'))                                 #file object or io.BytesIO
+        ans = True
+        >>> video_has_audio(dataset.take_blobs('video', indices=[0])[0])             #lance blob
+        ans = True
     """
+    if not _FileFormTranslator.is_path(path): #urls and data uris are str too, but not paths
+        with _FileFormTranslator.opened(path, ('path',)) as spilled: #ffprobe needs a real file; other forms are spilled for the call
+            return video_has_audio(spilled, use_cache=False, strict=strict, include_silent=include_silent)
     import subprocess
 
     if not 'ffprobe' in get_system_commands():
@@ -46920,7 +49189,8 @@ def video_has_audio(path, *, use_cache=True, strict=False, include_silent=True):
 
 def _get_video_bit_depth(path):
     """
-    Query, general. Probe a video file's pixel format via PyAV and return its bit depth.
+    Command, general. Probe a video file's pixel format via PyAV and return its bit depth.
+    Buffers non-seekable input and restores seekable input positions.
 
     Returns 8, 10, or 12. Defaults to 8 if detection fails or format is unrecognized.
 
@@ -46936,17 +49206,23 @@ def _get_video_bit_depth(path):
         >>> # _get_video_bit_depth('10bit_h265.mp4')
         10
     """
+    path = _FileFormTranslator.as_str_or_file_object(path) #bytes, data uris, s3 urls, streams and file objects are probed as a seekable file object
     av = pip_import('av')
+    position = path.tell() if hasattr(path, 'tell') else None #A file object is probed in place, then rewound
     try:
-        container = av.open(str(path))
-        stream = container.streams.video[0]
-        pix_fmt = stream.codec_context.pix_fmt
-        container.close()
-        return _PIX_FMT_BIT_DEPTHS[pix_fmt]
-    except KeyError:
-        raise ValueError("Unrecognized pix_fmt: %r" % pix_fmt)
-    except Exception:
-        return 8
+        try:
+            container = av.open(path)
+            stream = container.streams.video[0]
+            pix_fmt = stream.codec_context.pix_fmt
+            container.close()
+            return _PIX_FMT_BIT_DEPTHS[pix_fmt]
+        except KeyError:
+            raise ValueError("Unrecognized pix_fmt: %r" % pix_fmt)
+        except Exception:
+            return 8
+    finally:
+        if position is not None:
+            path.seek(position)
 
 
 class _VideoCodecError(RuntimeError):
@@ -47017,14 +49293,14 @@ def _load_video_stream_via_av(location, start_frame=0, dtype=None):
     """
     av = pip_import('av')
 
-    with _MaybeTemporarilyDownloadVideo(location) as path:
-        assert file_exists(path), 'load_video error: path %r does not point to a file that exists' % path
+    with _MaybeTemporarilyDownloadVideo(location, need_path=False) as path: #PyAV reads file objects natively
+        if isinstance(path, str):
+            assert file_exists(path), 'load_video error: path %r does not point to a file that exists' % path
 
-        container = av.open(str(path))
+        bit_depth = _get_video_bit_depth(path) #Probed first: on a file object it rewinds before PyAV reads
+        container = av.open(path)
         video_stream = container.streams.video[0]
         pix_fmt = video_stream.codec_context.pix_fmt
-
-        bit_depth = _get_video_bit_depth(path)
         has_alpha = pix_fmt.startswith('yuva')
 
         # Resolve dtype=None based on bit depth
@@ -47126,6 +49402,7 @@ def _cv_with_av_fallback(path, start_frame, dtype):
 def load_video_stream(path, *, start_frame=0, with_length=True, frame_transform=None, backend='auto', dtype=None):
     """
     Command, general. Stream video frames as a generator.
+    Consumes input streams as frames are decoded.
 
     Much faster than load_video, which loads all the frames into a numpy array. This means load_video has to iterate through all the frames before you can even use the first frame.
     load_video_stream is a generator, meaning to get the next frame you use python's builtin 'next' function
@@ -47164,9 +49441,23 @@ def load_video_stream(path, *, start_frame=0, with_length=True, frame_transform=
         for frame in load_video_stream("/Users/Ryan/Desktop/media.io_Silicon Valley - Gavin - Animals Compilation copy.mp4"):display_image(frame)
     EXAMPLE:
         for frame in load_video_stream(download_youtube_video('https://www.youtube.com/watch?v=cAy4zULKFDU')):display_image(frame)  #Monty python clip
+
+    EXAMPLE (any file form):
+        >>> next(load_video_stream('clip.mp4')).shape
+        ans = (48, 64, 3)
+        >>> len(load_video_stream('clip.mp4'))   # a path gets a __len__ (ffprobe counts the frames)
+        ans = 12
+        >>> next(load_video_stream('s3://multimedia-commons/data/videos/mp4/002/3df/0023df13b53926d7ee7a479e2d36cf.mp4', backend='av')).shape   # backend='av' streams s3 urls and file objects without a temp file
+        ans = (480, 640, 3)
+        >>> next(load_video_stream(file_to_bytes('clip.mp4'))).shape
+        ans = (48, 64, 3)
+        >>> sum(1 for frame in load_video_stream(io.BytesIO(file_to_bytes('clip.mp4'))))   # a file object yields every frame but gets no __len__
+        ans = 12
+        >>> next(load_video_stream(dataset.take_blobs('video', indices=[0])[0])).shape   # a Lance BlobFile
+        ans = (48, 64, 3)
     """
     assert isinstance(start_frame, int) and start_frame >= 0, "rp.load_video_stream: start_frame must be a non-negative integer, got %s" % start_frame
-    assert isinstance(path, str), "rp.load_video_stream: path must be a string, got %s" % type(path).__name__
+    path = _FileFormTranslator.as_str_or_file_object(path) #Any file form
     assert dtype in (None, 'byte', 'int', 'float'), "rp.load_video_stream: dtype must be None, 'byte', 'int', or 'float', got %r" % dtype
 
     # Resolve 'auto' to a concrete backend:
@@ -47184,21 +49475,17 @@ def load_video_stream(path, *, start_frame=0, with_length=True, frame_transform=
         else:
             backend = 'cv,av'
 
-    if backend == 'av':
-        frame_iterator = _load_video_stream_via_av(path, start_frame=start_frame, dtype=dtype)
-    elif backend == 'cv':
-        frame_iterator = _cv_load_video_stream(path, start_frame=start_frame)
-    elif backend == 'cv,av':
-        frame_iterator = _cv_with_av_fallback(path, start_frame, dtype)
-    elif backend == 'rs':
-        frame_iterator = _rs_load_video_stream(path, start_frame=start_frame)
+    if   backend == 'av'   : frame_iterator = _load_video_stream_via_av(path, start_frame=start_frame, dtype=dtype)
+    elif backend == 'cv'   : frame_iterator = _cv_load_video_stream(path, start_frame=start_frame)
+    elif backend == 'cv,av': frame_iterator = _cv_with_av_fallback(path, start_frame, dtype)
+    elif backend == 'rs'   : frame_iterator = _rs_load_video_stream(path, start_frame=start_frame)
     else:
         raise ValueError("rp.load_video_stream: backend must be 'auto', 'cv', 'av', 'rs', or 'cv,av', got %r" % backend)
 
     if frame_transform is not None:
         frame_iterator = map(frame_transform, frame_iterator)
 
-    if with_length:
+    if with_length and isinstance(path, str): #Counting frames needs ffprobe on a real file; a file object gets no __len__
         try:
             num_frames = get_video_file_num_frames(path)
             num_frames = max(0, num_frames - start_frame)
@@ -47226,7 +49513,7 @@ def load_video_streams(
 ):
     """ Plural of load_video_stream. If transpose==True, returns a single iterator that returns tuples of frames """
 
-    paths = detuple(paths)
+    paths = list(rp_iglob(paths)) #Globs, lists, lone paths, bytes, file objects and blobs (a list: the length is needed below)
 
     if not is_iterable(start_frame):
         #Allow broadcasting start_frame
@@ -47358,14 +49645,25 @@ def load_video(path, *, start_frame=0, length=None, show_progress=True, use_cach
         >>> levels_12bit = np.linspace(0, 1, 4096, dtype=np.float64)
         >>> assert len(np.unique(levels_12bit.astype(np.float16))) < 4096
 
+    EXAMPLE (any file form):
+        >>> load_video('clip.mp4', show_progress=False).shape
+        ans = (12, 48, 64, 3)
+        >>> load_video('s3://multimedia-commons/data/videos/mp4/002/3df/0023df13b53926d7ee7a479e2d36cf.mp4', backend='av', length=3, show_progress=False).shape   # backend='av' decodes s3 urls and file objects without a temp file
+        ans = (3, 480, 640, 3)
+        >>> load_video(file_to_bytes('clip.mp4'), show_progress=False).shape   # bytes are always contents, never a path
+        ans = (12, 48, 64, 3)
+        >>> load_video(open('clip.mp4', 'rb'), show_progress=False).shape   # any seekable file object (io.BytesIO too)
+        ans = (12, 48, 64, 3)
+        >>> load_video(dataset.take_blobs('video', indices=[0])[0], show_progress=False).shape   # a Lance BlobFile is a file object
+        ans = (12, 48, 64, 3)
     """
     assert length is None or (isinstance(length, int) and length >= 0), "rp.load_video: length must be None or a non-negative integer, got %s" % repr(length)
     assert isinstance(start_frame, int) and start_frame >= 0, "rp.load_video: start_frame must be a non-negative integer, got %s" % repr(start_frame)
-    assert isinstance(path, str), "rp.load_video: path must be a string, got %s" % type(path).__name__
+    path = _FileFormTranslator.as_str_or_file_object(path) #Any file form
 
     progress_prefix = "\rload_video: path=" + repr(path) + ": "
     
-    if path_exists(path):
+    if isinstance(path, str) and path_exists(path):
         path = get_absolute_path(path)  # This is important for caching.
     
     cache_id = (path, start_frame, length, frame_transform)
@@ -47453,12 +49751,22 @@ def load_videos(
     Args:
         See load_video for documentation on the paths, start_frame, length and use_cache args. Also see rp_iglob's docstring for paths.
         See load_files for documentation on the num_threads, show_progress, strict, lazy and buffer_limit args
+
+    EXAMPLE (any file form):
+        >>> [v.shape for v in load_videos('clip.mp4', 'clip.mp4', show_progress=False)]
+        ans = [(12, 48, 64, 3), (12, 48, 64, 3)]
+        >>> [v.shape for v in load_videos('clip.mp4', 's3://multimedia-commons/data/videos/mp4/002/3df/0023df13b53926d7ee7a479e2d36cf.mp4', backend='av', length=3, show_progress=False)]   # forms can be mixed in one call
+        ans = [(3, 48, 64, 3), (3, 480, 640, 3)]
+        >>> [v.shape for v in load_videos(file_to_bytes('clip.mp4'), io.BytesIO(file_to_bytes('clip.mp4')), show_progress=False)]
+        ans = [(12, 48, 64, 3), (12, 48, 64, 3)]
+        >>> [v.shape for v in load_videos([open('clip.mp4', 'rb'), dataset.take_blobs('video', indices=[0])[0]], length=4, show_progress=False)]   # a list works too; the last one is a Lance BlobFile
+        ans = [(4, 48, 64, 3), (4, 48, 64, 3)]
     """
     #I don't know if there's much advantage in doing this in parallel...but we'll try...
 
     if show_progress in ['eta', True]: show_progress='eta:rp.load_videos'
 
-    paths = detuple(paths)
+    paths = rp_iglob(paths) #Globs, lists, lone paths, bytes, file objects and blobs
     # paths = rp_iglob(paths)
 
     def load(path):
@@ -47640,7 +49948,20 @@ def load_video_via_decord(path, indices=None, *, as_dict=False, time_unit="frame
         For high-bit-depth video (10-bit, 12-bit), use load_video(path, backend='av')
         which auto-detects bit depth and returns float16 or float32 accordingly.
         For AV1, use load_video_via_rs (decord can't decode AV1).
+
+    EXAMPLE (any file form):
+        >>> load_video_via_decord('clip.mp4', [0, 5]).shape
+        ans = (2, 48, 64, 3)
+        >>> load_video_via_decord('s3://multimedia-commons/data/videos/mp4/002/3df/0023df13b53926d7ee7a479e2d36cf.mp4', 3).shape   # decord reads s3 urls and file objects into RAM, no temp file
+        ans = (3, 480, 640, 3)
+        >>> load_video_via_decord(file_to_bytes('clip.mp4'), [0, 5]).shape
+        ans = (2, 48, 64, 3)
+        >>> load_video_via_decord(io.BytesIO(file_to_bytes('clip.mp4')), 3).shape
+        ans = (3, 48, 64, 3)
+        >>> load_video_via_decord(dataset.take_blobs('video', indices=[0])[0], as_dict=True)['num_frames']   # a Lance BlobFile
+        ans = 12
     """
+    path = _FileFormTranslator.as_str_or_file_object(path) #Any file form; decord reads file objects (into RAM)
     return _load_video_via_indexed_reader(path, indices, as_dict, _open_decord_reader, time_unit)
 
 
@@ -47678,9 +49999,23 @@ def load_video_via_rs(path, indices=None, *, as_dict=False, lazy=False, time_uni
               eager). Still a big win over eager's full-array allocation.
               If you can afford the RAM for arbitrary-order access, prefer
               lazy=False.
+
+    EXAMPLE (any file form):
+        >>> load_video_via_rs('clip.mp4', [0, 5]).shape
+        ans = (2, 48, 64, 3)
+        >>> load_video_via_rs('s3://multimedia-commons/data/videos/mp4/002/3df/0023df13b53926d7ee7a479e2d36cf.mp4', 3).shape   # rs needs a real file: s3 urls, bytes and file objects are spilled to a temp file, deleted afterwards
+        ans = (3, 480, 640, 3)
+        >>> load_video_via_rs(file_to_bytes('clip.mp4'), [0, 5]).shape
+        ans = (2, 48, 64, 3)
+        >>> len(load_video_via_rs(io.BytesIO(file_to_bytes('clip.mp4')), lazy=True))   # lazy=True works on file objects too
+        ans = 12
+        >>> load_video_via_rs(dataset.take_blobs('video', indices=[0])[0], [0, 5]).shape   # a Lance BlobFile
+        ans = (2, 48, 64, 3)
     """
+    path = _FileFormTranslator.as_str_or_file_object(path) #Any file form; video-reader-rs needs a real file, so file objects are spilled
     if not lazy:
-        return _load_video_via_indexed_reader(path, indices, as_dict, _open_rs_reader, time_unit)
+        with _MaybeTemporarilyDownloadVideo(path) as local_path:
+            return _load_video_via_indexed_reader(local_path, indices, as_dict, _open_rs_reader, time_unit)
     return _load_video_via_rs_lazy(path, indices, as_dict, time_unit)
 
 
@@ -47742,34 +50077,62 @@ def _load_video_via_rs_lazy(path, indices, as_dict, time_unit="frames"):
 def save_video_avi(frames,path:str=None,framerate:int=30):
     """
     Saves the frames of the video to an .avi file
+
+    Command. Encode (T, H, W, 3) RGB frames as XVID AVI at a writable destination.
+
+    Args:
+        frames: Video images, for example a (4, 48, 64, 3) uint8 RGB array.
+        path: Local path, S3 URI or writable binary handle; None generates a filename.
+        framerate: Frames per second.
+
+    Returns:
+        str or file object: Absolute local path, S3 URI or the original handle.
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> output = io.BytesIO()
+        >>> save_video_avi([uniform_byte_color_image(48, 64, 'red')] * 4, output) is output
+        ans = True
+        >>> output.getvalue()[:4]
+        ans = b'RIFF'
+        >>> save_video_avi([uniform_byte_color_image(48, 64, 'red')] * 4, bytes)[:4]
+        ans = b'RIFF'
     """
 
+    if not is_number(framerate) or not math.isfinite(framerate) or framerate <= 0:
+        raise ValueError('save_video_avi: framerate must be a positive finite number')
     pip_import('cv2')
     import cv2
     
-    if path is None: path=_get_default_video_path('avi')
-    if not has_file_extension(path) or get_file_extension(path).lower()!='avi': path+='.avi'
-        
-    frames=as_numpy_array(frames)
-    
-    height=get_image_height(frames[0])
-    width =get_image_width (frames[0])
-    
-    out = cv2.VideoWriter(path,
-                      cv2.VideoWriter_fourcc(*'XVID'),
-                      framerate,
-                      (width,height),
-                      #isColor=True
-                      )
-                      
-    for frame in frames:
-        frame=_as_rgb_byte_image(frame)
-        frame=cv_bgr_rgb_swap(frame)
-        out.write(frame)
+    path = _normalize_video_output_path(path, 'avi')
+    with _FileDestination.opened(path, ('path',), suffix='.avi') as target:
+        frames=as_numpy_array(list(frames) if not hasattr(frames, '__getitem__') else frames)
 
-    path = rp.get_absolute_path(path)
-        
-    return path
+        if not len(frames):
+            raise ValueError('save_video_avi: video must contain at least one frame')
+        height=get_image_height(frames[0])
+        width =get_image_width (frames[0])
+
+        out = cv2.VideoWriter(target,
+                          cv2.VideoWriter_fourcc(*'XVID'),
+                          framerate,
+                          (width,height),
+                          #isColor=True
+                          )
+
+        try:
+            if not out.isOpened():
+                raise RuntimeError('save_video_avi: OpenCV could not open ' + str(path))
+            for frame in frames:
+                frame=_as_rgb_byte_image(frame)
+                if frame.shape[:2] != (height, width):
+                    raise ValueError('save_video_avi: all frames must have the same height and width')
+                frame=cv_bgr_rgb_swap(frame)
+                out.write(frame)
+        finally:
+            out.release()
+
+    return _FileDestination.completed(path)
 
 def _get_default_video_path(extension='mp4'):
     return get_unique_copy_path('video.'+extension)
@@ -47808,6 +50171,42 @@ def _as_video_quality(video_quality:str) -> int:
         video_quality = 100
     return video_quality
 
+_FRAGMENTED_MP4_MOVFLAGS = 'frag_keyframe+empty_moov+default_base_moof' #Index first, then self-contained fragments, so MP4 can stream while encoding
+
+def _copy_stdout_in_background(process, output):
+    """
+    Command. Copy a subprocess's stdout into a writable binary output on a new thread, as the bytes arrive.
+    If copying fails, the process is killed so a writer blocked on its stdin fails fast instead of hanging.
+
+    Args:
+        process (subprocess.Popen): Started with stdout=subprocess.PIPE, such as ffmpeg writing to pipe:1.
+        output: Writable binary file object that receives the bytes.
+    Returns:
+        callable: join() waits for the copy to finish and re-raises its exception, if any.
+    Examples:
+        >>> # join = _copy_stdout_in_background(process, output); feed process.stdin; process.wait(); join()
+    """
+    errors = []
+
+    def copy():
+        """Command. Copy until stdout closes; on failure, keep the error for join() and kill the process."""
+        try:
+            #Raw reads return whatever ffmpeg has written so far instead of waiting to fill a whole chunk
+            _FileDestination.copy(getattr(process.stdout, 'raw', process.stdout), output)
+        except BaseException as error: #Re-raised by join(), never dropped
+            errors.append(error)
+            process.kill()
+
+    thread = run_as_new_thread(copy)
+
+    def join():
+        """Command. Wait for the copy thread and re-raise its error if it failed."""
+        thread.join()
+        if errors:
+            raise errors[0]
+
+    return join
+
 class VideoWriterMP4:
     """
     A class for writing MP4 videos frame by frame using ffmpeg.
@@ -47840,7 +50239,18 @@ class VideoWriterMP4:
 
     _CODEC_MAP = _video_codec_alias_map
 
-    def __init__(self, path=None, framerate=60, video_bitrate='medium', height=None, width=None, show_progress=True, codec='h264', crf=None, pix_fmt='yuv420p'):
+    def __init__(self, path=None, framerate=60, video_bitrate='medium', height=None, width=None, show_progress=True, codec='h264', crf=None, pix_fmt='yuv420p', fragmented=False):
+        """
+        Command. Configure the MP4 destination and encoder options; the first frame starts the subprocess.
+
+        Args:
+            path, framerate, video_bitrate, height, width, show_progress, codec, crf, pix_fmt: As documented on VideoWriterMP4.
+            fragmented (bool): Stream fragmented MP4 through ffmpeg's stdout into path, which must then be a writable binary file object.
+        Returns:
+            None: Initializes this writer without starting its encoder.
+        Examples:
+            >>> # writer = VideoWriterMP4('out.mp4'); writer.started is False
+        """
         # Originally from: https://github.com/kkroening/ffmpeg-python/issues/246
 
         _ensure_ffmpeg_installed()
@@ -47853,7 +50263,7 @@ class VideoWriterMP4:
 
         video_bitrate = _as_video_bitrate(video_bitrate)
 
-        assert path.endswith('.mp4')
+        assert hasattr(path, 'write') if fragmented else path.endswith('.mp4'), 'VideoWriterMP4: path must be an .mp4 filename, or a writable binary file object when fragmented=True'
         assert isinstance(video_bitrate,int)
 
         # Resolve codec name to ffmpeg codec
@@ -47872,6 +50282,7 @@ class VideoWriterMP4:
         self.fmt_in        = fmt_in
         self.fmt_out       = fmt_out
         self.scale_max     = scale_max
+        self.fragmented    = fragmented
 
         self.started  = False
         self.finished = False
@@ -47880,6 +50291,17 @@ class VideoWriterMP4:
         self.width=width
         
     def write_frame(self, frame):
+        """
+        Command. Encode one (H, W, 3 or 4) RGB/RGBA frame, starting the encoder on the first call.
+
+        Args:
+            frame: Image or image path; for example a (48, 64, 3) uint8 RGB array.
+        Returns:
+            None: Streams encoded frame data into this writer's MP4.
+        Examples:
+            >>> # writer.write_frame(uniform_byte_color_image(48, 64, 'red'))
+            >>> # Returns None; writer.finish() finalizes the file.
+        """
         import ffmpeg
 
         assert is_image(frame) or isinstance(frame,str)
@@ -47890,8 +50312,6 @@ class VideoWriterMP4:
         assert not self.finished
 
         if not self.started:
-            self.started = True
-
             height = get_image_height(frame) if self.height is None else self.height
             width  = get_image_width (frame) if self.width  is None else self.width 
 
@@ -47907,6 +50327,8 @@ class VideoWriterMP4:
                 output_kwargs['crf'] = self.crf
             else:
                 output_kwargs['video_bitrate'] = self.video_bitrate
+            if self.fragmented:
+                output_kwargs.update(format='mp4', movflags=_FRAGMENTED_MP4_MOVFLAGS, g=round(self.framerate))
 
             self.process = (
                 ffmpeg.input(
@@ -47917,10 +50339,12 @@ class VideoWriterMP4:
                     r=self.framerate,
                     **(dict(loglevel="quiet") if not self.show_progress else dict())
                 )
-                .output(self.path, **output_kwargs)
+                .output('pipe:' if self.fragmented else self.path, **output_kwargs)
                 .overwrite_output()
-                .run_async(pipe_stdin=True)
+                .run_async(pipe_stdin=True, pipe_stdout=self.fragmented)
             )
+            self.started = True
+            self.join_output = _copy_stdout_in_background(self.process, self.path) if self.fragmented else None
 
             self.height = height
             self.width  = width
@@ -47931,10 +50355,25 @@ class VideoWriterMP4:
 
 
     def finish(self):
+        """
+        Command. Close encoder input, reap the subprocess even when closing fails, and check its exit status.
+
+        Returns:
+            None: Completes the MP4 or raises the encoder/pipe error.
+        Examples:
+            >>> # writer.finish()  # Returns None after the final frame has been written.
+        """
+        import subprocess
         assert self.started
-        self.process.stdin.close()
-        self.process.wait()
-        self.finished=True
+        try:
+            self.process.stdin.close()
+        finally:
+            returncode = self.process.wait()
+            self.finished = True
+            if self.join_output:
+                self.join_output()
+        if returncode:
+            raise subprocess.CalledProcessError(returncode, self.process.args)
         
 
 def _cv_save_video_mp4(
@@ -47946,38 +50385,57 @@ def _cv_save_video_mp4(
     quality
 ):
     """ 
-    Uses quality instead of bitrate because of how opencv works: https://docs.opencv.org/3.4/d4/d15/group__videoio__flags__base.html#gga41c5cfa7859ae542b71b1d33bbd4d2b4ace3320e146f4f95f3d58b32b0e1237b1 
+    Command. Encode (T, H, W, 3) RGB video with OpenCV into an MP4 destination.
+    Uses quality instead of bitrate because of how opencv works: https://docs.opencv.org/3.4/d4/d15/group__videoio__flags__base.html#gga41c5cfa7859ae542b71b1d33bbd4d2b4ace3320e146f4f95f3d58b32b0e1237b1
     NOTE: This quality parameter...doesn't seem to do anything. So it will be hidden in save_video_mp4's docstring for now.
+    Args:
+        video: RGB images, for example (4, 48, 64, 3) uint8 frames.
+        path: Output path, S3 URI or writable binary handle.
+        framerate: Frames per second.
+        show_progress: Display progress on stderr.
+        quality: OpenCV quality value.
+    Returns:
+        str or file object: Saved path/URI or the original writable handle.
+    Examples:
+        >>> # _cv_save_video_mp4(frames, 'out.mp4', framerate=30, show_progress=False, quality=95)
+        >>> # Returns the absolute path to out.mp4.
     """
     pip_import("cv2")
     import cv2
 
-    video = _as_rgb_byte_video(video)
-    video = as_numpy_array(video)
-
-    quality = _as_video_quality(quality)
-
     path = _normalize_video_output_path(path, 'mp4')
+    with _FileDestination.opened(path, ('path',), suffix='.mp4') as target:
+        if not hasattr(video, '__getitem__'):
+            video = list(video)
+        video = _as_rgb_byte_video(video)
+        video = as_numpy_array(video)
+        if not len(video):
+            raise ValueError('save_video_mp4: video must contain at least one frame')
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    _, h, w, c = video.shape
-    video_writer = cv2.VideoWriter(path, fourcc, framerate, (w, h))
+        quality = _as_video_quality(quality)
 
-    # Set quality if provided (in percent)
-    if quality is not None:
-        video_writer.set(cv2.VIDEOWRITER_PROP_QUALITY, quality)
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        _, h, w, c = video.shape
+        video_writer = cv2.VideoWriter(target, fourcc, framerate, (w, h))
 
-    video_iter = video
-    if show_progress:
-        video_iter = eta(video_iter, title='rp.r.'+get_current_function_name())
+        # Set quality if provided (in percent)
+        if quality is not None:
+            video_writer.set(cv2.VIDEOWRITER_PROP_QUALITY, quality)
 
-    for frame in video_iter:
-        frame = cv_rgb_bgr_swap(frame)
-        video_writer.write(frame)  # Fixed typo: 'img' -> 'frame'
+        video_iter = video
+        if show_progress:
+            video_iter = eta(video_iter, title='rp.r.'+get_current_function_name(), file=sys.stderr)
 
-    video_writer.release()  # Ensure proper file closure
+        try:
+            if not video_writer.isOpened():
+                raise RuntimeError('save_video_mp4: OpenCV could not open ' + str(path))
+            for frame in video_iter:
+                frame = cv_rgb_bgr_swap(frame)
+                video_writer.write(frame) # Fixed typo: 'img' -> 'frame'
+        finally:
+            video_writer.release() # Ensure proper file closure
 
-    return path
+    return _FileDestination.completed(path)
 
 def _write_video_via_imageio_ffmpeg(
     frames,
@@ -47992,7 +50450,9 @@ def _write_video_via_imageio_ffmpeg(
     width=None,
     show_progress=True,
     alpha=False,
-    pix_fmt='yuv420p'
+    pix_fmt='yuv420p',
+    filetype='mp4',
+    fragmented=False
 ):
     """
     Command, specific. Write video frames via imageio-ffmpeg's bundled binary.
@@ -48003,7 +50463,8 @@ def _write_video_via_imageio_ffmpeg(
 
     Args:
         frames:              Iterable of images (numpy arrays or file path strings)
-        path (str):          Output file path (should already be normalized)
+                             RGB/RGBA images; for example (4, 48, 64, 3) uint8 frames.
+        path:                Normalized local path, S3 URI or writable binary handle.
         framerate (int):     Video framerate in fps
         codec (str):         User-friendly name ('h264', 'h265', 'vp9', etc.)
                              or raw ffmpeg codec string ('libx264', 'libvpx-vp9')
@@ -48015,74 +50476,90 @@ def _write_video_via_imageio_ffmpeg(
         show_progress (bool): Show eta progress bar and ffmpeg warnings
         alpha (bool):        If True, encode RGBA. If False, RGB.
         pix_fmt (str):       ffmpeg pixel format string (default 'yuv420p').
+        filetype (str):      Container extension ('mp4' or 'webm').
+        fragmented (bool):   MP4 only. Encode fragmented MP4 to ffmpeg's stdout and copy it to the destination while encoding.
 
     Returns:
-        str: Path to the saved video file
+        str or file object: Saved path/URI or the original writable handle.
 
     Examples:
         >>> # _write_video_via_imageio_ffmpeg(frames, '/tmp/out.mp4',
         ... #     framerate=30, codec='h264', video_bitrate=10000000)
+        >>> # Returns '/tmp/out.mp4'.
     """
     pip_import('imageio_ffmpeg', 'imageio-ffmpeg')
-    from imageio_ffmpeg import write_frames
+    from imageio_ffmpeg import get_ffmpeg_exe
+    import subprocess
 
-    # Get pixel formats from pix_fmt
-    pix_fmt_in, pix_fmt_out, np_dtype, scale_max = _video_encode_pix_fmts(pix_fmt, alpha)
-    mode = 'rgba' if alpha else 'rgb'
+    assert not fragmented or filetype == 'mp4', 'Only MP4 can be fragmented, got ' + filetype
+    path = _FileDestination.canonicalize(path)
+    with _FileDestination.opened(path, ('file_object',) if fragmented else ('path',), suffix='.' + filetype) as target:
+        # Get pixel formats from pix_fmt
+        pix_fmt_in, pix_fmt_out, np_dtype, scale_max = _video_encode_pix_fmts(pix_fmt, alpha)
+        mode = 'rgba' if alpha else 'rgb'
+        # Resolve codec: user-friendly name → ffmpeg string, or pass through as-is
+        vcodec = VideoWriterMP4._CODEC_MAP.get(codec.lower(), codec)
 
-    # Resolve codec: user-friendly name → ffmpeg string, or pass through as-is
-    vcodec = VideoWriterMP4._CODEC_MAP.get(codec.lower(), codec)
+        # Build ffmpeg output params from quality settings
+        #Match imageio_ffmpeg.write_frames' default quality=5, then apply RP's explicit options.
+        imageio_default_quality = 5
+        quality_fraction = 1 - imageio_default_quality / 10.0
+        params = ['-crf', str(int(quality_fraction * 51))] if vcodec == 'libx264' else ['-qscale:v', str(int(quality_fraction * 30) + 1)]
+        if crf is not None and vcodec != 'mpeg4':
+            params += ['-crf', str(crf)]
+        elif video_bitrate is not None:
+            params += ['-b:v', str(video_bitrate)]
+        if output_params:
+            params += output_params
+        if fragmented:
+            params += ['-g', str(round(framerate)), '-movflags', _FRAGMENTED_MP4_MOVFLAGS, '-f', 'mp4']
 
-    # Build ffmpeg output params from quality settings
-    params = []
-    if crf is not None and vcodec != 'mpeg4':
-        params += ['-crf', str(crf)]
-    elif video_bitrate is not None:
-        params += ['-b:v', str(video_bitrate)]
-    if output_params:
-        params += output_params
-
-    log_level = 'warning' if show_progress else 'quiet'
-
-    gen = None
-
-    try:
         frame_iter = frames
         if show_progress and hasattr(frames, '__len__'):
-            frame_iter = eta(frames, title='rp.r._write_video_via_imageio_ffmpeg')
+            frame_iter = eta(frames, title='rp.r._write_video_via_imageio_ffmpeg', file=sys.stderr)
+        frame_iter = iter(frame_iter)
+        first = next(frame_iter, None)
+        if first is None:
+            raise ValueError('save_video: video must contain at least one frame')
+        if isinstance(first, str):
+            first = load_image(first)
+        height = get_image_height(first) if height is None else height
+        width = get_image_width(first) if width is None else width
+        height, width = _round_dimensions_to_even(height, width)
 
-        for frame in frame_iter:
-            if isinstance(frame, str):
-                frame = load_image(frame)
+        #Use the same bundled executable and arguments, but check the encoder's final exit status.
+        #write_frames() only waits on close and can silently accept a nonempty truncated file.
+        command = [get_ffmpeg_exe(), '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
+                   '-s', '%dx%d' % (width, height), '-pix_fmt', pix_fmt_in,
+                   '-r', '%.02f' % framerate, '-i', '-', '-an',
+                   '-vcodec', vcodec, '-pix_fmt', pix_fmt_out,
+                   '-v', 'warning' if show_progress else 'error'] + params + ['pipe:1' if fragmented else target]
+        process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE if fragmented else None, bufsize=0)
+        join_output = _copy_stdout_in_background(process, target) if fragmented else None
+        try:
+            for frame in itertools.chain((first,), frame_iter):
+                if isinstance(frame, str):
+                    frame = load_image(frame)
+                frame = _prepare_video_frame_for_encoding(frame, height, width, mode=mode, scale_max=scale_max)
+                _FileDestination.write_all(process.stdin, frame.tobytes())
+            process.stdin.close()
+            returncode = process.wait()
+            if returncode:
+                raise subprocess.CalledProcessError(returncode, command)
+        except BrokenPipeError as error:
+            returncode = process.wait()
+            if returncode:
+                raise subprocess.CalledProcessError(returncode, command) from error
+            raise
+        finally:
+            process.stdin.close()
+            if process.poll() is None:
+                process.terminate()
+            process.wait()
+            if join_output:
+                join_output()
 
-            if gen is None:
-                h = get_image_height(frame) if height is None else height
-                w = get_image_width(frame)  if width  is None else width
-                h, w = _round_dimensions_to_even(h, w)
-
-                gen = write_frames(
-                    path,
-                    size=(w, h),
-                    pix_fmt_in=pix_fmt_in,
-                    pix_fmt_out=pix_fmt_out,
-                    fps=framerate,
-                    codec=vcodec,
-                    macro_block_size=2,
-                    ffmpeg_log_level=log_level,
-                    output_params=params,
-                )
-                gen.send(None)
-
-                height = h
-                width  = w
-
-            frame = _prepare_video_frame_for_encoding(frame, height, width, mode=mode, scale_max=scale_max)
-            gen.send(frame.tobytes())
-    finally:
-        if gen is not None:
-            gen.close()
-
-    return path
+    return _FileDestination.completed(path)
 
 def _write_video_via_av(
     frames,
@@ -48097,7 +50574,8 @@ def _write_video_via_av(
     width=None,
     show_progress=True,
     alpha=False,
-    pix_fmt='yuv420p'
+    pix_fmt='yuv420p',
+    fragmented=False
 ):
     """
     Command. Write video frames via PyAV (direct ffmpeg library bindings).
@@ -48109,7 +50587,8 @@ def _write_video_via_av(
 
     Args:
         frames:              Iterable of images (numpy arrays or file path strings)
-        path (str):          Output file path (should already be normalized)
+                             RGB/RGBA images; for example (4, 48, 64, 3) uint8 frames.
+        path:                Normalized local path, S3 URI or writable binary handle.
         framerate (int):     Video framerate in fps
         codec (str):         User-friendly name ('h264', 'h265', 'vp9', etc.)
                              or raw ffmpeg codec string ('libx264', 'libvpx-vp9')
@@ -48122,13 +50601,16 @@ def _write_video_via_av(
         show_progress (bool): Show eta progress bar
         alpha (bool):        If True, encode RGBA. If False, RGB.
         pix_fmt (str):       ffmpeg pixel format string (default 'yuv420p').
+        fragmented (bool):   Write fragmented MP4: the index first, then self-contained fragments, so a
+                             non-seekable destination such as a pipe receives playable bytes while encoding.
 
     Returns:
-        str: Path to the saved video file
+        str or file object: Saved path/URI or the original writable handle.
 
     Examples:
         >>> # _write_video_via_av(frames, '/tmp/out.mp4',
         ... #     framerate=30, codec='h264', video_bitrate=10000000)
+        >>> # Returns '/tmp/out.mp4'.
     """
     pip_import('av')
     import av
@@ -48161,25 +50643,24 @@ def _write_video_via_av(
                 options[key] = ''
                 i += 1
 
-    container = None
-    stream = None
+    if fragmented:
+        options.setdefault('g', str(round(framerate))) #A keyframe each second, so each fragment holds about a second
+    with _FileDestination.opened(path, ('path', 'file_object'), suffix='.mp4', seekable=not fragmented) as target:
+        container = None
+        try:
+            frame_iter = frames
+            if show_progress and hasattr(frames, '__len__'):
+                frame_iter = eta(frames, title='rp.r._write_video_via_av', file=sys.stderr)
 
-    try:
-        frame_iter = frames
-        if show_progress and hasattr(frames, '__len__'):
-            frame_iter = eta(frames, title='rp.r._write_video_via_av')
+            for frame in frame_iter:
+                if isinstance(frame, str):
+                    frame = load_image(frame)
 
-        for frame in frame_iter:
-            if isinstance(frame, str):
-                frame = load_image(frame)
-
-            if container is None:
-                h = get_image_height(frame) if height is None else height
-                w = get_image_width(frame)  if width  is None else width
-                h, w = _round_dimensions_to_even(h, w)
-
-                try:
-                    container = av.open(path, mode='w')
+                if container is None:
+                    h = get_image_height(frame) if height is None else height
+                    w = get_image_width(frame)  if width  is None else width
+                    h, w = _round_dimensions_to_even(h, w)
+                    container = av.open(target, mode='w', format='mp4', options={'movflags': _FRAGMENTED_MP4_MOVFLAGS} if fragmented else {})
                     stream = container.add_stream(vcodec, rate=framerate)
                     stream.width = w
                     stream.height = h
@@ -48187,34 +50668,25 @@ def _write_video_via_av(
                     stream.options = options
                     if video_bitrate is not None and 'crf' not in options:
                         stream.bit_rate = video_bitrate
-                except Exception as e:
-                    # Clean up container if stream creation failed
-                    if container is not None:
-                        container.close()
-                        container = None
-                    raise RuntimeError(
-                        "Failed to initialize encoder: vcodec=%r, pix_fmt=%r, "
-                        "codec=%r. %s. "
-                        "Try backend='imageio' or a different codec "
-                        "(e.g. codec='h265') for this pix_fmt."
-                        % (vcodec, fmt_out, codec, e)
-                    ) from e
+                    height = h
+                    width = w
 
-                height = h
-                width  = w
+                frame = _prepare_video_frame_for_encoding(frame, height, width, mode=mode, scale_max=scale_max)
+                video_frame = av.VideoFrame.from_ndarray(frame, format=fmt_in)
+                for packet in stream.encode(video_frame):
+                    container.mux(packet)
 
-            frame = _prepare_video_frame_for_encoding(frame, height, width, mode=mode, scale_max=scale_max)
-            video_frame = av.VideoFrame.from_ndarray(frame, format=fmt_in)
-            for packet in stream.encode(video_frame):
-                container.mux(packet)
-    finally:
-        if container is not None and stream is not None:
+            if container is None:
+                raise ValueError('save_video_mp4: video must contain at least one frame')
             # Flush encoder
             for packet in stream.encode():
                 container.mux(packet)
-            container.close()
+        finally:
+            if container is not None:
+                # Clean up container if stream creation failed
+                container.close()
 
-    return path
+    return _FileDestination.completed(path)
 
 _save_video_mp4_default_backend = 'auto'
 
@@ -48246,6 +50718,64 @@ def set_save_video_mp4_default_backend(backend):
     global _save_video_mp4_default_backend
     _save_video_mp4_default_backend = backend
 
+def _write_video_via_ffmpeg_python(frames, path, *, framerate, video_bitrate, height, width, show_progress, codec, crf, pix_fmt, fragmented=False):
+    """
+    Command. Writes frames to an mp4 with VideoWriterMP4, which drives the system ffmpeg through ffmpeg-python.
+    Backend of save_video_mp4; sits beside _write_video_via_av and _write_video_via_imageio_ffmpeg.
+    Stages destinations that the system ffmpeg requires as a local path.
+
+    Args:
+        frames: Iterable of images (any rp image type); a sized list of images sets height/width to the max frame size
+            RGB/RGBA images, for example (4, 48, 64, 3) uint8.
+        path: Output path, S3 URI or writable binary handle; None generates a filename.
+        framerate, video_bitrate, height, width, show_progress, codec, crf, pix_fmt, fragmented: As in save_video_mp4
+
+    Returns:
+        str or file object: Saved path/URI or the original writable handle.
+
+    Examples:
+        >>> # save_video_mp4(frames, 'out.mp4', backend='ffmpeg', show_progress=False)
+        >>> # Returns the absolute path to out.mp4 through this backend.
+    """
+    path = _normalize_video_output_path(path, 'mp4')
+    with _FileDestination.opened(path, ('file_object',) if fragmented else ('path',), suffix='.mp4') as target:
+        height = None if height is None else height
+        width  = None if width  is None else width
+
+        if hasattr(frames,'__len__') and not isinstance(frames, str) and all(map(is_image, frames)):
+            # If we're not fed a generator without a predefined number of frames,
+            # Calculate the max height and width in the video and use that to be the height and width
+            max_height, max_width = get_max_image_dimensions(frames)
+            if height is None: height=max_height
+            if width  is None: width =max_width
+
+        # YES, this is faster, but it also means more memory...probably not the best thing to do right?
+        # #Speed improvement - batch-convert to uint8
+        # if is_numpy_array(frames) or isinstance(frames, list) or is_torch_tensor(frames):
+        #     frames = as_numpy_images(frames, copy=False)
+        #     frames = as_byte_images(frames, copy=False)
+        #     frames = as_rgb_images(frames, copy=False)
+
+        writer = VideoWriterMP4(target, framerate, video_bitrate=video_bitrate, height=height, width=width, show_progress=show_progress, codec=codec, crf=crf, pix_fmt=pix_fmt, fragmented=fragmented)
+
+        try:
+            for frame in frames:
+                writer.write_frame(frame)
+        finally:
+            if writer.started:
+                original_error = sys.exc_info()[1]
+                try:
+                    writer.finish()
+                except BaseException as cleanup_error:
+                    if original_error is not None:
+                        raise original_error from cleanup_error
+                    raise
+
+        if not writer.started:
+            raise ValueError('save_video_mp4: video must contain at least one frame')
+
+    return _FileDestination.completed(path)
+
 def save_video_mp4(
     frames,
     path=None,
@@ -48258,10 +50788,13 @@ def save_video_mp4(
     backend=None,
     codec="h264",
     crf=None,
-    pix_fmt='yuv420p'
+    pix_fmt='yuv420p',
+    fragmented=False
 ):
     """
     Command, specific. Save video frames to an MP4 file.
+    Accepts (T, H, W, 3 or 4) RGB/RGBA video frames and writable destinations.
+    For example, (4, 48, 64, 3) uint8 RGB frames become an encoded MP4 byte stream.
 
     frames: a list of images as defined by rp.is_image(). Saves an .mp4 file at the path
         - frames can also contain strings, if those strings are image file paths
@@ -48270,7 +50803,7 @@ def save_video_mp4(
     This can let you save larger videos that would otherwise make your computer run out of memory.
 
     frames: the video
-    path: the path to save the video to. Defaults to 'video.mp4'
+    path: local path, S3 URI or writable binary handle. None generates a 'video.mp4' filename.
     video_bitrate: controls the quality of the output. If your backend is opencv, this parameter has no effect!
     height, width: If frames have various sizes, and are given as a generator, use this to set the height and width or else it will use the first frame's height and width
     show_progress: Whether to show the saving progress
@@ -48320,6 +50853,22 @@ def save_video_mp4(
         outside [0, 1] are clamped. To load back with full precision, use
         load_video() which auto-detects bit depth and returns the appropriate
         float dtype.
+    fragmented: If True, write fragmented MP4 so the output can stream: a pipe or socket receives playable
+        bytes while frames are still being encoded. Works with the 'av', 'imageio' and 'ffmpeg' backends, not 'cv2'.
+
+    Returns:
+        str or file object: Absolute local path, S3 URI or the original writable handle.
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> output = io.BytesIO()
+        >>> frames = [uniform_byte_color_image(48, 64, 'red')] * 4
+        >>> save_video_mp4(frames, output, show_progress=False) is output
+        ans = True
+        >>> output.getvalue()[4:8]
+        ans = b'ftyp'
+        >>> save_video_mp4(frames, bytes, show_progress=False)[4:8]
+        ans = b'ftyp'
 
     EXAMPLE BITRATES (used for the Sunkist soda example):
      10^5: 100000    : ( 345KB) is decent, and very compressed. It starts out a bit mushy though
@@ -48329,6 +50878,8 @@ def save_video_mp4(
      10^9: 1000000000: (93.0MB) It seems to be the maximum size
     """
 
+    if not is_number(framerate) or not math.isfinite(framerate) or framerate <= 0:
+        raise ValueError('save_video_mp4: framerate must be a positive finite number')
     if backend is None:
         backend = _save_video_mp4_default_backend
 
@@ -48357,6 +50908,7 @@ def save_video_mp4(
     assert backend in ('imageio', 'av', 'ffmpeg', 'cv2'), (
         "Unknown backend %r. Choose from: 'auto', 'imageio', 'av', 'ffmpeg', 'cv2'" % backend
     )
+    assert not (fragmented and backend == 'cv2'), "save_video_mp4: fragmented=True is not supported by backend='cv2'; use 'av', 'imageio' or 'ffmpeg'"
 
     #Make frames specifiable as a glob, folder path, list of images, or list of image paths
     if isinstance(frames, str):
@@ -48397,39 +50949,18 @@ def save_video_mp4(
             width=width,
             show_progress=show_progress,
             pix_fmt=pix_fmt,
+            fragmented=fragmented,
         )
 
-    height = None if height is None else height
-    width  = None if width  is None else width
-
-    if hasattr(frames,'__len__') and not isinstance(frames, str) and all(map(is_image, frames)):
-        # If we're not fed a generator without a predefined number of frames,
-        # Calculate the max height and width in the video and use that to be the height and width
-        max_height, max_width = get_max_image_dimensions(frames)
-        if height is None: height=max_height
-        if width  is None: width =max_width
-
-    # YES, this is faster, but it also means more memory...probably not the best thing to do right?
-    # #Speed improvement - batch-convert to uint8
-    # if is_numpy_array(frames) or isinstance(frames, list) or is_torch_tensor(frames):
-    #     frames = as_numpy_images(frames, copy=False)
-    #     frames = as_byte_images(frames, copy=False)
-    #     frames = as_rgb_images(frames, copy=False)
-
-    writer = VideoWriterMP4(path, framerate, video_bitrate=video_bitrate, height=height, width=width, show_progress=show_progress, codec=codec, crf=crf, pix_fmt=pix_fmt)
-
-    try:
-        for frame in frames:
-            writer.write_frame(frame)
-    finally:
-        writer.finish()
-
-    return writer.path
+    #Only backend=='ffmpeg' reaches here (see the assert above)
+    return _write_video_via_ffmpeg_python(frames, path, framerate=framerate, video_bitrate=video_bitrate, height=height, width=width, show_progress=show_progress, codec=codec, crf=crf, pix_fmt=pix_fmt, fragmented=fragmented)
 
 
 def save_video_webm(frames, path=None, framerate=60, *, video_quality='high', height=None, width=None, show_progress=True, pix_fmt='yuva420p'):
     """
     Save video frames to WebM format with alpha channel support using VP9 codec.
+
+    Command. Save (T, H, W, 3 or 4) RGB/RGBA frames at a writable destination.
 
     Uses imageio-ffmpeg with libvpx-vp9 codec and yuva420p pixel format to preserve
     transparency in video frames. This is the recommended format for saving videos
@@ -48439,7 +50970,7 @@ def save_video_webm(frames, path=None, framerate=60, *, video_quality='high', he
         frames: List of images as defined by rp.is_image(), or numpy array video
                 Supports RGBA images - alpha channel will be preserved
                 Can also be a generator for memory-efficient saving
-        path: Output file path (defaults to auto-generated 'video.webm')
+        path: Output path, S3 URI or writable binary handle (None generates 'video.webm')
               Adds .webm extension if not present
         framerate: Video framerate in fps (default: 60)
         video_quality: Quality setting for VP9 codec (default: 'high')
@@ -48458,7 +50989,7 @@ def save_video_webm(frames, path=None, framerate=60, *, video_quality='high', he
               yuv420p        8-bit  4:2:0  (no alpha)
 
     Returns:
-        str: Absolute path to the saved WebM file
+        str or file object: Absolute local path, S3 URI or the original handle.
 
     EXAMPLE (with alpha channel):
         >>> frames = [random_image(100, 100, mode='rgba') for _ in range(30)]
@@ -48470,11 +51001,24 @@ def save_video_webm(frames, path=None, framerate=60, *, video_quality='high', he
         ... save_video_webm(video, 'low_quality.webm', video_quality='low')
         ... save_video_webm(video, 'high_quality.webm', video_quality='high')
 
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> output = io.BytesIO()
+        >>> frames = [uniform_byte_color_image(48, 64, 'red')] * 4
+        >>> save_video_webm(frames, output, show_progress=False) is output
+        ans = True
+        >>> output.getvalue()[:4]
+        ans = b'\\x1aE\\xdf\\xa3'
+        >>> save_video_webm(frames, bytes, show_progress=False)[:4]
+        ans = b'\\x1aE\\xdf\\xa3'
+
     See Also:
         - save_video_mp4: For videos without alpha (smaller files)
         - save_animated_webp: For animated WebP with alpha
         - save_video_gif: For animated GIFs
     """
+    if not is_number(framerate) or not math.isfinite(framerate) or framerate <= 0:
+        raise ValueError('save_video_webm: framerate must be a positive finite number')
     path = _normalize_video_output_path(path, 'webm')
 
     # Convert quality parameter to CRF value (0-63, lower is better)
@@ -48509,6 +51053,7 @@ def save_video_webm(frames, path=None, framerate=60, *, video_quality='high', he
         show_progress=show_progress,
         alpha=alpha,
         pix_fmt=pix_fmt,
+        filetype='webm',
     )
 
 
@@ -48518,39 +51063,67 @@ save_animated_webm = save_video_webm
 def save_video_gif_via_pil(video, path=None, *, framerate=30):
     """
     Save a video to a GIF with given path and framerate.
-    Returns the path of the new GIF.
+    Returns the path of the new GIF, or the original writable handle.
+
+    Command. Encode (T, H, W, 3 or 4) RGB/RGBA frames as an animated GIF.
+
+    Args:
+        video: Images, for example (4, 48, 64, 3) uint8 RGB, or an input video path.
+        path: Output path, S3 URI or writable binary handle; None generates a filename.
+        framerate: Frames per second, rounded to GIF's supported frame timing.
+
+    Returns:
+        str or file object: Absolute local path, S3 URI or the original handle.
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> output = io.BytesIO()
+        >>> save_video_gif([uniform_byte_color_image(48, 64, 'red')] * 4, output) is output
+        ans = True
+        >>> output.getvalue()[:6]
+        ans = b'GIF89a'
+        >>> save_video_gif([uniform_byte_color_image(48, 64, 'red')] * 4, bytes)[:6]
+        ans = b'GIF89a'
 
     TODO: Support higher quality dithering via adapting VideoWriterMP4 and convert_to_gif_via_ffmpeg together somehow
     """
+
+    if path is None:
+        path = get_unique_copy_path('video.gif')
+    path = _FileDestination.canonicalize(path)
+    if isinstance(path, io.TextIOBase):
+        raise TypeError('save_video_gif: binary output requires a binary handle, such as sys.stdout.buffer')
+    if not is_number(framerate) or not math.isfinite(framerate) or framerate <= 0:
+        raise ValueError('save_video_gif: framerate must be a positive finite number')
+    if isinstance(path, str):
+        path = with_file_extension(path, 'gif')
 
     if isinstance(video, str):
         assert is_video_file(video) or ends_with_any(video, '.gif', '.png')
         video=load_video_stream(video)
 
-    if path is None:
-        path = get_unique_copy_path('video.gif')
-    path = with_file_extension(path ,'gif')
-
     # Number of millis between frames
     frame_duration_millis = round(1 / framerate * 1000)
 
     frames = map(as_pil_image, video)
-    frame_one = next(frames)
+    frame_one = next(frames, None)
+    if frame_one is None:
+        raise ValueError('save_video_gif: video must contain at least one frame')
 
-    rp.make_directory(rp.get_path_parent(path))
+    if _FileDestination.is_path(path):
+        rp.make_directory(rp.get_path_parent(path))
+        path = get_absolute_path(path)
+    with _FileDestination.opened(path, ('path', 'file_object'), suffix='.gif') as target:
+        frame_one.save(
+            target,
+            format="GIF",
+            append_images=frames,
+            save_all=True,
+            duration=frame_duration_millis,
+            loop=0,
+        )
 
-    frame_one.save(
-        path,
-        format="GIF",
-        append_images=frames,
-        save_all=True,
-        duration=frame_duration_millis,
-        loop=0,
-    )
-
-    path = get_absolute_path(path)
-
-    return path
+    return _FileDestination.completed(path)
 
 save_animated_gif = save_video_gif = save_animated_gif_via_pil = save_video_gif_via_pil
 
@@ -48716,61 +51289,70 @@ def convert_to_gifs_via_ffmpeg(
         num_threads=num_threads,
     )
 
-def save_video(images, path, *, framerate=60):
+def save_video(images, path, *, framerate=60, filetype=None):
     """
-    #TODO: add options for sound and framerate. Possibly quality options but probably not (that should be delegated to a function meant for a specific format)
+    #TODO: add options for sound. Possibly quality options but probably not (that should be delegated to a function meant for a specific format)
     #Save a series of images into a video.
     #Note that the file extension used in path decides the kind of video that will be exported.
     #For example, save_video(images,'video.mp4') saves an mp4 file whilst save_video(images,'video.avi') saves an avi file
     #Use save_video(images,'video.webm') for videos with alpha channels (transparency)
+
+    Command. Encode (T, H, W, 3 or 4) RGB/RGBA images as the selected video format.
+
+    Args:
+        images: Iterable of frames, for example (4, 48, 64, 3) uint8 RGB.
+        path: Local path, S3 URI or writable binary handle.
+        framerate: Frames per second.
+        filetype: mp4, avi, gif, png, webp or webm, optionally prefixed with a dot.
+            Inferred from a named destination; required for an unnamed handle.
+
+    Returns:
+        str or file object: Saved path/URI or the original writable handle.
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> output = io.BytesIO()
+        >>> frames = [uniform_byte_color_image(48, 64, 'red')] * 4
+        >>> save_video(frames, output, filetype='mp4') is output
+        ans = True
+        >>> output.getvalue()[4:8]
+        ans = b'ftyp'
+        >>> save_video(frames, bytes, filetype='mp4')[4:8]
+        ans = b'ftyp'
     """
     assert not isinstance(images, str), 'The first argument should be the sequence of video frames, not the path!'
-
-    assert get_file_extension(path) in 'mp4 avi gif png webp webm'.split(), 'This function currently supports .mp4, .avi, .png, .webp, .webm and .gif files'
-
-    if path.endswith('.mp4') : return save_video_mp4(images,path,framerate=framerate, show_progress=False)
-    if path.endswith('.avi') : return save_video_avi(images,path,framerate=framerate)
-    if path.endswith('.png') : return save_video_png(images,path,framerate=framerate)
-    if path.endswith('.gif') : return save_video_gif(images,path,framerate=framerate)
-    if path.endswith('.webp'): return save_video_webp(images,path,framerate=framerate)
-    if path.endswith('.webm'): return save_video_webm(images,path,framerate=framerate)
-
-
-    assert False, 'Below this line mightn not work. Until further notice, please specify .avi or .mp4 in the path argument'
-
-
-
-    if not has_file_extension(path):
-        try:
-            return save_video_mp4(path,images)
-            return save_video_avi(images,path,framerate=framerate)
-        except Exception:
-            pass #No big deal, we'll try sk-video. Although, that's more annoying because it means we need FFMPEG instead of just needing OpenCV
-
-
-    #Make sure all frames have ranges between 0 and 255, and that they're RGB. Otherwise we might get weird results when we save the video
-    images=[as_byte_image(as_rgb_image(frame)) for frame in images]
-
-    pip_import('skvideo.io','sk-video')
-    import skvideo.io#pip install sk-video:
-    #NOTE: Quicktime on my mac can't play these. Idk why. But the video outputs are NOT broken. VLC video player CAN play them without error.
-    skvideo.io.vwrite(path,images,inputdict={'-r':str(framerate)})
-    return path
+    path = _FileDestination.canonicalize(path)
+    filetype = _FileDestination.filetype(path, explicit=filetype)
+    if filetype == 'mp4' : return save_video_mp4 (images,path,framerate=framerate,show_progress=False)
+    if filetype == 'avi' : return save_video_avi (images,path,framerate=framerate)
+    if filetype == 'png' : return save_video_png (images,path,framerate=framerate)
+    if filetype == 'gif' : return save_video_gif (images,path,framerate=framerate)
+    if filetype == 'webp': return save_video_webp(images,path,framerate=framerate)
+    if filetype == 'webm': return save_video_webm(images,path,framerate=framerate)
+    raise ValueError('save_video: supported filetypes are mp4, avi, png, webp, webm and gif')
 
 
 def encode_video_to_bytes(video,filetype:str='.mp4',framerate=60):
-    """Encode video to bytes without saving to disk.
-    See also: decode_video_from_bytes"""
-    video_file=temporary_file_path(filetype)
-    
-    try:
-        save_video(video,video_file,framerate=framerate)
-        return file_to_bytes(video_file)
-    except:
-        raise
-    finally:
-        if file_exists(video_file):
-            delete_file(video_file)
+    """
+    Encode video to bytes.
+    See also: decode_video_from_bytes
+
+    Command. Encode (T, H, W, 3 or 4) video to bytes; path-only backends use a temporary file.
+
+    Args:
+        video: Images, for example (4, 48, 64, 3) uint8 RGB frames.
+        filetype: Encoded format, such as '.mp4' or 'gif'.
+        framerate: Frames per second.
+
+    Returns:
+        bytes: Encoded video. See also decode_video_from_bytes.
+
+    EXAMPLE:
+        >>> encoded = encode_video_to_bytes([uniform_byte_color_image(48, 64, 'red')] * 4)
+        >>> encoded[4:8]
+        ans = b'ftyp'
+    """
+    return save_video(video, bytes, framerate=framerate, filetype=filetype)
 
 def decode_video_from_bytes(encoded_video:bytes, filetype:str='.avi'):
     """Decode bytes back to video array.
@@ -53903,6 +56485,165 @@ def load_text_from_google_doc(url):
 #
 #     raise ValueError("Not a valid Google Drive URL or could not extract file ID from: {}".format(url))
 
+def _download_url_via_aws_cli(url, dst_path, *, show_progress, timeout):
+    """
+    Command. Downloads an s3:// url to dst_path with the AWS CLI. Backend of download_url.
+    Moved verbatim out of download_url; untested in isolation (needs the aws CLI and credentials).
+
+    Args:
+        url (str): s3://bucket/key
+        dst_path (str): Destination file path
+        show_progress (bool): When False the CLI runs with --quiet
+        timeout (int|float|None): CLI connect and read timeout in seconds
+
+    Returns:
+        str: dst_path
+    """
+    import subprocess
+
+    try:
+        aws_args = ['aws', 's3', 'cp', url, dst_path]
+        if not show_progress:
+            aws_args+=['--quiet']
+        if timeout:
+            aws_args.extend(['--cli-connect-timeout', str(timeout)]) # Add timeout for s3 cli
+            aws_args.extend(['--cli-read-timeout', str(timeout)]) # Add timeout for s3 cli
+        subprocess.check_call(aws_args)
+    except subprocess.TimeoutExpired:
+        raise TimeoutError("rp.download_url timed out downloading s3 url %s to path %s"%(url,dst_path))  # Removed after {timeout} seconds as timeout is optional
+    except subprocess.CalledProcessError as e:
+        raise Exception("rp.download_url failed to download s3 url %s to path %s: "%(url,dst_path) + str(e))
+
+    return dst_path
+
+def _download_url_via_gsutil(url, dst_path, *, show_progress, timeout):
+    """
+    Command. Downloads a gs:// url to dst_path with gsutil. Backend of download_url.
+    Moved verbatim out of download_url; untested in isolation (needs gsutil and credentials).
+
+    Args:
+        url (str): gs://bucket/key
+        dst_path (str): Destination file path
+        show_progress (bool): When False gsutil's stderr is silenced
+        timeout (int|float|None): Whole-command timeout in seconds, via the `timeout` command
+
+    Returns:
+        str: dst_path
+    """
+    import subprocess
+
+    try:
+        kwargs = dict()
+        gs_args = ['gsutil', 'cp', '-r', url, dst_path]
+        if timeout:
+            gs_args = ['timeout', str(timeout)] + gs_args
+        if not show_progress:
+            kwargs.update(dict(stderr=subprocess.DEVNULL))
+        subprocess.check_call(gs_args,**kwargs)
+    except subprocess.TimeoutExpired:
+        raise TimeoutError("rp.download_url timed out downloading Google Cloud Storage url %s to path %s"%(url,dst_path))
+    except subprocess.CalledProcessError as e:
+        raise Exception("rp.download_url failed to download Google Cloud Storage url %s to path %s: "%(url,dst_path) + str(e))
+
+    return dst_path
+
+def _download_url_via_fileutil(url, dst_path, *, show_progress, timeout):
+    """
+    Command. Downloads a /cns/ path to dst_path with Google's internal fileutil. Backend of download_url.
+    Moved verbatim out of download_url; untested in isolation (needs an internal Google machine).
+
+    Args:
+        url (str): /cns/... path on Colossus
+        dst_path (str): Destination file path
+        show_progress (bool): When False fileutil's stderr is silenced
+        timeout (int|float|None): Aspirational fileutil deadline; the command is killed at 2x that
+
+    Returns:
+        str: dst_path
+    """
+    import subprocess
+
+    try:
+        kwargs = dict()
+        fileutil_args = ['fileutil', 'cp', '--R', '--f']
+        if timeout:
+            fileutil_args+=['--fileutil_timeout',str(timeout)] #Not a guarantee - in the doc it says its aspirational
+            fileutil_args = ['timeout', str(timeout*2)] + fileutil_args #So we kill it if it takes 2x as long as the deadline
+        fileutil_args+=[url,dst_path]
+        if not show_progress:
+            kwargs.update(dict(stderr=subprocess.DEVNULL))
+        subprocess.check_call(fileutil_args,**kwargs)
+    except subprocess.TimeoutExpired:
+        raise TimeoutError("rp.download_url timed out downloading Google Colossus url %s to path %s"%(url,dst_path))
+    except subprocess.CalledProcessError as e:
+        raise Exception("rp.download_url failed to download Google Colossus url %s to path %s: "%(url,dst_path) + str(e))
+
+    return dst_path
+
+def _download_url_via_gdown(url, dst_path, *, show_progress):
+    """
+    Command. Downloads a Google Drive url with gdown. Backend of download_url.
+    Moved verbatim out of download_url; untested in isolation (needs network access to Drive).
+
+    Args:
+        url (str): A drive.google.com or docs.google.com url
+        dst_path (str): Destination file path, or a folder path ending in "/" to let gdown pick the file name
+        show_progress (bool): gdown's own progress output
+
+    Returns:
+        str: The path gdown wrote to
+
+    EXAMPLE:
+        >>> download_url('https://docs.google.com/document/d/1LEYMqILsRe0EajUlpC-V_xZ9AcWlkRUKM2poCjP5Ixs/edit?usp=drive_link')
+        ans = ./My actual resume.docx
+    """
+    pip_import('gdown')
+    import gdown
+
+    return gdown.download(url=url, output=dst_path, fuzzy=True, quiet=not show_progress)
+
+def _download_url_via_requests(url, dst_path, *, show_progress, timeout):
+    """
+    Command. Downloads an http(s) url to dst_path with requests, streaming 1MB chunks. Backend of download_url.
+    Moved verbatim out of download_url.
+
+    Args:
+        url (str): http:// or https:// url
+        dst_path (str): Destination file path
+        show_progress (bool): Shows an rp.eta byte counter
+        timeout (int|float|None): Request timeout in seconds
+
+    Returns:
+        str: dst_path
+    """
+    pip_import('requests')
+    import requests
+
+    try:
+        request_kwargs = {'stream': True}
+        if timeout:
+            request_kwargs['timeout'] = timeout
+        response = requests.get(url, **request_kwargs)
+        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+    except requests.exceptions.Timeout:
+        raise TimeoutError("rp.download_url timed out downloading url {}".format(url)) # Removed after {timeout} seconds as timeout is optional
+    except requests.exceptions.RequestException as e:
+         raise Exception("rp.download_url failed to download url {}: {}".format(url, e))
+
+    # We count decoded bytes, so content-length is only the total when the body isn't compressed on the wire. Otherwise the total is unknown.
+    knows_total = 'content-length' in response.headers and 'content-encoding' not in response.headers
+    total_size = int(response.headers['content-length']) if knows_total else None
+    chunk_size = 1024**2  # 1 MB per iteration
+    if show_progress:
+        show_eta = _eta_bytes(total_size, title="Download", completion_verb="Downloaded")
+    with open(dst_path, 'wb') as file:
+        for data in response.iter_content(chunk_size):
+            file.write(data)
+            if show_progress:
+                show_eta(file.tell())
+
+    return dst_path
+
 def download_url(url, path=None, *, skip_existing=False, show_progress=False, timeout=None):
     """
     Download files from URLs with multi-protocol support and automatic path handling.
@@ -53921,7 +56662,7 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
         url (str): URL to download. Supports HTTP/HTTPS, s3://, gs://, /cns/, and YouTube video URLs.
         path (str|None): Destination path. If None, uses URL filename in current directory. If directory, downloads into it with URL filename.
         skip_existing (bool): Skip download if file already exists at path. Defaults to False.
-        show_progress (bool): Show download progress bar using tqdm. Defaults to False.  
+        show_progress (bool): Show download progress bar. Defaults to False.  
         timeout (int|float|None): Request timeout in seconds. Applied to HTTP requests, S3/GCS CLI calls.
     
     Returns:
@@ -53988,116 +56729,28 @@ def download_url(url, path=None, *, skip_existing=False, show_progress=False, ti
         return dst_path
 
     if is_s3_url(url):
-        import subprocess
+        return _download_url_via_aws_cli(url, dst_path, show_progress=show_progress, timeout=timeout)
 
-        try:
-            aws_args = ['aws', 's3', 'cp', url, dst_path] 
-            if not show_progress:
-                aws_args+=['--quiet']
-            if timeout:
-                aws_args.extend(['--cli-connect-timeout', str(timeout)]) # Add timeout for s3 cli
-                aws_args.extend(['--cli-read-timeout', str(timeout)]) # Add timeout for s3 cli
-            subprocess.check_call(aws_args)
-        except subprocess.TimeoutExpired:
-            raise TimeoutError("rp.download_url timed out downloading s3 url %s to path %s"%(url,dst_path))  # Removed after {timeout} seconds as timeout is optional
-        except subprocess.CalledProcessError as e:
-            raise Exception("rp.download_url failed to download s3 url %s to path %s: "%(url,dst_path) + str(e))
-
-        return dst_path
-    
     elif is_gs_url(url):
+        return _download_url_via_gsutil(url, dst_path, show_progress=show_progress, timeout=timeout)
 
-        import subprocess
-
-        try:
-            kwargs = dict()
-            gs_args = ['gsutil', 'cp', '-r', url, dst_path]
-            if timeout:
-                gs_args = ['timeout', str(timeout)] + gs_args
-            if not show_progress:
-                kwargs.update(dict(stderr=subprocess.DEVNULL))
-            subprocess.check_call(gs_args,**kwargs)
-        except subprocess.TimeoutExpired:
-            raise TimeoutError("rp.download_url timed out downloading Google Cloud Storage url %s to path %s"%(url,dst_path))
-        except subprocess.CalledProcessError as e:
-            raise Exception("rp.download_url failed to download Google Cloud Storage url %s to path %s: "%(url,dst_path) + str(e))
-
-        return dst_path
-    
     elif url.startswith('/cns/') and system_command_exists('fileutil', use_cache=True) and not folder_exists('/cns'):
         #We're on an internal Google computer and want to download a file from colossus
-
-        import subprocess
-
-        try:
-            kwargs = dict()
-            fileutil_args = ['fileutil', 'cp', '--R', '--f']
-            if timeout:
-                fileutil_args+=['--fileutil_timeout',str(timeout)] #Not a guarantee - in the doc it says its aspirational
-                fileutil_args = ['timeout', str(timeout*2)] + fileutil_args #So we kill it if it takes 2x as long as the deadline
-            fileutil_args+=[url,dst_path]
-            if not show_progress:
-                kwargs.update(dict(stderr=subprocess.DEVNULL))
-            subprocess.check_call(fileutil_args,**kwargs)
-        except subprocess.TimeoutExpired:
-            raise TimeoutError("rp.download_url timed out downloading Google Colossus url %s to path %s"%(url,dst_path))
-        except subprocess.CalledProcessError as e:
-            raise Exception("rp.download_url failed to download Google Colossus url %s to path %s: "%(url,dst_path) + str(e))
-
-        return dst_path
+        return _download_url_via_fileutil(url, dst_path, show_progress=show_progress, timeout=timeout)
 
     elif is_google_drive_url(url):
-        #EXAMPLE:
-        #    >>> download_url('https://docs.google.com/document/d/1LEYMqILsRe0EajUlpC-V_xZ9AcWlkRUKM2poCjP5Ixs/edit?usp=drive_link')
-        #    ans = ./My actual resume.docx
-
-        pip_import('gdown')
-        import gdown
-
-        if path is None:
-            #We can't use the default dst_path as it would take the file name from the URL which is often junk
-            #It needs to end with "/" to treat it as a folder
-            dst_path = dst_root + "/"
-
-        output_path = gdown.download(url=url, output=dst_path, fuzzy=True, quiet=not show_progress)
-
-        return output_path
+        #gdown chooses the file name itself, so when no path was given hand it the folder (a trailing "/" means folder)
+        return _download_url_via_gdown(url, dst_root + "/" if path is None else dst_path, show_progress=show_progress)
 
     elif _is_youtube_video_url(url):
         return download_youtube_video(url, dst_path, skip_existing=skip_existing, show_progress=show_progress, timeout=timeout) # Pass timeout to youtube download
 
     elif is_valid_url(url):
-        pip_import('requests')
-        import requests
-
-        try:
-            request_kwargs = {'stream': True}
-            if timeout:
-                request_kwargs['timeout'] = timeout
-            response = requests.get(url, **request_kwargs)
-            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
-        except requests.exceptions.Timeout:
-            raise TimeoutError("rp.download_url timed out downloading url {}".format(url)) # Removed after {timeout} seconds as timeout is optional
-        except requests.exceptions.RequestException as e:
-             raise Exception("rp.download_url failed to download url {}: {}".format(url, e))
-
-        total_size = int(response.headers.get('content-length', 0))
-        chunk_size = 1024**2  # 1 MB per iteration
-        with open(dst_path, 'wb') as file:
-            iterator = response.iter_content(chunk_size)
-            
-            if show_progress:
-                pip_import('tqdm')
-                from tqdm import tqdm
-                iterator=tqdm(iterator, total=total_size // chunk_size, unit='MB')
-            
-            for data in iterator:
-                file.write(data)
-
-        return dst_path
+        return _download_url_via_requests(url, dst_path, show_progress=show_progress, timeout=timeout)
 
     else:
         raise ValueError("Invalid URL: "+str(url)[:1000])
+
 
 def download_urls(
     urls,
@@ -54231,14 +56884,25 @@ class TemporarilyDownloadUrl:
             pass
 
 class _MaybeTemporarilyDownloadVideo:
-    def __init__(self, url_or_path:str, ):
-
+    """
+    Context manager. Yields a local path for a video location for the duration of the block: a path as is, a url
+    downloaded to a temp file (YouTube via download_youtube_video), and any other file form (bytes, file object,
+    stream, data uri) spilled to a temp file. Temp files are deleted on exit and a file object's read position is
+    restored. need_path=False yields a file object unchanged, for backends like PyAV that read file objects natively.
+    """
+    def __init__(self, url_or_path, need_path=True):
         self.url_or_path = url_or_path
-
-        if is_valid_url(url_or_path) and not file_exists(url_or_path):
+        self.need_path = need_path
+        if isinstance(url_or_path, str) and is_valid_url(url_or_path) and not file_exists(url_or_path):
             self.temp_path = temporary_file_path(get_file_extension(url_or_path))
 
     def __enter__(self):
+        if not isinstance(self.url_or_path, str):
+            if not self.need_path:
+                return self.url_or_path
+            self.position = self.url_or_path.tell() if hasattr(self.url_or_path, 'tell') else None
+            self.temp_path = _FileFormTranslator.as_path(self.url_or_path) #A spill, removed in __exit__
+            return self.temp_path
         if hasattr(self, 'temp_path'):
             #Download something if we need to
             if _is_youtube_video_url(self.url_or_path):
@@ -54249,20 +56913,22 @@ class _MaybeTemporarilyDownloadVideo:
                     need_audio=False,
                 )
             else:
-                #A regular download
                 out = self.temp_path = download_url(self.url_or_path, self.temp_path)
             assert out==self.temp_path
         else:
-            #Nothing needs to be downloaded
             out=self.url_or_path
         return out
-        
+
     def __exit__(self, *_):
-        if hasattr(self, 'temp_path'):
+        if hasattr(self, 'temp_path') and (isinstance(self.url_or_path, str) or self.temp_path in _FileFormTranslator._spills):
+            #Only what this object created: a url download, or a registered spill. A file object's own on-disk file (its .name) is never removed.
             try:
                 os.remove(self.temp_path)
             except FileNotFoundError:
                 pass
+            _FileFormTranslator._spills.discard(self.temp_path)
+        if getattr(self, 'position', None) is not None:
+            self.url_or_path.seek(self.position)
 
 
 def download_url_to_cache(url, cache_dir=None, skip_existing=True, hash_func=None, show_progress=False, timeout=None):
@@ -55461,17 +58127,16 @@ def strip_python_docstrings(code: str) -> str:
     :param code: A string of Python code.
     :return: A string of Python code with all docstrings removed.
     """
-    # print( 'strip_python_docstrings: I think this function is wrong. ChatGPT screwed up. Please rewrite this function by hand. Reference https://stackoverflow.com/questions/1769332/script-to-remove-python-comments-docstrings to start.')
-    pip_import('astor')
-
     import ast
-    import astor
+
+    def is_docstring(n):
+        return isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str)
 
     tree = ast.parse(code)
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            node.body = [n for n in node.body if not isinstance(n, ast.Expr) or not isinstance(n.value, ast.Str)]
-    return astor.to_source(tree)
+            node.body = [n for n in node.body if not is_docstring(n)] or [ast.Pass()]
+    return ast.unparse(tree)
 
 def strip_python_comments(code:str):
     """
@@ -55824,6 +58489,7 @@ __import__("sys").path.append(__import__("os").getcwd())
 ## Custom command prefix shortcuts
 #__import__('rp').r._add_pterm_prefix_shortcut("fu","!!fileutil")
 #__import__('rp').r._add_pterm_prefix_shortcut("fp",["fansi_print('","','green bold')"])
+__import__('rp').r._add_pterm_prefix_shortcut("cdx","!codex --dangerously-bypass-approvals-and-sandbox -c model_context_window=1050000 -c model_auto_compact_token_limit=900000 -c agents.max_concurrent_threads_per_session=12")
 
 ## Custom pterm commands
 #__import__('rp').r._add_pterm_command_shortcuts('''
@@ -56073,6 +58739,7 @@ _ryan_tmux_conf=r'''
 #   - The history limit is way higher than the default
 #   - Ctrl+S toggles the visibility of the status bar
 #   - Let Control-HJKL (with shift key) resize panes
+#   - Ctrl+W enters divider mode: arrows or hjkl select a divider, Shift+arrows or HJKL move it, Enter keeps it, Escape cancels
 #   - Changing the leader (useful in nested sessions):
 #       - NOTE: To activate this, uncomment the section titled CHANGING THE LEADER
 #       - Alt+a sets the leader to Alt+B 
@@ -56089,6 +58756,19 @@ _ryan_tmux_conf=r'''
 #BASICS:
     set -g mouse on 
 
+    #Double-click a border to name its pane; clear the name to hide it. No automatic titles or buttons.
+    set -g pane-border-status off
+    set -g pane-border-format '#{@pane_name}'
+    #Show title rows only in windows with labels; hook slot 100 is reserved for RP pane labels.
+    set-hook -g after-set-option[100] 'set -wF pane-border-status "#{?#{n:#{P:#{@pane_name}}},top,off}"'
+    set-hook -g window-layout-changed[100] 'set -wF pane-border-status "#{?#{n:#{P:#{@pane_name}}},top,off}"'
+    set-hook -g window-linked[100] 'set -wF pane-border-status "#{?#{n:#{P:#{@pane_name}}},top,off}"'
+    bind -n DoubleClick1Border {
+        select-pane -t =
+        #Window/index avoids prompt substitution of %1 in pane IDs like %1898.
+        command-prompt -F -l -I '#{@pane_name}' -p 'Pane name:' 'set-option -p -t "#{window_id}.#{pane_index}" @pane_name "%%%"'
+    }
+
     set -g history-limit 99999
     
     #Don't let us have weird gaps between window numbers...
@@ -56101,6 +58781,11 @@ _ryan_tmux_conf=r'''
     #Optional: Set the default shell
     set-option -g default-shell /bin/zsh
 
+    #Extended keys: Forwards complex ones like control+enter
+    set -g extended-keys always
+    set -g extended-keys-format csi-u
+    set -as terminal-features 'xterm*:extkeys'
+
 
 #CAPABILITIES
 
@@ -56110,6 +58795,12 @@ _ryan_tmux_conf=r'''
         run-shell ~/clone/path/yank.tmux
         set -g @yank_with_mouse on
         set -g @yank_selection_mouse 'clipboard' # or 'primary' or 'secondary'
+
+    #DIVIDER RESIZE:
+        # Move one divider with the keyboard: Ctrl+B then Ctrl+W. Arrows or hjkl select, Shift+arrows or HJKL move, Enter or a click keeps, Escape cancels.
+        # First, please run   git clone https://github.com/RyannDaGreat/tmux-divider-resize ~/.tmux/plugins/tmux-divider-resize
+        set -g @divider-resize-step 4 # Cells per move key; edit this number to taste.
+        run-shell ~/.tmux/plugins/tmux-divider-resize/divider-resize.tmux
 
     #IMAGES:
         #Allow images to be displayed through tmux
@@ -56255,6 +58946,7 @@ def _set_ryan_tmux_conf():
     if not file_exists(conf_path) or input_yes_no("You already have a tmux config file ~/.tmux.conf, would you like to overwrite it?"):
         string_to_text_file(conf_path,_ryan_tmux_conf)
         shell_command('git clone https://github.com/tmux-plugins/tmux-yank ~/clone/path')
+        shell_command('git clone https://github.com/RyannDaGreat/tmux-divider-resize ~/.tmux/plugins/tmux-divider-resize')
         print("Succesfully configured your tmux! Please restart tmux to see the changes.")
     try:
         os.system('tmux source-file ~/.tmux.conf') #Refresh tmux conf if possible
@@ -56373,7 +59065,7 @@ def _ensure_installed(name: str, *, windows=None, mac=None, linux=None, unix=Non
     elif currently_running_mac()    : command = mac
     elif currently_running_windows(): command = windows
 
-    if   starts_with_any(command, 'brew ' , 'yes | brew ' ): _ensure_brew_installed()
+    if   starts_with_any(command, 'brew ' , 'yes | brew ' ): _ensure_brew_installed() ; command += " --yes" if command.endswith(' --yes') else ' --yes'
     elif starts_with_any(command, 'curl ' , 'yes | curl ' ): _ensure_curl_installed()
     elif starts_with_any(command, 'npm '  , 'yes | npm '  ): _ensure_npm_installed()
     elif starts_with_any(command, 'nvm '  , 'yes | nvm '  ): _ensure_nvm_installed() ; command = _nvm_command_string(command, remove_prefix=True)
@@ -56444,7 +59136,7 @@ def _pterm_run_shell_command(command):
 
 def _brew_install(x):
     _ensure_brew_installed()
-    command = 'brew install '+shlex.quote(x)
+    command = 'brew install --yes '+shlex.quote(x)
     _run_sys_command(command)
 
 @_register_ensure_installed_func
@@ -56723,6 +59415,17 @@ def _ensure_codex_installed():
         'codex',
         unix   ='npm install -g @openai/codex',
         windows='npm install -g @openai/codex',
+    )
+
+@_register_ensure_installed_func
+def _ensure_pi_installed():
+    """pi: Earendil's minimal agentic CLI for AI-assisted coding"""
+    _ensure_node_installed(min_version=22)
+    _ensure_installed(
+        'pi',
+        # https://github.com/earendil-works/pi
+        unix   ='npm install -g @earendil-works/pi-coding-agent',
+        windows='npm install -g @earendil-works/pi-coding-agent',
     )
 
 @_register_ensure_installed_func('claude')
@@ -57217,6 +59920,15 @@ def _ensure_ntfy_installed():
     )
 
 @_register_ensure_installed_func
+def _ensure_timeout_installed():
+    """timeout: a core utility on linux but isn't on Mac by default"""
+    _ensure_installed(
+        'timeout',
+        mac    ='brew install aisk/homebrew-tap/timeout',
+        linux  ='apt install coreutils',
+    )
+
+@_register_ensure_installed_func
 def _ensure_uv_installed():
     """uv: Extremely fast Python package manager written in Rust"""
     try:
@@ -57690,6 +60402,7 @@ def _run_ai_coder_cli(code, command=None):
         rp.r._default_ai_coder_cli_command = "codex"
         rp.r._default_ai_coder_cli_command = "cursor-agent"
         rp.r._default_ai_coder_cli_command = "gemini"
+        rp.r._default_ai_coder_cli_command = "pi"
     
     Args:
         code: A file path, directory path, or string containing code to edit
@@ -57707,10 +60420,14 @@ def _run_ai_coder_cli(code, command=None):
     
     _ensure_git_installed()
 
+    launches_claude = 'claude' in command  # Claude Code shows a trust dialog per folder; pre-trust the launch folder so it doesn't block
+
     if file_exists(code):
         code = get_parent_directory(code)
 
     if directory_exists(code):
+        if launches_claude:
+            _add_claude_trust_dir(code)
         with SetCurrentDirectoryTemporarily(code):
             _run_sys_command(command)
         return
@@ -57733,6 +60450,9 @@ def _run_ai_coder_cli(code, command=None):
     print(fansi_highlight_path(workdir))
     with SetCurrentDirectoryTemporarily(workdir):
         save_text_file(code, filename)
+        subprocess.run(['git', 'init'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # Before trusting: a nested repo is its own trust key
+        if launches_claude:
+            _add_claude_trust_dir(workdir)
 
         done = False
         
@@ -57749,7 +60469,6 @@ def _run_ai_coder_cli(code, command=None):
         @run_as_new_thread
         def commit_process():
             devnull = open(os.devnull, 'w')
-            subprocess.run(['git', 'init'], stdout=devnull, stderr=devnull)
             while not done and get_current_directory()==workdir:
                 sleep(.1)
                 commit_message = 'Auto-Commit at '+format_current_date()
@@ -57795,16 +60514,75 @@ def _run_claude_code(code,*,fullperm=False,return_command=False):
     command = 'export IS_SANDBOX=1 && '+command
 
     if return_command:
-        return command
+        return 'rp call _add_claude_trust_dir && '+command  # Shell form: pre-trust the folder so Claude Code skips its trust dialog
 
     _ensure_claudecode_installed()
     _setup_claude_bash()
-    return _run_ai_coder_cli(code,command)
+    return _run_ai_coder_cli(code,command)  # Pre-trusts the launch folder via _add_claude_trust_dir
+
+def _add_claude_trust_dir(directory='.'):
+    """
+    Command. Marks a directory as trusted by Claude Code, so it skips the
+    "Do you trust the files in this folder?" dialog there. Meant for setup scripts on headless boxes.
+
+    Mutates ~/.claude.json: sets projects[<key>].hasTrustDialogAccepted = True, where <key> is the
+    git toplevel if the directory is inside a repo, else the directory itself. That mirrors how
+    Claude Code keys trust (https://code.claude.com/docs/en/permissions): trust on a non-repo
+    directory covers its subdirectories except nested git repos, so trusting a broad folder such
+    as ~ is a wide grant. Trust unlocks the folder's .claude/settings.json permissions.allow rules
+    and additionalDirectories.
+
+    The rewrite goes through a temp file and os.replace, so an interruption cannot truncate the
+    config. It is re-serialized by save_json (tab indent, ASCII-escaped); Claude Code reformats it
+    on its next save. Do not call while a Claude Code session is open: Claude Code rewrites the
+    same file and the last writer wins.
+
+    Args:
+        directory (str): Directory to trust. Must exist. Accepts ~ and relative paths. Defaults to the current directory.
+
+    Returns:
+        str: The absolute path key that was marked trusted
+
+    Examples:
+        >>> # Inside a repo, trust is keyed on the repo toplevel
+        >>> _add_claude_trust_dir('~/projects/my_repo/src')
+        '/Users/me/projects/my_repo'
+        >>> # Outside a repo, trust is keyed on the directory itself
+        >>> _add_claude_trust_dir('~/Downloads/loose_folder')
+        '/Users/me/Downloads/loose_folder'
+        >>> # No argument trusts the current directory
+        >>> _add_claude_trust_dir()
+        '/Users/me/Downloads/loose_folder'
+    """
+    import shutil
+
+    directory = get_absolute_path(directory)
+    assert directory_exists(directory), 'rp._add_claude_trust_dir: Directory does not exist: ' + directory
+    key = get_git_toplevel(directory) if is_a_git_repo(directory) else directory
+
+    config_path = path_join(get_home_directory(), '.claude.json')
+    config = load_json(config_path) if file_exists(config_path) else {}
+    config.setdefault('projects', {}).setdefault(key, {})['hasTrustDialogAccepted'] = True
+
+    temp_path = config_path + '.rp_partial'
+    save_json(config, temp_path, pretty=True)
+    if file_exists(config_path):
+        shutil.copymode(config_path, temp_path)
+    else:
+        os.chmod(temp_path, 0o600)  # Owner-only, as Claude Code creates it: the file holds the OAuth account
+    os.replace(temp_path, config_path)  # Atomic swap
+
+    return key
 
 def _run_gemini_cli(code):
     """ See rp.r._run_ai_coder_cli.__doc__ """
     _ensure_gemini_cli_installed()
     return _run_ai_coder_cli(code,'gemini')
+
+def _run_pi_cli(code):
+    """ See rp.r._run_ai_coder_cli.__doc__ """
+    _ensure_pi_installed()
+    return _run_ai_coder_cli(code,'pi')
 
 
 def _configure_filebrowser():
@@ -58674,10 +61452,22 @@ def tmux_get_all_session_names():
 
 tmux_list_sessions = tmux_get_all_session_names
 
-def tmux_get_unique_session_name(name=""):
-    """ Given a prefix, will return a new session name that doesn't exist already """
-    existing_sessions=tmux_get_all_session_names()
-    
+def tmux_get_unique_session_name(name="", existing_sessions=None):
+    """
+    Query. Given a prefix, will return a new session name that doesn't exist already
+    existing_sessions are the session names to avoid, which by default are tmux_get_all_session_names()
+
+    EXAMPLE:
+        >>> tmux_get_unique_session_name('vim', ['htop'])
+        'vim'
+        >>> tmux_get_unique_session_name('vim', ['htop', 'vim', 'vim 0'])
+        'vim 1'
+        >>> tmux_get_unique_session_name('', ['0', '1']) #With no prefix it's just a number, like tmux's default session names
+        '2'
+    """
+    if existing_sessions is None:
+        existing_sessions=tmux_get_all_session_names()
+
     candidate_name = name
     index = 0
     while not candidate_name or candidate_name in existing_sessions:
@@ -58753,6 +61543,55 @@ def tmux_kill_sessions(*session_names,strict=False):
     #Then, kill all the sessions
     for session_name in session_names:
         tmux_kill_session(session_name)
+
+def _get_all_tmux_sessions_with_one_window():
+    """
+    Query. Returns a list of (session_id, session_name, window_name) tuples, one for every tmux session that has exactly one window
+    A session_id looks like '$3'. Unlike a session name it's always a safe tmux target, because names get prefix-matched and can contain tmux's '.' and ':' separators
+
+    EXAMPLE:
+        >>> _get_all_tmux_sessions_with_one_window()
+        [('$0', '0', 'vim'), ('$4', 'my server', 'htop')]
+    """
+    #The id is first and the window count is last so _run_tmux_command's strip can't eat a blank name. tmux doesn't allow tabs in names.
+    row_format = '\t'.join(['#{session_id}', '#{session_name}', '#{window_name}', '#{session_windows}'])
+    rows = [line.split('\t') for line in _run_tmux_command(['tmux', 'list-windows', '-a', '-F', row_format]).splitlines()]
+    return [(session_id, session_name, window_name) for session_id, session_name, window_name, num_windows in rows if num_windows == '1']
+
+def _rename_tmux_session(session, new_name):
+    """
+    Command. Renames a tmux session. The session can be any tmux target, preferably a session id like '$3'
+
+    EXAMPLE:
+        >>> _rename_tmux_session('$3', 'my server')
+    """
+    _run_tmux_command(['tmux', 'rename-session', '-t', session, new_name])
+
+def tmux_rename_single_window_sessions():
+    """
+    Command. Renames every tmux session that has exactly one window to that window's name
+    Sessions with multiple windows are left alone. Works both inside and outside of tmux.
+    If another session already has that name a number is added to it, like in tmux_get_unique_session_name. A window with a blank name gives just a number.
+    Any '.' or ':' becomes '_', because tmux can't target a session by name if it has them. Old versions of tmux make that replacement on their own.
+
+    Returns:
+        dict: The sessions that were renamed, as {old_name: new_name}. Sessions that already had the right name aren't included.
+
+    EXAMPLE:
+        >>> #Sessions 0 and 2 each have one window called vim, session 1 has one window called r.py, and session 3 has two windows
+        >>> tmux_rename_single_window_sessions()
+        {'0': 'vim', '1': 'r_py', '2': 'vim 0'}
+        >>> tmux_rename_single_window_sessions() #Running it again does nothing, because the names are already right
+        {}
+    """
+    renamed = {}
+    for session_id, old_name, window_name in _get_all_tmux_sessions_with_one_window():
+        other_names = set(tmux_get_all_session_names()) - {old_name}
+        new_name = tmux_get_unique_session_name(window_name.replace('.', '_').replace(':', '_'), other_names)
+        if new_name != old_name:
+            _rename_tmux_session(session_id, new_name)
+            renamed[old_name] = new_name
+    return renamed
 
 
 def tmux_type_in_all_panes(keystrokes: str, *, session: str = None, window: str = None):
@@ -59260,7 +62099,7 @@ def tmuxp_create_session_yaml(windows, *, session_name=None, command_before=None
     return yaml.dump(config, default_flow_style=False, sort_keys=False, width=9999999)
 
 
-def tmuxp_launch_session_from_yaml(session_yaml,*,attach=False):
+def tmuxp_launch_session_from_yaml(session_yaml,*,attach=False,shell="bash"):
     """
     Input can be a yaml string or yaml file path
     Uses the "tmuxp load <yaml file>" command to spin up a tmux session
@@ -59268,6 +62107,10 @@ def tmuxp_launch_session_from_yaml(session_yaml,*,attach=False):
     Also to read the session name afterwards, use parse_yaml(session_yaml)['session_name']
     If attach is False, we spin up the tmux session without attaching it
     If it is True, we try to attach to it immediately. This will block the current process.
+    shell is the command every window and pane starts in, replacing tmux's default-command for this session only
+        (for example, a tmux.conf that starts rp in every new pane). Commands from the yaml are typed into it.
+        It's set as the session option "default-command" - if the yaml already sets that option, the yaml wins.
+        If shell is None, panes start with whatever your tmux config says.
 
     EXAMPLE:
         >>> tmuxp_launch_session_from_yaml(
@@ -59275,19 +62118,30 @@ def tmuxp_launch_session_from_yaml(session_yaml,*,attach=False):
         ...         [[func_call_to_shell_command(list, map(print, range(i))) for i in range(9)]]
         ...     ),
         ...     attach=True,
-        ... ) 
+        ... )
+
+    EXAMPLE:
+        >>> #Panes run zsh instead of the default bash. Use shell=None to get your tmux config's default instead.
+        >>> tmuxp_launch_session_from_yaml(tmuxp_create_session_yaml('echo $0'), shell='zsh', attach=True)
     """
     pip_import("tmuxp")
+    import yaml
+    from tmuxp.workspace.loader import expand
 
     if file_exists(session_yaml):
-        session_path = session_yaml
-        session_yaml = load_text_file(session_path)
-        should_delete = False
+        workspace = yaml.safe_load(load_text_file(session_yaml))
+        #tmuxp resolves relative paths against the yaml file's folder, but we load a copy from a temporary folder
+        workspace = expand(workspace, cwd=get_path_parent(get_absolute_path(session_yaml)))
     else:
         assert isinstance(session_yaml, str), "input should be a yaml string"
-        session_path = temporary_file_path("yaml")
-        save_text_file(session_yaml, session_path)
-        should_delete = True
+        workspace = yaml.safe_load(session_yaml)
+
+    if shell is not None:
+        workspace.setdefault("options", {}).setdefault("default-command", shell)
+
+    session_yaml = yaml.dump(workspace, default_flow_style=False, sort_keys=False, width=9999999)
+    session_path = temporary_file_path("yaml")
+    save_text_file(session_yaml, session_path)
 
     try:
         command = "tmuxp load " + shlex.quote(session_path)
@@ -59307,8 +62161,7 @@ def tmuxp_launch_session_from_yaml(session_yaml,*,attach=False):
         os.system(command)
 
     finally:
-        if should_delete:
-            delete_file(session_path)
+        delete_file(session_path)
 
     ##Future: I might return something, such as the session name
     # data = parse_yaml(session_yaml)
@@ -60045,6 +62898,37 @@ def inverted_images(images, invert_alpha=False):
     return [gather_args_call(inverted_image, image) for image in images]
 invert_images = inverted_images
 
+def _make_zip_file_via_zipfile(src_folder, tmp_path):
+    """
+    Command. Zips src_folder into tmp_path + ".zip" with the zipfile module, showing an rp.eta over the files.
+    Follows symlinks like shutil.make_archive does. Backend of make_zip_file_from_folder, moved verbatim out of it.
+    """
+    # Match shutil.make_archive behavior exactly: follow symlinks, dereference them
+    import zipfile
+    import os
+
+    # Collect all files (following symlinks like shutil.make_archive does)
+    file_list = []
+    for root, dirs, files in os.walk(src_folder):
+        for file in files:
+            file_list.append(os.path.join(root, file))
+
+    # Create zip with progress
+    with zipfile.ZipFile(tmp_path+'.zip', 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for file_path in eta(file_list, title="rp.make_zip_file_from_folder"):
+            arcname = os.path.relpath(file_path, src_folder)
+            # Write normally - this dereferences symlinks like shutil.make_archive
+            zipf.write(file_path, arcname)
+
+def _make_zip_file_via_shutil(src_folder, tmp_path):
+    """
+    Command. Zips src_folder into tmp_path + ".zip" with shutil.make_archive (the golden-standard behaviour, no progress).
+    Backend of make_zip_file_from_folder, moved verbatim out of it.
+    """
+    # Golden standard behavior
+    import shutil
+    shutil.make_archive(tmp_path, 'zip', src_folder)
+
 def make_zip_file_from_folder(src_folder:str=None, dst_zip_file:str=None, *, show_progress=False)->str:
     """
     Creates a .zip file on your hard drive.
@@ -60068,26 +62952,9 @@ def make_zip_file_from_folder(src_folder:str=None, dst_zip_file:str=None, *, sho
 
     try:
         if show_progress:
-            # Match shutil.make_archive behavior exactly: follow symlinks, dereference them
-            import zipfile
-            import os
-
-            # Collect all files (following symlinks like shutil.make_archive does)
-            file_list = []
-            for root, dirs, files in os.walk(src_folder):
-                for file in files:
-                    file_list.append(os.path.join(root, file))
-
-            # Create zip with progress
-            with zipfile.ZipFile(tmp_path+'.zip', 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for file_path in eta(file_list, title="rp.make_zip_file_from_folder"):
-                    arcname = os.path.relpath(file_path, src_folder)
-                    # Write normally - this dereferences symlinks like shutil.make_archive
-                    zipf.write(file_path, arcname)
+            _make_zip_file_via_zipfile(src_folder, tmp_path)
         else:
-            # Golden standard behavior
-            import shutil
-            shutil.make_archive(tmp_path, 'zip', src_folder)
+            _make_zip_file_via_shutil(src_folder, tmp_path)
     except KeyboardInterrupt:
         delete_file(tmp_path+'.zip') #It will be corrupted. Don't waste space
         raise
@@ -60582,13 +63449,31 @@ def get_image_file_dimensions(image_file_path:str):
     This method can be up to 4000 times faster.
     This method supports the following file types:
         png jpg gif tiff svg jpeg jpeg2000
+
+    EXAMPLE (any file form):
+        >>> get_image_file_dimensions('doggy.jpg')                                                 #A path: (height, width), read from the header alone
+        ans = (48, 64)
+        >>> get_image_file_dimensions('s3://open-images-dataset/validation/0001eeaf4aed83f9.jpg')  #An s3:// url
+        ans = (447, 1024)
+        >>> get_image_file_dimensions(file_to_bytes('doggy.jpg'))                                  #Bytes
+        ans = (48, 64)
+        >>> get_image_file_dimensions(open('doggy.jpg','rb'))                                      #An open file object
+        ans = (48, 64)
+        >>> get_image_file_dimensions(dataset.take_blobs('image', indices=[0])[0])                 #A Lance BlobFile
+        ans = (48, 64)
     """
-    assert file_exists(image_file_path)
-    if get_file_extension(image_file_path)=='exr':
-        return _get_openexr_image_dimensions(image_file_path)
-    pip_import('imagesize')
-    import imagesize
-    return imagesize.get(image_file_path)[::-1]#Returns (height, width)
+    with _FileFormTranslator.opened(image_file_path, ('file_object', 'path')) as source: #A path stays a path; every other form becomes a seekable file object
+        if isinstance(source, str):
+            assert file_exists(source), source
+        if _FileFormTranslator.extension_of(source)=='exr':
+            with _FileFormTranslator.opened(source, ('path',)) as path: #OpenEXR needs a real file
+                return _get_openexr_image_dimensions(path)
+        pip_import('imagesize')
+        import imagesize
+        width, height = imagesize.get(source)
+        if width < 0 or height < 0:
+            raise ValueError('rp.get_image_file_dimensions: could not read image dimensions from ' + repr(image_file_path)) #imagesize returns -1 instead of raising
+        return height, width
 
 
 
@@ -60610,25 +63495,43 @@ def get_video_file_shape(path, use_cache=True):
         such that load_video loads a bunch of grayscale images such that
         the video shape would only have 3 dims (num_frames, height, width)
         then in the future this function might just return a tuple with vals!
+
+    EXAMPLE (any file form):
+        >>> get_video_file_shape('video.mp4')                                        #path (also pathlib.Path)
+        ans = (12, 48, 64, 3)
+        >>> get_video_file_shape(open('video.mp4', 'rb').read())                     #bytes: non-path forms are spilled to a temp file for ffprobe
+        ans = (12, 48, 64, 3)
+        >>> get_video_file_shape(open('video.mp4', 'rb'))                            #file object or io.BytesIO
+        ans = (12, 48, 64, 3)
+        >>> get_video_file_shape(dataset.take_blobs('video', indices=[0])[0])        #lance blob
+        ans = (12, 48, 64, 3)
     """
+    if not _FileFormTranslator.is_path(path): #urls and data uris are str too, but not paths
+        with _FileFormTranslator.opened(path, ('path',)) as spilled: #ffprobe needs a real file; other forms are spilled for the call
+            return get_video_file_shape(spilled, use_cache=False)
     path = get_absolute_path(path) #Important for caching
     if use_cache and path in _video_shape_cache:
         return _video_shape_cache[path]
 
-    pip_import('moviepy')
-
-    with _moviepy_VideoFileClip(path) as video:
-        width, height = video.size
-        num_frames = int(video.fps * video.duration)
-        num_channels = 3  # Assuming RGB - I'm not aware of any other formats
-
-    shape = (num_frames, height, width, num_channels)
+    shape = _get_video_file_shape_via_ffprobe(path)
     _video_shape_cache[path] = shape
     return shape
 
 def get_video_file_num_frames(path, use_cache=True):
     """
     Returns the number of frames in the video.
+
+    EXAMPLE (any file form):
+        >>> get_video_file_num_frames('video.mp4')                                   #path (also pathlib.Path)
+        ans = 12
+        >>> get_video_file_num_frames('s3://multimedia-commons/data/videos/mp4/002/3df/0023df13b53926d7ee7a479e2d36cf.mp4')  #url: same forms as get_video_file_shape
+        ans = 2697
+        >>> get_video_file_num_frames(open('video.mp4', 'rb').read())                #bytes
+        ans = 12
+        >>> get_video_file_num_frames(open('video.mp4', 'rb'))                       #file object or io.BytesIO
+        ans = 12
+        >>> get_video_file_num_frames(dataset.take_blobs('video', indices=[0])[0])   #lance blob
+        ans = 12
     """
     shape = get_video_file_shape(path, use_cache)
     return shape[0]
@@ -61455,40 +64358,46 @@ def big_ascii_text(text:str,*,font='standard'):
 
 def bytes_to_file(data: bytes, path: str = None):
     """
+    Command.
+
     Enhanced Documentation:
     
     Saves bytes data to a file at the specified path or a temporary location.
-    Automatically creates parent directories if they don't exist. Handles file permission
-    issues by creating temporary files when no path is specified.
+    Automatically creates parent directories if they don't exist. Creates temporary
+    files when no path is specified.
     
+    Destinations: local paths, PathLike, file:// or s3:// URIs, and writable binary handles/streams.
+    Caller handles remain open, receive output at their current position, and are flushed on success.
+
     Parameters:
         data (bytes): Binary data to write to file. Must be bytes type, not str or other types.
-        path (str, optional): File path where to save the data. If None, creates a temporary file.
+        path (str, os.PathLike or file object, optional): File path where to save the data. If None, creates a temporary file.
                               Parent directories are created automatically if they don't exist.
     
     Returns:
         str: The actual path where the file was saved (same as input path, or temp path if None given).
+        Writable handles are returned unchanged; S3 destinations return their URI.
     
     Usage Examples:
         >>> # Save bytes to temporary file
         >>> data = b"Hello, binary world!"
         >>> temp_path = bytes_to_file(data)
-        >>> print(f"Saved to: {temp_path}")  # /var/folders/.../tmpXXXXXXXX
+        >>> print("Saved to: {}".format(temp_path))  # /var/folders/.../tmpXXXXXXXX
         
         >>> # Save to specific path
         >>> data = b"\\x89PNG\\r\\n\\x1a\\n..."  # PNG file bytes
         >>> saved_path = bytes_to_file(data, "my_image.png")
-        >>> print(f"Image saved to: {saved_path}")  # my_image.png
+        >>> print("Image saved to: {}".format(saved_path))  # my_image.png
         
         >>> # Save to nested path (creates directories)
         >>> data = b"Some file content"
         >>> path = bytes_to_file(data, "folder/subfolder/file.dat")
-        >>> print(f"File saved to: {path}")  # folder/subfolder/file.dat
+        >>> print("File saved to: {}".format(path))  # folder/subfolder/file.dat
         
         >>> # Read back the saved data
-        >>> with open(saved_path, 'rb') as f:
+        >>> with open(path, 'rb') as f:
         ...     read_back = f.read()
-        >>> print(f"Data matches: {data == read_back}")  # True
+        >>> print("Data matches: {}".format(data == read_back))  # True
     
     Related Functions:
         - file_to_bytes(): Read bytes from a file (inverse operation)
@@ -61499,34 +64408,48 @@ def bytes_to_file(data: bytes, path: str = None):
         
     Notes:
         - Automatically creates parent directories if they don't exist
-        - Uses binary write mode ('wb') to preserve exact byte content
+        - Uses binary write mode ('wb') for local paths to preserve exact byte content
         - Safe for any binary data: images, videos, compressed files, etc.
         - Cross-platform path handling
         - Raises AssertionError if data is not bytes type
         
     Tags: files, bytes, binary, io, filesystem, save, write
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> from pathlib import Path
+        >>> data = b'hello world'
+        >>> saved = bytes_to_file(data, Path('data.bin'))
+        >>> loaded = file_to_bytes(saved)
+        >>> loaded == data
+        ans = True
+        >>> buffer = io.BytesIO()
+        >>> bytes_to_file(data, buffer) is buffer
+        ans = True
+        >>> loaded = file_to_bytes(buffer.getvalue())
+        >>> loaded == data
+        ans = True
+        >>> bytes_to_file(data, bytes)
+        ans = b'hello world'
+        >>> with open('copy.bin', 'wb') as output:
+        ...     saved = bytes_to_file(data, output)
+        ...     ownership_preserved = saved is output and not output.closed
+        >>> ownership_preserved
+        ans = True
+        >>> bytes_to_file(data, 's3://my-bucket/data.bin')  # Replace with your writable bucket.
     """
     assert isinstance(data, bytes), 'Expected bytes, got ' + str(type(data))
 
     if path is None:
         path = temporary_file_path()
 
-    def helper():
-        with open(path, 'wb') as out:
-            out.write(data)
-        return path
-
-    try:
-        return helper()
-    except FileNotFoundError:
-        #Faster than checking for folder exists every time
-        make_parent_directory(path)
-        return helper()
+    return _FileDestination.write(path, data)
 
 
 _file_to_bytes_cache={}
 def file_to_bytes(path: str, use_cache=False):
     """
+    Accepts any file form: a path, url, data uri, bytes, an open file object or a stream (see _FileFormTranslator).
     Enhanced Documentation:
     
     Reads binary data from a file path or URL, returning raw bytes content.
@@ -61583,21 +64506,26 @@ def file_to_bytes(path: str, use_cache=False):
         - No automatic retry logic for failed downloads
     
     Tags: file-io, bytes, binary-data, url-download, caching
+
+    EXAMPLE (any file form):
+        >>> file_to_bytes('notes.txt').splitlines()                                          # a path
+        ans = [b'hello world', b'second line']
+        >>> len(file_to_bytes('s3://open-images-dataset/validation/0001eeaf4aed83f9.jpg'))   # an s3:// url, streamed through smart_open
+        ans = 290621
+        >>> file_to_bytes(b'hello')                                                          # bytes are always content, never a path
+        ans = b'hello'
+        >>> file_to_bytes(io.BytesIO(b'hello'))                                              # an open file object (a non-seekable pipe works too)
+        ans = b'hello'
+        >>> file_to_bytes(dataset.take_blobs('text', indices=[0])[0]).splitlines()           # a Lance blob
+        ans = [b'hello world', b'second line']
     """
 
-    if use_cache and path in _file_to_bytes_cache:
+    cacheable = use_cache and isinstance(path, str) #Only str locations (paths and urls) are cached
+    if cacheable and path in _file_to_bytes_cache:
         return _file_to_bytes_cache[path]
-
-    if is_valid_url(path):
-        data = curl_bytes(path)
-
-    else:
-        with open(path, 'rb') as out:
-            data = out.read()
-
-    if use_cache:
-        _file_to_bytes_cache[path]=_file_to_bytes_cache
-
+    data = bytes(_FileFormTranslator.as_bytes(path)) #A path, url, data uri, bytes, file object or stream
+    if cacheable:
+        _file_to_bytes_cache[path]=data
     return data
 
 def file_to_base64(path: str, use_cache=False):
@@ -61667,6 +64595,16 @@ def file_to_object(path:str, use_cache=False):
     
     Note: RP Object format is different from pickle. Use object_to_file() to
     create compatible files. Cache persists until program exit.
+
+    EXAMPLE (any file form):
+        >>> file_to_object('data.rpo')                                  # a path
+        ans = {'ints': [1, 2, 3], 'nested': {'k': 'v', 'f': 1.5}, 'none': None, 'array': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
+        >>> file_to_object(file_to_bytes('data.rpo'))                   # bytes
+        ans = {'ints': [1, 2, 3], 'nested': {'k': 'v', 'f': 1.5}, 'none': None, 'array': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
+        >>> file_to_object(open('data.rpo', 'rb'))                      # an open file object
+        ans = {'ints': [1, 2, 3], 'nested': {'k': 'v', 'f': 1.5}, 'none': None, 'array': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
+        >>> file_to_object(dataset.take_blobs('rpo', indices=[0])[0])   # a Lance blob; anything file_to_bytes accepts works here
+        ans = {'ints': [1, 2, 3], 'nested': {'k': 'v', 'f': 1.5}, 'none': None, 'array': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
     """
     if use_cache and path in _file_to_object_cache:
         return _file_to_object_cache[path]
@@ -61680,10 +64618,45 @@ def file_to_object(path:str, use_cache=False):
 
 def object_to_file(object,path:str):
     """
+    Command.
+
     Saves an object to a file using RP's object serialization format (.rpo).
     Uses compression and handles any Python object that can be pickled.
+
+    Destinations: local paths, PathLike, file:// or s3:// URIs, and writable binary handles/streams.
+    Caller handles remain open, receive output at their current position, and are flushed on success.
+
+    Args:
+        object: Python object supported by RP's object_to_bytes serializer.
+        path: Destination.
+    Returns:
+        str or file object: Normalized destination path/URI, or original handle.
+
     EXAMPLE:
         >>> object_to_file([1, 2, 3], '/tmp/test.rpo')
+
+    EXAMPLE (any file destination):
+        >>> import io
+        >>> from pathlib import Path
+        >>> data = {'name': 'test', 'values': [1, 2, 3]}
+        >>> saved = object_to_file(data, Path('data.rpo'))
+        >>> loaded = file_to_object(saved)
+        >>> loaded == data
+        ans = True
+        >>> buffer = io.BytesIO()
+        >>> object_to_file(data, buffer) is buffer
+        ans = True
+        >>> loaded = file_to_object(buffer.getvalue())
+        >>> loaded == data
+        ans = True
+        >>> file_to_object(object_to_file(data, bytes)) == data
+        ans = True
+        >>> with open('copy.rpo', 'wb') as output:
+        ...     saved = object_to_file(data, output)
+        ...     ownership_preserved = saved is output and not output.closed
+        >>> ownership_preserved
+        ans = True
+        >>> object_to_file(data, 's3://my-bucket/data.rpo')  # Replace with your writable bucket.
     """
     return bytes_to_file(object_to_bytes(object),path)
 
@@ -61908,6 +64881,40 @@ def ntfy_send(message:str, topic='rp'):
     
     if not response.status_code==200:
         raise IOError(response.status_code)
+
+def ntfy_read(topic='rp'):
+    """
+    Query. Returns the messages ntfy.sh still has cached for a topic, oldest first (most recent = last).
+    ntfy.sh only caches messages for a few hours, and a message sent less than about a second ago may not be cached yet.
+    See also: ntfy_send, ntfy_receive
+
+    Args:
+        topic (str): The ntfy topic, with the same default as ntfy_send
+
+    Returns:
+        list of str: The message bodies
+
+    Examples:
+        >>> ntfy_send('build started', topic='my_jobs')   # doctest: +SKIP
+        >>> ntfy_send('build finished', topic='my_jobs')  # doctest: +SKIP
+        >>> ntfy_read('my_jobs')                          # doctest: +SKIP
+        ['build started', 'build finished']
+    """
+    import json
+    pip_import('requests')
+    import requests
+
+    assert connected_to_internet()
+
+    url = "https://ntfy.sh/" + topic + "/json"
+    response = requests.get(url, params={"poll": "1"}) #poll=1 returns every cached message, oldest first, then closes
+    if response.status_code != 200:
+        raise IOError(response.status_code)
+    if response.headers.get("X-Messages-Truncated") == "1":
+        fansi_print("ntfy_read: ntfy.sh truncated the topic's cache to its newest messages; older messages were dropped", 'yellow')
+
+    events = [json.loads(line) for line in response.text.splitlines() if line]
+    return [event["message"] for event in events if event.get("event") == "message"]
 
 def ntfy_receive(*topics, timeout=90):
     """
@@ -70216,6 +73223,56 @@ def autoformat_bash_via_beautysh(code):
     output,_=beautysh.Beautify().beautify_string(code)
     return output
 
+def autoformat_bash_via_shfmt(code, indent=4):
+    """
+    Command. Autoformats bash code using shfmt (https://github.com/mvdan/sh).
+    Installs shfmt via the system package manager on first use, and runs it as a subprocess.
+
+    Args:
+        code (str): Bash code to format
+        indent (int): Spaces per indentation level. 0 means indent with tabs.
+
+    Returns:
+        str
+
+    Examples:
+        >>> print(autoformat_bash_via_shfmt('if true; then\\necho hi; fi'))
+        if true; then
+            echo hi
+        fi
+        <BLANKLINE>
+    """
+    import subprocess
+    _ensure_shfmt_installed()
+    process = subprocess.run(
+        ['shfmt', '-i', str(indent), '-'],
+        input=code.encode(),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if process.returncode:
+        raise ValueError('rp.autoformat_bash_via_shfmt: shfmt failed: ' + process.stderr.decode().strip())
+    return process.stdout.decode()
+
+def autoformat_python_via_yapf(code):
+    """
+    Command. Autoformats Python code using Google's yapf library (pip-installs yapf on first use).
+
+    Args:
+        code (str): Python code to format
+
+    Returns:
+        str
+
+    Examples:
+        >>> print(autoformat_python_via_yapf('def f( a,b ):return a+b'))
+        def f(a, b):
+            return a + b
+        <BLANKLINE>
+    """
+    yapf = pip_import('yapf')
+    return yapf.yapf_api.FormatCode(code)[0]
+
 def autoformat_html_via_bs4(code: str) -> str:
     """Given a string of HTML, autoformats it"""
     pip_import('bs4')
@@ -70634,8 +73691,22 @@ def load_safetensors(
         >>> lazy = load_safetensors('model.safetensors', lazy_tensors=True)
         >>> weight = lazy['layer1.weight']()  # call to load just this tensor
 
+    EXAMPLE (any file form):
+        >>> load_safetensors('tiny.safetensors')['b']                              # a path is mmapped in place
+        ans = tensor([0., 0., 0.])
+        >>> load_safetensors(file_to_bytes('tiny.safetensors'))['b']               # bytes are spilled to a temp file, deleted after loading
+        ans = tensor([0., 0., 0.])
+        >>> load_safetensors(open('tiny.safetensors', 'rb'))['b']                  # an open file object
+        ans = tensor([0., 0., 0.])
+        >>> load_safetensors(dataset.take_blobs('weights', indices=[0])[0])['b']   # a Lance blob (lazy_tensors=True keeps its temp file alive)
+        ans = tensor([0., 0., 0.])
     """
     # Handle Cache
+    path = _FileFormTranslator.canonicalize(path)
+    spilled = not isinstance(path, (str, list)) or (isinstance(path, str) and not _FileFormTranslator.is_path(path))
+    if spilled:
+        #safetensors maps the file, so bytes, file objects, streams and urls are materialized to a temp file first
+        path = _FileFormTranslator.as_path(path)
     cache_key = handy_hash([path, device, include_tensors, include_shapes, include_dtypes, include_metadata])
     cache = _load_safetensors_cache
     if use_cache:
@@ -70677,32 +73748,66 @@ def load_safetensors(
     #Possibly output a tuple with metadata
     if include_metadata:
         metadata_dict = _load_safetensors_metadata(metadata_path, device)
-        return result, metadata_dict
-    else:
-        return result
+        result = result, metadata_dict
+    if spilled and not lazy_tensors and path in _FileFormTranslator._spills: #Never a file object's own on-disk file
+        delete_file(path) #Lazy tensors keep reading the file, so only a fully loaded spill is removed
+        _FileFormTranslator._spills.discard(path)
+    return result
 
 
 def save_safetensors(tensors, path, metadata=None, *, verbose=False):
     """
+    Command.
+
     Saves tensors to a .safetensors file.
+
+    Destinations: local paths, PathLike, file:// or s3:// URIs, and writable binary handles/streams.
+    Caller handles remain open, receive output at their current position, and are flushed on success.
+    Tensor shapes are unchanged, e.g. weight (3, 4) -> (3, 4).
 
     Args:
         tensors (dict or easydict): Dictionary of tensors to save (str -> tensor)
-        path (str): Path to save the .safetensors file
+        path (str, os.PathLike or file object): Path to save the .safetensors file
         metadata (dict, optional): Metadata to include in the file. Defaults to None. (str -> str)
+        verbose (bool): Print tensor names and shapes to stderr.
 
     Returns:
         str: Path to the saved file
+        Writable handles are returned unchanged; S3 destinations return their URI.
         
     Reference: https://huggingface.co/docs/safetensors/en/index
 
     EXAMPLE:
+        >>> import torch
         >>> tensors = {"weight": torch.randn(3, 4), "bias": torch.randn(4)}
         >>> save_safetensors(tensors, "model.safetensors")
         'model.safetensors'
         >>> loaded = load_safetensors("model.safetensors")
-        >>> loaded.keys()
-        ['weight', 'bias']
+        >>> sorted(loaded.keys())
+        ['bias', 'weight']
+
+    EXAMPLE (any file destination):
+        >>> import io, torch
+        >>> from pathlib import Path
+        >>> data = {'weight': torch.zeros(3, 4), 'bias': torch.ones(4)}
+        >>> saved = save_safetensors(data, Path('data.safetensors'))
+        >>> loaded = load_safetensors(saved)
+        >>> all(torch.equal(loaded[key], data[key]) for key in data)
+        ans = True
+        >>> buffer = io.BytesIO()
+        >>> save_safetensors(data, buffer) is buffer
+        ans = True
+        >>> loaded = load_safetensors(buffer.getvalue())
+        >>> all(torch.equal(loaded[key], data[key]) for key in data)
+        ans = True
+        >>> load_safetensors(save_safetensors(data, bytes))['bias'].tolist()
+        ans = [1.0, 1.0, 1.0, 1.0]
+        >>> with open('copy.safetensors', 'wb') as output:
+        ...     saved = save_safetensors(data, output)
+        ...     ownership_preserved = saved is output and not output.closed
+        >>> ownership_preserved
+        ans = True
+        >>> save_safetensors(data, 's3://my-bucket/data.safetensors')  # Replace with your writable bucket.
     """
     import os
     from rp.r import pip_import
@@ -70714,16 +73819,15 @@ def save_safetensors(tensors, path, metadata=None, *, verbose=False):
     tensors = dict(tensors)
     
     if verbose:
-        print("Saving {0} tensors to {1}".format(len(tensors), path))
+        print("Saving {0} tensors to {1}".format(len(tensors), path), file=sys.stderr)
         for k, v in tensors.items():
-            print("    - {0}: {1}".format(k, v.shape if hasattr(v, 'shape') else 'no shape'))
+            print("    - {0}: {1}".format(k, v.shape if hasattr(v, 'shape') else 'no shape'), file=sys.stderr)
     
-    make_parent_directory(path)
-    
+    path = _FileDestination.canonicalize(path)
     # Save the tensors
-    save_file(tensors, path, metadata)
-    
-    return path
+    with _FileDestination.opened(path, ('path',), suffix='.safetensors') as target:
+        save_file(tensors, target, metadata)
+    return _FileDestination.completed(path)
 
 
 class ImageDataset:
@@ -74418,7 +77522,7 @@ known_pypi_module_package_names={
     'tree_sitter_python': 'tree-sitter-python',
     # 'cv2': 'opencv-python',
     # 'cv2': 'opencv-contrib-python', #This one is just like opencv, but better...but does it install as reliably? (Update: so far, so good!)
-    'cv2': 'opencv-python opencv-contrib-python', #But that didn't work for get_edge_drawing...https://github.com/Comfy-Org/ComfyUI-Manager/discussions/708
+    'cv2': 'opencv-python opencv-contrib-python', #But that didn't work for get_edge_drawing...https://github.com/Comfy-Org/ComfyUI-Manager/discussions/708  #macOS: importing cv2 together with video_reader prints "objc: Class AVFFrameReceiver is implemented in both .../cv2/.dylibs/libavdevice... and .../video_reader/.dylibs/libavdevice..." ("may cause spurious casting failures and mysterious crashes") - both bundle their own FFmpeg. Seen with video-reader-rs 0.4.4
     'fluidsynth' : 'pyfluidsynth',
     'handy_kws':'handy-kws',
     'AppKit':         'pyobjc-framework-Cocoa',
@@ -74480,6 +77584,7 @@ known_pypi_module_package_names={
     'keras': 'keras-nightly',
     'keras_gym': 'keras-gym',
     'keras_preprocessing': 'Keras-Preprocessing',
+    'lance': 'pylance',
     'lazy_object_proxy': 'lazy-object-proxy',
     'lib2to3': '2to3',
     'libarchive': 'libarchive-c',
@@ -74487,6 +77592,7 @@ known_pypi_module_package_names={
     'libpasteurize': 'future',
     'lpips_tf': 'lpips-tf',
     'mac_vendor_lookup': 'mac-vendor-lookup',
+    'macchiato': 'black-macchiato',#WARNING: 'pip install macchiato' is a DIFFERENT package (materials science) that ALSO creates a 'macchiato' module. We want black-macchiato.
     'markdown': 'Markdown',
     'markdown_it': 'markdown-it-py',
     'matplotlib_inline': 'matplotlib-inline',
@@ -74581,11 +77687,12 @@ known_pypi_module_package_names={
     'xontrib': 'xonsh',
     'yapftests': 'yapf',
     'yaml':'PyYAML',
+    'yt_dlp': 'yt-dlp[default]',
     'zalgo_text': 'zalgo-text',
     'hitherdither' : "git+https://www.github.com/hbldh/hitherdither",
     'decord' : "decord2", # 'decord' : "eva-decord" if currently_running_mac() else "decord", #https://www.piwheels.org/project/eva-decord/ - decord doesn't pip install on mac
     # 'video_reader': 'video-reader-rs', # Rust-based video decoder (gcanat/video_reader-rs); decodes AV1, which decord can't
-    'video_reader': 'video-reader-rs-next', # Fork of video-reader-rs that doesn't crash on Netflix
+    'video_reader': 'video-reader-rs-next', # Fork of video-reader-rs that doesn't crash on Netflix  #macOS: importing cv2 together with video_reader prints "objc: Class AVFFrameReceiver is implemented in both .../cv2/.dylibs/libavdevice... and .../video_reader/.dylibs/libavdevice..." ("may cause spurious casting failures and mysterious crashes") - both bundle their own FFmpeg. Seen with video-reader-rs 0.4.4
 }
 
 
@@ -74677,4 +77784,3 @@ _rp_set_env_vars('RP_SET_EVAL_', parse=eval)
 #     args=[args]
 
 # Version Oct24 2021
-

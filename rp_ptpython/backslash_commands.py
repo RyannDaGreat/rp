@@ -2,7 +2,7 @@
 Backslash Commands Module
 
 Provides a command mode for applying text transformations to selections.
-When text is selected and \ is pressed, enters command mode where you can
+When text is selected and \\ is pressed, enters command mode where you can
 type a command name and press Enter to apply it to the selection.
 
 Usage:
@@ -34,6 +34,54 @@ def register(shortcut: str, name: str, description: str):
         COMMANDS[shortcut] = (name, description, fn)
         return fn
     return decorator
+
+
+# =============================================================================
+# HELPERS
+# =============================================================================
+
+def _leading_indent(text: str) -> str:
+    """
+    Pure function. Returns the leading whitespace of the first line of text.
+
+    Args:
+        text (str): Text whose first line's indent to extract
+
+    Returns:
+        str
+
+    Examples:
+        >>> _leading_indent('    x = 1\\n        y = 2')
+        '    '
+        >>> _leading_indent('x = 1')
+        ''
+    """
+    first_line = text.split('\n')[0]
+    return first_line[:len(first_line) - len(first_line.lstrip())]
+
+
+def _match_trailing_newline(formatted: str, original: str) -> str:
+    """
+    Pure function. Gives formatted text the same trailing-newline presence as original.
+    Formatters like black and shfmt always append a trailing newline; when replacing
+    an inline selection that had none, that newline must be stripped.
+
+    Args:
+        formatted (str): Formatter output
+        original (str): The text that was formatted
+
+    Returns:
+        str
+
+    Examples:
+        >>> _match_trailing_newline('x = 1\\n', 'x=1')
+        'x = 1'
+        >>> _match_trailing_newline('x = 1\\n', 'x=1\\n')
+        'x = 1\\n'
+    """
+    if not original.endswith('\n'):
+        return formatted.rstrip('\n')
+    return formatted
 
 
 # =============================================================================
@@ -221,7 +269,15 @@ def minify(text: str) -> str:
 @register('bla', 'black', 'Format with black')
 def black_format(text: str) -> str:
     import rp
-    return rp.autoformat_code(text)
+    # Macchiato handles indented/partial code fragments, which selections usually are
+    return _match_trailing_newline(rp.autoformat_python_via_black_macchiato(text), text)
+
+
+@register('bash', 'shfmt', 'Format bash with shfmt')
+@register('shf', 'shfmt', 'Format bash with shfmt')
+def shfmt_format(text: str) -> str:
+    import rp
+    return _match_trailing_newline(rp.autoformat_bash_via_shfmt(text), text)
 
 
 @register('sc', 'strip_comments', 'Strip Python comments')
@@ -238,14 +294,26 @@ def strip_docstrings(text: str) -> str:
 
 @register('sim', 'sort_imports', 'Sort imports with isort')
 def sort_imports(text: str) -> str:
-    import rp
-    return rp.isort(text)
+    from rp.r import _sort_imports_via_isort
+    return _sort_imports_via_isort(text)
 
 
 @register('al', 'align', 'Align lines on = or :')
 def align_lines(text: str) -> str:
-    import rp
-    return rp.align_lines(text)
+    #   a=1\n bb=2  ->  a =1\n bb=2  (pads before the first = so they line up)
+    char = '=' if '=' in text else ':'
+    lines = text.split('\n')
+    positions = [line.index(char) for line in lines if char in line]
+    if not positions:
+        return text
+    target = max(positions)
+    result = []
+    for line in lines:
+        if char in line:
+            i = line.index(char)
+            line = line[:i] + ' ' * (target - i) + line[i:]
+        result.append(line)
+    return '\n'.join(result)
 
 
 @register('und', 'unindent', 'Remove common leading indentation')
@@ -262,13 +330,13 @@ def tabs_to_spaces(text: str) -> str:
 @register('cim', 'clean_imports', 'Clean/organize imports')
 def clean_imports(text: str) -> str:
     import rp
-    return rp.clean_imports(text)
+    return rp.clean_imports_via_unimport(text)
 
 
 @register('rms', 'remove_star', 'Expand star imports')
 def remove_star(text: str) -> str:
     import rp
-    return rp.remove_star_imports(text)
+    return rp.run_removestar(text)
 
 
 @register('rmfs', 'remove_fstrings', 'Convert f-strings to .format()')
@@ -291,19 +359,20 @@ def strip_blank_lines(text: str) -> str:
 @register('mla', 'multi_line_args', 'Split function args to multiple lines')
 def multi_line_args(text: str) -> str:
     import rp
-    return rp.multi_line_args(text)
+    # Line length 1 forces black to break every argument onto its own line
+    return _match_trailing_newline(rp.autoformat_python_via_black_macchiato(text, max_line_length=1), text)
 
 
 @register('fi', 'from_import_swap', 'Swap import/from import style')
 def from_import_swap(text: str) -> str:
-    import rp
-    return rp.import_from_swap(text)
+    from rp.rp_ptpython.key_bindings import swap_from_import
+    return '\n'.join(swap_from_import(line) for line in text.split('\n'))
 
 
 @register('ya', 'yapf', 'Format with yapf')
 def yapf_format(text: str) -> str:
     import rp
-    return rp.yapf_format(text)
+    return _match_trailing_newline(rp.autoformat_python_via_yapf(text), text)
 
 
 @register('23p', 'python2to3', 'Convert Python 2 to 3')
@@ -314,8 +383,8 @@ def python_2_to_3(text: str) -> str:
 
 @register('rcl', 'reverse_columns', 'Reverse columns in each line')
 def reverse_columns(text: str) -> str:
-    import rp
-    return rp.reverse_columns(text)
+    #   abc\n def  ->  cba\n fed  (mirrors each line, matching the \rcl microcompletion)
+    return '\n'.join(line[::-1] for line in text.splitlines())
 
 
 @register('spl', 'splitlines', 'Split into lines (normalize newlines)')
@@ -331,14 +400,16 @@ def line_join(text: str) -> str:
 
 @register('irp', 'inline_rp', 'Inline rp.* calls')
 def inline_rp(text: str) -> str:
-    import rp
-    return rp.inline_rp(text)
+    from rp.r import _inline_rp_code
+    return _inline_rp_code(text)
 
 
 @register('qrp', 'qualify_rp', 'Qualify rp.* calls')
 def qualify_rp(text: str) -> str:
+    # Same recipe as the \qrp microcompletion in key_bindings.py
     import rp
-    return rp.qualify_rp(text)
+    text = rp.run_removestar(text, qualify=False)
+    return rp.qualify_imports(text, 'rp')
 
 
 @register('rpr', 'repr', 'Wrap in repr()')
@@ -348,8 +419,14 @@ def wrap_repr(text: str) -> str:
 
 @register('tbp', 'toggle_parens', 'Toggle big parenthesis style')
 def toggle_big_parens(text: str) -> str:
-    import rp
-    return rp.toggle_big_parenthesis(text)
+    from rp.rp_ptpython.key_bindings import commented_parenthesizer_automator as auto
+    lines = text.split('\n')
+    kept = [l for l in lines if not (auto.is_upper_line(l) or auto.is_lower_line(l))]
+    if len(kept) != len(lines):
+        return '\n'.join(kept)
+    if len(lines) == 1:
+        return auto.parenthezized_line(text)
+    raise ValueError('tbp: select a single line to parenthesize')
 
 
 @register('en', 'enumerate', 'Wrap iterable in enumerate()')
@@ -357,10 +434,10 @@ def wrap_enumerate(text: str) -> str:
     return f'enumerate({text.strip()})'
 
 
-@register('ac', 'align_char', 'Align on specific character')
+@register('ac', 'align_char', 'Align lines on → marker chars')
 def align_char(text: str) -> str:
-    import rp
-    return rp.align_char(text)
+    from rp.rp_ptpython.key_bindings import align_lines_to_char
+    return align_lines_to_char(text)
 
 
 # Delete empty lines variants
@@ -387,8 +464,7 @@ def del_empty_2(text: str) -> str:
 def wrap_for(text: str) -> str:
     #   x        ->   for i in x:
     #                     pass
-    import rp
-    indent = rp.get_indent(text) if '\n' in text else ''
+    indent = _leading_indent(text) if '\n' in text else ''
     return f'{indent}for i in {text.strip()}:\n{indent}    pass'
 
 
@@ -397,7 +473,7 @@ def wrap_def(text: str) -> str:
     #   code     ->   def func():
     #                     code
     import rp
-    indented = rp.indent(text, '    ')
+    indented = rp.indentify(text, '    ')
     return f'def func():\n{indented}'
 
 
@@ -405,8 +481,7 @@ def wrap_def(text: str) -> str:
 def wrap_while(text: str) -> str:
     #   cond     ->   while cond:
     #                     pass
-    import rp
-    indent = rp.get_indent(text) if '\n' in text else ''
+    indent = _leading_indent(text) if '\n' in text else ''
     return f'{indent}while {text.strip()}:\n{indent}    pass'
 
 
@@ -414,8 +489,7 @@ def wrap_while(text: str) -> str:
 def wrap_with(text: str) -> str:
     #   expr     ->   with expr:
     #                     pass
-    import rp
-    indent = rp.get_indent(text) if '\n' in text else ''
+    indent = _leading_indent(text) if '\n' in text else ''
     return f'{indent}with {text.strip()}:\n{indent}    pass'
 
 
@@ -423,8 +497,7 @@ def wrap_with(text: str) -> str:
 def wrap_if(text: str) -> str:
     #   cond     ->   if cond:
     #                     pass
-    import rp
-    indent = rp.get_indent(text) if '\n' in text else ''
+    indent = _leading_indent(text) if '\n' in text else ''
     return f'{indent}if {text.strip()}:\n{indent}    pass'
 
 
@@ -435,7 +508,7 @@ def wrap_try(text: str) -> str:
     #                 except Exception as e:
     #                     raise
     import rp
-    indented = rp.indent(text, '    ')
+    indented = rp.indentify(text, '    ')
     return f'try:\n{indented}\nexcept Exception as e:\n    raise'
 
 
@@ -444,7 +517,7 @@ def wrap_class(text: str) -> str:
     #   code     ->   class MyClass:
     #                     code
     import rp
-    indented = rp.indent(text, '    ')
+    indented = rp.indentify(text, '    ')
     return f'class MyClass:\n{indented}'
 
 

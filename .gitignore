@@ -98,3 +98,4 @@ grep
 
 .rp_pyin_settings
 .boot_cache/system_commands.txt
+libs/powerpoint/upload_cache.json

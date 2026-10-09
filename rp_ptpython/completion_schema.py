@@ -14,7 +14,10 @@ Example usage:
     ...     return None
 """
 from __future__ import unicode_literals
+import glob
 import os
+import shlex
+import shutil
 import subprocess
 import time
 import re
@@ -203,7 +206,7 @@ for shell safety. This ensures paths with spaces, special characters, or other
 shell metacharacters are properly escaped when inserted into the command line.
 
 Examples:
-- `/home/user/my file.txt` becomes `/home/user/my\ file.txt`
+- `/home/user/my file.txt` becomes `/home/user/my\\ file.txt`
 - `/path/with'quotes.txt` becomes `/path/with'quotes.txt`
 
 ### Folder vs File Distinction
@@ -443,6 +446,7 @@ PROGRAM_DESCRIPTIONS = {
     'rp': 'ryan\'s python shell (rp --help)',
     'claude': 'Claude AI CLI (claude --help)',
     'gemini': 'Gemini AI CLI (gemini --help)',
+    'pi': 'Pi AI coding agent (pi --help)',
     'cargo': 'rust packages (cargo --help)',
     'kubectl': 'kubernetes (kubectl --help)',
     'ssh': 'remote shell (man ssh)',
@@ -701,6 +705,12 @@ def get_completions_for_command(text, cursor_pos):
             # Silently fail - don't break completions
             return None
 
+    # FALLBACK 0: Commands speaking cobra's `__complete` protocol (gh, and any CLI implementing it).
+    # None means it doesn't speak it, failed or timed out: fall through to the help parsing below.
+    cobra_completions = _cobra_completions(tokens, cursor_token_idx, cursor_pos)
+    if cobra_completions is not None:
+        return cobra_completions
+
     # FALLBACK 1: Auto-parse subcommands if at position 0 (right after command name)
     # This helps commands like 'claude' get automatic subcommand completion
     if cursor_token_idx == 0 and is_after:
@@ -750,6 +760,75 @@ def get_completions_for_command(text, cursor_pos):
             pass
 
     return None
+
+
+class CobraCompletions(dict):
+    """
+    Candidates from `command __complete`, plus path_filter(path_text, desc) deciding which paths bash_completer adds.
+    """
+    def __init__(self, candidates, path_filter):
+        dict.__init__(self, candidates)
+        self.path_filter = path_filter
+
+
+_COBRA_SPEAKERS = {}  # Executable path -> whether it speaks `__complete`, probed once per session
+
+
+def _mentions_cobra(path):
+    """
+    True if an executable, or the package its Python console script imports, contains '__complete'.
+    Guards the probe, since a command that ignores the protocol would act on it: `touch __complete ''` makes files.
+    """
+    with open(path, 'rb') as file:
+        content = file.read()
+    if b'__complete' in content:
+        return True
+    interpreter = re.match(br'#!(\S*python\S*)', content)
+    package = re.search(br'^from (\w+) import', content, re.M)
+    if not (interpreter and package):
+        return False
+    site_packages = os.path.join(os.path.dirname(interpreter.group(1).decode()), '..', 'lib', 'python*', 'site-packages')
+    package = package.group(1).decode()
+    sources = glob.glob(os.path.join(site_packages, package, '*.py')) + glob.glob(os.path.join(site_packages, package + '.py'))
+    return any(b'__complete' in open(source, 'rb').read() for source in sources)
+
+
+def _run_cobra(path, words):
+    """Run `path __complete *words`, returning (lines, directive), or None if it is slow or its output isn't cobra's."""
+    try:
+        output = subprocess.run([path, '__complete'] + words, capture_output=True, text=True, timeout=1.5, stdin=subprocess.DEVNULL).stdout
+    except subprocess.TimeoutExpired:
+        return None  # Too slow to complete interactively; the caller falls through to help parsing
+    lines = output.splitlines()
+    if not lines or not re.fullmatch(r':\d+', lines[-1]):
+        return None
+    return lines[:-1], int(lines[-1][1:])
+
+
+def _cobra_completions(tokens, cursor_token_idx, cursor_pos):
+    """
+    Complete with cobra's protocol: `command __complete arg... current` prints `value<TAB>description` lines then `:directive`.
+    Directive bits: 1 error, 2 no space, 4 no files, 8 lines are file extensions, 16 directories only.
+    Returns CobraCompletions, or None when the command doesn't speak the protocol or reports an error.
+    """
+    token = tokens[cursor_token_idx]
+    new_word = cursor_pos > token.position + len(token.text)  # find_cursor_token's is_after is also True at a word's end
+    path = shutil.which(tokens[0].text)
+    if (cursor_token_idx == 0 and not new_word) or path is None:
+        return None
+    if path not in _COBRA_SPEAKERS:
+        _COBRA_SPEAKERS[path] = _mentions_cobra(path) and _run_cobra(path, ['']) is not None
+    if not _COBRA_SPEAKERS[path]:
+        return None
+    result = _run_cobra(path, [token.text for token in tokens[1:cursor_token_idx + 1]] + ([''] if new_word else []))
+    if result is None or result[1] & 1:
+        return None
+    lines, directive = result
+    if directive & (8 | 16):
+        extensions = tuple('.' + line for line in lines) if directive & 8 else ()
+        return CobraCompletions({}, lambda path_text, desc: desc == 'Folder' or bool(extensions) and shlex.split(path_text)[0].endswith(extensions))
+    candidates = dict((line.split('\t', 1) + [''])[:2] for line in lines)
+    return CobraCompletions(candidates, None if directive & 4 else lambda path_text, desc: True)
 
 
 def get_bash_origin(document_text, cursor_position):

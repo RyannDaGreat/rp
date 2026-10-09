@@ -66,8 +66,8 @@ class PythonFunctionCompleter(Completer):
         # Find functions in this file.
         with open(filename, 'r') as f:
             for i, line in enumerate(f.readlines()):
-                names = re.findall('def\s+([^\s]+)\s*[(]', line)
-                signature = re.findall('(def\s+[^\s]+\s*[(][^)]*[)])', line)
+                names = re.findall(r'def\s+([^\s]+)\s*[(]', line)
+                signature = re.findall(r'(def\s+[^\s]+\s*[(][^)]*[)])', line)
 
                 for n in names:
                     if n.startswith(text):

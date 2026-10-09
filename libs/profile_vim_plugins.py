@@ -82,7 +82,7 @@ class StartupData(object):
 
         # Get common plugin dir if any
         vim_subdirs = "autoload|ftdetect|plugin|syntax"
-        matches = re.findall("^\d+.\d+\s+\d+.\d+\s+\d+.\d+: "
+        matches = re.findall(r"^\d+.\d+\s+\d+.\d+\s+\d+.\d+: "
                              "sourcing (.+?)/(?:[^/]+/)(?:%s)/[^/]+"
                              % vim_subdirs, log_txt, re.MULTILINE)
         for plugin_dir in matches:
@@ -109,7 +109,7 @@ class StartupData(object):
             # Try to guess the folder based on the logs themselves
             try:
                 plugin_dir = self.__guess_plugin_dir(log_txt)
-                matches = re.findall("^\d+.\d+\s+\d+.\d+\s+(\d+.\d+): "
+                matches = re.findall(r"^\d+.\d+\s+\d+.\d+\s+(\d+.\d+): "
                                      "sourcing %s/([^/]+)/" % plugin_dir,
                                      log_txt, re.MULTILINE)
                 for res in matches:
@@ -128,7 +128,7 @@ class StartupData(object):
 
             if check_system:
                 for d in self.system_dirs:
-                    matches = re.findall("^\d+.\d+\s+\d+.\d+\s+(\d+.\d+): "
+                    matches = re.findall(r"^\d+.\d+\s+\d+.\d+\s+(\d+.\d+): "
                                          "sourcing %s/.+/([^/]+.vim)\n" % d,
                                          log_txt, re.MULTILINE)
                     for res in matches:

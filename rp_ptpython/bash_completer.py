@@ -126,8 +126,11 @@ class BashCompleter:
                         replace_origin=replace_origin,
                     ))
 
+            # Commands speaking cobra's __complete choose which paths to offer (none, dirs, or by extension)
+            path_filter = getattr(schema_completions, 'path_filter', lambda path_text, desc: True)
+
             # Add path completions with priority=1 (lower) unless completing command name
-            if not is_completing_command and not after_line:
+            if path_filter and not is_completing_command and not after_line:
                 path_completions = complete_paths(tokens, cursor_token_idx, is_after)
                 if path_completions:
                     # Compute replace_origin for dotfile fix (see completer.py lines 488-506).
@@ -153,6 +156,8 @@ class BashCompleter:
                     for path_text, desc in path_completions.items():
                         # Skip if already in schema completions
                         if schema_completions and path_text in (schema_completions if isinstance(schema_completions, dict) else schema_completions):
+                            continue
+                        if not path_filter(path_text, desc):
                             continue
                         is_dir = desc == 'Folder'
                         priority = 1
