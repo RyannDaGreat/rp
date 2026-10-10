@@ -10054,6 +10054,38 @@ def _get_files_from_paths(paths, get_files=None):
     paths = list_flatten(get_files(x) if is_a_folder(x) else [x] for x in paths)
     return paths
 
+def _resolve_conversion_path(input_file, new_extension=None, output_folder=None, output_file=None, *, stem=None):
+    """
+    Pure function. Conversion convention: the file's extension wins, then
+    new_extension, then the source extension. Relative files use output_folder
+    or the source folder. Absolute files stand alone. Output dictionaries
+    replace shared settings; missing keys keep them.
+
+    Args:
+        input_file: Source path. new_extension: Optional suffix.
+        output_folder, output_file: Optional destination folder and name.
+        stem: Optional source stem, used without output_file.
+    Returns:
+        str: Destination path.
+    Examples:
+        >>> _resolve_conversion_path('/data/take.avi', 'mov', 'archive', 'review/name')
+        'archive/review/name.mov'
+        >>> _resolve_conversion_path('/data/take.avi', 'mov', 'archive', '/out/name.mp4')
+        '/out/name.mp4'
+    """
+    folder, name           = os.path.split(os.fspath(input_file))
+    source_stem, extension = os.path.splitext(name)
+    extension              = extension if new_extension is None else new_extension
+    stem                   = source_stem if stem is None else stem
+    name                   = os.fspath(output_file) if output_file is not None else with_file_extension(stem, extension)
+    folder                 = (folder or '.') if output_folder is None else os.fspath(output_folder)
+    if not name or os.path.basename(name) in ('', '.', '..'):
+        raise ValueError('Output must include a file name')
+    if not os.path.splitext(name)[1]:
+        name = with_file_extension(name, extension)
+    return os.path.join(folder, name)
+
+
 def convert_image_file(
     input_file,
     new_extension=None,
@@ -10064,10 +10096,15 @@ def convert_image_file(
     name_transform=lambda file_name: file_name,
     load_image=lambda path       : rp.load_image(path       ),
     save_image=lambda image, path: rp.save_image(image, path),
-    delete_original=False
+    delete_original=False,
+    output_file=None,
+    outputs=None
 ):
     """
-    Converts an image file to a specified format and saves it to the provided output folder.
+    Command. Convert an image file. See _resolve_conversion_path for naming.
+    outputs is a list of option dictionaries; returns their paths in order.
+    Multiple outputs load once. Transforms map (H, W, C) RGB to (H, W, C) RGB,
+    for example (480, 640, 3) to (240, 320, 3).
     It can also be used to resize image files or recolor them or whatever - beyond just filetype conversions.
 
     Args:
@@ -10094,22 +10131,42 @@ def convert_image_file(
         TypeError: If the input file, output folder, or new extension is not a string.
     """
 
-    if output_folder is None:
-        output_folder = get_parent_folder(input_file)
-    if new_extension is None:
-        new_extension = get_file_extension(input_file)
-    
-    if not isinstance(input_file   , str): raise TypeError("Input file must be a string, but got %s."   %type(input_file   ))
-    if not isinstance(new_extension, str): raise TypeError("New extension must be a string, but got %s."%type(new_extension))
-    if not isinstance(output_folder, str): raise TypeError("Output folder must be a string, but got %s."%type(output_folder))
+    if outputs is not None:
+        from functools import lru_cache
+        from copy import deepcopy
+        if not isinstance(outputs, list) or not outputs:
+            raise ValueError('outputs must be a nonempty list of dictionaries')
+        defaults = dict(
+            new_extension   = new_extension,
+            output_folder   = output_folder,
+            output_file     = output_file,
+            skip_overwrite  = skip_overwrite,
+            name_transform  = name_transform,
+            image_transform = image_transform,
+            save_image      = save_image,
+        )
+        options = [as_easydict(defaults | record) for record in outputs]
+        paths = []
+        for option in options:
+            if option.keys() - defaults.keys():
+                raise TypeError('Unknown image output option')
+            stem = option.name_transform(get_file_name(input_file, False)) if option.output_file is None else None
+            path = _resolve_conversion_path(input_file, option.new_extension,
+                                            option.output_folder, option.output_file, stem=stem)
+            option.update(output_file=path, output_folder='')
+            paths.append(os.path.realpath(path))
+        if len(set(paths)) != len(paths):
+            raise ValueError('Outputs must have different paths')
+        cached_load = lru_cache(maxsize=1)(load_image)
+        result = [None] * len(options)
+        for i in sorted(range(len(options)), key=lambda i: paths[i] == os.path.realpath(input_file)):
+            result[i] = convert_image_file(input_file, load_image=lambda path: deepcopy(cached_load(path)), **options[i])
+        if delete_original and os.path.realpath(input_file) not in paths and all(file_exists(path) for path in result):
+            delete_file(input_file)
+        return result
 
-    input_file_name = get_file_name(input_file, include_file_extension=False)
-    output_file_name = input_file_name
-    output_file_name = name_transform(output_file_name)
-    output_file_name = with_file_extension(output_file_name, new_extension)
-    output_file = path_join(output_folder, output_file_name)
-
-    assert isinstance(output_file, str)
+    stem = name_transform(get_file_name(input_file, False)) if output_file is None else None
+    output_file = _resolve_conversion_path(input_file, new_extension, output_folder, output_file, stem=stem)
 
     if file_exists(output_file) and skip_overwrite:
         return output_file
@@ -10123,7 +10180,7 @@ def convert_image_file(
 
     output = save_image(image, output_file)
 
-    if delete_original and file_exists(output) and file_exists(input_file):
+    if delete_original and file_exists(output) and file_exists(input_file) and os.path.realpath(output) != os.path.realpath(input_file):
         delete_file(input_file)
 
     return output
@@ -10231,11 +10288,14 @@ def convert_image_files(
     name_transform=lambda file_name: file_name,
     load_image=lambda path       : rp.load_image(path       ),
     save_image=lambda image, path: rp.save_image(image, path),
-    delete_original=False
+    delete_original=False,
+    output_file=None,
+    outputs=None
 ):
 
     """
-    Converts multiple image files to a specified format and saves them to the provided output folder. The function
+    Command. Convert image files. See _resolve_conversion_path for naming.
+    output_file and outputs follow convert_image_file. The function
     leverages concurrent processing for enhanced performance. The function also includes a strict mode that controls
     how the function behaves when an image fails to convert.
 
@@ -10287,6 +10347,11 @@ def convert_image_files(
     
     assert output_folder is None or isinstance(output_folder, str), "Output folder must be a string, but got {}.".format(type(output_folder))
 
+    if output_file is not None or any(record.get('output_file') is not None for record in (outputs or [])):
+        input_files = _get_files_from_paths(input_files, get_files=get_all_image_files)
+        if len(input_files) > 1:
+            raise ValueError('A fixed output_file requires one input; use name_transform for batch names')
+
     def convert_single_image_file(input_file):
         return convert_image_file(
             input_file, new_extension, output_folder,
@@ -10295,7 +10360,9 @@ def convert_image_files(
             name_transform=name_transform,
             load_image=load_image,
             save_image=save_image,
-            delete_original=delete_original
+            delete_original=delete_original,
+            output_file=output_file,
+            outputs=outputs,
         )
 
     return _convert_files(
@@ -10323,10 +10390,18 @@ def convert_video_file_via_ffmpeg(
     pix_fmt=None,
     framerate=None,
     keep_audio=True,
-    show_progress=False
+    show_progress=False,
+    output_file=None,
+    outputs=None,
+    height=None,
+    width=None,
+    preset=None
 ):
     """
-    Command. Converts a video file to a different format/codec using ffmpeg.
+    Command. Convert video. See _resolve_conversion_path for naming.
+    outputs is a list of option dictionaries; one FFmpeg input serves all outputs.
+    Returns a path list when outputs is given. height/width set output size;
+    one missing dimension keeps the aspect ratio. preset selects encoder speed.
 
     Signature mirrors rp.convert_image_file. Encoding options mirror rp.save_video_mp4
     (codec, crf, video_bitrate, pix_fmt). All encoding options default to None, which
@@ -10386,52 +10461,71 @@ def convert_video_file_via_ffmpeg(
     """
     import subprocess
 
-    if output_folder is None:
-        output_folder = get_parent_folder(input_file)
-    if new_extension is None:
-        new_extension = get_file_extension(input_file)
-
-    if not isinstance(input_file   , str): raise TypeError("Input file must be a string, but got %s."   % type(input_file   ))
-    if not isinstance(new_extension, str): raise TypeError("New extension must be a string, but got %s."% type(new_extension))
-    if not isinstance(output_folder, str): raise TypeError("Output folder must be a string, but got %s."% type(output_folder))
-
     if not path_exists(input_file):
         raise FileNotFoundError("Input file not found: " + input_file)
 
     _ensure_ffmpeg_installed()
 
-    input_file_name  = get_file_name(input_file, include_file_extension=False)
-    output_file_name = name_transform(input_file_name)
-    output_file_name = with_file_extension(output_file_name, new_extension)
-    output_file      = path_join(output_folder, output_file_name)
-
-    assert isinstance(output_file, str)
-
-    if file_exists(output_file) and skip_overwrite:
-        return output_file
-
-    make_parent_directory(output_file)
-
-    in_place = get_absolute_path(output_file) == get_absolute_path(input_file)
-    ffmpeg_output = output_file
-    if in_place:
-        ffmpeg_output = output_file + ".tmp_convert." + get_file_extension(output_file)
-
-    codec_arg = None
-    if codec is not None:
-        codec_arg = _video_codec_alias_map.get(codec.lower(), codec) if hasattr(codec, 'lower') else codec
-
-    cmd = ["ffmpeg"]
-    if not show_progress:
-        cmd += ["-loglevel", "quiet"]
-    cmd += ["-y", "-i", input_file]
-    if framerate     is not None: cmd += ["-r"      , str(framerate)]
-    if codec_arg     is not None: cmd += ["-c:v"    , str(codec_arg)]
-    if crf           is not None: cmd += ["-crf"    , str(crf)]
-    if video_bitrate is not None: cmd += ["-b:v"    , str(_as_video_bitrate(video_bitrate))]
-    if pix_fmt       is not None: cmd += ["-pix_fmt", str(pix_fmt)]
-    cmd += ["-c:a", "copy"] if keep_audio else ["-an"]
-    cmd += [ffmpeg_output]
+    defaults = dict(
+        new_extension  = new_extension,
+        output_folder  = output_folder,
+        output_file    = output_file,
+        skip_overwrite = skip_overwrite,
+        name_transform = name_transform,
+        codec          = codec,
+        crf            = crf,
+        video_bitrate  = video_bitrate,
+        pix_fmt        = pix_fmt,
+        framerate      = framerate,
+        keep_audio     = keep_audio,
+        height         = height,
+        width          = width,
+        preset         = preset,
+    )
+    if outputs is not None and (not isinstance(outputs, list) or not outputs):
+        raise ValueError('outputs must be a nonempty list of dictionaries')
+    paths, pending = [], []
+    cmd = ['ffmpeg', '-y', '-loglevel', 'info' if show_progress else 'error', '-i', os.fspath(input_file)]
+    for record in ([{}] if outputs is None else outputs):
+        if record.keys() - defaults.keys():
+            raise TypeError('Unknown video output option')
+        option = as_easydict(defaults | record)
+        stem = option.name_transform(get_file_name(input_file, False)) if option.output_file is None else None
+        path = _resolve_conversion_path(input_file, option.new_extension,
+                                        option.output_folder, option.output_file, stem=stem)
+        paths.append(path)
+        if file_exists(path) and option.skip_overwrite:
+            continue
+        make_parent_directory(path)
+        target = path
+        if os.path.realpath(path) == os.path.realpath(input_file):
+            target += '.tmp_convert.' + get_file_extension(path)
+        pending.append((target, path))
+        if option.codec is not None:
+            option.codec = _video_codec_alias_map.get(option.codec.lower(), option.codec)
+        if option.video_bitrate is not None:
+            option.video_bitrate = _as_video_bitrate(option.video_bitrate)
+        if option.framerate     is not None: cmd += ["-r"     , str(option.framerate)]
+        if option.codec         is not None: cmd += ["-c:v"   , str(option.codec)]
+        if option.crf           is not None: cmd += ["-crf"   , str(option.crf)]
+        if option.video_bitrate is not None: cmd += ["-b:v"   , str(option.video_bitrate)]
+        if option.preset        is not None: cmd += ["-preset", str(option.preset)]
+        filters = []
+        if option.height is not None or option.width is not None:
+            filters = ['scale={}:{}'.format(option.width or -2, option.height or -2)]
+        if option.pix_fmt is not None:
+            pixel_format = option.pix_fmt.lstrip('+')
+            if not filters:  filters  = ['scale=iw:ih']
+            if pixel_format: filters += ['format=' + pixel_format]
+            cmd += ['-pix_fmt', '+' + pixel_format]
+        if filters:
+            cmd += ['-vf', ','.join(filters)]
+        cmd += ['-c:a', 'copy'] if option.keep_audio else ['-an']
+        cmd += [target]
+    if len(set(map(os.path.realpath, paths))) != len(paths):
+        raise ValueError('Outputs must have different paths')
+    if not pending:
+        return paths if outputs is not None else paths[0]
 
     try:
         subprocess.run(
@@ -10446,16 +10540,14 @@ def convert_video_file_via_ffmpeg(
     except FileNotFoundError:
         raise RuntimeError("FFmpeg not found. Please install FFmpeg to convert video files.")
 
-    if not file_exists(ffmpeg_output):
-        raise FileNotFoundError("Failed to create output file: " + ffmpeg_output)
-
-    if in_place:
-        os.replace(ffmpeg_output, output_file)  # atomic; no rp wrapper for this
-
-    if delete_original and file_exists(output_file) and file_exists(input_file) and get_absolute_path(output_file) != get_absolute_path(input_file):
+    for target, path in pending:
+        if not file_exists(target):
+            raise FileNotFoundError('Failed to create output file: ' + target)
+        if target != path:
+            os.replace(target, path)
+    if delete_original and os.path.realpath(input_file) not in map(os.path.realpath, paths):
         delete_file(input_file)
-
-    return output_file
+    return paths if outputs is not None else paths[0]
 
 
 def convert_video_files_via_ffmpeg(
@@ -11817,13 +11909,20 @@ def wav_to_mp3(wav_file_path: str, mp3_output_path: str = None, samplerate: int 
     subprocess.run(cmd, check=True)
     return mp3_output_path
 
-def convert_audio_file(input_file, output_file, *, skip_existing=False, show_progress=False):
+def convert_audio_file(input_file, output=None, *, output_file=None,
+                       skip_existing=False, show_progress=False,
+                       new_extension=None, output_folder=None, outputs=None,
+                       codec=None, audio_bitrate=None, samplerate=None):
     """
-    Convert an audio file to a different format using FFmpeg.
+    Command. Convert audio. See _resolve_conversion_path for naming.
+    outputs is a list of option dictionaries. One FFmpeg input serves all outputs.
+    Returns a path list with outputs; otherwise returns one path.
+    codec, audio_bitrate and samplerate set each output's audio encoding.
 
     Args:
         input_file (str): Path to the input audio file.
-        output_file (str): Desired output format or path. If only extension is provided
+        output (str): Legacy output format or path, relative to the current folder.
+        output_file (str): Explicit name using the conversion convention. If only extension is provided
                           (e.g., 'mp3', 'wav'), output will use input filename with new extension.
                           Supported formats: wav, mp3, ogg, mp4.
         skip_existing (bool, optional): If True, won't overwrite existing files. Defaults to False.
@@ -11854,25 +11953,55 @@ def convert_audio_file(input_file, output_file, *, skip_existing=False, show_pro
 
     supported_output_filetypes = "wav ogg mp3 mp4".split()
 
-    if output_file in supported_output_filetypes or "." + output_file in supported_output_filetypes:
+    if output is not None:
+        if output_file is not None:
+            raise ValueError('Use output or output_file, not both')
+        output_file = output if output in supported_output_filetypes else os.path.abspath(output)
+    if outputs is None and new_extension is None and output_folder is None and output_file in supported_output_filetypes:
         output_file = rp.with_file_extension(input_file, output_file, replace=True)
-
-        if output_file==input_file:
-            #Converting a file to its own type...take a shortcut and just return the original file!
+        if output_file == input_file and codec is None and audio_bitrate is None and samplerate is None:
             return input_file
+        output_file = os.path.abspath(rp.get_unique_copy_path(output_file))
 
-        output_file = rp.get_unique_copy_path(output_file)
-
-    if os.path.exists(output_file) and skip_existing:
-        return output_file
-
-    make_parent_directory(output_file)
-
-    maybe_silent = ["-loglevel", "quiet"] if not show_progress else []
+    defaults = dict(
+        output_file    = output_file,
+        new_extension  = new_extension,
+        output_folder  = output_folder,
+        codec          = codec,
+        audio_bitrate  = audio_bitrate,
+        samplerate     = samplerate,
+        skip_existing  = skip_existing,
+    )
+    if outputs is not None and (not isinstance(outputs, list) or not outputs):
+        raise ValueError('outputs must be a nonempty list of dictionaries')
+    paths, pending = [], []
+    cmd = ['ffmpeg', '-y', '-loglevel', 'info' if show_progress else 'error', '-i', os.fspath(input_file)]
+    for record in ([{}] if outputs is None else outputs):
+        if record.keys() - defaults.keys():
+            raise TypeError('Unknown audio output option')
+        option = as_easydict(defaults | record)
+        path = _resolve_conversion_path(input_file, option.new_extension,
+                                        option.output_folder, option.output_file)
+        paths.append(path)
+        if os.path.exists(path) and option.skip_existing:
+            continue
+        make_parent_directory(path)
+        target = path
+        if os.path.realpath(path) == os.path.realpath(input_file):
+            target += '.tmp_convert.' + get_file_extension(path)
+        pending.append((target, path))
+        if option.codec         is not None: cmd += ["-c:a", str(option.codec)]
+        if option.audio_bitrate is not None: cmd += ["-b:a", str(option.audio_bitrate)]
+        if option.samplerate    is not None: cmd += ["-ar" , str(option.samplerate)]
+        cmd += [target]
+    if len(set(map(os.path.realpath, paths))) != len(paths):
+        raise ValueError('Outputs must have different paths')
+    if not pending:
+        return paths if outputs is not None else paths[0]
 
     try:
         subprocess.run(
-            ["ffmpeg"] + maybe_silent + ["-i", input_file, "-y", output_file],
+            cmd,
             check=True,
             stdout=subprocess.PIPE if not show_progress else None,
             stderr=subprocess.PIPE if not show_progress else None,
@@ -11883,10 +12012,12 @@ def convert_audio_file(input_file, output_file, *, skip_existing=False, show_pro
     except FileNotFoundError:
         raise RuntimeError("FFmpeg not found. Please install FFmpeg to convert audio files.")
 
-    if not os.path.exists(output_file):
-        raise FileNotFoundError("Failed to create output file: " + output_file)
-
-    return output_file
+    for target, path in pending:
+        if not os.path.exists(target):
+            raise FileNotFoundError('Failed to create output file: ' + target)
+        if target != path:
+            os.replace(target, path)
+    return paths if outputs is not None else paths[0]
 
 
 def convert_audio_files(
@@ -17411,6 +17542,18 @@ class _FileFormTranslator(_FormTranslator):
         #http(s) keeps rp's own downloader; s3://, gs:// and friends read through the smart_open edge
         return curl_bytes(url) if url.startswith('http') else cls.url_to_file_object(url).read()
     def url_to_file_object (cls, url ):
+        """
+        Command. Open remote bytes; S3 handles retain the full URL as their name.
+
+        Args:
+            url (str): Remote source URL.
+        Returns:
+            Binary file object, seekable directly or buffered in memory.
+        Examples:
+            >>> with _FileFormTranslator.opened('s3://bucket/render.exr') as source:
+            ...     source.name
+            's3://bucket/render.exr'
+        """
         pip_import('smart_open')
         import smart_open
         if url.startswith('http'):
@@ -17427,11 +17570,13 @@ class _FileFormTranslator(_FormTranslator):
             pip_import('boto3')
             import boto3, botocore, botocore.exceptions
             try:
-                return smart_open.open(url, 'rb')
+                file_object = smart_open.open(url, 'rb')
             except botocore.exceptions.NoCredentialsError:
                 #No AWS credentials configured: retry unsigned, which works for public buckets and fails loudly otherwise
                 client = boto3.client('s3', config=botocore.config.Config(signature_version=botocore.UNSIGNED))
-                return smart_open.open(url, 'rb', transport_params={'client': client})
+                file_object = smart_open.open(url, 'rb', transport_params={'client': client})
+            file_object.name = url #A bare S3 key can look like an existing absolute local path; never let it trigger the no-copy shortcut
+            return file_object
         file_object = smart_open.open(url, 'rb')
         return file_object if file_object.seekable() else cls.stream_to_file_object(file_object)
     def data_uri_to_bytes(cls, data_uri):
@@ -17445,18 +17590,36 @@ class _FileFormTranslator(_FormTranslator):
     def bytes_to_data_uri   (cls, b): return 'data:application/octet-stream;base64,' + bytes_to_base64(bytes(b))
     def file_object_to_bytes(cls, f): return f.read()
     def file_object_to_path (cls, f):
+        """
+        Command. Reuse a named local file or spill contents; clean up failed copies.
+
+        Args:
+            f: Binary reader. Seekable readers are copied whole and their cursor restored.
+        Returns:
+            str: Existing local path or registered temporary path.
+        Examples:
+            >>> with _FileFormTranslator.opened(io.BytesIO(b'hello'), ('path',)) as path:
+            ...     _FileFormTranslator.path_to_bytes(path)
+            b'hello'
+        """
         name = getattr(f, 'name', None)
         if isinstance(name, str) and os.path.isabs(name) and file_exists(name):
             return name #Already on disk (open(path), NamedTemporaryFile, ...): no copy needed
         import shutil
-        path = temporary_file_path()
         position = f.tell() if cls.is_file_object(f) else None #A seekable object is copied whole, from the start, and left where it was
-        if position is not None:
-            f.seek(0)
-        with open(path, 'wb') as out:
-            shutil.copyfileobj(f, out) #Chunked, so a huge stream never sits in RAM
-        if position is not None:
-            f.seek(position)
+        path = temporary_file_path()
+        try:
+            try:
+                if position is not None:
+                    f.seek(0)
+                with open(path, 'wb') as out:
+                    shutil.copyfileobj(f, out) #Chunked, so a huge stream never sits in RAM
+            finally:
+                if position is not None:
+                    f.seek(position)
+        except BaseException: #Failed acquisition: opened() cannot clean up a path it has not received yet
+            delete_file(path)
+            raise
         return cls._register_spill(path)
     def stream_to_bytes      (cls, s): return s.read()
     def stream_to_file_object(cls, s):

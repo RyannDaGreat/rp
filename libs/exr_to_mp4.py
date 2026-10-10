@@ -9,6 +9,7 @@
 # Per frame the color transform is a torch grid_sample trilinear interpolation —
 # OCIO is never on the hot path.
 
+import contextlib
 import functools
 import glob
 import json
@@ -45,26 +46,68 @@ def console_print(text):
     rp.fansi_print(text, text_color=PRINT_STYLE)
 
 
-def _read_header(path):
-    """Query. Read framesPerSecond and PixelAspectRatio from an EXR header (defaults: 24.0, 1.0)."""
+@contextlib.contextmanager
+def _open_exr(source):
+    """
+    Command. Open OIIO input; close it and remove translator-owned temp files.
+
+    Args:
+        source: Local path or file form accepted by _FileFormTranslator.
+    Yields:
+        OpenImageIO.ImageInput: Open EXR reader.
+    Examples:
+        >>> with _open_exr('render.exr') as inp:
+        ...     print(inp.spec().width)  # e.g. 1920
+    """
     import OpenImageIO as oiio
-    inp = oiio.ImageInput.open(path)
-    if inp is None:
-        raise RuntimeError("Could not open " + path)
-    try:
+    forms = rp.r._FileFormTranslator
+    # Keep local paths unchanged. Remote inputs use the translator's streaming
+    # transport (including S3 credentials), then spill because OIIO needs a path.
+    with forms.opened(source, ('file_object', 'path')) as readable:
+        with forms.opened(readable, ('path',)) as path:
+            inp = oiio.ImageInput.open(path)
+            if inp is None:
+                raise RuntimeError("Could not open " + str(source) + ": " + oiio.geterror())
+            try:
+                yield inp
+            finally:
+                inp.close()
+
+
+def _read_header(path):
+    """
+    Command. Read EXR timing; remote inputs use temporary files, then clean up.
+
+    Args:
+        path: Local path or URL.
+    Returns:
+        tuple: (frames per second, pixel aspect ratio), defaulting to (24.0, 1.0).
+    Examples:
+        >>> _read_header('render.exr')  # header with 24 fps and square pixels
+        (24.0, 1.0)
+    """
+    with _open_exr(path) as inp:
         spec = inp.spec()
         fps = spec.get_float_attribute("framesPerSecond") or 24.0
         par = (spec.get_float_attribute("PixelAspectRatio")
                or spec.get_float_attribute("pixelAspectRatio")
                or 1.0)
         return float(fps), float(par)
-    finally:
-        inp.close()
 
 
 def _read_image(path, want_metadata=False):
     """
-    Query. Reads an EXR as (H, W, C) float32 numpy.
+    Command. Decode EXR to (H, W, C) float32 numpy; clean up temporary input.
+
+    Args:
+        path: Local path or URL.
+        want_metadata: Include JSON-safe OIIO header attributes.
+    Returns:
+        ndarray or tuple: (H, W, C) pixels (e.g. (1080, 1920, 3) RGB,
+        or 4 channels RGBA), optionally paired with a metadata dict.
+    Examples:
+        >>> _read_image('render.exr').shape  # a 1920x1080 RGB EXR
+        (1080, 1920, 3)
 
     With want_metadata=True, returns (image, metadata) instead — metadata is
     the JSON-safe header dict from `_spec_metadata`, captured from the same
@@ -73,18 +116,11 @@ def _read_image(path, want_metadata=False):
     the header is grabbed while the file is already downloaded and hot.
     """
     import OpenImageIO as oiio
-    inp = oiio.ImageInput.open(path)
-    if inp is None:
-        # oiio.geterror() both explains WHY (e.g. "not an OpenEXR file") and
-        # clears OIIO's pending-error state (which otherwise warns at exit).
-        raise RuntimeError("Could not open " + path + ": " + oiio.geterror())
-    try:
+    with _open_exr(path) as inp:
         metadata = _spec_metadata(inp.spec()) if want_metadata else None
         image = inp.read_image(format=oiio.FLOAT)
         if image is None:
-            raise RuntimeError("Could not read " + path + ": " + inp.geterror())
-    finally:
-        inp.close()
+            raise RuntimeError("Could not read " + str(path) + ": " + inp.geterror())
     return (image, metadata) if want_metadata else image
 
 
@@ -495,6 +531,36 @@ _FANOUT_FORWARDED_KWARGS = (
 )
 
 
+def _expand_exr_paths(exr_paths):
+    """
+    Query. Expand local folders/globs; preserve URLs and explicit list order.
+
+    Args:
+        exr_paths: Local path/glob/folder, individual URL, or iterable of paths/URLs.
+    Returns:
+        list: Nonempty canonicalized paths/URLs. Remote globs are not expanded.
+    Examples:
+        >>> _expand_exr_paths('s3://renders/frame001.exr')
+        ['s3://renders/frame001.exr']
+        >>> _expand_exr_paths(['frame002.exr', 's3://renders/frame001.exr'])
+        ['frame002.exr', 's3://renders/frame001.exr']
+    """
+    forms = rp.r._FileFormTranslator
+    if isinstance(exr_paths, (str, os.PathLike)):
+        source = forms.canonicalize(exr_paths)
+        if forms.is_url(source):
+            paths = [source]
+        elif rp.is_a_folder(source):
+            paths = rp.get_all_paths(source, file_extension_filter="exr", sort_by="number")
+        else:
+            paths = rp.sorted_by_number(glob.glob(source))
+    else:
+        paths = [forms.canonicalize(path) for path in exr_paths]
+    if not paths:
+        raise ValueError("exr_paths is empty")
+    return paths
+
+
 def _fanout_exr_to_mp4(exr_paths, out_path, *, devices, num_shards, meta_path, kwargs):
     """
     Command. Shard `exr_paths` into `num_shards` contiguous chunks, launch each
@@ -519,15 +585,7 @@ def _fanout_exr_to_mp4(exr_paths, out_path, *, devices, num_shards, meta_path, k
     if kwargs.get("ffmpeg_extra_args"):
         raise ValueError("ffmpeg_extra_args not supported in fanout mode (run single-shard for codec-specific tuning)")
 
-    # Resolve exr_paths into a concrete list (mirrors the single-shard branch).
-    if isinstance(exr_paths, str):
-        if rp.is_a_folder(exr_paths):
-            exr_paths = rp.get_all_paths(exr_paths, file_extension_filter="exr", sort_by="number")
-        else:
-            exr_paths = rp.sorted_by_number(glob.glob(exr_paths))
-    exr_paths = list(exr_paths)
-    if not exr_paths:
-        raise ValueError("exr_paths is empty")
+    exr_paths = _expand_exr_paths(exr_paths)
     num_shards = min(num_shards, len(exr_paths))
 
     rp.make_parent_directory(out_path)
@@ -540,9 +598,10 @@ def _fanout_exr_to_mp4(exr_paths, out_path, *, devices, num_shards, meta_path, k
     pad = len(str(num_shards - 1))                                     # 16 shards -> 2-digit zero-pad
 
     shards = rp.split_into_n_sublists(exr_paths, num_shards)
-    ext = rp.get_file_extension(out_path)  # shards share out_path's container (.mp4/.mov/...)
     shard_listfiles = [os.path.join(tmp_dir, "shard_" + str(i).zfill(pad) + "_frames.txt") for i in range(num_shards)]
-    shard_outputs   = [os.path.join(tmp_dir, "shard_" + str(i).zfill(pad) + "." + ext)     for i in range(num_shards)]
+    outputs = rp.as_easydicts(kwargs.get("outputs") or [dict(output_file=out_path)])
+    shard_outputs = [[os.path.join(tmp_dir, "shard_" + str(i).zfill(pad) + "_" + str(j) + "." + rp.get_file_extension(option.output_file))
+                      for j, option in enumerate(outputs)] for i in range(num_shards)]
     shard_metadatas = None
     if meta_path is not None:
         shard_metadatas = [os.path.join(tmp_dir, "shard_" + str(i).zfill(pad) + "_metadata.jsonl") for i in range(num_shards)]
@@ -613,9 +672,11 @@ def _fanout_exr_to_mp4(exr_paths, out_path, *, devices, num_shards, meta_path, k
         device_str = devices[i % len(devices)]
         cmd = ["rp", "call", "exr_to_mp4",
                "load_file_lines(" + json.dumps(listfile) + ")",
-               "---", shard_out,
+               "---", shard_out[0],
                *_flag("device", device_str),
                *forwarded]
+        if kwargs.get("outputs") is not None:
+            cmd.extend(["--outputs", repr([option | dict(output_file=path) for option, path in zip(outputs, shard_out)])])
         if shard_metadatas is not None:
             cmd.extend(_flag("meta_path", shard_metadatas[i]))
         plans.append(cmd)
@@ -645,7 +706,8 @@ def _fanout_exr_to_mp4(exr_paths, out_path, *, devices, num_shards, meta_path, k
                 fails.append((i, rc))
         if fails:
             raise RuntimeError("exr_to_mp4 fanout: shards failed " + repr(fails))
-        rp.concat_video_files(shard_outputs, out_path)
+        for j, option in enumerate(outputs):
+            rp.concat_video_files([shard[j] for shard in shard_outputs], option.output_file)
         if shard_metadatas is not None:
             # Merge shard JSONLs in shard order — line order matches frame
             # order in the concatenated video (shards are contiguous chunks).
@@ -661,26 +723,56 @@ def _fanout_exr_to_mp4(exr_paths, out_path, *, devices, num_shards, meta_path, k
     return out_path
 
 
-def _ffmpeg_command(out_path, fps, out_w, out_h, *, codec, crf, preset, pix_fmt, extra_args):
-    return [
+def _ffmpeg_command(out_path, fps, out_w, out_h, *, codec, crf, preset, pix_fmt, extra_args, outputs=None):
+    """
+    Query. Build one stdin command, using RP's codec quality rules.
+
+    Args:
+        out_path, fps, out_w, out_h: Destination, frame rate and input dimensions.
+        codec, crf, preset, pix_fmt, extra_args: Shared encoder settings.
+        outputs: Optional list of output setting dictionaries.
+    Returns:
+        list: FFmpeg arguments; for example cmd.count('-i') == 1 for two outputs.
+    """
+    cmd = [
         "ffmpeg", "-hide_banner", "-nostats", "-y",
         "-f", "rawvideo", "-pix_fmt", "rgb48le",
-        "-s", str(out_w) + "x" + str(out_h), "-r", str(fps),
-        "-i", "-",
-        "-vf", "format=" + pix_fmt,
-        "-c:v", codec, "-preset", preset,
-        *rp.r._ffmpeg_quality_flags(codec, crf),
-        *extra_args,
-        "-color_primaries", "bt709", "-color_trc", "bt709",
-        "-colorspace", "bt709", "-color_range", "tv",
-        "-movflags", "+faststart",
-        out_path,
+        "-s", str(out_w) + "x" + str(out_h), "-r", str(fps), "-i", "-",
     ]
+    defaults = dict(
+        output_file       = out_path,
+        codec             = codec,
+        crf               = crf,
+        preset            = preset,
+        pix_fmt           = pix_fmt,
+        ffmpeg_extra_args = extra_args,
+        height            = None,
+        width             = None,
+    )
+    codec_extras = {
+        "libx264":    ("-x264-params", "threads=0:lookahead-threads=auto"),
+        "libaom-av1": ("-row-mt", "1", "-cpu-used", "4"),
+    }
+    for record in outputs or [{}]:
+        option = rp.as_easydict(defaults | record)
+        filters = ['scale=iw:ih']
+        if option.height is not None or option.width is not None:
+            filters = ['scale={}:{}'.format(option.width or -2, option.height or -2)]
+        filters.append('format=' + option.pix_fmt)
+        cmd += ['-vf', ','.join(filters), '-pix_fmt', '+' + option.pix_fmt, '-c:v', option.codec]
+        if option.preset is not None:
+            cmd += ['-preset', option.preset]
+        if option.crf is not None:
+            cmd += rp.r._ffmpeg_quality_flags(option.codec, option.crf)
+        cmd += [*codec_extras.get(option.codec, ()), *option.ffmpeg_extra_args,
+                '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709',
+                '-color_range', 'tv', '-movflags', '+faststart', option.output_file]
+    return cmd
 
 
 def exr_to_mp4(
     exr_paths,
-    out_path,
+    out_path=None,
     meta_path=None,                 # optional: also write per-frame EXR header metadata as JSONL
                                     # (one JSON object per input frame, in frame order). True derives
                                     # the path from out_path (out.mov -> out.jsonl). See Args.
@@ -713,14 +805,21 @@ def exr_to_mp4(
                                     # 'skip' drops bad frames (output is shorter). 'pad' substitutes the
                                     # previous good frame (or the first upcoming good frame for leading
                                     # bad ones, or black if every frame is bad).
+    output_file=None, output_folder=None, new_extension=None, outputs=None,
+    height=None, width=None,
     _probe=None                     # PRIVATE. (fps, pixel_aspect, out_h, out_w) tuple. When set, single-shard
                                     # path skips its probe + header read entirely — fanout's parent probes
                                     # once and passes the result to each shard so we don't duplicate
                                     # `_read_header` + `_read_image` + `frame_transform` across N shards.
 ):
     """
-    Convert a sequence of EXR frames to MP4 (or MOV — see `out_path`) with a
+    Command. Convert EXR frames to a local MP4 (or MOV — see `out_path`) with a
     fully torch-resident pipeline.
+
+    Output names follow rp.r._resolve_conversion_path. Use outputs=[dict(...), ...]
+    for multiple files with different encoder settings, height or width. This
+    returns their paths in order. One frame stream serves all outputs per shard.
+    Metadata stays shared; meta_path=True names it after the first output.
 
     Color transform (`src_colorspace` -> Rec.709 SDR via the ACES 2.0 SDR view) is
     baked into a 65^3 3D LUT + log2 shaper at startup. Per frame everything runs
@@ -759,7 +858,15 @@ def exr_to_mp4(
         - ffmpeg encodes as a separate OS process.
 
     Args:
-        out_path: destination video file. The container is chosen by ffmpeg
+        exr_paths: Local folder/glob, individual path/URL, or ordered iterable
+            of paths/URLs (including s3:// and https://). Both single-process
+            and fanout modes use _FileFormTranslator for remote inputs. OIIO
+            needs local files, so each remote read spills to a temporary file
+            removed after decoding. Remote globs/prefixes are not enumerated;
+            pass an explicit list of object URLs. Local inputs are not copied.
+            Transport/authentication errors propagate, even with strict='skip'
+            or 'pad'; those policies handle OIIO decode failures only.
+        out_path: local destination video file. The container is chosen by ffmpeg
             from the extension — `.mp4` and `.mov` are both supported (the
             function's name notwithstanding). This applies in every mode:
             single-shard, `atomic=True`, and fanout (shards are encoded in
@@ -863,6 +970,9 @@ def exr_to_mp4(
 
         # Single GPU (auto), single process. Local development / testing.
         exr_to_mp4(paths, "out.mp4")
+
+        # Explicit URLs (list order is frame order); output stays local:
+        exr_to_mp4(["s3://renders/frame001.exr", "s3://renders/frame002.exr"], "out.mp4")
 
         # Pin to a specific GPU.
         exr_to_mp4(paths, "out.mp4", device="cuda:2")     # or device=2
@@ -971,6 +1081,41 @@ def exr_to_mp4(
         # frame is bad). Output length matches input frame count.
         exr_to_mp4(paths, "out.mp4", strict="pad")
     """
+    # Naming follows rp.r._resolve_conversion_path. One frame stream serves all outputs.
+    if output_file is None and out_path is not None:
+        output_file = os.path.basename(out_path)
+    defaults = dict(
+        output_file       = output_file,
+        output_folder     = output_folder,
+        new_extension     = new_extension,
+        codec             = codec,
+        crf               = crf,
+        preset            = preset,
+        pix_fmt           = pix_fmt,
+        ffmpeg_extra_args = ffmpeg_extra_args,
+        height            = height,
+        width             = width,
+    )
+    if outputs is not None and (not isinstance(outputs, list) or not outputs):
+        raise ValueError('outputs must be a nonempty list of dictionaries')
+    options = [rp.as_easydict(defaults | record) for record in ([{}] if outputs is None else outputs)]
+    for option in options:
+        if option.keys() - defaults.keys():
+            raise TypeError('Unknown EXR output option')
+        if option.output_file is None:
+            raise ValueError('EXR sequences require out_path or output_file')
+        path = rp.r._resolve_conversion_path(out_path or 'output.mp4', option.new_extension,
+                                            option.output_folder, option.output_file)
+        option.output_file = os.path.abspath(path)
+    paths = [option.output_file for option in options]
+    if len(set(map(os.path.realpath, paths))) != len(paths):
+        raise ValueError('Outputs must have different paths')
+    for path in paths:
+        if not overwrite and rp.file_exists(path):
+            raise FileExistsError('Output exists and overwrite=False: ' + path)
+        rp.make_parent_directory(path)
+    out_path = paths[0]
+
     # Resolve runtime deps in the parent BEFORE any fanout, so subprocesses
     # don't race each other to pip-install the same packages. Subsequent
     # pip_import calls in the shards are no-ops once the parent succeeds.
@@ -981,7 +1126,7 @@ def exr_to_mp4(
     rp.r._ensure_ffmpeg_installed()
     # Fail fast if the requested codec isn't in this ffmpeg build. Otherwise
     # we'd decode the entire shard before ffmpeg said "Unknown encoder".
-    if codec not in rp.get_available_ffmpeg_codecs():
+    if any(option.codec not in rp.get_available_ffmpeg_codecs() for option in options):
         raise ValueError(
             "codec=" + repr(codec) + " is not available in this ffmpeg build. "
             "Available codecs: rp.get_available_ffmpeg_codecs()"
@@ -999,6 +1144,8 @@ def exr_to_mp4(
     # Resolved before fanout dispatch so the merged JSONL lands at the derived path.
     if meta_path is True:
         meta_path = rp.with_file_extension(out_path, "jsonl", replace=True)
+    if meta_path is not None and os.path.realpath(meta_path) in map(os.path.realpath, paths):
+        raise ValueError('Metadata and video must use different paths')
 
     # Fanout dispatch: a list device or num_shards>1 means subprocess fanout.
     is_list_device = isinstance(device, (list, tuple))
@@ -1013,7 +1160,7 @@ def exr_to_mp4(
             device_list = device_list[:num_shards]
         # A single-element list with num_shards==1 is effectively single-shard — fall through.
         if not (len(device_list) == 1 and num_shards == 1):
-            return _fanout_exr_to_mp4(
+            _fanout_exr_to_mp4(
                 exr_paths, out_path,
                 devices=device_list,
                 num_shards=num_shards,
@@ -1027,9 +1174,10 @@ def exr_to_mp4(
                     frame_transform=frame_transform,
                     pre_unsquash_frame_transform=pre_unsquash_frame_transform,
                     ffmpeg_extra_args=ffmpeg_extra_args,
-                    strict=strict,
+                    strict=strict, outputs=options,
                 ),
             )
+            return paths if outputs is not None else out_path
         device = device_list[0]                                        # collapse [x] -> x for single-shard path
 
     import torch
@@ -1044,13 +1192,7 @@ def exr_to_mp4(
     def _phase(msg):
         console_print(_shard_tag + " " + msg + " (+" + str(round(time.perf_counter() - _startup_t0, 2)) + "s)")
 
-    if isinstance(exr_paths, str):
-        if rp.is_a_folder(exr_paths):
-            exr_paths = rp.get_all_paths(exr_paths, file_extension_filter="exr", sort_by="number")
-        else:
-            exr_paths = rp.sorted_by_number(glob.glob(exr_paths))
-    if not exr_paths:
-        raise ValueError("exr_paths is empty")
+    exr_paths = _expand_exr_paths(exr_paths)
 
     _phase("warming CUDA / picking device")
     dev = _pick_device(device)
@@ -1087,12 +1229,6 @@ def exr_to_mp4(
     n = len(exr_paths)
     _phase("startup done; output=" + str(out_w) + "x" + str(out_h) + " frames=" + str(n) + " — starting encode")
 
-    codec_extras = {
-        "libx264":    ("-x264-params", "threads=0:lookahead-threads=auto"),
-        "libaom-av1": ("-row-mt", "1", "-cpu-used", "4"),
-    }
-    extra = (*codec_extras.get(codec, ()), *ffmpeg_extra_args)
-
     if not show_progress:
         console_print(
             "frames=" + str(n)
@@ -1104,10 +1240,6 @@ def exr_to_mp4(
             + " fps=" + str(fps)
         )
 
-    if not overwrite and rp.file_exists(out_path):
-        raise FileExistsError("out_path already exists and overwrite=False: " + out_path)
-    rp.make_parent_directory(out_path)
-
     collect_metadata = meta_path is not None
     if collect_metadata:
         if not overwrite and rp.file_exists(meta_path):
@@ -1117,14 +1249,15 @@ def exr_to_mp4(
     # The temp file must share out_path's extension: ffmpeg picks the muxer from
     # the extension, so a hardcoded "mp4" here would mux MP4 then rename it to
     # .mov — a mislabeled container.
-    encode_path = rp.temporary_file_path(rp.get_file_extension(out_path)) if atomic else out_path
+    encode_paths = [rp.temporary_file_path(rp.get_file_extension(path)) if atomic else path for path in paths]
     meta_encode_path = (rp.temporary_file_path("jsonl") if atomic else meta_path) if collect_metadata else None
     if not atomic:
-        rp.delete_file(out_path, strict=False)
+        for path in paths:
+            rp.delete_file(path, strict=False)
 
-    cmd = _ffmpeg_command(encode_path, fps, out_w, out_h,
-                          codec=codec, crf=crf, preset=preset,
-                          pix_fmt=pix_fmt, extra_args=extra)
+    cmd = _ffmpeg_command(encode_paths[0], fps, out_w, out_h,
+                          codec=codec, crf=crf, preset=preset, pix_fmt=pix_fmt, extra_args=ffmpeg_extra_args,
+                          outputs=[option | dict(output_file=path) for option, path in zip(options, encode_paths)])
     progress = "eta:exr to mp4" if show_progress is True else show_progress
 
     fn = partial(
@@ -1175,24 +1308,29 @@ def exr_to_mp4(
         if meta_file is not None and not meta_file.closed:
             meta_file.close()
         if atomic:
-            rp.delete_file(encode_path, strict=False)
+            for path in encode_paths:
+                rp.delete_file(path, strict=False)
             if collect_metadata:
                 rp.delete_file(meta_encode_path, strict=False)
         raise
     elapsed = time.perf_counter() - started
     if rc != 0:
         if atomic:
-            rp.delete_file(encode_path, strict=False)
+            for path in encode_paths:
+                rp.delete_file(path, strict=False)
             if collect_metadata:
                 rp.delete_file(meta_encode_path, strict=False)
         raise RuntimeError("ffmpeg failed with exit " + str(rc))
     if atomic:
-        rp.delete_file(out_path, strict=False)
-        rp.move_path(encode_path, out_path)
+        for encode_path, path in zip(encode_paths, paths):
+            rp.delete_file(path, strict=False)
+            rp.move_path(encode_path, path)
         if collect_metadata:
             rp.delete_file(meta_path, strict=False)
             rp.move_path(meta_encode_path, meta_path)
     if not show_progress:
         console_print("elapsed_seconds=" + str(round(elapsed, 3)))
         console_print("fps_processed=" + str(round(n / elapsed, 3)))
-        console_print("out=" + out_path)
+        console_print("out=" + str(paths))
+    if outputs is not None:
+        return paths
