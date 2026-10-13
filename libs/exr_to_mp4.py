@@ -58,6 +58,7 @@ def _open_exr(source):
     Examples:
         >>> with _open_exr('render.exr') as inp:
         ...     print(inp.spec().width)  # e.g. 1920
+        1920
     """
     import OpenImageIO as oiio
     forms = rp.r._FileFormTranslator
@@ -490,7 +491,7 @@ def _process_frame(path, *, frame_transform, pre_unsquash_frame_transform,
 
     from einops import rearrange
 
-    with _gpu_lock:
+    with _gpu_lock if device.type != "cpu" else contextlib.nullcontext():
         t = t_cpu.to(device, non_blocking=True)                        # HWC, pipeline-internal layout
 
         # User transforms receive CHW (rp convention for torch images); we
@@ -574,16 +575,13 @@ def _fanout_exr_to_mp4(exr_paths, out_path, *, devices, num_shards, meta_path, k
     Each shard's EXR list is written to a temp .txt file; the subprocess loads
     it via `rp.load_file_lines(...)` — so non-globbable lists work fine.
 
-    Forwarded kwargs: see `_FANOUT_FORWARDED_KWARGS`. Not supported in fanout
-    mode: `frame_transform`, `pre_unsquash_frame_transform` (can't serialize
-    Python callables across processes), `ffmpeg_extra_args` (use single-shard).
+    Forwarded kwargs: see `_FANOUT_FORWARDED_KWARGS`. Per-output settings,
+    including `ffmpeg_extra_args`, travel in output records; callables use .rpo.
     """
     if num_shards is None or num_shards < 1:
         raise ValueError("num_shards must be >= 1")
     if not devices:
         devices = ["cuda"]
-    if kwargs.get("ffmpeg_extra_args"):
-        raise ValueError("ffmpeg_extra_args not supported in fanout mode (run single-shard for codec-specific tuning)")
 
     exr_paths = _expand_exr_paths(exr_paths)
     num_shards = min(num_shards, len(exr_paths))
@@ -730,9 +728,18 @@ def _ffmpeg_command(out_path, fps, out_w, out_h, *, codec, crf, preset, pix_fmt,
     Args:
         out_path, fps, out_w, out_h: Destination, frame rate and input dimensions.
         codec, crf, preset, pix_fmt, extra_args: Shared encoder settings.
-        outputs: Optional list of output setting dictionaries.
+        outputs: Optional output setting dictionaries; fps overrides output rate only.
     Returns:
         list: FFmpeg arguments; for example cmd.count('-i') == 1 for two outputs.
+    Examples:
+        >>> cmd = _ffmpeg_command('full.mp4', '24000/1001', 640, 360,
+        ...     codec='libx264', crf=20, preset='veryfast', pix_fmt='yuv444p10le',
+        ...     extra_args=(), outputs=[{}, dict(output_file='scrub.mp4', fps=12),
+        ...                               dict(output_file='last.mp4')])
+        >>> [(cmd[i + 1], i < cmd.index('-i')) for i, arg in enumerate(cmd) if arg == '-r']
+        [('24000/1001', True), ('12', False)]
+        >>> cmd.index('full.mp4') < cmd.index('-r', cmd.index('-i')) < cmd.index('scrub.mp4')
+        True
     """
     cmd = [
         "ffmpeg", "-hide_banner", "-nostats", "-y",
@@ -748,6 +755,7 @@ def _ffmpeg_command(out_path, fps, out_w, out_h, *, codec, crf, preset, pix_fmt,
         ffmpeg_extra_args = extra_args,
         height            = None,
         width             = None,
+        fps               = None,
     )
     codec_extras = {
         "libx264":    ("-x264-params", "threads=0:lookahead-threads=auto"),
@@ -760,6 +768,8 @@ def _ffmpeg_command(out_path, fps, out_w, out_h, *, codec, crf, preset, pix_fmt,
             filters = ['scale={}:{}'.format(option.width or -2, option.height or -2)]
         filters.append('format=' + option.pix_fmt)
         cmd += ['-vf', ','.join(filters), '-pix_fmt', '+' + option.pix_fmt, '-c:v', option.codec]
+        if option.fps is not None:
+            cmd += ['-r', str(option.fps)]
         if option.preset is not None:
             cmd += ['-preset', option.preset]
         if option.crf is not None:
@@ -817,7 +827,7 @@ def exr_to_mp4(
     fully torch-resident pipeline.
 
     Output names follow rp.r._resolve_conversion_path. Use outputs=[dict(...), ...]
-    for multiple files with different encoder settings, height or width. This
+    for multiple files with different encoder settings, height, width or fps. This
     returns their paths in order. One frame stream serves all outputs per shard.
     Metadata stays shared; meta_path=True names it after the first output.
 
@@ -854,7 +864,7 @@ def exr_to_mp4(
     Performance:
         - OIIO decode runs in parallel across `num_threads` (GIL-released in C++).
         - GPU stage is serialized by a module-level lock (one frame on GPU at a time).
-          The lock is fine — GPU work per frame is far smaller than decode + encode.
+          CPU transforms run concurrently without this lock.
         - ffmpeg encodes as a separate OS process.
 
     Args:
@@ -904,8 +914,7 @@ def exr_to_mp4(
             `pre_unsquash_frame_transform`) are saved to a tmp `.rpo`
             (RP Object) file in fanout mode and re-loaded in each shard
             via `file_to_object("...")` in the printed bash — so closures,
-            lambdas, and partials all survive the boundary. Non-empty
-            `ffmpeg_extra_args` is the only thing fanout still rejects.
+            lambdas, and partials all survive the boundary.
         lut_size: edge length of the baked 3D LUT (default 65). The LUT is
             lut_size^3 float32 RGB entries = lut_size^3 * 12 bytes on the GPU,
             baked once per (src_colorspace, device, lut_size) and cached for
@@ -1095,6 +1104,7 @@ def exr_to_mp4(
         ffmpeg_extra_args = ffmpeg_extra_args,
         height            = height,
         width             = width,
+        fps               = None,  # Per-output rate; top-level fps is the input rate.
     )
     if outputs is not None and (not isinstance(outputs, list) or not outputs):
         raise ValueError('outputs must be a nonempty list of dictionaries')
