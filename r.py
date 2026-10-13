@@ -49081,8 +49081,8 @@ def get_audio_file_bitrate(file_path):
             raise RuntimeError("get_audio_file_bitrate: ffprobe failed on " + file_path + ": " + str(e))
 
 _get_video_file_framerate_cache={}
-def _get_video_file_framerate_via_moviepy(path, use_cache=True):
-    """ Given a (str) path to a video file, returns a number (framerate) """
+def get_video_file_framerate_via_moviepy(path, use_cache=True):
+    """ Requires moviepy. Given a (str) path to a video file, returns a number (framerate) """
     path = get_absolute_path(path) #Important for caching
     if use_cache and path in _get_video_file_framerate_cache:
         return _get_video_file_framerate_cache[path]
@@ -49160,9 +49160,9 @@ def _get_video_file_shape_via_ffprobe(path):
     num_channels = 3  # Assuming RGB - I'm not aware of any other formats
     return (num_frames, height, width, num_channels)
 
-def _get_video_file_framerate_via_ffprobe(path, use_cache=True):
+def get_video_file_framerate_via_ffprobe(path, use_cache=True):
     """ 
-    Slower than _get_video_file_framerate_via_moviepy but no extra python dependencies
+    Slower than get_video_file_framerate_via_moviepy but no extra python dependencies
     Given a (str) path to a video file, returns a number (framerate)
     """
     import subprocess
@@ -49197,9 +49197,12 @@ def _get_video_file_framerate_via_ffprobe(path, use_cache=True):
     _get_video_file_framerate_cache[path] = framerate
     return framerate
 
-def get_video_file_framerate(path, use_cache=True):
+def get_video_file_framerate(path, use_cache=True, *, backend='auto'):
     """
     Given a (str) path to a video file, returns a number (framerate)
+
+    backend: 'auto' tries moviepy, and falls back to ffprobe if moviepy fails;
+             'moviepy' and 'ffprobe' use exactly that backend (see get_video_file_framerate_via_*)
 
     EXAMPLE (any file form):
         >>> get_video_file_framerate('video.mp4')                                    #path (also pathlib.Path)
@@ -49213,15 +49216,22 @@ def get_video_file_framerate(path, use_cache=True):
     """
     if not _FileFormTranslator.is_path(path): #urls and data uris are str too, but not paths
         with _FileFormTranslator.opened(path, ('path',)) as spilled: #ffprobe needs a real file; other forms are spilled for the call
-            return get_video_file_framerate(spilled, use_cache=False)
+            return get_video_file_framerate(spilled, use_cache=False, backend=backend)
+    if backend == 'ffprobe':
+        return get_video_file_framerate_via_ffprobe(path, use_cache)
+    if backend == 'moviepy':
+        pip_import('moviepy')
+        return get_video_file_framerate_via_moviepy(path, use_cache)
+    if backend != 'auto':
+        raise ValueError('get_video_file_framerate: Invalid backend ' + repr(backend))
     try:
         pip_import('moviepy')
 
         #Ning had some error where the following line failed, but Yuancheng's didnt...
-        return _get_video_file_framerate_via_moviepy(path, use_cache)
+        return get_video_file_framerate_via_moviepy(path, use_cache)
 
     except Exception:
-        return _get_video_file_framerate_via_ffprobe(path, use_cache)
+        return get_video_file_framerate_via_ffprobe(path, use_cache)
 
 _video_has_audio_cache = {}
 
@@ -72669,6 +72679,30 @@ def get_git_is_dirty(path='.') -> bool:
         return False
     except subprocess.CalledProcessError:
         return True
+
+def git_discard_mode_changes(path='.'):
+    """
+    Command. Ignore executable-bit changes via repo-local core.fileMode=false.
+
+    Does not change file permissions, content, or staged changes.
+
+    Args:
+        path: Directory inside the repository; defaults to the current directory.
+    Returns:
+        None.
+    Examples:
+        >>> import subprocess, tempfile
+        >>> with tempfile.TemporaryDirectory() as repo:
+        ...     _ = subprocess.check_output(['git', 'init', repo])
+        ...     git_discard_mode_changes(repo)
+        ...     subprocess.check_output(
+        ...         ['git', '-C', repo, 'config', '--local', 'core.fileMode'],
+        ...         text=True).strip()
+        'false'
+    """
+    import subprocess
+    subprocess.check_call(['git', '-C', path, 'config', '--local', '--replace-all', 'core.fileMode', 'false'])
+
 
 def get_git_remote_url(repo='.'):
     assert folder_exists(repo)
