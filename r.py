@@ -61022,9 +61022,32 @@ def _listening_pids_via_lsof(port):
     return pids
 
 
+def _listening_pids_via_psutil(port):
+    """
+    Helper: return the PIDs LISTENing on the given TCP port, IPv4 or IPv6, lowest first.
+    Like lsof without root, it sees only the processes this user may inspect.
+    """
+    if not isinstance(port, int):
+        raise TypeError("Port must be an integer but got type %s" % type(port))
+    if not 0 <= port <= 65535:
+        raise ValueError("Port must be within the range 0-65535 but got %i" % port)
+
+    pip_import('psutil')
+    import psutil
+
+    pids = []
+    for process in psutil.process_iter():  # Sorted by PID
+        try:
+            if any(c.status == psutil.CONN_LISTEN and c.laddr.port == port for c in process.net_connections(kind="tcp")):
+                pids.append(process.pid)
+        except (psutil.AccessDenied, psutil.NoSuchProcess):
+            pass  # Another user's process, which lsof without root cannot see either, or one that just exited
+    return pids
+
+
 def get_process_using_port(port, strict=True):
     """
-    Gets one process ID (PID) listening on the specified TCP port using lsof.
+    Gets one process ID (PID) listening on the specified TCP port, the lowest if several.
 
     Args:
         port: The port number.
@@ -61037,12 +61060,12 @@ def get_process_using_port(port, strict=True):
     Raises:
         TypeError: If 'port' is not an int, or 'strict' is not bool or None.
         ValueError: If 'port' is out of range.
-        RuntimeError: If strict is True and no process/PID is found, or lsof fails.
+        RuntimeError: If strict is True and no process is found.
     """
     if strict not in (True, None):
         raise TypeError("'strict' argument must be either True or None but got %s" % (strict,))
 
-    pids = _listening_pids_via_lsof(port)
+    pids = _listening_pids_via_psutil(port)
 
     if pids:
         # Return a single representative PID (first one)
@@ -61079,7 +61102,7 @@ def killport(port, signal="SIGKILL", *, strict=True, recursive=False):
     if pid is None:
         return
 
-    all_pids = _listening_pids_via_lsof(port)
+    all_pids = _listening_pids_via_psutil(port)
 
     if not all_pids:
         if strict:
@@ -61096,6 +61119,37 @@ def killport(port, signal="SIGKILL", *, strict=True, recursive=False):
 
 
 get_pid_using_port = get_process_using_port
+
+def start_local_server_and_wait(command, port: int, *, poll_interval: float = 1.0) -> int:
+    """
+    Runs a server's shell command (a string, or a list that shlex.join quotes) unless something already serves on localhost:port, waits until something does, and returns its PID.
+    Raises if the command exits first. The server prints to stderr, so `rp call start_local_server_and_wait ...` prints only the PID.
+
+    EXAMPLE:
+        >>> pid = start_local_server_and_wait('python3 -m http.server 8000', 8000)  # Returns once it serves
+        >>> pid == start_local_server_and_wait('python3 -m http.server 8000', 8000)  # Already running: reused
+        True
+        >>> killport(8000)
+    """
+    import socket, subprocess
+
+    def is_serving():
+        # Connecting, not binding: a port that a stopped server left in TIME_WAIT cannot be bound, but nothing serves on it.
+        with socket.socket() as connection:
+            return connection.connect_ex(("localhost", port)) == 0
+
+    if not isinstance(command, str):
+        command = shlex.join(command)
+
+    if not is_serving():
+        process = subprocess.Popen(command, shell=True, stdout=2)
+        while not is_serving():
+            if process.poll() is not None:
+                message = "start_local_server_and_wait: %r exited with code %i before using port %i"
+                raise RuntimeError(message % (command, process.returncode, port))
+            time.sleep(poll_interval)
+
+    return get_process_using_port(port)
 
 def get_pids_using_ports(ports, *, strict=True, show_progress=False):
     """
