@@ -35608,7 +35608,7 @@ def ncr(n, r):
 def _sum_over_process_tree(pid, recursive, measure):
     """
     Query. Sums measure(process) over a psutil.Process and, if recursive, over all of its living descendants.
-    A descendant that exits before it is measured is skipped. pid=None means the current process.
+    A descendant that exits before it is measured, or whose counters the kernel hides (one that is exiting, or another user's), is skipped. pid=None means the current process.
 
     Example:
         >>> _sum_over_process_tree(None, True, lambda process: process.num_threads())  # Threads of this process and its subprocesses
@@ -35622,8 +35622,8 @@ def _sum_over_process_tree(pid, recursive, measure):
     for child in process.children(recursive=True) if recursive else []:
         try:
             total += measure(child)
-        except psutil.NoSuchProcess:
-            pass  # It exited after children() listed it
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass  # It exited after children() listed it, or the kernel hides its counters
     return total
 
 def get_process_memory(pid:int=None, recursive=False)->int:
@@ -35679,13 +35679,14 @@ def get_process_disk_io_bytes(pid:int=None, recursive=False)->tuple:
 
     Args:
         pid (int, optional): Defaults to the current process
-        recursive (bool): If True, adds the bytes of every living descendant process, so it covers the whole process tree
+        recursive (bool): If True, adds the bytes of every living descendant process, so it covers the whole process tree.
+            The kernel hides the counters of a descendant that is exiting or belongs to another user; it is skipped.
 
     Returns:
         tuple: (read_bytes, write_bytes), two ints
 
     Raises:
-        psutil.AccessDenied: If a process belongs to another user, whose counters the kernel hides
+        psutil.AccessDenied: If the process at pid belongs to another user, whose counters the kernel hides
 
     Examples:
         >>> get_process_disk_io_bytes()
@@ -76659,7 +76660,8 @@ class ResourceRecorder:
         machine_vram_bytes: the VRAM used on all NVIDIA GPUs together (see get_used_vram), or None without GPUs
         machine_disk_free_bytes: the free bytes on the disk that holds disk_path (see get_free_disk_space)
         disk_read_bytes, disk_write_bytes: the bytes the process tree has read from and written to storage so far (see get_process_disk_io_bytes).
-            These see local disks, Lustre and NFS. They miss FUSE mounts such as rclone, and reads that the page cache answers. A descendant of another user raises psutil.AccessDenied.
+            These see local disks, Lustre and NFS. They miss FUSE mounts such as rclone, and reads that the page cache answers.
+            A descendant whose disk counters the kernel hides, such as one that is exiting, is left out of all four sums (see _sum_over_process_tree).
 
     Args:
         interval (float): Seconds between samples. One sample costs about 15 ms of CPU, mostly to list the processes of the machine.
