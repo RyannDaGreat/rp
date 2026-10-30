@@ -21073,7 +21073,7 @@ def is_iterable(x):
 def is_non_str_iterable(x):
     return not isinstance(x,str) and is_iterable(x) 
 
-# region Network Utilities: ［get_my_local_ip_address，get_my_ip，get_my_mac_address，get_my_public_ip_address］  
+# region Network Utilities: ［get_my_local_ip_address，get_my_local_ip_addresses，get_my_ip，get_my_mac_address，get_my_public_ip_address］  
 def get_my_local_ip_address() -> str:
     import socket
     s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
@@ -21084,6 +21084,26 @@ def get_my_local_ip_address() -> str:
         s.close()
         
 get_my_ip=get_my_local_ip_address #Legacy: Some of my old code might depend on this function. It's deprecated because it's a bad name
+
+def get_my_local_ip_addresses() -> list:
+    """
+    Query. Returns every IP address of this computer's network interfaces, like `hostname -I` does.
+    Loopback (127.0.0.1, ::1) and link-local (169.254.x.x, fe80::) addresses are left out, since other computers can't reach them.
+    Unlike get_my_local_ip_address, this needs no internet route, and it lists all addresses rather than one.
+    Not to be confused with get_all_local_ip_addresses, which pings the local network to find other computers.
+
+    Example:
+        >>> get_my_local_ip_addresses()
+        ans = ['100.65.12.34', '172.17.0.1', '2600:1f18:4a3:6b01::1d2']
+    """
+    pip_import('psutil')
+    import psutil
+    import socket
+    import ipaddress
+
+    addresses = [address.address for interface in psutil.net_if_addrs().values() for address in interface if address.family in (socket.AF_INET, socket.AF_INET6)]
+    ips = [ipaddress.ip_address(address.split('%')[0]) for address in addresses]  # A link-local IPv6 address ends in its interface, as in 'fe80::1%eth0'
+    return [str(ip) for ip in ips if not ip.is_loopback and not ip.is_link_local]
 
 def _get_my_mac_address_via_sysfs():
     """
@@ -21154,6 +21174,7 @@ def get_my_public_ip_address():
         
     Related Functions:
         - get_my_local_ip_address
+        - get_my_local_ip_addresses
         - get_my_mac_address
         - get_all_local_ip_addresses
         - connected_to_internet
@@ -35584,15 +35605,119 @@ def ncr(n, r):
     denom = reduce(op.mul, xrange(1, r+1), 1)
     return numer//denom
 
-def get_process_memory(pid:int=None)->int:
-    "Returns the process memory usage in bytes."
-    if pid is None: pid=get_process_id()
+def _sum_over_process_tree(pid, recursive, measure):
+    """
+    Query. Sums measure(process) over a psutil.Process and, if recursive, over all of its living descendants.
+    A descendant that exits before it is measured is skipped. pid=None means the current process.
 
+    Example:
+        >>> _sum_over_process_tree(None, True, lambda process: process.num_threads())  # Threads of this process and its subprocesses
+        ans = 23
+    """
     pip_import('psutil')
     import psutil
 
-    process = psutil.Process(pid)
-    return process.memory_info().rss#Get this process's total memory in bytes
+    process = psutil.Process(get_process_id() if pid is None else pid)
+    total = measure(process)
+    for child in process.children(recursive=True) if recursive else []:
+        try:
+            total += measure(child)
+        except psutil.NoSuchProcess:
+            pass  # It exited after children() listed it
+    return total
+
+def get_process_memory(pid:int=None, recursive=False)->int:
+    """
+    Query. Returns the memory a process uses (its resident set size) in bytes.
+
+    Args:
+        pid (int, optional): Defaults to the current process
+        recursive (bool): If True, adds the memory of every descendant process, such as subprocesses and their children
+
+    Examples:
+        >>> get_process_memory()
+        ans = 210239488
+        >>> get_process_memory(recursive=True)  # While a subprocess uses 9 GB
+        ans = 9873915904
+    """
+    return _sum_over_process_tree(pid, recursive, lambda process: process.memory_info().rss)
+
+def get_process_cpu_time(pid:int=None, recursive=False)->float:
+    """
+    Query. Returns the CPU seconds a process has used so far: user plus system time, including its exited children that it waited for.
+    A change in CPU seconds divided by the wall seconds it took is the mean number of busy CPU cores.
+
+    Args:
+        pid (int, optional): Defaults to the current process
+        recursive (bool): If True, adds the CPU time of every living descendant process, so it covers the whole process tree
+
+    Examples:
+        >>> get_process_cpu_time()
+        ans = 3.82
+        >>> start = get_process_cpu_time(recursive=True) ; sleep(10)
+        >>> (get_process_cpu_time(recursive=True) - start) / 10  # While a subprocess keeps 27 cores busy
+        ans = 27.31
+    """
+    return _sum_over_process_tree(pid, recursive, _get_cpu_seconds)
+
+def _get_cpu_seconds(process):
+    """
+    Query. Returns a psutil.Process's user plus system CPU seconds, including its exited children that it waited for.
+
+    Example:
+        >>> _get_cpu_seconds(psutil.Process())
+        ans = 3.82
+    """
+    times = process.cpu_times()
+    return times.user + times.system + times.children_user + times.children_system
+
+def get_process_disk_io_bytes(pid:int=None, recursive=False)->tuple:
+    """
+    Query. Returns (read_bytes, write_bytes): what the kernel has moved from and to storage for a process so far, including its exited children that it waited for.
+    Reads count the bytes that missed the page cache, writes count the bytes dirtied in it, on local disks and on Lustre and NFS, but not on FUSE mounts.
+    A change in these bytes divided by the wall seconds it took is the mean disk throughput.
+
+    Args:
+        pid (int, optional): Defaults to the current process
+        recursive (bool): If True, adds the bytes of every living descendant process, so it covers the whole process tree
+
+    Returns:
+        tuple: (read_bytes, write_bytes), two ints
+
+    Raises:
+        psutil.AccessDenied: If a process belongs to another user, whose counters the kernel hides
+
+    Examples:
+        >>> get_process_disk_io_bytes()
+        ans = (1318912, 86016)
+        >>> before = get_process_disk_io_bytes(recursive=True) ; sleep(10)
+        >>> get_process_disk_io_bytes(recursive=True)[1] - before[1]  # While a subprocess writes 3 GB
+        ans = 3221225472
+    """
+    import numpy as np
+
+    read_bytes, write_bytes = _sum_over_process_tree(pid, recursive, lambda process: np.array(_get_disk_io_bytes(process)))
+    return int(read_bytes), int(write_bytes)
+
+def _get_disk_io_bytes(process):
+    """
+    Query. Returns a psutil.Process's (read_bytes, write_bytes) for get_process_disk_io_bytes.
+    A zombie (a child that exited, and whose parent has not yet waited for it) gives (0, 0): the kernel hides its counters until they join its parent's.
+
+    Example:
+        >>> _get_disk_io_bytes(psutil.Process())
+        ans = (1318912, 86016)
+    """
+    pip_import('psutil')
+    import psutil
+
+    try:
+        counters = process.io_counters()
+    except psutil.AccessDenied:
+        if process.status() != psutil.STATUS_ZOMBIE:
+            raise  # A process of another user: its counters are unreadable, not zero
+        return 0, 0
+    return counters.read_bytes, counters.write_bytes
 
 def get_process_username(pid: int=None) -> str:
     """
@@ -70433,6 +70558,8 @@ def get_all_local_ip_addresses():
     Returns a list of all local ip addresses currently in use on your local network
     Pings all 254 addresses in your /24 subnet in parallel using threads.
     Can take up to 20 seconds to complete.
+    This finds the other computers on the network, and it needs the `ping` command (without it, the list is empty).
+    For this computer's own addresses, see get_my_local_ip_addresses, which is instant and runs no commands.
     EXAMPLE:
          >>> get_all_local_ip_addresses()
          ans = ['192.168.1.1', '192.168.1.21', '192.168.1.33', '192.168.1.32', '192.168.1.53', '192.168.1.105', '192.168.1.122', '192.168.1.136', '192.168.1.171', '192.168.1.190', '192.168.1.205', '192.168.1.235', '192.168.1.237', '192.168.1.175', '192.168.1.228', '192.168.1.249']
@@ -76210,15 +76337,22 @@ def get_gpu_uuid(gpu_id=None):
 
 def get_gpu_count():
     """
-    Returns the number of available GPUs.
+    Query. Returns the number of NVIDIA GPUs.
+    A machine without the NVIDIA driver has 0, so there the get_gpu_* functions return [] when gpu_id is None.
 
     Example:
     >>> get_gpu_count()
     4
+    >>> get_gpu_count()  # On a machine without the NVIDIA driver
+    0
     """
-    _init_nvml()
-    from py3nvml.py3nvml import nvmlDeviceGetCount
+    pip_import("py3nvml")
+    from py3nvml.py3nvml import nvmlDeviceGetCount, NVMLError_LibraryNotFound, NVMLError_DriverNotLoaded
 
+    try:
+        _init_nvml()
+    except (NVMLError_LibraryNotFound, NVMLError_DriverNotLoaded):
+        return 0
     return nvmlDeviceGetCount()
 get_num_gpus = get_gpu_count
 
@@ -76507,6 +76641,174 @@ def get_gpu_utilization(gpu_id=None):
     handle = _get_gpu_handle(gpu_id)
     utilization = nvmlDeviceGetUtilizationRates(handle)
     return utilization.gpu
+
+class ResourceRecorder:
+    """
+    Command. A context manager that records the CPU, RAM, GPU and disk use of a process tree, and the CPU, RAM, GPU and free disk space of the whole machine.
+    Inside the with block, a thread takes a sample every interval seconds. Entering, exiting and mark() take one too.
+    Then phase_usages() summarizes each phase that mark() started, and usage() summarizes any time windows.
+    If a sample fails in the thread, sampling stops, and exiting the with block raises that sample's error.
+
+    Each sample in recorder.samples is a dict:
+        time: Unix seconds
+        cpu_seconds: the CPU seconds the process tree has used so far (see get_process_cpu_time)
+        rss_bytes: the memory the process tree uses (see get_process_memory)
+        machine_busy_seconds, machine_total_seconds: the CPU seconds of all the machine's CPUs so far, busy and in total
+        machine_memory_percent: the percent of the machine's RAM in use
+        machine_gpu_percent: the mean utilization of all NVIDIA GPUs (see get_gpu_utilization), or None without GPUs
+        machine_vram_bytes: the VRAM used on all NVIDIA GPUs together (see get_used_vram), or None without GPUs
+        machine_disk_free_bytes: the free bytes on the disk that holds disk_path (see get_free_disk_space)
+        disk_read_bytes, disk_write_bytes: the bytes the process tree has read from and written to storage so far (see get_process_disk_io_bytes).
+            These see local disks, Lustre and NFS. They miss FUSE mounts such as rclone, and reads that the page cache answers. A descendant of another user raises psutil.AccessDenied.
+
+    Args:
+        interval (float): Seconds between samples. One sample costs about 15 ms of CPU, mostly to list the processes of the machine.
+        pid (int, optional): The root of the process tree. Defaults to the current process. A sample fails once that process has exited.
+        disk_path (str, optional): Any path on the disk whose free space to watch. Defaults to the temporary directory, where programs spill and unpack,
+            which on a container is the node's root disk. Network filesystems (Lustre, NFS, FUSE) report the size of a shared pool, not of the node, so they are no use here.
+
+    Example:
+        >>> with ResourceRecorder() as recorder:
+        ...     for _ in range(2):
+        ...         recorder.mark('sleep') ; sleep(1)
+        ...         recorder.mark('sum')   ; sum(range(10**8))
+        >>> recorder.phase_usages()  # Each name sums both of its phases
+        ans = {'sleep': {'start': 1793301851.7227888, 'seconds': 2.0539872646331787, 'cpu_cores': 0.05355437294770433, 'machine_cpu_percent': 3.8253894808091284, 'rss_bytes_max': 146481152, 'machine_memory_percent_max': 16.0, 'machine_disk_free_bytes_min': 375553298432, 'disk_read_bytes': 0.0, 'disk_write_bytes': 0.0},
+               'sum'  : {'start': 1793301852.7498906, 'seconds': 1.977417230606079 , 'cpu_cores': 0.9962490310637139 , 'machine_cpu_percent': 4.19854973746931  , 'rss_bytes_max': 146481152, 'machine_memory_percent_max': 16.0, 'machine_disk_free_bytes_min': 375552233472, 'disk_read_bytes': 0.0, 'disk_write_bytes': 0.0}}
+    """
+    def __init__(self, interval=1, pid=None, disk_path=None):
+        """Command. Sets up the recorder's state; nothing is sampled until the with block starts."""
+        self.interval = interval
+        self.pid = get_process_id() if pid is None else pid
+        self.disk_path = tempfile.gettempdir() if disk_path is None else disk_path
+        self.samples = []
+        self.marks = []  # (name, start) pairs
+        self._error = None
+        self._lock = threading.Lock()
+        self._stopped = threading.Event()
+
+    def __enter__(self):
+        """Command. Takes the first sample and starts the sampling thread."""
+        self.sample()
+        self._thread = run_as_new_thread(self._sample_until_stopped)
+        return self
+
+    def __exit__(self, *args):
+        """Command. Stops the sampling thread, takes a last sample, and raises the thread's error if it had one."""
+        self._stopped.set()
+        self._thread.join()
+        self.sample()
+        if self._error is not None:
+            raise self._error  # Its traceback shows the failed sample, and an error from the with block stays visible as its __context__
+
+    def _sample_until_stopped(self):
+        """Command. The sampling thread: takes a sample every self.interval seconds until __exit__ stops it or a sample fails."""
+        try:
+            while not self._stopped.wait(self.interval):
+                self.sample()
+        except Exception as error:
+            self._error = error  # __exit__ raises it, because a thread's error would otherwise only be printed
+
+    def sample(self) -> float:
+        """Command. Appends one sample to self.samples, and returns its time."""
+        pip_import('psutil')
+        import psutil
+        import numpy as np
+
+        with self._lock:  # Keeps the samples in time order
+            moment = time.time()
+            measure = lambda process: np.array([_get_cpu_seconds(process), process.memory_info().rss, *_get_disk_io_bytes(process)])
+            cpu_seconds, rss_bytes, disk_read_bytes, disk_write_bytes = _sum_over_process_tree(self.pid, True, measure)  # One walk measures all: listing the tree costs more than measuring it
+            cpu_times = psutil.cpu_times()._asdict()
+            machine_total_seconds = sum(cpu_times.values()) - cpu_times.get('guest', 0) - cpu_times.get('guest_nice', 0)  # Linux counts guest time in user and nice too
+            gpu_percents = get_gpu_utilization()
+            self.samples.append(dict(
+                time                    = moment,
+                cpu_seconds             = float(cpu_seconds),
+                rss_bytes               = int(rss_bytes),
+                disk_read_bytes         = int(disk_read_bytes),
+                disk_write_bytes        = int(disk_write_bytes),
+                machine_busy_seconds    = machine_total_seconds - cpu_times['idle'] - cpu_times.get('iowait', 0),
+                machine_total_seconds   = machine_total_seconds,
+                machine_memory_percent  = psutil.virtual_memory().percent,
+                machine_disk_free_bytes = get_free_disk_space(self.disk_path),
+                machine_gpu_percent     = sum(gpu_percents) / len(gpu_percents) if gpu_percents else None,
+                machine_vram_bytes      = sum(get_used_vram()) if gpu_percents else None,
+            ))
+            return moment
+
+    def mark(self, name):
+        """Command. Ends the current phase, if any, and starts a phase with this name."""
+        self.marks.append((name, self.sample()))
+
+    @staticmethod
+    def _summarize_samples(samples, windows):
+        """
+        Pure function. Summarizes ResourceRecorder samples over time windows, such as one phase of a program, or every "encode" step in it.
+        Cumulative CPU seconds and disk bytes are interpolated at each window's edges. Maxima and the GPU mean use the samples that bracket each window.
+
+        Args:
+            samples (list[dict]): ResourceRecorder.samples, in time order, with one at or before the first start and one at or after the last end
+            windows (list[tuple]): (start, end) pairs in Unix seconds. They may overlap.
+
+        Returns:
+            dict: seconds (the windows' total length), cpu_cores (the process tree's CPU seconds per second),
+                machine_cpu_percent (of all the machine's CPUs), rss_bytes_max, machine_memory_percent_max, machine_disk_free_bytes_min,
+                disk_read_bytes and disk_write_bytes (the process tree's total in the windows),
+                and machine_gpu_percent (the mean) and machine_vram_bytes_max when the samples have GPU values
+
+        Examples:
+            >>> sample = lambda time, cpu, rss, busy, total, memory, read, write, free: dict(time=time, cpu_seconds=cpu, rss_bytes=rss, machine_busy_seconds=busy,
+            ...     machine_total_seconds=total, machine_memory_percent=memory, disk_read_bytes=read, disk_write_bytes=write, machine_disk_free_bytes=free, machine_gpu_percent=None, machine_vram_bytes=None)
+            >>> samples = [sample(0, 10, 2**30, 100, 400, 40.0, 10**9, 0, 3 * 10**11), sample(10, 30, 3 * 2**30, 300, 800, 55.5, 5 * 10**9, 10**8, 2 * 10**11)]
+            >>> ResourceRecorder._summarize_samples(samples, [(0, 10)])  # 20 CPU seconds in 10 seconds is 2 busy cores; 4 GB read, 0.1 GB written, and the disk fell to 200 GB free
+            {'seconds': 10, 'cpu_cores': 2.0, 'machine_cpu_percent': 50.0, 'rss_bytes_max': 3221225472, 'machine_memory_percent_max': 55.5, 'machine_disk_free_bytes_min': 200000000000, 'disk_read_bytes': 4000000000.0, 'disk_write_bytes': 100000000.0}
+            >>> samples = [dict(sample, machine_gpu_percent=80.0, machine_vram_bytes=2**33) for sample in samples]
+            >>> ResourceRecorder._summarize_samples(samples, [(0, 2.5), (5, 7.5)])  # Two windows of 2.5 seconds
+            {'seconds': 5.0, 'cpu_cores': 2.0, 'machine_cpu_percent': 50.0, 'rss_bytes_max': 3221225472, 'machine_memory_percent_max': 55.5, 'machine_disk_free_bytes_min': 200000000000, 'disk_read_bytes': 2000000000.0, 'disk_write_bytes': 50000000.0, 'machine_gpu_percent': 80.0, 'machine_vram_bytes_max': 8589934592}
+        """
+        import bisect
+        import numpy as np
+
+        times = [sample['time'] for sample in samples]
+        def change(key):
+            values = [sample[key] for sample in samples]
+            return float(sum(np.interp(end, times, values) - np.interp(start, times, values) for start, end in windows))
+        near = [sample for start, end in windows for sample in samples[max(bisect.bisect_right(times, start) - 1, 0) : bisect.bisect_left(times, end) + 1]]
+        seconds = sum(end - start for start, end in windows)
+        machine_seconds = change('machine_total_seconds')
+        usage = dict(
+            seconds                     = seconds,
+            cpu_cores                   = change('cpu_seconds') / seconds if seconds else 0.0,
+            machine_cpu_percent         = 100 * change('machine_busy_seconds') / machine_seconds if machine_seconds else 0.0,
+            rss_bytes_max               = max(sample['rss_bytes'] for sample in near),
+            machine_memory_percent_max  = max(sample['machine_memory_percent'] for sample in near),
+            machine_disk_free_bytes_min = min(sample['machine_disk_free_bytes'] for sample in near),
+            disk_read_bytes             = change('disk_read_bytes'),
+            disk_write_bytes            = change('disk_write_bytes'),
+        )
+        if samples[0]['machine_gpu_percent'] is not None:
+            usage['machine_gpu_percent'] = sum(sample['machine_gpu_percent'] for sample in near) / len(near)
+            usage['machine_vram_bytes_max'] = max(sample['machine_vram_bytes'] for sample in near)
+        return usage
+
+    def usage(self, windows):
+        """Query. Summarizes the samples over (start, end) windows in Unix seconds. See _summarize_samples for the keys."""
+        with self._lock:
+            return self._summarize_samples(self.samples, windows)
+
+    def phase_usages(self):
+        """
+        Command. Returns {name: {'start': Unix seconds, **usage}} for each phase name, in the order of first marks. See _summarize_samples for the usage keys.
+        Each phase ends where the next one starts. A name marked more than once sums all of its phases, and its start is its first one.
+        Inside the with block, the last phase ends now, with a new sample. After the block, it ends where the block ended.
+        """
+        starts = [start for name, start in self.marks]
+        ends = starts[1:] + [self.samples[-1]['time'] if self._stopped.is_set() else self.sample()]
+        windows = {}
+        for (name, start), end in zip(self.marks, ends):
+            windows.setdefault(name, []).append((start, end))
+        return {name: dict(start=name_windows[0][0], **self.usage(name_windows)) for name, name_windows in windows.items()}
 
 def print_gpu_summary(
     include_processes=True,
